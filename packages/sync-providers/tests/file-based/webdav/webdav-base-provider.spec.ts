@@ -29,24 +29,6 @@ const nativeNoop: NativeHttpExecutor = async () => ({
   data: '',
 });
 
-const propfindXml = (path: string): string => `<?xml version="1.0" encoding="utf-8"?>
-<D:multistatus xmlns:D="DAV:">
-  <D:response>
-    <D:href>/dav/sp/</D:href>
-    <D:propstat>
-      <D:prop><D:displayname>sp</D:displayname><D:getcontentlength>0</D:getcontentlength><D:resourcetype><D:collection/></D:resourcetype></D:prop>
-      <D:status>HTTP/1.1 200 OK</D:status>
-    </D:propstat>
-  </D:response>
-  <D:response>
-    <D:href>${path}</D:href>
-    <D:propstat>
-      <D:prop><D:displayname>op-1.json</D:displayname><D:getcontentlength>10</D:getcontentlength><D:resourcetype/></D:prop>
-      <D:status>HTTP/1.1 200 OK</D:status>
-    </D:propstat>
-  </D:response>
-</D:multistatus>`;
-
 const validWebdavCfg: WebdavPrivateCfg = {
   baseUrl: 'https://dav.example.com/dav/',
   userName: 'alice',
@@ -155,29 +137,6 @@ describe('Webdav (provider)', () => {
     const r = await provider.downloadFile('op-1.json');
     expect(r.dataStr).toBe(body);
     expect(r.rev).toBe(await md5HashWasm(body));
-  });
-
-  it('listFiles parses PROPFIND multistatus body', async () => {
-    const nativeHttp = vi.fn().mockResolvedValue({
-      status: 207,
-      headers: {},
-      data: propfindXml('/dav/sp/op-1.json'),
-    });
-    const provider = new Webdav({
-      logger: NOOP_SYNC_LOGGER,
-      platformInfo: {
-        isNativePlatform: true,
-        isAndroidWebView: false,
-        isIosNative: false,
-      },
-      webFetch: () => globalThis.fetch as typeof fetch,
-      nativeHttp,
-      credentialStore: fakeStore<typeof PROVIDER_ID_WEBDAV, WebdavPrivateCfg>(
-        validWebdavCfg,
-      ),
-    });
-    const r = await provider.listFiles('');
-    expect(r).toEqual(['/dav/sp/op-1.json']);
   });
 });
 
@@ -293,6 +252,46 @@ describe('NextcloudProvider', () => {
     );
     expect(request.headers.Authorization).toBe(
       `Basic ${btoa('alice@example.com:secret')}`,
+    );
+  });
+
+  it('getFileReadRequest matches the request downloadFile sends', async () => {
+    const nativeHttp = vi.fn().mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: 'real-payload',
+    });
+    const provider = new NextcloudProvider(
+      {
+        logger: NOOP_SYNC_LOGGER,
+        platformInfo: {
+          isNativePlatform: true,
+          isAndroidWebView: false,
+          isIosNative: false,
+        },
+        webFetch: () => globalThis.fetch as typeof fetch,
+        nativeHttp,
+        credentialStore: fakeStore<typeof PROVIDER_ID_NEXTCLOUD, NextcloudPrivateCfg>({
+          ...validNextcloudCfg,
+          loginName: 'alice@example.com',
+          syncFolderPath: 'my folder',
+        }),
+      },
+      '/DEV',
+    );
+
+    await provider.downloadFile('sync-data.json');
+    const sent = nativeHttp.mock.calls[0]?.[0] as {
+      url: string;
+      headers: Record<string, string>;
+    };
+
+    expect(await provider.getFileReadRequest('sync-data.json')).toEqual({
+      url: sent.url,
+      authorization: sent.headers.Authorization,
+    });
+    expect(sent.url).toBe(
+      'https://cloud.example.com/remote.php/dav/files/alice/my%20folder/DEV/sync-data.json',
     );
   });
 

@@ -28,8 +28,11 @@ The backup script creates two dumps:
 # Run manually
 ./scripts/backup.sh
 
-# Set up daily cron at 3 AM with 3-day retention
-(crontab -l 2>/dev/null; echo "0 3 * * * RETENTION_DAYS=3 /path/to/scripts/backup.sh >> /var/log/supersync-backup.log 2>&1") | crontab -
+# Set up daily cron at 3 AM with 3-day retention. flock keeps a slow dump from
+# overlapping the next night's run. The lock must live in a root-owned dir like /run —
+# in world-writable /tmp any local user could squat the path and silently block every
+# nightly run.
+(crontab -l 2>/dev/null; echo "0 3 * * * RETENTION_DAYS=3 flock -n /run/supersync-backup.lock /path/to/scripts/backup.sh >> /var/log/supersync-backup.log 2>&1") | crontab -
 ```
 
 Backups are saved to `backups/` next to the scripts directory.
@@ -75,16 +78,34 @@ This is the simplest and most reliable recovery method when at least one client 
 **Steps:**
 
 ```bash
-# 1. Restore accounts from backup
+# 1. Stop the server so nothing writes while you restore
+docker compose stop supersync
+
+# 2. Empty the accounts tables (and the sync data that references them). A
+#    deployed database already has these tables, and the dump contains
+#    CREATE TABLE statements.
+docker exec supersync-postgres psql -U supersync supersync \
+  -c 'TRUNCATE users, passkeys CASCADE'
+
+# 3. Restore accounts from backup. psql prints about a dozen "already exists" /
+#    "multiple primary keys" errors for the CREATE TABLE and constraint
+#    statements; they are harmless. The rows themselves are loaded by COPY.
 gunzip -c backups/supersync_accounts_YYYYMMDD_HHMMSS.sql.gz | \
   docker exec -i supersync-postgres psql -U supersync supersync
 
-# 2. That's it — clients will re-sync automatically when they connect
+# 4. Check the accounts are back, then start the server
+docker exec supersync-postgres psql -U supersync supersync -c 'SELECT count(*) FROM users'
+docker compose start supersync
+
+# 5. That's it — clients will re-sync automatically when they connect
 ```
+
+On a new host, run `./scripts/deploy.sh` first so the database schema exists,
+then follow the same steps.
 
 **Why this is preferred:**
 
-- Avoids `SYNC_IMPORT_EXISTS` conflicts that occur with partial restores
+- Avoids the `SYNC_IMPORT_EXISTS` rejection and silent data gap of partial restores (see the known limitation below)
 - Clients hold the complete data — they are the authoritative source
 - Produces a clean, consistent server state
 - Verified by e2e tests (`supersync-server-backup-revert.spec.ts`)
@@ -103,14 +124,20 @@ docker exec -i supersync-postgres psql -U supersync supersync \
 gunzip -c backups/supersync_YYYYMMDD_HHMMSS.sql.gz | \
   docker exec -i supersync-postgres psql -U supersync supersync
 
-# 3. Restart the server
+# 3. Empty the capture tables. Restored rows would re-import tasks users
+#    already have and revive revoked assistant connections. Devices register
+#    their key again on the next sync; assistants need a new token.
+docker exec -i supersync-postgres psql -U supersync supersync \
+  -c 'TRUNCATE capture_items, capture_grants, capture_keys, capture_auth, capture_connect_codes'
+
+# 4. Restart the server
 docker compose start supersync
 ```
 
 > **Note:** The database name (`supersync` above) must match your deployment's
 > `POSTGRES_DB` setting. Check your `.env` or `docker-compose.yml` for the actual value.
 
-**Known limitation:** If clients reconnect after a full restore, the server's existing `SYNC_IMPORT` operation can conflict with the client's gap detection mechanism (`SYNC_IMPORT_EXISTS` error). To resolve this, use the "Reset Account" feature in the app to clear server sync data, then re-sync.
+**Known limitation:** After a full restore the server still holds its original `SYNC_IMPORT`. A reconnecting client resets its sync position, re-downloads and tries to re-upload its full state, but the server rejects that with `SYNC_IMPORT_EXISTS`. The rejection is only logged and the app shows no error, so that upload does not restore changes made after the backup was taken. To resolve this, use the "Reset Account" feature in the app to clear server sync data, then re-sync: the client then uploads its full state.
 
 ### Recovery Decision Tree
 
@@ -129,6 +156,20 @@ The procedures above recover the **whole server**. A different situation: one
 user's account is wiped — usually because a bad `SYNC_IMPORT` propagated an
 empty or stale snapshot across their devices — and you need to roll _that one
 user_ back to a point in time.
+
+**Check the affected devices first.** Every client keeps local recovery
+points: right before it applies a remote full-state op (`SYNC_IMPORT`,
+`BACKUP_IMPORT`, `REPAIR`), before "Use server data", and before an import,
+it snapshots its complete state into a ring of three. The user opens
+**Settings → Sync & Backup → Import/Export → Browse backups** on the device
+that held the data when the wipe arrived, picks the entry labelled "before
+sync replaced local data", and restores it. That restore is a normal local
+import, so it uploads as a new full-state op and repairs the other devices
+on their next sync. This works for encrypted accounts and needs nothing from
+the server. See `docs/sync-and-op-log/local-recovery-points.md`.
+
+Only if no device has a usable recovery point, fall back to the server-side
+options below.
 
 The in-app **Restore from History** handles this for unencrypted accounts. It
 does **not** work for E2E-encrypted accounts: the server cannot decrypt the op

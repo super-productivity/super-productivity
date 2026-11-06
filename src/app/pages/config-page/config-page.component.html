@@ -21,9 +21,10 @@
         subscriptSizing="dynamic"
       >
         <mat-icon matPrefix>search</mat-icon>
-        <mat-label>{{ T.PS.SEARCH_PLACEHOLDER | translate }}</mat-label>
         <input
           matInput
+          [attr.aria-label]="T.PS.SEARCH_PLACEHOLDER | translate"
+          [placeholder]="T.PS.SEARCH_PLACEHOLDER | translate"
           [matAutocomplete]="settingsSearchAutoEl"
           [ngModel]="searchQuery"
           (ngModelChange)="onSearchChange($event)"
@@ -69,6 +70,9 @@
 
       <mat-tab-group
         class="settings-tabs"
+        tabHeaderWheelScroll
+        mat-align-tabs="center"
+        [mat-stretch-tabs]="false"
         [(selectedIndex)]="selectedTabIndex"
         animationDuration="200ms"
       >
@@ -86,11 +90,14 @@
             <h2 class="mat-h2 section-title">
               {{ 'PS.TABS.GENERAL' | translate }}
             </h2>
-            <theme-selector></theme-selector>
+            <section class="config-section appearance-section">
+              <theme-selector></theme-selector>
+            </section>
             @for (section of generalFormCfg; track section.key) {
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -118,6 +125,7 @@
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -151,10 +159,20 @@
             <h2 class="mat-h2 section-title">
               {{ 'PS.TABS.TIME_TRACKING' | translate }}
             </h2>
+            <!-- Same switch as in General › App Features: people look for it here. -->
+            <section class="config-section time-tracking-switch">
+              <config-form
+                (save)="saveTimeTrackingSwitch($event)"
+                [cfg]="globalCfg.appFeatures"
+                [formCfg]="timeTrackingSwitchFormCfg"
+                sectionKey="appFeatures"
+              ></config-form>
+            </section>
             @for (section of timeTrackingFormCfg; track section.key) {
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -182,6 +200,7 @@
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -212,6 +231,7 @@
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -288,14 +308,6 @@
                     <mat-icon>tune</mat-icon>
                     {{ 'PS.SYNC.CONFIGURE' | translate }}
                   </button>
-                  <button
-                    routerLink="/sync-conflicts"
-                    mat-stroked-button
-                    type="button"
-                  >
-                    <mat-icon>rule</mat-icon>
-                    {{ 'F.SYNC.CONFLICT_REVIEW.CONFIG_LINK' | translate }}
-                  </button>
                 </div>
               }
             </section>
@@ -304,6 +316,7 @@
               <section class="config-section imex-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"

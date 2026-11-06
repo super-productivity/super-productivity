@@ -42,11 +42,16 @@ import {
 } from '../dialog-confirm-url-import/dialog-confirm-url-import.component';
 import { Log } from '../../core/log';
 import { DialogArchiveCompressionComponent } from '../../features/archive/dialog-archive-compression/dialog-archive-compression.component';
-import { DataValidationFailedError } from '../../op-log/core/errors/sync-errors';
+import {
+  BackupRepairFailedError,
+  DataValidationFailedError,
+} from '../../op-log/core/errors/sync-errors';
 import { alertDialog } from '../../util/native-dialogs';
 import { PluginService } from '../../plugins/plugin.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 const TODOIST_IMPORT_PLUGIN_ID = 'todoist-import';
+const TICKTICK_IMPORT_PLUGIN_ID = 'ticktick-import';
 
 @Component({
   selector: 'file-imex',
@@ -165,6 +170,7 @@ export class FileImexComponent implements OnInit {
   openUrlImportDialog(): void {
     this._matDialog
       .open(DialogImportFromUrlComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         width: '500px', // Or any other appropriate width
       })
       .afterClosed()
@@ -239,9 +245,9 @@ export class FileImexComponent implements OnInit {
         true,
       );
 
-      // This profile's notes were just replaced wholesale, so every draft's
+      // The notes were just replaced wholesale, so every draft's
       // baseContent refers to content that no longer exists.
-      this._localDraftService.deleteDraftsForActiveProfile();
+      this._localDraftService.deleteAllDrafts();
 
       // Handle encryption state change if needed (e.g., import has different encryption settings)
       // This ensures server data is wiped and fresh snapshot is uploaded with correct encryption
@@ -258,7 +264,12 @@ export class FileImexComponent implements OnInit {
     } catch (e) {
       Log.err('Import process failed', e);
 
-      if (e instanceof DataValidationFailedError) {
+      if (e instanceof BackupRepairFailedError) {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.FILE_IMEX.S_ERR_IMPORT_UNREPAIRABLE,
+        });
+      } else if (e instanceof DataValidationFailedError) {
         this._snackService.open({
           type: 'ERROR',
           msg: `Import failed: ${e.message}`,
@@ -308,27 +319,35 @@ export class FileImexComponent implements OnInit {
     });
   }
 
-  async openTodoistImport(): Promise<void> {
+  openTodoistImport(): Promise<void> {
+    return this._openImportPlugin(
+      TODOIST_IMPORT_PLUGIN_ID,
+      T.FILE_IMEX.S_ERR_TODOIST_IMPORT_OPEN,
+    );
+  }
+
+  openTickTickImport(): Promise<void> {
+    return this._openImportPlugin(
+      TICKTICK_IMPORT_PLUGIN_ID,
+      T.FILE_IMEX.S_ERR_TICKTICK_IMPORT_OPEN,
+    );
+  }
+
+  private async _openImportPlugin(pluginId: string, errorMsg: string): Promise<void> {
     try {
       if (!this._pluginService.isInitialized()) {
         await this._pluginService.initializePlugins();
       }
       // In-memory activation only (not persisted): the importer is a one-time
       // tool and should be dormant again after a restart.
-      const instance = await this._pluginService.activatePlugin(
-        TODOIST_IMPORT_PLUGIN_ID,
-        true,
-      );
+      const instance = await this._pluginService.activatePlugin(pluginId, true);
       if (!instance) {
         throw new Error('Plugin activation returned no instance');
       }
-      await this._router.navigate(['/plugins', TODOIST_IMPORT_PLUGIN_ID, 'index']);
+      await this._router.navigate(['/plugins', pluginId, 'index']);
     } catch (e) {
-      Log.err('Failed to open Todoist importer', e);
-      this._snackService.open({
-        type: 'ERROR',
-        msg: T.FILE_IMEX.S_ERR_TODOIST_IMPORT_OPEN,
-      });
+      Log.err('Failed to open importer', { pluginId }, e);
+      this._snackService.open({ type: 'ERROR', msg: errorMsg });
     }
   }
 }

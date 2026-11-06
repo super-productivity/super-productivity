@@ -26,6 +26,9 @@
     [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
     (keydown)="onKeydown($event)"
     [placeholder]="T.F.TAG.D_EDIT.PLACEHOLDER | translate"
+    spChipAutocompleteKeys
+    (suggestionAccepted)="acceptSuggestion($event)"
+    (textCommitted)="commitText($event)"
   />
 </mat-chip-grid>
 <mat-autocomplete

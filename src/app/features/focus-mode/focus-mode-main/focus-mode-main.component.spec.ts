@@ -90,9 +90,13 @@ describe('FocusModeMainComponent', () => {
   beforeEach(async () => {
     mainStateSignal = signal(FocusMainUIState.Preparation);
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
       tasks: jasmine.createSpy().and.returnValue({
         notesTemplate: 'Default task notes template',
+        isMarkdownFormattingInNotesEnabled: false,
       }),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
@@ -562,6 +566,47 @@ describe('FocusModeMainComponent', () => {
       expect(startSessionDispatchCount).toBe(1);
     }));
 
+    it('should still start the session when the overlay closes during the inline launch', fakeAsync(() => {
+      component.displayDuration.set(900000);
+      focusModeServiceSpy.focusModeConfig.and.returnValue({
+        isSkipPreparation: false,
+      });
+
+      component.startSession();
+      expect(component.isLaunching()).toBe(true);
+
+      // Escape, the close button and Android back hide the overlay, which
+      // destroys this component before the rocket finishes. The Start the
+      // user already pressed must not be dropped.
+      fixture.destroy();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.startFocusSession({ duration: 900000, taskId: mockTask.id }),
+      );
+
+      tick(800);
+
+      const startSessionDispatchCount = (mockStore.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .filter(([action]) => action.type === actions.startFocusSession.type).length;
+      expect(startSessionDispatchCount).toBe(1);
+    }));
+
+    it('should not start a session on destroy when the inline launch was cancelled', fakeAsync(() => {
+      focusModeServiceSpy.focusModeConfig.and.returnValue({
+        isSkipPreparation: false,
+      });
+
+      component.startSession();
+      component.openTaskSelector();
+      fixture.destroy();
+      tick(800);
+
+      expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: actions.startFocusSession.type }),
+      );
+    }));
+
     it('should use zero duration for Flowtime on the default inline-start path', fakeAsync(() => {
       focusModeServiceSpy.focusModeConfig.and.returnValue({
         isSkipPreparation: false,
@@ -740,6 +785,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
   let modeSignal: WritableSignal<FocusModeMode>;
   let isSessionRunningSignal: WritableSignal<boolean>;
   let isXsSignal: WritableSignal<boolean>;
+  let currentCycleSignal: WritableSignal<number>;
   let mockIssueService: jasmine.SpyObj<IssueService>;
 
   const mockTask: TaskCopy = {
@@ -767,11 +813,16 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     modeSignal = signal(FocusModeMode.Pomodoro);
     isSessionRunningSignal = signal(true);
     isXsSignal = signal(true);
+    currentCycleSignal = signal(1);
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
       tasks: jasmine.createSpy().and.returnValue({
         notesTemplate: 'Default task notes template',
+        isMarkdownFormattingInNotesEnabled: false,
       }),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
@@ -804,7 +855,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       isSessionRunning: isSessionRunningSignal,
       isSessionPaused: signal(false),
       isBreakActive: signal(false),
-      currentCycle: signal(1),
+      currentCycle: currentCycleSignal,
       sessionDuration: signal(0),
       mode: modeSignal,
       mainState: mainStateSignal,
@@ -904,8 +955,9 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       controls.querySelectorAll(':scope > button, :scope > a'),
     ) as HTMLElement[];
 
-    expect(buttons.length).toBe(4);
+    expect(buttons.length).toBe(3);
     expect(controls.querySelector('.secondary-actions-menu-btn')).not.toBeNull();
+    expect(controls.querySelector('.cancel-session-btn')).toBeNull();
   });
 
   it('should restore direct secondary session actions and issue points on desktop', () => {
@@ -925,6 +977,21 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     expect(controls.querySelector('.open-issue-btn')).not.toBeNull();
     expect(controls.querySelector('.show-notes-btn')).not.toBeNull();
     expect(controls.querySelector('.mini-badge')?.textContent?.trim()).toBe('5');
+    expect(buttons[buttons.length - 1].classList).toContain('cancel-session-btn');
+  });
+
+  it('should disable the in-session reset cycles button while on the first cycle (#9893)', () => {
+    isXsSignal.set(false);
+    fixture.detectChanges();
+
+    const btn = fixture.nativeElement.querySelector(
+      '.reset-cycles-btn',
+    ) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+
+    currentCycleSignal.set(2);
+    fixture.detectChanges();
+    expect(btn.disabled).toBe(false);
   });
 
   it('should defer resolving the issue URL until the mobile More menu opens', async () => {
@@ -967,6 +1034,28 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     fixture.detectChanges();
 
     expect(component.isFocusNotes()).toBe(true);
+  });
+
+  it('should offer Cancel session in the mobile More menu without a task or Pomodoro', async () => {
+    modeSignal.set(FocusModeMode.Countdown);
+    currentTaskSubject.next(null);
+    fixture.detectChanges();
+
+    const trigger = fixture.nativeElement.querySelector(
+      '.secondary-actions-menu-btn',
+    ) as HTMLButtonElement;
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const cancelButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel button'),
+    ).find((button) => button.textContent?.includes('F.FOCUS_MODE.CANCEL_SESSION'));
+
+    expect(cancelButton).toBeDefined();
+    cancelButton!.click();
+
+    expect(mockStore.dispatch).toHaveBeenCalledWith(actions.cancelFocusSession());
   });
 
   it('should label every icon-only primary session action', () => {
@@ -1110,9 +1199,13 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
     storeSpy.selectSignal.and.returnValue(signal(null));
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
       tasks: jasmine.createSpy().and.returnValue({
         notesTemplate: 'Default task notes template',
+        isMarkdownFormattingInNotesEnabled: false,
       }),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { WebSocketConnectionService } from '../src/sync/services/websocket-connection.service';
 import { Logger } from '../src/logger';
+import type { WebSocket } from 'ws';
 
 vi.mock('../src/logger', () => ({
   Logger: {
@@ -408,6 +409,41 @@ describe('WebSocketConnectionService', () => {
     });
   });
 
+  describe('closeForUser', () => {
+    it('should close every socket of that user only, with the token-revoked code', () => {
+      const wsA = createMockWs();
+      const wsB = createMockWs();
+      const wsOther = createMockWs();
+      service.addConnection(1, 'client-a', wsA as any);
+      service.addConnection(1, 'client-b', wsB as any);
+      service.addConnection(2, 'client-c', wsOther as any);
+
+      service.closeForUser(1);
+
+      expect(wsA.close).toHaveBeenCalledWith(4003, 'Token revoked');
+      expect(wsB.close).toHaveBeenCalledWith(4003, 'Token revoked');
+      expect(wsOther.close).not.toHaveBeenCalled();
+      expect(service.getConnectionCount()).toBe(1);
+    });
+
+    it('should no-op for a user with no connections', () => {
+      expect(() => service.closeForUser(99)).not.toThrow();
+    });
+
+    it('should close the revoking caller too — a clientId is self-declared, sparing it would be spoofable', () => {
+      const wsCaller = createMockWs();
+      const wsOtherDevice = createMockWs();
+      service.addConnection(1, 'client-caller', wsCaller as any);
+      service.addConnection(1, 'client-other', wsOtherDevice as any);
+
+      service.closeForUser(1);
+
+      expect(wsCaller.close).toHaveBeenCalledWith(4003, 'Token revoked');
+      expect(wsOtherDevice.close).toHaveBeenCalledWith(4003, 'Token revoked');
+      expect(service.getConnectionCount()).toBe(0);
+    });
+  });
+
   describe('notifyNewOps', () => {
     it('should send to other clients and exclude sender', () => {
       const wsA = createMockWs();
@@ -448,7 +484,7 @@ describe('WebSocketConnectionService', () => {
       );
     });
 
-    it('should accumulate excludeClientIds across debounced calls', () => {
+    it('notifies uploaders about other clients in the same debounce window', () => {
       const wsA = createMockWs();
       const wsB = createMockWs();
       const wsC = createMockWs();
@@ -464,17 +500,26 @@ describe('WebSocketConnectionService', () => {
       service.notifyNewOps(1, 'B', 5);
       vi.advanceTimersByTime(100);
 
-      // Client A excluded from first call, client B excluded from second
-      const messagesA = parseSendCalls(wsA);
-      expect(messagesA).not.toContainEqual(expect.objectContaining({ type: 'new_ops' }));
+      // A's piggyback download can finish before B commits. Uploading during
+      // this window is not proof that a client has seen every coalesced update.
+      for (const socket of [wsA, wsB, wsC]) {
+        expect(parseSendCalls(socket)).toContainEqual(
+          expect.objectContaining({ type: 'new_ops', latestSeq: 5 }),
+        );
+      }
+    });
 
-      const messagesB = parseSendCalls(wsB);
-      expect(messagesB).not.toContainEqual(expect.objectContaining({ type: 'new_ops' }));
+    it('retains the highest sequence when upload responses finish out of order', () => {
+      const wsB = createMockWs();
+      service.addConnection(1, 'B', wsB as unknown as WebSocket);
+      wsB.send.mockClear();
 
-      // Only client C should receive the notification
-      const messagesC = parseSendCalls(wsC);
-      expect(messagesC).toContainEqual(
-        expect.objectContaining({ type: 'new_ops', latestSeq: 5 }),
+      service.notifyNewOps(1, 'A', 7);
+      service.notifyNewOps(1, 'A', 3);
+      vi.advanceTimersByTime(100);
+
+      expect(parseSendCalls(wsB)).toContainEqual(
+        expect.objectContaining({ type: 'new_ops', latestSeq: 7 }),
       );
     });
 
@@ -485,6 +530,49 @@ describe('WebSocketConnectionService', () => {
   });
 
   describe('startHeartbeat', () => {
+    it('touches the device row of a live socket, throttled to the shared interval', () => {
+      const touch = vi.fn();
+      const ws = createMockWs();
+      service.addConnection(1, 'client-a', ws as any);
+
+      service.startHeartbeat(touch);
+
+      // First tick is inside the throttle window measured from accept.
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      expect(touch).not.toHaveBeenCalled();
+
+      // Crossing DEVICE_TOUCH_THROTTLE_MS (2 min) yields exactly one write...
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      expect(touch).toHaveBeenCalledTimes(1);
+      expect(touch).toHaveBeenCalledWith(1, 'client-a');
+
+      // ...and the next ticks are throttled again rather than one per heartbeat.
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      expect(touch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps pinging when no touch fn is injected', () => {
+      const ws = createMockWs();
+      service.addConnection(1, 'client-a', ws as any);
+      ws.send.mockClear();
+
+      service.startHeartbeat();
+      vi.advanceTimersByTime(30_000);
+
+      expect(parseSendCalls(ws)).toContainEqual(
+        expect.objectContaining({ type: 'ping' }),
+      );
+    });
+
     it('should send ping at interval', () => {
       const ws = createMockWs();
       service.addConnection(1, 'client-a', ws as any);

@@ -4,20 +4,27 @@ import {
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  getTaskTitles,
   waitForTask,
+  getTaskElement,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  createdTitle,
+  moveTaskWithKeyboard,
+  taskTitleLocator,
+} from '../../utils/audit-concurrency-helpers';
 
 /**
  * SuperSync Task Ordering E2E Tests
  *
- * Tests that task ordering/reordering syncs correctly between clients.
- * Uses drag-and-drop to reorder tasks and verifies the order is replicated.
+ * Tests that the initial task order replicates and that a concurrent keyboard
+ * reorder of the same TODAY list on two clients converges.
  */
 
 test.describe('@supersync Task Ordering Sync', () => {
   /**
-   * Test: Task order is consistent between clients after sync
+   * Test: The initial task order replicates to another client
    *
    * Actions:
    * 1. Client A creates 3 tasks (Task1, Task2, Task3)
@@ -28,7 +35,7 @@ test.describe('@supersync Task Ordering Sync', () => {
    * Note: This tests that task ordering is preserved through sync,
    * not that specific reordering actions work (which is UI-dependent).
    */
-  test('Task reordering syncs to other client', async ({
+  test('Initial task order replicates to other client', async ({
     browser,
     baseURL,
     testRunId,
@@ -76,21 +83,11 @@ test.describe('@supersync Task Ordering Sync', () => {
       console.log('[Order Test] Client B has all 3 tasks');
 
       // ============ PHASE 4: Verify Order on Both Clients ============
-      // Get task order on both clients using innerText to avoid duplicates
-      const getTaskOrder = async (client: SimulatedE2EClient): Promise<string[]> => {
-        const tasks = client.page.locator('task .task-title');
-        const count = await tasks.count();
-        const order: string[] = [];
-        for (let i = 0; i < count; i++) {
-          const titleEl = tasks.nth(i);
-          const text = await titleEl.innerText();
-          order.push(text.trim());
-        }
-        return order;
-      };
-
-      const orderA = await getTaskOrder(clientA);
-      const orderB = await getTaskOrder(clientB);
+      // Get task order on both clients using innerText to avoid duplicates. One
+      // snapshot per client: count() + nth(i) reads would wait on a row that a
+      // re-render after the sync had just removed.
+      const orderA = await getTaskTitles(clientA);
+      const orderB = await getTaskTitles(clientB);
 
       console.log('[Order Test] Client A order:', orderA);
       console.log('[Order Test] Client B order:', orderB);
@@ -185,14 +182,11 @@ test.describe('@supersync Task Ordering Sync', () => {
       // ============ PHASE 4: Verify Subtask Order ============
       // Get subtask order using innerText to avoid duplicate text issues
       const getSubtaskOrder = async (client: SimulatedE2EClient): Promise<string[]> => {
-        const subtasks = client.page.locator('task.hasNoSubTasks .task-title');
-        const count = await subtasks.count();
-        const order: string[] = [];
-        for (let i = 0; i < count; i++) {
-          const text = await subtasks.nth(i).innerText();
-          order.push(text.trim());
-        }
-        return order;
+        // One snapshot: count() + nth(i) reads would wait on a row a re-render removed.
+        const texts = await client.page
+          .locator('task.hasNoSubTasks .task-title')
+          .allInnerTexts();
+        return texts.map((text) => text.trim());
       };
 
       const subtaskOrderA = await getSubtaskOrder(clientA);
@@ -221,14 +215,18 @@ test.describe('@supersync Task Ordering Sync', () => {
   });
 
   /**
-   * Test: Concurrent reordering resolves via LWW
+   * Test: Concurrent reordering of the same TODAY list converges
+   *
+   * Both moves write TAG:TODAY's taskIds, so this is a real same-entity
+   * conflict (the earlier version clicked the task centre, which enters title
+   * editing where the shortcut never fires, and moved the top task up — a no-op).
    *
    * Actions:
-   * 1. Both clients have same 3 tasks
-   * 2. Client A moves Task1 to top (offline)
-   * 3. Client B moves Task3 to top (offline)
-   * 4. Both sync - LWW should resolve
-   * 5. Verify consistent state
+   * 1. A creates Task1..Task3; new tasks go on top: [T3, T2, T1]. B downloads.
+   * 2. A moves T1 up twice: [T1, T3, T2] (offline)
+   * 3. B moves T3 down twice, later: [T2, T1, T3] (offline)
+   * 4. Sync A, B, A
+   * 5. Verify both show B's order (LWW: B's TAG:TODAY write is later)
    */
   test('Concurrent reordering resolves consistently', async ({
     browser,
@@ -261,60 +259,32 @@ test.describe('@supersync Task Ordering Sync', () => {
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
 
-      // Verify both have all tasks
-      await waitForTask(clientA.page, task1Name);
-      await waitForTask(clientB.page, task1Name);
-      console.log('[Concurrent Order Test] Both clients have all tasks');
+      const full = (name: string): string => createdTitle('A', testRunId, name);
+      const initialOrder = [task3Name, task2Name, task1Name].map(full);
+      await expect(taskTitleLocator(clientA)).toHaveText(initialOrder);
+      await expect(taskTitleLocator(clientB)).toHaveText(initialOrder);
 
       // ============ PHASE 2: Concurrent Reordering ============
-      // Client A moves Task1 to top
-      const task1A = clientA.page.locator(`task:has-text("${task1Name}")`);
-      await task1A.click();
-      await clientA.page.keyboard.press('Control+Shift+ArrowUp');
-      await clientA.page.waitForTimeout(300);
-      console.log('[Concurrent Order Test] Client A moved Task1 to top');
+      await moveTaskWithKeyboard(getTaskElement(clientA, task1Name), 'up', 2);
+      const orderA = [task1Name, task3Name, task2Name].map(full);
+      await expect(taskTitleLocator(clientA)).toHaveText(orderA);
 
-      // Client B moves Task3 to top (concurrent, no sync yet)
-      const task3B = clientB.page.locator(`task:has-text("${task3Name}")`);
-      await task3B.click();
-      await clientB.page.keyboard.press('Control+Shift+ArrowUp');
-      await clientB.page.waitForTimeout(300);
-      console.log('[Concurrent Order Test] Client B moved Task3 to top');
+      // B's write is the later one.
+      await clientB.page.waitForTimeout(1000);
+      await moveTaskWithKeyboard(getTaskElement(clientB, task3Name), 'down', 2);
+      const orderB = [task2Name, task1Name, task3Name].map(full);
+      await expect(taskTitleLocator(clientB)).toHaveText(orderB);
 
       // ============ PHASE 3: Sync - LWW Resolution ============
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
-      await clientA.sync.syncAndWait(); // Final sync to converge
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
 
-      // Allow UI to settle after sync operations under load
-      await clientA.page.waitForTimeout(500);
-      await clientB.page.waitForTimeout(500);
-      console.log('[Concurrent Order Test] All clients synced');
-
-      // ============ PHASE 4: Verify Consistent State ============
-      const getOrder = async (client: SimulatedE2EClient): Promise<string[]> => {
-        const tasks = client.page.locator('task');
-        const count = await tasks.count();
-        const order: string[] = [];
-        for (let i = 0; i < count; i++) {
-          const title = await tasks.nth(i).locator('.task-title').textContent();
-          order.push(title?.trim() || '');
-        }
-        return order;
-      };
-
-      const orderA = await getOrder(clientA);
-      const orderB = await getOrder(clientB);
-
-      console.log('[Concurrent Order Test] Client A final order:', orderA);
-      console.log('[Concurrent Order Test] Client B final order:', orderB);
-
-      // Both clients should have the same order (eventual consistency)
-      expect(orderA.length).toBe(3);
-      expect(orderB.length).toBe(3);
-      expect(orderA).toEqual(orderB);
-
-      console.log('[Concurrent Order Test] Both clients have consistent order');
+      // ============ PHASE 4: Verify Converged Order ============
+      // Retrying assertions first: the list may still re-render after sync.
+      await expect(taskTitleLocator(clientA)).toHaveText(orderB);
+      await expect(taskTitleLocator(clientB)).toHaveText(orderB);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

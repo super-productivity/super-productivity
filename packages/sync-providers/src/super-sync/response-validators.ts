@@ -5,6 +5,14 @@ import type {
   SnapshotUploadResponse,
   SuperSyncOpDownloadResponse,
 } from '../provider-types';
+import type {
+  SuperSyncCaptureClaimResult,
+  SuperSyncCaptureGrantList,
+  SuperSyncCaptureTokenResult,
+  SuperSyncCaptureConnectCodeResult,
+  SuperSyncDeviceListResponse,
+  SuperSyncReplaceTokenResult,
+} from './super-sync.model';
 
 /**
  * Host-injected response validators. The package can't import
@@ -24,4 +32,10 @@ export interface SuperSyncResponseValidators {
   validateRestorePoints(data: unknown): RestorePointsResponse;
   validateRestoreSnapshot(data: unknown): RestoreSnapshotResponse;
   validateDeleteAllData(data: unknown): { success: boolean };
+  validateDevices(data: unknown): SuperSyncDeviceListResponse;
+  validateReplaceToken(data: unknown): SuperSyncReplaceTokenResult;
+  validateCaptureClaim(data: unknown): SuperSyncCaptureClaimResult;
+  validateCaptureGrants(data: unknown): SuperSyncCaptureGrantList;
+  validateCaptureConnectCode(data: unknown): SuperSyncCaptureConnectCodeResult;
+  validateCaptureToken(data: unknown): SuperSyncCaptureTokenResult;
 }

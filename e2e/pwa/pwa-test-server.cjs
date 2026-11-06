@@ -36,6 +36,40 @@ version2Manifest.hashTable['/index.html'] = createHash('sha1')
   .digest('hex');
 const version2ManifestBody = Buffer.from(JSON.stringify(version2Manifest));
 
+// Installs from before #10715 registered ngsw-worker.js directly. The
+// "legacy" version serves this build with only that registration changed, so a
+// test can update such an install to the sw.js entry point.
+const buildLegacyVersion = () => {
+  const mainScript = version1Html.match(/<script src="(main-[^"]+\.js)"/)?.[1];
+  if (!mainScript) {
+    throw new Error(`Unable to find the main script in ${INDEX_PATH}`);
+  }
+  let registrations = 0;
+  const legacyMain = readFileSync(path.join(DIST_ROOT, mainScript), 'utf8').replace(
+    /([`'"])sw\.js\1/g,
+    (_match, quote) => {
+      registrations += 1;
+      return `${quote}ngsw-worker.js${quote}`;
+    },
+  );
+  if (registrations !== 2) {
+    throw new Error(
+      `Expected 2 sw.js registrations in ${mainScript}, found ${registrations}`,
+    );
+  }
+  const mainBody = Buffer.from(legacyMain);
+  const manifest = JSON.parse(JSON.stringify(version1Manifest));
+  manifest.hashTable[`/${mainScript}`] = createHash('sha1')
+    .update(mainBody)
+    .digest('hex');
+  return {
+    mainPath: `/${mainScript}`,
+    mainBody,
+    manifestBody: Buffer.from(JSON.stringify(manifest)),
+  };
+};
+let legacyVersion = null;
+
 let activeVersion = 'v1';
 let manifestRequestCount = 0;
 
@@ -50,7 +84,7 @@ const sendBuffer = (request, response, contentType, body) => {
 
 const interceptVersionedRequests = (request, response) => {
   const { pathname } = new URL(request.url ?? '/', 'http://localhost');
-  const versionMatch = pathname.match(/^\/__e2e\/pwa\/version\/(v1|v2)$/);
+  const versionMatch = pathname.match(/^\/__e2e\/pwa\/version\/(v1|v2|legacy)$/);
 
   if (request.method === 'GET' && pathname === '/__e2e/pwa/manifest-request-count') {
     sendBuffer(
@@ -63,6 +97,15 @@ const interceptVersionedRequests = (request, response) => {
   }
 
   if (request.method === 'POST' && versionMatch) {
+    if (versionMatch[1] === 'legacy' && !legacyVersion) {
+      try {
+        legacyVersion = buildLegacyVersion();
+      } catch (e) {
+        response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(String(e));
+        return;
+      }
+    }
     activeVersion = versionMatch[1];
     sendBuffer(
       request,
@@ -78,9 +121,23 @@ const interceptVersionedRequests = (request, response) => {
     return;
   }
 
+  if (activeVersion === 'legacy' && pathname === legacyVersion.mainPath) {
+    sendBuffer(
+      request,
+      response,
+      'text/javascript; charset=utf-8',
+      legacyVersion.mainBody,
+    );
+    return;
+  }
+
   if (pathname === '/ngsw.json') {
     const manifestBody =
-      activeVersion === 'v2' ? version2ManifestBody : version1ManifestBody;
+      activeVersion === 'v2'
+        ? version2ManifestBody
+        : activeVersion === 'legacy'
+          ? legacyVersion.manifestBody
+          : version1ManifestBody;
     manifestRequestCount += 1;
     sendBuffer(request, response, 'application/json; charset=utf-8', manifestBody);
     return;

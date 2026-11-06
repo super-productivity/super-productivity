@@ -1,11 +1,15 @@
 import { IValidation } from 'typia';
-import type { SyncFilePrefixInvalidPrefixDetails } from '@sp/sync-core';
+import type {
+  SyncFileHeadShape,
+  SyncFilePrefixInvalidPrefixDetails,
+} from '@sp/sync-core';
 import {
   AdditionalLogErrorBase as PackageAdditionalLogErrorBase,
   extractErrorMessage as packageExtractErrorMessage,
 } from '@sp/sync-providers/errors';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
 import { KNOWN_ACTION_TYPES } from '../action-types.enum';
+import { ConflictReason } from '../../sync-providers/provider.const';
 
 /** Upper bound for the entity count reported in a sync diagnostic. */
 const MAX_REPORTED_ENTITY_COUNT = 9999;
@@ -16,6 +20,7 @@ const MAX_REPORTED_ENTITY_COUNT = 9999;
 // Identity is covered by sync-errors.identity.spec.ts.
 export {
   AuthFailSPError,
+  ClientUpdateRequiredSPError,
   EmptyRemoteBodySPError,
   FileHashCreationAPIError,
   HttpNotOkAPIError,
@@ -48,6 +53,18 @@ const getValidationErrors = (
   return undefined;
 };
 
+/**
+ * Typia's IError carries the offending `value` — a task title, note body,
+ * project name. `additionalLog` on the classes below renders into the global
+ * error alert and the prefilled GitHub issue body, so keep only the
+ * schema-derived parts (rule: never log user content). `path`/`expected` are
+ * what a maintainer needs to locate the failing field anyway.
+ */
+const stripValidationErrorValues = (
+  errors: IValidation.IError[],
+): { path: string; expected: string }[] =>
+  errors.map((e) => ({ path: e.path, expected: e.expected }));
+
 // AdditionalLogErrorBase is provided by @sp/sync-providers (without the
 // previous constructor-time logging side effect). The remaining app-only
 // errors below extend it; they MUST log at the catch site via
@@ -73,10 +90,13 @@ export class NoSyncProviderSetError extends Error {
  */
 export class LocalDataConflictError extends Error {
   override name = 'LocalDataConflictError';
+  readonly conflictReason: ConflictReason = ConflictReason.NoLastSync;
 
   constructor(
     public readonly unsyncedCount: number,
-    public readonly remoteSnapshotState: Record<string, unknown>,
+    // `null` when the remote side arrived as ops without a snapshot (#9391) —
+    // there is no full remote state to show.
+    public readonly remoteSnapshotState: Record<string, unknown> | null,
     public readonly remoteVectorClock?: Record<string, number>,
     // The client's vector clock as of its last successful sync. Used by the
     // conflict dialog as an APPROXIMATE baseline for the per-client
@@ -90,6 +110,16 @@ export class LocalDataConflictError extends Error {
   ) {
     super(`Local data conflict: ${unsyncedCount} unsynced changes would be lost`);
   }
+}
+
+/**
+ * The remote snapshot lost changes this device already synced (#10916): with
+ * nothing pending, hydrating it would delete them silently. Routed to the same
+ * dialog as LocalDataConflictError; its reason adds an explanation.
+ */
+export class OwnUploadsMissingConflictError extends LocalDataConflictError {
+  override name = 'OwnUploadsMissingConflictError';
+  override readonly conflictReason = ConflictReason.OwnUploadsMissing;
 }
 
 export class SyncAlreadyInProgressError extends Error {
@@ -110,6 +140,21 @@ export class LockAcquisitionTimeoutError extends Error {
     super(
       `Timed out waiting ${timeoutMs}ms to acquire lock "${lockName}". ` +
         `A previous lock holder may have crashed or stalled.`,
+    );
+  }
+}
+
+/**
+ * flushThenRunExclusive could not find a moment with no capture in flight:
+ * actions kept arriving between the flush and the lock. Transient — retrying
+ * once dispatch activity settles succeeds.
+ */
+export class OperationWriteCutoffError extends Error {
+  override name = 'OperationWriteCutoffError';
+
+  constructor(attempts: number) {
+    super(
+      `Operation write cutoff not reached after ${attempts} attempts — continuous dispatch activity. Try again.`,
     );
   }
 }
@@ -336,9 +381,13 @@ const buildDecompressErrorMessage = (rawMessage: string): string => {
 export class JsonParseError extends Error {
   override name = 'JsonParseError';
   position?: number;
-  dataSample?: string;
 
-  constructor(originalError: unknown, dataStr?: string) {
+  // No raw-data sample: it had zero readers, and holding ±50 chars around the
+  // parse position retains user content (task titles, notes) on an error
+  // object (rule: log history is exportable, never log user content). The
+  // position in the message plus InvalidFilePrefixError's headShape cover the
+  // triage need.
+  constructor(originalError: unknown) {
     // Extract position from SyntaxError message (e.g., "...at position 80999")
     const positionMatch =
       originalError instanceof Error
@@ -352,13 +401,6 @@ export class JsonParseError extends Error {
 
     super(message);
     this.position = position;
-
-    // Extract a sample of the data around the error position for debugging
-    if (dataStr && position !== undefined) {
-      const start = Math.max(0, position - 50);
-      const end = Math.min(dataStr.length, position + 50);
-      this.dataSample = `...${dataStr.substring(start, end)}...`;
-    }
   }
 }
 
@@ -415,13 +457,26 @@ export class ModelValidationError extends Error {
       try {
         const errors = getValidationErrors(params.validationResult);
         if (errors) {
-          const str = JSON.stringify(errors);
+          const str = JSON.stringify(stripValidationErrorValues(errors));
           this.additionalLog = `Model: ${params.id}, Errors: ${str.substring(0, 400)}`;
         }
       } catch {
         // Ignore stringification errors
       }
     }
+  }
+}
+
+/**
+ * A backup import refused because its data is invalid and repair cannot fix it,
+ * so importing would persist and broadcast state every client rejects (#8279).
+ * UI paths map it to a translated "use an older backup" message.
+ */
+export class BackupRepairFailedError extends Error {
+  override name = 'BackupRepairFailedError';
+
+  constructor() {
+    super('Data validation failed and repair not possible');
   }
 }
 
@@ -436,7 +491,7 @@ export class DataValidationFailedError extends Error {
     try {
       const errors = getValidationErrors(validationResult);
       if (errors) {
-        const str = JSON.stringify(errors);
+        const str = JSON.stringify(stripValidationErrorValues(errors));
         this.additionalLog = str.substring(0, 400);
       }
     } catch {
@@ -470,6 +525,14 @@ export class ModelVersionToImportNewerThanLocalError extends AdditionalLogErrorB
 
 export class InvalidFilePrefixError extends AdditionalLogErrorBase {
   override name = 'InvalidFilePrefixError';
+  /**
+   * Coarse shape of what the body started with instead of the prefix.
+   * `markup` means the download was a RESPONSE page (WebDAV multistatus,
+   * proxy or captive-portal), not the stored file — handlers use this to
+   * withhold the force-overwrite offer, which would clobber a likely-intact
+   * remote file over a transient network problem.
+   */
+  readonly headShape: SyncFileHeadShape;
 
   constructor(details: SyncFilePrefixInvalidPrefixDetails) {
     super({
@@ -477,7 +540,10 @@ export class InvalidFilePrefixError extends AdditionalLogErrorBase {
       expectedPrefix: details.expectedPrefix,
       endSeparator: details.endSeparator,
       inputLength: details.inputLength,
+      prefixAt: details.prefixAt,
+      headShape: details.headShape,
     });
+    this.headShape = details.headShape;
   }
 }
 
@@ -519,6 +585,9 @@ export class StorageQuotaExceededError extends Error {
  * This can occur when the remote file was written by a different (older or newer)
  * version of the app. Force-uploading is unsafe in this case because the remote
  * may be in a newer format.
+ *
+ * `isRemoteNewer` marks a file written in a format NEWER than this build reads:
+ * it is healthy, so it must never be "recovered" from an older backup (#8764).
  */
 export class SyncDataCorruptedError extends Error {
   override name = 'SyncDataCorruptedError';
@@ -526,6 +595,7 @@ export class SyncDataCorruptedError extends Error {
   constructor(
     message: string,
     public readonly filePath: string,
+    public readonly isRemoteNewer = false,
   ) {
     super(`Sync data incompatible at ${filePath}: ${message}`);
   }

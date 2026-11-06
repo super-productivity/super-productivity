@@ -12,6 +12,7 @@ import { SyncProviderManager } from '../sync-providers/provider-manager.service'
 import { VectorClockService } from './vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
+import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
 import { LockService } from './lock.service';
@@ -38,7 +39,10 @@ import { SyncProviderId } from '../sync-providers/provider.const';
 import { LOCAL_ONLY_SYNC_KEYS } from '../../features/config/local-only-sync-settings.util';
 import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
 import { HydrationStateService } from '../apply/hydration-state.service';
+import { RepairSyncContextService } from '../validation/repair-sync-context.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { BackupService } from '../backup/backup.service';
+import { RecoveryPointBannerService } from '../../imex/local-backup/recovery-point-banner.service';
 
 describe('RemoteOpsProcessingService', () => {
   let service: RemoteOpsProcessingService;
@@ -55,6 +59,8 @@ describe('RemoteOpsProcessingService', () => {
   let syncImportFilterServiceSpy: jasmine.SpyObj<SyncImportFilterService>;
   let operationLogEffectsSpy: jasmine.SpyObj<OperationLogEffects>;
   let writeFlushServiceSpy: jasmine.SpyObj<OperationWriteFlushService>;
+  let backupServiceSpy: jasmine.SpyObj<BackupService>;
+  let recoveryPointBannerSpy: jasmine.SpyObj<RecoveryPointBannerService>;
 
   const applyAllWithReducerCommit = async (
     ops: Operation[],
@@ -99,7 +105,6 @@ describe('RemoteOpsProcessingService', () => {
       'getLatestFullStateOpEntry',
       'getOpById',
       'markRejected',
-      'clearFullStateOps',
       'clearFullStateOpsExcept',
       'getVectorClock',
     ]);
@@ -119,11 +124,11 @@ describe('RemoteOpsProcessingService', () => {
     );
     // By default, no full-state ops in store
     opLogStoreSpy.getLatestFullStateOp.and.returnValue(Promise.resolve(undefined));
+    // By default, incoming ops are not yet in the log
+    opLogStoreSpy.hasOp.and.resolveTo(false);
     // By default, both durable clock transitions succeed
     opLogStoreSpy.mergeRemoteOpClocks.and.resolveTo();
     opLogStoreSpy.markReducersCommittedAndMergeClocks.and.resolveTo();
-    // By default, clearFullStateOps returns 0 (no ops cleared)
-    opLogStoreSpy.clearFullStateOps.and.resolveTo(0);
     // By default, clearFullStateOpsExcept returns 0 (no ops cleared)
     opLogStoreSpy.clearFullStateOpsExcept.and.resolveTo(0);
     vectorClockServiceSpy = jasmine.createSpyObj('VectorClockService', [
@@ -270,9 +275,19 @@ describe('RemoteOpsProcessingService', () => {
       },
     );
 
+    backupServiceSpy = jasmine.createSpyObj('BackupService', [
+      'captureRecoveryPointIfMeaningful',
+    ]);
+    backupServiceSpy.captureRecoveryPointIfMeaningful.and.resolveTo(null);
+    recoveryPointBannerSpy = jasmine.createSpyObj('RecoveryPointBannerService', [
+      'showIfShrunk',
+    ]);
+
     TestBed.configureTestingModule({
       providers: [
         RemoteOpsProcessingService,
+        { provide: BackupService, useValue: backupServiceSpy },
+        { provide: RecoveryPointBannerService, useValue: recoveryPointBannerSpy },
         { provide: Store, useValue: storeSpy },
         { provide: SchemaMigrationService, useValue: schemaMigrationServiceSpy },
         { provide: SnackService, useValue: snackServiceSpy },
@@ -390,65 +405,133 @@ describe('RemoteOpsProcessingService', () => {
       ]);
     });
 
-    it('should log conflict identities without logging operation payloads', async () => {
-      const localOp = {
-        id: 'local-op',
-        entityType: 'TASK',
-        entityId: 'task-1',
-        payload: { title: 'private local title' },
-      } as Operation;
-      const remoteOp = {
-        id: 'remote-op',
-        entityType: 'TASK',
-        entityId: 'task-1',
-        payload: { title: 'private remote title' },
-        schemaVersion: 1,
-      } as Operation;
-      spyOn(service, 'detectConflicts').and.resolveTo({
-        nonConflicting: [],
-        conflicts: [
-          {
-            entityType: 'TASK',
-            entityId: 'task-1',
-            localOps: [localOp],
-            remoteOps: [remoteOp],
-            suggestedResolution: 'manual',
-          },
-        ],
-      });
-      conflictResolutionServiceSpy.autoResolveConflictsLWW.and.resolveTo({
-        localWinOpsCreated: 0,
-      });
-      vectorClockServiceSpy.getEntityFrontier.and.resolveTo(new Map());
-      const warnSpy = spyOn(OpLog, 'warn');
+    for (const rebaseKeptTimeDeltas of [false, true]) {
+      it(`should log only conflict identities and forward the rebase policy (${rebaseKeptTimeDeltas})`, async () => {
+        const localOp = {
+          id: 'local-op',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'private local title' },
+        } as Operation;
+        const remoteOp = {
+          id: 'remote-op',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'private remote title' },
+          schemaVersion: 1,
+        } as Operation;
+        spyOn(service, 'detectConflicts').and.resolveTo({
+          nonConflicting: [],
+          conflicts: [
+            {
+              entityType: 'TASK',
+              entityId: 'task-1',
+              localOps: [localOp],
+              remoteOps: [remoteOp],
+              suggestedResolution: 'manual',
+            },
+          ],
+        });
+        conflictResolutionServiceSpy.autoResolveConflictsLWW.and.resolveTo({
+          localWinOpsCreated: 0,
+        });
+        vectorClockServiceSpy.getEntityFrontier.and.resolveTo(new Map());
+        const warnSpy = spyOn(OpLog, 'warn');
 
-      await service.processRemoteOps([remoteOp]);
+        await service.processRemoteOps([remoteOp], {
+          rebaseKeptTimeDeltas,
+          fenceEpoch: 37,
+        });
+        const resolutionOptions =
+          conflictResolutionServiceSpy.autoResolveConflictsLWW.calls.mostRecent().args[2];
+        expect(resolutionOptions?.rebaseKeptTimeDeltas).toBe(
+          rebaseKeptTimeDeltas ? true : undefined,
+        );
+        if (rebaseKeptTimeDeltas) {
+          const assertFence = spyOn(
+            TestBed.inject(SyncProviderManager),
+            'assertSyncEpochUnchanged',
+          ).and.throwError('epoch changed');
+          expect(() => resolutionOptions?.assertFence?.('kept time deltas')).toThrowError(
+            'epoch changed',
+          );
+          expect(assertFence).toHaveBeenCalledWith(37, 'kept time deltas');
+        } else {
+          expect(resolutionOptions?.assertFence).toBeUndefined();
+        }
 
-      const summary = warnSpy.calls
-        .allArgs()
-        .find(([message]) => String(message).includes('Detected 1 conflicts'))?.[1];
-      expect(summary).toEqual({
-        conflicts: [
-          {
-            entityType: 'TASK',
-            entityId: 'task-1',
-            localOpIds: ['local-op'],
-            remoteOpIds: ['remote-op'],
-            suggestedResolution: 'manual',
-          },
-        ],
+        const summary = warnSpy.calls
+          .allArgs()
+          .find(([message]) => String(message).includes('Detected 1 conflicts'))?.[1];
+        expect(summary).toEqual({
+          conflicts: [
+            {
+              entityType: 'TASK',
+              entityId: 'task-1',
+              localOpIds: ['local-op'],
+              remoteOpIds: ['remote-op'],
+              suggestedResolution: 'manual',
+            },
+          ],
+        });
+        expect(JSON.stringify(summary)).not.toContain('private');
       });
-      expect(JSON.stringify(summary)).not.toContain('private');
-    });
+    }
 
-    // Producer freeze (journal half) for the conflict-review rollback: this is
-    // the only production entry point into autoResolveConflictsLWW, so if the
-    // flag is ever dropped the stable fleet silently starts persisting the
-    // discarded side of every conflict verbatim again. Delete that half of this
-    // test with the freeze. The disjoint-merge half is pinned the OTHER way:
-    // freezing it made concurrent disjoint-field edits lose one side by
-    // whole-entity LWW (#9095), so the merge must stay enabled here.
-    it('should freeze the journal producer but keep disjoint merge enabled on the production resolve path', async () => {
+    // #10377: a pending reorder that crossed an applied remote op is reissued
+    // before it can upload stale, on every provider.
+    for (const withConflict of [false, true]) {
+      it(`reissues crossed pending reorders after the ${withConflict ? 'LWW' : 'plain'} apply`, async () => {
+        const remoteOp = {
+          id: 'remote-order',
+          entityType: 'NOTE',
+          entityId: 'note-1',
+          payload: {},
+          schemaVersion: 1,
+        } as Operation;
+        spyOn(service, 'detectConflicts').and.resolveTo({
+          nonConflicting: [remoteOp],
+          conflicts: withConflict
+            ? [
+                {
+                  entityType: 'TASK',
+                  entityId: 'task-1',
+                  localOps: [{ id: 'local-op' } as Operation],
+                  remoteOps: [{ id: 'other-remote' } as Operation],
+                  suggestedResolution: 'manual',
+                },
+              ]
+            : [],
+        });
+        const callOrder: string[] = [];
+        conflictResolutionServiceSpy.autoResolveConflictsLWW.and.callFake(async () => {
+          callOrder.push('apply');
+          return { localWinOpsCreated: 1 };
+        });
+        spyOn(service, 'applyNonConflictingOps').and.callFake(async () => {
+          callOrder.push('apply');
+          return [];
+        });
+        spyOn(service, 'validateAfterSync').and.resolveTo(true);
+        const reissue = spyOn(
+          TestBed.inject(SupersededOperationResolverService),
+          'reissueCrossedPendingReorders',
+        ).and.callFake(async () => {
+          callOrder.push('reissue');
+          return { created: 2, deferredOpIds: [] };
+        });
+        vectorClockServiceSpy.getEntityFrontier.and.resolveTo(new Map());
+
+        const result = await service.processRemoteOps([remoteOp]);
+
+        expect(reissue).toHaveBeenCalledOnceWith();
+        expect(callOrder).toEqual(['apply', 'reissue']);
+        expect(result.localWinOpsCreated).toBe(withConflict ? 3 : 2);
+      });
+    }
+
+    // Disjoint-field merging must remain enabled (#9095).
+    it('should keep disjoint merge enabled on the production resolve path', async () => {
       const localOp = {
         id: 'local-op',
         entityType: 'TASK',
@@ -484,9 +567,7 @@ describe('RemoteOpsProcessingService', () => {
       expect(conflictResolutionServiceSpy.autoResolveConflictsLWW).toHaveBeenCalledWith(
         jasmine.any(Array),
         jasmine.any(Array),
-        jasmine.objectContaining({
-          disableConflictJournal: true,
-        }),
+        jasmine.objectContaining({}),
       );
       const resolveOptions =
         conflictResolutionServiceSpy.autoResolveConflictsLWW.calls.mostRecent().args[2];
@@ -676,6 +757,100 @@ describe('RemoteOpsProcessingService', () => {
         { pendingApply: true },
       );
       expect(result.blockedByIncompatibleOp).toBe(true);
+    });
+
+    it('should block at an op with an unknown opType, keep the prefix, and show the update-app snack (#8764)', async () => {
+      const remoteOps: Operation[] = [
+        { id: 'op1', schemaVersion: 1, opType: OpType.Update } as Operation,
+        {
+          id: 'future-vocabulary',
+          schemaVersion: 1,
+          opType: 'FUTURE_OP' as unknown as OpType,
+        } as Operation,
+        { id: 'op3', schemaVersion: 1, opType: OpType.Update } as Operation,
+      ];
+
+      opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+      opLogStoreSpy.getUnsyncedByEntity.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getEntityFrontier.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getSnapshotVectorClock.and.returnValue(Promise.resolve({}));
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+
+      const result = await service.processRemoteOps(remoteOps);
+
+      expect(result.blockedByIncompatibleOp).toBeTrue();
+      expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+        [remoteOps[0]],
+        'remote',
+        { pendingApply: true },
+      );
+      expect(schemaMigrationServiceSpy.migrateOperation).not.toHaveBeenCalledWith(
+        remoteOps[1],
+      );
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.VERSION_TOO_OLD,
+          actionStr: T.PS.UPDATE_APP,
+        }),
+      );
+    });
+
+    it('should withdraw the causal repair base for the rest of a blocked run', async () => {
+      const repairSyncContext = TestBed.inject(RepairSyncContextService);
+      const remoteOps: Operation[] = [
+        { id: 'op1', schemaVersion: 1, opType: OpType.Update } as Operation,
+        {
+          id: 'future',
+          schemaVersion: 1,
+          opType: 'FUTURE_OP' as unknown as OpType,
+        } as Operation,
+      ];
+      opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+      opLogStoreSpy.getUnsyncedByEntity.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getEntityFrontier.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getSnapshotVectorClock.and.returnValue(Promise.resolve({}));
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+
+      let baseDuringApply: number | undefined = -1;
+      operationApplierServiceSpy.applyOperations.and.callFake(async (ops, options) => {
+        baseDuringApply = repairSyncContext.baseServerSeq;
+        return applyAllWithReducerCommit(ops, options);
+      });
+
+      await repairSyncContext.runWithBaseServerSeq(12, async () => {
+        const result = await service.processRemoteOps(remoteOps);
+        expect(result.blockedByIncompatibleOp).toBeTrue();
+        expect(repairSyncContext.baseServerSeq).toBeUndefined();
+      });
+
+      expect(operationApplierServiceSpy.applyOperations).toHaveBeenCalled();
+      expect(baseDuringApply).toBeUndefined();
+      // An unblocked run keeps its base.
+      await repairSyncContext.runWithBaseServerSeq(13, async () => {
+        await service.processRemoteOps([remoteOps[0]]);
+        expect(repairSyncContext.baseServerSeq).toBe(13);
+      });
+    });
+
+    it('should block at a full-state op with an unknown syncImportReason (#8764)', async () => {
+      const remoteOps: Operation[] = [
+        {
+          id: 'future-reason',
+          schemaVersion: 1,
+          opType: OpType.SyncImport,
+          syncImportReason: 'FUTURE_REASON',
+        } as unknown as Operation,
+      ];
+
+      const result = await service.processRemoteOps(remoteOps);
+
+      expect(result.blockedByIncompatibleOp).toBeTrue();
+      expect(schemaMigrationServiceSpy.migrateOperation).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendBatchSkipDuplicates).not.toHaveBeenCalled();
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: 'ERROR', msg: T.F.SYNC.S.VERSION_TOO_OLD }),
+      );
     });
 
     it('should report a committed full-state prefix before a blocked suffix', async () => {
@@ -957,6 +1132,202 @@ describe('RemoteOpsProcessingService', () => {
       });
       expect(wasApplyingDuringDrain).toBeFalse();
       expect(result.fullStateApplyBlockedByLocalConflict).toBeTrue();
+    });
+
+    it('should capture a REMOTE_IMPORT recovery point before applying a full-state op', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-recovery-point',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      const order: string[] = [];
+      backupServiceSpy.captureRecoveryPointIfMeaningful.and.callFake(async () => {
+        order.push('capture');
+        return { backupId: 'b1', savedAt: 1, reason: 'REMOTE_IMPORT', taskCount: 9 };
+      });
+      operationApplierServiceSpy.applyOperations.and.callFake(async (ops, options) => {
+        order.push('apply');
+        return applyAllWithReducerCommit(ops, options);
+      });
+
+      await service.processRemoteOps([syncImportOp]);
+
+      expect(backupServiceSpy.captureRecoveryPointIfMeaningful).toHaveBeenCalledOnceWith(
+        'REMOTE_IMPORT',
+      );
+      expect(order).toEqual(['capture', 'apply']);
+    });
+
+    it('should not capture a recovery point for a full-state op already in the log', async () => {
+      const duplicateImport: Operation = {
+        id: 'sync-import-duplicate',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      opLogStoreSpy.hasOp.and.resolveTo(true);
+      opLogStoreSpy.appendBatchSkipDuplicates.and.resolveTo({
+        seqs: [],
+        writtenOps: [],
+        skippedCount: 1,
+      });
+
+      await service.processRemoteOps([duplicateImport]);
+
+      expect(backupServiceSpy.captureRecoveryPointIfMeaningful).not.toHaveBeenCalled();
+      expect(operationApplierServiceSpy.applyOperations).not.toHaveBeenCalled();
+    });
+
+    it('should hand the before/after task counts to the shrink banner after a full-state apply', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-shrink',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: { task: { ids: ['t1'], entities: {} } },
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      backupServiceSpy.captureRecoveryPointIfMeaningful.and.resolveTo({
+        backupId: 'b1',
+        savedAt: 1,
+        reason: 'REMOTE_IMPORT',
+        taskCount: 9,
+      });
+
+      await service.processRemoteOps([syncImportOp]);
+
+      expect(recoveryPointBannerSpy.showIfShrunk).toHaveBeenCalledOnceWith(9, 1);
+    });
+
+    it('should unwrap a REPAIR payload before counting tasks for the shrink banner', async () => {
+      const repairOp: Operation = {
+        id: 'repair-wrapped',
+        opType: OpType.Repair,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {
+          appDataComplete: { task: { ids: ['t1', 't2', 't3'], entities: {} } },
+          repairSummary: {},
+        },
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      backupServiceSpy.captureRecoveryPointIfMeaningful.and.resolveTo({
+        backupId: 'b1',
+        savedAt: 1,
+        reason: 'REMOTE_IMPORT',
+        taskCount: 3,
+      });
+
+      await service.processRemoteOps([repairOp]);
+
+      expect(recoveryPointBannerSpy.showIfShrunk).toHaveBeenCalledOnceWith(3, 3);
+    });
+
+    it('should skip the capture when the caller already holds a recovery point', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-rebuild',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: { task: { ids: ['t1'], entities: {} } },
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      await service.processRemoteOps([syncImportOp], {
+        skipConflictDetection: true,
+        skipRecoveryPoint: true,
+      });
+
+      expect(backupServiceSpy.captureRecoveryPointIfMeaningful).not.toHaveBeenCalled();
+      expect(recoveryPointBannerSpy.showIfShrunk).not.toHaveBeenCalled();
+    });
+
+    it('should not consult the shrink banner when nothing was captured', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-fresh-device',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      await service.processRemoteOps([syncImportOp]);
+
+      expect(recoveryPointBannerSpy.showIfShrunk).not.toHaveBeenCalled();
+    });
+
+    it('should abort the full-state apply when the recovery point cannot be captured', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-capture-failed',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      backupServiceSpy.captureRecoveryPointIfMeaningful.and.rejectWith(
+        new Error('IDB quota exceeded'),
+      );
+
+      await expectAsync(service.processRemoteOps([syncImportOp])).toBeRejected();
+
+      expect(operationApplierServiceSpy.applyOperations).not.toHaveBeenCalled();
+      expect(
+        validateStateServiceSpy.validateAndRepairCurrentState,
+      ).not.toHaveBeenCalled();
+      // the deferred-action drain still runs so buffered local actions are not lost
+      expect(operationLogEffectsSpy.processDeferredActions).toHaveBeenCalledOnceWith({
+        callerHoldsOperationLogLock: true,
+      });
+    });
+
+    it('should not capture a recovery point for non-full-state remote ops', async () => {
+      await service.processRemoteOps(
+        [
+          {
+            id: 'plain-op',
+            opType: OpType.Update,
+            actionType: '[Task] Update' as ActionType,
+            entityType: 'TASK',
+            entityId: 't1',
+            payload: {},
+            clientId: 'client-1',
+            vectorClock: { client1: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          } as Operation,
+        ],
+        { skipConflictDetection: true },
+      );
+
+      expect(backupServiceSpy.captureRecoveryPointIfMeaningful).not.toHaveBeenCalled();
     });
 
     it('should propagate an already-held operation-log lock through full-state apply and validation', async () => {
@@ -1807,6 +2178,45 @@ describe('RemoteOpsProcessingService', () => {
         'partial-apply-failure',
         { callerHoldsLock: false },
       );
+    });
+
+    it('should withdraw the causal repair base before validating a partial apply failure', async () => {
+      // A REPAIR minted after a partial apply failure must NOT claim the whole
+      // downloaded cursor: its snapshot only covers the ops that actually
+      // applied. A falsely causal REPAIR makes receivers drop their concurrent
+      // prefix ops outright (`SyncImportFilterService`, `isPrefixOp` +
+      // `repairBaseServerSeq !== undefined`) instead of replaying them after the
+      // repair boundary, deleting work that was never in the snapshot.
+      const repairSyncContext = TestBed.inject(RepairSyncContextService);
+      const remoteOps: Operation[] = [
+        createFullOp({ id: 'op-1' }),
+        createFullOp({ id: 'op-2' }),
+        createFullOp({ id: 'op-3' }),
+      ];
+
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      opLogStoreSpy.markApplied.and.returnValue(Promise.resolve());
+      opLogStoreSpy.markFailed.and.returnValue(Promise.resolve());
+      operationApplierServiceSpy.applyOperations.and.callFake(async (ops, options) => {
+        await options?.onReducersCommitted?.(ops);
+        return {
+          appliedOps: [remoteOps[0]],
+          failedOp: { op: remoteOps[1], error: new Error('Test error') },
+        };
+      });
+
+      let baseDuringValidation: number | undefined = -1;
+      validateStateServiceSpy.validateAndRepairCurrentState.and.callFake(async () => {
+        baseDuringValidation = repairSyncContext.baseServerSeq;
+        return true;
+      });
+
+      await repairSyncContext.runWithBaseServerSeq(150, async () => {
+        await expectAsync(service.applyNonConflictingOps(remoteOps)).toBeRejected();
+      });
+
+      expect(validateStateServiceSpy.validateAndRepairCurrentState).toHaveBeenCalled();
+      expect(baseDuringValidation).toBeUndefined();
     });
 
     it('should preserve the incomplete-remote error when the deferred drain also fails', async () => {

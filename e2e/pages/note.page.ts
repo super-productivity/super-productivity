@@ -1,5 +1,6 @@
 import { type Locator, type Page } from '@playwright/test';
 import { BasePage } from './base.page';
+import { fillMarkdownEditor, markdownEditor } from '../utils/markdown-editor';
 
 export class NotePage extends BasePage {
   readonly toggleNotesBtn: Locator;
@@ -7,7 +8,7 @@ export class NotePage extends BasePage {
   readonly notesSection: Locator;
   readonly notesList: Locator;
   readonly noteDialog: Locator;
-  readonly noteTextarea: Locator;
+  readonly noteEditor: Locator;
   readonly saveNoteBtn: Locator;
 
   constructor(page: Page, testPrefix: string = '') {
@@ -24,7 +25,7 @@ export class NotePage extends BasePage {
     this.notesList = page.locator('notes .notes, .notes-list');
     // Use dialog-fullscreen-markdown specifically as it's the note edit component
     this.noteDialog = page.locator('dialog-fullscreen-markdown');
-    this.noteTextarea = page.locator('dialog-fullscreen-markdown textarea');
+    this.noteEditor = markdownEditor(this.noteDialog);
     this.saveNoteBtn = page.locator(
       '#T-save-note, button:has(mat-icon:has-text("save"))',
     );
@@ -89,9 +90,7 @@ export class NotePage extends BasePage {
     await this.noteDialog.waitFor({ state: 'visible', timeout: 5000 });
 
     // Fill content
-    const textarea = this.page.locator('textarea').first();
-    await textarea.waitFor({ state: 'visible', timeout: 3000 });
-    await textarea.fill(content);
+    await fillMarkdownEditor(this.noteDialog, content);
 
     // Save
     let saveBtn = this.page.locator('#T-save-note');
@@ -106,7 +105,7 @@ export class NotePage extends BasePage {
       await saveBtn.click();
     } else {
       // Fallback: use keyboard shortcut
-      await textarea.press('Control+Enter');
+      await this.noteEditor.press('Control+Enter');
     }
 
     // Wait for dialog to close
@@ -134,10 +133,7 @@ export class NotePage extends BasePage {
     await this.noteDialog.waitFor({ state: 'visible', timeout: 5000 });
 
     // Clear and fill new content
-    const textarea = this.page.locator('textarea').first();
-    await textarea.waitFor({ state: 'visible', timeout: 3000 });
-    await textarea.clear();
-    await textarea.fill(newContent);
+    await fillMarkdownEditor(this.noteDialog, newContent);
 
     // Save
     let saveBtn = this.page.locator('#T-save-note');

@@ -281,37 +281,6 @@ export const waitForPluginInMenu = async (
 };
 
 /**
- * Debug helper to log current plugin state
- */
-export const logPluginState = async (page: Page): Promise<void> => {
-  await page.evaluate(() => {
-    const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-    const plugins = cards.map((card) => {
-      const title =
-        card.querySelector('mat-card-title')?.textContent?.trim() || 'Unknown';
-      const toggle = card.querySelector(
-        'mat-slide-toggle button[role="switch"]',
-      ) as HTMLButtonElement;
-      const enabled = toggle?.getAttribute('aria-checked') === 'true';
-      return { title, enabled };
-    });
-
-    const menuButtons = Array.from(
-      document.querySelectorAll('magic-side-nav nav-item button'),
-    ).map((btn) => btn.textContent?.trim() || '');
-
-    return {
-      pluginCards: plugins,
-      menuEntries: menuButtons,
-      hasPluginManagement: !!document.querySelector('plugin-management'),
-      hasMagicSideNav: !!document.querySelector('magic-side-nav'),
-    };
-  });
-
-  // Plugin state debugging removed to reduce test output
-};
-
-/**
  * Get timeout multiplier for CI environment
  */
 export const getCITimeoutMultiplier = (): number => {
@@ -423,57 +392,6 @@ export const disablePluginWithVerification = async (
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[Plugin Test] Timeout waiting for plugin to disable: ${message}`);
-    return false;
-  }
-};
-
-/**
- * Robust element clicking with multiple selector fallbacks
- */
-export const robustClick = async (
-  page: Page,
-  selectors: string[],
-  timeout: number = 8000, // Reduced from 10s to 8s
-): Promise<boolean> => {
-  for (const selector of selectors) {
-    try {
-      const element = page.locator(selector).first();
-      await element.waitFor({ state: 'visible', timeout: timeout / selectors.length });
-      await element.click();
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.log(`Selector ${selector} failed: ${message}`);
-    }
-  }
-  console.error(`All selectors failed: ${selectors.join(', ')}`);
-  return false;
-};
-
-/**
- * Wait for element with multiple selector fallbacks
- */
-export const robustWaitFor = async (
-  page: Page,
-  selectors: string[],
-  timeout: number = 8000, // Reduced from 10s to 8s
-): Promise<boolean> => {
-  const promises = selectors.map((selector) =>
-    page
-      .locator(selector)
-      .first()
-      .waitFor({
-        state: 'visible',
-        timeout,
-      })
-      .then(() => selector)
-      .catch(() => null),
-  );
-
-  try {
-    const result = await Promise.race(promises.filter(Boolean));
-    return !!result;
-  } catch {
     return false;
   }
 };

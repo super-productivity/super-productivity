@@ -1,6 +1,6 @@
 import { autoFixTypiaErrors } from './auto-fix-typia-errors';
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
-import { validateAllData } from './validation-fn';
+import { appDataValidators, validateAllData } from './validation-fn';
 import type { AppDataComplete } from '../model/model-config';
 import type { IValidation } from 'typia';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
@@ -766,10 +766,8 @@ describe('autoFixTypiaErrors — against REAL typia validation (#9139)', () => {
   //
   // This is why an empty theme is STICKIER than a missing one: a missing theme
   // self-heals on the next validation pass, `{}` is invisible to validation
-  // forever. The settings dialog persists exactly `{}` (see #9156).
-  //
-  // When #9156 is fixed these expectations SHOULD flip — that is the signal,
-  // not a regression.
+  // forever. The settings dialog stopped writing `{}` in #9156, and replaces a
+  // stored `{}` with the default on its next save or cancel; until then it stays.
   it('DOCUMENTS #9156: an empty or partial theme is invisible to validation', () => {
     expect(isValid(buildTag((t) => (t.theme = {})))).toBe(true);
     expect(
@@ -781,5 +779,189 @@ describe('autoFixTypiaErrors — against REAL typia validation (#9139)', () => {
         }),
       ),
     ).toBe(true);
+  });
+});
+
+// Issue #8279: a synced state failed typia with the first error at
+// `project.entities["…"].advancedCfg.worklogExportSettings.groupBy` (expected
+// the WorklogGrouping enum). No branch healed it, so every sync that brought in
+// remote ops ended in "sync validation failed". Driven through the REAL
+// validator so the tests fail if typia reports these at a different path.
+describe('autoFixTypiaErrors — invalid worklogExportSettings (#8279)', () => {
+  beforeEach(() => {
+    spyOn(OP_LOG_SYNC_LOGGER, 'err').and.stub();
+    spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
+  });
+
+  // Starts with a digit like the id in the #8279 log, so typia emits the
+  // bracketed `entities["…"]` path form.
+  const ENTITY_ID = '6CrcqXM8F9qJ7f58';
+
+  // A user who customised their export settings: the heal must keep these.
+  const USER_SETTINGS = {
+    cols: ['DATE', 'TITLES', 'TIME_STR'],
+    roundWorkTimeTo: 'QUARTER',
+    roundStartTimeTo: null,
+    roundEndTimeTo: null,
+    separateTasksBy: ' ; ',
+    groupBy: 'TASK',
+  };
+
+  const build = (
+    root: 'project' | 'tag',
+    mutate: (s: Record<string, unknown>) => void,
+  ): AppDataComplete => {
+    const d = createAppDataCompleteMock() as unknown as Record<string, unknown>;
+    const base = root === 'project' ? DEFAULT_PROJECT : DEFAULT_TAG;
+    const settings = structuredClone(USER_SETTINGS) as Record<string, unknown>;
+    mutate(settings);
+    const entity = {
+      ...structuredClone(base),
+      id: ENTITY_ID,
+      title: 'Probe',
+      ...(root === 'tag' ? { created: Date.now() } : {}),
+      advancedCfg: { worklogExportSettings: settings },
+    };
+    d[root] = { ids: [ENTITY_ID], entities: { [ENTITY_ID]: entity } };
+    return d as unknown as AppDataComplete;
+  };
+
+  const errorsOf = (d: AppDataComplete): IValidation.IError[] =>
+    (validateAllData(d) as { errors?: IValidation.IError[] }).errors ?? [];
+  const isValid = (d: AppDataComplete): boolean =>
+    (validateAllData(d) as { success: boolean }).success;
+  const settingsOf = (d: AppDataComplete, root: 'project' | 'tag'): unknown =>
+    (d as any)[root].entities[ENTITY_ID].advancedCfg.worklogExportSettings;
+
+  (['project', 'tag'] as const).forEach((root) => {
+    it(`real typia reports an invalid ${root} groupBy at the #8279 path`, () => {
+      const errors = errorsOf(build(root, (s) => (s.groupBy = 'INVALID')));
+
+      expect(errors.length).toBe(1);
+      expect(errors[0].path).toBe(
+        `$input.${root}.entities["${ENTITY_ID}"].advancedCfg.worklogExportSettings.groupBy`,
+      );
+      expect(errors[0].expected).toBe('("DATE" | "PARENT" | "TASK" | "WORKLOG")');
+    });
+
+    // `undefined`: projects created between 2019-03 and 2019-04 persisted
+    // worklogExportSettings before `groupBy` existed (b0b00a5a63e..4e8857d7de5).
+    (
+      [
+        ['an unknown value', (s: Record<string, unknown>): unknown => (s.groupBy = 'X')],
+        ['a missing value', (s: Record<string, unknown>): unknown => delete s.groupBy],
+        ['null', (s: Record<string, unknown>): unknown => (s.groupBy = null)],
+      ] as const
+    ).forEach(([label, mutate]) => {
+      it(`heals ${label} for ${root} groupBy, keeping the other settings`, () => {
+        const data = build(root, mutate);
+        expect(isValid(data)).toBe(false);
+
+        const repaired = autoFixTypiaErrors(data, errorsOf(data));
+
+        expect(isValid(repaired)).toBe(true);
+        expect(settingsOf(repaired, root)).toEqual({
+          ...USER_SETTINGS,
+          groupBy: 'DATE',
+        });
+      });
+    });
+
+    it(`heals other invalid ${root} worklogExportSettings fields`, () => {
+      const data = build(root, (s) => {
+        delete s.separateTasksBy;
+        s.cols = ['DATE', 'NOT_A_COL'];
+        s.roundWorkTimeTo = 'FORTNIGHT';
+      });
+      expect(isValid(data)).toBe(false);
+
+      const repaired = autoFixTypiaErrors(data, errorsOf(data));
+
+      expect(isValid(repaired)).toBe(true);
+      expect(settingsOf(repaired, root)).toEqual({
+        ...USER_SETTINGS,
+        cols: ['DATE', 'START', 'END', 'TIME_CLOCK', 'TITLES_INCLUDING_SUB'],
+        roundWorkTimeTo: null,
+        separateTasksBy: ' | ',
+      });
+    });
+  });
+
+  it('does not alias the shared defaults into the repaired state', () => {
+    const data = build('project', (s) => (s.cols = ['NOT_A_COL']));
+
+    const repaired = autoFixTypiaErrors(data, errorsOf(data));
+
+    const cols = (settingsOf(repaired, 'project') as { cols: string[] }).cols;
+    expect(cols).toEqual(['DATE', 'START', 'END', 'TIME_CLOCK', 'TITLES_INCLUDING_SUB']);
+    expect(cols).not.toBe(DEFAULT_PROJECT.advancedCfg.worklogExportSettings.cols);
+  });
+});
+
+// Both encodings have been persisted by master builds. Exercise the real validator.
+describe('autoFixTypiaErrors — mixed task priority encodings', () => {
+  beforeEach(() => {
+    spyOn(OP_LOG_SYNC_LOGGER, 'err').and.stub();
+    spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
+  });
+
+  const withTaskPriority = (priority: unknown): AppDataComplete => {
+    const d = createAppDataCompleteMock();
+    const task = { ...DEFAULT_TASK, id: 't1', projectId: INBOX_PROJECT.id, priority };
+    return {
+      ...d,
+      task: { ...initialTaskState, ids: ['t1'], entities: { t1: task } },
+      archiveYoung: {
+        ...d.archiveYoung,
+        task: {
+          ids: ['young'],
+          entities: { young: { ...task, id: 'young', isDone: true } },
+        },
+      },
+      archiveOld: {
+        ...d.archiveOld,
+        task: { ids: ['old'], entities: { old: { ...task, id: 'old', isDone: true } } },
+      },
+    } as unknown as AppDataComplete;
+  };
+
+  for (const priority of ['high', 'medium', 'low', 1, 2, 3, null, undefined] as const) {
+    it(`preserves ${priority} through validation and repair`, () => {
+      const d = withTaskPriority(priority);
+      const before = validateAllData(d);
+      expect(before.success).toBe(true);
+      expect(appDataValidators.archiveYoung(d.archiveYoung).success).toBe(true);
+      expect(appDataValidators.archiveOld(d.archiveOld).success).toBe(true);
+      const result = autoFixTypiaErrors(d, before.success ? [] : before.errors);
+      expect(result.task.entities.t1!.priority).toBe(priority);
+      expect(result.archiveYoung.task.entities.young!.priority).toBe(priority);
+      expect(result.archiveOld.task.entities.old!.priority).toBe(priority);
+      expect(validateAllData(result).success).toBe(true);
+      expect(appDataValidators.archiveYoung(result.archiveYoung).success).toBe(true);
+      expect(appDataValidators.archiveOld(result.archiveOld).success).toBe(true);
+    });
+  }
+
+  for (const archive of ['archiveYoung', 'archiveOld'] as const) {
+    it(`rejects an invalid priority in ${archive}`, () => {
+      const d = withTaskPriority('invalid');
+      const result = appDataValidators[archive](d[archive]);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.errors.some((error) => error.path.endsWith('.priority'))).toBe(
+          true,
+        );
+      }
+    });
+  }
+
+  it('keeps an unknown numeric priority, which only a newer client could write', () => {
+    const d = withTaskPriority(4);
+    const before = validateAllData(d);
+    expect(before.success).toBe(false);
+
+    const result = autoFixTypiaErrors(d, (before as IValidation.IFailure).errors);
+
+    expect(result.task.entities.t1!.priority as unknown).toBe(4);
   });
 });

@@ -60,15 +60,15 @@ test.describe('Project completion', () => {
     await celebration.locator('.actions button').click();
     await expect(celebration).toBeHidden();
 
-    await page.goto('/#/archived-projects');
-    const archivedProject = page
-      .locator('archived-projects-page .project-row')
-      .filter({ hasText: 'Test Project' });
-    await expect(archivedProject).toBeVisible();
+    // The sidebar links to the archived projects below the project list (#10473).
+    await expect(projectPage.archivedProjectsLink).toContainText('Archived (1)');
+    await projectPage.archivedProjectsLink.click();
+    await expect(page).toHaveURL(/\/#\/archived-projects$/);
+    await expect(projectPage.archivedProjectRow('Test Project')).toBeVisible();
 
-    await archivedProject.getByRole('button', { name: 'Reopen' }).click();
-
-    await expect(archivedProject).toHaveCount(0);
+    await projectPage.reopenArchivedProject('Test Project');
+    // Nothing is archived any more, so the link goes away.
+    await expect(projectPage.archivedProjectsLink).toBeHidden();
     await projectPage.navigateToProjectByName('Test Project');
     await expect(page).toHaveURL(/\/#\/project\/.+\/tasks/);
 

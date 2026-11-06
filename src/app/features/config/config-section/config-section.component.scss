@@ -10,6 +10,52 @@
     display: block;
   }
 
+  // Reads as one more field row (same input tokens as the formly rows above),
+  // so a link to elsewhere sits in the list instead of floating below it.
+  .action-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    width: 100%;
+    min-height: 56px;
+    // The last form field above already reserves its subscript space; pull the
+    // row up so it sits at the same spacing as the rows between fields.
+    margin-top: calc(-1 * var(--s2));
+    margin-bottom: var(--s2);
+    padding: 0 var(--s2);
+    border: 1px solid var(--input-border-color);
+    border-radius: var(--input-border-radius);
+    background: var(--input-bg);
+    color: var(--button-primary-label);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition: background var(--transition-duration-s) ease-out;
+
+    &:hover {
+      background: var(--input-bg-hover);
+    }
+
+    &:focus-visible {
+      outline: var(--focus-ring-width) solid var(--focus-ring-color);
+      outline-offset: var(--focus-ring-offset);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.6;
+    }
+
+    &__label {
+      flex: 1;
+    }
+
+    // Decorative cue: the label keeps the contrast-safe button ink.
+    &__icon {
+      color: var(--c-primary);
+    }
+  }
+
   .section-actions {
     display: flex;
     flex-wrap: wrap;

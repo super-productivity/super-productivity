@@ -39,7 +39,11 @@
 }
 
 // Encryption status box - groups password info and encryption action buttons
+// NOTE: formly puts `className` on the <formly-field> host, which has no default
+// display. Without `display: block` the bordered box stays inline and its
+// border-radius renders as stray round caps around the block-level children.
 .encryption-status-box {
+  display: block;
   border: 1px solid var(--extra-border-color);
   border-radius: var(--card-border-radius);
   padding: var(--s);

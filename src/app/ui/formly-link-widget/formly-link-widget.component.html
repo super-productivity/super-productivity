@@ -1,6 +1,6 @@
 <a
   #linkEl
-  [href]="field.templateOptions?.url"
+  [href]="$safeNavigationMigration(field.templateOptions?.url)"
   target="_blank"
-  >{{ field.templateOptions?.txt | translate }}</a
+  >{{ $safeNavigationMigration(field.templateOptions?.txt) | translate }}</a
 >

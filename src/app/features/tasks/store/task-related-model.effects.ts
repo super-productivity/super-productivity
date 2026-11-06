@@ -16,6 +16,7 @@ import { moveProjectTaskToRegularList } from '../../project/store/project.action
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
 import { Store } from '@ngrx/store';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { selectTaskEntities } from './task.selectors';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { DateService } from '../../../core/date/date.service';
@@ -42,6 +43,8 @@ export class TaskRelatedModelEffects {
         ofType(TimeTrackingActions.addTimeSpent),
         // PERF: Skip during hydration/sync before any further work.
         filter(() => !this._hydrationState.isApplyingRemoteOps()),
+        // Time back-filled for a past day is not work done today.
+        filter(({ isBackfill }) => !isBackfill),
         // Cheap field checks first: a task with its own due date is already
         // handled by dueDay-based TODAY membership, so it can never need
         // auto-adding here. Running these before any store read means the
@@ -109,15 +112,24 @@ export class TaskRelatedModelEffects {
       filter(
         ({ src, target }) => (src === 'UNDONE' || src === 'BACKLOG') && target === 'DONE',
       ),
-      map(({ taskId }) =>
-        TaskSharedActions.updateTask({
-          task: {
-            id: taskId,
-            changes: {
-              isDone: true,
-            },
-          },
-        }),
+      // The backlog lists done tasks too. Marking one done again would only
+      // stamp a new `doneOn`: it moves the completion date and turns a won't-do
+      // task into a completed one (`isWontDoTask`).
+      concatMap(({ taskId }) =>
+        this._store.select(selectTaskEntities).pipe(
+          first(),
+          filter((entities) => !entities[taskId]?.isDone),
+          map(() =>
+            TaskSharedActions.updateTask({
+              task: {
+                id: taskId,
+                changes: {
+                  isDone: true,
+                },
+              },
+            }),
+          ),
+        ),
       ),
     ),
   );

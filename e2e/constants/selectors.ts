@@ -77,15 +77,8 @@ export const cssSelectors = {
   // SETTINGS PAGE SELECTORS
   // ============================================================================
   PAGE_SETTINGS: '.page-settings',
-  PLUGIN_SECTION: '.plugin-section',
-  PLUGIN_MANAGEMENT: 'plugin-management',
   COLLAPSIBLE: 'collapsible',
   COLLAPSIBLE_HEADER: '.collapsible-header',
-
-  // Plugin selectors
-  PLUGIN_CARD: 'plugin-management mat-card',
-  PLUGIN_TOGGLE: 'mat-slide-toggle button[role="switch"]',
-  PLUGIN_FILE_INPUT: 'input[type="file"][accept=".zip"]',
 
   // ============================================================================
   // PROJECT SELECTORS
@@ -94,7 +87,7 @@ export const cssSelectors = {
   CREATE_PROJECT_BTN:
     'button[aria-label="Create New Project"], button:has-text("Create Project")',
   PROJECT_NAME_INPUT: '[name="projectName"]',
-  WORK_CONTEXT_MENU: 'work-context-menu',
+  WORK_CONTEXT_MENU: '.work-context-menu-panel',
   MOVE_TO_ARCHIVE_BTN: '.e2e-move-done-to-archive',
 
   // ============================================================================
@@ -133,6 +126,22 @@ export const cssSelectors = {
   SCHEDULE_TASK_ITEM:
     'task-detail-item:has(mat-icon:text("alarm")), task-detail-item:has(mat-icon:text("today")), task-detail-item:has(mat-icon:text("schedule"))',
   TASK_SCHEDULE_BTN: '.ico-btn.schedule-btn',
+
+  // ============================================================================
+  // SYNC BUTTON SELECTORS
+  // ============================================================================
+  // Upload state of the header sync button. The current build exposes it as
+  // `data-sync-confirmation`. Released clients that the compatibility specs run
+  // (v18.14.0 to v19.1.0) render a `check` / `done_all` badge instead, so each
+  // selector lists both forms.
+  SYNC_UPLOADED:
+    'button.sync-btn[data-sync-confirmation], .sync-btn mat-icon.sync-state-ico',
+  SYNC_REMOTE_CONFIRMED:
+    'button.sync-btn[data-sync-confirmation="remote"], .sync-btn mat-icon.sync-state-ico:has-text("done_all")',
+  // Error state of the header sync button: the current build shows the
+  // `sync_error` SVG icon; released clients show the `sync_problem` ligature.
+  SYNC_ERROR:
+    '.sync-btn mat-icon[data-mat-icon-name="sync_error"], .sync-btn mat-icon:has-text("sync_problem")',
 } as const;
 
 export type SelectorKey = keyof typeof cssSelectors;

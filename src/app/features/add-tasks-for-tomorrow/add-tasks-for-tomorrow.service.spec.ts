@@ -396,6 +396,26 @@ describe('AddTasksForTomorrowService', () => {
         logicalTomorrow,
       );
     });
+
+    it('should not mutate the repeat cfg array it gets from the store', async () => {
+      // memoized selector output - nrOfPlannerItemsForTomorrow$ holds the same array
+      const cfgs = [
+        { ...mockRepeatCfg, id: 'second', order: 2 },
+        { ...mockRepeatCfg, id: 'first', order: 1 },
+      ];
+      taskRepeatCfgServiceMock.getRepeatableTasksForExactDay$.and.returnValue(of(cfgs));
+      store.overrideSelector(selectTasksWithDueTimeForRange, []);
+      store.overrideSelector(selectTasksDueForDay, []);
+      store.overrideSelector(
+        selectTasksForPlannerDay(getDbDateStr(tomorrow.getTime())),
+        [],
+      );
+      store.overrideSelector(selectTodayTaskIds, []);
+
+      await service.addAllDueTomorrow();
+
+      expect(cfgs.map((c) => c.id)).toEqual(['second', 'first']);
+    });
   });
 
   describe('addAllDueToday()', () => {
@@ -539,6 +559,24 @@ describe('AddTasksForTomorrowService', () => {
       expect(
         taskRepeatCfgServiceMock.getAllUnprocessedRepeatableTasks$,
       ).toHaveBeenCalledWith(logicalToday.getTime());
+    });
+
+    it('should not mutate the repeat cfg array it gets from the store', async () => {
+      const cfgs = [
+        { ...mockRepeatCfg, id: 'second', order: 2 },
+        { ...mockRepeatCfg, id: 'first', order: 1 },
+      ];
+      taskRepeatCfgServiceMock.getAllUnprocessedRepeatableTasks$.and.returnValue(
+        of(cfgs),
+      );
+      store.overrideSelector(selectTasksWithDueTimeForRange, []);
+      store.overrideSelector(selectTasksDueForDay, []);
+      store.overrideSelector(selectTasksForPlannerDay(getDbDateStr(today)), []);
+      store.overrideSelector(selectTodayTaskIds, []);
+
+      await service.addAllDueToday();
+
+      expect(cfgs.map((c) => c.id)).toEqual(['second', 'first']);
     });
   });
 

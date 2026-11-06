@@ -43,6 +43,8 @@ const ROOT_STYLESHEET = path.join(SRC_DIR, 'styles.scss');
 // Carries a real document-level <style> block.
 const INDEX_HTML = path.join(SRC_DIR, 'index.html');
 
+const toPosix = (p) => p.split(path.sep).join('/');
+
 /**
  * Custom properties that are set at runtime rather than declared in CSS.
  * Add here ONLY with a verified source — never to silence a real typo.
@@ -229,7 +231,9 @@ for (const file of sourceFiles) {
         const componentScoped = anyDefs.has(name);
         anyComponentScoped ||= componentScoped;
         offenders.push({
-          location: `${path.relative(REPO_ROOT, file)}:${idx + 1}`,
+          // Reported paths stay posix-style so the output (and the specs that
+          // match it) reads the same on Windows as it does on macOS and Linux.
+          location: `${toPosix(path.relative(REPO_ROOT, file))}:${idx + 1}`,
           name: componentScoped ? `${name}   (component-scoped)` : name,
         });
       }

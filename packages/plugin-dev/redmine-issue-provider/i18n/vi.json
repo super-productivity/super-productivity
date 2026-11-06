@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Máy chủ (ví dụ: https://redmine.org)",
+    "API_KEY": "Khóa API",
+    "PROJECT_ID": "ID dự án",
+    "PROJECT_ID_DESC": "Mô tả",
+    "SCOPE": "Phạm vi",
+    "SCOPE_ALL": "Tất cả",
+    "SCOPE_CREATED": "Tôi tạo",
+    "SCOPE_ASSIGNED": "Giao cho tôi",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Hiện hộp thoại báo cáo Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Mô tả",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Hiện hộp thoại khi việc con hoàn thành",
+    "DEFAULT_TIME": "Giá trị thời gian mặc định cho hộp thoại",
+    "DEFAULT_TIME_ALL_TIME": "Điền tất cả thời gian dành cho công việc",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Điền tất cả thời gian đã dùng trừ thời gian đã ghi",
+    "DEFAULT_TIME_TODAY": "Chỉ điền thời gian dùng hôm nay",
+    "DEFAULT_TIME_YESTERDAY": "Chỉ điền thời gian dùng hôm qua"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Tóm tắt",
+    "STATUS": "Trạng thái",
+    "PRIORITY": "Ưu tiên",
+    "AUTHOR": "Tác giả",
+    "ASSIGNEE": "Người được giao",
+    "CATEGORY": "Danh mục",
+    "VERSION": "Phiên bản",
+    "DUE_DATE": "Ngày hết hạn",
+    "TIME_SPENT": "Thời gian đã dùng",
+    "DESCRIPTION": "Mô tả"
+  },
+  "FORM_HELP": "<p>Cấu hình Super Productivity liệt kê sự cố Redmine.</p><p>Tự động nhập tất cả sự cố mở.</p>"
+}

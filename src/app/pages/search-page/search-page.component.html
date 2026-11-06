@@ -48,13 +48,22 @@
                 <div
                   class="task-title"
                   [class.task-archived]="item.isArchiveTask"
+                  [class.task-deleted]="item.deletedEntry"
                   [class.task-done]="item.isDone"
                   [class.task-subtask]="!!item.parentTitle"
                 >
                   {{ item?.title }}
                 </div>
                 <div class="task-icons">
-                  @if (item.ctx) {
+                  @if (item.isProject) {
+                    <mat-icon class="issue-icon">list</mat-icon>
+                  } @else if (item.isTag) {
+                    <tag
+                      [tag]="item.ctx"
+                      [isHideTitle]="true"
+                      class="context-tag"
+                    ></tag>
+                  } @else if (item.ctx) {
                     <tag
                       [tag]="item.ctx"
                       class="context-tag"
@@ -68,6 +77,24 @@
                   }
                   @if (item.isNote) {
                     <mat-icon class="issue-icon">comment</mat-icon>
+                  }
+                  @if (item.deletedEntry) {
+                    <span class="deleted-label">
+                      <mat-icon class="archive-icon">delete_outline</mat-icon>
+                      {{ T.F.SEARCH_BAR.DELETED | translate }}
+                    </span>
+                    <button
+                      (click)="restoreDeletedItem(item, $event)"
+                      [attr.aria-label]="
+                        T.F.TASK.D_RECENTLY_DELETED.RESTORE_ARIA
+                          | translate: { title: item.title }
+                      "
+                      [title]="T.F.TASK.D_RECENTLY_DELETED.RESTORE | translate"
+                      mat-icon-button
+                      class="restore-deleted-btn"
+                    >
+                      <mat-icon>restore_from_trash</mat-icon>
+                    </button>
                   }
                   @if (item.isArchiveTask) {
                     <mat-icon class="archive-icon">archive</mat-icon>

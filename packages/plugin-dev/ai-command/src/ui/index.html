@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+    <title>AI Command</title>
+    <link
+      rel="stylesheet"
+      href="styles.css"
+    />
+  </head>
+  <body>
+    <main
+      class="aic"
+      id="app"
+    >
+      <h2>
+        <span>AI Command</span>
+        <button
+          id="settings-btn"
+          class="btn-outline"
+          type="button"
+          hidden
+        >
+          Settings
+        </button>
+      </h2>
+      <section
+        id="ask"
+        hidden
+      >
+        <textarea
+          id="input"
+          rows="2"
+          aria-label="What should change?"
+          placeholder="e.g. “Call the dentist tomorrow, 15 min” or “What should I focus on?”"
+        ></textarea>
+        <p
+          class="hint muted"
+          id="hint"
+        ></p>
+      </section>
+      <div
+        class="result"
+        id="body"
+        aria-live="polite"
+      ></div>
+      <footer id="footer"></footer>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

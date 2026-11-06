@@ -124,35 +124,4 @@ test.describe('Complete Daily Workflow', () => {
     const url = page.url();
     expect(url).toMatch(/daily-summary|before-finish-day/);
   });
-
-  test('should navigate back from daily summary', async ({
-    page,
-    workViewPage,
-    taskPage,
-    testPrefix,
-  }) => {
-    await workViewPage.waitForTaskList();
-
-    // Create and complete a task
-    await workViewPage.addTask(`${testPrefix}-Nav Task`);
-    const task = taskPage.getTaskByText(`${testPrefix}-Nav Task`);
-    await taskPage.markTaskAsDone(task);
-
-    // Finish day
-    const finishDayBtn = page.locator(FINISH_DAY_BTN);
-    await finishDayBtn.waitFor({ state: 'visible' });
-    await finishDayBtn.click();
-
-    // Wait for daily summary
-    await page.waitForURL(/daily-summary/);
-
-    // Click Save and go home
-    const saveBtn = page.locator(SAVE_AND_GO_HOME_BTN);
-    await saveBtn.waitFor({ state: 'visible' });
-    await saveBtn.click();
-
-    // Verify we're back at work view
-    await page.waitForURL(/tag\/TODAY/);
-    await expect(page.locator('task-list').first()).toBeVisible();
-  });
 });

@@ -10,6 +10,7 @@ const runLaterToday = (
   tasks: (Task | undefined)[],
   todayStr: string,
   offset: number = 0,
+  currentTaskId: string | null = null,
 ): TaskWithSubTasks[] => {
   const snapshot: SchedulingSnapshot[] = tasks
     .filter((t): t is Task => !!t)
@@ -23,7 +24,12 @@ const runLaterToday = (
       parentId: t.parentId ?? null,
       subTaskIds: t.subTaskIds,
     }));
-  const structure = selectLaterTodayStructure.projector(snapshot, todayStr, offset);
+  const structure = selectLaterTodayStructure.projector(
+    snapshot,
+    todayStr,
+    offset,
+    currentTaskId,
+  );
   const entities: Record<string, Task | undefined> = {};
   tasks.forEach((t) => {
     if (t) {
@@ -618,6 +624,39 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     expect(subTaskIds).toContain('SUB_UNSCHEDULED_M');
   });
 
+  it('should order subtasks by parent subTaskIds, not by store insertion order (#9614)', () => {
+    // Reordering subtasks (drag & drop / move up / down) only updates
+    // parent.subTaskIds - the entity insertion order in the store never changes.
+    // The Later Today panel must follow subTaskIds like every other list.
+    const parentTask = createMockTask({
+      id: 'PARENT_REORDERED',
+      title: 'Parent with reordered subtasks',
+      dueWithTime: todayAt(22, 0),
+      dueDay: todayStr,
+      subTaskIds: ['SUB_R2', 'SUB_R1'], // user moved SUB_R2 to the top
+    });
+
+    const subR1 = createMockTask({
+      id: 'SUB_R1',
+      title: 'Subtask created first',
+      parentId: 'PARENT_REORDERED',
+      dueDay: todayStr,
+    });
+
+    const subR2 = createMockTask({
+      id: 'SUB_R2',
+      title: 'Subtask created second',
+      parentId: 'PARENT_REORDERED',
+      dueDay: todayStr,
+    });
+
+    // Store insertion order (creation order): SUB_R1 before SUB_R2
+    const result = runLaterToday([parentTask, subR1, subR2], todayStr, 0);
+
+    expect(result.length).toBe(1);
+    expect(result[0].subTasks?.map((st) => st.id)).toEqual(['SUB_R2', 'SUB_R1']);
+  });
+
   it('should expose scheduled nested subtasks as top-level when their direct parent is not included', () => {
     const grandparent = createMockTask({
       id: 'GRANDPARENT',
@@ -826,6 +865,75 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       const result = runLaterToday([taskAt8amFeb15], feb15Str, FOUR_HOURS_MS);
 
       expect(result.length).toBe(0);
+    });
+  });
+  describe('currently tracked task', () => {
+    it('should exclude the tracked task even when it starts later today', () => {
+      const appointment = createMockTask({
+        id: 'APPOINTMENT',
+        title: 'Meeting at 2 PM',
+        dueWithTime: todayAt(14, 0),
+      });
+      const other = createMockTask({
+        id: 'OTHER',
+        title: 'Call at 6 PM',
+        dueWithTime: todayAt(18, 0),
+      });
+
+      const result = runLaterToday([appointment, other], todayStr, 0, 'APPOINTMENT');
+
+      expect(result.map((t) => t.id)).toEqual(['OTHER']);
+    });
+
+    it('should exclude the parent when one of its subtasks is tracked', () => {
+      const parent = createMockTask({
+        id: 'PARENT',
+        title: 'Parent',
+        dueDay: todayStr,
+        subTaskIds: ['SUB'],
+      });
+      const sub = createMockTask({
+        id: 'SUB',
+        title: 'Sub at 2 PM',
+        parentId: 'PARENT',
+        dueWithTime: todayAt(14, 0),
+      });
+
+      expect(runLaterToday([parent, sub], todayStr, 0).map((t) => t.id)).toEqual([
+        'PARENT',
+      ]);
+      expect(runLaterToday([parent, sub], todayStr, 0, 'SUB')).toEqual([]);
+    });
+
+    it('should exclude a scheduled subtask when its parent is tracked', () => {
+      const parent = createMockTask({
+        id: 'PARENT',
+        title: 'Parent',
+        dueDay: todayStr,
+        subTaskIds: ['SUB'],
+      });
+      const sub = createMockTask({
+        id: 'SUB',
+        title: 'Sub at 2 PM',
+        parentId: 'PARENT',
+        dueWithTime: todayAt(14, 0),
+      });
+
+      // Without the parent, the subtask would be promoted to a top-level entry
+      // with no parent context while the parent sits in the main list.
+      expect(runLaterToday([parent, sub], todayStr, 0, 'PARENT')).toEqual([]);
+    });
+
+    it('should keep everything else when nothing is tracked', () => {
+      const appointment = createMockTask({
+        id: 'APPOINTMENT',
+        title: 'Meeting at 2 PM',
+        dueWithTime: todayAt(14, 0),
+      });
+
+      const result = runLaterToday([appointment], todayStr, 0, null);
+
+      expect(result.map((t) => t.id)).toEqual(['APPOINTMENT']);
     });
   });
 });

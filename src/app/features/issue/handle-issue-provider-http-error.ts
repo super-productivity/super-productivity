@@ -15,6 +15,7 @@ export const handleIssueProviderHttpError$ = <T>(
 ): ObservableInput<T> => {
   const errorBody: unknown = error.error;
   IssueLog.log('Issue provider HTTP error', {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     issueProviderKey,
     status: error.status,
     errorBodyName: _getErrorBodyName(errorBody),
@@ -53,7 +54,10 @@ export const handleIssueProviderHttpError$ = <T>(
   }
   const ipLabel = ISSUE_PROVIDER_HUMANIZED[issueProviderKey];
   if (error && error.message) {
-    return throwError({ [HANDLED_ERROR_PROP_STR]: `${ipLabel}: ` + error.message });
+    // Angular bakes the request URL into `message`; it can carry a token and the
+    // handled error is logged whole, so mask it the way the provider dialog does.
+    const message = error.url ? error.message.split(error.url).join('…') : error.message;
+    return throwError({ [HANDLED_ERROR_PROP_STR]: `${ipLabel}: ` + message });
   }
 
   return throwError({ [HANDLED_ERROR_PROP_STR]: `${ipLabel}: ${getErrorTxt(error)}` });

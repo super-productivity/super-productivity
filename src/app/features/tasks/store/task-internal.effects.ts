@@ -16,6 +16,7 @@ import {
   selectTasksConfig,
 } from '../../config/store/global-config.reducer';
 import { Task, TaskState } from '../task.model';
+import { isCompletedTask } from '../util/is-wont-do-task';
 import { EMPTY, of } from 'rxjs';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
@@ -54,10 +55,14 @@ export class TaskInternalEffects {
           return false;
         }
         const parent = state.entities[task.parentId] as Task;
-        const undoneSubTasks = parent.subTaskIds.filter(
-          (id) => !(state.entities[id] as Task).isDone,
-        );
-        return undoneSubTasks.length === 0;
+        // Marking a done parent done again would only stamp a new `doneOn`,
+        // which turns a won't-do parent into a completed one.
+        if (parent.isDone) {
+          return false;
+        }
+        const subTasks = parent.subTaskIds.map((id) => state.entities[id] as Task);
+        // A parent whose subtasks were all finished as won't do wasn't completed.
+        return subTasks.every((t) => t.isDone) && subTasks.some(isCompletedTask);
       }),
       map(([action, miscCfg, state]) =>
         TaskSharedActions.updateTask({
@@ -155,6 +160,34 @@ export class TaskInternalEffects {
         return of(
           TaskSharedActions.updateTask({
             task: { id: taskId, changes: { tagIds: ownTagIds } },
+          }),
+        );
+      }),
+    ),
+  );
+
+  /**
+   * Starting a done task re-opens it. The `setCurrentTask` reducer only moves
+   * the unsynced `currentTaskId` pointer (it may resolve a parent to one of its
+   * subtasks), so the completion flip has to be its own persistent op or other
+   * devices never learn about it (#9904). Reads `currentTaskId` after the
+   * reducer ran so the op targets the task that was actually started.
+   */
+  reopenStartedDoneTask$ = createEffect(() =>
+    this._actions$.pipe(
+      ofType(setCurrentTask),
+      withLatestFrom(this._store$.pipe(select(selectTaskFeatureState))),
+      mergeMap(([, state]) => {
+        const currentTaskId = state.currentTaskId;
+        const currentTask = currentTaskId
+          ? (state.entities[currentTaskId] as Task | undefined)
+          : undefined;
+        if (!currentTask || !currentTask.isDone) {
+          return EMPTY;
+        }
+        return of(
+          TaskSharedActions.updateTask({
+            task: { id: currentTask.id, changes: { isDone: false } },
           }),
         );
       }),

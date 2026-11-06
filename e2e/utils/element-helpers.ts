@@ -20,21 +20,6 @@ export const safeIsVisible = async (
 };
 
 /**
- * Safely checks if an element is enabled, returning false on any error.
- * Use this instead of `.isEnabled().catch(() => false)` pattern.
- *
- * @param locator - Playwright locator to check
- * @returns Promise<boolean> - true if enabled, false otherwise
- */
-export const safeIsEnabled = async (locator: Locator): Promise<boolean> => {
-  try {
-    return await locator.isEnabled();
-  } catch {
-    return false;
-  }
-};
-
-/**
  * Ensures the global add task bar is open and returns the input locator.
  * If the bar is closed, it will click the add button to open it.
  * Uses proper condition-based waiting to avoid race conditions.
@@ -56,3 +41,16 @@ export const ensureGlobalAddTaskBarOpen = async (page: Page): Promise<Locator> =
   await addTaskInput.waitFor({ state: 'visible', timeout: 10000 });
   return addTaskInput;
 };
+
+/**
+ * The calendar header's "next month" arrow inside a scope (usually a dialog).
+ *
+ * Do not reach for this by role: the datetime picker's quick-access row has its
+ * own "Next month" shortcut, so `getByRole('button', { name: /next month/i })`
+ * matches two elements and fails on strict mode.
+ *
+ * @param scope - Locator to search within, e.g. the schedule dialog
+ * @returns Locator - The calendar's next-month navigation button
+ */
+export const calendarNextMonthBtn = (scope: Locator): Locator =>
+  scope.locator('.mat-calendar-next-button');

@@ -12,6 +12,8 @@ import { Operation, OpType, ActionType } from '../core/operation.types';
 import { T } from '../../t.const';
 import { MAX_CONCURRENT_RESOLUTION_ATTEMPTS } from '../core/operation-log.const';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import { OperationLogDownloadService } from './operation-log-download.service';
+import { OpLog } from '../../core/log';
 
 describe('RejectedOpsHandlerService', () => {
   let service: RejectedOpsHandlerService;
@@ -46,13 +48,18 @@ describe('RejectedOpsHandlerService', () => {
       'getOpById',
       'markRejected',
       'markSynced',
+      'getVectorClock',
     ]);
+    opLogStoreSpy.getVectorClock.and.resolveTo(null);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     supersededOperationResolverSpy = jasmine.createSpyObj(
       'SupersededOperationResolverService',
-      ['resolveSupersededLocalOps'],
+      ['resolveSupersededLocalOps', 'rebaseCommutingTimeDeltaRejections'],
     );
     supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(0);
+    supersededOperationResolverSpy.rebaseCommutingTimeDeltaRejections.and.resolveTo(
+      new Set<string>(),
+    );
     repairOperationServiceSpy = jasmine.createSpyObj('RepairOperationService', [
       'rebaseStaleRepair',
     ]);
@@ -68,6 +75,10 @@ describe('RejectedOpsHandlerService', () => {
           useValue: supersededOperationResolverSpy,
         },
         { provide: RepairOperationService, useValue: repairOperationServiceSpy },
+        {
+          provide: OperationLogDownloadService,
+          useValue: { hasUnseenRemoteOps: () => false },
+        },
       ],
     });
 
@@ -563,6 +574,51 @@ describe('RejectedOpsHandlerService', () => {
         expect(downloadCallback).toHaveBeenCalled();
       });
 
+      it('should leave ops pending while the backlog is only partly downloaded (#8763)', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 1 });
+        spyOn(
+          TestBed.inject(OperationLogDownloadService),
+          'hasUnseenRemoteOps',
+        ).and.returnValue(true);
+
+        const result = await service.handleRejectedOps(
+          [{ opId: 'op-1', error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+          downloadCallback,
+        );
+
+        expect(downloadCallback).toHaveBeenCalledTimes(1);
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+        expect(result).toEqual({
+          kind: 'completed',
+          mergedOpsCreated: 0,
+          permanentRejectionCount: 0,
+        });
+      });
+
+      it('should not spend the resolution-attempt budget across partial backlog passes', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 1 });
+        spyOn(
+          TestBed.inject(OperationLogDownloadService),
+          'hasUnseenRemoteOps',
+        ).and.returnValue(true);
+
+        for (let i = 0; i <= MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
+          await service.handleRejectedOps(
+            [{ opId: 'op-1', error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+            downloadCallback,
+          );
+        }
+
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      });
+
       it('should stop rejection handling when the nested download is cancelled', async () => {
         const op = createOp({ id: 'op-1' });
         opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
@@ -805,7 +861,199 @@ describe('RejectedOpsHandlerService', () => {
 
         // Should have called twice: normal then forced
         expect(downloadCallback).toHaveBeenCalledTimes(2);
-        expect(downloadCallback).toHaveBeenCalledWith({ forceFromSeq0: true });
+        expect(downloadCallback).toHaveBeenCalledWith({
+          forceFromSeq0: true,
+          isReDeliveryRetry: true,
+        });
+      });
+
+      it('should skip the forced download when every rejection is rebased in place (#10214)', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.resolveTo(mockEntry(op));
+        downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 0 });
+        supersededOperationResolverSpy.rebaseCommutingTimeDeltaRejections.and.resolveTo(
+          new Set(['op-1']),
+        );
+        const assertFence = jasmine.createSpy('assertFence');
+
+        const result = await service.handleRejectedOps(
+          [
+            {
+              opId: 'op-1',
+              error: 'concurrent',
+              errorCode: 'CONFLICT_CONCURRENT',
+              existingClock: { remote: 2 },
+            },
+          ],
+          downloadCallback,
+          assertFence,
+        );
+
+        // The resolver re-asserts the cycle's sync epoch before its write.
+        expect(
+          supersededOperationResolverSpy.rebaseCommutingTimeDeltaRejections,
+        ).toHaveBeenCalledWith([jasmine.objectContaining({ opId: 'op-1' })], assertFence);
+        expect(downloadCallback).toHaveBeenCalledTimes(1);
+        expect(downloadCallback).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ forceFromSeq0: true }),
+        );
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).not.toHaveBeenCalled();
+        expect(result).toEqual({
+          kind: 'completed',
+          mergedOpsCreated: 1,
+          permanentRejectionCount: 0,
+        });
+      });
+
+      it('should log the clocks of rejections no remote op explains', async () => {
+        const warnSpy = spyOn(OpLog, 'warn');
+        const op = createOp({
+          id: 'op-1',
+          clientId: 'local',
+          vectorClock: { local: 5, remote: 2 },
+        });
+        opLogStoreSpy.getOpById.and.resolveTo(mockEntry(op));
+        opLogStoreSpy.getVectorClock.and.resolveTo({ local: 5, remote: 2 });
+        downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 0 });
+
+        await service.handleRejectedOps(
+          [
+            {
+              opId: 'op-1',
+              error: 'superseded',
+              errorCode: 'CONFLICT_SUPERSEDED',
+              existingClock: { local: 7, remote: 2 },
+            },
+          ],
+          downloadCallback,
+        );
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          'RejectedOpsHandlerService: Rejected ops not explained by remote ops',
+          jasmine.objectContaining({
+            count: 1,
+            samples: [
+              {
+                opId: 'op-1',
+                opClientId: 'local',
+                // [server, op, local]: the server saw local:7, this client is at 5.
+                serverAhead: { local: [7, 5, 5] },
+              },
+            ],
+          }),
+        );
+      });
+
+      describe('when the local clock already covers the rejection clocks', () => {
+        // Clock shape from an Android report: three stale pending edits of one
+        // task, superseded by a server version this client's clock is past.
+        const staleOp = (id: string, phone: number, desktop: number): Operation =>
+          createOp({
+            id,
+            clientId: 'phone',
+            vectorClock: { phone, desktop },
+          });
+        const serverClock = { phone: 1025, desktop: 24583 };
+
+        const rejectAll = (ops: Operation[]): RejectedOpInfo[] =>
+          ops.map((op) => ({
+            opId: op.id,
+            error: 'Superseded operation: server has newer version of TASK:entity-1',
+            errorCode: 'CONFLICT_SUPERSEDED',
+            existingClock: serverClock,
+          }));
+
+        it('should resolve without a forced download', async () => {
+          const ops = [
+            staleOp('op-1', 1006, 23271),
+            staleOp('op-2', 1007, 23272),
+            staleOp('op-3', 1008, 23273),
+          ];
+          opLogStoreSpy.getOpById.and.callFake(async (opId: string) =>
+            mockEntry(ops.find((op) => op.id === opId)!),
+          );
+          opLogStoreSpy.getVectorClock.and.resolveTo({ phone: 1044, desktop: 26325 });
+          downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 0 });
+          supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
+
+          const result = await service.handleRejectedOps(
+            rejectAll(ops),
+            downloadCallback,
+          );
+
+          expect(downloadCallback).toHaveBeenCalledTimes(1);
+          expect(downloadCallback).not.toHaveBeenCalledWith(
+            jasmine.objectContaining({ forceFromSeq0: true }),
+          );
+          expect(
+            supersededOperationResolverSpy.resolveSupersededLocalOps,
+          ).toHaveBeenCalledOnceWith(
+            ops.map((op) => ({ opId: op.id, op, existingClock: serverClock })),
+            [serverClock, serverClock, serverClock],
+            undefined,
+          );
+          expect(result).toEqual({
+            kind: 'completed',
+            mergedOpsCreated: 1,
+            permanentRejectionCount: 0,
+          });
+        });
+
+        it('should resolve without a forced download when the local clock equals the rejection clock', async () => {
+          const ops = [staleOp('op-1', 1006, 23271)];
+          opLogStoreSpy.getOpById.and.resolveTo(mockEntry(ops[0]));
+          opLogStoreSpy.getVectorClock.and.resolveTo({ ...serverClock });
+          downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 0 });
+          supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
+
+          await service.handleRejectedOps(rejectAll(ops), downloadCallback);
+
+          expect(downloadCallback).not.toHaveBeenCalledWith(
+            jasmine.objectContaining({ forceFromSeq0: true }),
+          );
+          expect(
+            supersededOperationResolverSpy.resolveSupersededLocalOps,
+          ).toHaveBeenCalledTimes(1);
+        });
+
+        it('should still force the download when one rejection clock is ahead of the local clock', async () => {
+          const ops = [staleOp('op-1', 1006, 23271), staleOp('op-2', 1007, 23272)];
+          opLogStoreSpy.getOpById.and.callFake(async (opId: string) =>
+            mockEntry(ops.find((op) => op.id === opId)!),
+          );
+          opLogStoreSpy.getVectorClock.and.resolveTo({ phone: 1044, desktop: 26325 });
+          const rejections = rejectAll(ops);
+          rejections[1] = {
+            ...rejections[1],
+            existingClock: { ...serverClock, desktop: 26326 },
+          };
+          downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 0 });
+
+          await service.handleRejectedOps(rejections, downloadCallback);
+
+          expect(downloadCallback).toHaveBeenCalledWith(
+            jasmine.objectContaining({ forceFromSeq0: true }),
+          );
+        });
+
+        it('should still force the download when a rejection names no server clock', async () => {
+          const ops = [staleOp('op-1', 1006, 23271), staleOp('op-2', 1007, 23272)];
+          opLogStoreSpy.getOpById.and.callFake(async (opId: string) =>
+            mockEntry(ops.find((op) => op.id === opId)!),
+          );
+          opLogStoreSpy.getVectorClock.and.resolveTo({ phone: 1044, desktop: 26325 });
+          const rejections = rejectAll(ops);
+          delete rejections[1].existingClock;
+          downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 0 });
+
+          await service.handleRejectedOps(rejections, downloadCallback);
+
+          expect(downloadCallback).toHaveBeenCalledWith(
+            jasmine.objectContaining({ forceFromSeq0: true }),
+          );
+        });
       });
 
       it('should not resolve an op already retired by the forced download', async () => {

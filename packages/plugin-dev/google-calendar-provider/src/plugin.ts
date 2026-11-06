@@ -11,7 +11,8 @@ import type {
 declare const PluginAPI: {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
   startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult>;
-  getOAuthToken(): Promise<string | null>;
+  // Internal host ↔ bundled-plugin contract; not supported for third-party plugins.
+  getOAuthToken(tokenKey?: string): Promise<string | null>;
   clearOAuthToken(): Promise<void>;
 };
 
@@ -39,9 +40,13 @@ const MOBILE_CLIENT_ID =
 const IOS_CLIENT_ID =
   '637968426975-ka1muro7mee1go0m7hhog49fm7svr4os.apps.googleusercontent.com';
 
+// Transient host config paired with getOAuthToken(tokenKey), never synced or public.
+const SP_OAUTH_TOKEN_KEY_CFG_KEY = '__spOAuthTokenKey';
+
 // --- Config ---
 
 interface GoogleCalendarConfig {
+  [SP_OAUTH_TOKEN_KEY_CFG_KEY]?: string;
   readCalendarIds?: string[];
   writeCalendarId?: string;
   syncRangeWeeks?: string;
@@ -252,6 +257,9 @@ const isDeclined = (event: GoogleCalendarEvent): boolean =>
 const isSpManagedEvent = (event: GoogleCalendarEvent): boolean =>
   typeof event.extendedProperties?.private?.spTaskId === 'string';
 
+/** Minimum lookback for the read window, like the iCal provider's START_OFFSET. */
+const LOOKBACK_MS = 2 * 60 * 60 * 1000;
+
 /** Fetch events from a single calendar. */
 const fetchEventsForCalendar = async (
   http: PluginHttp,
@@ -261,7 +269,19 @@ const fetchEventsForCalendar = async (
 ): Promise<PluginSearchResult[]> => {
   const syncRangeWeeks = parseInt(cfg.syncRangeWeeks || '', 10) || 2;
   const now = new Date();
-  const timeMin = now.toISOString();
+  // Google applies `timeMin` (exclusive) to an event's END time, so
+  // `timeMin = now` drops an event on the first poll after it ends (#10190).
+  // Start the window at the user's LOCAL start of day, so events that ended
+  // earlier today stay in the schedule/agenda, or LOOKBACK_MS ago if that is
+  // earlier, so a late-evening event is still shown just after midnight.
+  const localStartOfDayMs = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const timeMin = new Date(
+    Math.min(localStartOfDayMs, now.getTime() - LOOKBACK_MS),
+  ).toISOString();
   const timeMax = new Date(
     now.getTime() + syncRangeWeeks * 7 * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -284,17 +304,73 @@ const fetchEventsForCalendar = async (
     .map((e) => mapEventToSearchResult(e, calendarId));
 };
 
+/** Calendar colors rarely change; reuse them across agenda polls. */
+const CALENDAR_COLORS_TTL_MS = 60 * 60 * 1000;
+// Per provider instance (each has its own OAuth token key), so two connected
+// Google accounts never share colors.
+const calendarColorsCache = new Map<
+  string,
+  { colors: Map<string, string>; fetchedAt: number }
+>();
+
+/**
+ * Each calendar's color as set in Google Calendar, keyed by calendar id ('primary'
+ * included). Only the first calendarList page is read, and per-event colors
+ * (`colorId`) are not used. Colors are cosmetic: a failed lookup keeps the last
+ * known colors, or none, and the host falls back to its own color.
+ */
+const fetchCalendarColors = async (
+  http: PluginHttp,
+  cfg: GoogleCalendarConfig,
+): Promise<Map<string, string>> => {
+  const cacheKey = cfg[SP_OAUTH_TOKEN_KEY_CFG_KEY] ?? '';
+  const cached = calendarColorsCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < CALENDAR_COLORS_TTL_MS) {
+    return cached.colors;
+  }
+  try {
+    const res = await http.get<{
+      items?: { id: string; primary?: boolean; backgroundColor?: string }[];
+    }>(`${GOOGLE_CALENDAR_API}/users/me/calendarList`, {
+      params: { fields: 'items(id,primary,backgroundColor)' },
+    });
+    const colors = new Map<string, string>();
+    for (const cal of res.items || []) {
+      if (!cal.backgroundColor) continue;
+      colors.set(cal.id, cal.backgroundColor);
+      if (cal.primary) colors.set('primary', cal.backgroundColor);
+    }
+    calendarColorsCache.set(cacheKey, { colors, fetchedAt: Date.now() });
+    return colors;
+  } catch {
+    return cached?.colors ?? new Map();
+  }
+};
+
+/** Test-only: forget cached calendar colors. */
+export const _resetCalendarColorsCache = (): void => {
+  calendarColorsCache.clear();
+};
+
 /** Fetch events from all read calendars, merged and sorted by start time. */
 const fetchEvents = async (
   http: PluginHttp,
   cfg: GoogleCalendarConfig,
-  opts?: { query?: string; maxResults?: string },
+  opts?: { query?: string; maxResults?: string; withColors?: boolean },
 ): Promise<PluginSearchResult[]> => {
   const calendarIds = getReadCalendarIds(cfg);
-  const results = await Promise.all(
-    calendarIds.map((calId) => fetchEventsForCalendar(http, calId, cfg, opts)),
-  );
-  return results.flat().sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  const [results, colors] = await Promise.all([
+    Promise.all(
+      calendarIds.map((calId) => fetchEventsForCalendar(http, calId, cfg, opts)),
+    ),
+    opts?.withColors ? fetchCalendarColors(http, cfg) : undefined,
+  ]);
+  return results
+    .flatMap((events, i) => {
+      const color = colors?.get(calendarIds[i]);
+      return color ? events.map((e) => ({ ...e, color })) : events;
+    })
+    .sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
 };
 
 // --- Load calendar list helpers ---
@@ -396,8 +472,11 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  async getHeaders(_config: Record<string, unknown>): Promise<Record<string, string>> {
-    const token = await PluginAPI.getOAuthToken();
+  async getHeaders(config: Record<string, unknown>): Promise<Record<string, string>> {
+    const cfg = migrateConfig(config);
+    const token = cfg[SP_OAUTH_TOKEN_KEY_CFG_KEY]
+      ? await PluginAPI.getOAuthToken(cfg[SP_OAUTH_TOKEN_KEY_CFG_KEY])
+      : await PluginAPI.getOAuthToken();
     if (!token) {
       throw new Error('Not authenticated. Please connect your Google account first.');
     }
@@ -466,7 +545,10 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginSearchResult[]> {
-    return fetchEvents(http, migrateConfig(config), { maxResults: '100' });
+    return fetchEvents(http, migrateConfig(config), {
+      maxResults: '100',
+      withColors: true,
+    });
   },
 
   issueDisplay: [

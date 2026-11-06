@@ -174,8 +174,8 @@ test.describe('@supersync Import client post-import ops sync correctly', () => {
       );
 
       // No sync errors
-      const errorSnackA = clientA.page.locator('simple-snack-bar.error');
-      const errorSnackB = clientB.page.locator('simple-snack-bar.error');
+      const errorSnackA = clientA.page.locator('snack-custom .wrapper.error');
+      const errorSnackB = clientB.page.locator('snack-custom .wrapper.error');
       await expect(errorSnackA).not.toBeVisible({ timeout: 5000 });
       await expect(errorSnackB).not.toBeVisible({ timeout: 5000 });
 

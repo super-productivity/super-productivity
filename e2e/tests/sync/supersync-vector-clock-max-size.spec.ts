@@ -16,7 +16,7 @@ import { expectTaskOnAllClients } from '../../utils/supersync-assertions';
  *
  * These tests verify ordinary convergence behavior adjacent to commit cb36c09538:
  * - equivalent concurrent task batches sync without hanging
- * - TAG:TODAY concurrent operations sync without hanging
+ * - a done toggle and a concurrent new TODAY task both survive
  * - Multiple clients with many tasks converge on the same task set
  *
  * They do not force the retry-limit or 20-entry vector-clock pruning boundaries.
@@ -133,8 +133,8 @@ test.describe('@supersync Concurrent Batch and Multi-Client Convergence', () => 
       }
 
       // No error snackbars
-      const errorSnackA = clientA.page.locator('simple-snack-bar.error');
-      const errorSnackB = clientB.page.locator('simple-snack-bar.error');
+      const errorSnackA = clientA.page.locator('snack-custom .wrapper.error');
+      const errorSnackB = clientB.page.locator('snack-custom .wrapper.error');
       await expect(errorSnackA).not.toBeVisible(ERROR_SNACK_TIMEOUT);
       await expect(errorSnackB).not.toBeVisible(ERROR_SNACK_TIMEOUT);
 
@@ -147,11 +147,13 @@ test.describe('@supersync Concurrent Batch and Multi-Client Convergence', () => 
   });
 
   /**
-   * Test 2: TAG:TODAY concurrent operations sync without hanging
+   * Test 2: A done toggle and a concurrent new TODAY task both survive
    *
-   * This reproduces the exact bug scenario: two clients editing tasks that belong
-   * to TAG:TODAY (via dueDay). Concurrent edits on the same entity produce LWW
-   * conflicts that previously caused an infinite re-upload loop.
+   * A marks a TODAY task done while B creates another TODAY task. These are
+   * different entities, and TODAY membership is derived from dueDay, so this
+   * is not a same-entity LWW conflict and does not exercise the re-upload
+   * retry bound. The concurrent TAG:TODAY reorder conflict is covered by
+   * supersync-task-ordering.spec.ts ("Concurrent reordering resolves consistently").
    *
    * Steps:
    * 1. Client A creates a task with `@today` (adds to TODAY ordering), syncs
@@ -161,7 +163,7 @@ test.describe('@supersync Concurrent Batch and Multi-Client Convergence', () => 
    * 5. Both sync in sequence
    * 6. Assert: sync completes, no hanging, consistent state
    */
-  test('TAG:TODAY concurrent operations sync without hanging', async ({
+  test('Concurrent done toggle and new TODAY task both survive', async ({
     browser,
     baseURL,
     testRunId,
@@ -231,8 +233,8 @@ test.describe('@supersync Concurrent Batch and Multi-Client Convergence', () => 
       console.log('[TODAY] Verifying state');
 
       // No error snackbars
-      const errorSnackA = clientA.page.locator('simple-snack-bar.error');
-      const errorSnackB = clientB.page.locator('simple-snack-bar.error');
+      const errorSnackA = clientA.page.locator('snack-custom .wrapper.error');
+      const errorSnackB = clientB.page.locator('snack-custom .wrapper.error');
       await expect(errorSnackA).not.toBeVisible(ERROR_SNACK_TIMEOUT);
       await expect(errorSnackB).not.toBeVisible(ERROR_SNACK_TIMEOUT);
 
@@ -355,7 +357,7 @@ test.describe('@supersync Concurrent Batch and Multi-Client Convergence', () => 
 
       // No error snackbars on any client
       for (const client of allClients) {
-        const errorSnack = client.page.locator('simple-snack-bar.error');
+        const errorSnack = client.page.locator('snack-custom .wrapper.error');
         await expect(errorSnack).not.toBeVisible(ERROR_SNACK_TIMEOUT);
       }
 

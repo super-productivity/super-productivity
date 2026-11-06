@@ -397,18 +397,51 @@ export class SyncProviderManager {
       return;
     }
     await provider.clearAuthCredentials();
+    await this.notifyCredentialsRotated(providerId);
+  }
 
-    // Revoking credentials invalidates the authority a queued request captured,
-    // even though this path emits no providerConfigChanged$.
+  /**
+   * Re-syncs manager-derived state after a provider mutated its own stored
+   * credentials in place (SuperSync token rotation via
+   * `signOutAllOtherDevices`, credential clearing) — writes that bypass
+   * `setProviderConfig()`, so `currentProviderPrivateCfg$` and everything
+   * cached on it (the settings-form seed, the Android credential bridge)
+   * would keep serving the stale token until restart.
+   *
+   * Deliberately NOT a target change: same server, same account, same op
+   * stream — `notifyProviderTargetChanged()` here would bump the sync epoch
+   * and wipe the per-target cursor a token rotation just carried over.
+   */
+  async notifyCredentialsRotated(providerId: SyncProviderId): Promise<void> {
+    // Rotated/revoked credentials invalidate the authority a queued request
+    // captured, even though this path emits no providerConfigChanged$.
     this._configEpoch++;
 
-    if (this._activeProvider?.id === providerId) {
-      const ready = await provider.isReady();
-      this._isProviderReady$.next(ready);
-
-      const privateCfg = await provider.privateCfg.load();
-      this._currentProviderPrivateCfg$.next({ providerId, privateCfg });
+    // Captured at guard time (providers are per-id singletons) — an async
+    // registry lookup here would open a window for the active provider to
+    // change while the emissions below still fire.
+    const provider = this._activeProvider;
+    if (provider?.id !== providerId) {
+      return;
     }
+    const ready = await provider.isReady();
+    this._isProviderReady$.next(ready);
+
+    const privateCfg = await provider.privateCfg.load();
+    this._currentProviderPrivateCfg$.next({ providerId, privateCfg });
+  }
+
+  /**
+   * Drops the provider's credential-derived caches so its next read hits the
+   * persistent store. Called on auth failures that may be caused by ANOTHER
+   * browser tab rotating the token on the shared store ("sign out other
+   * devices"): this tab's cached cfg would keep serving the revoked token —
+   * striking out the auth-failure tolerance and clearing the fresh token
+   * from the shared store. No-op for providers without credential caches.
+   */
+  async invalidateCredentialCache(providerId: SyncProviderId): Promise<void> {
+    const provider = await this.getProviderById(providerId);
+    provider?.invalidateCredentialCache?.();
   }
 
   private readonly _LAST_SYNCED_PROVIDER_KEY = 'SP_LAST_SYNCED_PROVIDER_ID';

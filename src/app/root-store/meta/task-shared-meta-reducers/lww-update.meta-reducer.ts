@@ -14,6 +14,7 @@ import {
   projectAdapter,
 } from '../../../features/project/store/project.reducer';
 import { Project } from '../../../features/project/project.model';
+import { NOTE_FEATURE_NAME } from '../../../features/note/store/note.reducer';
 import { TAG_FEATURE_NAME, tagAdapter } from '../../../features/tag/store/tag.reducer';
 import { Tag } from '../../../features/tag/tag.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
@@ -37,6 +38,7 @@ import {
 import { withLocalOnlySyncSettings } from '../../../features/config/local-only-sync-settings.util';
 import { SyncConfig } from '../../../features/config/global-config.model';
 import { LwwUpdateMode } from '../../../op-log/core/operation.types';
+import { ENVELOPE_SHADOWED_KEYS } from '../../../op-log/core/persistent-action.interface';
 
 /**
  * Updates project.taskIds arrays when a task's project membership changes via LWW Update.
@@ -430,6 +432,81 @@ const filterOrphanedTaskIdsFromEntityData = (
 };
 
 /**
+ * A NOTE recreated by an LWW Update (a local delete lost to a remote edit,
+ * #10380) rejoins the lists `deleteNote` removed it from: its project's
+ * `noteIds` and, when pinned, `todayOrder`. It is appended, so its position
+ * there may differ from the other devices (order only, accepted on #10393).
+ * Like `deleteNote` and the TASK recreate, this writes PROJECT without
+ * declaring it (a rule 13 exception decided on #10393).
+ */
+const restoreRecreatedNoteMembership = (
+  state: RootState,
+  note: Record<string, unknown>,
+): RootState => {
+  const noteId = note['id'] as string;
+  let nextState = state;
+  const projectId = note['projectId'];
+  const project =
+    typeof projectId === 'string'
+      ? (state[PROJECT_FEATURE_NAME].entities[projectId] as Project | undefined)
+      : undefined;
+  if (project && !project.noteIds.includes(noteId)) {
+    nextState = {
+      ...nextState,
+      [PROJECT_FEATURE_NAME]: projectAdapter.updateOne(
+        { id: project.id, changes: { noteIds: [...project.noteIds, noteId] } },
+        nextState[PROJECT_FEATURE_NAME],
+      ),
+    };
+  }
+  const noteState = nextState[NOTE_FEATURE_NAME];
+  if (note['isPinnedToToday'] === true && !noteState.todayOrder.includes(noteId)) {
+    nextState = {
+      ...nextState,
+      [NOTE_FEATURE_NAME]: {
+        ...noteState,
+        todayOrder: [...noteState.todayOrder, noteId],
+      },
+    };
+  }
+  return nextState;
+};
+
+/**
+ * An LWW Update that replaces an existing NOTE keeps `todayOrder` in step with
+ * the winner's `isPinnedToToday`, the list `updateNote` maintains locally
+ * (#10379): a pinned note absent from it is prepended, as `updateNote` does,
+ * and an unpinned one is removed. A note that stays pinned keeps its position.
+ */
+const syncExistingNoteTodayOrder = (
+  state: RootState,
+  note: Record<string, unknown>,
+): RootState => {
+  const noteId = note['id'] as string;
+  const noteState = state[NOTE_FEATURE_NAME];
+  const isListed = noteState.todayOrder.includes(noteId);
+  if (note['isPinnedToToday'] === true && !isListed) {
+    return {
+      ...state,
+      [NOTE_FEATURE_NAME]: {
+        ...noteState,
+        todayOrder: [noteId, ...noteState.todayOrder],
+      },
+    };
+  }
+  if (note['isPinnedToToday'] === false && isListed) {
+    return {
+      ...state,
+      [NOTE_FEATURE_NAME]: {
+        ...noteState,
+        todayOrder: noteState.todayOrder.filter((id) => id !== noteId),
+      },
+    };
+  }
+  return state;
+};
+
+/**
  * Applies an LWW Update to an array-pattern feature state (BOARD, REMINDER,
  * PLUGIN_USER_DATA, PLUGIN_METADATA): items live in a plain array — the feature
  * state itself for `arrayKey: null`, else under `arrayKey` — addressed by their
@@ -575,8 +652,9 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     }
 
     // Extract entity data from action (exclude 'type' and 'meta').
-    // NOTE: This assumes no entity state has top-level 'type' or 'meta' keys.
-    // If a singleton or adapter state gains such a key, it would be silently dropped.
+    // Entity fields named 'type'/'meta' are shadowed by the envelope: adapter
+    // entities restore them from meta.lwwShadowedFields (below), array items
+    // keep theirs by merging, a singleton with such a key would still lose it.
     const actionAny = action as unknown as Record<string, unknown>;
     const actionMeta = actionAny['meta'] as
       | {
@@ -584,6 +662,7 @@ export const lwwUpdateMetaReducer: MetaReducer = (
           isApplyingFromOtherClient?: boolean;
           recreatesEntityAfterDelete?: boolean;
           projectMoveFootprint?: readonly string[];
+          lwwShadowedFields?: Readonly<Record<string, unknown>>;
         }
       | undefined;
     let entityData: Record<string, unknown> = {};
@@ -695,6 +774,15 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     if (Object.prototype.hasOwnProperty.call(Object.prototype, entityId)) {
       OpLog.warn(`lwwUpdateMetaReducer: Unsafe entity id: ${entityId}`);
       return reducer(state, action);
+    }
+
+    // The sender's own `type`/`meta` fields (SimpleCounter.type), which the
+    // action envelope shadows; convertOpToAction carries them in meta.
+    const shadowedFields = actionMeta?.lwwShadowedFields;
+    for (const key of ENVELOPE_SHADOWED_KEYS) {
+      if (shadowedFields && Object.hasOwn(shadowedFields, key)) {
+        entityData[key] = shadowedFields[key];
+      }
     }
 
     // Sanitize date string fields to prevent corrupted data from sync (#6908)
@@ -865,13 +953,27 @@ export const lwwUpdateMetaReducer: MetaReducer = (
               `produced a partial merged entity on its happy path.`,
           );
         }
-        // Spread does not skip null/undefined-valued keys; strip them so they
-        // can't clobber a backfilled default.
-        const stripped: Record<string, unknown> = { modified: Date.now() };
-        for (const k of Object.keys(entityData)) {
-          if (entityData[k] != null) stripped[k] = entityData[k];
+        // A whole entity (a delete snapshot) needs no backfill and must not
+        // gain optional fields the original lacks (#11496). `null` counts as
+        // missing, as for the warn above, unless the field's default is `null`
+        // itself (`icon`): a `type: null` payload still gets the #7330 backfill.
+        const isWholeEntity =
+          fallback.wholeEntityKeys?.every(
+            (k) =>
+              entityData[k] != null ||
+              (entityData[k] === null && fallback.defaults[k] === null),
+          ) ?? false;
+        if (isWholeEntity) {
+          entityToAdd = { ...entityData, modified: Date.now() };
+        } else {
+          // Spread does not skip null/undefined-valued keys; strip them so they
+          // can't clobber a backfilled default.
+          const stripped: Record<string, unknown> = { modified: Date.now() };
+          for (const k of Object.keys(entityData)) {
+            if (entityData[k] != null) stripped[k] = entityData[k];
+          }
+          entityToAdd = { ...fallback.defaults, ...stripped };
         }
-        entityToAdd = { ...fallback.defaults, ...stripped };
 
         // INBOX_PROJECT may legitimately be missing from state (corrupted
         // import, partial migration). Mirror normalizeRestoredTask's guard at
@@ -901,6 +1003,17 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         // `modified` is for UI display of "when this client last saw this change"
         modified: Date.now(),
       };
+      // An op that carried no `type`/`meta` of its own keeps the existing
+      // values: a replace must not drop them (SimpleCounter.type would fail
+      // validation and repair would reset e.g. a Stopwatch habit).
+      for (const key of ENVELOPE_SHADOWED_KEYS) {
+        if (
+          !Object.prototype.hasOwnProperty.call(entityData, key) &&
+          Object.prototype.hasOwnProperty.call(existingEntity, key)
+        ) {
+          entityWithLocalModified[key] = existingEntity[key];
+        }
+      }
       updatedFeatureState =
         actionMeta?.lwwUpdateMode === 'replace'
           ? (adapter as EntityAdapter<any>).setOne(
@@ -925,6 +1038,12 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         entities?: Record<string, Record<string, unknown>>;
       }
     ).entities?.[entityId];
+
+    if (entityType === 'NOTE' && updatedEntity) {
+      updatedState = existingEntity
+        ? syncExistingNoteTodayOrder(updatedState, updatedEntity)
+        : restoreRecreatedNoteMembership(updatedState, updatedEntity);
+    }
 
     // For TASK entities, sync related entities when relationships change
     if (entityType === 'TASK' && updatedEntity) {

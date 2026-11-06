@@ -12,6 +12,11 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 
+const wsMocks = vi.hoisted(() => ({ closeForUser: vi.fn() }));
+vi.mock('../src/sync/services/websocket-connection.service', () => ({
+  getWsConnectionService: () => ({ closeForUser: wsMocks.closeForUser }),
+}));
+
 // Mock prisma - use factory function to avoid hoisting issues
 vi.mock('../src/db', () => {
   const mockPrisma = {
@@ -901,6 +906,7 @@ describe('Passkey Authentication', () => {
       const txPasskeyDeleteMany = vi.fn().mockResolvedValue({ count: 1 });
       const txPasskeyCreate = vi.fn().mockResolvedValue({});
       const txUserUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+      const txExecuteRaw = vi.fn().mockResolvedValue(0);
       mockPrisma.$transaction.mockImplementation(
         async (callback: RecoveryTransactionCallback) => {
           const tx = {
@@ -911,6 +917,8 @@ describe('Passkey Authentication', () => {
             user: {
               updateMany: txUserUpdateMany,
             },
+            // Capture grant revocation runs in the same transaction.
+            $executeRaw: txExecuteRaw,
           };
           return callback(tx);
         },
@@ -943,6 +951,9 @@ describe('Passkey Authentication', () => {
 
       expect(result.message).toContain('reset successfully');
       expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(String(txExecuteRaw.mock.calls[0][0].join('?'))).toContain(
+        'UPDATE capture_grants SET revoked_at',
+      );
       expect(txUserUpdateMany).toHaveBeenCalledWith({
         where: {
           id: 1,
@@ -960,6 +971,9 @@ describe('Passkey Authentication', () => {
       });
       expect(txPasskeyDeleteMany).toHaveBeenCalledWith({ where: { userId: 1 } });
       expect(txPasskeyCreate).toHaveBeenCalledOnce();
+      // Sockets authenticate only at upgrade: without the close, tokens the
+      // recovery just revoked keep receiving op notifications indefinitely.
+      expect(wsMocks.closeForUser).toHaveBeenCalledWith(1);
     });
 
     it('should reject recovery already consumed by another request before replacing passkeys', async () => {

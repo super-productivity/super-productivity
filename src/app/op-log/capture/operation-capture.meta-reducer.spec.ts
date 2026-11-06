@@ -8,12 +8,17 @@ import {
   getDeferredActions,
   clearDeferredActions,
   DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD,
+  consumeDeferredBufferStuckNotice,
 } from './operation-capture.meta-reducer';
 import { OperationCaptureService } from './operation-capture.service';
 import { Action } from '@ngrx/store';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { EntityType, OpType } from '../core/operation.types';
 import { RootState } from '../../root-store/root-state';
+import {
+  isReducerRejectedAction,
+  reducerFailureGuardMetaReducer,
+} from '../../root-store/meta/reducer-failure-guard.meta-reducer';
 
 describe('operationCaptureMetaReducer', () => {
   let mockCaptureService: jasmine.SpyObj<OperationCaptureService>;
@@ -328,6 +333,33 @@ describe('operationCaptureMetaReducer', () => {
         expect(getDeferredActions()).toEqual(actions);
       });
 
+      // devError only logs in production builds, so the user needs its own
+      // signal that changes are piling up unsaved (#8297).
+      it('should raise the user notice once per stuck window at the reload-warning threshold', () => {
+        spyNativeDialogs();
+        const actions = createManyActions(DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD + 50);
+        consumeDeferredBufferStuckNotice();
+
+        actions
+          .slice(0, DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD - 1)
+          .forEach((a) => bufferDeferredAction(a));
+        expect(consumeDeferredBufferStuckNotice()).toBeFalse();
+
+        bufferDeferredAction(actions[DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD - 1]);
+        expect(consumeDeferredBufferStuckNotice()).toBeTrue();
+        // Consumed: a second read (and further buffering) does not repeat it.
+        actions
+          .slice(DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD)
+          .forEach((a) => bufferDeferredAction(a));
+        expect(consumeDeferredBufferStuckNotice()).toBeFalse();
+
+        clearDeferredActions();
+        createManyActions(DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD).forEach((a) =>
+          bufferDeferredAction(a),
+        );
+        expect(consumeDeferredBufferStuckNotice()).toBeTrue();
+      });
+
       it('should fire the reload warning only once per stuck window (no per-action spam)', () => {
         const confirmSpy = spyNativeDialogs();
         const actions = createManyActions(
@@ -365,6 +397,33 @@ describe('operationCaptureMetaReducer', () => {
           bufferDeferredAction(a),
         );
         expect(reloadWarningCalls().length).toBe(2);
+      });
+
+      // The developer confirms "Throw" on a buffer warning; the guard's own
+      // devError prompt is then declined. The throw rejects the action and
+      // keeps the pre-dispatch state, so buffering it would later upload an op
+      // for a change NgRx never committed (#10195).
+      [
+        { warning: 'soft', alreadyBuffered: 10 },
+        {
+          warning: 'reload',
+          alreadyBuffered: DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD - 1,
+        },
+      ].forEach(({ warning, alreadyBuffered }) => {
+        it(`should not buffer an action rejected via the ${warning}-warning throw`, () => {
+          const confirmSpy = spyNativeDialogs();
+          createManyActions(alreadyBuffered).forEach((a) => bufferDeferredAction(a));
+          confirmSpy.and.returnValues(true, false);
+          setIsApplyingRemoteOps(true);
+          const guarded = reducerFailureGuardMetaReducer(
+            operationCaptureMetaReducer(mockReducer),
+          );
+          const action = createMockAction();
+
+          expect(guarded(mockState, action)).toBe(mockState);
+          expect(isReducerRejectedAction(action)).toBe(true);
+          expect(getDeferredActions().length).toBe(alreadyBuffered);
+        });
       });
     });
   });

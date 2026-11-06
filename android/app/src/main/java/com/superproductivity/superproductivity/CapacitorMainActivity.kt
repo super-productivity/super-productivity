@@ -5,33 +5,39 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.window.SplashScreenView
 import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
+import com.getcapacitor.WebViewListener
+import com.superproductivity.superproductivity.app.LaunchUrlReplayGuard
 import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
+import com.superproductivity.superproductivity.receiver.NotificationActionReceiver
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
-import com.superproductivity.superproductivity.service.FocusModeNotificationHelper
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
+import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
-import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.util.printWebViewVersion
+import com.superproductivity.superproductivity.webview.ImeWebViewHeight
 import com.superproductivity.superproductivity.webview.JavaScriptInterface
+import com.superproductivity.superproductivity.webview.NativeInsetShimGate
 import com.superproductivity.superproductivity.webview.WebHelper
 import com.superproductivity.superproductivity.webview.WebViewBlockActivity
 import com.superproductivity.superproductivity.webview.WebViewCompatibilityChecker
 import com.superproductivity.superproductivity.webview.WebViewRecovery
-import com.superproductivity.superproductivity.widget.ShareIntentQueue
-import com.superproductivity.superproductivity.widget.StartupOverlayManager
+import com.superproductivity.superproductivity.widget.NotificationActionQueue
 import com.superproductivity.superproductivity.widget.TaskListWidgetProvider
 import com.superproductivity.plugins.webdavhttp.WebDavHttpPlugin
 import org.json.JSONObject
@@ -44,27 +50,30 @@ class CapacitorMainActivity : BridgeActivity() {
     private var webViewCompatibility: WebViewCompatibilityChecker.Result? = null
     private var webViewBlocked = false
     private var webViewRecoveryScheduled = false
-    private var pendingShareIntent: JSONObject? = null
-    private var isFrontendReady = false
-    private var startupOverlayManager: StartupOverlayManager? = null
 
-    // SDK < 30 soft-keyboard workaround: the WebView's resting layout height
+    // Soft-keyboard workaround: the WebView's resting layout height
     // (e.g. MATCH_PARENT), captured so it can be restored when the keyboard hides.
-    // See adjustWebViewHeightForKeyboardBelowApi30.
+    // See adjustWebViewHeightForKeyboard.
     private var webViewLayoutHeightDefault: Int? = null
 
     // Reused scratch for getLocationOnScreen in the keyboard layout listener (hot
     // path) to avoid allocating an IntArray on every pass while the IME is up.
     private val webViewLocationOnScreen = IntArray(2)
 
-    // SDK < 30 status-bar overlap workaround: last value pushed to JS, to dedupe
-    // the per-layout-pass listener. -1 = nothing pushed yet.
-    // See pushStatusBarOverlapBelowApi30.
+    // Status-bar overlap workaround: last value pushed to JS, to dedupe the
+    // per-layout-pass listener. -1 = nothing pushed yet.
+    // See pushStatusBarOverlap.
     private var lastStatusBarOverlapCssPx: Int = -1
+
+    // Last IME state the geometry diagnostic logged, so the per-layout-pass
+    // listener logs once per transition instead of every pass. null = nothing yet.
+    // See logImeGeometryOnTransition.
+    private var lastLoggedKeyboardOpen: Boolean? = null
 
     private var isTimerCompleteReceiverRegistered = false
     private var isForegroundServiceFailureReceiverRegistered = false
     private var isWidgetDoneDrainReceiverRegistered = false
+    private var isNotificationActionDrainReceiverRegistered = false
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -86,6 +95,15 @@ class CapacitorMainActivity : BridgeActivity() {
                 // getWidgetDoneQueue(), so there is a single delivery path and no
                 // task data crosses the string-interpolated JS bridge.
                 callJSInterfaceFunctionIfExists("next", "onWidgetDoneDrainRequest$")
+            }
+        }
+    }
+
+    private val notificationActionDrainReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == NotificationActionReceiver.ACTION_DRAIN) {
+                // Contentless: Angular pulls the queued actions itself.
+                callJSInterfaceFunctionIfExists("next", "onNotificationActionDrainRequest$")
             }
         }
     }
@@ -132,6 +150,20 @@ class CapacitorMainActivity : BridgeActivity() {
         registerPlugin(WebDavHttpPlugin::class.java)
         registerPlugin(NavigationBarPlugin::class.java)
 
+        // On Activity recreation (config change / process death) getIntent() still
+        // holds the original launch intent and BridgeActivity.load() replays it
+        // through onNewIntent — without the LAUNCHED_FROM_HISTORY flag, so the
+        // recents guard in onNewIntent doesn't catch it. A stale VIEW data URI
+        // would re-fire appUrlOpen and duplicate the URL scheme task action;
+        // clear it (mirrors the savedInstanceState guard for handleIntent below).
+        if (savedInstanceState != null) {
+            intent?.data = null
+        } else if (intent != null &&
+            !LaunchUrlReplayGuard.shouldDispatchFreshLaunch(this)
+        ) {
+            // The system relaunched the task after a package update (#11153).
+            intent.data = null
+        }
         try {
             super.onCreate(savedInstanceState)
         } catch (e: Throwable) {
@@ -149,6 +181,7 @@ class CapacitorMainActivity : BridgeActivity() {
             showWebViewInitFailure("Bridge or WebView is null after onCreate")
             return
         }
+        holdSystemSplashUntilPageVisible()
 
         try {
             printWebViewVersion(webView)
@@ -204,8 +237,8 @@ class CapacitorMainActivity : BridgeActivity() {
 
 
         // Remember the WebView's resting layout height (e.g. MATCH_PARENT) so the
-        // SDK < 30 keyboard workaround can restore it on hide. See
-        // adjustWebViewHeightForKeyboardBelowApi30.
+        // keyboard workaround can restore it on hide. See
+        // adjustWebViewHeightForKeyboard.
         webViewLayoutHeightDefault = bridge?.webView?.layoutParams?.height
 
         // Handle keyboard visibility changes
@@ -222,8 +255,11 @@ class CapacitorMainActivity : BridgeActivity() {
                 "isKeyboardShown$",
                 if (isKeyboardOpen) "true" else "false"
             )
-            adjustWebViewHeightForKeyboardBelowApi30(rect, isKeyboardOpen)
-            pushStatusBarOverlapBelowApi30(rect)
+            adjustWebViewHeightForKeyboard(rect, isKeyboardOpen)
+            pushStatusBarOverlap(rect)
+            // After the shim, so the log shows the height it applied. See
+            // logImeGeometryOnTransition.
+            logImeGeometryOnTransition(rect, isKeyboardOpen)
         }
 
         // Register broadcast receiver for focus mode timer completion
@@ -242,23 +278,35 @@ class CapacitorMainActivity : BridgeActivity() {
             IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_DONE_DRAIN)
         )
         isWidgetDoneDrainReceiverRegistered = true
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            notificationActionDrainReceiver,
+            IntentFilter(NotificationActionReceiver.ACTION_DRAIN)
+        )
+        isNotificationActionDrainReceiverRegistered = true
 
-        // Show startup overlay for quick task entry while Angular loads.
-        // Only on fresh cold start — not on config-change recreation.
-        if (savedInstanceState == null) {
-            startupOverlayManager = StartupOverlayManager(this)
-            startupOverlayManager?.show()
-        }
-
-        // Schedule background sync worker if credentials are configured
-        if (BackgroundSyncCredentialStore.get(this) != null) {
-            SyncReminderScheduler.ensureScheduled(this)
-        }
+        // Schedule background sync worker if credentials are configured.
+        // Off the main thread: the first credential read opens the
+        // EncryptedSharedPreferences store (Keystore + Tink keyset setup), and
+        // in a WebView app the main thread also runs Chromium's browser side,
+        // so blocking it here stalls the page load super.onCreate() just
+        // started — on every cold start, sync configured or not. If a JS
+        // clear() lands between the read and the schedule, a periodic worker
+        // stays scheduled; it is a no-op (it skips without credentials).
+        val appContext = applicationContext
+        Thread({
+            try {
+                if (BackgroundSyncCredentialStore.hasAnyCredentials(appContext)) {
+                    SyncReminderScheduler.ensureScheduled(appContext)
+                }
+            } catch (e: Exception) {
+                Log.e("CapacitorMainActivity", "Background sync scheduling check failed", e)
+            }
+        }, "sync-schedule-check").start()
 
         // Handle initial intent (cold start) only on a fresh launch.
         // On Activity recreation (config change) savedInstanceState is non-null
-        // and getIntent() still holds the original share/reminder Intent — re-running
-        // handleIntent() there would create a duplicate task from the same share.
+        // and getIntent() still holds the original reminder/notification Intent —
+        // re-running handleIntent() there would replay the same action.
         if (savedInstanceState == null) {
             handleIntent(intent)
         }
@@ -315,50 +363,32 @@ class CapacitorMainActivity : BridgeActivity() {
     }
 
     override fun onNewIntent(intent: Intent) {
+        // A relaunch from recents redelivers the task's base intent. Replaying a
+        // VIEW data URI would re-fire Capacitor's appUrlOpen and repeat the URL
+        // scheme task action (create-task would add the same task again, syncing
+        // a duplicate to all devices), so strip the stale URI. OAuth callback
+        // replays are equally unwanted.
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) {
+            intent.data = null
+        }
         super.onNewIntent(intent)
         handleIntent(intent)
     }
 
-    fun getStartupOverlayPartialText(): String? {
-        return startupOverlayManager?.getPartialTextAndPrepare()
-    }
-
-    fun hideStartupOverlay() {
-        if (startupOverlayManager != null) {
-            startupOverlayManager?.hide()
-            startupOverlayManager = null
-        }
-    }
-
-    fun dismissStartupOverlay() {
-        startupOverlayManager?.dismiss()
-        startupOverlayManager = null
-    }
-
-    fun flushPendingShareIntent() {
-        isFrontendReady = true
+    /** Called by the web app once its bundle has initialised, including after a reload. */
+    fun onFrontendReady() {
         // A web-side reload (e.g. language change, PWA update, sync-conflict
         // recovery — all do window.location.reload()) re-runs the bundle and
         // re-enters here, but it also wipes the inline --android-status-bar-overlap
         // off the fresh document. Re-arm the dedupe so the next layout pass
         // re-publishes it; otherwise the unchanged value is skipped and the
-        // header overlaps the status bar again on the WebView < 140 / API < 30
-        // tail. See pushStatusBarOverlapBelowApi30.
+        // header overlaps the status bar again on the WebView < 140 / API < 35
+        // tail. See pushStatusBarOverlap.
         lastStatusBarOverlapCssPx = -1
-        pendingShareIntent?.let {
-            Log.d("SP_SHARE", "Flushing pending share intent")
-            callJSInterfaceFunctionIfExists("next", "onShareWithAttachment$", it.toString())
-            pendingShareIntent = null
-            ShareIntentQueue.getAndClear(this)
-        }
-    }
-
-    fun clearPendingShareIntent() {
-        pendingShareIntent = null
     }
 
     private fun handleIntent(intent: Intent) {
-        Log.d("SP_SHARE", "handleIntent action: ${intent.action} type: ${intent.type}")
+        Log.d("SP_INTENT", "handleIntent action: ${intent.action} type: ${intent.type}")
 
         // Handle reminder notification tap
         val reminderTaskId = intent.getStringExtra("REMINDER_TASK_ID")
@@ -366,92 +396,47 @@ class CapacitorMainActivity : BridgeActivity() {
             // Sanitize to prevent JS injection (only allow alphanumeric, dash, underscore)
             val sanitizedId = reminderTaskId.replace(Regex("[^a-zA-Z0-9_-]"), "")
             Log.d("SP_REMINDER", "Reminder tap: taskId=$sanitizedId")
+            // Deadline taps carry their type so the frontend clears the deadline
+            // reminder, not the task reminder. Other taps stay a plain id, which
+            // keeps them working for a JS bundle that predates the typed form.
+            val isDeadline = intent.getStringExtra("REMINDER_TYPE") == "DEADLINE"
+            val tapPayload = if (isDeadline) {
+                org.json.JSONObject()
+                    .put("taskId", sanitizedId)
+                    .put("reminderType", "DEADLINE")
+                    .toString()
+            } else {
+                sanitizedId
+            }
             // Persist for pull-based retrieval (WebView may not be ready on cold start)
-            com.superproductivity.superproductivity.widget.ReminderTapQueue.setTaskId(this, sanitizedId)
-            // Also try push-based delivery (works on warm start)
-            callJSInterfaceFunctionIfExists("next", "onReminderTap$", "'$sanitizedId'")
+            com.superproductivity.superproductivity.widget.ReminderTapQueue.setTaskId(this, tapPayload)
+            // Also try push-based delivery (works on warm start). Both forms only
+            // contain the sanitized id and a constant, so they are safe to inline.
+            val jsArg = if (isDeadline) tapPayload else "'$sanitizedId'"
+            callJSInterfaceFunctionIfExists("next", "onReminderTap$", jsArg)
             intent.removeExtra("REMINDER_TASK_ID")
+            intent.removeExtra("REMINDER_TYPE")
             return
         }
 
-        // Handle tracking notification actions
-        when (intent.action) {
-            TrackingForegroundService.ACTION_PAUSE -> {
-                Log.d("SP_TRACKING", "Pause action received from notification")
-                callJSInterfaceFunctionIfExists("next", "onPauseTracking$")
-                return
-            }
-            TrackingForegroundService.ACTION_DONE -> {
-                Log.d("SP_TRACKING", "Done action received from notification")
-                callJSInterfaceFunctionIfExists("next", "onMarkTaskDone$")
-                return
-            }
-            // Handle focus mode notification actions
-            FocusModeForegroundService.ACTION_PAUSE -> {
-                Log.d("SP_FOCUS", "Pause action received from focus mode notification")
-                callJSInterfaceFunctionIfExists("next", "onFocusPause$")
-                return
-            }
-            FocusModeForegroundService.ACTION_RESUME -> {
-                Log.d("SP_FOCUS", "Resume action received from focus mode notification")
-                callJSInterfaceFunctionIfExists("next", "onFocusResume$")
-                return
-            }
-            FocusModeForegroundService.ACTION_SKIP -> {
-                Log.d("SP_FOCUS", "Skip action received from focus mode notification")
-                FocusModeNotificationHelper.cancelCompletionNotification(this)
-                callJSInterfaceFunctionIfExists("next", "onFocusSkip$")
-                return
-            }
-            FocusModeForegroundService.ACTION_COMPLETE -> {
-                Log.d("SP_FOCUS", "Complete action received from focus mode notification")
-                FocusModeNotificationHelper.cancelCompletionNotification(this)
-                callJSInterfaceFunctionIfExists("next", "onFocusComplete$")
-                return
-            }
+        // A relaunch from recents redelivers the base intent: a notification
+        // action in it was handled already and must not be queued again.
+        val isFromHistory = intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        // Tracking/focus buttons are broadcasts now (NotificationActionReceiver).
+        // Activity intents with these actions can only come from a notification
+        // posted by an older build; handle them the same way (#10683).
+        if (!isFromHistory && NotificationActionReceiver.handle(this, intent.action)) {
+            return
         }
-
-        // Handle share intent
-        if (Intent.ACTION_SEND == intent.action && intent.type != null) {
-            if (intent.type?.startsWith("text/") == true) {
-                val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-                // Leave title/subject empty when absent so the frontend can derive a
-                // meaningful title from the URL or note content. Defaulting to a literal
-                // "Shared Content" here masks that derivation (issue: blank shared tasks).
-                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: ""
-                val sharedSubject = intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: ""
-                // Shape only, never the content: logcat is world-readable to adb and
-                // ends up in bug reports, and this carries whatever the user shared.
-                Log.d(
-                    "SP_SHARE",
-                    "Received share: textLen=${sharedText?.length ?: 0} " +
-                        "hasTitle=${sharedTitle.isNotEmpty()} hasSubject=${sharedSubject.isNotEmpty()}",
-                )
-
-                // Ignore empty/blank shares — they only produce useless blank tasks.
-                if (!sharedText.isNullOrBlank()) {
-                    val json = JSONObject()
-                    json.put("title", sharedTitle)
-                    json.put("subject", sharedSubject)
-                    val type = if (sharedText.startsWith("http")) "LINK" else "NOTE"
-                    json.put("type", type)
-                    json.put("path", sharedText)
-
-                    // Always persist for crash safety
-                    ShareIntentQueue.setPending(this, json.toString())
-
-                    if (isFrontendReady) {
-                        Log.d("SP_SHARE", "Frontend ready, sending directly (type=$type)")
-                        callJSInterfaceFunctionIfExists("next", "onShareWithAttachment$", json.toString())
-                        pendingShareIntent = null
-                        ShareIntentQueue.getAndClear(this)
-                    } else {
-                        Log.d("SP_SHARE", "Frontend NOT ready, queueing (type=$type)")
-                        pendingShareIntent = json
-                        Toast.makeText(this, R.string.share_received, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
+        // Stop tracking on ANOTHER device (remote tracking presence notification).
+        // Stays an Activity intent on purpose (unlock required, see
+        // RemoteTrackingNotificationHelper.show), but is persisted: on a cold
+        // start the WebView isn't ready to receive a push yet.
+        if (!isFromHistory && intent.action == RemoteTrackingNotificationHelper.ACTION_REMOTE_STOP) {
+            Log.d("SP_TRACKING", "Remote stop action received from notification")
+            NotificationActionQueue.setRemoteStop(this, System.currentTimeMillis())
+            callJSInterfaceFunctionIfExists("next", "onNotificationActionDrainRequest$")
+            return
         }
     }
 
@@ -469,6 +454,52 @@ class CapacitorMainActivity : BridgeActivity() {
         bridge?.webView?.restoreState(savedInstanceState)
     }
 
+    /**
+     * Keeps the Android 12+ system splash up until the WebView shows index.html's
+     * boot splash, which looks the same. By default the system removes its splash
+     * on the activity's first frame, before the WebView has painted the page, so
+     * a few frames of blank background (no logo) showed before the web splash.
+     *
+     * Taking over the splash's exit leaves it on screen as an overlay while the
+     * window keeps drawing underneath, so the WebView can render and report
+     * onPageCommitVisible (its first frame with the page's content); only then is
+     * the overlay removed. (Withholding the window's first draw instead would also
+     * keep the WebView from drawing, so that signal could not arrive.) Page load,
+     * a load error, or a 2s cap also release it, so a slow or failing page never
+     * leaves the app stuck on the splash. Older Android shows no icon splash.
+     */
+    private fun holdSystemSplashUntilPageVisible() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        var isPageVisible = false
+        var splashView: SplashScreenView? = null
+        val handler = Handler(Looper.getMainLooper())
+        val release = {
+            if (!isPageVisible) {
+                isPageVisible = true
+                handler.removeCallbacksAndMessages(SPLASH_HOLD_TOKEN)
+                splashView?.remove()
+                splashView = null
+            }
+        }
+        splashScreen.setOnExitAnimationListener { view ->
+            if (isPageVisible) {
+                view.remove()
+            } else {
+                splashView = view
+            }
+        }
+        handler.postAtTime(
+            release,
+            SPLASH_HOLD_TOKEN,
+            SystemClock.uptimeMillis() + SPLASH_HOLD_MAX_MS,
+        )
+        bridge?.addWebViewListener(object : WebViewListener() {
+            override fun onPageCommitVisible(view: WebView?, url: String?) = release()
+            override fun onPageLoaded(webView: WebView?) = release()
+            override fun onReceivedError(webView: WebView?) = release()
+        })
+    }
+
     override fun onPause() {
         super.onPause()
         Log.v("TW", "CapacitorFullscreenActivity: onPause")
@@ -482,17 +513,71 @@ class CapacitorMainActivity : BridgeActivity() {
     }
 
     /**
-     * SDK < 30 soft-keyboard fallback for the add-task bar sitting behind the
-     * keyboard (#8508 follow-up, Android 9 / API 28).
+     * Whether Capacitor's SystemBars leaves the insets unowned on this device, so
+     * our native shims below have to step in. See [NativeInsetShimGate].
+     */
+    private fun shouldRunNativeInsetShim(): Boolean =
+        NativeInsetShimGate.shouldRunShim(
+            sdkInt = android.os.Build.VERSION.SDK_INT,
+            webViewMajor = NativeInsetShimGate.activeProviderMajor(webViewCompatibility),
+        )
+
+    /**
+     * One-line IME geometry diagnostic, logged once per keyboard transition.
+     *
+     * #9316 can only be settled on a reporter's device, and the shim is a strict
+     * no-op wherever the window already resizes for the IME — so "the bar looks
+     * fixed" cannot by itself tell a working shim from one that never ran. This
+     * prints the gate's inputs next to the geometry it decides from, so a test
+     * build gives an unambiguous answer.
+     *
+     * Must be called **after** the shim has had its pass, so `paramsHeight` is
+     * what the shim just applied rather than the value it replaced. `target` is
+     * recomputed here from the same input, so a pass where the shim bailed on a
+     * degenerate frame still reads unambiguously (`target` set, `paramsHeight`
+     * unchanged) instead of looking like the gate was off. `webViewHeight` is
+     * still the pre-layout measurement — it catches up on the next pass.
+     *
+     * Silent unless explicitly enabled (`adb shell setprop log.tag.SUPKeyboard
+     * DEBUG`), so release builds stay quiet; the transition check comes first to
+     * keep the per-layout-pass listener cheap. Geometry and versions only — never
+     * user content.
+     */
+    private fun logImeGeometryOnTransition(rect: Rect, isKeyboardOpen: Boolean) {
+        if (lastLoggedKeyboardOpen == isKeyboardOpen) return
+        lastLoggedKeyboardOpen = isKeyboardOpen
+        if (!Log.isLoggable("SUPKeyboard", Log.DEBUG)) return
+        val webView = bridge?.webView ?: return
+        webView.getLocationOnScreen(webViewLocationOnScreen)
+        Log.d(
+            "SUPKeyboard",
+            "ime=$isKeyboardOpen shim=${shouldRunNativeInsetShim()} " +
+                "sdk=${android.os.Build.VERSION.SDK_INT} " +
+                "wvMajor=${NativeInsetShimGate.activeProviderMajor(webViewCompatibility)} " +
+                "(raw=${webViewCompatibility?.majorVersion} src=${webViewCompatibility?.source}) " +
+                "rectBottom=${rect.bottom} webViewTop=${webViewLocationOnScreen[1]} " +
+                "target=${
+                    ImeWebViewHeight.targetHeight(rect.bottom, webViewLocationOnScreen[1])
+                } " +
+                "webViewHeight=${webView.height} paramsHeight=${webView.layoutParams?.height}"
+        )
+    }
+
+    /**
+     * Soft-keyboard fallback for the add-task bar sitting behind the keyboard
+     * (#8508 follow-up on Android 9 / API 28; #9316 on API 34 + WebView 124/126).
      *
      * Context: Android edge-to-edge inset handling is owned by Capacitor's
      * built-in SystemBars now (the `@capawesome` edge-to-edge plugin was removed).
-     * SystemBars only pads the WebView for the IME on **WebView >= 140**
-     * (passthrough) or **API >= 35**; below that band it is a no-op, and under
-     * enforced edge-to-edge the window does NOT resize for the IME on API < 30,
-     * so the `position: fixed` add-task bar sits behind the keyboard. This shim
-     * covers exactly that WebView < 140 / API < 30 tail and is **gated to
-     * WebView < 140** so it never double-counts against SystemBars' own padding.
+     * Up to Capacitor 8.5.1 SystemBars only padded for the IME on **WebView >= 140**
+     * (passthrough) or **API >= 35**; outside that it applied nothing, the window
+     * does NOT resize for the IME, and the `position: fixed` add-task bar sat
+     * behind the keyboard. This shim covers exactly that gap — see
+     * [NativeInsetShimGate] for why the gate is the complement of SystemBars'
+     * two ownership branches. From 8.5.2 SystemBars pads the DecorView for the IME
+     * on every API level, so in the gated band this now measures a WebView that is
+     * already at the keyboard top and writes the height it already has (kept as a
+     * fallback; see [NativeInsetShimGate]).
      *
      * We must NOT correct this via `bottomMargin` or `padding` (a margin writer
      * fights whatever owns the insets, and WebView padding does not move the web
@@ -502,20 +587,19 @@ class CapacitorMainActivity : BridgeActivity() {
      * the view shrinks the web layout viewport, so the existing CSS resolves the
      * bar above the keyboard with no web-side keyboard-height math (avoiding the
      * reverted #8295 fallback). The target (`rect.bottom − webViewTop`) is read
-     * from `getWindowVisibleDisplayFrame` (reliable on API 28) and does not
-     * depend on the WebView's own height, so it is stable across passes — no
-     * feedback loop. See docs/android-edge-to-edge-keyboard.md and
-     * docs/plans/2026-06-22-android-systembars-migration-corrected.md.
+     * from `getWindowVisibleDisplayFrame` and does not depend on the WebView's
+     * own height, so it is stable across passes — no feedback loop.
      *
-     * API >= 30 and WebView >= 140 are strict no-ops.
+     * That absolute target is also what makes this **resize-detecting**, the
+     * hard requirement #8508 left behind: on a device where the window already
+     * shrank for the IME, the WebView bottom is already at `rect.bottom`, so the
+     * computed height equals the one in effect. The write still happens once
+     * (MATCH_PARENT never equals a px target) but changes nothing visible, so it
+     * cannot re-create the squashed-WebView regression the way the reverted
+     * delta-based inset did. See docs/android-edge-to-edge-keyboard.md.
      */
-    private fun adjustWebViewHeightForKeyboardBelowApi30(rect: Rect, isKeyboardOpen: Boolean) {
-        if (android.os.Build.VERSION.SDK_INT >= 30) return
-        // Skip when SystemBars already handles the IME inset (WebView >= 140
-        // passthrough pads the WebView parent itself). Unknown version (null) ->
-        // run the shim, the safe default on API < 30.
-        val wvMajor = webViewCompatibility?.majorVersion
-        if (wvMajor != null && wvMajor >= 140) return
+    private fun adjustWebViewHeightForKeyboard(rect: Rect, isKeyboardOpen: Boolean) {
+        if (!shouldRunNativeInsetShim()) return
         val webView = bridge?.webView ?: return
         val params = webView.layoutParams ?: return
         // Ignore stale/pre-layout geometry so the height is not set from a bad frame.
@@ -524,12 +608,14 @@ class CapacitorMainActivity : BridgeActivity() {
         val targetHeight: Int
         if (isKeyboardOpen) {
             webView.getLocationOnScreen(webViewLocationOnScreen)
-            val heightToKeyboardTop = rect.bottom - webViewLocationOnScreen[1]
-            // Guard against a degenerate/transient measurement collapsing the
-            // WebView to 0 — the height==0 check above would then latch and stop
-            // recomputing. Keep the current height until a sane value appears.
-            if (heightToKeyboardTop <= 0) return
-            targetHeight = heightToKeyboardTop
+            // Absolute target, never a delta — see ImeWebViewHeight for why that is
+            // what keeps this from re-creating #8508. null = degenerate/transient
+            // frame; keep the current height until a sane value appears, or the
+            // height==0 check above would latch and stop recomputing.
+            targetHeight = ImeWebViewHeight.targetHeight(
+                rectBottom = rect.bottom,
+                webViewTop = webViewLocationOnScreen[1],
+            ) ?: return
         } else {
             targetHeight = webViewLayoutHeightDefault ?: ViewGroup.LayoutParams.MATCH_PARENT
         }
@@ -537,51 +623,41 @@ class CapacitorMainActivity : BridgeActivity() {
         if (params.height == targetHeight) return
         params.height = targetHeight
         webView.layoutParams = params
-        if (BuildConfig.DEBUG) {
-            Log.d(
-                "SUPKeyboard",
-                "webView height -> $targetHeight (kbOpen=$isKeyboardOpen rectB=${rect.bottom})"
-            )
-        }
     }
 
     /**
      * Status-bar overlap workaround for the web header drawing BEHIND the status
-     * bar on the WebView < 140 tail (#8508 / #8283 follow-up, Android 9 / API 28).
+     * bar on the WebView < 140 tail (#8508 / #8283 follow-up, Android 9 / API 28;
+     * reads 0 and self-disables where the WebView is already inset).
      *
      * Edge-to-edge insets are owned by Capacitor's built-in SystemBars now. On
-     * **API >= 35** it injects the real `--safe-area-inset-*` px, and on
-     * **WebView >= 140** the WebView's own `env(safe-area-inset-*)` is correct
-     * (passthrough). But on the **WebView < 140** tail under enforced edge-to-edge
-     * the WebView extends under the status bar while `env(safe-area-inset-top)`
-     * resolves to 0 (old WebViews map only display cutouts into safe-area insets,
-     * not the status bar) — so the web side has no top inset and content overlaps
-     * the status bar.
+     * **WebView >= 140** the WebView's own `env(safe-area-inset-*)` is correct and
+     * SystemBars mirrors it into `--safe-area-inset-*` (passthrough). Up to
+     * Capacitor 8.5.1, on the **WebView < 140 / API < 35** tail nothing inset the
+     * WebView: it extended under the status bar while `env(safe-area-inset-top)`
+     * resolved to 0 (old WebViews map only display cutouts into safe-area insets,
+     * not the status bar) — so the web side had no top inset and content
+     * overlapped the status bar. From 8.5.2 SystemBars pads the DecorView for the
+     * status bar there too, so this measures 0 (see below) and stays inert.
      *
      * We measure the overlap natively and publish it as the `--android-status-bar-
      * overlap` CSS var, which the web side folds into `--safe-area-top` via
-     * `var(--safe-area-inset-top, max(env(...), var(--android-status-bar-overlap)))`.
+     * `var(--android-status-bar-overlap, var(--safe-area-inset-top, env(...)))`.
      * The overlap is how much of the status bar covers the WebView: `rect.top`
      * (top of the visible display frame = status-bar height, reliable on API 28,
      * the same frame the keyboard path uses) minus the WebView's top on screen
      * (`getLocationOnScreen`: 0 when edge-to-edge, == status-bar height once
      * inset). So it is the status-bar height when the WebView is NOT inset and 0
-     * once it is — `max()` never double-counts. Physical px → CSS px via display
+     * once it is — no insets are added together. Physical px → CSS px via display
      * density; deduped so the per-layout listener does not spam evaluateJavascript.
      *
-     * Gated to **SDK < 30 AND WebView < 140** (mirrors
-     * adjustWebViewHeightForKeyboardBelowApi30) so it never fights SystemBars; on
-     * API >= 35 the injected --safe-area-inset-top wins via var() precedence and
-     * the published var is ignored regardless. (Known small gap: an API 30–34
-     * device on an old WebView < 140 also has env()==0; rare, since WebView
-     * auto-updates above API 30 — broaden the gate if it ever surfaces.)
+     * Shares [NativeInsetShimGate] with the keyboard shim. Only where SystemBars
+     * leaves the insets unowned do we publish this override; elsewhere CSS falls
+     * back to SystemBars / env(). Giving the measurement precedence prevents
+     * SystemBars' injected 0px from shadowing it on API < 35 / WebView < 140.
      */
-    private fun pushStatusBarOverlapBelowApi30(rect: Rect) {
-        if (android.os.Build.VERSION.SDK_INT >= 30) return
-        // Skip when SystemBars/env() already give the correct top inset (WebView
-        // >= 140 passthrough). Unknown version (null) -> run it, the safe default.
-        val wvMajor = webViewCompatibility?.majorVersion
-        if (wvMajor != null && wvMajor >= 140) return
+    private fun pushStatusBarOverlap(rect: Rect) {
+        if (!shouldRunNativeInsetShim()) return
         if (!::javaScriptInterface.isInitialized) return
         val webView = bridge?.webView ?: return
         webView.getLocationOnScreen(webViewLocationOnScreen)
@@ -619,8 +695,6 @@ class CapacitorMainActivity : BridgeActivity() {
 
 
     override fun onDestroy() {
-        startupOverlayManager?.dismiss()
-        startupOverlayManager = null
         if (isTimerCompleteReceiverRegistered) {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(timerCompleteReceiver)
             isTimerCompleteReceiverRegistered = false
@@ -635,11 +709,19 @@ class CapacitorMainActivity : BridgeActivity() {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(widgetDoneDrainReceiver)
             isWidgetDoneDrainReceiverRegistered = false
         }
+        if (isNotificationActionDrainReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(
+                notificationActionDrainReceiver
+            )
+            isNotificationActionDrainReceiverRegistered = false
+        }
         super.onDestroy()
     }
 
     companion object {
         const val WINDOW_INTERFACE_PROPERTY: String = "SUPAndroid"
         const val WINDOW_PROPERTY_F_DROID: String = "SUPFDroid"
+        private const val SPLASH_HOLD_MAX_MS = 2_000L
+        private val SPLASH_HOLD_TOKEN = Any()
     }
 }

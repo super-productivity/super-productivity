@@ -189,6 +189,16 @@ button {
   align-items: center;
   gap: var(--header-nav-button-gap);
   flex-shrink: 0;
+  // The header is a drag region on Electron with a custom title bar, and a drag
+  // region swallows pointer input at the OS level — without this a touch drag
+  // across the action row moves the window instead of scrolling the row.
+  //
+  // On the GROUP rather than on `.action-nav-scroll`: the rect follows the
+  // element's box, and this one is the buttons' own band, while the scroller's
+  // is 16px taller (see there). Signing the scroller no-drag put a dead band
+  // along the top of every icon — where the window's top edge is — for no gain
+  // in return.
+  -webkit-app-region: no-drag;
 
   &:empty {
     display: none;
@@ -298,14 +308,14 @@ button {
       // `overflow-x: auto` forces `overflow-y` to compute to `auto` (the two
       // axes are coupled). Pin it to `hidden` so no stray vertical scrollbar
       // can appear, and buy the clipped ink back as padding: the sync badge
-      // above, and the play button's elevation, which reaches 8px under its box
-      // and 5px to either side. (No active-panel underline in that list: the
+      // above, and the play button's blurred elevation, which needs more than
+      // the old 8px gutter. (No active-panel underline in that list: the
       // only `::after` tab left is `display: none` in plugin-side-panel-btns.)
       //
       // Block and inline-start padding are each cancelled by an equal negative
       // margin, so the row's own box is exactly what it was — the padding buys
       // paintable area inside the clip without costing the row a pixel. The
-      // start side may paint 8px outward safely: what abuts it is the title's
+      // start side may paint 16px outward safely: what abuts it is the title's
       // free space, not a control.
       //
       // Deliberately nothing on the inline END: keeping the row's geometry
@@ -316,10 +326,10 @@ button {
       // practice the trailing action is a panel toggle, which has no overhang
       // at all.
       overflow-y: hidden;
-      padding-block: var(--s);
-      padding-inline-start: var(--s);
-      margin-block: calc(-1 * var(--s));
-      margin-inline-start: calc(-1 * var(--s));
+      padding-block: var(--s2);
+      padding-inline-start: var(--s2);
+      margin-block: calc(-1 * var(--s2));
+      margin-inline-start: calc(-1 * var(--s2));
       scrollbar-width: none;
       // Keep whatever the browser scrolls into view clear of the fade. Without
       // this, focusing a button that had scrolled away lands it flush against
@@ -330,10 +340,16 @@ button {
       // Horizontal overscroll here would otherwise reach the platform's
       // back-gesture, which is a steep price for flicking a button row.
       overscroll-behavior-x: contain;
-      // The header is a drag region on Electron with a custom title bar, and a
-      // drag region swallows pointer input at the OS level — without this a
-      // touch drag across the row moves the window instead of scrolling it.
-      -webkit-app-region: no-drag;
+      // No `-webkit-app-region: no-drag` here, and that is load-bearing: the
+      // rect follows this element's box, and `padding-block: var(--s)` makes it
+      // 8px taller than the buttons on each side — bought back from its own clip
+      // by the matching negative margin, which changes nothing about the box.
+      // Marked no-drag it punches two 8px bands of dead space through the
+      // header's drag region — and on macOS, where the theme zeroes the top
+      // padding, the upper band lands right against the window's top edge: the
+      // strip above the icons shows the grab cursor and cannot move the window.
+      // The action groups carry `no-drag` instead — their boxes hug the
+      // buttons, so a finger on a button still scrolls the row.
 
       &::-webkit-scrollbar {
         display: none;
@@ -400,18 +416,20 @@ button {
 // rather than to `:host`, because the page title's own buttons are deliberately
 // not on this grid.
 .action-nav-right {
-  ::ng-deep button:not(.sync-btn) .mat-icon:not(.sync-state-ico) {
+  // Material's icon-button token, so an SVG icon (the sync states) gets a
+  // 20px box too instead of 24px.
+  ::ng-deep button {
+    --mat-icon-button-icon-size: 20px;
+  }
+
+  ::ng-deep button .mat-icon {
     font-size: 20px;
     width: 20px;
     height: 20px;
     line-height: 20px;
   }
 
-  ::ng-deep button.sync-btn .mat-icon:not(.sync-state-ico) {
-    font-size: 24px;
-    width: 24px;
-    height: 24px;
-    line-height: 24px;
+  ::ng-deep button.sync-btn .mat-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -497,18 +515,18 @@ button {
   }
 }
 
+// Clockwise, the way the arrows of the `sync_ring` icon point.
 @keyframes spin {
   from {
     transform: rotate(0deg) translateZ(0);
   }
 
   to {
-    transform: rotate(-360deg) translateZ(0);
+    transform: rotate(360deg) translateZ(0);
   }
 }
 
 .sync-btn {
-  position: relative;
   color: var(--text-color-muted);
 
   &:is(:hover, :focus-visible) {
@@ -521,50 +539,5 @@ button {
   &.is-error,
   &.is-offline {
     color: var(--button-warn-label);
-  }
-}
-
-.sync-state-ico {
-  // Positioning - center within sync button
-  position: absolute !important;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-
-  // Icon sizing
-  font-size: 15px;
-  width: 15px;
-  height: 15px;
-  line-height: 15px;
-
-  // Deliberately NO fill behind the badge, however much "solid circle so the
-  // badge reads" wants one. This sits dead centre on the 24px `sync` glyph, so
-  // at 15px plus 3px padding an opaque disc covers 21px of it and knocks the
-  // glyph out down to four corner nubs. That is not a hypothetical: the fill
-  // was written against the phantom `--c-bg`, which made the declaration
-  // invalid, so it never painted once until #9304 mapped it to the real `--bg`
-  // and the icon visibly lost its ring.
-  //
-  // No token can stand in for it either, because the header is
-  // `background: transparent` and what shows through varies: `--sidenav-bg`
-  // once the action row teleports to the vertical strip, nothing at all on
-  // liquid-glass (`--bg` is `transparent` there), and the user's own wallpaper
-  // wherever `.bg-image` is set — where any opaque disc is just a blob.
-  // The check reads fine inside the ring unaided.
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  // Inert without a fill, but they still size and round the forced-colors ring.
-  border-radius: 50%;
-  padding: 3px;
-
-  // Ensure it sits above sync icon
-  z-index: 1;
-
-  // Windows High Contrast Mode flattens every glyph to one system colour, so
-  // the badge needs an edge of its own to stay separable from the sync ring.
-  @media (forced-colors: active) {
-    outline: 2px solid CanvasText;
-    outline-offset: -2px;
   }
 }

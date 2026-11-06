@@ -25,6 +25,7 @@ describe('AddTaskBarParserService', () => {
       'updateAttachments',
       'updateDeadline',
       'updateDeadlineRemindOption',
+      'updatePriority',
       'updateRepeatSetting',
       'clearRepeatSetting',
       'updateSyntaxHighlight',
@@ -359,6 +360,43 @@ describe('AddTaskBarParserService', () => {
         );
 
         expect(mockStateService.updateDate).toHaveBeenCalledWith(null, null);
+      });
+    });
+
+    describe('Priority Parsing', () => {
+      const parse = (text: string, config: ShortSyntaxConfig): Promise<void> =>
+        service.parseAndUpdateText(
+          text,
+          config,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+      it('should set the priority from p1 and strip it from the clean text', async () => {
+        await parse('Fix login bug p1', { ...mockConfig, isEnablePriority: true });
+
+        expect(mockStateService.updatePriority).toHaveBeenCalledWith(3);
+        expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Fix login bug');
+        const highlight =
+          mockStateService.updateSyntaxHighlight.calls.mostRecent().args[0];
+        expect(highlight?.ranges).toEqual([{ type: 'priority', start: 14, end: 16 }]);
+      });
+
+      it('should clear the priority once the token is deleted', async () => {
+        const config = { ...mockConfig, isEnablePriority: true };
+        await parse('Fix login bug p2', config);
+        expect(mockStateService.updatePriority).toHaveBeenCalledWith(2);
+
+        await parse('Fix login bug', config);
+        expect(mockStateService.updatePriority.calls.mostRecent().args).toEqual([null]);
+      });
+
+      it('should leave p1 in the text when the flag is off', async () => {
+        await parse('Fix login bug p1', { ...mockConfig, isEnablePriority: false });
+
+        expect(mockStateService.updatePriority).toHaveBeenCalledWith(null);
+        expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Fix login bug p1');
       });
     });
 
@@ -849,6 +887,20 @@ describe('AddTaskBarParserService', () => {
         expect(service.removeShortSyntaxFromInput(input, 'date')).toBe('Call mom');
       });
 
+      it('should remove an nth-weekday due token whole', async () => {
+        const input = 'Water plants @2monday';
+        await parse(input);
+        expect(service.removeShortSyntaxFromInput(input, 'date')).toBe('Water plants');
+      });
+
+      it('should remove an nth-weekday token with its trailing time', async () => {
+        // The parse consumed "@2monday 3pm" as one due range, so clearing the
+        // date must not orphan "3pm" into the title.
+        const input = 'Call mom @2monday 3pm';
+        await parse(input);
+        expect(service.removeShortSyntaxFromInput(input, 'date')).toBe('Call mom');
+      });
+
       it('should remove a recurrence phrase whole when clearing the date', async () => {
         const input = 'Water plants @every 2 fridays';
         await parse(input);
@@ -917,6 +969,12 @@ describe('AddTaskBarParserService', () => {
         const result = service.removeShortSyntaxFromInput(input, 'date');
         expect(result).toBe('Task content');
       });
+
+      it('should handle an nth-weekday date', async () => {
+        const input = 'Task content @2monday';
+        const result = service.removeShortSyntaxFromInput(input, 'date');
+        expect(result).toBe('Task content');
+      });
     });
 
     describe('deadline removal', () => {
@@ -940,6 +998,12 @@ describe('AddTaskBarParserService', () => {
 
       it('should handle deadline at end', async () => {
         const input = 'Task content !today';
+        const result = service.removeShortSyntaxFromInput(input, 'deadline');
+        expect(result).toBe('Task content');
+      });
+
+      it('should handle an nth-weekday deadline', async () => {
+        const input = 'Task content !2monday';
         const result = service.removeShortSyntaxFromInput(input, 'deadline');
         expect(result).toBe('Task content');
       });
@@ -1199,6 +1263,42 @@ describe('AddTaskBarParserService', () => {
 
       // Date should be passed through without modification
       expect(mockStateService.updateDate).toHaveBeenCalledWith(dateStr, null);
+    });
+
+    it('should parse dates in the given date input locale', async () => {
+      mockStateService.state.and.returnValue({
+        projectId: mockDefaultProject.id,
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+        repeat: null,
+      });
+
+      await service.parseAndUpdateText(
+        'Task @morgen 15 Uhr',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+        undefined,
+        undefined,
+        { language: 'de', isDayFirst: true },
+      );
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      expect(mockStateService.updateDate).toHaveBeenCalledWith(
+        getDbDateStr(tomorrow),
+        '15:00',
+      );
+      expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Task');
     });
 
     it('should handle midnight time correctly', async () => {
@@ -2126,6 +2226,29 @@ describe('AddTaskBarParserService', () => {
       const arg = mockStateService.updateSyntaxHighlight.calls.mostRecent().args[0];
       expect(arg?.ranges.length).toBe(1);
       expect(text.slice(arg!.ranges[0].start, arg!.ranges[0].end)).toBe('@every friday');
+      expect(arg!.ranges[0].type).toBe('due');
+    });
+
+    it('should include an nth-weekday token in the due range', async () => {
+      mockStateService.state.and.returnValue(baseState as any);
+      const text = 'Water plants @2monday';
+      await service.parseAndUpdateText(text, cfg, [], [], defaultProject);
+      const arg = mockStateService.updateSyntaxHighlight.calls.mostRecent().args[0];
+      expect(arg?.forText).toBe(text);
+      expect(arg!.ranges.length).toBe(1);
+      expect(text.slice(arg!.ranges[0].start, arg!.ranges[0].end)).toBe('@2monday');
+      expect(arg!.ranges[0].type).toBe('due');
+    });
+
+    it('should include a trailing time in the nth-weekday due range', async () => {
+      // The token owns its absorbed time, so the highlight has to cover both
+      // parts; the clear path deletes exactly this range.
+      mockStateService.state.and.returnValue(baseState as any);
+      const text = 'Call mom @2monday 3pm';
+      await service.parseAndUpdateText(text, cfg, [], [], defaultProject);
+      const arg = mockStateService.updateSyntaxHighlight.calls.mostRecent().args[0];
+      expect(arg!.ranges.length).toBe(1);
+      expect(text.slice(arg!.ranges[0].start, arg!.ranges[0].end)).toBe('@2monday 3pm');
       expect(arg!.ranges[0].type).toBe('due');
     });
 

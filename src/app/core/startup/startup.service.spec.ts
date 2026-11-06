@@ -13,11 +13,14 @@ import { ChromeExtensionInterfaceService } from '../chrome-extension-interface/c
 import { ProjectService } from '../../features/project/project.service';
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
 import { LegacyPfDbService } from '../persistence/legacy-pf-db.service';
+import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
+import { LegacySupDbService } from '../persistence/legacy-sup-db.service';
 import { DataInitStateService } from '../data-init/data-init-state.service';
 import { CustomThemeService } from '../theme/custom-theme.service';
 import { of } from 'rxjs';
 import { signal } from '@angular/core';
 import { LS } from '../persistence/storage-keys.const';
+import { T } from '../../t.const';
 import { provideMockStore } from '@ngrx/store/testing';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
 import { selectEnabledIssueProviders } from '../../features/issue/store/issue-provider.selectors';
@@ -47,7 +50,9 @@ describe('StartupService', () => {
     const localBackupServiceSpy = jasmine.createSpyObj('LocalBackupService', [
       'askForFileStoreBackupIfAvailable',
       'init',
+      'restoreBackupStr',
     ]);
+    localBackupServiceSpy.restoreBackupStr.and.resolveTo(true);
     localBackupServiceSpy.askForFileStoreBackupIfAvailable.and.returnValue(
       Promise.resolve(),
     );
@@ -114,6 +119,12 @@ describe('StartupService', () => {
     // Default: no legacy data (fresh install)
     legacyPfDbServiceSpy.hasUsableEntityData.and.returnValue(Promise.resolve(false));
 
+    const legacySupDbServiceSpy = jasmine.createSpyObj('LegacySupDbService', [
+      'loadUnmigratedData',
+    ]);
+    // Default: no v12-or-older data on this device
+    legacySupDbServiceSpy.loadUnmigratedData.and.resolveTo(null);
+
     const dataInitStateServiceSpy = {
       isAllDataLoadedInitially$: of(true),
     };
@@ -144,6 +155,7 @@ describe('StartupService', () => {
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: TrackingReminderService, useValue: trackingReminderServiceSpy },
         { provide: LegacyPfDbService, useValue: legacyPfDbServiceSpy },
+        { provide: LegacySupDbService, useValue: legacySupDbServiceSpy },
         { provide: DataInitStateService, useValue: dataInitStateServiceSpy },
         { provide: CustomThemeService, useValue: customThemeServiceSpy },
         provideMockStore({
@@ -236,6 +248,183 @@ describe('StartupService', () => {
     });
   });
 
+  // Regression guard for #4137/#7345: v11.1.0–v12.0.1 shipped with local
+  // backups never initialised, so a later data loss had nothing to restore.
+  describe('local backup initialisation', () => {
+    let localBackupService: jasmine.SpyObj<LocalBackupService>;
+    let opLogStore: jasmine.SpyObj<OperationLogStoreService>;
+
+    beforeEach(() => {
+      localBackupService = TestBed.inject(
+        LocalBackupService,
+      ) as jasmine.SpyObj<LocalBackupService>;
+      opLogStore = jasmine.createSpyObj('OperationLogStoreService', [
+        'loadStateCache',
+        'getLastSeq',
+        'isRawRebuildIncomplete',
+        'loadRawRebuildRecovery',
+      ]);
+      opLogStore.isRawRebuildIncomplete.and.resolveTo(false);
+      opLogStore.loadRawRebuildRecovery.and.resolveTo(null);
+      Object.assign(service as object, {
+        _opLogStore: opLogStore,
+        _platformService: { isNative: true },
+      });
+    });
+
+    it('should initialise local backups on startup for existing data', fakeAsync(() => {
+      opLogStore.getLastSeq.and.resolveTo(1);
+
+      service.init();
+      flush();
+
+      expect(localBackupService.init).toHaveBeenCalledTimes(1);
+      expect(localBackupService.askForFileStoreBackupIfAvailable).not.toHaveBeenCalled();
+    }));
+
+    it('should offer a backup restore and then initialise backups on a blank store', fakeAsync(() => {
+      opLogStore.loadStateCache.and.resolveTo(null);
+      opLogStore.getLastSeq.and.resolveTo(0);
+
+      service.init();
+      flush();
+
+      expect(localBackupService.askForFileStoreBackupIfAvailable).toHaveBeenCalled();
+      expect(localBackupService.init).toHaveBeenCalledTimes(1);
+    }));
+  });
+
+  // #7345: v12-or-older data that v17+ no longer migrates on its own.
+  describe('pre-v13 data on a blank start', () => {
+    const PRE_V13_DATA = {
+      task: { ids: ['t1'], entities: { t1: { id: 't1', title: 'Old task' } } },
+      project: { ids: ['p1'], entities: { p1: { id: 'p1' } } },
+      taskArchive: { ids: ['a1'], entities: { a1: { id: 'a1' } } },
+    };
+    let localBackupService: jasmine.SpyObj<LocalBackupService>;
+    let legacySupDb: jasmine.SpyObj<LegacySupDbService>;
+    let opLogStore: jasmine.SpyObj<OperationLogStoreService>;
+    let confirmSpy: jasmine.Spy;
+    let translateService: jasmine.SpyObj<TranslateService>;
+
+    const initBackups = (): Promise<void> =>
+      (service as unknown as { _initBackups: () => Promise<void> })._initBackups();
+
+    beforeEach(() => {
+      localBackupService = TestBed.inject(
+        LocalBackupService,
+      ) as jasmine.SpyObj<LocalBackupService>;
+      legacySupDb = TestBed.inject(
+        LegacySupDbService,
+      ) as jasmine.SpyObj<LegacySupDbService>;
+      legacySupDb.loadUnmigratedData.and.resolveTo(PRE_V13_DATA);
+      translateService = TestBed.inject(
+        TranslateService,
+      ) as jasmine.SpyObj<TranslateService>;
+      opLogStore = jasmine.createSpyObj('OperationLogStoreService', [
+        'loadStateCache',
+        'getLastSeq',
+      ]);
+      opLogStore.loadStateCache.and.resolveTo(null);
+      opLogStore.getLastSeq.and.resolveTo(0);
+      Object.assign(service as object, {
+        _opLogStore: opLogStore,
+        _platformService: { isNative: true },
+      });
+      // window.confirm is a global spy installed by the test setup.
+      confirmSpy = window.confirm as jasmine.Spy;
+      // Keep download() from creating object URLs in the test browser.
+      spyOn(URL, 'createObjectURL').and.returnValue('blob:test');
+      spyOn(URL, 'revokeObjectURL');
+    });
+
+    it('should import the data through the backup restore once confirmed', async () => {
+      confirmSpy.and.returnValue(true);
+
+      await initBackups();
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      // Active plus archived tasks, so an archive-only profile isn't "0 tasks".
+      expect(translateService.instant).toHaveBeenCalledWith(
+        T.MIGRATE.C_IMPORT_PRE_V13_DATA,
+        { tasks: 2, projects: 1 },
+      );
+      expect(localBackupService.restoreBackupStr).toHaveBeenCalledOnceWith(
+        JSON.stringify(PRE_V13_DATA),
+      );
+      expect(localBackupService.askForFileStoreBackupIfAvailable).not.toHaveBeenCalled();
+      expect(localBackupService.init).toHaveBeenCalledTimes(1);
+    });
+
+    it('should leave the data alone and fall back to the backup prompt when declined', async () => {
+      confirmSpy.and.returnValue(false);
+
+      await initBackups();
+
+      expect(localBackupService.restoreBackupStr).not.toHaveBeenCalled();
+      expect(localBackupService.askForFileStoreBackupIfAvailable).toHaveBeenCalled();
+    });
+
+    it('should fall back to the backup prompt when the import fails', async () => {
+      confirmSpy.and.returnValue(true);
+      localBackupService.restoreBackupStr.and.resolveTo(false);
+
+      await initBackups();
+
+      expect(localBackupService.askForFileStoreBackupIfAvailable).toHaveBeenCalled();
+    });
+
+    it('should offer it on the web too, without starting local backups', async () => {
+      Object.assign(service as object, { _platformService: { isNative: false } });
+      confirmSpy.and.returnValue(true);
+
+      await initBackups();
+
+      expect(localBackupService.restoreBackupStr).toHaveBeenCalled();
+      expect(localBackupService.askForFileStoreBackupIfAvailable).not.toHaveBeenCalled();
+      expect(localBackupService.init).not.toHaveBeenCalled();
+    });
+
+    it('should not look for it when the store holds data', async () => {
+      opLogStore.loadStateCache.and.resolveTo({} as never);
+
+      await initBackups();
+
+      expect(legacySupDb.loadUnmigratedData).not.toHaveBeenCalled();
+      expect(confirmSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not read the state snapshot when the op-log holds operations', async () => {
+      opLogStore.getLastSeq.and.resolveTo(5);
+
+      await initBackups();
+
+      expect(opLogStore.loadStateCache).not.toHaveBeenCalled();
+      expect(legacySupDb.loadUnmigratedData).not.toHaveBeenCalled();
+      expect(localBackupService.askForFileStoreBackupIfAvailable).not.toHaveBeenCalled();
+    });
+
+    it('should not look for it while v13–v16 pf data awaits migration', async () => {
+      const legacyPfDb = TestBed.inject(
+        LegacyPfDbService,
+      ) as jasmine.SpyObj<LegacyPfDbService>;
+      legacyPfDb.hasUsableEntityData.and.resolveTo(true);
+
+      await initBackups();
+
+      expect(legacySupDb.loadUnmigratedData).not.toHaveBeenCalled();
+    });
+
+    it('should stay silent when no such data exists', async () => {
+      legacySupDb.loadUnmigratedData.and.resolveTo(null);
+
+      await initBackups();
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(localBackupService.askForFileStoreBackupIfAvailable).toHaveBeenCalled();
+    });
+  });
+
   describe('raw rebuild recovery', () => {
     const callRecoveryCheck = async (): Promise<void> => {
       await (
@@ -301,40 +490,27 @@ describe('StartupService', () => {
       expect(result).toBe(false);
     });
 
+    // Spy on the prototype getter rather than defining an own property on
+    // `navigator`: an own property survives the test and shadows the prototype
+    // getter for every later spec that spies on it.
     it('should return false for NIGHTWATCH user agent', () => {
-      const originalUserAgent = navigator.userAgent;
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'NIGHTWATCH',
-        configurable: true,
-      });
+      spyOnProperty(Navigator.prototype, 'userAgent', 'get').and.returnValue(
+        'NIGHTWATCH',
+      );
 
       const result = (service as any)._isTourLikelyToBeShown();
 
       expect(result).toBe(false);
-
-      // Restore
-      Object.defineProperty(navigator, 'userAgent', {
-        value: originalUserAgent,
-        configurable: true,
-      });
     });
 
     it('should return false for PLAYWRIGHT user agent', () => {
-      const originalUserAgent = navigator.userAgent;
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'Something PLAYWRIGHT Something',
-        configurable: true,
-      });
+      spyOnProperty(Navigator.prototype, 'userAgent', 'get').and.returnValue(
+        'Something PLAYWRIGHT Something',
+      );
 
       const result = (service as any)._isTourLikelyToBeShown();
 
       expect(result).toBe(false);
-
-      // Restore
-      Object.defineProperty(navigator, 'userAgent', {
-        value: originalUserAgent,
-        configurable: true,
-      });
     });
 
     it('should return false when more than 2 projects exist', () => {
@@ -363,16 +539,21 @@ describe('StartupService', () => {
   });
 
   describe('_requestPersistence (private)', () => {
+    // Same reason as the user-agent stub above: defining `storage` on
+    // `navigator` itself leaks the mock into every later spec in the run.
+    const stubStorage = (storage: unknown): void => {
+      spyOnProperty(Navigator.prototype, 'storage', 'get').and.returnValue(
+        storage as StorageManager,
+      );
+    };
+
     it('should request persistent storage', fakeAsync(() => {
       const mockStorage = {
         persisted: jasmine.createSpy().and.returnValue(Promise.resolve(false)),
         persist: jasmine.createSpy().and.returnValue(Promise.resolve(true)),
         estimate: jasmine.createSpy(),
       };
-      Object.defineProperty(navigator, 'storage', {
-        value: mockStorage,
-        configurable: true,
-      });
+      stubStorage(mockStorage);
 
       (service as any)._requestPersistence();
       tick();
@@ -389,10 +570,7 @@ describe('StartupService', () => {
         persist: jasmine.createSpy(),
         estimate: jasmine.createSpy(),
       };
-      Object.defineProperty(navigator, 'storage', {
-        value: mockStorage,
-        configurable: true,
-      });
+      stubStorage(mockStorage);
 
       (service as any)._requestPersistence();
       tick();

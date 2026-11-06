@@ -1,4 +1,5 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
+import { DEFAULT_DATE_INPUT_LOCALE } from 'src/app/core/date-time-format/date-input-locale';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
@@ -20,7 +21,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { signal, Signal } from '@angular/core';
 import { AddTaskSuggestion } from './add-task-suggestions.model';
 import { PlannerActions } from '../../planner/store/planner.actions';
-import { TaskCopy, TaskReminderOptionId } from '../task.model';
+import { TaskCopy, TaskReminderOptionId, TaskWithSubTasks } from '../task.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 import { DateService } from '../../../core/date/date.service';
@@ -28,14 +29,15 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { SS } from '../../../core/persistence/storage-keys.const';
 import { BodyClass } from '../../../app.constants';
+import { IosKeyboardService } from '../../../core/theme/ios-keyboard.service';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
   listSorted$: Observable<Project[]>;
-  listSortedForUI$: Observable<Project[]>;
   listInTreeOrderForUI$: Observable<Project[]>;
-  listSortedForUI: Signal<Project[]>;
   listInTreeOrderForUI: Signal<Project[]>;
+  listInTreeOrder: Signal<Project[]>;
   listSorted: Signal<Project[]>;
 };
 
@@ -137,10 +139,9 @@ describe('AddTaskBarComponent', () => {
     return {
       list$: projects$,
       listSorted$: projects$,
-      listSortedForUI$: projects$,
       listInTreeOrderForUI$: projects$,
-      listSortedForUI: signal(projects),
       listInTreeOrderForUI: signal(projects),
+      listInTreeOrder: signal(projects),
       listSorted: signal(projects),
     };
   };
@@ -166,8 +167,10 @@ describe('AddTaskBarComponent', () => {
     'textLocale',
     // Reached by the actions bar's date chip as soon as a state has a time on it
     'formatTime',
+    'dateInputLocale',
   ]);
   mockDateTimeFormatService.currentLocale.and.returnValue('en-US');
+  mockDateTimeFormatService.dateInputLocale.and.returnValue(DEFAULT_DATE_INPUT_LOCALE);
   mockDateTimeFormatService.textLocale.and.returnValue('en-US');
   mockDateTimeFormatService.formatTime.and.callFake((timestamp: number) =>
     new Date(timestamp).toLocaleTimeString('en-US', {
@@ -187,6 +190,7 @@ describe('AddTaskBarComponent', () => {
     mockTaskService = jasmine.createSpyObj('TaskService', [
       'add',
       'getByIdOnce$',
+      'getByIdWithSubTaskData$',
       'scheduleTask',
       'moveToCurrentWorkContext',
     ]);
@@ -195,7 +199,7 @@ describe('AddTaskBarComponent', () => {
     });
     mockProjectService = jasmine.createSpyObj(
       'ProjectService',
-      [],
+      ['moveTaskToTodayList'],
       createProjectSignals(mockProjects),
     );
     mockTagService = jasmine.createSpyObj(
@@ -378,6 +382,34 @@ describe('AddTaskBarComponent', () => {
       expect(getComputedStyle(fixture.nativeElement).bottom).toBe('56px');
     });
 
+    // The offset is bound on the host from IosKeyboardService rather than
+    // inherited from <html>, where writing it restyles the whole list (#9779).
+    it('takes the iOS keyboard offset from IosKeyboardService', () => {
+      document.body.classList.add(BodyClass.isIOS);
+      fixture.componentRef.setInput('isGlobalBarVariant', true);
+      const iosKeyboardService = TestBed.inject(IosKeyboardService);
+
+      iosKeyboardService.keyboardOverlayOffset.set('40px');
+      fixture.detectChanges();
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('56px');
+
+      // Hidden again: the host binding goes away and the :root default applies.
+      iosKeyboardService.keyboardOverlayOffset.set(null);
+      fixture.detectChanges();
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('16px');
+    });
+
+    // Inline bars (planner, plan-tomorrow) never read the offset, so they do
+    // not get the style write either: with the signal set, this host (not
+    // flagged as the global variant) keeps the :root default.
+    it('does not bind the keyboard offset on inline bars', () => {
+      document.body.classList.add(BodyClass.isIOS);
+      TestBed.inject(IosKeyboardService).keyboardOverlayOffset.set('40px');
+      fixture.detectChanges();
+
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('16px');
+    });
+
     it('does not add the safe area to the keyboard offset for non-iOS touch builds', () => {
       expect(getComputedStyle(fixture.nativeElement).bottom).toBe('352px');
     });
@@ -461,6 +493,112 @@ describe('AddTaskBarComponent', () => {
       );
       expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
     });
+
+    it('moves a backlog task picked in a project to its regular list (#10838)', async () => {
+      const suggestion = {
+        title: 'Existing task',
+        taskId: 'task-1',
+        projectId: 'project-2',
+      } as AddTaskSuggestion;
+
+      await component.onTaskSuggestionSelected(suggestion);
+
+      expect(mockProjectService.moveTaskToTodayList).toHaveBeenCalledOnceWith(
+        'task-1',
+        'project-2',
+      );
+      expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
+    });
+
+    it('moves a task from another project here, sub tasks included', async () => {
+      const task = {
+        id: 'task-1',
+        title: 'Other task',
+        subTaskIds: ['sub-1'],
+        subTasks: [{ id: 'sub-1' }],
+      } as Partial<TaskWithSubTasks> as TaskWithSubTasks;
+      mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
+      mockTaskService.getByIdWithSubTaskData$.and.returnValue(of(task));
+      const emitSpy = spyOn(component.afterTaskAdd, 'emit');
+
+      await component.onTaskSuggestionSelected({
+        title: task.title,
+        taskId: task.id,
+        projectId: 'project-2',
+        isFromOtherContextAndTagOnlySearch: true,
+      } as AddTaskSuggestion);
+
+      expect(mockTaskService.moveToCurrentWorkContext).toHaveBeenCalledOnceWith(task);
+      expect(mockSnackService.open).toHaveBeenCalled();
+      expect(emitSpy).toHaveBeenCalled();
+    });
+
+    it('reports nothing when the picked task no longer exists', async () => {
+      mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
+      mockTaskService.getByIdWithSubTaskData$.and.returnValue(of(undefined));
+      const emitSpy = spyOn(component.afterTaskAdd, 'emit');
+
+      await component.onTaskSuggestionSelected({
+        title: 'Deleted task',
+        taskId: 'task-1',
+        projectId: 'project-2',
+        isFromOtherContextAndTagOnlySearch: true,
+      } as AddTaskSuggestion);
+
+      expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+      expect(emitSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('view prefill', () => {
+    // Hidden unless the task keeps the tag "need" and is planned for the day.
+    const prefill = {
+      fields: { tagIds: ['need'], dueDay: '2026-09-12' },
+      isHidden: (f: Partial<TaskCopy>) =>
+        !f.tagIds?.includes('need') || f.dueDay !== '2026-09-12',
+    };
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('isNoDefaults', true);
+      fixture.componentRef.setInput('viewPrefill', prefill);
+      fixture.detectChanges();
+    });
+
+    it("shows the view's values as chips", () => {
+      expect(component.stateService.state().tagIds).toEqual(['need']);
+      expect(component.stateService.state().date).toBe('2026-09-12');
+      expect(component.isHiddenInView()).toBeFalse();
+    });
+
+    it('tells when a removed chip hides the task, and adds it back', () => {
+      component.stateService.updateTagIds([]);
+      expect(component.isHiddenInView()).toBeTrue();
+
+      component.applyViewPrefill();
+      expect(component.isHiddenInView()).toBeFalse();
+    });
+
+    it('adds back the work project the view requires', () => {
+      fixture.componentRef.setInput('viewPrefill', {
+        fields: { projectId: 'proj-a' },
+        isHidden: (f: Partial<TaskCopy>) => f.projectId !== 'proj-a',
+      });
+      component.stateService.updateProjectId('proj-b');
+      expect(component.isHiddenInView()).toBeTrue();
+
+      component.applyViewPrefill();
+      expect(component.isHiddenInView()).toBeFalse();
+    });
+
+    it('keeps the view tags for the next task', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      component.stateService.updateInputTxt('First task');
+      component.stateService.updateCleanText('First task');
+      await component.addTask();
+
+      expect(component.stateService.state().tagIds).toEqual(['need']);
+    });
   });
 
   describe('addTask', () => {
@@ -499,6 +637,24 @@ describe('AddTaskBarComponent', () => {
       const secondCall = mockTaskService.add.calls.mostRecent();
       const secondTaskData = secondCall.args[2] as Partial<TaskCopy>;
       expect(secondTaskData.tagIds).toEqual(['tag-1']);
+    });
+
+    it('should pass a syntax-parsed priority to the new task and reset it after', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+
+      component.stateService.updateInputTxt('Fix login bug p1');
+      component.stateService.updateCleanText('Fix login bug');
+      component.stateService.updatePriority(3);
+      await component.addTask();
+
+      const [title, , taskData] = mockTaskService.add.calls.mostRecent().args as [
+        string,
+        boolean,
+        Partial<TaskCopy>,
+      ];
+      expect(title).toBe('Fix login bug');
+      expect(taskData.priority).toBe(3);
+      expect(component.stateService.state().priority).toBeNull();
     });
 
     // #5461: a repeat-preset task with no explicit date must default to the
@@ -625,6 +781,31 @@ describe('AddTaskBarComponent', () => {
       expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2026-03-30');
     });
 
+    // The schedule pick offers day/week lead times; a repeat config persists the
+    // option id, which released clients before v19.2.0 cannot convert.
+    it('should not persist a long lead time into a picked repeat config', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Standup');
+      component.stateService.updateCleanText('Standup');
+      component.stateService.updateDate('2026-03-30', '09:30');
+      component.stateService.updateRemindOption(TaskReminderOptionId.d1);
+      component.stateService.updateRepeatSetting({
+        type: 'PRESET',
+        quickSetting: 'DAILY',
+      });
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy.calls.mostRecent().args[2].remindAt).toBe(
+        TaskReminderOptionId.h1,
+      );
+    });
+
     // Nothing rolls the fallback to today on the way in — a recurrence with no
     // date never passes a date through the parser — so the config would keep a
     // weekend start date the user cannot see while the task itself is created
@@ -653,6 +834,50 @@ describe('AddTaskBarComponent', () => {
       expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2024-05-20');
     });
 
+    // The contextual monthly presets read the picked date, so "the 1st of the
+    // month" has to mean the month the user picked into, not the month the bar
+    // happens to be open in. Dates far enough out to stay true whatever day the
+    // suite runs on.
+    it('should anchor a monthly-first-day repeat to the month of the picked date', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Pay rent');
+      component.stateService.updateCleanText('Pay rent');
+      component.stateService.updateDate('2099-09-15');
+      component.stateService.updateRepeatSetting({
+        type: 'PRESET',
+        quickSetting: 'MONTHLY_FIRST_DAY',
+      });
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2099-10-01');
+    });
+
+    it('should anchor a monthly-last-day repeat to the month of the picked date', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Pay rent');
+      component.stateService.updateCleanText('Pay rent');
+      component.stateService.updateDate('2099-09-15');
+      component.stateService.updateRepeatSetting({
+        type: 'PRESET',
+        quickSetting: 'MONTHLY_LAST_DAY',
+      });
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2099-09-30');
+    });
+
     it('should copy entered notes to an inline repeat preset config (discussion #937)', async () => {
       mockTaskService.add.and.returnValue('task-1');
       const addRepeatCfgSpy = spyOn(
@@ -672,6 +897,26 @@ describe('AddTaskBarComponent', () => {
 
       const repeatCfg = addRepeatCfgSpy.calls.mostRecent().args[2];
       expect(repeatCfg.notes).toBe('Join from the meeting room');
+    });
+
+    it('should copy a syntax-parsed priority to an inline repeat config', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const addRepeatCfgSpy = spyOn(
+        TestBed.inject(TaskRepeatCfgService),
+        'addTaskRepeatCfgToTask',
+      );
+
+      component.stateService.updateInputTxt('Daily standup p1');
+      component.stateService.updateCleanText('Daily standup');
+      component.stateService.updatePriority(3);
+      component.stateService.updateRepeatSetting({
+        type: 'PRESET',
+        quickSetting: 'DAILY',
+      });
+
+      await component.addTask();
+
+      expect(addRepeatCfgSpy.calls.mostRecent().args[2].priority).toBe(3);
     });
 
     it('seeds skipOverdue ON for an inline Daily repeat (#8644)', async () => {
@@ -1380,6 +1625,22 @@ describe('AddTaskBarComponent', () => {
     });
   });
 
+  describe('deadline button', () => {
+    const getDeadlineBtn = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('[data-test="add-task-bar-deadline-btn"]');
+
+    it('is shown with the default config', () => {
+      fixture.detectChanges();
+      expect(getDeadlineBtn()).not.toBeNull();
+    });
+
+    it('is hidden when planForDay is set', () => {
+      fixture.componentRef.setInput('planForDay', '2024-05-20');
+      fixture.detectChanges();
+      expect(getDeadlineBtn()).toBeNull();
+    });
+  });
+
   // cdkTextareaAutosize measures a present placeholder by temporarily swapping
   // it into textarea.value, and each swap resets the caret to the end — so the
   // placeholder must be detached whenever the field has text (the only time a
@@ -1444,6 +1705,109 @@ describe('AddTaskBarComponent', () => {
 
       expect(noteEl.hasAttribute('placeholder')).toBe(false);
       expect(noteEl.getAttribute('aria-label')).toBe(emptyLabel);
+    });
+  });
+
+  // Only ever spied on elsewhere in this file, so the two paths below — one of
+  // them the blur → focus cycle the Android IME depends on — had no coverage.
+  describe('focusInput()', () => {
+    const getInput = (f: ComponentFixture<AddTaskBarComponent>): HTMLTextAreaElement =>
+      f.debugElement.nativeElement.querySelector('.main-input') as HTMLTextAreaElement;
+
+    it('focuses the field synchronously', () => {
+      fixture.detectChanges();
+      const input = getInput(fixture);
+      input.blur();
+
+      component.focusInput();
+
+      expect(document.activeElement).toBe(input);
+    });
+
+    it('selects the existing text when asked', () => {
+      fixture.detectChanges();
+      const input = getInput(fixture);
+      input.value = 'water the plants';
+      input.dispatchEvent(new Event('input'));
+
+      component.focusInput(true);
+
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe('water the plants'.length);
+    });
+
+    // #9779: a second focus() on an already-focused field re-fires focusin, and
+    // the global handler scrolls it into view again mid keyboard animation.
+    it('does not re-focus a field that already took focus', fakeAsync(() => {
+      fixture.detectChanges();
+      const focusSpy = spyOn(getInput(fixture), 'focus').and.callThrough();
+
+      component.focusInput();
+      const callsBeforeRetry = focusSpy.calls.count();
+      tick(50);
+
+      expect(focusSpy.calls.count()).toBe(callsBeforeRetry);
+      flush();
+    }));
+
+    it('retries once when the web view dropped the focus', fakeAsync(() => {
+      fixture.detectChanges();
+      const input = getInput(fixture);
+
+      component.focusInput();
+      input.blur();
+      tick(50);
+
+      expect(document.activeElement).toBe(input);
+      flush();
+    }));
+
+    describe('on the Android web view', () => {
+      let androidFixture: ComponentFixture<AddTaskBarComponent>;
+
+      beforeEach(async () => {
+        TestBed.resetTestingModule();
+        await TestBed.configureTestingModule({
+          imports: [AddTaskBarComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+          providers: [
+            { provide: TaskService, useValue: mockTaskService },
+            { provide: WorkContextService, useValue: mockWorkContextService },
+            { provide: ProjectService, useValue: mockProjectService },
+            { provide: TagService, useValue: mockTagService },
+            { provide: GlobalConfigService, useValue: mockGlobalConfigService },
+            { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+            { provide: DateService, useValue: mockDateService },
+            { provide: Store, useValue: mockStore },
+            { provide: MatDialog, useValue: mockMatDialog },
+            { provide: SnackService, useValue: mockSnackService },
+            {
+              provide: AddTaskBarIssueSearchService,
+              useValue: mockAddTaskBarIssueSearchService,
+            },
+            { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
+          ],
+        }).compileComponents();
+        androidFixture = TestBed.createComponent(AddTaskBarComponent);
+        androidFixture.detectChanges();
+      });
+
+      // The IME only comes up reliably after this repeated cycle, so it stays
+      // exactly as it was while the other platforms moved to a guarded retry.
+      it('keeps the repeated blur to focus cycle that raises the IME', fakeAsync(() => {
+        const input = getInput(androidFixture);
+        const focusSpy = spyOn(input, 'focus').and.callThrough();
+
+        androidFixture.componentInstance.focusInput();
+        expect(focusSpy).toHaveBeenCalledTimes(1);
+
+        tick(0);
+        expect(focusSpy).toHaveBeenCalledTimes(2);
+
+        tick(200);
+        expect(focusSpy).toHaveBeenCalledTimes(3);
+        expect(document.activeElement).toBe(input);
+        flush();
+      }));
     });
   });
 });

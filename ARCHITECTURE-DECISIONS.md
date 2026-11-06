@@ -4,6 +4,8 @@ This document tracks significant architectural decisions and patterns in the Sup
 
 It is also the **index** of accepted decisions: a decision recorded somewhere else — because it is long enough to stand alone, or because it is enforced as a contributor rule — must still be listed under [Decisions Recorded Elsewhere](#decisions-recorded-elsewhere).
 
+**Decisions:** [1. dueDay/dueWithTime Mutual Exclusivity Pattern](#1-duedayduewithtime-mutual-exclusivity-pattern) · [2. TODAY_TAG Virtual Tag Pattern](#2-today_tag-virtual-tag-pattern) · [3. Sync Package Boundary Direction](#3-sync-package-boundary-direction) · [4. Upload Conflict Safety via the lastSeq Row Lock Under RepeatableRead](#4-upload-conflict-safety-via-the-lastseq-row-lock-under-repeatableread) · [5. Project Completion: Decoupled Resolution over Atomic Multi-Entity Op](#5-project-completion-decoupled-resolution-over-atomic-multi-entity-op) · [6. Passkeys Stay Pending Until Email Verification](#6-passkeys-stay-pending-until-email-verification) · [7. Versioned Delete-Wins Semantics for Project Deletion](#7-versioned-delete-wins-semantics-for-project-deletion) · [8. Additive Data-Model Evolution over Schema Bumps](#8-additive-data-model-evolution-over-schema-bumps) · [9. Calendar Writes Live in Plugins, Behind Per-Provider Opt-In](#9-calendar-writes-live-in-plugins-behind-per-provider-opt-in) · [10. Vector Clocks over Server-Side Entity Versioning](#10-vector-clocks-over-server-side-entity-versioning)
+
 ## Active Patterns & Decisions
 
 ### 1. dueDay/dueWithTime Mutual Exclusivity Pattern
@@ -93,11 +95,12 @@ sync primitives.
 
 - ESLint rejects Angular, NgRx, app, shared-schema, sync-core deep imports, and
   dynamic imports inside package sources
-- `@sp/sync-core` has no runtime dependencies and owns vector-clock algorithms
-  used by client/server compatibility paths
-- `packages/shared-schema` compatibility-re-exports generic vector-clock
-  algorithms from `@sp/sync-core`; `@sp/sync-core` must not import
-  `@sp/shared-schema`
+- `@sp/sync-core` owns the vector-clock algorithms that the app and the
+  SuperSync server import directly; its only runtime dependencies are
+  `@noble/ciphers` and `hash-wasm`, used by its encryption primitives
+- `packages/shared-schema` owns schema contracts and validators shared by app
+  and server and has no dependency on `@sp/sync-core`; `@sp/sync-core` must
+  not import `@sp/shared-schema`
 - `@sp/sync-providers` depends on public `@sp/sync-core` plus provider runtime
   helpers, while app factories inject credentials, platform bridges, validators,
   OAuth routing, and config
@@ -120,42 +123,69 @@ sync primitives.
 
 ---
 
-### 4. Batch Uploads Under RepeatableRead
+### 4. Upload Conflict Safety via the lastSeq Row Lock Under RepeatableRead
 
-**Status**: ✅ Active (since May 2026)
+**Status**: ✅ Active (since May 2026; batch upload engine removed August 2026)
 
-**Decision**: SuperSync batch uploads derive conflict-safety from the shared
+**Decision**: SuperSync uploads derive conflict-safety from the shared
 `user_sync_state.lastSeq` row write that reserves server sequence numbers, not
 from PostgreSQL RepeatableRead snapshot isolation alone.
+
+**Note — batch upload engine deleted (2026-08, #9508)**: this decision was
+originally written for the batch upload engine (`processOperationBatch`,
+`prefetchLatestEntityOpsForBatch`, the `SUPERSYNC_BATCH_UPLOAD` flag). That
+engine was never enabled in production and was deleted rather than rolled out;
+the serial per-op path (`processOperation`) is the only upload engine. The
+invariant below is engine-neutral and applies unchanged to the serial path.
+The deleted batch code last lived at commit `924ddd7019`. Re-open condition:
+the batch engine processed a 25-op upload in ~10 SQL statements vs ~127 for
+serial — resurrect it (from that commit, re-reviewed) only if per-upload
+latency or transaction lock-hold time becomes a measured production problem.
 
 **Rationale**:
 
 - PostgreSQL RepeatableRead does not provide full serializable snapshot isolation
-- Two concurrent upload transactions can both pass conflict prefetch checks when
-  they read the same pre-insert snapshot
+- Two concurrent upload transactions can both pass conflict checks when they
+  read the same pre-insert snapshot
 - Reserving sequence numbers through one `user_sync_state.lastSeq` row forces
   accepted writers for the same user to serialize on that row lock
 - A causal `REPAIR` snapshot must prove that its state includes the current
   server prefix; the same row serializes that base-cursor check with later writes
-- If two batches race, the later writer blocks on the row and the transaction
+- If two uploads race, the later writer blocks on the row and the transaction
   retry path handles the serialization failure rather than silently accepting
   conflicting operations
+- The serial path's post-allocation conflict re-check ("FIX 1.5", removed
+  2026-08; last lived at commit `07511ab45c`) was dead code: under
+  RepeatableRead both conflict checks read one snapshot fixed at the
+  transaction's first statement, and the `lastSeq` increment raises a
+  serialization failure (40001) against any committed concurrent upload
+  before a re-check could run. Lowering the isolation level below
+  REPEATABLE READ would require reinstating a post-allocation re-check.
 
 **Implementation**:
 
-- Batch upload conflict detection runs in memory against prefetched latest
-  entity rows and updates that map as operations are accepted
-- Accepted operations reserve one contiguous sequence range with
-  `INSERT ... ON CONFLICT ... DO UPDATE SET last_seq = last_seq + delta`
-- The batch insert does not use `skipDuplicates`; an unexpected unique conflict
-  aborts the transaction and lets the request retry
+- An upsert ensures the `user_sync_state` row exists (`lastSeq: 0`); each
+  accepted operation then reserves its sequence number with an atomic
+  `update({ lastSeq: { increment: 1 } })` on that row
+  (`operation-upload.service.ts`)
+- The operation insert uses `createMany(..., skipDuplicates: true)`: a lost
+  duplicate-ID race surfaces as `count === 0` and is handled in-transaction
+  (sequence rolled back, op classified as `DUPLICATE_OPERATION`) rather than
+  aborting the whole upload with a unique-constraint error; only a non-ID
+  unique conflict aborts the transaction
 - `REPAIR` uploads persist `repairBaseServerSeq` on the operation row. The HTTP
   handler rejects an obviously stale base before quota cleanup, and the upload
   transaction repeats the check under `SELECT ... FOR UPDATE` before insertion
 - Regular uploads carrying `lastKnownServerSeq` use the same per-user row lock
-  to reject a batch behind the latest `SYNC_IMPORT` or `BACKUP_IMPORT` before
+  to reject an upload behind the latest `SYNC_IMPORT` or `BACKUP_IMPORT` before
   insertion. The durable replacement marker is reconciled lazily from retained
   operations for rows created before the marker existed.
+- The marker carries **import** semantics — it forces a stale client to download
+  a replacement whose concurrent ops the client then drops. Only an import
+  advances it. The lazy reconcile falls back to the newest causal `REPAIR` purely
+  as a stand-in for an import row that pruning already deleted; a repair is not a
+  fence in its own right, and the client replays concurrent work on top of one
+  rather than dropping it
 - Markerless legacy repairs are compatibility records, not causal boundaries:
   they cannot drive download fast-forward, snapshot trust, history pruning, or
   server-generated restore points; snapshot replay across one fails closed
@@ -168,7 +198,7 @@ from PostgreSQL RepeatableRead snapshot isolation alone.
 
 **Key Files**:
 
-- [`packages/super-sync-server/src/sync/sync.service.ts`](packages/super-sync-server/src/sync/sync.service.ts) - Upload transaction and batch primitive
+- [`packages/super-sync-server/src/sync/sync.service.ts`](packages/super-sync-server/src/sync/sync.service.ts) - Upload transaction and sequencing primitive
 - [`packages/super-sync-server/prisma/schema.prisma`](packages/super-sync-server/prisma/schema.prisma) - `user_sync_state.last_seq`
 - [`packages/super-sync-server/tests/integration/repair-causality.integration.spec.ts`](packages/super-sync-server/tests/integration/repair-causality.integration.spec.ts) - Real-PostgreSQL race coverage
 
@@ -310,23 +340,76 @@ recoverable via local undo, not via sync.
 - The shared LWW planner accepts a host-supplied delete-wins classifier. A remote
   marked delete is applied regardless of timestamps. A local marked delete is
   replaced with one operation whose vector clock dominates both conflict sides.
+- **Frontier guard (#11489, applies to projects and tags):** a marked delete
+  wins only while no same-side op re-creates the entity after it. Such an op
+  is causally after the delete (vector clock greater: it saw the delete) and
+  would re-create the entity on replay: a Create, or an LWW Update (matched by
+  its `] LWW Update` action type, so released clients' envelope-less ones
+  count), e.g. a released client's re-creating LWW update, the board's same-id
+  `createTags`, or a pending same-id `addTag`. Then the whole entity falls
+  back to timestamp LWW. A plain update of a deleted id does not block (it is
+  a no-op on replay; blocking on it would reject the delete without a
+  replacement), nor does a recreate-marked `'patch'` delta (ignored while the
+  entity is absent). The planner judges this across all conflicts of the
+  entity, because detection emits one conflict per remote op; without it one
+  entity could get split plans (the delete applied here while a local-win
+  snapshot re-creates it elsewhere). Concurrent same-side ops do not block the
+  delete. For projects the guard is effectively inert: nothing re-creates a
+  project id after a marked delete.
 - SuperSync keeps its generic conflict protocol: if the first delete upload is
   rejected, the existing retry path uploads the causally dominant replacement.
   File-based providers use the same client planner and marker.
 - Do not add per-task/note restoration operations or project-sized snapshots to
   compensate a losing marked project delete.
 
+**Extension — single-tag deletion (#11489, since November 2026)**: new
+`deleteTag` actions carry `tagDeleteWins: true` and win the same way. Under
+timestamp LWW, a concurrent tag rename recreated the tag on the deleting device,
+while that device's delete cascade had already stripped the tag from its live and
+archived tasks. Nothing re-applied the membership, so the devices stayed
+different for good. Restoring that cascade would need affected live and archived
+task ids in the delete payload, and still could not bring back what the cascade
+dropped (orphaned tasks, repeat-config tags, issue-provider default tags). That is
+the same reasoning as for projects.
+
+- Trade-off: a tag rename or other tag edit concurrent with the delete is lost,
+  whichever timestamp is newer.
+- **No schema barrier and no bump.** The marker alone is the discriminator; the
+  classifier still requires the authenticated payload `id` to match the
+  plaintext `entityId` and tolerates a null payload. A released client ignores
+  the marker and resolves the delete by timestamp exactly as before. That leaves
+  the pre-existing membership divergence for that pair, not data loss (unlike the
+  empty project shell that justified v4, which itself needed no bump, see
+  [Bump Policy](docs/sync-and-op-log/operation-log-architecture.md#bump-policy--a-bump-does-not-protect-the-released-fleet)).
+- Mixed fleet: two updated clients converge on the delete in both directions;
+  any pair with a released client behaves as before; deletes stored before this
+  change carry no marker and keep LWW.
+- The frontier guard above applies: a later same-side re-create of the tag
+  returns the entity to timestamp LWW.
+- Trade-off reach: references to the tag that another device adds concurrently
+  (task tags, repeat-config tags, issue-provider default tags) are dropped on
+  that device by the cascade, or left dangling on the deleting device. That
+  was already possible when the delete won by timestamp; it now also applies
+  when a concurrent rename would have kept the tag.
+- `deleteTags` (several tag ids in one op) is excluded: it is never stamped and
+  the classifier accepts only `[Tag] Delete Tag`. Delete-wins for a
+  multi-entity op is a new conflict crossing that needs its own resolution
+  path and E2E (AGENTS.md sync rule 14).
+- Proof: [`supersync-tag-delete-rename-race-11489.spec.ts`](e2e/tests/sync/supersync-tag-delete-rename-race-11489.spec.ts)
+  covers both directions, live and archived.
+
 **Key Files**:
 
 - [`task-shared.actions.ts`](src/app/root-store/meta/task-shared.actions.ts) — the `PROJECT_DELETE_WINS_MARKER` producer
+- [`tag.actions.ts`](src/app/features/tag/store/tag.actions.ts) — the `TAG_DELETE_WINS_MARKER` producer
 - [`conflict-resolution.ts`](packages/sync-core/src/conflict-resolution.ts)
-- [`conflict-resolution.service.ts`](src/app/op-log/sync/conflict-resolution.service.ts) — the delete-wins classifier
+- [`conflict-resolution.util.ts`](src/app/op-log/sync/conflict-resolution.util.ts) — the delete-wins classifier (`isDeleteWinsOperation`)
 - [`schema-version.ts`](packages/shared-schema/src/schema-version.ts)
 - [`project-delete-wins-barrier-v3-to-v4.ts`](packages/shared-schema/src/migrations/project-delete-wins-barrier-v3-to-v4.ts) (registered in [`migrations/index.ts`](packages/shared-schema/src/migrations/index.ts))
 
 **When to Update This Pattern**:
 
-- Changing the cascade performed by `deleteProject`
+- Changing the cascade performed by `deleteProject` or `deleteTag`
 - Adding another operation with delete-wins conflict semantics
 - Changing schema compatibility or LWW replacement behavior
 
@@ -397,6 +480,124 @@ a shipped precedent.
 
 ---
 
+### 9. Calendar Writes Live in Plugins, Behind Per-Provider Opt-In
+
+**Status**: ✅ Active (recorded 2026-08; describes the boundary that shipped 2026-03 in `3e2265fa57` / `020fd56504`)
+
+**Decision**: Super Productivity is never the authority for calendar state. It
+reads calendars to show the day's commitments, and it may write a _mirror_ of a
+scheduled task back — but only through a **plugin issue provider** that opts into
+the `timeBlock` contract, and only when the user has enabled that provider's
+auto-time-blocking setting. Core code contains no calendar write path.
+
+The boundary today:
+
+| Surface                                                                                            | Writes?                           |
+| -------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Built-in iCal/CalDAV URL feeds (`src/app/features/schedule/ical/`)                                 | No — poll and parse only          |
+| Built-in issue providers (`src/app/features/issue/providers/*`)                                    | No — none implement `timeBlock`   |
+| Plugin providers implementing `timeBlock` (`google-calendar-provider`, `caldav-calendar-provider`) | Yes, when `isAutoTimeBlock` is on |
+
+**Rationale**:
+
+- **A time block is a projection, not a synced entity.** `TimeBlockSyncEffects`
+  pushes task state one way — schedule, reschedule, title, estimate, done, delete
+  — into an event the app itself created. It never reconciles a user's edit of
+  that event back into the task, and it never touches events the app did not
+  create. That keeps the flow one-directional even though it writes, which is what
+  avoids the sync loop a true bidirectional design has to solve.
+- **Off by default, per provider.** `isAutoTimeBlock` is an unchecked box on the
+  provider's config form. Writing into someone's calendar is not something to
+  infer from an integration merely being connected (manifesto: opt-in, quiet by
+  default).
+- **Plugins are the right home.** Every write path needs OAuth, per-vendor event
+  shapes, and vendor-specific throttling. Keeping that in `packages/plugin-dev/`
+  behind the `timeBlock` contract means core carries no vendor API surface, and a
+  broken provider degrades to read-only rather than breaking the app.
+- **What is still excluded.** No reconciliation of external event edits into task
+  state, no adoption of pre-existing calendar events, and no per-occurrence
+  recurring-event editing (`RECURRENCE-ID`/`EXDATE`, #8148). These are the parts
+  that would require answering conflict resolution between vector clocks and
+  ETags, and they remain unbuilt — see #5001 for the open bidirectional request.
+
+**Implementation**:
+
+- Contract: `timeBlock: { upsertEvent, deleteEvent, logWorkSession? }` in
+  [`packages/plugin-api/src/issue-provider-types.ts`](packages/plugin-api/src/issue-provider-types.ts)
+- Driver: [`time-block-sync.effects.ts`](src/app/features/calendar-integration/time-block/time-block-sync.effects.ts),
+  registered in [`feature-stores.module.ts`](src/app/root-store/feature-stores.module.ts)
+- Tracked work sessions (#6378, append-only, written only by the tracking device;
+  unwritten sessions wait in device-local `LS.WORK_SESSION_LOG`, never synced):
+  [`work-session-log.effects.ts`](src/app/features/calendar-integration/time-block/work-session-log.effects.ts)
+- Manual per-event actions (reschedule, delete): [`calendar-event-actions.service.ts`](src/app/features/calendar-integration/calendar-event-actions.service.ts)
+- Events themselves are **not** op-log entities — a converted task is an ordinary
+  task with a derived stable id
+  ([`generate-calendar-task-id.ts`](src/app/features/calendar-integration/generate-calendar-task-id.ts)).
+  Provider _configuration_ does sync (`ISSUE_PROVIDER` in
+  [`entity-registry.ts`](src/app/op-log/core/entity-registry.ts)).
+
+**When to Update This Pattern**:
+
+- A core (non-plugin) calendar write path is proposed — that crosses the boundary
+  this record draws
+- Reconciling external event edits back into task state is proposed (#5001) — that
+  needs the ETag-vs-vector-clock conflict story written down first
+- Per-occurrence recurring edits land (#8148)
+
+---
+
+### 10. Vector Clocks over Server-Side Entity Versioning
+
+**Status**: ✅ Active (recorded 2026-08; the alternative design is `git show 07511ab45c:docs/long-term-plans/server-side-entity-versioning.md`)
+
+**Decision**: Conflict detection stays on **vector clocks**, pruned to
+`MAX_VECTOR_CLOCK_SIZE = 20`. Server-side per-entity version counters (optimistic
+concurrency control, the shape every centralized API uses) were designed in full
+and are **not being built**. The design was never rejected on its merits by a
+maintainer decision — it is recorded here as declined-by-default, because nothing
+has yet justified its cost.
+
+**Rationale**:
+
+- **The problem it solves is not observed.** Pruning only discards causal
+  information once 21+ distinct client IDs have touched a clock. For a personal
+  deep-work tool that is not a realistic fleet, and the one edge case that did bite
+  — an import client mispruning against its own ops — is already handled by a
+  same-client check.
+- **It would make the server the source of truth, not just the referee.** The
+  SuperSync server already detects conflicts (`detectConflict` in
+  `packages/super-sync-server/src/sync/conflict.ts`), but it does so by comparing
+  clocks the _clients_ authored — the causal history stays client-owned. Entity
+  versioning moves that authority into the server. File-based providers (WebDAV,
+  Dropbox, local file) have no server to run it, so the vector-clock path must
+  survive regardless, and we would maintain **two** conflict systems instead of
+  one.
+- **The migration is the expensive half.** It needs a new server table, a wire
+  protocol change, a backfill for every existing entity, and a mixed-fleet window
+  where old (clock-only) and new (version-carrying) clients edit the same entity.
+  The design did address this — each step was independently deployable and
+  backward compatible — but "correct on paper, across eight steps, in the
+  subsystem where mistakes silently destroy user data" is precisely the cost being
+  weighed, and there is no failure it currently buys us out of.
+- **Encryption boundary.** The design assumed entity versions are non-sensitive
+  and would ride outside E2EE. Plausible, but it adds another plaintext channel to
+  reason about and was never re-derived against the current threat model — see
+  [`supersync-encryption-architecture.md`](docs/sync-and-op-log/supersync-encryption-architecture.md).
+
+**Implementation**: unchanged — see
+[`docs/sync-and-op-log/vector-clocks.md`](docs/sync-and-op-log/vector-clocks.md).
+The server prunes after conflict detection, before storage.
+
+**When to Update This Pattern**:
+
+- Real fleets are observed exceeding ~20 distinct client IDs per user, or pruning
+  is traced to an actual user-visible conflict (rule: start from a reproducible
+  problem)
+- SuperSync becomes the only supported backend, removing the "file providers need
+  the clock path regardless" constraint
+
+---
+
 ## Decisions Recorded Elsewhere
 
 These carry the same authority as the numbered records above. They live outside this file because they are long enough to stand alone, or because they are enforced as contributor/agent rules that must be read before touching the subsystem. Keep this table complete — if you record a decision somewhere else, add a row here.
@@ -407,7 +608,7 @@ These carry the same authority as the numbered records above. They live outside 
 | **Schema-version bump policy** — default to NOT bumping `CURRENT_SCHEMA_VERSION`; a bump never protects the released fleet and cannot be reverted         | [`operation-log-architecture.md` §A.7.11 Bump Policy](docs/sync-and-op-log/operation-log-architecture.md#bump-policy--a-bump-does-not-protect-the-released-fleet), [`schema-version.ts`](packages/shared-schema/src/schema-version.ts), `AGENTS.md` sync rule 10 |
 | **Required fields on persisted models** — a new field on a persisted model is optional (`?`) plus a runtime default, never required                       | [`docs/sync-and-op-log/persisted-model-fields.md`](docs/sync-and-op-log/persisted-model-fields.md), `AGENTS.md` sync rule 11                                                                                                                                     |
 | **One user intent = one op** — effects inject `LOCAL_ACTIONS`; a multi-entity change is a meta-reducer, not an effect fan-out                             | [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md), `AGENTS.md` sync rules 1–3 and 6                                                                                                                             |
-| **`src/app` layer boundary** — `core/` and `ui/` must not import `features/`; lint-enforced, with a shrink-only grandfathered list                        | [`src/app/README.md`](src/app/README.md), [`eslint.config.js`](eslint.config.js) (`FEATURE_LAYER_FENCE`)                                                                                                                                                         |
+| **`src/app` layer boundary** — `core/` and `ui/` must not import `features/`; lint-enforced; legacy imports carry shrink-only inline disables             | [`src/app/README.md`](src/app/README.md), [`eslint.config.js`](eslint.config.js) (`FEATURE_LAYER_FENCE`)                                                                                                                                                         |
 
 ---
 

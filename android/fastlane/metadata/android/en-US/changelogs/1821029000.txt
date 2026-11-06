@@ -1,0 +1,7 @@
+• Show the tracked task in the browser tab title
+• Add Android URL-scheme task actions
+• Update Turkish translations
+• Prevent touch swipes from moving or resizing schedule events
+• Stop the iOS add-task bar from jumping with keyboard changes
+• Fix overdue repeating-task cleanup when reminders are present
+• Improve legacy data migration and sync reliability

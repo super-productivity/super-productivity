@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { RETENTION_DAYS } from '../src/sync/sync.types';
+import { SYNC_DEVICES_DDL } from './sync-devices-ddl.helper';
 import {
   afterAll,
   afterEach,
@@ -104,22 +105,13 @@ const SCHEMA = `
   -- received_at-bounded reports depend on, so a query that only performs
   -- acceptably *because* of this index would look identical here to one that
   -- does not.
-  CREATE INDEX operations_user_id_received_at_idx ON operations (user_id, received_at);
+  CREATE INDEX operations_user_id_received_at_server_seq_idx ON operations (user_id, received_at, server_seq);
   CREATE TABLE user_sync_state (
     user_id integer PRIMARY KEY,
     last_seq integer NOT NULL DEFAULT 0,
     last_snapshot_seq integer,
     snapshot_data bytea,
     snapshot_at bigint
-  );
-  CREATE TABLE sync_devices (
-    client_id text NOT NULL,
-    user_id integer NOT NULL,
-    device_name text,
-    last_seen_at bigint NOT NULL,
-    last_acked_seq integer NOT NULL DEFAULT 0,
-    created_at bigint NOT NULL,
-    PRIMARY KEY (user_id, client_id)
   );
 `;
 
@@ -325,6 +317,7 @@ describe('monitoring report SQL (PGlite)', () => {
     await db.waitReady;
     mocks.state.db = db;
     await db.exec(SCHEMA);
+    await db.exec(SYNC_DEVICES_DDL);
     await seed();
   });
 

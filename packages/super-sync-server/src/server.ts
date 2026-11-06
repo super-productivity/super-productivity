@@ -1,3 +1,5 @@
+import { getJwtSecret } from './auth';
+import { captureOAuthRoutes } from './capture/capture-oauth.routes';
 import * as fs from 'fs';
 import Fastify, { FastifyError, FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
@@ -10,6 +12,7 @@ import {
   ServerConfig,
   PrivacyConfig,
   isConsentRequired,
+  SERVER_TRUST_PROXY,
 } from './config';
 import { Logger } from './logger';
 import { prisma, disconnectDb } from './db';
@@ -24,11 +27,14 @@ import {
   getSyncService,
 } from './sync';
 import { wsRoutes } from './sync/websocket.routes';
+import { connectRoutes } from './connect/connect.routes';
+import { RETENTION_DAYS } from './sync/sync.types';
 import {
   getWsConnectionService,
   resetWsConnectionService,
 } from './sync/services/websocket-connection.service';
 import { testRoutes } from './test-routes';
+import { captureMcpRoutes, captureRoutes } from './capture';
 
 // HTML escape to prevent XSS in generated HTML
 export const escapeHtml = (unsafe: string): string => {
@@ -54,6 +60,30 @@ export const SERVER_HELMET_CONFIG = {
       baseUri: ["'self'"],
     },
   },
+};
+
+/**
+ * Helmet config for the deployment's public URL.
+ *
+ * Helmet's default CSP adds `upgrade-insecure-requests`, which makes the
+ * browser fetch every same-origin asset over https. On a plain-HTTP
+ * deployment (e.g. a LAN IP) that breaks every page, so the directive is
+ * dropped when PUBLIC_URL is http:// (#10023). This never weakens a
+ * production server: config.ts refuses to boot with a non-https PUBLIC_URL
+ * when NODE_ENV=production.
+ */
+export const getServerHelmetConfig = (publicUrl: string) => {
+  if (!/^http:\/\//i.test(publicUrl)) {
+    return SERVER_HELMET_CONFIG;
+  }
+  const { contentSecurityPolicy } = SERVER_HELMET_CONFIG;
+  return {
+    ...SERVER_HELMET_CONFIG,
+    contentSecurityPolicy: {
+      ...contentSecurityPolicy,
+      directives: { ...contentSecurityPolicy.directives, upgradeInsecureRequests: null },
+    },
+  };
 };
 
 /**
@@ -175,7 +205,10 @@ const assertFullyRendered = (html: string, source: string): void => {
  * or worse, inherited boilerplate about someone else's hosting provider — is a false
  * legal statement published in the operator's name. A 404 is the honest failure.
  */
-const generatePrivacyHtml = (privacy?: PrivacyConfig): boolean => {
+const generatePrivacyHtml = (
+  privacy: PrivacyConfig | undefined,
+  options: { isCaptureEnabled: boolean },
+): boolean => {
   const publicDir = resolvePublicDir();
   const templatePath = path.join(resolveTemplateDir(), 'privacy.template.html');
   const outputPath = path.join(publicDir, 'privacy.html');
@@ -211,6 +244,8 @@ const generatePrivacyHtml = (privacy?: PrivacyConfig): boolean => {
   const keep = new Set<string>([
     privacy.hostingProvider ? 'HOSTING' : 'NO_HOSTING',
     ...(privacy.supervisoryAuthority ? ['AUTHORITY'] : []),
+    // Describes the AI assistant connector only where it can be used.
+    ...(options.isCaptureEnabled ? ['CAPTURE'] : []),
   ]);
 
   // Only tokens whose block survived are supplied; an unused one would be an unresolved
@@ -229,6 +264,10 @@ const generatePrivacyHtml = (privacy?: PrivacyConfig): boolean => {
         : {}),
       ...(privacy.supervisoryAuthority
         ? { PRIVACY_SUPERVISORY_AUTHORITY: privacy.supervisoryAuthority }
+        : {}),
+      // Unclaimed captures are removed by the same retention as stored ops.
+      ...(options.isCaptureEnabled
+        ? { CAPTURE_RETENTION_DAYS: String(RETENTION_DAYS) }
         : {}),
     },
   );
@@ -315,7 +354,7 @@ const installOperatorLegalPages = (dataDir: string): boolean => {
   return true;
 };
 
-export { ServerConfig, loadConfigFromEnv };
+export { ServerConfig, loadConfigFromEnv, SERVER_TRUST_PROXY };
 
 export const createServer = (
   config: Partial<ServerConfig> = {},
@@ -325,7 +364,7 @@ export const createServer = (
   stop: () => Promise<void>;
 } => {
   const fullConfig = loadConfigFromEnv(config);
-  initSyncService({ batchUpload: fullConfig.batchUpload });
+  initSyncService();
 
   // Ensure data directory exists
   if (!fs.existsSync(fullConfig.dataDir)) {
@@ -335,7 +374,9 @@ export const createServer = (
 
   // Generate the legal pages, then tell the API whether consent can be required at all.
   // Order matters: index.html must reflect the pages that were actually written.
-  const hasPrivacyPolicy = generatePrivacyHtml(fullConfig.privacy);
+  const hasPrivacyPolicy = generatePrivacyHtml(fullConfig.privacy, {
+    isCaptureEnabled: fullConfig.captureConnectorEnabled,
+  });
   const hasOperatorTerms = installOperatorLegalPages(fullConfig.dataDir);
   generateIndexHtml({
     hasPrivacyPolicy,
@@ -356,10 +397,7 @@ export const createServer = (
         // Add explicit timeouts for long-running operations
         connectionTimeout: 90000, // 90s - match client timeout
         requestTimeout: 80000, // 80s - must exceed DB timeout (60s) but be less than Caddy (85s)
-        // Trust exactly one reverse proxy hop (X-Forwarded-For) so req.ip reflects
-        // the real client IP instead of the proxy's IP. Using 1 instead of true
-        // prevents attackers from spoofing IPs when no proxy is present.
-        trustProxy: 1,
+        trustProxy: fullConfig.trustProxy,
       });
 
       // Sanitize 5xx responses so internal details (e.g. raw Prisma errors
@@ -388,7 +426,7 @@ export const createServer = (
       });
 
       // Security Headers
-      await fastifyServer.register(helmet, SERVER_HELMET_CONFIG);
+      await fastifyServer.register(helmet, getServerHelmetConfig(fullConfig.publicUrl));
 
       // Rate Limiting (prevent brute force)
       if (!fullConfig.testMode?.enabled) {
@@ -428,26 +466,14 @@ export const createServer = (
       });
 
       // WebSocket support for real-time sync notifications
-      // maxPayload: only app-level pong messages expected from clients (~20 bytes)
+      // maxPayload: clients send app-level pongs (~20 bytes) and presence
+      // messages (encrypted envelope + JSON wrapper, typically <1 KB). Must
+      // stay >= MAX_PRESENCE_PAYLOAD_BYTES in websocket-connection.service.ts —
+      // an undersized frame limit errors the WHOLE socket (sync included)
+      // instead of just dropping the presence message.
       await fastifyServer.register(websocket, {
-        options: { maxPayload: 1024 },
+        options: { maxPayload: 8192 },
       });
-
-      // Backfill self-check: paired with the env-flag enforcement in
-      // loadConfigFromEnv. The env flag (SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE)
-      // is operator-set; if it is flipped to true before the migrate-payload-bytes
-      // script finishes, batch-upload deltas are still correct but the SUM-based
-      // reconcile in calculateStorageUsage would mix exact bytes with the
-      // CASE-WHEN fallback for legacy rows. One indexed probe at startup closes
-      // the trust hole: refuse to boot if any row still has payload_bytes = 0.
-      if (fullConfig.batchUpload) {
-        try {
-          await getSyncService().assertPayloadBytesBackfillComplete();
-        } catch (err) {
-          Logger.error('Startup self-check failed', err);
-          throw err;
-        }
-      }
 
       // Health Check - verifies database connectivity
       // Exempt from rate limiting (Kubernetes probes hit this every 5-15s)
@@ -467,6 +493,17 @@ export const createServer = (
         }
       });
 
+      // Liveness - process health only, deliberately free of dependency checks.
+      // Restarting the process cannot fix a database that is down, and the restart
+      // lands a cold start exactly when the database comes back; on this chart it
+      // also drops every client's live-sync websocket, since replicaCount > 1 is
+      // rejected and there is no failover. Answering here still proves the event
+      // loop is responsive. Exempt from rate limiting like /health, as probes are
+      // frequent.
+      fastifyServer.get('/live', { config: { rateLimit: false } }, async () => ({
+        status: 'ok',
+      }));
+
       // API Routes
       await fastifyServer.register(apiRoutes, {
         prefix: '/api',
@@ -478,6 +515,29 @@ export const createServer = (
 
       // WebSocket routes for real-time sync notifications
       await fastifyServer.register(wsRoutes, { prefix: '/api/sync' });
+
+      // Browser sign-in of new devices; the app falls back to token paste without it
+      await fastifyServer.register(connectRoutes, { prefix: '/api/connect' });
+
+      // Agent task capture: public /mcp for assistants, /api/capture for the app
+      if (fullConfig.captureConnectorEnabled) {
+        await fastifyServer.register(captureMcpRoutes, {
+          publicUrl: fullConfig.publicUrl,
+        });
+        await fastifyServer.register(captureOAuthRoutes, {
+          publicUrl: fullConfig.publicUrl,
+          signingKey: getJwtSecret(),
+          clients: fullConfig.captureOAuthClients,
+          review: fullConfig.captureReview,
+        });
+        if (fullConfig.captureReview) {
+          Logger.warn(
+            'CAPTURE_REVIEW_* is set: a reusable reviewer code can connect assistants ' +
+              'to one demo account. Unset it once directory review is done.',
+          );
+        }
+        await fastifyServer.register(captureRoutes, { prefix: '/api/capture' });
+      }
 
       // Test Routes (only in test mode)
       if (fullConfig.testMode?.enabled) {
@@ -491,12 +551,18 @@ export const createServer = (
       // Start cleanup jobs
       startCleanupJobs();
 
-      // Start WebSocket heartbeat
-      getWsConnectionService().startHeartbeat();
+      // Start WebSocket heartbeat. It also refreshes the device row of every live
+      // socket, so a long-lived read-only connection is not pruned as stale.
+      getWsConnectionService().startHeartbeat((userId, clientId) =>
+        getSyncService().touchDevice(userId, clientId),
+      );
 
       try {
         const address = await fastifyServer.listen(createListenOptions(fullConfig));
-        Logger.info(`Server started on ${address}`);
+        // Self-hosters on :latest otherwise cannot tell which build they run (#9181).
+        Logger.info(
+          `Server started on ${address} (revision ${process.env.SUPERSYNC_REVISION || 'unknown'})`,
+        );
         return address;
       } catch (err) {
         Logger.error('Failed to start server:', err);

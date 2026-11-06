@@ -17,4 +17,12 @@ export interface ProviderPlatformInfo {
   readonly isAndroidWebView: boolean;
   /** True when running on iOS via Capacitor. */
   readonly isIosNative: boolean;
+  /**
+   * True when running inside the Electron desktop shell.
+   *
+   * Optional so hosts that predate it keep today's behaviour: consumers treat
+   * a missing value as `false`. Enables the desktop WebDAV transport handling
+   * coordinated with `electron/main-window.ts` (#9985).
+   */
+  readonly isElectron?: boolean;
 }

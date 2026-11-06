@@ -67,7 +67,7 @@ const mergeAndIncrementClocks = (
  * whole row even though the surviving siblings' plan intent (dueDay set to the
  * plan day, reminders cleared) is already applied locally and would otherwise
  * never upload. Mirror of the bulk-delete preserve
- * (`ConflictResolutionService._preservePartiallyRejectedLocalBulkDeletes`):
+ * (`ConflictBulkPreservationService._preservePartiallyRejectedLocalBulkDeletes`):
  * replace each affected row with ONE narrowed copy that
  *
  * - drops every COVERED conflict target id — remote winners are owned by the

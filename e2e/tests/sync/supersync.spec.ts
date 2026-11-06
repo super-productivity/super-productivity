@@ -31,6 +31,10 @@ import {
   expectTaskCount,
 } from '../../utils/supersync-assertions';
 import { waitForAppReady } from '../../utils/waits';
+import {
+  expectArchivedNotLive,
+  getTaskIdByTitle,
+} from '../../utils/audit-archive-helpers';
 
 /**
  * SuperSync E2E Tests
@@ -638,6 +642,10 @@ test.describe('@supersync SuperSync E2E', () => {
 
       await markTaskDone(clientA, task2Name);
       console.log(`[Archive Test] Client A marked ${task2Name} as done`);
+      const archiveTaskIds = [
+        await getTaskIdByTitle(clientA, task1Name),
+        await getTaskIdByTitle(clientA, task2Name),
+      ];
 
       // ============ PHASE 2: Sync Tasks to Server ============
       await clientA.sync.syncAndWait();
@@ -690,6 +698,11 @@ test.describe('@supersync SuperSync E2E', () => {
       await clientA.sync.syncAndWait();
       console.log('[Archive Test] Client A synced (downloaded archive)');
 
+      // The worklog lists live tasks too, so it cannot prove the archive op was
+      // applied. Read the archive and the live store directly on both clients.
+      await expectArchivedNotLive(clientB, archiveTaskIds, 'Client B (archiver)');
+      await expectArchivedNotLive(clientA, archiveTaskIds, 'Client A (receiver)');
+
       // ============ PHASE 6: Verify Worklog on Both Clients ============
       // Navigate Client A to worklog
       await clientA.page.goto('/#/tag/TODAY/history');
@@ -705,19 +718,21 @@ test.describe('@supersync SuperSync E2E', () => {
 
       // Expand the current day's worklog to see tasks
       // Click on the week row to expand it
+      const archiveClientA = clientA;
+      const archiveClientB = clientB;
       const expandWorklogA = async (): Promise<void> => {
-        const weekRow = clientA.page.locator('.week-row').first();
+        const weekRow = archiveClientA.page.locator('.week-row').first();
         if (await weekRow.isVisible()) {
           await weekRow.click();
-          await clientA.page.waitForTimeout(500);
+          await archiveClientA.page.waitForTimeout(500);
         }
       };
 
       const expandWorklogB = async (): Promise<void> => {
-        const weekRow = clientB.page.locator('.week-row').first();
+        const weekRow = archiveClientB.page.locator('.week-row').first();
         if (await weekRow.isVisible()) {
           await weekRow.click();
-          await clientB.page.waitForTimeout(500);
+          await archiveClientB.page.waitForTimeout(500);
         }
       };
 

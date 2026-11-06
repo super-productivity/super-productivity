@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "ホスト (例: https://redmine.org)",
+    "API_KEY": "APIアクセスキー",
+    "PROJECT_ID": "プロジェクト識別子",
+    "PROJECT_ID_DESC": "ブラウザでプロジェクトを表示するときに、URL の一部として見つかります。",
+    "SCOPE": "範囲",
+    "SCOPE_ALL": "全て",
+    "SCOPE_CREATED": "私が作った",
+    "SCOPE_ASSIGNED": "私に割り当てられた",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Redmineへの報告用に時間トラッキングダイアログを表示",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Redmineプロジェクトで時間トラッキングモジュールが有効である必要があります",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "サブタスク完了時に時間トラッキングダイアログを表示",
+    "DEFAULT_TIME": "ダイアログのデフォルトの時間値",
+    "DEFAULT_TIME_ALL_TIME": "タスクに費やしたすべての時間を記入してください",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "費やした時間から記録した時間を差し引いたすべての時間を入力します",
+    "DEFAULT_TIME_TODAY": "今日過ごした時間だけを埋める",
+    "DEFAULT_TIME_YESTERDAY": "昨日過ごした時間だけを埋める"
+  },
+  "DISPLAY": {
+    "SUMMARY": "概要",
+    "STATUS": "地位",
+    "PRIORITY": "優先権",
+    "AUTHOR": "著者",
+    "ASSIGNEE": "担当者",
+    "CATEGORY": "カテゴリ",
+    "VERSION": "バージョン",
+    "DUE_DATE": "期日",
+    "TIME_SPENT": "滞在時間",
+    "DESCRIPTION": "形容"
+  },
+  "FORM_HELP": "<p>ここで SuperProductivity を設定し、日次計画ビューのタスク作成パネルで、特定のプロジェクトの Redmine (オンライン版またはセルフホスト インスタンス) の未解決の課題をリストすることができます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報が提供されます。</p><p>さらに、すべての未解決課題を自動的にインポートすることもできます。</p>"
+}

@@ -27,22 +27,6 @@ export const SCHEDULE_CONSTANTS = {
   },
 
   /**
-   * Month view layout configuration.
-   */
-  MONTH_VIEW: {
-    /** Height offset for header/controls in month view calculation */
-    HEADER_OFFSET: 160,
-    /** Minimum height per week row on desktop */
-    MIN_HEIGHT_PER_WEEK_DESKTOP: 100,
-    /** Minimum height per week row on mobile */
-    MIN_HEIGHT_PER_WEEK_MOBILE: 60,
-    /** Minimum number of weeks to show */
-    MIN_WEEKS: 3,
-    /** Maximum number of weeks to show */
-    MAX_WEEKS: 6,
-  },
-
-  /**
    * Column widths for different screen sizes.
    * These values determine the width of day columns in the schedule view.
    */

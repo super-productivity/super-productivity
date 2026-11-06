@@ -3,20 +3,16 @@
 
 const path = require('node:path');
 
-// sql.js (WASM SQLite) is served into the Karma run so the SqliteOpLogAdapter
-// can be validated against a REAL SQLite engine, not just the in-memory
-// translation-layer fake (see docs/sync-and-op-log/sqlite-migration.md, B2).
-// It is loaded as a plain global <script> rather than imported, because the
-// universal sql.js build statically references node: builtins that the webpack
-// Karma builder cannot bundle. Dev/test only — never reaches the app bundle.
-const SQL_JS_DIST = path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist');
-const SQL_JS_WASM_ABS = '/absolute' + path.join(SQL_JS_DIST, 'sql-wasm.wasm');
-
 module.exports = function (config) {
   // NOTE: necessary to fix some of the unit tests with a timezone in them
   // NOTE2: won't work for wallaby, but that's maybe ok for now
   // process.env.TZ = 'Europe/Berlin';
-  const isCodeCoverage = Boolean(config.buildWebpack?.options?.codeCoverage);
+  // `@angular/build:karma` does not expose its options to this file; read the
+  // `ng test --code-coverage` flag so the istanbul reporter replaces the
+  // `karma-coverage` one the builder would otherwise add.
+  const isCodeCoverage = process.argv.some(
+    (arg) => arg === '--code-coverage' || arg === '--code-coverage=true',
+  );
   const reporters = ['spec', 'running-spec'];
 
   if (isCodeCoverage) {
@@ -25,28 +21,14 @@ module.exports = function (config) {
 
   config.set({
     basePath: '',
-    frameworks: ['jasmine', '@angular-devkit/build-angular'],
+    frameworks: ['jasmine'],
     plugins: [
       require('karma-jasmine'),
       require('karma-chrome-launcher'),
-      require('@angular-devkit/build-angular/plugins/karma'),
       require('./test-helpers/karma-running-spec-on-disconnect'),
       require('karma-coverage-istanbul-reporter'),
       require('karma-spec-reporter'),
     ],
-    files: [
-      // Global initSqlJs; the wasm is served (not auto-included) and fetched on demand.
-      { pattern: path.join(SQL_JS_DIST, 'sql-wasm.js'), included: true, watched: false },
-      {
-        pattern: path.join(SQL_JS_DIST, 'sql-wasm.wasm'),
-        included: false,
-        watched: false,
-      },
-    ],
-    proxies: {
-      // initSqlJs({ locateFile: () => '/sql-wasm.wasm' }) resolves here.
-      '/sql-wasm.wasm': SQL_JS_WASM_ABS,
-    },
     client: {
       clearContext: false, // leave Jasmine Spec Runner output visible in browser
       captureConsole: false,

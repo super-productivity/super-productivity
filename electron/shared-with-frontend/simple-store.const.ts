@@ -12,4 +12,19 @@ export enum SimpleStoreKey {
   PLUGIN_NODE_EXECUTION_CONSENT = 'pluginNodeExecutionConsent',
   // Legacy key kept for backwards compatibility when reading persisted settings
   LEGACY_IS_USE_OBSIDIAN_STYLE_HEADER = 'isUseObsidianStyleHeader',
+  // Whether the main window was maximized when it was last hidden/closed (#7276).
+  // electron-window-state cannot be trusted with this bit, see window-maximized-state.ts.
+  WINDOW_WAS_MAXIMIZED = 'windowWasMaximized',
+  // Whether the main window was full screen when it was last on screen. Same
+  // reason as WINDOW_WAS_MAXIMIZED, see window-full-screen-state.ts.
+  WINDOW_WAS_FULL_SCREEN = 'windowWasFullScreen',
+  // The main window's last known un-maximized size/position (#10058).
+  // electron-window-state cannot be trusted with these either, see window-restore-bounds.ts.
+  WINDOW_RESTORE_BOUNDS = 'windowRestoreBounds',
+  // Main-owned, never-synced switch for the local REST API. It used to live in
+  // the synced misc config, which started the listener on every synced desktop.
+  LOCAL_REST_API_ENABLED = 'localRestApiEnabled',
+  // Main-owned, never-synced assistant (MCP) access switch and granted scopes.
+  // The credential itself is never stored, only a verifier in a 0600 file.
+  ASSISTANT_ACCESS = 'assistantAccess',
 }

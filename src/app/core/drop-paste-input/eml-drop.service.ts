@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskService } from '../../features/tasks/task.service';
 import { SnackService } from '../snack/snack.service';
 import { Log } from '../log';

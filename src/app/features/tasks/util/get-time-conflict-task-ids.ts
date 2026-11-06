@@ -9,19 +9,20 @@ export const getTimeConflictTaskIds = (tasks: TaskWithDueTime[]): Set<string> =>
     .sort((a, b) => a.dueWithTime - b.dueWithTime);
 
   const conflictingIds = new Set<string>();
+  let latestEndingTask: TaskWithDueTime | undefined;
+  let latestEnd = -Infinity;
 
-  for (let i = 0; i < relevantTasks.length; i++) {
-    const task = relevantTasks[i];
-    const taskEnd = _getTaskEnd(task);
-
-    for (let j = i + 1; j < relevantTasks.length; j++) {
-      const nextTask = relevantTasks[j];
-      if (nextTask.dueWithTime >= taskEnd) {
-        break;
-      }
-
+  for (const task of relevantTasks) {
+    // Sorted starts mean only the furthest previous end is needed. Any other
+    // overlapping previous task was already marked when it entered this scan.
+    if (latestEndingTask && task.dueWithTime < latestEnd) {
+      conflictingIds.add(latestEndingTask.id);
       conflictingIds.add(task.id);
-      conflictingIds.add(nextTask.id);
+    }
+    const taskEnd = _getTaskEnd(task);
+    if (taskEnd > latestEnd) {
+      latestEnd = taskEnd;
+      latestEndingTask = task;
     }
   }
 

@@ -56,6 +56,12 @@ export const TimeTrackingActions = createActionGroup({
       date: string;
       duration: number;
       isFromTrackingReminder: boolean;
+      /**
+       * Time logged after the fact for a day other than today (Local REST API
+       * `POST /tasks/:id/time`). Only the task's time changes: no work start/end
+       * stamp and no auto-plan for today. Local-only action, never persisted.
+       */
+      isBackfill?: boolean;
     }>(),
     'Update whole State': props<{
       newState: TimeTrackingState;

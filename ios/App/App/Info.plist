@@ -55,6 +55,61 @@
 	<array>
 		<string>fetch</string>
 	</array>
+	<!-- Home Screen quick actions (long-press the app icon). Each item carries
+	     its target URL in UIApplicationShortcutItemUserInfo; AppDelegate just
+	     opens it, so the whole mapping lives in the shared URL-scheme parser
+	     (src/app/core/app-uri-actions/parse-app-uri-quick-action.ts) and is
+	     checked against this file by tools/verify-ios-quick-actions.test.js.
+	     Titles are English-only: iOS localizes static shortcut items via
+	     InfoPlist.strings per .lproj, which this project does not maintain.
+	     Array order is priority order — index 0 ranks highest and is the one
+	     iOS keeps if the list ever exceeded the four-item limit — so the most
+	     frequent action (New Task) comes first, matching what other apps do.
+	     Which screen edge the menu unfolds towards is not ours to pick: iOS
+	     positions it based on where the icon sits on the Home Screen, so the
+	     visual top/bottom flips between a docked icon and one in the top row. -->
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.super-productivity.app.quick-action.add-task</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New Task</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>plus.circle</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>com.super-productivity.app://add-task</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.super-productivity.app.quick-action.today</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Today</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>sun.max</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>com.super-productivity.app://today</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.super-productivity.app.quick-action.inbox</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Inbox</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>tray</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>com.super-productivity.app://inbox</string>
+			</dict>
+		</dict>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

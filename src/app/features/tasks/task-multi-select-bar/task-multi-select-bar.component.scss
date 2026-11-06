@@ -1,0 +1,66 @@
+@use '../../../../styles/_globals.scss' as *;
+@use '../menu-item-styles';
+
+:host {
+  display: contents;
+}
+
+// Fixed so it never changes the containing block of its siblings (the global
+// progress bar is anchored to <body>); its own z-index token sits above the
+// right panel's content column and below the add-task bar.
+.bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--s2);
+  transform: translateX(-50%);
+  z-index: var(--z-multi-select-bar);
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  max-width: calc(100% - var(--s2));
+  padding: var(--s-half) var(--s);
+  border-radius: var(--card-border-radius);
+  background: var(--card-bg);
+  border: 1px solid var(--extra-border-color);
+  color: var(--text-color);
+
+  @include mq(xs, max) {
+    left: var(--s);
+    right: var(--s);
+    transform: none;
+    bottom: calc(var(--s) + var(--safe-area-bottom));
+  }
+}
+
+:host-context(.has-mobile-bottom-nav) .bar {
+  bottom: calc(
+    var(--bottom-nav-height) + var(--bottom-nav-safe-area) +
+      var(--bottom-nav-extra-offset) + var(--s)
+  );
+}
+
+.count {
+  font-weight: 600;
+  white-space: nowrap;
+  padding-right: var(--s);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.positioned-trigger {
+  position: fixed;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.menu-title {
+  padding: var(--s-half) var(--s2);
+  font-size: 12px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

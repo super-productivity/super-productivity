@@ -36,16 +36,15 @@ export const sortWorklogEntriesAlphabetically = (
     }
   }
 
+  // Reuse locale setup across all comparisons in this day's entries.
+  const compareTitles = new Intl.Collator(undefined, { sensitivity: 'base' }).compare;
+
   // Sort parent tasks alphabetically (case-insensitive)
-  parentEntries.sort((a, b) =>
-    a.task.title.localeCompare(b.task.title, undefined, { sensitivity: 'base' }),
-  );
+  parentEntries.sort((a, b) => compareTitles(a.task.title, b.task.title));
 
   // Sort subtasks within each group alphabetically (case-insensitive)
   for (const subtasks of subtasksByParentId.values()) {
-    subtasks.sort((a, b) =>
-      a.task.title.localeCompare(b.task.title, undefined, { sensitivity: 'base' }),
-    );
+    subtasks.sort((a, b) => compareTitles(a.task.title, b.task.title));
   }
 
   // Build result: parent followed by its subtasks
@@ -68,9 +67,7 @@ export const sortWorklogEntriesAlphabetically = (
     }
   }
   if (orphanSubtasks.length > 0) {
-    orphanSubtasks.sort((a, b) =>
-      a.task.title.localeCompare(b.task.title, undefined, { sensitivity: 'base' }),
-    );
+    orphanSubtasks.sort((a, b) => compareTitles(a.task.title, b.task.title));
     result.push(...orphanSubtasks);
   }
 

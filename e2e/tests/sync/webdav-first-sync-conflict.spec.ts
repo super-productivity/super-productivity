@@ -4,6 +4,9 @@ import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForStatePersistence } from '../../utils/waits';
 import {
   WEBDAV_CONFIG_TEMPLATE,
+  WEBDAV_SYNC_FILE,
+  WEBDAV_SYNC_FORMAT,
+  readPrefixedFile,
   setupSyncClient,
   createSyncFolder,
   waitForSyncComplete,
@@ -12,6 +15,11 @@ import {
   confirmSyncConflictOverwriteIfShown,
 } from '../../utils/sync-helpers';
 import { waitForAppReady } from '../../utils/waits';
+import { hasEverAppeared, recordIfEverAppears } from '../../utils/audit-webdav-helpers';
+
+const WEBDAV_AUTHORIZATION = `Basic ${Buffer.from(
+  `${WEBDAV_CONFIG_TEMPLATE.username}:${WEBDAV_CONFIG_TEMPLATE.password}`,
+).toString('base64')}`;
 
 /**
  * Tests for first sync conflict when both clients have existing data.
@@ -60,7 +68,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     // Upload to remote
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Test] Client A uploaded task');
 
     // --- Client B: Create local task BEFORE setting up sync ---
@@ -113,21 +121,23 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     const confirmDialog = pageB.locator('dialog-confirm');
     await expect(confirmDialog).toBeVisible();
     await expect(confirmDialog.locator('.content')).toHaveText(
-      'WARNING: This device cannot determine how many unsynced changes the remote data has (it has no record of a previous sync). Overwriting the remote data with the local version may discard changes. Are you sure?',
+      'WARNING: The number of unsynced changes is unknown. This will replace the entire remote dataset with the local version. Changes present only in the remote data will be lost. Are you sure?',
     );
     const snapshotUploadResponse = pageB.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&
-        new URL(response.url()).pathname.endsWith('/sync-data.json'),
+        new URL(response.url()).pathname.endsWith(`/${WEBDAV_SYNC_FILE}`),
       { timeout: 60000 },
     );
     await confirmDialog.locator('[e2e="confirmBtn"]').click();
     expect((await snapshotUploadResponse).ok()).toBe(true);
 
     // Wait for the replacement upload started by USE_LOCAL.
-    await waitForSyncComplete(pageB, syncPageB, 30000, {
-      allowResponseOnlyCompletion: true,
-    });
+    expect(
+      await waitForSyncComplete(pageB, syncPageB, 30000, {
+        allowResponseOnlyCompletion: true,
+      }),
+    ).toBe('success');
     console.log('[Test] Sync completed on Client B');
 
     // Verify Client B still has its local task
@@ -140,7 +150,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     // --- Verify Client A now gets Client B's data ---
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Test] Client A synced');
 
     // Client A should now have Client B's task (remote was replaced by B's local data)
@@ -179,7 +189,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await workViewPageA.addTask(taskA);
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Test] Client A uploaded task');
 
     // --- Client B: Create local task, then connect ---
@@ -230,15 +240,17 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     const confirmDialog = pageB.locator('dialog-confirm');
     await expect(confirmDialog).toBeVisible();
     await expect(confirmDialog.locator('.content')).toHaveText(
-      'WARNING: This device cannot determine how many unsynced changes the local data has (it has no record of a previous sync). Overwriting the local data with the remote version may discard changes. Are you sure?',
+      'WARNING: The number of unsynced changes is unknown. This will replace the entire local dataset with the remote version. Changes present only in the local data will be lost. Are you sure?',
     );
     await confirmDialog.locator('[e2e="confirmBtn"]').click();
 
     // USE_REMOTE performs a fresh seq-0 rebuild download. The witness was armed
     // before the click so the setup response cannot be reused.
-    await waitForSyncComplete(pageB, syncPageB, 30000, {
-      allowResponseOnlyCompletion: true,
-    });
+    expect(
+      await waitForSyncComplete(pageB, syncPageB, 30000, {
+        allowResponseOnlyCompletion: true,
+      }),
+    ).toBe('success');
     console.log('[Test] Sync completed');
 
     // Verify Client B now has remote data (Client A's task)
@@ -290,7 +302,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await workViewPageA.addTask(taskA);
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Test] Client A uploaded initial task');
 
     // --- Client B: Create local task, connect, and resolve conflict ---
@@ -327,10 +339,23 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     await confirmSyncConflictOverwriteIfShown(pageB, conflictDialog);
 
-    await waitForSyncComplete(pageB, syncPageB, 30000, {
-      allowResponseOnlyCompletion: true,
-    });
+    expect(
+      await waitForSyncComplete(pageB, syncPageB, 30000, {
+        allowResponseOnlyCompletion: true,
+      }),
+    ).toBe('success');
     console.log('[Test] First sync completed after conflict resolution');
+
+    if (WEBDAV_SYNC_FORMAT === 'v2') {
+      // USE_LOCAL uploads a snapshot replacement: the file carries no op tail
+      // yet. The #9170 assertions below rely on B's next op being the first.
+      const remote = await readPrefixedFile<{ recentOps: unknown[] }>(
+        request,
+        `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${SYNC_FOLDER_NAME}/DEV/${WEBDAV_SYNC_FILE}`,
+        WEBDAV_AUTHORIZATION,
+      );
+      expect(remote.recentOps).toEqual([]);
+    }
 
     // Verify Client B has its local task
     await expect(pageB.locator('task', { hasText: taskB })).toBeVisible();
@@ -344,34 +369,40 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await waitForStatePersistence(pageB);
     console.log('[Test] Created second task');
 
-    // Trigger sync - should NOT show conflict dialog
+    // Trigger sync - should NOT show conflict dialog. Record every mutation
+    // so a dialog that opens and closes again still fails the test.
+    await recordIfEverAppears(pageB, 'conflict-second', 'dialog-sync-conflict');
     await syncPageB.triggerSync();
-
-    // Wait a moment for potential conflict dialog (should NOT appear)
-    const conflictDialogSecond = pageB.locator('mat-dialog-container', {
-      hasText: 'Conflicting Data',
-    });
-
-    // Give it a short window to potentially appear (it shouldn't)
-    await pageB.waitForTimeout(2000);
-
-    // Verify conflict dialog did NOT appear
-    const isConflictVisible = await conflictDialogSecond.isVisible();
-    expect(isConflictVisible).toBe(false);
-    console.log('[Test] Verified NO conflict dialog on second sync');
-
-    // Wait for sync to complete normally
-    await waitForSyncComplete(pageB, syncPageB, 30000);
-    console.log('[Test] Second sync completed without conflict');
+    expect(await waitForSyncComplete(pageB, syncPageB, 30000)).toBe('success');
+    expect(await hasEverAppeared(pageB, 'conflict-second')).toBe(false);
+    console.log('[Test] Second sync completed without conflict dialog');
 
     // Verify both tasks are present on Client B
     await expect(pageB.locator('task', { hasText: taskB })).toBeVisible();
     await expect(pageB.locator('task', { hasText: taskB2 })).toBeVisible();
     console.log('[Test] Verified both tasks are present on Client B');
 
-    // Note: We don't verify Client A receives the data here because that's
-    // testing sync propagation, not the conflict dialog regression.
-    // The key assertion is that NO conflict dialog appeared on the second sync.
+    // #9170 (unencrypted variant of webdav-encryption-conflict-use-local):
+    // B's tail op repopulated recentOps after its replacement, so pre-existing
+    // Client A must detect the replacement via the vector clock and hydrate it
+    // instead of applying B2 on top of its stale task A.
+    await syncPageA.triggerSync();
+    expect(await waitForSyncComplete(pageA, syncPageA, 30000)).toBe('success');
+    await expect(pageA.locator('task')).toHaveCount(2);
+    await expect(pageA.locator('task', { hasText: taskB })).toBeVisible();
+    await expect(pageA.locator('task', { hasText: taskB2 })).toBeVisible();
+    await expect(pageA.locator('task', { hasText: taskA })).not.toBeVisible();
+
+    // Converged state must survive a reload on both clients.
+    for (const page of [pageA, pageB]) {
+      await page.reload();
+      await waitForAppReady(page);
+      await new WorkViewPage(page).waitForTaskList();
+      await expect(page.locator('task')).toHaveCount(2);
+      await expect(page.locator('task', { hasText: taskB })).toBeVisible();
+      await expect(page.locator('task', { hasText: taskB2 })).toBeVisible();
+      await expect(page.locator('task', { hasText: taskA })).not.toBeVisible();
+    }
 
     await closeContextsSafely(contextA, contextB);
   });
@@ -419,7 +450,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await workViewPageA.addTask(taskA);
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Test] Client A uploaded initial task');
 
     // --- Client B: Connect WITHOUT local data (no conflict), becomes synced client ---
@@ -430,7 +461,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     // Setup sync - should download A's data without conflict (no local data)
     await syncPageB.setupWebdavSync(WEBDAV_CONFIG);
-    await waitForSyncComplete(pageB, syncPageB, 30000);
+    expect(await waitForSyncComplete(pageB, syncPageB, 30000)).toBe('success');
     console.log('[Test] Client B connected and downloaded A data (no conflict)');
 
     // Verify Client B has A's task
@@ -478,7 +509,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     const snapshotUploadResponse = pageC.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&
-        new URL(response.url()).pathname.endsWith('/sync-data.json'),
+        new URL(response.url()).pathname.endsWith(`/${WEBDAV_SYNC_FILE}`),
       { timeout: 60000 },
     );
     syncPageC.prepareForNextSyncCycle('write');
@@ -488,9 +519,11 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await confirmSyncConflictOverwriteIfShown(pageC, conflictDialogC);
 
     expect((await snapshotUploadResponse).ok()).toBe(true);
-    await waitForSyncComplete(pageC, syncPageC, 30000, {
-      allowResponseOnlyCompletion: true,
-    });
+    expect(
+      await waitForSyncComplete(pageC, syncPageC, 30000, {
+        allowResponseOnlyCompletion: true,
+      }),
+    ).toBe('success');
     console.log('[Test] Client C sync completed (snapshot uploaded)');
     await expect(pageC.locator('task', { hasText: taskC })).toBeVisible();
     await expect(pageC.locator('task', { hasText: taskA })).not.toBeVisible();
@@ -517,9 +550,11 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     await confirmSyncConflictOverwriteIfShown(pageB, conflictDialogB);
 
-    await waitForSyncComplete(pageB, syncPageB, 30000, {
-      allowResponseOnlyCompletion: true,
-    });
+    expect(
+      await waitForSyncComplete(pageB, syncPageB, 30000, {
+        allowResponseOnlyCompletion: true,
+      }),
+    ).toBe('success');
     console.log('[Test] Client B resolved conflict');
 
     // B's replacement contains its downloaded A task plus its unsynced B task,
@@ -593,7 +628,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await workViewPageSeed.addTask(taskSeed);
     await waitForStatePersistence(pageSeed);
     await syncPageSeed.triggerSync();
-    await waitForSyncComplete(pageSeed, syncPageSeed);
+    expect(await waitForSyncComplete(pageSeed, syncPageSeed)).toBe('success');
     console.log('[Test] SEED uploaded initial data');
 
     // --- Client A: own data → conflict → USE_LOCAL → uploads SNAPSHOT ---
@@ -622,9 +657,11 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     syncPageA.prepareForNextSyncCycle('write');
     await conflictDialogA.locator('button', { hasText: /Keep local/i }).click();
     await confirmSyncConflictOverwriteIfShown(pageA, conflictDialogA);
-    await waitForSyncComplete(pageA, syncPageA, 30000, {
-      allowResponseOnlyCompletion: true,
-    });
+    expect(
+      await waitForSyncComplete(pageA, syncPageA, 30000, {
+        allowResponseOnlyCompletion: true,
+      }),
+    ).toBe('success');
     console.log('[Test] A uploaded SNAPSHOT via USE_LOCAL');
 
     // --- Client B: fresh, downloads A's snapshot ---
@@ -650,7 +687,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await workViewPageB.waitForTaskList();
 
     await syncPageB.setupWebdavSync(WEBDAV_CONFIG);
-    await waitForSyncComplete(pageB, syncPageB, 30000);
+    expect(await waitForSyncComplete(pageB, syncPageB, 30000)).toBe('success');
     console.log('[Test] B downloaded snapshot');
 
     // Confirm B has A's task (snapshot was hydrated, not B's seed task —
@@ -693,26 +730,20 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     );
     console.log('[Test] B added local task (TASK op queued in IDB)');
 
+    await recordIfEverAppears(pageB, 'conflict-first', 'dialog-sync-conflict');
     await syncPageB.triggerSync();
-
-    const conflictDialogB = pageB.locator('mat-dialog-container', {
-      hasText: 'Conflicting Data',
-    });
-    await pageB.waitForTimeout(3000);
-    expect(await conflictDialogB.isVisible()).toBe(false);
+    expect(await waitForSyncComplete(pageB, syncPageB, 30000)).toBe('success');
+    expect(await hasEverAppeared(pageB, 'conflict-first')).toBe(false);
     console.log('[Test] Verified NO conflict dialog after change-and-sync');
-
-    await waitForSyncComplete(pageB, syncPageB, 30000);
 
     // Second sync — pre-fix would re-trigger the dialog because the snapshot
     // file's clientId is still A, recentOps still empty. The fix's guard
     // should keep firing.
+    await recordIfEverAppears(pageB, 'conflict-second', 'dialog-sync-conflict');
     await syncPageB.triggerSync();
-    await pageB.waitForTimeout(3000);
-    expect(await conflictDialogB.isVisible()).toBe(false);
+    expect(await waitForSyncComplete(pageB, syncPageB, 30000)).toBe('success');
+    expect(await hasEverAppeared(pageB, 'conflict-second')).toBe(false);
     console.log('[Test] Verified NO conflict dialog on second sync (loop broken)');
-
-    await waitForSyncComplete(pageB, syncPageB, 30000);
 
     await expect(pageB.locator('task', { hasText: taskA })).toBeVisible();
     await expect(pageB.locator('task', { hasText: taskB })).toBeVisible();

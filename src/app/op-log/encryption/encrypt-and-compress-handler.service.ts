@@ -165,7 +165,7 @@ export class EncryptAndCompressHandlerService {
     try {
       parsedData = JSON.parse(outStr);
     } catch (e) {
-      throw new JsonParseError(e, outStr);
+      throw new JsonParseError(e);
     }
 
     return {

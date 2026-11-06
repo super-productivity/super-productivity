@@ -18,7 +18,13 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
-import { testState, resetTestState } from './sync.service.test-state';
+import {
+  testState,
+  resetTestState,
+  isLatestCausalFullStateQuery,
+  latestCausalFullStateRows,
+  rawQueryValues,
+} from './sync.service.test-state';
 import { Operation } from '../src/sync/sync.types';
 
 // Mock the database module with Prisma mocks
@@ -290,6 +296,15 @@ vi.mock('../src/db', async () => {
     // `entity_ids @> ARRAY[id]`, scoped to ONE entity — not a user-wide max.
     // Raw SQL since the full-history-scan fix.
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: unknown[]) => {
+      // The download path's newest-causal-full-state lookup ships as a pre-built
+      // `Prisma.Sql` so its op_type values stay literals, so it arrives as ONE object
+      // argument rather than a tagged template — see rawQueryText.
+      if (isLatestCausalFullStateQuery(strings)) {
+        return latestCausalFullStateRows(
+          state.operations,
+          rawQueryValues(strings, params),
+        );
+      }
       if (!isEntityArrayBranchQuery(strings)) {
         throw new Error(`Unexpected raw query: ${String(strings)}`);
       }

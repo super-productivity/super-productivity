@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { Prisma } from '@prisma/client';
-import {
-  detectConflict,
-  detectConflictForEntities,
-  getEntityConflictKey,
-  prefetchLatestEntityOpsForBatch,
-} from '../src/sync/conflict';
+import { detectConflict, detectConflictForEntities } from '../src/sync/conflict';
 import { isEntityArrayBranchQuery } from './sync.service.test-state';
 import type { Operation, VectorClock } from '../src/sync/sync.types';
 
@@ -20,7 +15,7 @@ const TASK_TIME_DELTA_ACTION = '[TimeTracking] Sync time spent';
  *
  * The mock-based specs (issue-8334-detect-conflict.spec.ts, conflict-detection.spec.ts)
  * reproduce the Prisma filter semantics by hand and can NOT catch a bug in the raw SQL
- * that detectConflictForEntities / prefetchLatestEntityOpsForBatch actually send to
+ * that detectConflictForEntities actually sends to
  * Postgres. This spec runs that SQL against an in-process Postgres
  * (PGlite — no Docker, no DATABASE_URL) so it runs in the normal `npm test` CI job.
  *
@@ -340,143 +335,11 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
     });
   });
 
-  describe('prefetchLatestEntityOpsForBatch (pair-keyed batch SQL)', () => {
-    it('isolates by user and entity type in the ARRAY branch', async () => {
-      // Companion to the detect-side case above: both foreign rows carry the requested
-      // id inside entity_ids, so the array branch's `user_id` filter and its
-      // (entity_type, entity_id) pair re-check each have to reject one of them.
-      await insertOp({
-        id: 'other-user-array',
-        serverSeq: 20,
-        clientId: 'Z',
-        userId: OTHER_USER_ID,
-        entityId: 'other-primary',
-        entityIds: ['other-primary', 'shared-id'],
-        vectorClock: { Z: 1 },
-      });
-      await insertOp({
-        id: 'same-user-project-array',
-        serverSeq: 21,
-        clientId: 'Y',
-        entityType: 'PROJECT',
-        entityId: 'project-primary',
-        entityIds: ['project-primary', 'shared-id'],
-        vectorClock: { Y: 1 },
-      });
-
-      const latest = await prefetchLatestEntityOpsForBatch(
-        USER_ID,
-        [{ entityType: 'TASK', entityId: 'shared-id' }],
-        transaction,
-      );
-
-      expect(latest.size).toBe(0);
-    });
-
-    it('returns the latest same-user op for each (type,id) pair', async () => {
-      await insertOp({
-        id: 'opA-old',
-        serverSeq: 1,
-        clientId: 'A',
-        entityType: 'TASK',
-        entityId: 'task-2',
-        actionType: '[Task] Old Update',
-        vectorClock: { A: 1 },
-      });
-      await insertOp({
-        id: 'opA',
-        serverSeq: 3,
-        clientId: 'A',
-        entityType: 'TASK',
-        entityId: 'task-1',
-        entityIds: ['task-1', 'task-2'],
-        actionType: '[Task] Batch Update',
-        vectorClock: { A: 1 },
-      });
-      // Same id string but a different entity type must NOT match the TASK pair.
-      await insertOp({
-        id: 'opP',
-        serverSeq: 2,
-        clientId: 'A',
-        entityType: 'PROJECT',
-        entityId: 'task-2',
-        actionType: '[Project] Update',
-        vectorClock: { A: 2 },
-      });
-      await insertOp({
-        id: 'other-user-task',
-        serverSeq: 10,
-        clientId: 'Z',
-        userId: OTHER_USER_ID,
-        entityType: 'TASK',
-        entityId: 'task-2',
-        actionType: '[Task] Other User Update',
-        vectorClock: { Z: 1 },
-      });
-
-      const latestByEntity = await prefetchLatestEntityOpsForBatch(
-        USER_ID,
-        [
-          { entityType: 'TASK', entityId: 'task-2' },
-          { entityType: 'PROJECT', entityId: 'task-2' },
-        ],
-        transaction,
-      );
-
-      expect(latestByEntity.get(getEntityConflictKey('TASK', 'task-2'))).toMatchObject({
-        entityType: 'TASK',
-        entityId: 'task-2',
-        clientId: 'A',
-        actionType: '[Task] Batch Update',
-        vectorClock: { A: 1 },
-        serverSeq: 3,
-      });
-      expect(latestByEntity.get(getEntityConflictKey('PROJECT', 'task-2'))).toMatchObject(
-        {
-          entityType: 'PROJECT',
-          entityId: 'task-2',
-          clientId: 'A',
-          actionType: '[Project] Update',
-          vectorClock: { A: 2 },
-          serverSeq: 2,
-        },
-      );
-    });
-
-    it('matches a (type, divergent-scalar) pair not present in entity_ids — the #8334 silent-data-loss case', async () => {
-      // The prefetch path got the same scalar-UNION fix as detectConflictForEntities and
-      // can drift independently; pin the divergent scalar here too. task-Z is the scalar but
-      // not a member of entity_ids (['task-A']); the old CASE form dropped it.
-      await insertOp({
-        id: 'opD',
-        serverSeq: 1,
-        clientId: 'A',
-        entityType: 'TASK',
-        entityId: 'task-Z',
-        entityIds: ['task-A'],
-        vectorClock: { A: 1 },
-      });
-
-      const latestByEntity = await prefetchLatestEntityOpsForBatch(
-        USER_ID,
-        [{ entityType: 'TASK', entityId: 'task-Z' }],
-        transaction,
-      );
-
-      expect(latestByEntity.get(getEntityConflictKey('TASK', 'task-Z'))).toMatchObject({
-        entityType: 'TASK',
-        entityId: 'task-Z',
-        serverSeq: 1,
-      });
-    });
-  });
-
-  // Three tx mocks (sync.service.test-state, conflict-detection.spec, sync.service.spec)
+  // The tx mocks (sync.service.test-state, conflict-detection.spec, sync.service.spec)
   // route raw queries by sniffing the tagged template's LITERALS. Nothing but a comment
-  // kept those three predicates mutually exclusive, and #9503 already broke one of them:
-  // `DISTINCT ON` stopped separating the two batch queries once both had it. A mock that
-  // answers a query it never modelled returns "no conflict", which is silent data loss
-  // dressed as a passing suite — so pin the partition itself.
+  // kept those predicates mutually exclusive, and #9503 already broke one of them. A mock
+  // that answers a query it never modelled returns "no conflict", which is silent data
+  // loss dressed as a passing suite — so pin the partition itself.
   it('each raw conflict template matches exactly one tx-mock discriminator', async () => {
     const seen: string[] = [];
     const capturingTx = {
@@ -490,27 +353,20 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
       },
     } as unknown as Prisma.TransactionClient;
 
-    // The single-entity array branch, then both batch templates.
+    // The single-entity array branch, then the multi-entity batch template.
     await detectConflict(
       USER_ID,
       { ...incomingOp(), entityId: 'solo' } as Operation,
       capturingTx,
     );
     await detectConflictForEntities(USER_ID, incomingOp(), ['a', 'b'], capturingTx);
-    await prefetchLatestEntityOpsForBatch(
-      USER_ID,
-      [{ entityType: 'TASK', entityId: 'a' }],
-      capturingTx,
-    );
 
     const discriminators = [
       isEntityArrayBranchQuery,
-      (sql: string): boolean =>
-        sql.includes('scalar_hits') && !sql.includes('touched(entity_type'),
-      (sql: string): boolean => sql.includes('touched(entity_type'),
+      (sql: string): boolean => sql.includes('scalar_hits'),
     ];
 
-    expect(seen).toHaveLength(3);
+    expect(seen).toHaveLength(2);
     for (const sql of seen) {
       expect(discriminators.filter((matches) => matches(sql))).toHaveLength(1);
     }

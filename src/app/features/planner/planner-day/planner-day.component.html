@@ -59,9 +59,13 @@
         cdkDrag
         [cdkDragData]="task"
         [cdkDragStartDelay]="dragDelayForTouch()"
+        (cdkDragStarted)="onDragStarted(task, $event)"
+        (cdkDragEnded)="onDragEnded()"
+        [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
         [cdkDragLockAxis]="isXs() ? 'y' : ''"
         [task]="task"
         [day]="day.dayDate"
+        [focusable]="true"
       ></planner-task>
     }
 
@@ -145,8 +149,12 @@
               cdkDrag
               [task]="scheduledItem.task"
               [day]="day.dayDate"
+              [focusable]="true"
               [cdkDragData]="scheduledItem.task"
               [cdkDragStartDelay]="dragDelayForTouch()"
+              (cdkDragStarted)="onDragStarted(scheduledItem.task, $event)"
+              (cdkDragEnded)="onDragEnded()"
+              [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
               [cdkDragLockAxis]="isXs() ? 'y' : ''"
             ></planner-task>
           }

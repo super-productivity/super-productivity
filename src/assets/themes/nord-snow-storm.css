@@ -253,8 +253,11 @@ body:not(.isDarkTheme) a[href]:hover {
 /* Task states use a contrast-safe Nord blue boundary. */
 @media (hover: hover) {
   body:not(.isDarkTheme)
-    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    task:not(.isSelected):not(.isCurrent):not(.isMultiSelected):hover:not(
+      :has(task:hover)
+    )
     > swipe-block
+    > .inner-wrapper
     > .inner-wrapper
     > .box {
     background-color: var(--nord4);
@@ -263,8 +266,12 @@ body:not(.isDarkTheme) a[href]:hover {
   }
 }
 
-body:not(.isDarkTheme) task.isSelected > swipe-block > .inner-wrapper > .box,
-body:not(.isDarkTheme) task.isCurrent > swipe-block > .inner-wrapper > .box {
+body:not(.isDarkTheme)
+  task.isCurrent
+  > swipe-block
+  > .inner-wrapper
+  > .inner-wrapper
+  > .box {
   border-left: 3px solid var(--nord-link);
 }
 

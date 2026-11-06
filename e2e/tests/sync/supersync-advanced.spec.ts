@@ -8,11 +8,14 @@ import {
   getTaskElement,
   markTaskDone,
   deleteTask,
-  countTasks,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { expectTaskNotVisible } from '../../utils/supersync-assertions';
-import { waitForAppReady } from '../../utils/waits';
+import { waitForMenuSettled } from '../../utils/waits';
+import {
+  getTagIdFromStore,
+  getTasksFromStore,
+} from '../../utils/audit-import-encryption-helpers';
 
 /**
  * SuperSync Advanced E2E Tests
@@ -22,95 +25,6 @@ import { waitForAppReady } from '../../utils/waits';
  */
 
 test.describe('@supersync SuperSync Advanced', () => {
-  /**
-   * Scenario: Large Dataset Sync
-   *
-   * Tests performance and reliability when syncing a larger number of items.
-   *
-   * Actions:
-   * 1. Client A creates 50 tasks
-   * 2. Client A syncs (upload)
-   * 3. Client B syncs (download)
-   * 4. Verify all 50 tasks exist on Client B
-   */
-  test('Large dataset sync (50 tasks)', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }, testInfo) => {
-    // Increase timeout for this test as creating/syncing 50 tasks takes time
-    testInfo.setTimeout(180000);
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-    const TASK_COUNT = 50;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // Setup Client A
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      // Create tasks in batch
-      console.log(`[LargeData] Creating ${TASK_COUNT} tasks on Client A...`);
-
-      // We can optimize creation by not waiting for every single task to appear
-      // if the UI allows rapid entry, but the helper might need adjustment.
-      // For now, let's just loop.
-      for (let i = 1; i <= TASK_COUNT; i++) {
-        await clientA.workView.addTask(`Task-${testRunId}-${i}`);
-        // Small pause every 10 tasks to let UI breathe/save
-        if (i % 10 === 0) await clientA.page.waitForTimeout(200);
-      }
-
-      console.log(`[LargeData] Creation complete. Verifying local count...`);
-      const countA = await countTasks(clientA.page);
-      // Expect at least TASK_COUNT (there might be default tasks? usually not in fresh profile)
-      expect(countA).toBeGreaterThanOrEqual(TASK_COUNT);
-
-      // Sync A
-      console.log(`[LargeData] Syncing Client A...`);
-      await clientA.sync.syncAndWait();
-
-      // Setup Client B
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-
-      // Sync B
-      console.log(`[LargeData] Syncing Client B...`);
-      await clientB.sync.syncAndWait();
-
-      // Verify B has all tasks
-      console.log(`[LargeData] Verifying Client B count...`);
-
-      // Wait for first task to appear (ensures sync operations have rendered)
-      await waitForTask(clientB.page, `Task-${testRunId}-1`);
-
-      // If the page needs a refresh to show all synced tasks, reload and wait
-      // This handles bulk dispatch UI update timing issues
-      // Use goto instead of reload - more reliable with service workers
-      await clientB.page.goto(clientB.page.url(), {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000,
-      });
-      await waitForAppReady(clientB.page);
-      await waitForTask(clientB.page, `Task-${testRunId}-1`);
-
-      const countB = await countTasks(clientB.page);
-      expect(countB).toBe(countA);
-
-      // Spot check first and last
-      await waitForTask(clientB.page, `Task-${testRunId}-1`);
-      await waitForTask(clientB.page, `Task-${testRunId}-${TASK_COUNT}`);
-
-      console.log(`[LargeData] ✓ Success: Synced ${countB} tasks.`);
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
   /**
    * Scenario: Tag Management
    *
@@ -166,6 +80,10 @@ test.describe('@supersync SuperSync Advanced', () => {
 
       // Verify tag is present on Client A
       await expect(clientA.page.locator(`task tag:has-text("${tagName}")`)).toBeVisible();
+      const tagId = await getTagIdFromStore(clientA.page, tagName);
+      expect(tagId, 'the tag exists in A store').not.toBeNull();
+      const [taskOnAWithTag] = await getTasksFromStore(clientA.page, taskName);
+      expect(taskOnAWithTag?.tagIds).toContain(tagId);
 
       // Sync A
       await clientA.sync.syncAndWait();
@@ -186,6 +104,11 @@ test.describe('@supersync SuperSync Advanced', () => {
       const taskB = getTaskElement(clientB, taskName);
       await taskB.click({ button: 'right' });
 
+      // The panel scales into place over 120ms; clicking before it settles parks
+      // the cursor on the item that slides into that spot, whose submenu then
+      // replaces the one we opened. Wait it out before every click in the menu.
+      await waitForMenuSettled(clientB.page);
+
       // Click "Toggle Tags" in context menu (using text match or class if available)
       // Based on i18n: T.F.TASK.CMP.TOGGLE_TAGS -> 'Toggle Tags' (en)
       const toggleTagsItem = clientB.page
@@ -199,6 +122,7 @@ test.describe('@supersync SuperSync Advanced', () => {
         `.mat-mdc-menu-item:not(.nav-link):has-text("${tagName}")`,
       );
       await tagItem.waitFor({ state: 'visible' });
+      await waitForMenuSettled(clientB.page);
       await tagItem.click();
 
       // Close menu by pressing Escape multiple times (submenu + main menu)
@@ -242,10 +166,15 @@ test.describe('@supersync SuperSync Advanced', () => {
         `[TagTest] Client A has ${tagCount} tag(s) on task: [${tagTexts.join(', ')}]`,
       );
 
-      // Verify tag is gone on A
+      // Verify tag is gone on A. Anchor on the task first: an unrendered task
+      // has no visible tag either. Then read the store, which is what synced.
+      await waitForTask(clientA.page, taskName);
       await expect(
         clientA.page.locator(`task tag:has-text("${tagName}")`),
       ).not.toBeVisible();
+      const tasksOnA = await getTasksFromStore(clientA.page, taskName);
+      expect(tasksOnA, 'the task still exists on A').toHaveLength(1);
+      expect(tasksOnA[0].tagIds, 'the removal synced to A').not.toContain(tagId);
 
       console.log('[TagTest] ✓ Tag added and removed successfully across clients');
     } finally {

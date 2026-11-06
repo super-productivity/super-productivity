@@ -24,6 +24,7 @@ export const createBlockedBlocksByDayMap = (
   now?: number,
   nrOfDays: number = NR_OF_DAYS,
   realNow?: number,
+  startOfNextDayDiffMs: number = 0,
 ): BlockedBlockByDayMap => {
   const allBlockedBlocks = createSortedBlockerBlocks(
     scheduledTasks,
@@ -34,6 +35,7 @@ export const createBlockedBlocksByDayMap = (
     now,
     nrOfDays,
     realNow,
+    startOfNextDayDiffMs,
   );
   // Log.log(allBlockedBlocks);
 

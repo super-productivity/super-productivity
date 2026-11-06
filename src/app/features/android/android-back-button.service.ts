@@ -12,6 +12,7 @@ import { selectAllProjects } from '../project/store/project.selectors';
 import { hideFocusOverlay } from '../focus-mode/store/focus-mode.actions';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../tasks/task-focus.service';
+import { TaskMultiSelectService } from '../tasks/task-multi-select.service';
 
 /**
  * Implements Android back-button behavior for top-level (bottom-nav) destinations
@@ -38,6 +39,7 @@ export class AndroidBackButtonService {
   private readonly _matDialog = inject(MatDialog);
   private readonly _layoutService = inject(LayoutService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _taskMultiSelectService = inject(TaskMultiSelectService);
 
   private readonly _isFocusOverlayShown = this._store.selectSignal(selectIsOverlayShown);
   private readonly _allProjects = this._store.selectSignal(selectAllProjects);
@@ -80,6 +82,14 @@ export class AndroidBackButtonService {
       return;
     }
 
+    // 5b. A task multi-selection (or touch selection mode) has no history
+    //     entry and sits below every dialog, overlay and popup; back leaves
+    //     it before anything navigates away.
+    if (this._taskMultiSelectService.isSelecting()) {
+      this._taskMultiSelectService.clear();
+      return;
+    }
+
     // 6. Not a top-level destination (context sub-page, settings, search, …)
     //    → navigate up via the history stack as before.
     const currentUrl = this._router.url;
@@ -95,7 +105,14 @@ export class AndroidBackButtonService {
     // 7. A top-level destination → pop to the start destination, or exit if
     //    already there.
     const startUrl = this._getStartPageUrl();
-    if (this._pathOf(currentUrl) === this._pathOf(startUrl)) {
+    const currentPath = this._pathOf(currentUrl);
+    const startPath = this._pathOf(startUrl);
+    if (
+      currentPath === startPath ||
+      // The views start page `/boards` opens the last view, `/boards/<id>`:
+      // popping to `/boards` would land on the same view and never exit.
+      (startPath === '/boards' && /^\/boards\/[^/]+$/.test(currentPath))
+    ) {
       this._minimizeApp();
     } else {
       this._router.navigateByUrl(startUrl, { replaceUrl: true });
@@ -147,7 +164,9 @@ export class AndroidBackButtonService {
     const path = this._pathOf(url);
     return (
       /^\/(?:tag|project)\/[^/]+\/tasks$/.test(path) ||
-      ['/planner', '/schedule', '/boards', '/habits'].includes(path)
+      // `/boards` redirects to `/boards/<id>`, and each view is its own page.
+      /^\/boards(?:\/[^/]+)?$/.test(path) ||
+      ['/planner', '/schedule', '/habits'].includes(path)
     );
   }
 

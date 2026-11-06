@@ -1,27 +1,18 @@
+// Hangs on the bottom edge of the main header: nothing interactive lives
+// there, so it never covers the mobile add-task button, the bottom nav,
+// snackbars or the multi-select bar, and it stays below the status bar /
+// title bar on every platform.
 :host {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 9999;
+  // Above the banner and main-header layers it overlaps (both positioned with
+  // a z-index); a later sibling wins the tie with main-header.
+  z-index: var(--z-main-header);
   pointer-events: none;
   display: block;
-
-  .mat-mdc-progress-bar {
-    height: 3px;
-    box-shadow: var(--whiteframe-shadow-2dp);
-    opacity: 0.3;
-  }
-}
-
-.badge {
-  display: inline-block;
-  pointer-events: none;
-  padding: var(--s-quarter) 6px;
-  font-size: 10px;
-  line-height: 1;
-  border-top-right-radius: var(--card-border-radius);
-  background: var(--bg-lighter);
-  color: var(--text-color-less-intense);
-  opacity: 0.85;
+  opacity: 0.3;
+  --mat-progress-bar-track-height: 3px;
+  --mat-progress-bar-active-indicator-height: 3px;
 }

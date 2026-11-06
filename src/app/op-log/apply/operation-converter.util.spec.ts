@@ -789,6 +789,63 @@ describe('operation-converter utility', () => {
         ).toBe('replace');
       });
 
+      it('restores wire-dropped cleared fields for patch-mode LWW deltas (#9776)', () => {
+        // Exactly as a merged op arrives over the wire: JSON dropped the
+        // undefined-valued key from actionPayload; clearedFields survives.
+        const op: Operation = JSON.parse(
+          JSON.stringify(
+            createMockOperation({
+              actionType: '[TASK] LWW Update' as ActionType,
+              entityId: 'task-1',
+              payload: {
+                actionPayload: {
+                  id: 'task-1',
+                  title: 'Kept title',
+                  _hideSubTasksMode: undefined,
+                },
+                entityChanges: [],
+                lwwUpdateMode: 'patch',
+                clearedFields: ['_hideSubTasksMode'],
+              },
+            }),
+          ),
+        );
+
+        const action = convertOpToAction(op) as unknown as Record<string, unknown>;
+
+        expect(action['title']).toBe('Kept title');
+        // The clear must be an OWN property again so updateOne clears the field.
+        expect(Object.keys(action)).toContain('_hideSubTasksMode');
+        expect(action['_hideSubTasksMode']).toBeUndefined();
+      });
+
+      it('never restores a cleared id and ignores clears on replace snapshots', () => {
+        const patchOp = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-1',
+          payload: {
+            actionPayload: { id: 'task-1', title: 'T' },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+            clearedFields: ['id'],
+          },
+        });
+        expect((convertOpToAction(patchOp) as any).id).toBe('task-1');
+
+        const replaceOp = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-1',
+          payload: {
+            actionPayload: { id: 'task-1', title: 'T' },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+            clearedFields: ['title'],
+          },
+        });
+        const replaceAction = convertOpToAction(replaceOp) as any;
+        expect(replaceAction.title).toBe('T');
+      });
+
       it('should expose recreate-after-delete metadata (#8997)', () => {
         const op = createMockOperation({
           actionType: '[TASK] LWW Update' as ActionType,
@@ -803,6 +860,43 @@ describe('operation-converter utility', () => {
         const action = convertOpToAction(op);
 
         expect(action.meta.recreatesEntityAfterDelete).toBeTrue();
+      });
+
+      it('carries LWW entity fields that the action envelope shadows in meta', () => {
+        const op = createMockOperation({
+          actionType: '[SIMPLE_COUNTER] LWW Update' as ActionType,
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'cnt-1',
+          payload: {
+            actionPayload: { id: 'cnt-1', title: 'Habit', type: 'StopWatch' },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+          },
+        });
+
+        const action = convertOpToAction(op);
+
+        expect(action.type).toBe('[SIMPLE_COUNTER] LWW Update');
+        expect(action.meta.lwwShadowedFields).toEqual({ type: 'StopWatch' });
+      });
+
+      it('carries no shadowed fields for non-LWW actions or payloads without them', () => {
+        const regular = createMockOperation({
+          payload: { actionPayload: { type: 'x', title: 'T' }, entityChanges: [] },
+        });
+        const lwwWithoutType = createMockOperation({
+          actionType: '[SIMPLE_COUNTER] LWW Update' as ActionType,
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'cnt-1',
+          payload: {
+            actionPayload: { id: 'cnt-1', title: 'Habit' },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+          },
+        });
+
+        expect(convertOpToAction(regular).meta.lwwShadowedFields).toBeUndefined();
+        expect(convertOpToAction(lwwWithoutType).meta.lwwShadowedFields).toBeUndefined();
       });
 
       it('should fall back to legacy payload format when not MultiEntityPayload', () => {

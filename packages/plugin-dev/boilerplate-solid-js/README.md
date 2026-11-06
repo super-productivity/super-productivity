@@ -6,7 +6,7 @@ A modern, TypeScript-based boilerplate for creating Super Productivity plugins u
 
 - 🚀 **Solid.js** - Fast, reactive UI framework
 - 📘 **TypeScript** - Full type safety with Super Productivity Plugin API
-- 🎨 **Modern UI** - Clean, responsive design with dark mode support
+- 🎨 **Modern UI** - Clean, responsive design that follows the app theme
 - 🔧 **Vite** - Lightning-fast development and build tooling
 - 📦 **Ready to Use** - Complete setup with examples for all plugin features
 
@@ -16,7 +16,7 @@ A modern, TypeScript-based boilerplate for creating Super Productivity plugins u
 
 - Node.js 16+
 - npm or yarn
-- Super Productivity 8.0.0+
+- Super Productivity 19.3.0+
 
 ### Installation
 
@@ -28,7 +28,9 @@ cp -r boilerplate-solid-js my-plugin
 cd my-plugin
 ```
 
-2. Install dependencies:
+2. Set a unique `name` in `package.json` (every folder in `plugin-dev` is an npm
+   workspace; duplicate names break the install), then install dependencies into
+   the shared plugin-dev workspace:
 
 ```bash
 npm install
@@ -332,12 +334,11 @@ const result = await sendMessage('myCommand', { foo: 'bar' });
 
 The boilerplate includes:
 
-- CSS custom properties for theming
-- Dark mode support
-- Responsive design
-- Minimal, clean styling
+- The host theme (light/dark, colors, fonts) applied automatically inside the plugin iframe; do not define your own theme or dark mode
+- UI kit element defaults and classes (`.btn-primary`, `.card`, `.list-item`, `.chip`, `.stack`, `.row`, ...)
+- A tiny `src/app/App.css` for layout that is specific to this plugin
 
-Modify `src/app/App.css` to customize the appearance.
+Use the kit and the host's CSS variables (e.g. `var(--text-color-muted)`) instead of hardcoded colors. See [Theme Variables & UI Kit](../../../docs/plugin-development.md). Unlayered CSS in `App.css` overrides the kit, so do not restate kit defaults.
 
 ### Adding Features
 
@@ -382,7 +383,8 @@ Modify `src/app/App.css` to customize the appearance.
 
 - Run `npm run typecheck` to check for TypeScript errors
 - Ensure all dependencies are installed
-- Clear `node_modules` and reinstall if needed
+- Reinstall with `npm ci` in `packages/plugin-dev` (deleting only this folder's
+  `node_modules` can leave the plugin on another workspace's Vite version)
 
 ## Resources
 

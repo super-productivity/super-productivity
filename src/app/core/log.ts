@@ -30,6 +30,18 @@ export const MAX_DATA_LENGTH = 400;
 const truncateSerialized = (value: string): string =>
   value.length > MAX_DATA_LENGTH ? 'short:' + value.substring(0, MAX_DATA_LENGTH) : value;
 
+// Stack traces and OS errors embed absolute paths, and the home folder names
+// the OS user (#11502). Applied to the final export string so every arg and
+// every escaping level (a stack inside a JSON string inside JSON) is covered.
+// The lookbehind skips URL paths like https://host/home/feed.
+// Windows usernames may contain spaces but none of these: " / \ [ ] : ; | = , + * ? < >
+const WINDOWS_HOME_RE =
+  /(?<![\w.-])([a-z]:[\\/]+users[\\/]+)[^\\/"'[\]:;|=,+*?<>\r\n\t]+/gi;
+const POSIX_HOME_RE = /(?<![\w.-])(\/(?:Users|home)\/)[^\\/"'\s:)]+/g;
+
+const redactHomePaths = (value: string): string =>
+  value.replace(WINDOWS_HOME_RE, '$1<user>').replace(POSIX_HOME_RE, '$1<user>');
+
 const isDomRelatedObject = (value: unknown): boolean => {
   if (!value || typeof value !== 'object') {
     return false;
@@ -71,6 +83,26 @@ const serializeErrorArg = (error: Error): Record<string, unknown> => {
 
   return result;
 };
+
+// Angular's HttpErrorResponse is not an Error, and its url, message and body can
+// carry user content. Matched by name and url rather than instanceof so the
+// reminder worker, which bundles this file, does not pull in @angular/common/http.
+const isHttpErrorResponse = (
+  value: unknown,
+): value is { status: unknown; statusText: unknown } =>
+  typeof value === 'object' &&
+  value !== null &&
+  (value as { name?: unknown }).name === 'HttpErrorResponse' &&
+  'url' in value;
+
+const serializeHttpErrorArg = (error: {
+  status: unknown;
+  statusText: unknown;
+}): Record<string, unknown> => ({
+  name: 'HttpErrorResponse',
+  status: error.status,
+  statusText: error.statusText,
+});
 
 // IMPORTANT: All Log class methods and context loggers (SyncLog, etc.) record logs to history
 // for later export. The trade-off is that line numbers will show log.ts instead of the
@@ -133,6 +165,8 @@ export class Log {
           msg = firstArg;
         } else if (firstArg instanceof Error) {
           msg = serializeErrorMessage(firstArg);
+        } else if (isHttpErrorResponse(firstArg)) {
+          msg = JSON.stringify(serializeHttpErrorArg(firstArg));
         } else if (typeof firstArg === 'object' && firstArg !== null) {
           // Handle DOM objects (HTMLCollection, NodeList, etc.)
           if (isDomRelatedObject(firstArg)) {
@@ -254,6 +288,9 @@ export class Log {
           if (arg instanceof Error) {
             return serializeErrorArg(arg);
           }
+          if (isHttpErrorResponse(arg)) {
+            return serializeHttpErrorArg(arg);
+          }
           // Try to serialize each arg safely
           const r = JSON.stringify(arg);
           if (r.length > MAX_DATA_LENGTH) {
@@ -267,12 +304,12 @@ export class Log {
       }),
     }));
 
-    return JSON.stringify(safeHistory, null, 2);
+    return redactHomePaths(JSON.stringify(safeHistory, null, 2));
   }
 
   /** Export log history as formatted text for download */
   static exportLogHistoryAsText(): string {
-    return this.logHistory
+    const text = this.logHistory
       .map((entry) => {
         const date = new Date(entry.time).toISOString();
         const context = entry.ctx ? `[${entry.ctx}] ` : '';
@@ -281,6 +318,7 @@ export class Log {
         return `${date} [${entry.lvl}] ${context}${entry.msg}${argsStr}`;
       })
       .join('\n');
+    return redactHomePaths(text);
   }
 
   /**

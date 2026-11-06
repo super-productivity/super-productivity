@@ -36,6 +36,13 @@ export interface SyncProviderBase<
    * hook. See issue #7616.
    */
   clearAuthCredentials?(): Promise<void>;
+  /**
+   * Drops caches derived from the stored credentials so the next read hits
+   * the persistent store. Implement when the provider caches credential
+   * state that another context sharing the store (a second browser tab)
+   * can change underneath it — e.g. SuperSync's token-derived cursor key.
+   */
+  invalidateCredentialCache?(): void;
 }
 
 export interface FileRevResponse {
@@ -69,7 +76,6 @@ export interface FileSyncProvider<
     isForceOverwrite?: boolean,
   ): Promise<FileRevResponse>;
   removeFile(targetPath: string): Promise<void>;
-  listFiles?(targetPath: string): Promise<string[]>;
 }
 
 export const isFileSyncProvider = <
@@ -123,6 +129,7 @@ export interface OpUploadResponse {
   newOps?: ServerSyncOperation[];
   latestSeq: number;
   hasMorePiggyback?: boolean;
+  deduplicated?: boolean;
 }
 
 export interface OpDownloadResponseBase {
@@ -133,7 +140,7 @@ export interface OpDownloadResponseBase {
   snapshotVectorClock?: VectorClock;
   serverTime?: number;
   capabilities?: {
-    causalRepairSnapshots?: true;
+    causalRepairSnapshots?: boolean;
   };
 }
 
@@ -151,6 +158,18 @@ export interface FileSnapshotOpDownloadResponse extends OpDownloadResponseBase {
    * applied on top of the snapshot before the download cursor is committed.
    */
   snapshotAppliedOpIds?: string[];
+  /**
+   * The remote file no longer carries uploads this client already saw there,
+   * and no full-state replacement explains it: a writer on a stale copy lost
+   * them (#10916). Hydrating `snapshotState` would delete them locally too.
+   */
+  ownUploadsMissing?: boolean;
+  /**
+   * The remote only appended to the file this client last committed: no
+   * full-state replacement since (#10972). Its snapshot is a catch-up past
+   * trimmed ops, so pending local ops may be kept on top of it.
+   */
+  snapshotExtendsLastSeen?: boolean;
 }
 
 export type OpDownloadResponse =

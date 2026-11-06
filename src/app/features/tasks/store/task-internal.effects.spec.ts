@@ -453,6 +453,123 @@ describe('TaskInternalEffects', () => {
         done();
       }, 50);
     });
+
+    it('should mark parent as done when one subtask was completed and one is wont do', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1', 'sub2'],
+        isDone: false,
+      });
+      const subTask1 = createTask('sub1', { parentId: 'parent', isDone: true });
+      const subTask2 = createTask('sub2', {
+        parentId: 'parent',
+        isDone: true,
+        doneOn: 5,
+        wontDoOn: 5,
+      });
+
+      store.overrideSelector(
+        selectTasksConfig,
+        createTasksConfig({ isAutoMarkParentAsDone: true }),
+      );
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask1, subTask2]),
+      );
+      store.refreshState();
+
+      effects.onAllSubTasksDone$.subscribe((action) => {
+        expect((action as any).task.id).toBe('parent');
+        expect((action as any).task.changes).toEqual({ isDone: true });
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'sub2', changes: { isDone: true, doneOn: 5, wontDoOn: 5 } },
+        }),
+      );
+    });
+
+    it('should NOT mark a parent done again when it already is', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1'],
+        isDone: true,
+        doneOn: 5,
+        wontDoOn: 5,
+      });
+      const subTask1 = createTask('sub1', { parentId: 'parent', isDone: true });
+
+      store.overrideSelector(
+        selectTasksConfig,
+        createTasksConfig({ isAutoMarkParentAsDone: true }),
+      );
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask1]),
+      );
+      store.refreshState();
+
+      let emitted = false;
+      effects.onAllSubTasksDone$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'sub1', changes: { isDone: true } },
+        }),
+      );
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
+
+    it('should NOT mark parent as done when all subtasks are wont do', (done) => {
+      const parentTask = createTask('parent', {
+        subTaskIds: ['sub1', 'sub2'],
+        isDone: false,
+      });
+      const subTask1 = createTask('sub1', {
+        parentId: 'parent',
+        isDone: true,
+        doneOn: 5,
+        wontDoOn: 5,
+      });
+      const subTask2 = createTask('sub2', {
+        parentId: 'parent',
+        isDone: true,
+        doneOn: 5,
+        wontDoOn: 5,
+      });
+
+      store.overrideSelector(
+        selectTasksConfig,
+        createTasksConfig({ isAutoMarkParentAsDone: true }),
+      );
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parentTask, subTask1, subTask2]),
+      );
+      store.refreshState();
+
+      let emitted = false;
+      effects.onAllSubTasksDone$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'sub2', changes: { isDone: true, doneOn: 5, wontDoOn: 5 } },
+        }),
+      );
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
   });
 
   describe('setDefaultEstimateIfNonGiven$', () => {
@@ -553,6 +670,100 @@ describe('TaskInternalEffects', () => {
         expect(emitted).toBe(false);
         done();
       }, 50);
+    });
+  });
+
+  describe('reopenStartedDoneTask$', () => {
+    it('should emit a persistent updateTask re-opening a started done task', (done) => {
+      const task = createTask('task1', { isDone: true, doneOn: 1234 });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], 'task1'));
+      store.refreshState();
+
+      effects.reopenStartedDoneTask$.subscribe((action) => {
+        expect(action).toEqual(
+          TaskSharedActions.updateTask({
+            task: { id: 'task1', changes: { isDone: false } },
+          }),
+        );
+        expect(action.meta.isPersistent).toBe(true);
+        done();
+      });
+
+      actions$.next(setCurrentTask({ id: 'task1' }));
+    });
+
+    it('should emit nothing when the started task is not done', () => {
+      const task = createTask('task1', { isDone: false });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], 'task1'));
+      store.refreshState();
+
+      let emitted = false;
+      effects.reopenStartedDoneTask$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(setCurrentTask({ id: 'task1' }));
+
+      expect(emitted).toBe(false);
+    });
+
+    it('should emit nothing when no task ends up current', () => {
+      const task = createTask('task1', { isDone: true });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], null));
+      store.refreshState();
+
+      let emitted = false;
+      effects.reopenStartedDoneTask$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(setCurrentTask({ id: null }));
+
+      expect(emitted).toBe(false);
+    });
+
+    it('should re-open the subtask that actually got started, not the parent from the action', (done) => {
+      const parent = createTask('parent', { subTaskIds: ['sub1'], isDone: false });
+      const subTask = createTask('sub1', { parentId: 'parent', isDone: true });
+
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parent, subTask], 'sub1'),
+      );
+      store.refreshState();
+
+      effects.reopenStartedDoneTask$.subscribe((action) => {
+        expect(action.task).toEqual({ id: 'sub1', changes: { isDone: false } });
+        done();
+      });
+
+      actions$.next(setCurrentTask({ id: 'parent' }));
+    });
+
+    it('should re-open the first subtask when a parent with only done subtasks is started', (done) => {
+      const parent = createTask('parent', {
+        subTaskIds: ['sub1', 'sub2'],
+        isDone: false,
+      });
+      const sub1 = createTask('sub1', { parentId: 'parent', isDone: true });
+      const sub2 = createTask('sub2', { parentId: 'parent', isDone: true });
+
+      // The reducer falls back to subTaskIds[0] when every subtask is done.
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parent, sub1, sub2], 'sub1'),
+      );
+      store.refreshState();
+
+      effects.reopenStartedDoneTask$.subscribe((action) => {
+        expect(action.task).toEqual({ id: 'sub1', changes: { isDone: false } });
+        done();
+      });
+
+      actions$.next(setCurrentTask({ id: 'parent' }));
     });
   });
 

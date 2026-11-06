@@ -48,6 +48,8 @@ export enum ConflictReason {
   BothNewerLastSync = 'BothNewerLastSync',
   MatchingModelChangeButLastSyncMismatch = 'MatchingModelChangeButLastSyncMismatch',
   UnexpectedRevMismatch = 'UnexpectedRevMismatch',
+  /** The remote lost changes this device already synced (#10916). */
+  OwnUploadsMissing = 'OwnUploadsMissing',
 }
 
 export const REMOTE_FILE_CONTENT_PREFIX = 'pf_' as const;

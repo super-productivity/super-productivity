@@ -9,6 +9,7 @@ import {
   WEB_CAPABILITIES,
 } from './platform-capabilities.model';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { IS_ELECTRON_TOKEN } from '../../app.constants';
 
 /**
  * Service for detecting platform and exposing platform-specific capabilities.
@@ -28,6 +29,7 @@ import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 })
 export class CapacitorPlatformService {
   private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
 
   /**
    * The current platform type
@@ -45,6 +47,17 @@ export class CapacitorPlatformService {
   readonly isMobile: boolean;
 
   /**
+   * Whether running in the legacy Android WebView shell (`MODE_ONLINE` in
+   * `LaunchDecider.kt`) rather than the Capacitor activity.
+   *
+   * `isNative` is true here as well, but there is no Capacitor bridge, so every
+   * Capacitor plugin silently falls back to its web implementation. Callers that
+   * would otherwise reach a plugin must branch on this and use the `SUPAndroid`
+   * JS interface — or degrade — instead.
+   */
+  readonly isLegacyAndroidWebView: boolean;
+
+  /**
    * Platform capabilities for conditional feature enabling
    */
   readonly capabilities: PlatformCapabilities;
@@ -54,6 +67,7 @@ export class CapacitorPlatformService {
     // Include legacy Android WebView in isNative check
     this.isNative = Capacitor.isNativePlatform() || this._isAndroidWebView;
     this.isMobile = this.platform === 'ios' || this.platform === 'android';
+    this.isLegacyAndroidWebView = this._isAndroidWebView && !Capacitor.isNativePlatform();
     this.capabilities = this._getCapabilities();
   }
 
@@ -93,6 +107,19 @@ export class CapacitorPlatformService {
   }
 
   /**
+   * Check if the renderer is iOS-family WebKit — native Capacitor iOS, mobile
+   * Safari, the installed PWA, or a third-party iOS browser (all WKWebView).
+   *
+   * Distinct from `isIOS()`, which is the *platform* check and is false in an
+   * iOS browser (`_detectPlatform()` deliberately reports those as 'web').
+   * Use this one for behaviour keyed off the engine, e.g. the 16px focus-zoom
+   * threshold, which every iOS browser shares.
+   */
+  isIOSWebKit(): boolean {
+    return this.isIOS() || this._isIOSBrowser();
+  }
+
+  /**
    * Check if running on iPad (native or browser)
    */
   isIPad(): boolean {
@@ -116,7 +143,7 @@ export class CapacitorPlatformService {
    */
   private _detectPlatform(): PlatformType {
     // Check for Electron first (it also has navigator)
-    if (this._isElectron()) {
+    if (this._isElectron) {
       return 'electron';
     }
 
@@ -159,13 +186,6 @@ export class CapacitorPlatformService {
       default:
         return WEB_CAPABILITIES;
     }
-  }
-
-  /**
-   * Check if running in Electron
-   */
-  private _isElectron(): boolean {
-    return navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
   }
 
   /**

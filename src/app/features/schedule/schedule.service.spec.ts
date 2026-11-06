@@ -4,7 +4,12 @@ import { ScheduleService } from './schedule.service';
 import { DateService } from '../../core/date/date.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { findSpringForwardSunday } from '../tasks/dst.test-helper';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectStartOfNextDayDiffMs } from '../../root-store/app-state/app-state.selectors';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfg,
+} from '../task-repeat-cfg/task-repeat-cfg.model';
 import { selectTimelineTasks } from '../work-context/store/work-context.selectors';
 import { selectTaskRepeatCfgsWithAndWithoutStartTime } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { selectTimelineConfig } from '../config/store/global-config.reducer';
@@ -303,6 +308,177 @@ describe('ScheduleService', () => {
       const lastDay = new Date(result[result.length - 1]);
       // With 5 weeks starting from late December, we should reach into February
       expect(lastDay.getMonth()).toBeGreaterThanOrEqual(0);
+    });
+
+    describe('full-month coverage (#9449)', () => {
+      const dayStr = (date: Date): string => dateService.todayStr(date.getTime());
+      const lastDayOfMonth = (year: number, month: number): Date =>
+        new Date(year, month + 1, 0);
+
+      // The derivation itself. Pinning at 6 spanned every month but left an
+      // empty row on most of them; deriving from available height is what
+      // #9449 was filed for. The month is the right input.
+      it('should derive 4 to 6 weeks, and never fewer than the month needs', () => {
+        // Feb 2027 is 28 days starting on a Monday, the only shape that fits
+        // in four rows under a Monday-first week.
+        expect(service.getMonthWeeksToShow(1, new Date(2027, 1, 15))).toBe(4);
+        // Aug 2026 starts on a Saturday: 5 leading days + 31 needs six rows.
+        expect(service.getMonthWeeksToShow(1, new Date(2026, 7, 15))).toBe(6);
+        // Sep 2026 is 30 days from a Tuesday: five rows is exact.
+        expect(service.getMonthWeeksToShow(1, new Date(2026, 8, 15))).toBe(5);
+      });
+
+      it('should never return a count that drops a day of the month', () => {
+        // The count and the grid it feeds have to agree for every pair, or a
+        // day gets no cell and therefore no events at all.
+        for (let monthOffset = 0; monthOffset < 24; monthOffset++) {
+          const reference = new Date(2027, monthOffset, 15);
+          const year = reference.getFullYear();
+          const month = reference.getMonth();
+          const last = dayStr(lastDayOfMonth(year, month));
+
+          for (let firstDayOfWeek = 0; firstDayOfWeek < 7; firstDayOfWeek++) {
+            const weeks = service.getMonthWeeksToShow(firstDayOfWeek, reference);
+            const context = `${year}-${month + 1}, firstDayOfWeek ${firstDayOfWeek}`;
+            expect(weeks).withContext(context).toBeGreaterThanOrEqual(4);
+            expect(weeks).withContext(context).toBeLessThanOrEqual(6);
+            expect(service.getMonthDaysToShow(weeks, firstDayOfWeek, reference))
+              .withContext(context)
+              .toContain(last);
+            // And not a row more than it needs.
+            expect(service.getMonthDaysToShow(weeks - 1, firstDayOfWeek, reference))
+              .withContext(context)
+              .not.toContain(last);
+          }
+        }
+      });
+
+      it('should include Mon 31 Aug 2026 for every first day of week', () => {
+        const aug31 = dayStr(new Date(2026, 7, 31));
+
+        for (let firstDayOfWeek = 0; firstDayOfWeek < 7; firstDayOfWeek++) {
+          const reference = new Date(2026, 7, 15);
+          const result = service.getMonthDaysToShow(
+            service.getMonthWeeksToShow(firstDayOfWeek, reference),
+            firstDayOfWeek,
+            reference,
+          );
+          expect(result).withContext(`firstDayOfWeek ${firstDayOfWeek}`).toContain(aug31);
+        }
+      });
+
+      it('should not reach 31 Aug 2026 with only 5 weeks — why August derives 6', () => {
+        // August 2026 starts on a Saturday, so the padded grid needs 6 rows.
+        // This is the shape the reported bug had: a shorter window silently
+        // stopped before the end of the month.
+        const result = service.getMonthDaysToShow(5, 1, new Date(2026, 7, 15));
+        expect(result).not.toContain(dayStr(new Date(2026, 7, 31)));
+      });
+
+      it('should span the whole month for every month/firstDayOfWeek combination', () => {
+        // 24 consecutive months from Jan 2027 covers every start-weekday and
+        // both a non-leap February (2027) and a leap one (2028).
+        for (let monthOffset = 0; monthOffset < 24; monthOffset++) {
+          const reference = new Date(2027, monthOffset, 15);
+          const year = reference.getFullYear();
+          const month = reference.getMonth();
+          const first = dayStr(new Date(year, month, 1));
+          const last = dayStr(lastDayOfMonth(year, month));
+
+          for (let firstDayOfWeek = 0; firstDayOfWeek < 7; firstDayOfWeek++) {
+            const result = service.getMonthDaysToShow(
+              service.getMonthWeeksToShow(firstDayOfWeek, reference),
+              firstDayOfWeek,
+              reference,
+            );
+            const context = `${year}-${month + 1}, firstDayOfWeek ${firstDayOfWeek}`;
+            expect(result).withContext(context).toContain(first);
+            expect(result).withContext(context).toContain(last);
+          }
+        }
+      });
+    });
+  });
+
+  describe('createScheduleDaysComputed', () => {
+    it('anchors now into the displayed day when the wall clock has passed it', () => {
+      // The day panel shows logical today, which respects the start-of-next-day
+      // offset. Between midnight and that offset the wall clock is already past
+      // that day's end, and an unanchored now pushes every entry out of the only
+      // rendered day.
+      const dayStr = '2026-01-20';
+      const clock = new Date(2026, 0, 21, 3, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      const buildSpy = spyOn(service, 'buildScheduleDays').and.returnValue([]);
+
+      service.createScheduleDaysComputed(signal([dayStr]))();
+
+      const params = buildSpy.calls.mostRecent().args[0];
+      expect(params.now).toBe(new Date(2026, 0, 20, 0, 0, 0, 0).getTime());
+      expect(params.realNow).toBe(clock);
+    });
+
+    it('keeps the live clock while it still sits inside the displayed day', () => {
+      const dayStr = '2026-01-20';
+      const clock = new Date(2026, 0, 20, 9, 30).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      const buildSpy = spyOn(service, 'buildScheduleDays').and.returnValue([]);
+
+      service.createScheduleDaysComputed(signal([dayStr]))();
+
+      expect(buildSpy.calls.mostRecent().args[0].now).toBe(clock);
+    });
+
+    it('projects a repeat time before the day start into the night and follows offset changes (#3378)', () => {
+      const store = TestBed.inject(MockStore);
+      const cfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'late-night',
+        title: 'Late night',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: '2026-01-01',
+        startTime: '02:00',
+        lastTaskCreationDay: '2026-01-19',
+      };
+      store.overrideSelector(selectTaskRepeatCfgsWithAndWithoutStartTime, {
+        withStartTime: [cfg],
+        withoutStartTime: [],
+      });
+      store.overrideSelector(selectStartOfNextDayDiffMs, 0);
+      store.refreshState();
+      // 01:00 on the 21st is still logical day 20 with a 05:00 day start
+      const clock = new Date(2026, 0, 21, 1, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      const days = service.createScheduleDaysComputed(
+        signal(['2026-01-20', '2026-01-21']),
+      );
+      const repeatStarts = (): number[] =>
+        days()
+          .flatMap((day) => day.entries)
+          .filter((e) => e.id.includes(cfg.id))
+          .map((e) => e.start);
+
+      expect(repeatStarts()).toEqual([
+        new Date(2026, 0, 20, 2, 0).getTime(),
+        new Date(2026, 0, 21, 2, 0).getTime(),
+      ]);
+
+      store.overrideSelector(selectStartOfNextDayDiffMs, 5 * 60 * 60 * 1000);
+      store.refreshState();
+
+      // day 20's night is calendar day 21; day 21's night is out of view
+      expect(repeatStarts()).toEqual([new Date(2026, 0, 21, 2, 0).getTime()]);
+    });
+
+    it('falls back to the wall clock when no day is displayed', () => {
+      const clock = new Date(2026, 0, 20, 9, 30).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      const buildSpy = spyOn(service, 'buildScheduleDays').and.returnValue([]);
+
+      service.createScheduleDaysComputed(signal([]))();
+
+      expect(buildSpy.calls.mostRecent().args[0].now).toBe(clock);
     });
   });
 
@@ -749,6 +925,28 @@ describe('ScheduleService – calendar visibility filter', () => {
     return (spy.calls.mostRecent().args[0].calendarEvents ??
       []) as ScheduleCalendarMapEntry[];
   };
+
+  it('should map each provider to the first calendar source color', () => {
+    const withColor = (
+      entry: ScheduleCalendarMapEntry,
+      calendarColor?: string,
+    ): ScheduleCalendarMapEntry['items'][number] => ({
+      ...entry.items[0],
+      calendarColor,
+    });
+    calendarEvents$.next([
+      {
+        items: [
+          withColor(makeEntry('provider-A')),
+          withColor(makeEntry('provider-A'), '#fbe983'),
+          withColor(makeEntry('provider-A'), '#9fc6e7'),
+          withColor(makeEntry('provider-B')),
+        ],
+      },
+    ]);
+
+    expect([...service.calendarColorByProviderId()]).toEqual([['provider-A', '#fbe983']]);
+  });
 
   it('should pass all entries through when no providers are hidden', () => {
     calendarEvents$.next([makeEntry('provider-A'), makeEntry('provider-B')]);

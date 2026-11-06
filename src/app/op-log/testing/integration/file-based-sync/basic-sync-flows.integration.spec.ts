@@ -138,7 +138,10 @@ describe('File-Based Sync Integration - Basic Flows', () => {
 
     it('should NOT piggyback remote ops during upload response (piggybacking removed)', async () => {
       // Client A has the initial op
-      // Client B uploads without having downloaded first
+      // Normal sync downloads before uploading: unseen ops cannot be merged
+      // into a monolith whose snapshot does not contain them (#10256).
+      const downloaded = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
       const opFromB = clientB.createOp(
         'Task',
         'task-b-1',
@@ -151,8 +154,7 @@ describe('File-Based Sync Integration - Basic Flows', () => {
 
       const response = await clientB.uploadOps([opFromB]);
 
-      // File-based adapter no longer piggybacks — remote ops are only
-      // discovered via downloadOps on the next sync cycle
+      // Remote ops came through the download, not the upload response.
       expect(response.newOps).toBeUndefined();
     });
 
@@ -207,7 +209,8 @@ describe('File-Based Sync Integration - Basic Flows', () => {
       await clientA.uploadOps([initialOp]);
 
       // Client B downloads first to get in sync
-      await clientB.downloadOps(0);
+      const downloaded = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
 
       // Client B creates and uploads
       const op = clientB.createOp('Task', 'task-2', 'CRT', 'TaskActionTypes.ADD_TASK', {

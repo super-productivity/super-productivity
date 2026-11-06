@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { createServer } from './server';
 import * as path from 'path';
 import { Logger } from './logger';
+import { prisma } from './db';
+import { warnOnPendingMigrations } from './migration-status';
 
 // Create server instance with config overrides
 // The server will load additional config from environment variables
@@ -54,6 +56,10 @@ start()
     Logger.info('');
     Logger.info('Press Ctrl+C to stop the server');
     Logger.info('');
+    void warnOnPendingMigrations(
+      prisma,
+      path.join(process.cwd(), 'prisma', 'migrations'),
+    );
   })
   .catch((err: any) => {
     // Provide user-friendly error messages for common errors

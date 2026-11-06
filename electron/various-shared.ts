@@ -1,10 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import { info } from 'electron-log/main';
-import {
-  getWin,
-  getWasMaximizedBeforeHide,
-  setWasMaximizedBeforeHide,
-} from './main-window';
+import { getWin, getWasMaximizedBeforeHide } from './main-window';
+import { getWasFullScreen } from './window-full-screen-state';
 import {
   getIsTaskWidgetAlwaysShow,
   getIsTaskWidgetUserForcedVisible,
@@ -33,24 +30,25 @@ export function showOrFocus(passedWin: BrowserWindow): void {
     return;
   }
 
-  if (win.isVisible()) {
-    win.focus();
-  } else {
-    // restore explicitly - always call restore() before show()
-    // On Linux, event.preventDefault() on the minimize event has no effect, so the
-    // window may be minimized. On some desktop environments (e.g. GNOME/Wayland),
-    // isMinimized() returns false for a hidden+minimized window, so calling restore()
-    // only when isMinimized() is true would skip it and leave show() to fail alone.
+  // Preserve these before restore(): its synchronous unmaximize and
+  // leave-full-screen events can clear them.
+  const wasMaximized = getWasMaximizedBeforeHide();
+  const wasFullScreen = getWasFullScreen();
+  // Always show the window even if isVisible() is stale (#8448), but avoid
+  // restoring an already-visible maximized or full-screen window just to bring
+  // it to the front: restore() un-maximizes it and leaves full screen.
+  const isMaximizedOrFullScreen = win.isMaximized() || win.isFullScreen();
+  if (!win.isVisible() || !isMaximizedOrFullScreen || win.isMinimized()) {
     win.restore();
-    win.show();
-    if (getWasMaximizedBeforeHide()) win.maximize();
   }
+  win.show();
+  // maximize() on a full-screen window leaves full screen on X11.
+  if (wasMaximized && !win.isFullScreen()) win.maximize();
+  // After maximize(), so leaving full screen lands on the maximized window.
+  // Also covers a --start-minimized window, which skipped it at creation.
+  if (wasFullScreen && !win.isFullScreen()) win.setFullScreen(true);
 
-  // Hide task widget when main window is shown, unless the user explicitly
-  // pinned it visible via the global shortcut.
-  if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
-    hideTaskWidget();
-  }
+  _hideTaskWidgetUnlessPinned();
 
   // focus window afterwards always
   setTimeout(() => {
@@ -61,6 +59,54 @@ export function showOrFocus(passedWin: BrowserWindow): void {
       win.webContents.focus();
     }
   }, 60);
+}
+
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+function _hideTaskWidgetUnlessPinned(): void {
+  // Hide task widget when main window is shown, unless the user explicitly
+  // pinned it visible via the global shortcut.
+  if (!getIsTaskWidgetAlwaysShow() && !getIsTaskWidgetUserForcedVisible()) {
+    hideTaskWidget();
+  }
+}
+
+/**
+ * Bring the window to the front for a reminder when the user enabled
+ * "focus window on reminder", without taking keyboard focus so typing in another
+ * app doesn't land in SP. Windows' focus-stealing prevention ignores a plain
+ * raise from a background app (#10410); a brief always-on-top toggle lifts the
+ * window above others, and the taskbar button flashes until the user switches in.
+ * macOS/Linux keep the regular showOrFocus behavior.
+ */
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+export function raiseForReminder(passedWin: BrowserWindow): void {
+  const win = passedWin || getWin();
+  if (process.platform !== 'win32') {
+    showOrFocus(win);
+    return;
+  }
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+
+  // restore() (SC_RESTORE) is the only call that brings a minimized window back
+  // in its pre-minimize state, maximized included; it may try to activate, but a
+  // minimized window is in the background, where Windows' foreground lock blocks
+  // activation. Otherwise showInactive() shows without activating (SW_SHOWNA
+  // keeps a maximized window maximized); no maximize(), its SC_MAXIMIZE activates.
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.showInactive();
+  _hideTaskWidgetUnlessPinned();
+  win.setAlwaysOnTop(true);
+  win.moveTop();
+  win.setAlwaysOnTop(false);
+
+  if (!win.isFocused()) {
+    win.flashFrame(true);
+    win.once('focus', () => win.flashFrame(false));
+  }
 }
 
 // One physical key press can fire this action several times in a row: Electron's
@@ -109,7 +155,6 @@ export function toggleWindowVisibility(passedWin: BrowserWindow): void {
   //   enabled AND the tray was successfully (re)created; otherwise minimize so a taskbar
   //   handle remains as a safety net. blur() is a Windows focus workaround (electron#20464)
   //   and a no-op elsewhere.
-  setWasMaximizedBeforeHide(win.isMaximized());
   if (IS_MAC) {
     win.hide();
   } else if (getIsMinimizeToTray() && ensureIndicator()) {

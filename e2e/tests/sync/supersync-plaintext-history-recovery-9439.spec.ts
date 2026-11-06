@@ -1,7 +1,7 @@
 import {
   SuperSyncDownloadOpsResponseSchema,
-  type SuperSyncOperation,
-} from '@sp/shared-schema';
+  SuperSyncOperationSchema,
+} from '@sp/shared-schema/supersync-http-contract';
 import { decrypt } from '@sp/sync-core';
 import { expect, test } from '../../fixtures/supersync.fixture';
 import {
@@ -93,7 +93,7 @@ const seedPlaintextClone = async (
   }
 
   const clientId = `issue-9439-seed-${testRunId}`;
-  const plaintextOp: SuperSyncOperation = {
+  const plaintextOp = SuperSyncOperationSchema.parse({
     ...source,
     id: crypto.randomUUID(),
     clientId,
@@ -101,7 +101,7 @@ const seedPlaintextClone = async (
     vectorClock: { ...mergeHistoryClock(history), [clientId]: 1 },
     timestamp: Date.now(),
     isPayloadEncrypted: false,
-  };
+  });
   const headers = new Headers();
   headers.set('Content-Type', 'application/json');
   const response = await fetch(

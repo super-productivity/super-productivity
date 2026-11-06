@@ -3,6 +3,7 @@ import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isServerHealthy } from './utils/supersync-helpers';
+import { pickTestTimezone } from './utils/test-timezone';
 
 /**
  * Warm up the dev server by fetching the app once before any tests start.
@@ -32,10 +33,21 @@ const warmUpDevServer = async (baseURL: string): Promise<void> => {
 };
 
 const globalSetup = async (config: FullConfig): Promise<void> => {
-  // Set test environment variables
-  process.env.TZ = 'Europe/Berlin';
+  // Set test environment variables.
+  // TZ is picked so the run stays far from midnight — a day rollover mid-suite
+  // breaks date-sensitive specs (see ./utils/test-timezone.ts). Workers are
+  // forked after this, so they and the browsers they launch inherit the zone.
+  //
+  // This must stay an env var rather than Playwright's `use.timezoneId`, which
+  // would move only the browser: many specs compute a date in Node and assert it
+  // against the browser's local day (see utils/time-input-helper.ts and the note
+  // in tests/sync/supersync-round-time-conflict.spec.ts), so both sides have to
+  // move together. Specs that pin their own `timezoneId` opt out of this.
+  //
+  // Set E2E_TZ to pin a specific zone when reproducing a timezone-dependent bug.
+  process.env.TZ = process.env.E2E_TZ || pickTestTimezone();
   process.env.NODE_ENV = 'test';
-  console.log(`Running tests with ${config.workers} workers`);
+  console.log(`Running tests with ${config.workers} workers in TZ=${process.env.TZ}`);
 
   // Build plugins before starting tests (skip if already built)
   // Check both the dev path (src/assets/) and the CI pre-built path (.tmp/angular-dist/)
@@ -53,13 +65,20 @@ const globalSetup = async (config: FullConfig): Promise<void> => {
   } else {
     console.log('Building bundled plugins...');
     try {
+      // Output is piped and shown only on failure: a passing build adds ~55
+      // lines to every first run in a fresh worktree.
       execSync('npm run plugins:build', {
-        stdio: 'inherit',
+        stdio: 'pipe',
         cwd: process.cwd(),
+        // piped output counts against maxBuffer (1 MB default); exceeding it kills the build
+        maxBuffer: 64 * 1024 * 1024,
       });
       console.log('Bundled plugins built successfully');
     } catch (error) {
-      console.error('Failed to build plugins:', error);
+      // execSync's error message already ends with the child's stderr
+      const { stdout, message } = error as Error & { stdout?: Buffer };
+      console.error(`${stdout ?? ''}`);
+      console.error('Failed to build plugins:', message);
       throw error; // Fail fast if plugin build fails
     }
   }

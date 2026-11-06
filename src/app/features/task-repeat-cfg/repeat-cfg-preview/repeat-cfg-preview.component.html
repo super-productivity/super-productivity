@@ -1,6 +1,12 @@
+<!--
+  The row fills the whole host, so on touch platforms MatTooltip's inline
+  `touch-action: none` would stop any swipe starting on it from scrolling the
+  list (#11100, same as #10015). Hover tooltips are unaffected.
+-->
 <div
   (click)="editTaskRepeatCfg()"
   [matTooltip]="nextDueTooltip()"
+  matTooltipTouchGestures="off"
 >
   <mat-icon>repeat</mat-icon>
   <div class="wrap">

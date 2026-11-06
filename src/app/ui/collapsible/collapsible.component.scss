@@ -6,6 +6,63 @@
   padding: calc(var(--s) / 2) var(--s);
 }
 
+// Task-list section headings share one treatment, including user-made sections.
+:host(.task-section) .collapsible-header {
+  min-height: var(--bar-height);
+  padding: 0 var(--s);
+  gap: var(--s-half);
+  text-align: start;
+  border-bottom: 1px solid transparent;
+
+  .collapsible-expand-icon {
+    margin-right: 0;
+    color: var(--text-color-muted);
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+  }
+}
+
+// Deliberately typed as a label (small, semibold, muted) rather than as body
+// text, so a heading never reads as just another task row. No uppercase: section
+// titles can be long and user-authored, where caps only add width and noise.
+:host(.task-section) .collapsible-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--text-color-muted);
+}
+
+:host(.task-section.isExpanded) .collapsible-header {
+  border-bottom-color: var(--divider-color);
+}
+
+// Flat sections (a view's sections): no line under the header; the rows'
+// edges draw none either (`.task-list-no-top-line`), space separates them.
+:host(.task-section.task-section-flat) .collapsible-header {
+  min-height: var(--bar-height-small);
+  border-bottom-color: transparent;
+}
+
+// With no line under it, the heading itself carries the section.
+:host(.task-section.task-section-flat) .collapsible-title {
+  font-size: var(--font-size-md);
+  letter-spacing: normal;
+  color: var(--text-color);
+}
+
+:host(.hasCount) .collapsible-title {
+  flex-grow: 0;
+}
+
+// Takes the free space the title leaves, so the count stays next to it.
+.collapsible-count {
+  margin-right: auto;
+  font-weight: 400;
+  color: var(--text-color-muted);
+}
+
 .collapsible-header {
   &:focus-visible {
     outline: var(--focus-ring-width) solid var(--focus-ring-color);

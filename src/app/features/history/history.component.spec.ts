@@ -28,6 +28,7 @@ import { selectAllProjectColorsAndTitles } from '../project/store/project.select
 import { mapArchiveToWorklog } from '../worklog/util/map-archive-to-worklog';
 import { DateService } from '../../core/date/date.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { DialogWorklogExportComponent } from '../worklog/dialog-worklog-export/dialog-worklog-export.component';
 
 describe('HistoryComponent', () => {
   let fixture: ComponentFixture<HistoryComponent>;
@@ -200,6 +201,44 @@ describe('HistoryComponent', () => {
     expect(dayLabels).toEqual(['Wed 1.', 'Thu 2.', 'Fri 3.']);
   });
 
+  it('exports the complete worklog date range', () => {
+    const tasks = [createTaskForDate('2024-03-02'), createTaskForDate('2026-08-14')];
+    worklogData$.next(
+      mapArchiveToWorklog(
+        {
+          ids: tasks.map((task) => task.id),
+          entities: tasks.reduce(
+            (entities, task) => ({ ...entities, [task.id]: task }),
+            {},
+          ),
+        },
+        [],
+        { workStart: {}, workEnd: {} },
+        1,
+        'en-US',
+      ),
+    );
+    fixture.detectChanges();
+
+    fixture.componentInstance.exportAllData();
+
+    expect(matDialogSpy.open).toHaveBeenCalledWith(
+      DialogWorklogExportComponent,
+      jasmine.objectContaining({
+        data: {
+          rangeStart: new Date(2024, 2, 2),
+          rangeEnd: new Date(2026, 7, 14),
+        },
+      }),
+    );
+  });
+
+  it('does not open an export for an empty worklog', () => {
+    fixture.componentInstance.exportAllData();
+
+    expect(matDialogSpy.open).not.toHaveBeenCalled();
+  });
+
   it('explicitly restores the archived hierarchy to Today once', fakeAsync(() => {
     const subTask1 = {
       ...createTaskForDate('2026-01-05', 60000, true, 'subtask1'),
@@ -305,4 +344,76 @@ describe('HistoryComponent', () => {
       startOfNextDayDiffMs: 60 * 60 * 1000,
     });
   }));
+
+  describe('week crossing a month boundary (#9950)', () => {
+    // Mon 2026-08-31 – Sun 2026-09-06 is listed under August and September
+    const setCrossMonthWorklog = (): void => {
+      const tasks = [createTaskForDate('2026-08-31'), createTaskForDate('2026-09-01')];
+      worklogData$.next(
+        mapArchiveToWorklog(
+          {
+            ids: tasks.map((task) => task.id),
+            entities: tasks.reduce(
+              (entities, task) => ({ ...entities, [task.id]: task }),
+              {},
+            ),
+          },
+          [],
+          { workStart: {}, workEnd: {} },
+          1,
+          'en-US',
+        ),
+      );
+    };
+    const renderedDayLabels = (): string[] => {
+      fixture.debugElement.injector.get(ChangeDetectorRef).markForCheck();
+      fixture.detectChanges();
+      return fixture.debugElement
+        .queryAll(By.css('.week-row td:first-child'))
+        .map((de) => de.nativeElement.textContent.replace(/\s+/g, ' ').trim());
+    };
+
+    it('lists the whole week under both months, marking days of the other month', () => {
+      setCrossMonthWorklog();
+      fixture.componentInstance.toggleMonth('2026', '9');
+
+      expect(renderedDayLabels()).toEqual(['Mon 31. August', 'Tue 1.']);
+      expect(
+        fixture.debugElement
+          .queryAll(By.css('.week-row.isOtherMonth td:first-child'))
+          .map((de) => de.nativeElement.textContent.replace(/\s+/g, ' ').trim()),
+      ).toEqual(['Mon 31. August']);
+
+      fixture.componentInstance.toggleMonth('2026', '8');
+
+      expect(renderedDayLabels()).toEqual([
+        'Mon 31. August',
+        'Tue 1.',
+        'Mon 31.',
+        'Tue 1. September',
+      ]);
+    });
+
+    it('keeps element ids unique when a day is expanded under both months', () => {
+      setCrossMonthWorklog();
+      fixture.componentInstance.toggleMonth('2026', '8');
+      fixture.componentInstance.toggleMonth('2026', '9');
+      fixture.componentInstance.toggleDay('2026-08-31');
+      renderedDayLabels();
+
+      const ids = fixture.debugElement
+        .queryAll(By.css('[id^="history-day-"]'))
+        .map((de) => de.nativeElement.id);
+      expect(ids.length).toBe(2);
+      expect(new Set(ids).size).toBe(2);
+    });
+
+    it('expands the logical current month by default', () => {
+      dateServiceSpy.todayStr.and.returnValue('2026-09-01');
+      fixture = TestBed.createComponent(HistoryComponent);
+      setCrossMonthWorklog();
+
+      expect(renderedDayLabels()).toEqual(['Mon 31. August', 'Tue 1.']);
+    });
+  });
 });

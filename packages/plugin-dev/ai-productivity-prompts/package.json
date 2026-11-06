@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@solidjs/router": "^0.14.10",
+    "@super-productivity/vite-plugin": "file:../../vite-plugin",
     "@types/node": "^22.15.33",
     "solid-js": "^1.9.11",
     "typescript": "^5.8.3",

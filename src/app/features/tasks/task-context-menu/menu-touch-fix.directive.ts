@@ -12,7 +12,7 @@ import { MatMenuTrigger } from '@angular/material/menu';
 import { isTouchActive } from '../../../util/input-intent';
 import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { Subscription } from 'rxjs';
-import { lastMenuOpenTime, setLastMenuOpenTime } from './mat-menu-touch-monkey-patch';
+import { getMenuOpenTimeFor } from './mat-menu-touch-monkey-patch';
 
 /**
  * Directive to fix Angular Material menu submenu automatic selection on touch devices.
@@ -89,18 +89,22 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
     if (!isTouchActive()) {
       return;
     }
-    const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
-    const timeSinceTouchStart = Date.now() - this._touchStartTime;
     const element = this._elementRef.nativeElement;
+    // `element` is the trigger item, which lives in the PARENT panel; its own
+    // submenu renders in a separate overlay. So this measures when the parent
+    // menu opened, guarding against the parent appearing under the finger and
+    // the tap landing on a submenu trigger.
+    const menuOpenTime = getMenuOpenTimeFor(element);
+    const timeSinceMenuOpen = Date.now() - menuOpenTime;
+    const timeSinceTouchStart = Date.now() - this._touchStartTime;
     const isSubmenuTrigger = element.hasAttribute('matMenuTriggerFor');
 
-    // Block clicks that happen too quickly after any menu/submenu opened
-    // This prevents accidental selection when submenu appears under finger
+    // Block clicks that happen too quickly after the parent menu opened
     // Only apply aggressive blocking to submenu triggers
     if (
       event.isTrusted &&
       isSubmenuTrigger &&
-      lastMenuOpenTime > 0 &&
+      menuOpenTime > 0 &&
       timeSinceMenuOpen < 350
     ) {
       event.preventDefault();
@@ -204,23 +208,25 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
   }
 
   private _applyTouchFix(): void {
-    // Record when the menu opened - shared via monkey patch module
-    setLastMenuOpenTime(Date.now());
-
     // Use requestAnimationFrame to ensure DOM is ready
     requestAnimationFrame(() => {
-      // Find the menu panel that just opened
-      const menuPanels = document.querySelectorAll('.mat-mdc-menu-panel');
-      const latestPanel = Array.from(menuPanels).pop() as HTMLElement;
+      // The panel this trigger just opened — `aria-controls` points at it once
+      // the menu is open. Taking "the last panel in the DOM" instead would
+      // suspend the wrong menu's items whenever two panels are open. Open-time
+      // stamping is the monkey patch's job (observer + _setIsOpen override).
+      const panelId = this._elementRef.nativeElement.getAttribute('aria-controls');
+      const openedPanel =
+        (panelId ? document.getElementById(panelId) : null) ??
+        Array.from(document.querySelectorAll<HTMLElement>('.mat-mdc-menu-panel')).pop();
 
-      if (!latestPanel) {
+      if (!openedPanel) {
         return;
       }
 
       // Add touch-specific class
-      this._renderer.addClass(latestPanel, 'touch-menu-panel');
+      this._renderer.addClass(openedPanel, 'touch-menu-panel');
 
-      const menuItems = latestPanel.querySelectorAll('.mat-mdc-menu-item');
+      const menuItems = openedPanel.querySelectorAll('.mat-mdc-menu-item');
 
       // Temporarily disable pointer events on menu items
       menuItems.forEach((item: Element) => {

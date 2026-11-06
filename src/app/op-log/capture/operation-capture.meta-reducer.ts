@@ -156,6 +156,20 @@ export const DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD = 100;
 let highestWarnedThreshold = 0;
 
 /**
+ * Raised with the reload warning. devError only logs in production, so
+ * OperationLogEffects consumes this after the reducer pass and tells the user
+ * that their changes are piling up unsaved (#8297).
+ */
+let isDeferredBufferStuckNoticePending = false;
+
+/** Returns whether a stuck-buffer notice is pending, and clears it. */
+export const consumeDeferredBufferStuckNotice = (): boolean => {
+  const isPending = isDeferredBufferStuckNoticePending;
+  isDeferredBufferStuckNoticePending = false;
+  return isPending;
+};
+
+/**
  * Buffers an action for processing after sync completes.
  * Called by the meta-reducer when a persistent action arrives during sync.
  *
@@ -163,27 +177,33 @@ let highestWarnedThreshold = 0;
  * exists in NgRx, so removal here would create permanent unsyncable state.
  */
 export const bufferDeferredAction = (action: PersistentAction): void => {
-  deferredActions.push(action);
-  deferredActionSet.add(action);
-
+  // Warn BEFORE buffering: devError throws in dev builds when the developer
+  // confirms, and reducerFailureGuardMetaReducer then rejects the action and
+  // keeps the pre-dispatch state (#10195). Buffered first, it would still be
+  // turned into an op for a change NgRx never committed.
+  const nextLength = deferredActions.length + 1;
   if (
-    deferredActions.length >= DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD &&
+    nextLength >= DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD &&
     highestWarnedThreshold < DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD
   ) {
     highestWarnedThreshold = DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD;
+    isDeferredBufferStuckNoticePending = true;
     devError(
-      `[operationCaptureMetaReducer] Deferred actions buffer has ${deferredActions.length} items. ` +
+      `[operationCaptureMetaReducer] Deferred actions buffer has ${nextLength} items. ` +
         `Sync may be stuck - consider reloading the app. Nothing is dropped; actions remain buffered.`,
     );
   } else if (
-    deferredActions.length > DEFERRED_ACTIONS_SOFT_WARNING_THRESHOLD &&
+    nextLength > DEFERRED_ACTIONS_SOFT_WARNING_THRESHOLD &&
     highestWarnedThreshold < DEFERRED_ACTIONS_SOFT_WARNING_THRESHOLD
   ) {
     highestWarnedThreshold = DEFERRED_ACTIONS_SOFT_WARNING_THRESHOLD;
     devError(
-      `[operationCaptureMetaReducer] Deferred actions buffer has ${deferredActions.length} items - sync may be stuck or taking too long`,
+      `[operationCaptureMetaReducer] Deferred actions buffer has ${nextLength} items - sync may be stuck or taking too long`,
     );
   }
+
+  deferredActions.push(action);
+  deferredActionSet.add(action);
 };
 
 /**
@@ -203,6 +223,7 @@ export const acknowledgeDeferredAction = (action: PersistentAction): void => {
   deferredActionSet.delete(action);
   if (deferredActions.length === 0) {
     highestWarnedThreshold = 0;
+    isDeferredBufferStuckNoticePending = false;
   }
 };
 
@@ -218,6 +239,7 @@ export const clearDeferredActions = (): void => {
   }
   deferredActions = [];
   highestWarnedThreshold = 0;
+  isDeferredBufferStuckNoticePending = false;
 };
 
 /**

@@ -1,0 +1,53 @@
+name: Cancel CI of closed PRs
+
+# Closing or merging a PR doesn't cancel its runs: concurrency groups only
+# cancel when a newer run joins, and closing starts none. PRs merged before CI
+# finished kept whole suites running for up to 3h, blocking open PRs' queues.
+on:
+  # pull_request_target: fork PRs get a read-only token under pull_request.
+  # Safe because this job never checks out PR code.
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel in-flight runs of the closed PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          CLOSED_AT: ${{ github.event.pull_request.closed_at }}
+        run: |
+          set -euo pipefail
+          # The iOS TestFlight build is a deliberate, label-triggered release
+          # build, not CI; let it finish. After a merge, master pushes re-run
+          # electron smoke, CodeQL, docs links and wiki lint, and the nightly
+          # re-runs sync E2E. Nothing re-runs Android Native Tests, Plugin
+          # Tests, the SuperSync Helm/Postgres checks or CI's electron/i18n/
+          # WebKit/Lighthouse checks (build.yml covers only part of CI), so
+          # their PR run is the only signal. Keep them.
+          keep='["iOS TestFlight Build on Label"]'
+          if [[ "$MERGED" == "true" ]]; then
+            keep='["iOS TestFlight Build on Label","Android Native Tests","Plugin Tests","CI","SuperSync Server Tests"]'
+          fi
+          # Only runs started before the close: a reopen (or a new PR on the same
+          # head) queues fresh runs before this job lists them. ISO-8601 UTC
+          # timestamps compare correctly as strings.
+          # Assigned first: a failing substitution in a for list doesn't trip set -e.
+          ids=$(gh run list --commit "$SHA" --event pull_request --limit 100 \
+            --json databaseId,status,workflowName,createdAt |
+            jq -r --argjson keep "$keep" --arg closedAt "$CLOSED_AT" \
+              '.[] | select(.status != "completed" and .createdAt <= $closedAt and (.workflowName as $n | $keep | index($n) | not)) | .databaseId')
+          for id in $ids; do
+            echo "PR #$PR closed (merged: $MERGED): cancelling run $id"
+            # A run can finish between listing and cancelling; not fatal.
+            gh run cancel "$id" || echo "::warning::Could not cancel run $id of PR #$PR"
+          done

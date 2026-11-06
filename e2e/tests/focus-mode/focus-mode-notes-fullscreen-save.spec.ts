@@ -1,6 +1,7 @@
 import { test, expect } from '../../fixtures/test.fixture';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { cssSelectors } from '../../constants/selectors';
+import { fillMarkdownEditor } from '../../utils/markdown-editor';
 
 /**
  * Repro for the Reddit report: notes written in focus mode's fullscreen
@@ -81,9 +82,7 @@ test.describe('Focus Mode - fullscreen notes save', () => {
     await expect(dialog).toBeVisible({ timeout: 5000 });
 
     // Write the note and Save.
-    const textarea = dialog.locator('textarea');
-    await textarea.click();
-    await textarea.fill(NOTE_TEXT);
+    await fillMarkdownEditor(dialog, NOTE_TEXT);
     await page.locator('#T-save-note').click();
     await expect(dialog).not.toBeVisible({ timeout: 5000 });
 
@@ -131,9 +130,7 @@ test.describe('Focus Mode - fullscreen notes save', () => {
     await notesPanel.locator('button', { hasText: 'fullscreen' }).click();
     const dialog = page.locator('dialog-fullscreen-markdown');
     await expect(dialog).toBeVisible({ timeout: 5000 });
-    const textarea = dialog.locator('textarea');
-    await textarea.click();
-    await textarea.fill(NOTE_TEXT);
+    await fillMarkdownEditor(dialog, NOTE_TEXT);
 
     // While we keep the dialog open, the focus session auto-completes: the
     // in-progress complete-session button detaches once it leaves InProgress.

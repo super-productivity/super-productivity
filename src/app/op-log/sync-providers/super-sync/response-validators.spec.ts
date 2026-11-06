@@ -5,9 +5,27 @@ import {
   validateRestorePointsResponse,
   validateRestoreSnapshotResponse,
   validateDeleteAllDataResponse,
+  validateDevicesResponse,
+  validateReplaceTokenResponse,
+  validateCaptureClaimResponse,
+  validateCaptureGrantsResponse,
+  validateCaptureTokenResponse,
+  validateCaptureConnectCodeResponse,
 } from './response-validators';
 
 describe('response-validators', () => {
+  it('validates connection codes and rejects malformed responses', () => {
+    expect(
+      validateCaptureConnectCodeResponse({ code: 'ABCDE-FGHJK', expiresAt: 123 }).code,
+    ).toBe('ABCDE-FGHJK');
+    expect(() =>
+      validateCaptureConnectCodeResponse({ code: 'secret', expiresAt: 123 }),
+    ).toThrow();
+    expect(() =>
+      validateCaptureConnectCodeResponse({ code: 'ABCDE-FGHJK', expiresAt: '123' }),
+    ).toThrow();
+  });
+
   describe('validateOpUploadResponse', () => {
     it('should accept valid response', () => {
       const response = {
@@ -102,6 +120,65 @@ describe('response-validators', () => {
       };
       const validated = validateOpDownloadResponse(response);
       expect(validated.gapDetected).toBe(false);
+    });
+
+    it('should tolerate an op whose opType / syncImportReason this client does not know (#8764)', () => {
+      const op = (overrides: Record<string, unknown>): Record<string, unknown> => ({
+        id: 'op-1',
+        clientId: 'client_1',
+        actionType: '[Task] Add',
+        opType: 'CRT',
+        entityType: 'TASK',
+        entityId: 't1',
+        payload: {},
+        vectorClock: { client_1: 1 },
+        timestamp: 1,
+        schemaVersion: 4,
+        ...overrides,
+      });
+      const validated = validateOpDownloadResponse({
+        ops: [
+          { serverSeq: 1, op: op({}), receivedAt: 1 },
+          { serverSeq: 2, op: op({ id: 'op-2', opType: 'FUTURE_OP' }), receivedAt: 1 },
+          {
+            serverSeq: 3,
+            op: op({
+              id: 'op-3',
+              opType: 'SYNC_IMPORT',
+              syncImportReason: 'FUTURE_REASON',
+            }),
+            receivedAt: 1,
+          },
+        ],
+        hasMore: false,
+        latestSeq: 3,
+      });
+
+      // The whole page survives; the unknown values reach the receiver verbatim
+      // so RemoteOpsProcessingService can block at that op instead of the
+      // transport wedging every not-yet-updated device.
+      expect(validated.ops.map((o) => o.op.opType)).toEqual([
+        'CRT',
+        'FUTURE_OP',
+        'SYNC_IMPORT',
+      ]);
+      expect(validated.ops[2].op.syncImportReason).toBe('FUTURE_REASON');
+    });
+
+    it('should accept a boolean capability flag either way', () => {
+      const base = { ops: [], hasMore: false, latestSeq: 0 };
+      expect(
+        validateOpDownloadResponse({
+          ...base,
+          capabilities: { causalRepairSnapshots: false },
+        }).capabilities?.causalRepairSnapshots,
+      ).toBeFalse();
+      expect(
+        validateOpDownloadResponse({
+          ...base,
+          capabilities: { causalRepairSnapshots: true },
+        }).capabilities?.causalRepairSnapshots,
+      ).toBeTrue();
     });
 
     it('should strip file-based snapshotState from passthrough fields', () => {
@@ -224,6 +301,17 @@ describe('response-validators', () => {
       expect(() => validateRestorePointsResponse(response)).not.toThrow();
     });
 
+    it('should keep restore points of an unknown type instead of failing the list (#8764)', () => {
+      const validated = validateRestorePointsResponse({
+        restorePoints: [
+          { serverSeq: 100, timestamp: 1, type: 'SYNC_IMPORT', clientId: 'client-1' },
+          { serverSeq: 200, timestamp: 2, type: 'FUTURE_SNAPSHOT', clientId: 'client-1' },
+        ],
+      });
+
+      expect(validated.restorePoints.map((point) => point.serverSeq)).toEqual([100, 200]);
+    });
+
     it('should throw if not an object', () => {
       expect(() => validateRestorePointsResponse([])).toThrow();
     });
@@ -265,6 +353,58 @@ describe('response-validators', () => {
     });
   });
 
+  describe('validateDevicesResponse', () => {
+    const device = { clientId: 'E_abc123', lastSeenAt: 1700000000000 };
+
+    it('should accept a valid response', () => {
+      expect(() => validateDevicesResponse({ devices: [device] })).not.toThrow();
+    });
+
+    it('should accept an account with no devices', () => {
+      expect(() => validateDevicesResponse({ devices: [] })).not.toThrow();
+    });
+
+    it('should throw if a clientId violates the SuperSync charset', () => {
+      expect(() =>
+        validateDevicesResponse({ devices: [{ ...device, clientId: 'bad id!' }] }),
+      ).toThrow();
+    });
+
+    it('should throw if a timestamp arrives as a string', () => {
+      expect(() =>
+        validateDevicesResponse({
+          devices: [{ ...device, lastSeenAt: '1700000000000' }],
+        }),
+      ).toThrow();
+    });
+  });
+
+  describe('validateReplaceTokenResponse', () => {
+    const response = { token: 'fresh-token' };
+
+    it('should accept a valid response', () => {
+      expect(() => validateReplaceTokenResponse(response)).not.toThrow();
+    });
+
+    it('should tolerate fields the client does not consume (e.g. user)', () => {
+      expect(() =>
+        validateReplaceTokenResponse({ ...response, user: { id: 1, email: 'a@b.c' } }),
+      ).not.toThrow();
+    });
+
+    it('should throw if the token is missing', () => {
+      expect(() => validateReplaceTokenResponse({ user: { id: 1 } })).toThrow();
+    });
+
+    it('should throw if the token is empty', () => {
+      expect(() => validateReplaceTokenResponse({ ...response, token: '' })).toThrow();
+    });
+
+    it('should throw if not an object', () => {
+      expect(() => validateReplaceTokenResponse('fresh-token')).toThrow();
+    });
+  });
+
   describe('validateDeleteAllDataResponse', () => {
     it('should accept valid response', () => {
       const response = { success: true };
@@ -282,6 +422,44 @@ describe('response-validators', () => {
 
     it('should throw if success is not a boolean', () => {
       expect(() => validateDeleteAllDataResponse({ success: 1 })).toThrow();
+    });
+  });
+
+  describe('capture responses', () => {
+    const grant = {
+      id: 'g1',
+      kind: 'token',
+      clientName: 'Claude',
+      createdAt: 1,
+      lastUsedAt: null,
+      expiresAt: 2,
+      pendingCount: 0,
+    };
+
+    it('accepts claims with items and keyless statuses, unknown ones too', () => {
+      const item = { itemId: 'i', taskId: 't', ciphertext: 'c', createdAt: 1 };
+      expect(validateCaptureClaimResponse({ status: 'ok', items: [item] }).items).toEqual(
+        [item],
+      );
+      expect(validateCaptureClaimResponse({ status: 'no_key' }).status).toBe('no_key');
+      expect(validateCaptureClaimResponse({ status: 'later' }).status).toBe('later');
+    });
+
+    it('rejects a claim item without ciphertext', () => {
+      expect(() =>
+        validateCaptureClaimResponse({
+          status: 'ok',
+          items: [{ itemId: 'i', taskId: 't', createdAt: 1 }],
+        }),
+      ).toThrow();
+    });
+
+    it('validates grants and new tokens', () => {
+      expect(validateCaptureGrantsResponse({ grants: [grant] }).grants).toEqual([grant]);
+      expect(validateCaptureTokenResponse({ token: 'sp_cap_x', grant }).token).toBe(
+        'sp_cap_x',
+      );
+      expect(() => validateCaptureTokenResponse({ token: '', grant })).toThrow();
     });
   });
 });

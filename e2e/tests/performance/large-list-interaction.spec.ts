@@ -31,7 +31,10 @@ const seedProjectTasks = async (
       const operations = Array.from({ length: taskCount }, (_, index) => ({
         type: 'create',
         tempId: `temp-${index}`,
-        data: { title: `Large list seed ${index + 1}` },
+        data: {
+          title: `Large list seed ${index + 1}`,
+          dueWithTime: Date.now() + 3_600_000,
+        },
       }));
       const createdTaskIds = Object.fromEntries(
         operations.map(({ tempId }, index) => [

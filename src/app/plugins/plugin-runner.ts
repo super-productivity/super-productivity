@@ -7,6 +7,7 @@ import { PluginI18nService } from './plugin-i18n.service';
 import { SnackService } from '../core/snack/snack.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLog } from '../core/log';
+import { withUnknownMemberWarning } from './util/unknown-plugin-api-member.util';
 
 /**
  * Simplified plugin runner following KISS principles.
@@ -125,6 +126,7 @@ export class PluginRunner {
           });
         }
       } catch (error) {
+        this._pluginBridge.unregisterPluginHooks(manifest.id);
         pluginInstance.error =
           error instanceof Error ? error.message : 'Failed to load plugin';
         PluginLog.err(`Plugin ${manifest.id} error:`, error);
@@ -183,7 +185,10 @@ export class PluginRunner {
         );
 
         // Execute with API (pass same object for both parameter names)
-        pluginFunction(api, api);
+        const guardedApi = withUnknownMemberWarning(api, (msg) =>
+          PluginLog.warn(`[${manifest.id}] ${msg}`),
+        );
+        pluginFunction(guardedApi, guardedApi);
         resolve();
       } catch (error) {
         reject(error);

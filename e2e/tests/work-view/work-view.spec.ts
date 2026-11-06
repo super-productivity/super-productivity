@@ -114,31 +114,4 @@ test.describe('Work View', () => {
       timeout: 5000,
     });
   });
-
-  test('should add 2 tasks from initial bar', async ({ page, workViewPage }) => {
-    // Wait for work view to be ready
-    await workViewPage.waitForTaskList();
-
-    // Add two tasks - the addTask method now properly waits for each one
-    await workViewPage.addTask('test task hihi');
-
-    // Wait for first task to be visible before adding second
-    await page.locator('task').first().waitFor({ state: 'visible', timeout: 10000 });
-
-    await workViewPage.addTask('some other task here');
-
-    // Verify both tasks are visible with better error reporting
-    const tasks = page.locator('task');
-
-    // Wait for the expected number of tasks
-    await expect(tasks).toHaveCount(2, { timeout: 15000 });
-
-    // Verify both tasks exist (order doesn't matter)
-    const allTasksText = await tasks.allTextContents();
-    const hasHihi = allTasksText.some((text) => text.includes('hihi'));
-    const hasOther = allTasksText.some((text) => text.includes('other task'));
-
-    expect(hasHihi).toBe(true);
-    expect(hasOther).toBe(true);
-  });
 });

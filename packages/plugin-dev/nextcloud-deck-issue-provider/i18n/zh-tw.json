@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Nextcloud 基礎 URL",
+    "USERNAME": "您的 Nextcloud 使用者名稱",
+    "PASSWORD": "您的 Nextcloud 應用程式密碼",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "只匯入指派給我的卡片",
+    "TITLE_TEMPLATE": "任務標題範本",
+    "TITLE_TEMPLATE_DESC": "變數：{CARD_TITLE}、{BOARD}、{COLUMN}、{ID}、{LABELS}。範例：[{BOARD}: {COLUMN}] {CARD_TITLE}。留空則僅使用卡片標題。"
+  },
+  "DISPLAY": {
+    "SUMMARY": "摘要",
+    "DESCRIPTION": "Deck 描述",
+    "STACK": "堆疊",
+    "DUE_DATE": "截止日期",
+    "ASSIGNED_USERS": "已指派使用者",
+    "LABELS": "標籤"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "設定您的 Nextcloud Deck 整合以將卡片匯入為任務。請使用應用程式密碼進行驗證。"
+}

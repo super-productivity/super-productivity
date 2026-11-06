@@ -13,8 +13,8 @@ import { InjectionToken } from '@angular/core';
  * | Vector clock counter | MAX_SAFE_INTEGER-1000 | (vector-clock.ts) | Requires SYNC_IMPORT on overflow |
  * | Ops per upload batch | 25 | MAX_OPS_PER_UPLOAD_REQUEST | Reduced from 100 to avoid 413 errors |
  * | Download page size | 500 | DOWNLOAD_PAGE_SIZE | Operations per download request |
- * | Max download iterations | 1000 | MAX_DOWNLOAD_ITERATIONS | Server bug protection (500K ops max) |
- * | Max ops in memory | 50,000 | MAX_DOWNLOAD_OPS_IN_MEMORY | Prevents OOM during sync |
+ * | Max download iterations | 1000 | MAX_DOWNLOAD_ITERATIONS | Pages per download pass; rest follows next sync |
+ * | Max ops in memory | 50,000 | MAX_DOWNLOAD_OPS_IN_MEMORY | Ops per download pass (OOM guard); rest follows next sync |
  * | Compaction threshold | 500 | COMPACTION_THRESHOLD | Triggers automatic compaction |
  * | Lock acquisition timeout | 30s | LOCK_ACQUISITION_TIMEOUT_MS | Prevents infinite hang on stuck lock |
  * | Compaction timeout | 25s | COMPACTION_TIMEOUT_MS | Aborts to prevent lock expiration |
@@ -170,16 +170,17 @@ export const MAX_DOWNLOAD_RETRIES = 3;
 export const DOWNLOAD_RETRY_BASE_DELAY_MS = 1000;
 
 /**
- * Maximum operations to accumulate in memory during API download.
- * Prevents out-of-memory errors when syncing with users who have
- * millions of unsynced operations.
+ * Maximum operations to accumulate in memory during one API download pass.
+ * Prevents out-of-memory errors on a large backlog: the download stops at a
+ * page boundary, the prefix is applied and checkpointed, and the next sync
+ * continues from there (#8763).
  */
 export const MAX_DOWNLOAD_OPS_IN_MEMORY = 50000;
 
 /**
- * Maximum iterations for the download loop.
- * Prevents infinite loops if server has a bug and always returns hasMore=true.
- * At 500 ops per page, this allows downloading up to 500,000 operations.
+ * Maximum page requests in one download pass. Bounds the loop if the server
+ * keeps returning hasMore=true; like the memory cap, it checkpoints the prefix
+ * and leaves the rest to the next sync (#8763).
  */
 export const MAX_DOWNLOAD_ITERATIONS = 1000;
 

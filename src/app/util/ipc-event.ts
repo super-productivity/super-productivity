@@ -12,6 +12,7 @@ export const ipcEvent$ = (evName: string): Observable<unknown[]> => {
 
   const subject = new Subject<unknown[]>();
   if (handlerMap[evName]) {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     Log.log(handlerMap);
     devError(`ipcEvent$[${evName}] should only ever be registered once`);
     return handlerMap[evName];
@@ -19,6 +20,7 @@ export const ipcEvent$ = (evName: string): Observable<unknown[]> => {
   handlerMap[evName] = subject;
 
   const handler: (...args: unknown[]) => void = (...args): void => {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     Log.log('ipcEvent$ trigger', evName);
     subject.next([...args]);
   };
@@ -66,6 +68,7 @@ export const ipcEventReplay$ = (evName: string): Observable<unknown[]> => {
 
   const subject = new ReplaySubject<unknown[]>(1);
   if (replayHandlerMap[evName]) {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     Log.log(replayHandlerMap);
     devError(`ipcEventReplay$[${evName}] should only ever be registered once`);
     return replayHandlerMap[evName];
@@ -73,6 +76,7 @@ export const ipcEventReplay$ = (evName: string): Observable<unknown[]> => {
   replayHandlerMap[evName] = subject;
 
   const handler: (...args: unknown[]) => void = (...args): void => {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     Log.log('ipcEventReplay$ trigger', evName);
     subject.next([...args]);
   };

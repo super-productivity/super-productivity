@@ -3,7 +3,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import {
   TRANSLATE_HTTP_LOADER_CONFIG,
   TranslateHttpLoaderConfig,
@@ -25,7 +25,7 @@ describe('TranslateHttpLoaderWithFallback', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: TRANSLATE_HTTP_LOADER_CONFIG, useValue: CONFIG },
         TranslateHttpLoaderWithFallback,

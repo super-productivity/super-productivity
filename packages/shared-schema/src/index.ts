@@ -31,7 +31,9 @@ export { MIGRATIONS } from './migrations/index';
 export type { EntityType } from './entity-types';
 export { ENTITY_TYPES } from './entity-types';
 
-// SuperSync HTTP contract (shared between client and server)
+// SuperSync HTTP contract (shared between client and server). Zod schemas are
+// only exported from '@sp/shared-schema/supersync-http-contract' so importing
+// this barrel does not pull zod into the app's initial bundle.
 export {
   SUPER_SYNC_CLIENT_ID_REGEX,
   SUPER_SYNC_MAX_CLIENT_ID_LENGTH,
@@ -41,30 +43,14 @@ export {
   SUPER_SYNC_IMPORT_REASONS,
   SUPER_SYNC_SNAPSHOT_REASONS,
   SUPER_SYNC_SNAPSHOT_OP_TYPES,
-  SuperSyncVectorClockSchema,
-  SuperSyncClientIdSchema,
-  SuperSyncOperationSchema,
-  SuperSyncUploadOpsRequestSchema,
-  SuperSyncDownloadOpsQuerySchema,
-  SuperSyncUploadSnapshotRequestSchema,
-  SuperSyncOperationResponseSchema,
-  SuperSyncServerOperationSchema,
-  SuperSyncUploadResultSchema,
-  SuperSyncUploadOpsResponseSchema,
-  SuperSyncDownloadOpsResponseSchema,
-  SuperSyncSnapshotResponseSchema,
-  SuperSyncSnapshotUploadResponseSchema,
-  SuperSyncStatusResponseSchema,
-  SuperSyncRestorePointSchema,
-  SuperSyncRestorePointsResponseSchema,
-  SuperSyncRestoreSnapshotResponseSchema,
-  SuperSyncDeleteAllDataResponseSchema,
-} from './supersync-http-contract';
+  SUPER_SYNC_ERROR_CODES,
+} from './supersync-http-constants';
 export type {
   SuperSyncOpType,
   SuperSyncImportReason,
   SuperSyncSnapshotReason,
   SuperSyncSnapshotOpType,
+  SuperSyncErrorCode,
   SuperSyncOperation,
   SuperSyncUploadOpsRequest,
   SuperSyncDownloadOpsQuery,
@@ -76,8 +62,17 @@ export type {
   SuperSyncSnapshotResponse,
   SuperSyncSnapshotUploadResponse,
   SuperSyncStatusResponse,
+  SuperSyncDevice,
+  SuperSyncDevicesResponse,
+  SuperSyncReplaceTokenResponse,
   SuperSyncRestorePoint,
   SuperSyncRestorePointsResponse,
   SuperSyncRestoreSnapshotResponse,
   SuperSyncDeleteAllDataResponse,
+  SuperSyncCaptureItem,
+  SuperSyncCaptureClaimResponse,
+  SuperSyncCaptureGrant,
+  SuperSyncCaptureGrantsResponse,
+  SuperSyncCaptureTokenResponse,
+  SuperSyncCaptureConnectCodeResponse,
 } from './supersync-http-contract';

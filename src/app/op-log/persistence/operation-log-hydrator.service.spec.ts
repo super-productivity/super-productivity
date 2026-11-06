@@ -142,6 +142,7 @@ describe('OperationLogHydratorService', () => {
     mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
       'validateAndRepair',
       'validateState',
+      'validateStateWhenIdle',
     ]);
     mockRepairOperationService = jasmine.createSpyObj('RepairOperationService', [
       'createRepairOperation',
@@ -717,6 +718,42 @@ describe('OperationLogHydratorService', () => {
         await service.hydrateStore();
 
         expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+      });
+
+      it('should defer tail validation off the boot path when there is no save to gate', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const tailOps = Array.from({ length: 10 }, (_, i) =>
+          createMockEntry(6 + i, createMockOperation(`op-${6 + i}`)),
+        );
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(tailOps));
+
+        await service.hydrateStore();
+
+        expect(mockValidateStateService.validateState).not.toHaveBeenCalled();
+        expect(mockValidateStateService.validateStateWhenIdle).toHaveBeenCalledOnceWith(
+          mockState,
+          'tail-replay',
+        );
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+      });
+
+      it('should await tail validation when it gates a snapshot save', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const tailOps = Array.from({ length: 11 }, (_, i) =>
+          createMockEntry(6 + i, createMockOperation(`op-${6 + i}`)),
+        );
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(tailOps));
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(16));
+
+        await service.hydrateStore();
+
+        expect(mockValidateStateService.validateState).toHaveBeenCalledOnceWith(
+          mockState,
+        );
+        expect(mockValidateStateService.validateStateWhenIdle).not.toHaveBeenCalled();
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalled();
       });
 
       it('should merge tail ops clocks into local clock after replay', async () => {
@@ -1801,8 +1838,50 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
+      });
+
+      // #9863: a legacy-migrated client's log opens with its own MIGRATION
+      // genesis op. The corrupt-snapshot rebuild must hand that op to the bulk
+      // replay together with the local client id (the meta-reducer's ownership
+      // gate turns it into loadAllData), and must then persist the rebuilt
+      // state — this is the one replay path that writes its result back.
+      it('replays an own MIGRATION genesis op through the bulk apply and persists the rebuilt snapshot (#9863)', async () => {
+        mockOpLogStore.loadStateCache.and.resolveTo(createMockSnapshot());
+        mockSnapshotService.isValidSnapshot.and.returnValue(false);
+
+        const localClientId = 'test-client';
+        const genesisOp = createMockOperation('genesis-op', OpType.Batch, {
+          actionType: ActionType.MIGRATION_GENESIS_IMPORT,
+          entityType: 'MIGRATION',
+          entityId: '*',
+          payload: { task: { ids: ['pre-migration-task'], entities: {} } },
+          clientId: localClientId,
+          vectorClock: { [localClientId]: 1 },
+        });
+        const postMigrationOp = createMockOperation('post-migration-op', OpType.Create, {
+          clientId: localClientId,
+          vectorClock: { [localClientId]: 2 },
+        });
+        mockOpLogStore.getLastSeq.and.resolveTo(2);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+          createMockEntry(1, genesisOp),
+          createMockEntry(2, postMigrationOp),
+        ]);
+
+        await service.hydrateStore();
+
+        expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({
+            operations: [genesisOp, postMigrationOp],
+            localClientId,
+            isReplayFromEmptyBaseline: true,
+          }),
+        );
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalled();
       });
 
       it('should attempt recovery for an invalid snapshot only when no ops exist (lastSeq === 0) (#7892)', async () => {
@@ -1848,6 +1927,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
         // The degraded recovery must be visible to the user...
@@ -1994,6 +2074,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
         // Degraded recovery is visible; the partial replay is never persisted
@@ -2035,6 +2116,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
         // Hydration state is managed around the dispatch
@@ -2388,7 +2470,7 @@ describe('OperationLogHydratorService', () => {
       expect(reloadSpy).not.toHaveBeenCalled();
     });
 
-    // #9187: DB_VERSION 8-10 are deliberate downgrade barriers, so a
+    // #9187: DB_VERSION 8-10 and later schema upgrades form downgrade barriers, so a
     // VersionError means an old build is looking at an intact database. The
     // generic dialog's "your browser storage may need to be cleared" would
     // destroy that data and still not let this build open it.

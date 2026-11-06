@@ -122,7 +122,6 @@ breathing-dot {
     stroke: var(--c-primary);
     stroke-width: 2;
     stroke-linecap: round;
-    transition: stroke-dasharray 0.3s ease;
   }
 
   // Idle variant shown behind the breathing dot in Flowtime so the visual

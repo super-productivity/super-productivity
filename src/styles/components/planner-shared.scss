@@ -1,22 +1,17 @@
 @use '../../_common';
 @use '../mixins/_media-queries';
 
-// to share between planner-task and planner-calendar-event
+// Shared duration typography for planner tasks, events, and task previews.
 .planner-time-remaining-shared {
   min-width: 44px;
   text-align: right;
-  padding-left: 4px;
-  padding-right: 8px;
-  font-style: italic;
-  font-weight: 300;
-  line-height: 1;
+  padding-left: var(--s-half);
+  padding-right: var(--s);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-height-snug);
   margin-left: auto;
-  font-size: var(--planner-font-size-mobile);
+  font-size: var(--font-size-md);
   color: var(--text-color-muted);
-
-  @include media-queries.mq(xs) {
-    font-size: var(--planner-font-size);
-  }
 
   mat-icon {
     vertical-align: middle;

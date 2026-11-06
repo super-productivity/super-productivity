@@ -219,6 +219,13 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
         return;
       }
 
+      if (ve.getFirstPropertyValue('status') === 'CANCELLED') {
+        // A cancelled master must not resurrect its detached overrides either.
+        const uid = ve.getFirstPropertyValue('uid');
+        if (uid) processedRecurringUids.add(String(uid));
+        return;
+      }
+
       if (ve.getFirstPropertyValue('rrule')) {
         const uid = ve.getFirstPropertyValue('uid');
         const uidStr = uid ? String(uid) : '';
@@ -239,10 +246,12 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
         }
       }
     } catch (error) {
+      // Never the SUMMARY: it is the event title from the user's private
+      // calendar and the log is exportable (rule #9). The UID identifies the
+      // event well enough to debug with.
       Log.warn(
-        'Failed to process event:',
-        ve.getFirstPropertyValue('uid'),
-        ve.getFirstPropertyValue('summary'),
+        'Failed to process event',
+        { uid: ve.getFirstPropertyValue('uid') },
         error,
       );
     }
@@ -384,11 +393,9 @@ const getForRecurring = (
 
     // Handle missing or invalid dtstart for recurring events
     if (!start || typeof (start as { toJSDate?: () => Date }).toJSDate !== 'function') {
-      Log.warn(
-        'Recurring event missing valid dtstart:',
-        vevent.getFirstPropertyValue('uid'),
-        title,
-      );
+      Log.warn('Recurring event missing valid dtstart', {
+        uid: vevent.getFirstPropertyValue('uid'),
+      });
       return [];
     }
 
@@ -474,9 +481,8 @@ const getForRecurring = (
     return evs;
   } catch (error) {
     Log.warn(
-      'Failed to process recurring event:',
-      vevent.getFirstPropertyValue('uid'),
-      vevent.getFirstPropertyValue('summary'),
+      'Failed to process recurring event',
+      { uid: vevent.getFirstPropertyValue('uid') },
       error,
     );
     return [];
@@ -571,6 +577,11 @@ const getAllPossibleEventsAfterStartFromIcal = (
 
   const allPossibleFutureEvents = vevents.filter((ve: ICalVEvent) => {
     try {
+      // An override can move an in-window occurrence before the query window.
+      // Keep it for exclusion even when its replacement DTSTART is out of range.
+      if (safeGetDateTimestamp(ve, 'recurrence-id') !== null) {
+        return true;
+      }
       const dtstart = ve.getFirstPropertyValue('dtstart');
       // Skip events without valid dtstart
       if (
@@ -588,6 +599,11 @@ const getAllPossibleEventsAfterStartFromIcal = (
       // Check if it's a recurring event that might have future occurrences
       const rrule = ve.getFirstPropertyValue('rrule');
       if (rrule) {
+        // Keep cancelled masters so their detached overrides remain suppressed
+        // even when the series ended before the query window.
+        if (ve.getFirstPropertyValue('status') === 'CANCELLED') {
+          return true;
+        }
         const until = (rrule as { until?: unknown }).until;
         if (!until) {
           // No end date means infinite recurrence

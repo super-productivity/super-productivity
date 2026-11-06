@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Hospedar (e.g.: https://redmine.org)",
+    "API_KEY": "Chave de acesso API",
+    "PROJECT_ID": "Identificador do projeto",
+    "PROJECT_ID_DESC": "Pode ser encontrado como parte da URL, ao visualizar o projeto no Navegador.",
+    "SCOPE": "Escopo",
+    "SCOPE_ALL": "Todos",
+    "SCOPE_CREATED": "Criado por mim",
+    "SCOPE_ASSIGNED": "Definido para mim",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Mostrar diálogo de registo de tempo para reportar ao Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Requer que o módulo de registo de tempo esteja ativado para o projeto Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Mostrar diálogo de registo de tempo quando as subtarefas são concluídas",
+    "DEFAULT_TIME": "Valor de tempo padrão para a caixa de diálogo",
+    "DEFAULT_TIME_ALL_TIME": "Preencha todo o tempo gasto na tarefa",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Preencha todo o tempo gasto menos o tempo registrado",
+    "DEFAULT_TIME_TODAY": "Preencha apenas o tempo gasto hoje",
+    "DEFAULT_TIME_YESTERDAY": "Preencha apenas o tempo gasto ontem"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumo",
+    "STATUS": "Estado",
+    "PRIORITY": "Prioridade",
+    "AUTHOR": "Autor",
+    "ASSIGNEE": "Atribuído",
+    "CATEGORY": "Categoria",
+    "VERSION": "Versão",
+    "DUE_DATE": "Data de vencimento",
+    "TIME_SPENT": "Tempo gasto",
+    "DESCRIPTION": "Descrição"
+  },
+  "FORM_HELP": "<p>Aqui você pode configurar o SuperProductivity para listar problemas abertos do Redmine (seja a versão online ou uma instância auto-hospedada) para um projeto específico no painel de criação de tarefas na visualização de planejamento diário. Eles serão listados como sugestões e fornecerão um link para o problema, bem como mais informações sobre ele.</p><p>Além disso, você pode importar automaticamente todos os problemas em aberto.</p>"
+}

@@ -1,6 +1,7 @@
 import { test, expect } from '../../fixtures/test.fixture';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { cssSelectors } from '../../constants/selectors';
+import { fillMarkdownEditor } from '../../utils/markdown-editor';
 
 /**
  * Regression for issue #8434 (follow-up): a note edited in the fullscreen
@@ -44,9 +45,7 @@ test.describe('Detail panel fullscreen note - resize', () => {
     const dialog = page.locator('dialog-fullscreen-markdown');
     await expect(dialog).toBeVisible({ timeout: 5000 });
 
-    const textarea = dialog.locator('textarea');
-    await textarea.click();
-    await textarea.fill(NOTE_TEXT);
+    await fillMarkdownEditor(dialog, NOTE_TEXT);
 
     // Resize narrow, crossing the 600px breakpoint (desktop right-panel ->
     // mobile bottom sheet). This fires the navigation that used to drop the

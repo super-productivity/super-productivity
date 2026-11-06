@@ -1,0 +1,3 @@
+New: Full worklog export, connected SuperSync device management, and richer recurring-task previews.
+
+Fixed: Cleared sync fields, recurring-task anchors and subtask IDs, task and section ordering, schedule layout, worklog exports, and narrow task rows. Android notification permission handling and encrypted background reminders are also improved.

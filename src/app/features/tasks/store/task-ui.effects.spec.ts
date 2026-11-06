@@ -1,3 +1,4 @@
+import { PLAINSPACE_TYPE } from '../../issue/issue.const';
 import { TestBed } from '@angular/core/testing';
 import { of, Subject, take } from 'rxjs';
 import { TaskUiEffects } from './task-ui.effects';
@@ -24,6 +25,7 @@ import { DateService } from '../../../core/date/date.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { selectUnplannedDeadlineTasksForToday } from './task.selectors';
 import { Banner } from '../../../core/banner/banner.model';
+import { TaskMultiSelectService } from '../task-multi-select.service';
 
 describe('TaskUiEffects', () => {
   let effects: TaskUiEffects;
@@ -95,6 +97,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
@@ -154,6 +160,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
@@ -284,7 +294,10 @@ describe('TaskUiEffects', () => {
       ...overrides,
     });
 
+    let isSearchEnabled: boolean;
+
     beforeEach(() => {
+      isSearchEnabled = true;
       actions$ = new Subject<Action>();
       snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
       taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId']);
@@ -295,6 +308,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
@@ -316,7 +333,10 @@ describe('TaskUiEffects', () => {
           },
           {
             provide: GlobalConfigService,
-            useValue: { sound$: of({ doneSound: null }) },
+            useValue: {
+              sound$: of({ doneSound: null }),
+              appFeatures: () => ({ isSearchEnabled }),
+            },
           },
           { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
         ],
@@ -374,6 +394,46 @@ describe('TaskUiEffects', () => {
       expect(snackServiceMock.open).toHaveBeenCalled();
       sub.unsubscribe();
     });
+
+    const deletedSnackMsg = (task: TaskWithSubTasks): string => {
+      const sub = effects.snackDelete$.subscribe();
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+      sub.unsubscribe();
+      return (snackServiceMock.open.calls.mostRecent().args[0] as SnackParams)
+        .msg as string;
+    };
+
+    it('points to Search, which still finds the deleted task', () => {
+      expect(deletedSnackMsg(createMockTaskWithSubTasks({ title: 'Real task' }))).toBe(
+        T.F.TASK.S.DELETED_FIND_IN_SEARCH,
+      );
+    });
+
+    it('points to History when Search is turned off', () => {
+      isSearchEnabled = false;
+      expect(deletedSnackMsg(createMockTaskWithSubTasks({ title: 'Real task' }))).toBe(
+        T.F.TASK.S.DELETED_FIND_IN_HISTORY,
+      );
+    });
+
+    it('hints for a blank-titled parent kept by its subtasks (it is trashed)', () => {
+      expect(
+        deletedSnackMsg(
+          createMockTaskWithSubTasks({
+            title: '',
+            subTasks: [createMockTask({ id: 'sub', title: 'Real subtask' })],
+          }),
+        ),
+      ).toBe(T.F.TASK.S.DELETED_FIND_IN_SEARCH);
+    });
+
+    it('gives no trash hint for a Plainspace task, which is not trashed', () => {
+      expect(
+        deletedSnackMsg(
+          createMockTaskWithSubTasks({ title: 'Shared', issueType: PLAINSPACE_TYPE }),
+        ),
+      ).toBe(T.F.TASK.S.DELETED);
+    });
   });
 
   describe('goToProjectSnack$', () => {
@@ -396,6 +456,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
@@ -504,6 +568,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({

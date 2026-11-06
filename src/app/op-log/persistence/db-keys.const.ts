@@ -6,7 +6,6 @@
  */
 
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
-import { CompleteBackup } from '../sync-exports';
 
 /** Database name */
 export const DB_NAME = 'SUP_OPS';
@@ -18,8 +17,10 @@ export const DB_NAME = 'SUP_OPS';
  * `archive_pending` reducer checkpoint, version 9 protects the
  * `reducerRejectedAt` replay quarantine, and version 10 protects schema-v3
  * replacement LWW operations from readers that would treat them as patches.
+ * Version 11 removes the obsolete User Profiles data store and therefore also
+ * prevents older builds from opening the migrated database.
  */
-export const DB_VERSION = 10;
+export const DB_VERSION = 11;
 
 /** Object store names */
 export const STORE_NAMES = {
@@ -35,8 +36,6 @@ export const STORE_NAMES = {
   ARCHIVE_YOUNG: 'archive_young' as const,
   /** Archive old - older archived tasks (>= 21 days) */
   ARCHIVE_OLD: 'archive_old' as const,
-  /** Profile data - stores complete backups for user profile switching */
-  PROFILE_DATA: 'profile_data' as const,
   /** Client ID - sync device identity (singleton, key = SINGLETON_KEY) */
   CLIENT_ID: 'client_id' as const,
   /** Small persistence metadata records derived from ops */
@@ -88,14 +87,5 @@ export const OPS_INDEXES = {
 export interface ArchiveStoreEntry {
   id: typeof SINGLETON_KEY;
   data: ArchiveModel;
-  lastModified: number;
-}
-
-/**
- * Entry stored in the profile_data object store.
- */
-export interface ProfileDataStoreEntry {
-  id: string;
-  data: CompleteBackup<any>;
   lastModified: number;
 }

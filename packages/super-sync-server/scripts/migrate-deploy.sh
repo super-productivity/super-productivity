@@ -13,6 +13,11 @@ set -eu
 #
 # 1. For the transaction-block failure above, it runs a migration with the safe
 #    DROP+CREATE CONCURRENTLY shape out-of-band, marks it applied, and retries.
+#    The recovery is serialized across racing migrators by a dedicated advisory
+#    lock (RECOVERY_LOCK_KEY, see acquire_recovery_lock), and it first
+#    terminates any orphaned CONCURRENTLY build a prior interrupted deploy left
+#    holding the table lock (see terminate_orphaned_concurrently_backends), so
+#    the DROP cannot wedge behind it on statement_timeout.
 # 2. For the two-statement SET LOCAL lock_timeout + ALTER INDEX ... SET (...)
 #    shape, it rolls back Prisma's failed record and retries a bounded number of
 #    times through Prisma. It never splits or marks that transactional migration
@@ -51,10 +56,13 @@ set -eu
 
 SCHEMA="prisma/schema.prisma"
 MIGRATIONS_DIR="prisma/migrations"
-# 3 recoverable CONCURRENTLY migrations today + a final clean pass + slack.
-# The real infinite-loop backstop is the LAST_RECOVERED guard below; this is
-# just a tight upper bound. Overridable for emergencies.
-MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-6}"
+# 5 recoverable CONCURRENTLY migrations today (20260512000000, 20260514000000,
+# 20260514000002, 20260828000001, 20260829000000) + a final clean pass + slack.
+# Raise this WITH the list: each recoverable migration can cost one attempt, so
+# a stale count silently eats the slack rather than failing a check. The real
+# infinite-loop backstop is the LAST_RECOVERED guard below; this is just a
+# tight upper bound. Overridable for emergencies.
+MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-8}"
 # Validated for the same reason MAX_LOCK_ATTEMPTS is not settable at all: a
 # non-numeric value makes the `-ge` test error inside an `if`, which `set -e`
 # does not catch, so the guard silently never fires.
@@ -106,6 +114,23 @@ else
 fi
 STATEMENT_TIMEOUT_MS=$((STATEMENT_TIMEOUT_SECONDS * 1000))
 
+# Dedicated advisory lock serializing the out-of-band recovery across racing
+# migrators (#9781). Distinct from Prisma's own migrate lock (72707369): the
+# recovery calls `migrate resolve` while holding this one, and those commands
+# take Prisma's lock themselves — sharing the key would self-deadlock. How long
+# an acquirer waits for a peer's recovery before giving up; most recoveries are
+# seconds, so the default rides out a small-table rebuild without a restart.
+RECOVERY_LOCK_KEY=72707370
+RECOVERY_LOCK_TIMEOUT="${MIGRATE_RECOVERY_LOCK_TIMEOUT:-30}"
+case "$RECOVERY_LOCK_TIMEOUT" in
+  ''|0*|*[!0-9]*)
+    echo "ERROR: MIGRATE_RECOVERY_LOCK_TIMEOUT must be a positive integer (seconds)." >&2
+    exit 2
+    ;;
+esac
+RECOVERY_LOCK_PID=""
+RECOVERY_LOCK_ACK=""
+
 # Helm cannot inspect a DATABASE_URL stored in an existing Kubernetes Secret,
 # so its migration init container requests the same check at runtime.
 if [ "${REQUIRE_DATABASE_POOL_LIMITS:-false}" = "true" ]; then
@@ -134,13 +159,42 @@ fi
 # can leave PostgreSQL working after a killed client. Collapse protected query
 # parameters so a duplicate cannot override the final settings. The
 # application_name lets health-alert.sh ignore expected long-running DDL.
+#
+# client_connection_check_interval makes an abandoned migrator backend notice
+# its client is gone mid-statement and cancel itself within ~10s, so a killed/
+# OOM'd/timed-out deploy no longer leaves a CONCURRENTLY build holding the table
+# lock (the incident terminate_orphaned_concurrently_backends heals). It leaves
+# an INVALID index the drop-then-create recovery shape already clears. Requires
+# PostgreSQL >= 14 on a Linux-hosted server (POLLRDHUP) — a deliberate floor,
+# documented in the server README; an older server rejects the startup option
+# with FATAL, failing every migration loudly rather than degrading silently.
 # Connection option format: https://www.postgresql.org/docs/16/libpq-connect.html
+#
+# Single source of truth for the migrator identity prefix: the generator, the
+# prefix guard, and the orphan-cleanup LIKE pattern below all key on it, so a
+# rename cannot silently turn the cleanup into a no-op. health-alert.sh
+# hardcodes the same prefix (a shell script cannot share a variable across
+# files without sourcing).
+MIGRATOR_APP_NAME_PREFIX="supersync-migrator-"
 if [ -n "${DATABASE_URL:-}" ]; then
-  if ! MIGRATOR_APPLICATION_NAME=$(node -e \
-    "process.stdout.write('supersync-migrator-' + require('node:crypto').randomUUID())"); then
-    echo "ERROR: could not generate a unique database migrator identifier." >&2
-    exit 1
+  # Normally unset, so each run gets a fresh unique identity. An explicitly
+  # exported value is honored (tests pin a known one; an operator could too), but
+  # it MUST carry the MIGRATOR_APP_NAME_PREFIX the recovery cleanup keys on,
+  # so a stray value cannot silently opt this session out of orphan termination.
+  if [ -z "${MIGRATOR_APPLICATION_NAME:-}" ]; then
+    if ! MIGRATOR_APPLICATION_NAME=$(node -e \
+      "process.stdout.write('$MIGRATOR_APP_NAME_PREFIX' + require('node:crypto').randomUUID())"); then
+      echo "ERROR: could not generate a unique database migrator identifier." >&2
+      exit 1
+    fi
   fi
+  case "$MIGRATOR_APPLICATION_NAME" in
+    "$MIGRATOR_APP_NAME_PREFIX"*) ;;
+    *)
+      echo "ERROR: MIGRATOR_APPLICATION_NAME must start with '$MIGRATOR_APP_NAME_PREFIX'." >&2
+      exit 1
+      ;;
+  esac
   export MIGRATOR_APPLICATION_NAME
   if ! MIGRATOR_DATABASE_URL=$(
     MIGRATOR_SOURCE_DATABASE_URL="$DATABASE_URL" \
@@ -152,6 +206,8 @@ try {
   const options = url.searchParams.getAll('options').filter(Boolean);
   options.push(
     `-c statement_timeout=${process.env.MIGRATOR_STATEMENT_TIMEOUT_MS}`,
+    // Abandoned-backend self-cancel; PG >= 14 / Linux floor (comment above).
+    '-c client_connection_check_interval=10000',
   );
 
   url.searchParams.delete('options');
@@ -241,6 +297,267 @@ with_timeout() {
   return "$wt_rc"
 }
 
+# Orphaned CONCURRENTLY index builds outlive their migrator: PostgreSQL does not
+# notice that a client disconnected while a backend is mid-statement
+# (client_connection_check_interval defaults to 0), so a CREATE INDEX
+# CONCURRENTLY whose migrator container was killed, OOM'd, or timed out keeps
+# running and keeps its SHARE UPDATE EXCLUSIVE lock on the table. The out-of-band
+# DROP in recover_migration would then queue behind that lock and be cancelled by
+# statement_timeout, wedging every retry until an operator terminates the backend
+# by hand. Clear it first so a re-run (e.g. after raising MIGRATION_TIMEOUT for a
+# large table) self-heals instead.
+#
+# Migrator connections set client_connection_check_interval (options rewrite
+# above), so a backend whose client cleanly vanished cancels itself within ~10s
+# and new orphans of that class should be rare. This kill remains load-bearing
+# for what the GUC cannot see: orphans left by pre-GUC migrator versions, and
+# half-open connections (migrator node death, network partition) where no FIN
+# arrives and only TCP keepalives eventually reap the socket.
+#
+# Scoped so it cannot touch the app, monitoring, another database on a shared
+# cluster, or THIS run's own connections:
+#   * datname = current_database() AND usename = current_user — the same DB+role
+#     the orphan was created under (its DATABASE_URL is ours), never a sibling
+#     environment sharing the cluster. Matches terminate_migrator_backends /
+#     health-alert.sh. The role scope CAN skip an orphan created under a
+#     since-rotated credential (same DB, different role); that narrow case wedges
+#     on statement_timeout exactly as it did before this cleanup existed and
+#     still needs a manual pg_terminate_backend.
+#   * application_name LIKE '<MIGRATOR_APP_NAME_PREFIX>%' — only this pipeline's
+#     migrator identity (the app sets none; monitoring uses 'supersync-monitor'),
+#   * application_name <> the current run AND pid <> pg_backend_pid() — never our
+#     own session nor the cleanup connection itself,
+#   * state = 'active' AND query ILIKE '%CONCURRENTLY%' — only a session ACTIVELY running
+#     a concurrent build/drop. The state filter is load-bearing:
+#     pg_stat_activity.query keeps showing the LAST statement on an idle session,
+#     so without it an idle migrator connection whose previous statement was a
+#     CONCURRENTLY build would be a false match.
+#
+# This kill cannot tell an orphan apart from a PEER run's LIVE build (the
+# out-of-band recovery never holds Prisma's advisory lock — that is why a P3018
+# on a pending migration is reachable at all), so every caller MUST hold the
+# dedicated recovery advisory lock first (acquire_recovery_lock, #9781): with
+# recoveries serialized, no peer recovery can be mid-build when this fires.
+# The predicate stays as defense-in-depth for what the lock cannot cover: a
+# pre-lock migrator version racing this one, an operator running the printed
+# manual recovery statements outside the lock, and a run that degraded to
+# UNLOCKED after a lock-helper failure — in those windows a live peer build is
+# still killable, and the fleet then converges via the idempotent
+# drop-then-create at the cost of a wasted rebuild. That trade is why the
+# P1002 path still refuses to auto-kill (its lock holder may be a live build
+# the operator must adjudicate).
+#
+# Runs through prisma db execute (not the node cleanup used on timeout), so it
+# inherits the same finite statement_timeout and stays fake-able in tests.
+# Best-effort: on failure the DROP still runs, so warn and continue.
+terminate_orphaned_concurrently_backends() {
+  [ -n "${DATABASE_URL:-}" ] && [ -n "${MIGRATOR_APPLICATION_NAME:-}" ] || return 0
+
+  echo "    Clearing any orphaned CONCURRENTLY index build left running by an interrupted prior deploy..."
+  orphan_cleanup_err="$(mktemp "${TMPDIR:-/tmp}/supersync-orphan-err.XXXXXX")"
+  if ! printf '%s\n' "SELECT pg_terminate_backend(pid)
+  FROM pg_stat_activity
+ WHERE datname = current_database()
+   AND usename = current_user
+   AND application_name LIKE '${MIGRATOR_APP_NAME_PREFIX}%'
+   AND application_name <> '$MIGRATOR_APPLICATION_NAME'
+   AND pid <> pg_backend_pid()
+   AND state = 'active'
+   AND query ILIKE '%CONCURRENTLY%';" |
+    with_timeout npx prisma db execute --schema "$SCHEMA" --stdin \
+      >/dev/null 2>"$orphan_cleanup_err"; then
+    echo "    WARNING: could not clear orphaned CONCURRENTLY builds; continuing with recovery." >&2
+    sed 's/^/      /' "$orphan_cleanup_err" >&2 || true
+  fi
+  rm -f "$orphan_cleanup_err"
+  return 0
+}
+
+# Serialize the out-of-band recovery under RECOVERY_LOCK_KEY (#9781), so the
+# orphan-kill above can never fire while a PEER recovery is mid-build.
+#
+# Why a held helper connection: `npx prisma db execute` opens a fresh session
+# per statement, so a session-level pg_advisory_lock taken there would vanish
+# immediately, and pg_advisory_xact_lock bundled per statement only serializes
+# individual statements — a peer could still kill a build between them (and
+# bundling would turn CONCURRENTLY DDL into a multi-statement transaction,
+# which PostgreSQL forbids). So a small node helper opens ONE PrismaClient
+# connection (connection_limit=1 — a session lock lives and dies with its
+# session, so the pool must never swap it), polls pg_try_advisory_lock once a
+# second up to RECOVERY_LOCK_TIMEOUT (pg_try_* returns a plain boolean; the
+# blocking pg_advisory_lock returns void, which Prisma's raw deserializer
+# cannot be trusted with), acks through a file, and holds the session until
+# SIGTERM. While holding, a 30s heartbeat keeps the pooled connection from
+# being reaped idle and re-secures the lock if the pool ever swapped the
+# session; the helper also exits when the parent shell is gone, so a holder
+# orphaned by a hard kill releases within one beat instead of wedging peers.
+# An idle session's death is detected by PostgreSQL immediately (the backend
+# is blocked reading the socket), so a killed holder releases the lock at
+# once — the mid-statement orphan problem the kill above heals does not apply
+# to the holder itself.
+#
+# Failure split, deliberately asymmetric:
+#   * exit 3 (connected, lock still held after the wait) is FATAL for the
+#     caller: the holder is a live peer recovery whose CONCURRENTLY build must
+#     not be touched — fail loudly with diagnosis guidance and let the
+#     orchestrator's restart retry.
+#   * any other failure (cannot even connect/start) degrades to an UNLOCKED
+#     recovery with a loud warning: Prisma itself just reached the database
+#     over the same URL, so this is a helper problem, and refusing to recover
+#     would turn every such hiccup into a wedged deploy. Unlocked equals the
+#     pre-lock behavior; the kill predicate still bounds what it can touch.
+acquire_recovery_lock() {
+  [ -n "${DATABASE_URL:-}" ] && [ -n "${MIGRATOR_APPLICATION_NAME:-}" ] || return 0
+
+  echo "    Serializing recovery under the dedicated recovery advisory lock ($RECOVERY_LOCK_KEY)..."
+  RECOVERY_LOCK_ACK="$(mktemp "${TMPDIR:-/tmp}/supersync-recovery-lock.XXXXXX")"
+  RECOVERY_LOCK_ACK_FILE="$RECOVERY_LOCK_ACK" \
+    RECOVERY_LOCK_KEY="$RECOVERY_LOCK_KEY" \
+    RECOVERY_LOCK_TIMEOUT_S="$RECOVERY_LOCK_TIMEOUT" \
+    RECOVERY_LOCK_PARENT_PID="$$" \
+    node <<'NODE' &
+const { PrismaClient } = require('@prisma/client');
+const { writeFileSync } = require('node:fs');
+
+const ackFile = process.env.RECOVERY_LOCK_ACK_FILE;
+const key = process.env.RECOVERY_LOCK_KEY;
+const waitSeconds = Number(process.env.RECOVERY_LOCK_TIMEOUT_S);
+const parentPid = Number(process.env.RECOVERY_LOCK_PARENT_PID);
+
+const url = new URL(process.env.DATABASE_URL);
+// One physical connection: the session-level advisory lock lives and dies
+// with its session, so the pool must never swap it under us. The suffix keeps
+// this session visible (and 'supersync-migrator-<uuid>-lock' stays under
+// PostgreSQL's 63-byte NAMEDATALEN); it is idle while held and its queries
+// never contain CONCURRENTLY, so the orphan-kill predicate can never match it.
+url.searchParams.set('connection_limit', '1');
+url.searchParams.set(
+  'application_name',
+  `${process.env.MIGRATOR_APPLICATION_NAME}-lock`,
+);
+const prisma = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+
+const EXIT_HELD = 3;
+const EXIT_UNAVAILABLE = 4;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let done = false;
+const stop = async (code) => {
+  if (done) return;
+  done = true;
+  await prisma.$disconnect().catch(() => {});
+  process.exit(code);
+};
+process.on('SIGTERM', () => void stop(0));
+process.on('SIGINT', () => void stop(0));
+
+const tryLock = async () => {
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT pg_try_advisory_lock(${key}) AS locked, pg_backend_pid() AS pid`,
+  );
+  return rows[0];
+};
+
+(async () => {
+  try {
+    await prisma.$connect();
+  } catch (e) {
+    console.error(`recovery-lock: could not connect: ${e && e.message ? e.message : e}`);
+    return stop(EXIT_UNAVAILABLE);
+  }
+  const deadline = Date.now() + waitSeconds * 1000;
+  let row;
+  for (;;) {
+    row = await tryLock();
+    if (row.locked) break;
+    if (Date.now() >= deadline) return stop(EXIT_HELD);
+    await sleep(1000);
+  }
+  writeFileSync(ackFile, `acquired:${row.pid}\n`);
+  let heldPid = row.pid;
+  setInterval(async () => {
+    if (process.ppid !== parentPid) return void stop(0);
+    try {
+      const beat = await tryLock();
+      if (beat.pid !== heldPid || !beat.locked) {
+        console.error(
+          'recovery-lock WARNING: database session changed under the lock; re-secured where possible.',
+        );
+        heldPid = beat.pid;
+      }
+    } catch (e) {
+      console.error(`recovery-lock heartbeat failed: ${e && e.message ? e.message : e}`);
+    }
+  }, 30_000);
+})().catch((e) => {
+  console.error(`recovery-lock: ${e && e.message ? e.message : e}`);
+  return stop(EXIT_UNAVAILABLE);
+});
+NODE
+  RECOVERY_LOCK_PID=$!
+  # Wait for the helper to acquire, refuse, or die. Bounded: the helper's own
+  # wait budget plus slack for node startup and the connect attempt.
+  arl_deadline=$((RECOVERY_LOCK_TIMEOUT + 15))
+  arl_waited=0
+  while :; do
+    if [ -s "$RECOVERY_LOCK_ACK" ]; then
+      return 0
+    fi
+    kill -0 "$RECOVERY_LOCK_PID" 2>/dev/null || break
+    if [ "$arl_waited" -ge "$arl_deadline" ]; then
+      break
+    fi
+    sleep 1
+    arl_waited=$((arl_waited + 1))
+  done
+  kill "$RECOVERY_LOCK_PID" 2>/dev/null || true
+  arl_status=0
+  wait "$RECOVERY_LOCK_PID" || arl_status=$?
+  RECOVERY_LOCK_PID=""
+  rm -f "$RECOVERY_LOCK_ACK"
+  RECOVERY_LOCK_ACK=""
+  if [ "$arl_status" -eq 3 ]; then
+    return 3
+  fi
+  echo "    WARNING: could not acquire the recovery advisory lock (helper exit $arl_status); continuing UNLOCKED — racing recoveries are not serialized this run."
+  return 0
+}
+
+release_recovery_lock() {
+  [ -n "$RECOVERY_LOCK_PID" ] || return 0
+  kill "$RECOVERY_LOCK_PID" 2>/dev/null || true
+  rrl_waited=0
+  while kill -0 "$RECOVERY_LOCK_PID" 2>/dev/null && [ "$rrl_waited" -lt 5 ]; do
+    sleep 1
+    rrl_waited=$((rrl_waited + 1))
+  done
+  kill -9 "$RECOVERY_LOCK_PID" 2>/dev/null || true
+  wait "$RECOVERY_LOCK_PID" 2>/dev/null || true
+  RECOVERY_LOCK_PID=""
+  [ -n "$RECOVERY_LOCK_ACK" ] && rm -f "$RECOVERY_LOCK_ACK"
+  RECOVERY_LOCK_ACK=""
+  return 0
+}
+
+# Copy-paste diagnosis when the recovery lock is held: almost always a live
+# peer recovery whose build must simply be allowed to finish. Guidance only —
+# mirrors the P1002 emitter's operator-decides stance.
+emit_recovery_lock_busy() {
+  echo ""
+  echo "Another migration recovery holds the dedicated recovery advisory lock"
+  echo "($RECOVERY_LOCK_KEY), so this run refused to touch its (possibly live)"
+  echo "CONCURRENTLY build. Usually that recovery is still working — re-running"
+  echo "this deploy after it finishes succeeds. If it looks stuck, diagnose"
+  echo "against your Postgres:"
+  echo ""
+  echo "  SELECT a.pid, a.state, a.application_name, now() - a.state_change AS held_for, left(a.query, 80)"
+  echo "    FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid"
+  echo "   WHERE l.locktype = 'advisory' AND l.objid = $RECOVERY_LOCK_KEY AND l.granted;"
+  echo ""
+  echo "  Only if the holder is idle and its migrator is gone, release it:"
+  echo "    SELECT pg_terminate_backend(<pid>);"
+}
+
 # Printed manual-recovery commands re-enter through this narrow wrapper so
 # they receive the same finite bounds without printing database secrets.
 if [ "${1:-}" = "--prisma" ]; then
@@ -251,6 +568,33 @@ if [ "${1:-}" = "--prisma" ]; then
   exit "$prisma_status"
 fi
 
+# Test/diagnostic seam: run ONLY the orphaned-CONCURRENTLY cleanup, then exit.
+# It takes the recovery advisory lock like the full recovery does, so it cannot
+# kill a build a locked peer recovery is running — but a legitimate long build
+# in an UNLOCKED context (a pre-lock migrator version, an operator's manual
+# recovery) is still indistinguishable from an orphan, so prefer not to run it
+# while any deploy is in progress. Exists mainly to let the integration test
+# assert targeting and serialization against a real pg_stat_activity without
+# provoking a full CONCURRENTLY index build.
+if [ "${1:-}" = "--terminate-orphaned-concurrently" ]; then
+  # Fail loudly rather than silently exiting 0: an operator running this from a
+  # host shell without DATABASE_URL would otherwise conclude no orphan exists
+  # while the orphan still holds the table lock.
+  if [ -z "${DATABASE_URL:-}" ]; then
+    echo "ERROR: --terminate-orphaned-concurrently requires DATABASE_URL; nothing was checked or terminated." >&2
+    exit 2
+  fi
+  if ! acquire_recovery_lock; then
+    emit_recovery_lock_busy
+    echo ""
+    echo "ERROR: recovery advisory lock ($RECOVERY_LOCK_KEY) is held by another recovery; nothing was terminated." >&2
+    exit 1
+  fi
+  terminate_orphaned_concurrently_backends
+  release_recovery_lock
+  exit 0
+fi
+
 MIGRATE_LOG=""
 MIGRATE_STATUS=0
 LAST_RECOVERED=""
@@ -258,8 +602,12 @@ LAST_NATIVE_RETRY=""
 LOCK_ATTEMPTS=0
 
 STMT_FILE="$(mktemp "${TMPDIR:-/tmp}/supersync-stmts.XXXXXX")"
+PREFLIGHT_LOG=""
 cleanup() {
-  rm -f "$STMT_FILE" "$MIGRATE_LOG"
+  rm -f "$STMT_FILE" "$MIGRATE_LOG" "$PREFLIGHT_LOG"
+  # Recovery error paths exit directly; make sure the lock holder never
+  # outlives the script (its session closing is what releases the lock).
+  release_recovery_lock
 }
 trap cleanup EXIT
 
@@ -528,6 +876,19 @@ recover_migration() {
   echo ""
   echo "==> Recovering $name outside Prisma migrate (CONCURRENTLY cannot run in a transaction)..."
 
+  # Serialize the whole recovery — most importantly the orphan-kill below —
+  # against racing migrators (#9781). A held lock means a peer recovery is
+  # mid-build: refusing (retryably) is the point, not a failure of this run.
+  if ! acquire_recovery_lock; then
+    emit_recovery_lock_busy
+    fail_loudly "another migration recovery holds the recovery advisory lock ($RECOVERY_LOCK_KEY); its CONCURRENTLY build may be live. Re-run the deploy once it finishes (guidance above)." 1
+  fi
+
+  # A prior interrupted deploy can leave a CONCURRENTLY build still holding the
+  # table lock; clear it before the DROP below queues behind it and dies on
+  # statement_timeout. See terminate_orphaned_concurrently_backends.
+  terminate_orphaned_concurrently_backends
+
   set +e
   with_timeout npx prisma migrate resolve --rolled-back "$name"
   resolve_status=$?
@@ -555,6 +916,7 @@ recover_migration() {
   fi
 
   with_timeout npx prisma migrate resolve --applied "$name"
+  release_recovery_lock
   echo "    $name applied out-of-band and marked applied."
 }
 
@@ -571,6 +933,83 @@ rollback_for_native_retry() {
     fail_loudly "could not mark $name rolled back; refusing to retry it." 1
   fi
 }
+
+# Preflight: warn where the server is below the supported floor of 16.
+#
+# There is deliberately NO hard block here. The migration chain does require
+# PG13 -- it sets a storage parameter older servers reject with 22023, which
+# matches none of the gates above, so the migration would land failed and every
+# later deploy would die on P3009 (under Helm, a CrashLooping migrate-db
+# initContainer). But the migrator connection options set further up already
+# include client_connection_check_interval, a PG14+ startup option that an older
+# server rejects with FATAL at connect time. 14 > 13, so no connection capable of
+# wedging the chain is ever established.
+#
+# That is measured, not assumed: on 12.22 and on 13.x this preflight cannot
+# connect either, `migrate deploy` fails loudly with the FATAL, and
+# `_prisma_migrations` is never created. An earlier revision of this preflight
+# carried a second tier that refused below 13; once the connection option landed
+# it provably never fired, so it was removed rather than left as dead code.
+#
+# PG14-15 is the case left to report: those servers apply every migration
+# cleanly, they are just outside what the project tests. Blocking them would
+# strand self-hosters who are working today, on a floor this repo never declared
+# before, as a side effect of a performance tweak. They get a warning instead.
+#
+# Deliberately generic: this script must never name a migration or a reloption.
+# That lockstep coupling is what went stale and broke a production deploy, and
+# it is guarded by tests/migration-sql.spec.ts. Details live in README.md.
+#
+# A DO block rather than parsing a version out of a query, because
+# `prisma db execute` reports no rows: RAISE makes the server do the comparison
+# and turns a wrong version into a non-zero exit with a readable message.
+#
+# RAISE EXCEPTION, not the WARNING this tier's severity would suggest, because
+# `prisma db execute` does not surface warnings at all: verified against a real
+# PostgreSQL 15, a WARNING returns "Script executed successfully" and exit 0, so
+# a grep for it could never match and the tier would silently never fire. An
+# EXCEPTION's message text IS surfaced (verified: "Error: ERROR: <message>",
+# exit 1).
+#
+# A `db execute` can also fail because the database is unreachable, still
+# starting, or too old for the migrator's connection options. Reporting any of
+# those as "your PostgreSQL is below 16" would send an operator down the wrong
+# path entirely -- so anything not carrying the marker falls through and lets
+# `migrate deploy` report the real error in its own words.
+UNSUPPORTED_MARKER='SuperSync supports PostgreSQL 16 or newer'
+
+require_supported_postgres_version() {
+  echo "==> Checking PostgreSQL version..."
+  PREFLIGHT_LOG="$(mktemp "${TMPDIR:-/tmp}/supersync-pgversion.XXXXXX")"
+  preflight_log="$PREFLIGHT_LOG"
+  set +e
+  printf '%s\n' "DO \$\$ BEGIN
+     IF current_setting('server_version_num')::int < 160000 THEN
+       RAISE EXCEPTION '$UNSUPPORTED_MARKER, found %',
+         current_setting('server_version');
+     END IF;
+   END \$\$;" | with_timeout npx prisma db execute --schema "$SCHEMA" --stdin \
+    > "$preflight_log" 2>&1
+  preflight_status=$?
+  set -e
+  if [ "$preflight_status" -eq 0 ]; then
+    return 0
+  fi
+  if grep -q "$UNSUPPORTED_MARKER" "$preflight_log"; then
+    echo ""
+    echo "WARNING: this PostgreSQL is below SuperSync's supported floor (16)."
+    echo "         Migrations still apply, and nothing here is known to break,"
+    echo "         but this version is not covered by the test suite."
+    echo "         See packages/super-sync-server/README.md."
+    echo ""
+    return 0
+  fi
+  echo "    Could not determine the server version (exit $preflight_status);"
+  echo "    continuing -- migrate deploy will report the underlying error."
+  return 0
+}
+
+require_supported_postgres_version
 
 attempt=0
 while :; do

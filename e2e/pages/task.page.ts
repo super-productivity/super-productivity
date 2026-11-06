@@ -1,4 +1,4 @@
-import { Locator, Page } from '@playwright/test';
+import { expect, Locator, Page } from '@playwright/test';
 import { BasePage } from './base.page';
 import { cssSelectors } from '../constants/selectors';
 import { waitForAngularStability } from '../utils/waits';
@@ -126,12 +126,17 @@ export class TaskPage extends BasePage {
    */
   async openTaskDetail(task: Locator): Promise<void> {
     await task.waitFor({ state: 'visible' });
-    await task.hover();
     const showDetailBtn = this.page.getByRole('button', {
       name: 'Show/hide task panel',
     });
-    await showDetailBtn.waitFor({ state: 'visible', timeout: 3000 });
-    await showDetailBtn.click();
+    // The button only renders while the row is hovered. Right after a reload
+    // the list can still shift (e.g. the overdue panel settling), moving the
+    // row out from under the pointer so the button disappears mid-click —
+    // re-hover and retry instead of waiting on a detached button.
+    await expect(async () => {
+      await task.hover();
+      await showDetailBtn.click({ timeout: 2000 });
+    }).toPass({ timeout: 15000 });
     await this.page.waitForTimeout(300);
   }
 
@@ -227,16 +232,10 @@ export class TaskPage extends BasePage {
    * Check if task has a specific tag
    */
   async taskHasTag(task: Locator, tagName: string): Promise<boolean> {
-    const tags = this.getTaskTags(task);
-    const tagCount = await tags.count();
-
-    for (let i = 0; i < tagCount; i++) {
-      const tagText = await tags.nth(i).textContent();
-      if (tagText?.includes(tagName)) {
-        return true;
-      }
-    }
-    return false;
+    // One snapshot of all tags: count() + nth(i).textContent() would wait out its
+    // whole timeout on a tag that a re-render removed in between.
+    const tagTexts = await this.getTaskTags(task).allTextContents();
+    return tagTexts.some((tagText) => tagText.includes(tagName));
   }
 
   /**

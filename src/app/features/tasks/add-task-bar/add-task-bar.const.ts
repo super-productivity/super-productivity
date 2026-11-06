@@ -1,10 +1,10 @@
 import { INBOX_PROJECT } from '../../project/project.const';
-import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
+import { TimeSpentOnDay, TaskPriority, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { ShortSyntaxRepeat } from '../short-syntax';
 
 // The recurrence the bar will apply on submit. A preset or an interval creates
-// the config directly; DIALOG is the menu's "Custom recurring config" entry,
+// the config directly; DIALOG is the menu's "Custom…" entry,
 // which defers everything to the repeat dialog and therefore carries no config
 // of its own. Keeping it a separate variant is what lets a syntax-parsed
 // interval be a CUSTOM config without also opening that dialog.
@@ -27,6 +27,8 @@ export interface AddTaskBarState {
   deadlineDate?: string | null;
   deadlineTime?: string | null;
   deadlineRemindOption?: TaskReminderOptionId | null;
+  // Only ever set from "p1"-"p3" syntax; the bar has no priority control
+  priority?: TaskPriority | null;
 }
 const M = 60 * 1000;
 const H = 60 * M;
@@ -59,13 +61,16 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   deadlineDate: null,
   deadlineTime: null,
   deadlineRemindOption: null,
+  priority: null,
 };
 
+// Every entry must be a phrase shortSyntax() parses to a date that is not in
+// the past, or picking it leaves the text in the title and schedules nothing.
+// mention-config.service.spec.ts runs each entry through the parser.
 export const CHRONO_SUGGESTIONS: string[] = [
   // Relative Days
   'today',
   'tomorrow',
-  'yesterday',
   'tonight',
   'this morning',
   'this afternoon',
@@ -73,10 +78,8 @@ export const CHRONO_SUGGESTIONS: string[] = [
 
   // Relative Weeks
   'next week',
-  'last week',
   'this week',
   'next weekend',
-  'last weekend',
 
   // Days of Week
   'monday',
@@ -88,15 +91,13 @@ export const CHRONO_SUGGESTIONS: string[] = [
   'sunday',
   'next monday',
   'next friday',
-  'last monday',
-  'last friday',
 
-  // Months
+  // Months (a bare "may" is not read as the month)
   'january',
   'february',
   'march',
   'april',
-  'may',
+  'may 1',
   'june',
   'july',
   'august',
@@ -105,7 +106,6 @@ export const CHRONO_SUGGESTIONS: string[] = [
   'november',
   'december',
   'next january',
-  'last december',
 
   // Relative Time
   'in 5 minutes',
@@ -131,17 +131,12 @@ export const CHRONO_SUGGESTIONS: string[] = [
   'at 9pm',
   'at midnight',
 
-  // Special
   'now',
-  'asap',
-  'later',
-  'soon',
-  'end of day',
-  'end of week',
-  'end of month',
-  'end of year',
+];
 
-  // Recurrence
+// Recurrence phrases are only parsed when creating a task in the add task bar,
+// so they are offered for its due-date trigger alone.
+export const REPEAT_SUGGESTIONS: string[] = [
   'daily',
   'weekly',
   'monthly',

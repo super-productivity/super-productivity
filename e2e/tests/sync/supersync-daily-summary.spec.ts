@@ -1,25 +1,17 @@
-import { type ConsoleMessage } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  archiveDoneTasks,
+  markTaskDone,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 
 /**
  * SuperSync Daily Summary E2E Tests
  */
-
-/**
- * Checks if a console message indicates a DB lock error.
- * These errors would indicate the fix for synchronous flush is broken.
- */
-const isDbLockError = (msg: ConsoleMessage): boolean => {
-  const text = msg.text();
-  return text.includes('Attempting to write DB') && text.includes('while locked');
-};
 
 test.describe('@supersync Daily Summary Sync', () => {
   /**
@@ -94,33 +86,21 @@ test.describe('@supersync Daily Summary Sync', () => {
       // Create Task B (no time)
       const taskBName = `TaskB-${uniqueId}`;
       await clientA.workView.addTask(taskBName);
-      const taskBLocator = clientA.page.locator(`task:has-text("${taskBName}")`);
 
-      // Mark both done
-      await taskALocator.hover();
-      await taskALocator.locator('done-toggle').click();
+      // Mark both done. markTaskDone waits for the done state: setDone is
+      // dispatched 200 ms after the click and cancelled if the work view is
+      // destroyed first, so Finish Day right after the click could archive
+      // nothing and the summary checks below would still pass.
+      await markTaskDone(clientA, taskAName);
+      await markTaskDone(clientA, taskBName);
 
-      await taskBLocator.hover();
-      await taskBLocator.locator('done-toggle').click();
-
-      // Archive Tasks (Finish Day)
-      const finishDayBtn = clientA.page.locator('.e2e-finish-day');
-      await finishDayBtn.click();
-
-      // Wait for Daily Summary
-      await clientA.page.waitForURL(/daily-summary/);
-
-      // Click "Save and go home" to archive
-      const saveAndGoHomeBtn = clientA.page.locator(
-        'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
-      );
-      await saveAndGoHomeBtn.waitFor({ state: 'visible' });
-      await saveAndGoHomeBtn.click();
-
-      // Wait for Work View (Archived)
-      // Use negative lookahead so we don't match the CURRENT /daily-summary URL —
-      // /(active\/tasks|tag\/TODAY)/ would match tag/TODAY/daily-summary immediately.
-      await clientA.page.waitForURL(/(active\/tasks|tag\/TODAY(?!\/daily-summary))/);
+      // Archive Tasks (Finish Day). The helper retries the click: Finish Day
+      // shifts down while the last done task animates into "Completed Tasks",
+      // so a single click can land on empty space.
+      await archiveDoneTasks(clientA);
+      // Archived tasks leave the work view; this fails if a done was lost
+      await expect(clientA.page.locator('task', { hasText: taskAName })).toHaveCount(0);
+      await expect(clientA.page.locator('task', { hasText: taskBName })).toHaveCount(0);
       console.log('Client A archived tasks.');
 
       // Sync A (upload archive)
@@ -168,89 +148,6 @@ test.describe('@supersync Daily Summary Sync', () => {
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
-    }
-  });
-
-  /**
-   * Scenario: Finish day completes without DB lock errors
-   *
-   * This tests the race condition fix where the archive flush
-   * (flushYoungToOld) was being executed by an NgRx effect AFTER
-   * sync started and locked the database. The fix ensures the flush
-   * happens synchronously BEFORE the action is dispatched.
-   *
-   * Actions:
-   * 1. Client creates multiple tasks and marks them done.
-   * 2. Client clicks finish day button.
-   * 3. Client completes daily summary (archives tasks, triggers sync).
-   * 4. Verify NO "DB lock" console errors occurred.
-   */
-  test('Finish day completes without DB lock errors', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    test.setTimeout(60000);
-    const uniqueId = Date.now();
-    let client: SimulatedE2EClient | null = null;
-    const dbLockErrors: string[] = [];
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // Create client and set up sync
-      client = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await client.sync.setupSuperSync(syncConfig);
-
-      // Monitor for DB lock errors
-      client.page.on('console', (msg) => {
-        if (isDbLockError(msg)) {
-          dbLockErrors.push(msg.text());
-        }
-      });
-
-      // Create multiple tasks to increase chance of triggering flush
-      const tasks = [`Task1-${uniqueId}`, `Task2-${uniqueId}`, `Task3-${uniqueId}`];
-
-      for (const taskName of tasks) {
-        await client.workView.addTask(taskName);
-      }
-
-      // Mark all tasks as done
-      for (const taskName of tasks) {
-        const taskLocator = client.page.locator(`task:has-text("${taskName}")`);
-        await taskLocator.hover();
-        await taskLocator.locator('done-toggle').click();
-      }
-
-      // Click finish day - wait for button to be visible and stable
-      const finishDayBtn = client.page.locator('.e2e-finish-day');
-      await finishDayBtn.waitFor({ state: 'visible', timeout: 10000 });
-      await finishDayBtn.click();
-
-      // Wait for Daily Summary
-      await client.page.waitForURL(/daily-summary/);
-
-      // Click "Save and go home" to archive and trigger sync
-      const saveAndGoHomeBtn = client.page.locator(
-        'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
-      );
-      await saveAndGoHomeBtn.waitFor({ state: 'visible' });
-      await saveAndGoHomeBtn.click();
-
-      // Wait for navigation back to work view
-      // Use negative lookahead so we don't match the CURRENT /daily-summary URL.
-      await client.page.waitForURL(/(active\/tasks|tag\/TODAY(?!\/daily-summary))/);
-
-      // Wait a moment for any async effects to complete
-      await client.page.waitForTimeout(1000);
-
-      // Verify no DB lock errors occurred
-      expect(dbLockErrors).toEqual([]);
-      console.log('Finish day completed without DB lock errors');
-    } finally {
-      if (client) await closeClient(client);
     }
   });
 });

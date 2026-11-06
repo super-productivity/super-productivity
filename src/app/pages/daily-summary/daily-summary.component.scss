@@ -2,7 +2,12 @@
 
 $summary-point-inner-margin: var(--s);
 
+// The routed page is the scroll container. Reserve the scrollbar track so the
+// review tables rendering once the archive has loaded (around the end of the
+// route animation) can't narrow the page and re-wrap the centred headline.
 :host {
+  scrollbar-gutter: stable;
+
   evaluation-sheet {
     display: block;
   }
@@ -74,9 +79,14 @@ $summary-point-inner-margin: var(--s);
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  transition: opacity 0.2s ease;
 
-  &.is-loading-archive {
+  // Dim the points, not the container: the route animation fades the container
+  // in, and dimming it too would snap its opacity when that animation ends.
+  .summary-point {
+    transition: opacity var(--transition-duration-s) ease;
+  }
+
+  &.is-loading-archive .summary-point {
     opacity: 0.6;
   }
 

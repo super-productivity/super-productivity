@@ -307,6 +307,7 @@ const handleTagDeletion = (
   if (orphanedTaskIds.length > 0) {
     OpLog.log('tagSharedMetaReducer: Removed orphaned tasks during tag deletion', {
       orphanedTaskIds,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       tagIdsToRemove,
     });
   }

@@ -134,6 +134,9 @@ describe('FocusMode Bug #6064: Without break timer reset on break start', () => 
 
   afterEach(() => {
     actions$.complete();
+    // `overrideSelector()` freezes the module-level memoized selector, so
+    // without this the overrides above leak into later spec FILES (#9544).
+    store.resetSelectors();
   });
 
   describe('resetBreakTimerOnBreakStart$ effect', () => {

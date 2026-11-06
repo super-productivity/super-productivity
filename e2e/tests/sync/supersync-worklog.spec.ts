@@ -5,9 +5,15 @@ import {
   createSimulatedClient,
   closeClient,
   markTaskDone,
+  archiveDoneTasks,
+  navigateToWorkView,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
+import {
+  expectArchivedNotLive,
+  getTaskIdByTitle,
+} from '../../utils/audit-archive-helpers';
 
 /**
  * SuperSync Worklog/Archive E2E Tests
@@ -57,22 +63,13 @@ test.describe('@supersync Worklog Sync', () => {
       await markTaskDone(clientA, task1Name);
       await markTaskDone(clientA, task2Name);
       console.log('[Worklog Test] Client A marked tasks done');
+      const archivedIds = [
+        await getTaskIdByTitle(clientA, task1Name),
+        await getTaskIdByTitle(clientA, task2Name),
+      ];
 
       // ============ PHASE 2: Client A Archives ============
-      const finishDayBtn = clientA.page.locator('.e2e-finish-day');
-      await finishDayBtn.waitFor({ state: 'visible', timeout: 10000 });
-      await finishDayBtn.click();
-
-      await clientA.page.waitForURL(/daily-summary/, { timeout: 10000 });
-      await clientA.page.waitForLoadState('networkidle');
-
-      const saveBtn = clientA.page.locator(
-        'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
-      );
-      await saveBtn.waitFor({ state: 'visible', timeout: 10000 });
-      await saveBtn.click();
-
-      await clientA.page.waitForURL(/tag\/TODAY/, { timeout: 10000 });
+      await archiveDoneTasks(clientA);
       console.log('[Worklog Test] Client A archived tasks');
 
       // ============ PHASE 3: Sync ============
@@ -84,6 +81,10 @@ test.describe('@supersync Worklog Sync', () => {
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
       console.log('[Worklog Test] Client B synced');
+
+      // The worklog lists live tasks too: prove the archive op was applied.
+      await expectArchivedNotLive(clientA, archivedIds, 'Client A');
+      await expectArchivedNotLive(clientB, archivedIds, 'Client B');
 
       // Navigate to worklog
       await clientB.page.goto('/#/tag/TODAY/history');
@@ -109,94 +110,13 @@ test.describe('@supersync Worklog Sync', () => {
       await expect(task1InWorklog).toBeVisible({ timeout: 10000 });
       await expect(task2InWorklog).toBeVisible({ timeout: 10000 });
       console.log('[Worklog Test] Both tasks visible in worklog on Client B');
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
 
-  /**
-   * Test: Worklog shows correct time data after sync
-   *
-   * Actions:
-   * 1. Client A creates task, tracks time, completes
-   * 2. Client A archives
-   * 3. Client B syncs and checks worklog for time data
-   */
-  test('Worklog shows correct time data after sync', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    const uniqueId = Date.now();
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // ============ PHASE 1: Client A Creates, Tracks, Completes ============
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      const taskName = `TimedWorklog-${uniqueId}`;
-      await clientA.workView.addTask(taskName);
-
-      // Track time using helper functions (need to add imports)
-      const task = clientA.page.locator(`task:has-text("${taskName}")`);
-      await task.hover();
-      await task.locator('.start-task-btn').click();
-      await clientA.page.waitForTimeout(3000);
-      await task.hover();
-      const pauseBtn = task.locator('button:has(mat-icon:has-text("pause"))');
-      await pauseBtn.click();
-      console.log('[Timed Worklog Test] Tracked 3 seconds');
-
-      // Complete task
-      await markTaskDone(clientA, taskName);
-
-      // ============ PHASE 2: Archive ============
-      const finishDayBtn = clientA.page.locator('.e2e-finish-day');
-      await finishDayBtn.waitFor({ state: 'visible', timeout: 10000 });
-      await finishDayBtn.click();
-
-      await clientA.page.waitForURL(/daily-summary/, { timeout: 10000 });
-
-      const saveBtn = clientA.page.locator(
-        'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
-      );
-      await saveBtn.waitFor({ state: 'visible', timeout: 10000 });
-      await saveBtn.click();
-
-      await clientA.page.waitForURL(/tag\/TODAY/, { timeout: 10000 });
-
-      // ============ PHASE 3: Sync ============
-      await clientA.sync.syncAndWait();
-
-      // ============ PHASE 4: Client B Checks Worklog ============
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.sync.syncAndWait();
-
-      await clientB.page.goto('/#/tag/TODAY/history');
-      await clientB.page.waitForLoadState('networkidle');
-      await clientB.page.waitForSelector('history', { timeout: 10000 });
-
-      // Expand week
-      const weekRow = clientB.page.locator('.week-row').first();
-      if (await weekRow.isVisible()) {
-        await weekRow.click();
-        await clientB.page.waitForTimeout(500);
-      }
-
-      // Verify task appears in worklog
-      const taskInWorklog = clientB.page.locator(`text=${taskName}`);
-      await expect(taskInWorklog).toBeVisible({ timeout: 10000 });
-
-      // The task with tracked time should appear in the worklog
-      // Time data is stored but exact UI format varies
-      console.log('[Timed Worklog Test] Task with time data visible in worklog');
+      // Replaying Client B's persisted state must keep them archived.
+      // (waitForAppReady expects a work-view route, so leave the worklog first.)
+      await navigateToWorkView(clientB);
+      await clientB.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+      await waitForAppReady(clientB.page);
+      await expectArchivedNotLive(clientB, archivedIds, 'Client B after reload');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -235,17 +155,8 @@ test.describe('@supersync Worklog Sync', () => {
       await clientA.workView.addTask(taskA1);
 
       await markTaskDone(clientA, taskA1);
-
-      // Archive
-      const finishDayBtnA = clientA.page.locator('.e2e-finish-day');
-      await finishDayBtnA.click();
-      await clientA.page.waitForURL(/daily-summary/, { timeout: 10000 });
-
-      const saveBtnA = clientA.page.locator(
-        'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
-      );
-      await saveBtnA.click();
-      await clientA.page.waitForURL(/tag\/TODAY/, { timeout: 10000 });
+      const taskA1Id = await getTaskIdByTitle(clientA, taskA1);
+      await archiveDoneTasks(clientA);
       console.log('[Multi Archive Test] Client A archived first batch');
 
       await clientA.sync.syncAndWait();
@@ -259,23 +170,20 @@ test.describe('@supersync Worklog Sync', () => {
       await clientB.workView.addTask(taskB1);
 
       await markTaskDone(clientB, taskB1);
-
-      // Archive
-      const finishDayBtnB = clientB.page.locator('.e2e-finish-day');
-      await finishDayBtnB.click();
-      await clientB.page.waitForURL(/daily-summary/, { timeout: 10000 });
-
-      const saveBtnB = clientB.page.locator(
-        'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
-      );
-      await saveBtnB.click();
-      await clientB.page.waitForURL(/tag\/TODAY/, { timeout: 10000 });
+      const taskB1Id = await getTaskIdByTitle(clientB, taskB1);
+      await archiveDoneTasks(clientB);
       console.log('[Multi Archive Test] Client B archived second batch');
 
       // ============ PHASE 3: Sync Both ============
       await clientB.sync.syncAndWait();
       await clientA.sync.syncAndWait();
       console.log('[Multi Archive Test] Both synced');
+
+      // Both directions, before the reload: each client applied the other's
+      // archive op (the worklog alone would also list live tasks).
+      const bothIds = [taskA1Id, taskB1Id];
+      await expectArchivedNotLive(clientA, bothIds, 'Client A before reload');
+      await expectArchivedNotLive(clientB, bothIds, 'Client B before reload');
 
       // Reload both clients to ensure archive data from sync is loaded
       // Archive data is stored in a separate IndexedDB store and may need reload to appear in UI
@@ -290,6 +198,8 @@ test.describe('@supersync Worklog Sync', () => {
       });
       await waitForAppReady(clientB.page);
       console.log('[Multi Archive Test] Both clients reloaded after sync');
+      await expectArchivedNotLive(clientA, bothIds, 'Client A after reload');
+      await expectArchivedNotLive(clientB, bothIds, 'Client B after reload');
 
       // ============ PHASE 4: Verify All Archives in Worklog ============
       // Check Client A worklog

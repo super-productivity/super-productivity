@@ -86,7 +86,6 @@ const openFile = (filePath: string): void => {
   const args = platform === 'win32' ? ['/c', 'start', '', filePath] : [filePath];
 
   const result = spawnSync(command, args, {
-    detached: true,
     stdio: 'ignore',
     windowsHide: true,
   });

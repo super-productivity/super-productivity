@@ -3,6 +3,7 @@ import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { TASK_FEATURE_NAME } from '../../features/tasks/store/task.reducer';
 import {
   collectTaskRemovalEntityIdsFromBatch,
+  isRemovedAtIndex,
   stripBatchArchivedTaskIdsFromLwwPayload,
 } from './bulk-archive-filter.util';
 import { Log as OpLog } from '../../core/log';
@@ -83,6 +84,375 @@ describe('bulk-archive-filter.util', () => {
 
     expect(result.all).toEqual(new Set(['parent', 'child']));
     expect(result.archiving).toEqual(new Set(['parent', 'child']));
+  });
+
+  describe('restoreTask after an archive in the same batch (#10220)', () => {
+    const archiveOp = (id: string): Operation =>
+      createOperation({
+        id: `archive-${id}`,
+        actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        entityId: 'parent',
+        entityIds: ['parent', 'other'],
+        payload: {
+          actionPayload: {
+            tasks: [
+              { id: 'parent', subTaskIds: ['child'] },
+              { id: 'other', subTaskIds: [] },
+            ],
+          },
+          entityChanges: [],
+        },
+      });
+    const restoreOp = createOperation({
+      id: 'restore-parent',
+      actionType: ActionType.TASK_SHARED_RESTORE,
+      entityId: 'parent',
+      payload: {
+        actionPayload: {
+          task: { id: 'parent', subTaskIds: ['child'] },
+          subTasks: [{ id: 'child', parentId: 'parent' }],
+        },
+        entityChanges: [],
+      },
+    });
+    const state = {
+      [TASK_FEATURE_NAME]: {
+        entities: {
+          parent: { id: 'parent', subTaskIds: ['child'] },
+          child: { id: 'child', parentId: 'parent' },
+          other: { id: 'other', subTaskIds: [] },
+        },
+      },
+    };
+
+    it('records where the restore brings the task and its subtasks back', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [archiveOp('1'), restoreOp],
+        state,
+      );
+
+      expect(result.archiving).toEqual(new Set(['parent', 'child', 'other']));
+      expect(result.restoredAt).toEqual(
+        new Map([
+          ['parent', 1],
+          ['child', 1],
+        ]),
+      );
+    });
+
+    it('treats the task as removed only for ops BEFORE the restore', () => {
+      const { archiving, restoredAt } = collectTaskRemovalEntityIdsFromBatch(
+        [archiveOp('1'), restoreOp],
+        state,
+      );
+
+      expect(isRemovedAtIndex(archiving, restoredAt, 'parent', 0)).toBe(true);
+      expect(isRemovedAtIndex(archiving, restoredAt, 'parent', 1)).toBe(true);
+      expect(isRemovedAtIndex(archiving, restoredAt, 'parent', 2)).toBe(false);
+      expect(isRemovedAtIndex(archiving, restoredAt, 'child', 2)).toBe(false);
+      expect(isRemovedAtIndex(archiving, restoredAt, 'other', 2)).toBe(true);
+    });
+
+    it('keeps the task archived when the archive comes AFTER the restore', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [restoreOp, archiveOp('1')],
+        state,
+      );
+
+      expect(result.archiving).toEqual(new Set(['parent', 'child', 'other']));
+      expect(result.restoredAt.size).toBe(0);
+      expect(result.archiveRestoredAt.size).toBe(0);
+    });
+
+    it('forgets the restore when a later archive re-archives the task', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [archiveOp('1'), restoreOp, archiveOp('2')],
+        state,
+      );
+
+      expect(result.archiving).toEqual(new Set(['parent', 'child', 'other']));
+      expect(result.restoredAt.size).toBe(0);
+      expect(result.archiveRestoredAt.size).toBe(0);
+    });
+
+    it('still counts a later delete of the restored task', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [
+          archiveOp('1'),
+          restoreOp,
+          createOperation({
+            id: 'delete-parent',
+            opType: OpType.Delete,
+            actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+            entityIds: ['parent'],
+          }),
+        ],
+        state,
+      );
+
+      expect(result.all).toEqual(new Set(['parent', 'child', 'other']));
+      expect(result.restoredAt.size).toBe(0);
+      // A delete is not an archive: the restore still undid the archive.
+      expect(result.archiveRestoredAt).toEqual(
+        new Map([
+          ['parent', 1],
+          ['child', 1],
+        ]),
+      );
+    });
+
+    it('keeps the first restore index when a duplicate restore follows', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [archiveOp('1'), restoreOp, restoreOp],
+        state,
+      );
+
+      expect(result.restoredAt).toEqual(
+        new Map([
+          ['parent', 1],
+          ['child', 1],
+        ]),
+      );
+    });
+
+    it('ignores a restore whose root is still active', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [
+          createOperation({
+            id: 'delete-child',
+            opType: OpType.Delete,
+            actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+            entityIds: ['child'],
+          }),
+          restoreOp,
+        ],
+        state,
+      );
+
+      expect(result.all).toEqual(new Set(['child']));
+      expect(result.restoredAt.size).toBe(0);
+    });
+
+    it('does not let a filtered update revive the root before a later restore', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [
+          archiveOp('1'),
+          createOperation({
+            id: 'stale-parent-update',
+            actionType: toLwwUpdateActionType('TASK'),
+            entityId: 'parent',
+            payload: { id: 'parent', title: 'stale' },
+          }),
+          restoreOp,
+        ],
+        state,
+      );
+
+      expect(result.restoredAt).toEqual(
+        new Map([
+          ['parent', 2],
+          ['child', 2],
+        ]),
+      );
+    });
+  });
+
+  describe('recreate-after-delete in the same batch (#10381)', () => {
+    const deleteOp = createOperation({
+      id: 'delete',
+      opType: OpType.Delete,
+      actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+      entityId: TASK_ID,
+      entityIds: [TASK_ID],
+    });
+    const recreateOp = (lwwUpdateMode: 'replace' | 'patch'): Operation =>
+      createOperation({
+        id: `recreate-${lwwUpdateMode}`,
+        actionType: toLwwUpdateActionType('TASK'),
+        entityId: TASK_ID,
+        payload: {
+          actionPayload: { id: TASK_ID },
+          entityChanges: [],
+          lwwUpdateMode,
+          recreatesEntityAfterDelete: true,
+        },
+      });
+    const state = { [TASK_FEATURE_NAME]: { entities: { [TASK_ID]: { id: TASK_ID } } } };
+
+    it('records a whole-task recreate like a restore', () => {
+      const { all, restoredAt } = collectTaskRemovalEntityIdsFromBatch(
+        [deleteOp, recreateOp('replace')],
+        state,
+      );
+
+      expect(restoredAt).toEqual(new Map([[TASK_ID, 1]]));
+      expect(isRemovedAtIndex(all, restoredAt, TASK_ID, 1)).toBe(true);
+      expect(isRemovedAtIndex(all, restoredAt, TASK_ID, 2)).toBe(false);
+    });
+
+    it('ignores a patch recreate and a recreate with no earlier delete', () => {
+      expect(
+        collectTaskRemovalEntityIdsFromBatch([deleteOp, recreateOp('patch')], state)
+          .restoredAt,
+      ).toEqual(new Map());
+      expect(
+        collectTaskRemovalEntityIdsFromBatch([recreateOp('replace'), deleteOp], state)
+          .restoredAt,
+      ).toEqual(new Map());
+    });
+  });
+
+  describe('isRemovedAtIndex (position-aware pre-scan)', () => {
+    it('returns false for an id present in neither the removal set nor the restore map', () => {
+      expect(isRemovedAtIndex(new Set(['other']), new Map(), 'task-x', 5)).toBe(false);
+    });
+
+    it('returns false for an id only present in the restore map (not the removal set)', () => {
+      // A dangling restoredAt entry with no matching removal-set membership must
+      // not, by itself, mark the id as removed — `ids.has(...)` gates the check.
+      const restoredAt = new Map([['task-x', 3]]);
+      expect(isRemovedAtIndex(new Set(), restoredAt, 'task-x', 5)).toBe(false);
+    });
+
+    it('returns true for an id only present in the removal set, with no restore recorded', () => {
+      // "only an archive-restore" case mirrored here as "only a removal, no
+      // restore of any kind" — the archiveRestoredAt map is untouched.
+      const archiving = new Set(['task-x']);
+      expect(isRemovedAtIndex(archiving, new Map(), 'task-x', 0)).toBe(true);
+    });
+
+    it('treats an id restored before the queried index as no longer removed', () => {
+      // restore before archive (in terms of index ordering relative to the query)
+      const ids = new Set(['task-x']);
+      const restoredAt = new Map([['task-x', 2]]);
+      expect(isRemovedAtIndex(ids, restoredAt, 'task-x', 3)).toBe(false);
+    });
+
+    it('treats an id restored at or after the queried index as still removed', () => {
+      // archive before restore (in terms of index ordering relative to the query)
+      const ids = new Set(['task-x']);
+      const restoredAt = new Map([['task-x', 2]]);
+      expect(isRemovedAtIndex(ids, restoredAt, 'task-x', 2)).toBe(true);
+      expect(isRemovedAtIndex(ids, restoredAt, 'task-x', 1)).toBe(true);
+    });
+  });
+
+  describe('adversarial same-batch history: 3 archives, 2 restores, 1 subtask delete (#10220)', () => {
+    // parent + child, replaying:
+    //   archive(parent+child) -> restore(parent+child) -> delete(child only)
+    //   -> archive(parent) -> restore(parent) -> archive(parent)
+    // Sequential (one-op-at-a-time) replay outcome, hand-traced against the
+    // reducer semantics documented on TaskRemovalEntityIds:
+    //   - parent: last op touching it is the final archive -> stays archived,
+    //     with no restore after it.
+    //   - child: deleted (not re-created) after its one restore -> gone, but
+    //     NOT blocked by the archive-restore map, since the thing that undid
+    //     its archive (the restore) precedes the thing that removed it (the
+    //     delete) — a later recreate-after-delete update must be allowed
+    //     through, matching "a later delete removes the task without
+    //     archiving it, so recreate-after-delete applies".
+    const state = {
+      [TASK_FEATURE_NAME]: {
+        entities: {
+          parent: { id: 'parent', subTaskIds: ['child'] },
+          child: { id: 'child', parentId: 'parent' },
+        },
+      },
+    };
+
+    const archiveParentAndChild = (id: string): Operation =>
+      createOperation({
+        id: `archive-${id}`,
+        actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        entityId: 'parent',
+        entityIds: ['parent'],
+        payload: {
+          actionPayload: {
+            tasks: [{ id: 'parent', subTasks: [{ id: 'child' }] }],
+          },
+          entityChanges: [],
+        },
+      });
+    const archiveParentOnly = (id: string): Operation =>
+      createOperation({
+        id: `archive-${id}`,
+        actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        entityId: 'parent',
+        entityIds: ['parent'],
+        payload: {
+          actionPayload: { tasks: [{ id: 'parent' }] },
+          entityChanges: [],
+        },
+      });
+    const restoreParentAndChild = (id: string): Operation =>
+      createOperation({
+        id: `restore-${id}`,
+        actionType: ActionType.TASK_SHARED_RESTORE,
+        entityId: 'parent',
+        payload: {
+          actionPayload: {
+            task: { id: 'parent' },
+            subTasks: [{ id: 'child' }],
+          },
+          entityChanges: [],
+        },
+      });
+    const restoreParentOnly = (id: string): Operation =>
+      createOperation({
+        id: `restore-${id}`,
+        actionType: ActionType.TASK_SHARED_RESTORE,
+        entityId: 'parent',
+        payload: {
+          actionPayload: { task: { id: 'parent' } },
+          entityChanges: [],
+        },
+      });
+    const deleteChildOnly = createOperation({
+      id: 'delete-child',
+      opType: OpType.Delete,
+      actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+      entityIds: ['child'],
+      payload: { actionPayload: { taskIds: ['child'] }, entityChanges: [] },
+    });
+
+    const operations: Operation[] = [
+      archiveParentAndChild('1'), // 0
+      restoreParentAndChild('1'), // 1
+      deleteChildOnly, // 2
+      archiveParentOnly('2'), // 3
+      restoreParentOnly('2'), // 4
+      archiveParentOnly('3'), // 5
+    ];
+
+    it('matches sequential replay: parent stays archived, child stays deleted', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(operations, state);
+      const finalIndex = operations.length;
+
+      // parent: removed from live view, and archived, at the end of the batch.
+      expect(isRemovedAtIndex(result.all, result.restoredAt, 'parent', finalIndex)).toBe(
+        true,
+      );
+      expect(
+        isRemovedAtIndex(
+          result.archiving,
+          result.archiveRestoredAt,
+          'parent',
+          finalIndex,
+        ),
+      ).toBe(true);
+
+      // child: removed from live view (deleted at index 2, never recreated)...
+      expect(isRemovedAtIndex(result.all, result.restoredAt, 'child', finalIndex)).toBe(
+        true,
+      );
+      // ...but NOT still counted as "archived": its archive was undone by the
+      // restore at index 1, and the later delete (index 2) removed it without
+      // re-archiving it, so a flagged recreate-after-delete update must be let
+      // through.
+      expect(
+        isRemovedAtIndex(result.archiving, result.archiveRestoredAt, 'child', finalIndex),
+      ).toBe(false);
+    });
   });
 
   it('should strip archived task IDs from project LWW payload arrays', () => {

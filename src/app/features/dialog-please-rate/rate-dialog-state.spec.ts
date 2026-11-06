@@ -4,6 +4,7 @@ import {
   RECURRING_INTERVAL_STARTS,
   RateDialogState,
   applyRateDialogResult,
+  getPlatformLabel,
   isProgressWin,
   loadRateDialogState,
   saveRateDialogState,
@@ -260,6 +261,29 @@ describe('rate-dialog-state', () => {
       expect(isProgressWin(0, 0)).toBe(false);
       expect(isProgressWin(0, 5)).toBe(false);
       expect(isProgressWin(3, 0)).toBe(false); // no divide-by-zero win
+    });
+  });
+
+  describe('getPlatformLabel', () => {
+    it('names the OS for desktop builds', () => {
+      expect(
+        getPlatformLabel('E', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'),
+      ).toBe('Electron · macOS');
+      expect(getPlatformLabel('E', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe(
+        'Electron · Windows',
+      );
+      expect(getPlatformLabel('E', 'Mozilla/5.0 (X11; Linux x86_64)')).toBe(
+        'Electron · Linux',
+      );
+      expect(getPlatformLabel('E', 'curl/8.0')).toBe('Electron');
+    });
+
+    it('uses the bare platform name elsewhere', () => {
+      expect(getPlatformLabel('I', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)')).toBe(
+        'iOS',
+      );
+      expect(getPlatformLabel('A', 'Mozilla/5.0 (Linux; Android 14)')).toBe('Android');
+      expect(getPlatformLabel('B', 'Mozilla/5.0 (X11; Linux x86_64)')).toBe('Web');
     });
   });
 });

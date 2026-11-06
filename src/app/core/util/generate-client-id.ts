@@ -19,7 +19,16 @@ import { MIN_CLIENT_ID_LENGTH } from '../../op-log/core/operation-log.const';
  * same split `util/get-app-version-str.ts` uses for `distChannelSuffix()`.
  */
 
-type PlatformCode = 'B' | 'E' | 'A' | 'I';
+/**
+ * Every clientId prefix this app has ever minted. Single source for the union
+ * type and the decoder below, so a new code cannot drift between them: adding
+ * one here widens `PlatformCode`, which is a compile error at every exhaustive
+ * consumer (e.g. the `Record<PlatformCode, …>` icon map), and the decoder
+ * accepts it automatically.
+ */
+const PLATFORM_CODES = ['B', 'E', 'A', 'I'] as const;
+
+export type PlatformCode = (typeof PLATFORM_CODES)[number];
 
 interface ClientPlatform {
   isElectron: boolean;
@@ -50,7 +59,31 @@ export const getPlatformCode = (platform: ClientPlatform): PlatformCode => {
   return 'B';
 };
 
-const _getEnvironmentId = (): PlatformCode =>
+/**
+ * Reads back the platform a clientId was minted on, or null when the prefix is
+ * not one this app can decode without guessing.
+ *
+ * The inverse of `getPlatformCode`, kept in the same file for the reason its
+ * header gives: when the two halves of an id's contract live apart, one drifts.
+ *
+ * Legacy PFAPI ids were `{getEnvironmentId()}_{Date.now()}` with multi-char
+ * environment prefixes: Electron `E_{os}_…` happens to match the current
+ * one-letter-underscore shape, and Android's fixed `AND_…` is special-cased
+ * below. Legacy browser ids (`B{browser}{os}_…`, e.g. `BCL_…`) deliberately
+ * return null — decoding them would need the full historical browser/OS code
+ * table, and "unknown" is safer than a wrong guess.
+ */
+export const getClientIdPlatformCode = (clientId: string): PlatformCode | null => {
+  if (clientId.startsWith('AND_')) {
+    return 'A';
+  }
+  const code = clientId.slice(0, 1);
+  return clientId[1] === '_' && (PLATFORM_CODES as readonly string[]).includes(code)
+    ? (code as PlatformCode)
+    : null;
+};
+
+export const getCurrentPlatformCode = (): PlatformCode =>
   getPlatformCode({
     isElectron: IS_ELECTRON,
     // `window.SUPAndroid`, injected by both Android activities
@@ -83,7 +116,7 @@ const _generateBase62 = (length: number): string => {
  * Generates a compact client ID: {platform}_{6-char-base62}, e.g. "B_a7Kx9Z".
  */
 export const generateClientId = (): string => {
-  return `${_getEnvironmentId()}_${_generateBase62(6)}`;
+  return `${getCurrentPlatformCode()}_${_generateBase62(6)}`;
 };
 
 /**

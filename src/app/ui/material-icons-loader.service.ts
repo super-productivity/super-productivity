@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BodyClass } from '../app.constants';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import type { AndroidInterface } from '../features/android/android-interface';
 
 const MATERIAL_ICONS_FONT = '24px "Material Symbols Outlined"';

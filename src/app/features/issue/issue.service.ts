@@ -24,12 +24,14 @@ import {
   DEFAULT_ISSUE_STRS,
   JIRA_TYPE,
   OPEN_PROJECT_TYPE,
-  REDMINE_TYPE,
-  NEXTCLOUD_DECK_TYPE,
   PLAINSPACE_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
+import { GlobalConfigService } from '../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { withRemindAtForDueChange } from '../tasks/util/with-remind-at-for-due-change';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { IssueServiceInterface } from './issue-service-interface';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
 // Trello is now a plugin — no built-in service needed
@@ -39,11 +41,11 @@ import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
 // Gitea is now a plugin — no built-in service needed
-import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
+// Redmine is now a plugin — no built-in service needed
 // Linear is now a plugin — no built-in service needed
 // ClickUp is now a plugin — no built-in service needed
 // Azure DevOps is now a plugin — no built-in service needed
-import { NextcloudDeckCommonInterfacesService } from './providers/nextcloud-deck/nextcloud-deck-common-interfaces.service';
+// Nextcloud Deck is now a plugin — no built-in service needed
 import { PlainspaceCommonInterfacesService } from './providers/plainspace/plainspace-common-interfaces.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -55,32 +57,46 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
 import { _MISSING_PROJECT_ } from '../project/project.const';
 import { IssueProviderService } from './issue-provider.service';
+import { PendingRemoteIssueDeleteService } from './two-way-sync/pending-remote-issue-delete.service';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { getCalendarEventIdCandidates } from '../calendar-integration/get-calendar-event-id-candidates';
 import { Store } from '@ngrx/store';
 import { selectEnabledIssueProviders } from './store/issue-provider.selectors';
 import { getErrorTxt } from '../../util/get-error-text';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import typia from 'typia';
 import { GlobalProgressBarService } from '../../core-ui/global-progress-bar/global-progress-bar.service';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
 import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/plugin-issue-provider-adapter.service';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { PlainspaceIssue } from './providers/plainspace/plainspace-issue.model';
+
+/**
+ * Plainspace reuses one issue id per series (#10074). Completion advances the
+ * schedule but leaves the item done until the next occurrence's day begins.
+ * By then its task may be archived: update polling cannot see it and import
+ * dedup blocks it. Restore that task once the server reopens the issue.
+ * Other providers and non-recurring issues keep the usual archive dedup.
+ */
+const isIssueAwaitingNextOccurrence = (
+  issueProviderKey: IssueProviderKey,
+  issue: IssueDataReduced,
+): boolean =>
+  issueProviderKey === PLAINSPACE_TYPE &&
+  !!(issue as PlainspaceIssue).isRecurring &&
+  !(issue as PlainspaceIssue).isDone;
 
 @Injectable({
   providedIn: 'root',
 })
 export class IssueService {
   private _taskService = inject(TaskService);
+  private _pendingRemoteIssueDelete = inject(PendingRemoteIssueDeleteService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
   private _gitlabCommonInterfacesService = inject(GitlabCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
-  private _redmineInterfaceService = inject(RedmineCommonInterfacesService);
-  private _nextcloudDeckCommonInterfaceService = inject(
-    NextcloudDeckCommonInterfacesService,
-  );
   private _plainspaceCommonInterfaceService = inject(PlainspaceCommonInterfacesService);
   private _calendarCommonInterfaceService = inject(CalendarCommonInterfacesService);
   private _issueProviderService = inject(IssueProviderService);
@@ -94,15 +110,15 @@ export class IssueService {
   private _navigateToTaskService = inject(NavigateToTaskService);
   private _pluginAdapter = inject(PluginIssueProviderAdapterService);
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private _globalConfigService = inject(GlobalConfigService);
+  private _dateService = inject(DateService);
 
   ISSUE_SERVICE_MAP: { [key: string]: IssueServiceInterface } = {
     [GITLAB_TYPE]: this._gitlabCommonInterfacesService,
     [JIRA_TYPE]: this._jiraCommonInterfacesService,
     [CALDAV_TYPE]: this._caldavCommonInterfaceService,
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
-    [REDMINE_TYPE]: this._redmineInterfaceService,
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
-    [NEXTCLOUD_DECK_TYPE]: this._nextcloudDeckCommonInterfaceService,
     [PLAINSPACE_TYPE]: this._plainspaceCommonInterfaceService,
   };
 
@@ -265,15 +281,45 @@ export class IssueService {
 
     const allExistingIssueIds: string[] | number[] =
       await this._taskService.getAllIssueIdsForProviderEverywhere(issueProviderId);
-    const potentialIssuesToAdd = await service.getNewIssuesToAddToBacklog!(
-      issueProviderId,
-      allExistingIssueIds,
+    // A task whose remote delete is still to come is no longer among them, but
+    // its item is about to be deleted remotely: not new. Pending before the
+    // request too, as a delete that completes while it is in flight leaves the
+    // item in a list read before it.
+    const pendingBefore = this._pendingRemoteIssueDelete.issueIds(issueProviderId);
+    const potentialIssuesToAdd = (
+      await service.getNewIssuesToAddToBacklog!(issueProviderId, allExistingIssueIds)
+    ).filter(
+      (issue) =>
+        !pendingBefore.has(String(issue.id)) &&
+        !this._pendingRemoteIssueDelete.has(issueProviderId, String(issue.id)),
     );
 
-    const issuesToAdd: IssueDataReduced[] = potentialIssuesToAdd.filter(
-      (issue: IssueDataReduced): boolean =>
-        !(allExistingIssueIds as string[]).includes(issue.id as string),
+    // Compare as strings: task.issueId is stored as a string, but some providers
+    // (OpenProject) return numeric ids, which never matched and were re-imported
+    // on every poll (#11223).
+    const existingIssueIds = new Set<string>(
+      (allExistingIssueIds as (string | number)[]).map(String),
     );
+    const issuesToAdd: IssueDataReduced[] = potentialIssuesToAdd.filter(
+      (issue: IssueDataReduced): boolean => !existingIssueIds.has(String(issue.id)),
+    );
+
+    // Already-imported recurring issues whose task may sit in the archive: those
+    // are re-activated rather than imported (see isIssueAwaitingNextOccurrence).
+    // Kept out of `issuesToAdd` so the import snack below still counts imports.
+    const reactivationCandidates: IssueDataReduced[] = potentialIssuesToAdd.filter(
+      (issue: IssueDataReduced): boolean =>
+        existingIssueIds.has(String(issue.id)) &&
+        isIssueAwaitingNextOccurrence(providerKey, issue),
+    );
+    if (reactivationCandidates.length) {
+      await this._reactivateArchivedIssueTasks(
+        providerKey,
+        issueProviderId,
+        reactivationCandidates,
+        isBackgroundPoll,
+      );
+    }
 
     issuesToAdd.forEach((issue: IssueDataReduced) => {
       // TODO add correct project id
@@ -350,7 +396,7 @@ export class IssueService {
       if (this.ISSUE_REFRESH_MAP[issueProviderId]?.[issueId]) {
         this.ISSUE_REFRESH_MAP[issueProviderId][issueId].next(update.issue);
       }
-      this._taskService.update(task.id, update.taskChanges);
+      this._updateTaskFromPoll(task, update.taskChanges);
 
       if (isNotifySuccess) {
         this._snackService.open({
@@ -394,20 +440,11 @@ export class IssueService {
 
     for (const pKey of Object.keys(tasksIssueIdsByIssueProviderKey)) {
       const providerKey = pKey as IssueProviderKey;
-      IssueLog.log(
-        'POLLING CHANGES FOR ' + providerKey,
-        tasksIssueIdsByIssueProviderKey[providerKey],
-      );
-      const pollingLabelParams = {
-        issueProviderName: this._getProviderName(providerKey),
-        issuesStr: this._translateService.instant(
-          this._getIssueStrings(providerKey).ISSUES_STR,
-        ),
-      };
-
-      this._globalProgressBarService.countUp('POLL', {
-        labelParams: pollingLabelParams,
+      IssueLog.log('POLLING CHANGES FOR ' + providerKey, {
+        taskCount: tasksIssueIdsByIssueProviderKey[providerKey].length,
+        taskIds: tasksIssueIdsByIssueProviderKey[providerKey].map((t) => t.id),
       });
+      this._globalProgressBarService.countUp();
 
       const service = this._getService(providerKey);
       if (!service) {
@@ -435,7 +472,7 @@ export class IssueService {
               update.issue,
             );
           }
-          this._taskService.update(update.task.id, update.taskChanges);
+          this._updateTaskFromPoll(update.task, update.taskChanges);
         }
 
         if (updates.length === 1) {
@@ -537,7 +574,7 @@ export class IssueService {
       ...additionalFromProviderIssueService
     } = this._getAddTaskData(issueProviderKey, issueDataReduced, providerCfg);
     IssueLog.log({
-      related_to,
+      hasRelatedTo: !!related_to,
       additionalKeys: Object.keys(additionalFromProviderIssueService),
     });
 
@@ -604,7 +641,7 @@ export class IssueService {
       // Default plan for today unless a precise time is provided by provider.
       // Skip when going to backlog — a backlog task that's also "due today"
       // shows up in the Today tab, defeating the point of the backlog.
-      ...(isAddToBacklog ? {} : { dueDay: getDbDateStr() }),
+      ...(isAddToBacklog ? {} : { dueDay: this._dateService.todayStr() }),
       ...additionalFromProviderIssueService,
       ...taskDefaults,
       ...additional,
@@ -637,9 +674,25 @@ export class IssueService {
 
     // add new task (also fallback when parent id of subtask is not found)
     if (!taskId) {
+      // A Plainspace title is shared and syncs both ways: short syntax would
+      // strip "#tag", "1h" or "@tomorrow" from it, and that edit would be
+      // pushed to everyone in the Space. Other providers keep parsing.
+      const isIgnoreShortSyntax = issueProviderKey === PLAINSPACE_TYPE;
       taskId = taskData.dueWithTime
-        ? await this._taskService.addAndSchedule(title, taskData, taskData.dueWithTime)
-        : this._taskService.add(title, isAddToBacklog, taskData);
+        ? await this._taskService.addAndSchedule(
+            title,
+            taskData,
+            taskData.dueWithTime,
+            undefined,
+            isIgnoreShortSyntax,
+          )
+        : this._taskService.add(
+            title,
+            isAddToBacklog,
+            taskData,
+            false,
+            isIgnoreShortSyntax,
+          );
 
       // TODO more elegant solution for skipped calendar events
       if (issueProviderKey === ICAL_TYPE) {
@@ -742,6 +795,61 @@ export class IssueService {
     return { taskId, parentTaskId: effectiveParentId };
   }
 
+  /**
+   * Prepare the next occurrence before restoring it, so schedule, reminder and
+   * provider baselines replay together. Time history and completed subtasks
+   * carry over, matching the active-task poll's parent-only reopen.
+   */
+  private async _reactivateArchivedIssueTasks(
+    providerKey: IssueProviderKey,
+    issueProviderId: string,
+    issues: IssueDataReduced[],
+    isBackgroundPoll: boolean,
+  ): Promise<void> {
+    for (const issue of issues) {
+      const res = await this._taskService.checkForTaskWithIssueEverywhere(
+        issue.id.toString(),
+        providerKey,
+        issueProviderId,
+      );
+      if (!res?.isFromArchive) {
+        continue;
+      }
+
+      let task: Task;
+      try {
+        const { changes } = withRemindAtForDueChange(
+          res.task,
+          this._getAddTaskData(providerKey, issue),
+          this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+            DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+        );
+        // Archiving clears the schedule but leaves remindAt behind. Restore
+        // inserts complete entities, so omitting the old reminder is wire-safe.
+        task = { ...res.task, remindAt: undefined, ...changes };
+      } catch {
+        IssueLog.err('Plainspace: invalid issue data, skipping task reactivation');
+        continue;
+      }
+
+      const subTasks = (res.subTasks || []).map((subTask) => ({
+        ...subTask,
+        remindAt: undefined,
+      }));
+      this._taskService.restoreTask(task, subTasks);
+
+      // Background ('always'-mode) polls stay quiet, same as the import snack
+      // above: the task reappearing in the project is the signal.
+      if (!isBackgroundPoll) {
+        this._snackService.open({
+          ico: 'info',
+          msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,
+          translateParams: { title: res.task.title },
+        });
+      }
+    }
+  }
+
   private async _checkAndHandleIssueAlreadyAdded(
     issueType: IssueProviderKey,
     issueProviderId: string,
@@ -829,6 +937,10 @@ export class IssueService {
         const taskWithTaskSubTasks = await this._taskService
           .getByIdWithSubTaskData$(res.task.id)
           .toPromise();
+        // Nothing to move if the task vanished between the lookup and here (#9946).
+        if (!taskWithTaskSubTasks) {
+          return false;
+        }
         this._taskService.moveToCurrentWorkContext(taskWithTaskSubTasks);
         this._snackService.open({
           ico: 'arrow_upward',
@@ -848,6 +960,36 @@ export class IssueService {
     return false;
   }
 
+  /**
+   * A poll result is applied as a plain `updateTask`, which never touches
+   * `remindAt`. Derive it here so a remote (re)schedule lands with its reminder
+   * in the same op (#10047) — same default the import path uses.
+   *
+   * A remote unschedule is two ops on purpose: `remindAt: undefined` inside
+   * `updateTask` is dropped by JSON serialization and never replays on other
+   * devices (#9776), so the clear goes through `dismissReminderOnly`, whose
+   * reducer sets it deterministically. Rare enough that the extra op is fine.
+   */
+  private _updateTaskFromPoll(task: Task, taskChangesIn: Partial<Task>): void {
+    // A done write to a task that is already done would only stamp a new
+    // `doneOn`: it moves the completion date and turns a won't-do task into a
+    // completed one (`isWontDoTask`).
+    const { isDone, ...rest } = taskChangesIn;
+    const taskChanges = isDone === true && task.isDone ? rest : taskChangesIn;
+    const { changes, isClearRemindAt } = withRemindAtForDueChange(
+      task,
+      taskChanges,
+      this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+        DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+    );
+    this._taskService.update(task.id, changes);
+    if (isClearRemindAt) {
+      this._store.dispatch(
+        TaskSharedActions.dismissReminderOnly({ id: task.id, isSkipSnack: true }),
+      );
+    }
+  }
+
   private _getService(key: IssueProviderKey): IssueServiceInterface | undefined {
     // Registry-first: check plugin registry before built-in map.
     // This handles both 'plugin:*' keys AND migrated keys like 'GITHUB'.
@@ -857,9 +999,9 @@ export class IssueService {
     return this.ISSUE_SERVICE_MAP[key];
   }
 
-  private _getProviderIcon(key: IssueProviderKey): string {
+  private _getProviderIcon(key: IssueProviderKey): string | undefined {
     if (this._pluginRegistry.hasProvider(key)) {
-      return this._pluginRegistry.getIcon(key);
+      return this._pluginRegistry.getSvgIcon(key);
     }
     return ISSUE_PROVIDER_ICON_MAP[key as BuiltInIssueProviderKey];
   }

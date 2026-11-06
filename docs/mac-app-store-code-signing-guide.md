@@ -99,7 +99,7 @@ Distribution identity from `security find-identity`.
    base64 -i tools/mac-profiles/mas.provisionprofile -o mas-profile.b64
    ```
 
-2. Update the `mas_provision_profile` GitHub Actions secret. Do not commit the
+2. Update the `MAC_APP_STORE_PROFILE` GitHub Actions secret. Do not commit the
    encoded profile.
 3. Build locally with the same profile:
 

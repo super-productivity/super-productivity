@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, of } from 'rxjs';
 import { resolveContextTheme, WorkContextService } from './work-context.service';
 import { SYSTEM_ENTITY_THEMES } from './work-context-default-theme.util';
 import {
@@ -8,7 +8,9 @@ import {
   WORK_CONTEXT_DEFAULT_THEME,
 } from './work-context.const';
 import { DEFAULT_PROJECT, INBOX_PROJECT } from '../project/project.const';
-import { TaskWithSubTasks } from '../tasks/task.model';
+import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../tasks/task.model';
+import { TASK_FEATURE_NAME } from '../tasks/store/task.reducer';
+import { selectAllTasksWithSubTasks } from '../tasks/store/task.selectors';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { Router } from '@angular/router';
@@ -66,11 +68,10 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
     }) as TaskWithSubTasks;
 
   beforeEach(() => {
-    // Mock current time to be 10 AM for consistent testing
+    // Pin the clock to 2023-06-13 10 AM so it matches the mocked DateService day
+    // (the later-today window is derived from DateService.todayStr()).
     jasmine.clock().install();
-    const currentTime = new Date();
-    currentTime.setHours(10, 0, 0, 0);
-    jasmine.clock().mockDate(currentTime);
+    jasmine.clock().mockDate(new Date(2023, 5, 13, 10, 0, 0, 0));
 
     // Create service mocks
     tagServiceMock = jasmine.createSpyObj('TagService', ['getTagById$']);
@@ -79,9 +80,13 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
       [],
       {
         todayDateStr$: of('2023-06-13'),
+        minuteTick$: of(Date.now()),
       },
     );
-    dateServiceMock = jasmine.createSpyObj('DateService', ['todayStr']);
+    dateServiceMock = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+    ]);
     timeTrackingServiceMock = jasmine.createSpyObj('TimeTrackingService', [
       'getWorkStartEndForWorkContext$',
     ]);
@@ -90,6 +95,7 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
     // Configure mock return values
     tagServiceMock.getTagById$.and.returnValue(of(TODAY_TAG));
     dateServiceMock.todayStr.and.returnValue('2023-06-13');
+    dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(0);
     timeTrackingServiceMock.getWorkStartEndForWorkContext$.and.returnValue(of({}));
     taskArchiveServiceMock.loadYoung.and.returnValue(
       Promise.resolve({ ids: [], entities: {} }),
@@ -150,6 +156,102 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
     jasmine.clock().uninstall();
   });
 
+  describe('done tasks on Today', () => {
+    const at = (month: number, day: number, hours: number): number =>
+      new Date(2023, month, day, hours, 0, 0, 0).getTime();
+    const DUE_TODAY = createMockTask({
+      id: 'DUE_TODAY',
+      isDone: true,
+      dueDay: '2023-06-13',
+      doneOn: at(5, 13, 9),
+    });
+    const DONE_TODAY = createMockTask({
+      id: 'DONE_TODAY',
+      isDone: true,
+      dueDay: '2023-01-02',
+      doneOn: at(5, 13, 8),
+    });
+    const DONE_EARLIER = createMockTask({
+      id: 'DONE_EARLIER',
+      isDone: true,
+      dueDay: '2023-01-01',
+      doneOn: at(0, 1, 9),
+    });
+    const DUE_TIME_TODAY = createMockTask({
+      id: 'DUE_TIME_TODAY',
+      isDone: true,
+      dueWithTime: at(5, 13, 7),
+      doneOn: at(5, 12, 9),
+    });
+    const UNDONE = createMockTask({ id: 'UNDONE', dueDay: '2023-06-13' });
+
+    beforeEach(() => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectActiveContextId, TODAY_TAG.id);
+      store.overrideSelector(selectAllTasksWithSubTasks, [
+        DONE_EARLIER,
+        DUE_TODAY,
+        DONE_TODAY,
+        DUE_TIME_TODAY,
+        UNDONE,
+      ]);
+      store.refreshState();
+    });
+
+    it('lists only tasks due or completed today, newest first', async () => {
+      const done = await firstValueFrom(service.doneTasks$);
+      expect(done.map((t) => t.id)).toEqual([
+        'DUE_TODAY',
+        'DONE_TODAY',
+        'DUE_TIME_TODAY',
+      ]);
+    });
+
+    it('drops tasks of the previous day once the day changes', () => {
+      const day$ = new BehaviorSubject('2023-06-13');
+      (
+        Object.getOwnPropertyDescriptor(
+          globalTrackingIntervalServiceMock,
+          'todayDateStr$',
+        )!.get as jasmine.Spy
+      ).and.returnValue(day$);
+      let ids: string[] = [];
+      const sub = service.doneTasks$.subscribe((tasks) => (ids = tasks.map((t) => t.id)));
+      expect(ids).toEqual(['DUE_TODAY', 'DONE_TODAY', 'DUE_TIME_TODAY']);
+
+      day$.next('2023-06-14');
+
+      expect(ids).toEqual([]);
+      sub.unsubscribe();
+    });
+
+    it('archives every unarchived done task, including earlier ones', async () => {
+      const toArchive = await firstValueFrom(service.doneTasksToArchive$);
+      expect(toArchive.map((t) => t.id)).toEqual([
+        'DUE_TODAY',
+        'DONE_TODAY',
+        'DUE_TIME_TODAY',
+        'DONE_EARLIER',
+      ]);
+    });
+
+    it('lists every done task of the context outside Today', async () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectActiveContextId, 'project-1');
+      store.refreshState();
+      // read lazily inside switchMap, so replacing it after construction works
+      (service as unknown as { mainListTasks$: unknown }).mainListTasks$ = of([
+        DONE_EARLIER,
+        DUE_TODAY,
+        UNDONE,
+      ]);
+
+      const done = await firstValueFrom(service.doneTasks$);
+
+      expect(done.map((t) => t.id)).toEqual(['DUE_TODAY', 'DONE_EARLIER']);
+    });
+  });
+
   describe('breakTimeToday$', () => {
     it('exposes recorded break time for the current day', (done) => {
       const today = '2023-06-13';
@@ -175,10 +277,13 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
 
   // Test the filtering logic directly instead of testing the full observable chain
   describe('filtering logic', () => {
-    const filterTasks = (tasks: TaskWithSubTasks[]): TaskWithSubTasks[] => {
+    const filterTasks = (
+      tasks: TaskWithSubTasks[],
+      currentTaskId: string | null = null,
+    ): TaskWithSubTasks[] => {
       return (
         (service as any)
-          ._filterFutureScheduledTasksForToday(tasks)
+          ._filterFutureScheduledTasksForToday(tasks, currentTaskId)
           // The observable filters out done tasks afterwards
           .filter((task: TaskWithSubTasks) => task && !task.isDone)
       );
@@ -225,6 +330,44 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
       expect(filteredTasks.find((t) => t.id === 'EARLIER_TODAY')).toBeDefined();
       expect(filteredTasks.find((t) => t.id === 'UNSCHEDULED')).toBeDefined();
       expect(filteredTasks.find((t) => t.id === 'DONE_TASK')).toBeUndefined();
+    });
+
+    it('should keep the tracked task even when it starts later today', () => {
+      const todayAt = (hours: number): number => {
+        const date = new Date();
+        date.setHours(hours, 0, 0, 0);
+        return date.getTime();
+      };
+
+      const mockTasks: TaskWithSubTasks[] = [
+        createMockTask({
+          id: 'TRACKED',
+          title: 'Appointment started early',
+          dueWithTime: todayAt(14),
+        }),
+        createMockTask({
+          id: 'NOT_TRACKED',
+          title: 'Other appointment',
+          dueWithTime: todayAt(15),
+        }),
+      ];
+
+      const filteredTasks = filterTasks(mockTasks, 'TRACKED');
+
+      expect(filteredTasks.map((t) => t.id)).toEqual(['TRACKED']);
+    });
+
+    it('should keep the parent of the tracked subtask even when it starts later today', () => {
+      const laterToday = new Date();
+      laterToday.setHours(14, 0, 0, 0);
+      const parent = createMockTask({
+        id: 'PARENT',
+        dueWithTime: laterToday.getTime(),
+        subTaskIds: ['SUB'],
+      });
+
+      expect(filterTasks([parent], 'SUB').map((t) => t.id)).toEqual(['PARENT']);
+      expect(filterTasks([parent], null)).toEqual([]);
     });
 
     it('should NOT filter out tasks scheduled for tomorrow', () => {
@@ -512,6 +655,14 @@ describe('WorkContextService - getDoneTodayInArchive', () => {
     jasmine.clock().uninstall();
   });
 
+  it('doneTodayArchived$ falls back to 0 when the archive read fails', async () => {
+    taskArchiveServiceMock.loadYoung.and.returnValue(Promise.reject(new Error('idb')));
+
+    const result = await firstValueFrom(service.doneTodayArchived$);
+
+    expect(result).toBe(0);
+  });
+
   it('does not count a task done yesterday (different logical day)', async () => {
     dateServiceMock.isToday.and.returnValue(false);
     taskArchiveServiceMock.loadYoung.and.returnValue(
@@ -673,6 +824,42 @@ describe('WorkContextService - activeWorkContext$ distinctUntilChanged', () => {
 
     ttSub.unsubscribe();
     sub.unsubscribe();
+  });
+
+  it('keeps unchanged task objects when a task is added to or moved in the list', () => {
+    const tasks = ['A', 'B', 'C'].map(
+      (id): Task => ({ ...DEFAULT_TASK, id, projectId: 'P', title: id }),
+    );
+    store.setState({
+      workContext: { activeId: TODAY_TAG.id, activeType: 'TAG' },
+      tag: { entities: {}, ids: [] },
+      project: { entities: {}, ids: [] },
+      [TASK_FEATURE_NAME]: {
+        ids: tasks.map((t) => t.id),
+        entities: Object.fromEntries(tasks.map((t) => [t.id, t])),
+      },
+    });
+    const showTaskIds = (taskIds: string[]): void => {
+      store.overrideSelector(selectActiveWorkContext, { ...CTX1, taskIds });
+      store.refreshState();
+    };
+    showTaskIds(['A', 'B']);
+    const lists: TaskWithSubTasks[][] = [];
+    const sub = service.mainListTasks$.subscribe((list) => lists.push(list));
+
+    showTaskIds(['A', 'B', 'C']);
+    showTaskIds(['C', 'A', 'B']);
+    sub.unsubscribe();
+
+    expect(lists.length).toBe(3);
+    const [[a, b], added, moved] = lists;
+    expect(added.map((t) => t.id)).toEqual(['A', 'B', 'C']);
+    expect(added[0]).toBe(a);
+    expect(added[1]).toBe(b);
+    expect(moved.map((t) => t.id)).toEqual(['C', 'A', 'B']);
+    expect(moved[0]).toBe(added[2]);
+    expect(moved[1]).toBe(a);
+    expect(moved[2]).toBe(b);
   });
 });
 

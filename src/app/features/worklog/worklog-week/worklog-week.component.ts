@@ -1,11 +1,18 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  afterRenderEffect,
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  signal,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { WorklogService } from '../worklog.service';
 import { DialogWorklogExportComponent } from '../dialog-worklog-export/dialog-worklog-export.component';
 import { MatDialog } from '@angular/material/dialog';
 import { expandAnimation, expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { getDateRangeForWeek } from '../../../util/get-date-range-for-week';
-import { getWeekNumber } from '../../../util/get-week-number';
+import { getWeekStartDate } from '../../../util/get-week-start-date';
+import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
 import { T } from '../../../t.const';
@@ -21,6 +28,12 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { MetricService } from '../../metric/metric.service';
 import { DialogViewArchivedTaskComponent } from '../../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { WorklogTaskRowComponent } from '../worklog-task-row/worklog-task-row.component';
+import { WorklogDay } from '../worklog.model';
+
+export const sortWorklogDays = (
+  a: KeyValue<string, WorklogDay>,
+  b: KeyValue<string, WorklogDay>,
+): number => a.value.dateStr.localeCompare(b.value.dateStr);
 
 @Component({
   selector: 'worklog-week',
@@ -47,23 +60,36 @@ export class WorklogWeekComponent {
   private readonly _matDialog = inject(MatDialog);
   private readonly _taskService = inject(TaskService);
   private _dateAdapter = inject(DateAdapter);
+  private readonly _dateService = inject(DateService);
   private readonly _metricService = inject(MetricService);
+
+  // undefined while the worklog loads, null when the week has no entries
+  readonly currentWeek = toSignal(this.worklogService.currentWeek$);
+  // Rows rendered with the first data appear in place; only later toggles animate.
+  readonly isAnimationEnabled = signal(false);
 
   visibility: boolean[] = [];
   T: typeof T = T;
   keys: (o: Record<string, unknown>) => string[] = Object.keys;
 
-  sortDays<T extends KeyValue<string, V>, V = unknown>(a: T, b: T): number {
-    return b.key < a.key ? 1 : -1;
+  sortDays = sortWorklogDays;
+
+  constructor() {
+    afterRenderEffect(() => {
+      if (this.currentWeek() !== undefined) {
+        this.isAnimationEnabled.set(true);
+      }
+    });
   }
 
   async exportData(): Promise<void> {
-    const now = new Date();
-    const year = now.getFullYear();
-    const weekNr = getWeekNumber(now, this._dateAdapter.getFirstDayOfWeek());
-
-    // get for whole week
-    const { rangeStart, rangeEnd } = getDateRangeForWeek(year, weekNr);
+    // the displayed week (see getWorklogWeekForDate), through its last day
+    const rangeStart = getWeekStartDate(
+      this._dateService.getLogicalTodayDate(),
+      this._dateAdapter.getFirstDayOfWeek(),
+    );
+    const rangeEnd = new Date(rangeStart);
+    rangeEnd.setDate(rangeEnd.getDate() + 6);
 
     this._matDialog.open(DialogWorklogExportComponent, {
       restoreFocus: true,

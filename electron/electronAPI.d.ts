@@ -3,7 +3,7 @@
 // relied on the now-removed `import { IpcRendererEvent } from 'electron'` here to
 // transitively supply them. Several frontend/shared modules still probe Node globals
 // guarded at runtime (get-dist-channel's `process`/`NodeJS`,
-// create-task-placeholder's `NodeJS.Timeout`, user-profile's `require`),
+// create-task-placeholder's `NodeJS.Timeout`),
 // so re-expose them explicitly instead of by accident.
 /// <reference types="node" />
 import {
@@ -20,8 +20,14 @@ import { PluginNodeExecutionElectronApi } from './shared-with-frontend/plugin-no
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
+  LocalRestApiState,
 } from './shared-with-frontend/local-rest-api.model';
 import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
+import {
+  AssistantAccessCredentialResult,
+  AssistantAccessScope,
+  AssistantAccessState,
+} from './shared-with-frontend/assistant-access.model';
 import { JiraElectronApi } from './shared-with-frontend/jira-request.model';
 
 export interface ElectronAPI {
@@ -39,6 +45,9 @@ export interface ElectronAPI {
 
   checkBackupAvailable(): Promise<false | LocalBackupMeta>;
 
+  /** All automatic backup files, newest first. */
+  listBackups(): Promise<LocalBackupMeta[]>;
+
   loadBackupData(backupPath: string): Promise<string>;
 
   fileSyncSave(args: {
@@ -53,8 +62,6 @@ export interface ElectronAPI {
   }): Promise<{ rev: string; dataStr: string | undefined } | Error>;
 
   fileSyncRemove(args: { relativePath: string }): Promise<unknown | Error>;
-
-  fileSyncListFiles(args: { relativePath?: string }): Promise<string[] | Error>;
 
   checkDirExists(args: { relativePath?: string }): Promise<true | Error>;
 
@@ -218,7 +225,7 @@ export interface ElectronAPI {
 
   flashFrame(): void;
 
-  showOrFocus(): void;
+  showOrFocus(opts?: { isReminder?: boolean }): void;
 
   lockScreen(): void;
 
@@ -232,8 +239,9 @@ export interface ElectronAPI {
 
   setProgressBar(args: {
     progress: number;
-    progressBarMode: 'normal' | 'pause' | 'none';
+    progressBarMode: 'normal' | 'paused' | 'none';
   }): void;
+  setDueTaskBadge(count: number, iconDataUrl?: string): void;
 
   sendAppSettingsToElectron(globalCfg: GlobalConfigState): void;
 
@@ -282,4 +290,10 @@ export interface ElectronAPI {
   sendLocalRestApiResponse(payload: LocalRestApiResponsePayload): void;
   getLocalRestApiToken(): Promise<string>;
   regenerateLocalRestApiToken(): Promise<string>;
+  getLocalRestApiState(): Promise<LocalRestApiState>;
+  setLocalRestApiEnabled(isEnabled: boolean): Promise<LocalRestApiState>;
+  getAssistantAccessState(): Promise<AssistantAccessState>;
+  setAssistantAccessEnabled(isEnabled: boolean): Promise<AssistantAccessState>;
+  setAssistantAccessScopes(scopes: AssistantAccessScope[]): Promise<AssistantAccessState>;
+  rotateAssistantAccessCredential(): Promise<AssistantAccessCredentialResult>;
 }

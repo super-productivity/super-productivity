@@ -96,6 +96,7 @@ describe('createPluginSyncAdapter', () => {
       createMockDefinition(),
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const mappings = adapter.getFieldMappings();
@@ -111,6 +112,7 @@ describe('createPluginSyncAdapter', () => {
       createMockDefinition(),
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const syncConfig = adapter.getSyncConfig(MOCK_CFG);
@@ -139,6 +141,7 @@ describe('createPluginSyncAdapter', () => {
       }),
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     expect(adapter.getFieldMappings()[0].defaultDirection).toBe('pullOnly');
@@ -155,6 +158,7 @@ describe('createPluginSyncAdapter', () => {
       createMockDefinition(),
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const cfgWithoutSync = {
@@ -171,6 +175,7 @@ describe('createPluginSyncAdapter', () => {
       definition,
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const result = await adapter.fetchIssue('1', MOCK_CFG);
@@ -189,6 +194,7 @@ describe('createPluginSyncAdapter', () => {
       definition,
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     await adapter.pushChanges('1', { state: 'closed' }, MOCK_CFG);
@@ -207,6 +213,7 @@ describe('createPluginSyncAdapter', () => {
       definition,
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     await expectAsync(
@@ -220,6 +227,7 @@ describe('createPluginSyncAdapter', () => {
       definition,
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const issue = { state: 'open', title: 'test', extra: 'ignored' };
@@ -235,6 +243,7 @@ describe('createPluginSyncAdapter', () => {
       definition,
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const issue = { state: 'open', title: 'test', extra: 'ignored' };
@@ -243,12 +252,26 @@ describe('createPluginSyncAdapter', () => {
     expect(result).toEqual({ state: 'open', title: 'test' });
   });
 
+  it('should return no sync values without calling the plugin when nothing is mapped', () => {
+    const definition = createMockDefinition({ fieldMappings: [] });
+    const adapter = createPluginSyncAdapter(
+      definition,
+      () => mockHttpHelper,
+      mockTagService,
+      'test-plugin',
+    );
+
+    expect(adapter.extractSyncValues({ state: 'open' })).toEqual({});
+    expect(definition.extractSyncValues).not.toHaveBeenCalled();
+  });
+
   it('should create issue via definition.createIssue', async () => {
     const definition = createMockDefinition();
     const adapter = createPluginSyncAdapter(
       definition,
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const result = await adapter.createIssue!('new issue', MOCK_CFG);
@@ -268,6 +291,7 @@ describe('createPluginSyncAdapter', () => {
       definition,
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     await expectAsync(adapter.createIssue!('new issue', MOCK_CFG)).toBeRejectedWithError(
@@ -280,6 +304,7 @@ describe('createPluginSyncAdapter', () => {
       createMockDefinition(),
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const mappings = adapter.getFieldMappings();
@@ -307,6 +332,7 @@ describe('createPluginSyncAdapter', () => {
       createMockDefinition({ fieldMappings: mappingsWithExclusive }),
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const mappings = adapter.getFieldMappings();
@@ -321,6 +347,7 @@ describe('createPluginSyncAdapter', () => {
       createMockDefinition(),
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     const mappings = adapter.getFieldMappings();
@@ -337,6 +364,7 @@ describe('createPluginSyncAdapter', () => {
       definition,
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     await adapter.deleteIssue!('99', MOCK_CFG);
@@ -354,6 +382,7 @@ describe('createPluginSyncAdapter', () => {
       definition,
       () => mockHttpHelper,
       mockTagService,
+      'test-plugin',
     );
 
     expect(adapter.deleteIssue).toBeUndefined();
@@ -378,6 +407,7 @@ describe('createPluginSyncAdapter', () => {
         definition,
         () => mockHttpHelper,
         tagServiceWithTags,
+        'test-plugin',
       );
 
       const mappings = adapter.getFieldMappings();
@@ -403,6 +433,7 @@ describe('createPluginSyncAdapter', () => {
         definition,
         () => mockHttpHelper,
         tagServiceNoTags,
+        'test-plugin',
       );
 
       const mappings = adapter.getFieldMappings();
@@ -423,6 +454,7 @@ describe('createPluginSyncAdapter', () => {
         definition,
         () => mockHttpHelper,
         tagServiceWithTags,
+        'test-plugin',
       );
 
       const issue = { state: 'open', title: 'test', labels: ['feature', 'bug'] };
@@ -442,6 +474,7 @@ describe('createPluginSyncAdapter', () => {
         definition,
         () => mockHttpHelper,
         tagServiceWithTags,
+        'test-plugin',
       );
 
       const issue = { state: 'open', title: 'test', labels: ['feature', 'bug'] };

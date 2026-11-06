@@ -32,9 +32,18 @@ import { sanitizeSvgIconContent } from '../../../util/sanitize-svg-icon.util';
         justify-content: center;
       }
 
+      /* Used as a menu item icon: Material only spaces its own .mat-icon, so take
+         the same gap here to line the label up with the other items. */
+      :host[matMenuItemIcon] {
+        margin-inline-end: var(--mat-menu-item-spacing, 12px);
+      }
+
       :host mat-icon {
         display: flex;
         flex: 1;
+        /* Inside a menu item Material's .mat-mdc-menu-item .mat-icon rule would also
+           space this nested icon; the host already carries that gap. */
+        margin: 0;
       }
 
       .plugin-svg-icon {

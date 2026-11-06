@@ -1,0 +1,53 @@
+// Shared styles for dialogs that render an async list.
+// Used by: dialog-restore-point, dialog-sync-devices, dialog-backups-list
+//
+// Values are kept in `rem` rather than moved onto the spacing/font tokens:
+// `html` sets `font-size: var(--font-size-md)` (14px), so 1rem is 14px here and
+// the nearest tokens (--s2 = 16px, --font-size-md = 14px) are all a step
+// larger. Swapping them in would restyle the shipped restore-point dialog.
+
+// Centred placeholder shown while loading, on error, and when the list is empty.
+@mixin dialog-list-states {
+  .loading,
+  .empty,
+  .error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+    gap: 1rem;
+
+    mat-icon {
+      // Matched icon-box sizing — off the spacing scale by design, see
+      // docs/styling-guide.md.
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      opacity: 0.5;
+    }
+  }
+
+  .error mat-icon {
+    color: var(--color-danger);
+  }
+}
+
+// Scrolling column of bordered rows.
+@mixin dialog-list-rows($row-selector) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+
+  #{$row-selector} {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    border: 1px solid var(--extra-border-color);
+    border-radius: var(--card-border-radius);
+  }
+}

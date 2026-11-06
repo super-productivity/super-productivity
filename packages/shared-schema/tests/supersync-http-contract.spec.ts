@@ -5,7 +5,10 @@ import {
   SuperSyncDownloadOpsQuerySchema,
   SuperSyncDownloadOpsResponseSchema,
   SuperSyncOperationSchema,
+  SuperSyncRestorePointsResponseSchema,
+  SuperSyncSnapshotUploadResponseSchema,
   SuperSyncUploadOpsRequestSchema,
+  SuperSyncUploadOpsResponseSchema,
   SuperSyncUploadSnapshotRequestSchema,
 } from '../src/supersync-http-contract';
 
@@ -231,6 +234,74 @@ describe('SuperSync HTTP contract schemas', () => {
     expect(parsed.capabilities?.causalRepairSnapshots).toBe(true);
   });
 
+  it('keeps download-side vocabulary fields loose so an unknown value cannot reject a page (#8764)', () => {
+    const page = (ops: unknown[]): unknown => ({
+      ops: ops.map((op, i) => ({ serverSeq: i + 1, op, receivedAt: 1 })),
+      hasMore: false,
+      latestSeq: ops.length,
+    });
+
+    const parsed = SuperSyncDownloadOpsResponseSchema.parse(
+      page([
+        createValidOperation(),
+        { ...createValidOperation(), id: 'op-2', opType: 'FUTURE_OP' },
+        {
+          ...createValidOperation(),
+          id: 'op-3',
+          opType: 'SYNC_IMPORT',
+          syncImportReason: 'FUTURE_REASON',
+        },
+      ]),
+    );
+
+    expect(parsed.ops.map((entry) => entry.op.opType)).toEqual([
+      'CRT',
+      'FUTURE_OP',
+      'SYNC_IMPORT',
+    ]);
+    expect(parsed.ops[2].op.syncImportReason).toBe('FUTURE_REASON');
+    // Structure stays strict: the value must still be a non-empty string.
+    expect(() =>
+      SuperSyncDownloadOpsResponseSchema.parse(
+        page([{ ...createValidOperation(), opType: 123 }]),
+      ),
+    ).toThrow();
+    expect(() =>
+      SuperSyncDownloadOpsResponseSchema.parse(
+        page([{ ...createValidOperation(), opType: '' }]),
+      ),
+    ).toThrow();
+    // The strict enum still guards the standalone operation schema (request side).
+    expect(() =>
+      SuperSyncOperationSchema.parse({ ...createValidOperation(), opType: 'FUTURE_OP' }),
+    ).toThrow();
+  });
+
+  it('keeps restore-point types loose on the response side (#8764)', () => {
+    const parsed = SuperSyncRestorePointsResponseSchema.parse({
+      restorePoints: [
+        { serverSeq: 1, timestamp: 1, type: 'SYNC_IMPORT', clientId: 'c' },
+        { serverSeq: 2, timestamp: 2, type: 'FUTURE_SNAPSHOT', clientId: 'c' },
+      ],
+    });
+
+    expect(parsed.restorePoints.map((point) => point.type)).toEqual([
+      'SYNC_IMPORT',
+      'FUTURE_SNAPSHOT',
+    ]);
+  });
+
+  it('accepts a false capability flag instead of failing the download page (#8764)', () => {
+    const parsed = SuperSyncDownloadOpsResponseSchema.parse({
+      ops: [],
+      hasMore: false,
+      latestSeq: 0,
+      capabilities: { causalRepairSnapshots: false },
+    });
+
+    expect(parsed.capabilities?.causalRepairSnapshots).toBe(false);
+  });
+
   it('requires an operation ID for destructive clean-slate snapshots', () => {
     expect(() =>
       SuperSyncUploadSnapshotRequestSchema.parse({
@@ -269,6 +340,39 @@ describe('SuperSync HTTP contract schemas', () => {
         ops: [createValidOperation()],
         clientId: 'client_1',
         requestId: 'x'.repeat(65),
+      }),
+    ).toThrow();
+  });
+
+  it('types deduplicated upload responses instead of relying on passthrough', () => {
+    const parsed = SuperSyncUploadOpsResponseSchema.parse({
+      results: [],
+      latestSeq: 12,
+      deduplicated: true,
+    });
+
+    expect(parsed.deduplicated).toBe(true);
+    expect(() =>
+      SuperSyncUploadOpsResponseSchema.parse({
+        results: [],
+        latestSeq: 12,
+        deduplicated: 'true',
+      }),
+    ).toThrow();
+  });
+
+  it('types snapshot upload errorCode responses instead of relying on passthrough', () => {
+    const parsed = SuperSyncSnapshotUploadResponseSchema.parse({
+      accepted: false,
+      error: 'SYNC_IMPORT_EXISTS',
+      errorCode: 'SYNC_IMPORT_EXISTS',
+    });
+
+    expect(parsed.errorCode).toBe('SYNC_IMPORT_EXISTS');
+    expect(() =>
+      SuperSyncSnapshotUploadResponseSchema.parse({
+        accepted: false,
+        errorCode: 409,
       }),
     ).toThrow();
   });

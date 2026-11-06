@@ -13,7 +13,9 @@ import { T } from 'src/app/t.const';
 import {
   BaseOption,
   DEFAULT_OPTIONS,
+  FILTER_COMMON,
   FILTER_OPTION_TYPE,
+  FILTER_PRIORITY,
   FILTER_SCHEDULE,
   FILTER_TIME,
   FilterOption,
@@ -46,11 +48,14 @@ export class TaskViewCustomizerMenuItemComponent {
   readonly PRESETS = PRESETS;
 
   readonly type = input.required<FILTER_OPTION_TYPE>();
-  readonly options = input.required<BaseOption<FILTER_SCHEDULE | FILTER_TIME>[]>();
+  readonly options =
+    input.required<
+      BaseOption<FILTER_COMMON | FILTER_SCHEDULE | FILTER_TIME | FILTER_PRIORITY>[]
+    >();
   readonly selectedFilter = input.required<FilterOption>();
 
   readonly byClick = output<{
     filterType: FILTER_OPTION_TYPE;
-    preset: FILTER_SCHEDULE | FILTER_TIME | null;
+    preset: FILTER_COMMON | FILTER_SCHEDULE | FILTER_TIME | FILTER_PRIORITY | null;
   }>();
 }

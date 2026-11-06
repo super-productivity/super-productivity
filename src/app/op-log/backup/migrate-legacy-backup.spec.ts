@@ -6,6 +6,9 @@ import { validateFull } from '../validation/validation-fn';
 import { AppDataComplete, MODEL_CONFIGS } from '../model/model-config';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import fixture from './test-fixtures/legacy-v10-backup.json';
+import { getDbDateStr } from '../../util/get-db-date-str';
+import { WORKLOG_EXPORT_DEFAULTS } from '../../features/work-context/work-context.const';
+import { WorklogGrouping } from '../../features/worklog/worklog.model';
 
 /**
  * Creates a minimal v10-era legacy backup structure.
@@ -392,6 +395,37 @@ describe('migrate-legacy-backup', () => {
       expect(task.plannedAt).toBeUndefined();
     });
 
+    // #7645: this is the one raw caller of getStartOfNextDayDiffMs -- it feeds
+    // un-normalized config straight in and uses the resulting todayStr to assign
+    // dueDay / evict tasks from TODAY_TAG. v18.5.0-v18.6.x could persist
+    // `{ startOfNextDayTime: '24:00', startOfNextDay: 23 }`, which resolved to a
+    // ~24h offset and put the whole import on yesterday.
+    it('should not shift the day boundary for a poisoned start-of-next-day pair (#7645)', () => {
+      const data = createLegacyBackup();
+      data.globalConfig.misc.startOfNextDayTime = '24:00';
+      data.globalConfig.misc.startOfNextDay = 23;
+      data.tag.entities.TODAY.taskIds = ['task-1'];
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.tag.entities.TODAY.taskIds).toEqual(['task-1']);
+      expect(result.task.entities['task-1'].dueDay).toBe(getDbDateStr(new Date()));
+    });
+
+    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+
+    it('should honour a genuine legacy start-of-next-day hour without a time string', () => {
+      const data = createLegacyBackup();
+      data.globalConfig.misc.startOfNextDay = 4;
+      data.tag.entities.TODAY.taskIds = ['task-1'];
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1'].dueDay).toBe(
+        getDbDateStr(new Date(Date.now() - FOUR_HOURS_MS)),
+      );
+    });
+
     it('should migrate legacy task reminders to task.remindAt', () => {
       const data = createLegacyBackup();
       data.reminders = [
@@ -624,6 +658,74 @@ describe('migrate-legacy-backup', () => {
       expect(result.task.ids.length).toBe(0);
       expect(result.archiveYoung.task.ids.length).toBe(0);
       expect(result.archiveOld.task.ids.length).toBe(0);
+    });
+
+    describe('legacy entity defaults', () => {
+      const createWithEntities = (
+        repeatCfgs: Record<string, Record<string, unknown>>,
+      ): Record<string, any> => {
+        const data = createLegacyBackup();
+        data.note.ids = ['note-1'];
+        data.note.entities = {
+          'note-1': { id: 'note-1', content: 'n', created: 1000, projectId: 'proj-1' },
+        };
+        data.taskRepeatCfg.ids = Object.keys(repeatCfgs);
+        data.taskRepeatCfg.entities = repeatCfgs;
+        return data;
+      };
+
+      it('should fill advancedCfg, note.modified and repeat fields when absent', () => {
+        const data = createWithEntities({
+          'rc-top': { id: 'rc-top', title: 'Top' },
+          'rc-bottom': { id: 'rc-bottom', title: 'Bottom', isAddToBottom: true },
+        });
+
+        const result = migrateLegacyBackup(data) as any;
+
+        const defaultAdvancedCfg = { worklogExportSettings: WORKLOG_EXPORT_DEFAULTS };
+        expect(result.project.entities['proj-1'].advancedCfg).toEqual(defaultAdvancedCfg);
+        expect(result.tag.entities.TODAY.advancedCfg).toEqual(defaultAdvancedCfg);
+        // A copy, so editing one context's settings cannot touch the defaults.
+        expect(
+          result.project.entities['proj-1'].advancedCfg.worklogExportSettings,
+        ).not.toBe(WORKLOG_EXPORT_DEFAULTS);
+        expect(result.note.entities['note-1'].modified).toBe(1000);
+        expect(result.taskRepeatCfg.entities['rc-top']).toEqual(
+          jasmine.objectContaining({ repeatCycle: 'WEEKLY', repeatEvery: 1, order: 0 }),
+        );
+        // The pre-v14 migration mapped legacy isAddToBottom to order 1.
+        expect(result.taskRepeatCfg.entities['rc-bottom'].order).toBe(1);
+      });
+
+      it('should keep existing advancedCfg, note.modified and repeat fields', () => {
+        const data = createWithEntities({
+          'rc-1': {
+            id: 'rc-1',
+            title: 'Kept',
+            repeatCycle: 'MONTHLY',
+            repeatEvery: 3,
+            // An explicit order wins over the legacy flag.
+            order: 0,
+            isAddToBottom: true,
+          },
+        });
+        const customAdvancedCfg = {
+          worklogExportSettings: {
+            ...WORKLOG_EXPORT_DEFAULTS,
+            groupBy: WorklogGrouping.TASK,
+          },
+        };
+        data.project.entities['proj-1'].advancedCfg = structuredClone(customAdvancedCfg);
+        data.note.entities['note-1'].modified = 2000;
+
+        const result = migrateLegacyBackup(data) as any;
+
+        expect(result.project.entities['proj-1'].advancedCfg).toEqual(customAdvancedCfg);
+        expect(result.note.entities['note-1'].modified).toBe(2000);
+        expect(result.taskRepeatCfg.entities['rc-1']).toEqual(
+          jasmine.objectContaining({ repeatCycle: 'MONTHLY', repeatEvery: 3, order: 0 }),
+        );
+      });
     });
   });
 

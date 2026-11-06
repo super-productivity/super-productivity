@@ -1,0 +1,165 @@
+import { inject, Injectable } from '@angular/core';
+import { createEffect } from '@ngrx/effects';
+import { Store } from '@ngrx/store';
+import { Dictionary } from '@ngrx/entity';
+import { combineLatest, fromEvent, merge, Observable } from 'rxjs';
+import {
+  distinctUntilChanged,
+  filter,
+  map,
+  startWith,
+  switchMap,
+  take,
+  tap,
+  withLatestFrom,
+} from 'rxjs/operators';
+import { MOBILE_BACKGROUND_IDLE_CAP_MS } from '../../../app.constants';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
+import { Task } from '../../tasks/task.model';
+import {
+  selectCurrentTaskId,
+  selectTaskEntities,
+} from '../../tasks/store/task.selectors';
+import { TaskService } from '../../tasks/task.service';
+import { FocusModeState } from '../focus-mode.model';
+import {
+  FocusModeStorageService,
+  FocusSessionSnapshot,
+} from '../focus-mode-storage.service';
+import { restoreFocusSession } from './focus-mode.actions';
+import { selectFocusModeState } from './focus-mode.selectors';
+
+type SnapshotInput = Omit<FocusSessionSnapshot, 'savedAt'>;
+
+const toSnapshotInput = (
+  state: FocusModeState,
+  currentTaskId: string | null,
+): SnapshotInput | null =>
+  state.timer.purpose === null
+    ? null
+    : {
+        timer: state.timer,
+        mode: state.mode,
+        currentCycle: state.currentCycle,
+        pausedTaskId: state.pausedTaskId,
+        trackedTaskId: currentTaskId,
+      };
+
+// `elapsed` changes every tick while running but is derivable from
+// `startedAt`, so ignore it there to avoid a localStorage write per second.
+const snapshotKey = (input: SnapshotInput | null): string =>
+  JSON.stringify(
+    input?.timer.isRunning ? { ...input, timer: { ...input.timer, elapsed: 0 } } : input,
+  );
+
+const isSessionOver = (timer: FocusSessionSnapshot['timer'], now: number): boolean =>
+  timer.duration > 0 && !!timer.startedAt && now - timer.startedAt >= timer.duration;
+
+/**
+ * Keeps a running/paused focus session in localStorage and re-adopts it when the
+ * app starts with an idle store, so an iOS WebView killed in the background
+ * does not reset the Pomodoro or stop task tracking.
+ * Focus state is local-only (never op-logged), so this has no sync surface.
+ * Registered on iOS only: AndroidFocusModeEffects recovers from the native
+ * foreground service (a second path would race it), and on desktop/web closing
+ * the app is a deliberate end of the session.
+ */
+@Injectable()
+export class FocusModeSessionPersistenceEffects {
+  private _store = inject(Store);
+  private _storage = inject(FocusModeStorageService);
+  private _syncTrigger = inject(SyncTriggerService);
+  private _hydrationState = inject(HydrationStateService);
+  private _taskService = inject(TaskService);
+  private _globalTrackingInterval = inject(GlobalTrackingIntervalService);
+
+  // Restore must read the snapshot before the first (idle) state is persisted,
+  // which would otherwise clear it. It waits for startup sync: a session that
+  // ended while away completes on its first tick, and completion detection
+  // skips emissions while remote ops are applied, so it would never complete.
+  restoreThenPersist$ = createEffect(
+    () =>
+      this._syncTrigger.afterInitialSyncDoneStrict$.pipe(
+        take(1),
+        waitForSyncWindow(this._hydrationState, 'FocusModeSessionPersistence:restore'),
+        withLatestFrom(
+          this._store.select(selectFocusModeState),
+          this._store.select(selectTaskEntities),
+          this._store.select(selectCurrentTaskId),
+        ),
+        tap(([, state, entities, currentTaskId]) => {
+          if (state.timer.purpose === null) {
+            this._restore(entities, currentTaskId);
+          }
+        }),
+        switchMap(() => this._persist$()),
+      ),
+    { dispatch: false },
+  );
+
+  private _persist$(): Observable<unknown> {
+    // Refresh `savedAt` when the app is backgrounded/closed: it marks how long
+    // the app was away, which decides whether the session is still worth restoring.
+    const pageHidden$ = merge(
+      fromEvent(document, 'visibilitychange').pipe(
+        filter(() => document.visibilityState === 'hidden'),
+      ),
+      fromEvent(window, 'pagehide'),
+    ).pipe(startWith(undefined));
+
+    const input$ = combineLatest([
+      this._store.select(selectFocusModeState),
+      this._store.select(selectCurrentTaskId),
+    ]).pipe(
+      map(([state, currentTaskId]) => toSnapshotInput(state, currentTaskId)),
+      distinctUntilChanged((a, b) => snapshotKey(a) === snapshotKey(b)),
+    );
+
+    return combineLatest([input$, pageHidden$]).pipe(
+      tap(([input]) =>
+        input
+          ? this._storage.setSessionSnapshot({ ...input, savedAt: Date.now() })
+          : this._storage.clearSessionSnapshot(),
+      ),
+    );
+  }
+
+  private _restore(entities: Dictionary<Task>, currentTaskId: string | null): void {
+    const snapshot = this._storage.getSessionSnapshot();
+    const now = Date.now();
+    // shortcut: same cap as the iOS resume gap — a session left for longer
+    // was most likely abandoned on purpose.
+    if (!snapshot || now - snapshot.savedAt > MOBILE_BACKGROUND_IDLE_CAP_MS) return;
+    const { timer, mode, currentCycle, pausedTaskId, trackedTaskId } = snapshot;
+    // A session that ended while away completes on the next tick with
+    // `elapsed = now - startedAt`; pin the start so it logs its real length,
+    // not the time the app was gone.
+    const restoredTimer =
+      timer.isRunning && isSessionOver(timer, now)
+        ? { ...timer, startedAt: now - timer.duration }
+        : timer;
+    this._store.dispatch(
+      restoreFocusSession({ timer: restoredTimer, mode, currentCycle, pausedTaskId }),
+    );
+
+    // A session that ended while the app was gone completes via the tick
+    // reducer; tracking it again would count time after its end. A task the
+    // user started while sync was pending wins over the snapshot's.
+    const trackedTask = trackedTaskId ? entities[trackedTaskId] : undefined;
+    if (
+      trackedTaskId &&
+      !currentTaskId &&
+      timer.purpose === 'work' &&
+      timer.isRunning &&
+      !isSessionOver(timer, now) &&
+      trackedTask &&
+      !trackedTask.isDone
+    ) {
+      this._globalTrackingInterval.resetTrackingStart();
+      this._taskService.setCurrentId(trackedTaskId);
+    }
+  }
+}

@@ -15,16 +15,22 @@ const syncFilePrefixHelpers = createSyncFilePrefixHelpers({
     // the @sp/sync-providers privacy refactor), so the log call moved
     // here — the only site that owns the bridge between the package
     // helper's invalid-prefix detection and the app's OpLog history.
-    // The key names are inlined in the first-arg string so they survive
-    // any downstream serialization that stringifies args positionally.
+    // The key names are inlined in the first-arg string so the line reads as
+    // one greppable unit in a console. The structured meta is what the log
+    // EXPORT carries: `Log.exportLogHistory()` JSON-round-trips each arg, so
+    // the fields survive there on their own.
     OpLog.log(
       `InvalidFilePrefixError (inputLength=${details.inputLength}, ` +
         `expectedPrefix="${details.expectedPrefix}", ` +
-        `endSeparator="${details.endSeparator}")`,
+        `endSeparator="${details.endSeparator}", ` +
+        `prefixAt=${details.prefixAt}, ` +
+        `headShape="${details.headShape}")`,
       {
         expectedPrefix: details.expectedPrefix,
         endSeparator: details.endSeparator,
         inputLength: details.inputLength,
+        prefixAt: details.prefixAt,
+        headShape: details.headShape,
       },
     );
     return new InvalidFilePrefixError(details);

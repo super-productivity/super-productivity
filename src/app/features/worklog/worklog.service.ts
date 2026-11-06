@@ -13,6 +13,7 @@ import {
   switchMap,
 } from 'rxjs/operators';
 import { getWeekNumber } from '../../util/get-week-number';
+import { getWeekStartDate } from '../../util/get-week-start-date';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContext } from '../work-context/work-context.model';
 import { mapArchiveToWorklog } from './util/map-archive-to-worklog';
@@ -28,6 +29,57 @@ import { TaskArchiveService } from '../archive/task-archive.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { Log } from '../../core/log';
+import { DateService } from '../../core/date/date.service';
+
+export const getWorklogWeekForDate = (
+  worklog: Worklog,
+  relativeDate: Date,
+  firstDayOfWeek: number,
+): WorklogWeek | null => {
+  const normalizedFirstDayOfWeek = ((firstDayOfWeek % 7) + 7) % 7;
+  const rangeEnd = new Date(
+    relativeDate.getFullYear(),
+    relativeDate.getMonth(),
+    relativeDate.getDate(),
+  );
+  const rangeStart = getWeekStartDate(rangeEnd, firstDayOfWeek);
+  const weekEnd = new Date(rangeStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+
+  const ent: WorklogWeek['ent'] = {};
+  let daysWorked = 0;
+  let timeSpent = 0;
+
+  for (
+    const date = new Date(rangeStart);
+    date <= rangeEnd;
+    date.setDate(date.getDate() + 1)
+  ) {
+    const day =
+      worklog[date.getFullYear()]?.ent[date.getMonth() + 1]?.ent[date.getDate()];
+
+    if (day) {
+      ent[date.getDate()] = day;
+      daysWorked += 1;
+      timeSpent += day.timeSpent;
+    }
+  }
+
+  if (daysWorked === 0) {
+    return null;
+  }
+
+  return {
+    start: rangeStart.getDate(),
+    end: weekEnd.getDate(),
+    startDateStr: getDbDateStr(rangeStart),
+    endDateStr: getDbDateStr(weekEnd),
+    weekNr: getWeekNumber(relativeDate, normalizedFirstDayOfWeek),
+    timeSpent,
+    daysWorked,
+    ent,
+  };
+};
 
 @Injectable({ providedIn: 'root' })
 export class WorklogService {
@@ -37,6 +89,7 @@ export class WorklogService {
   private readonly _timeTrackingService = inject(TimeTrackingService);
   private readonly _router = inject(Router);
   private readonly _dateTimeFormatService = inject(DateTimeFormatService);
+  private readonly _dateService = inject(DateService);
   private _dateAdapter = inject(DateAdapter);
   private _taskArchiveService = inject(TaskArchiveService);
 
@@ -107,17 +160,8 @@ export class WorklogService {
   );
   currentWeek$: Observable<WorklogWeek | null> = this.worklog$.pipe(
     map((worklog) => {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth() + 1;
-      const weekNr = getWeekNumber(now);
-
-      if (worklog[year] && worklog[year].ent[month]) {
-        return (
-          worklog[year].ent[month].weeks.find((week) => week.weekNr === weekNr) || null
-        );
-      }
-      return null;
+      const today = this._dateService.getLogicalTodayDate();
+      return getWorklogWeekForDate(worklog, today, this._dateAdapter.getFirstDayOfWeek());
     }),
   );
 

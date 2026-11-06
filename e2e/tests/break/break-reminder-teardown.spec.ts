@@ -8,8 +8,7 @@ import type { Page } from '@playwright/test';
  * on screen (and, on Electron, left the lock-screen / fullscreen-blocker
  * subjects latched at `true` for the rest of the session).
  *
- * The sibling spec in this folder only exercises settings navigation; its own
- * header notes that timing tests "would require waiting for real time". The
+ * Driving the reminder through the UI would require waiting for real time. The
  * store bridge removes that constraint — the reminder threshold is shrunk to a
  * couple of seconds so the real banner can be driven end to end.
  *

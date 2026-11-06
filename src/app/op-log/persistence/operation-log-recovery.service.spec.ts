@@ -70,7 +70,7 @@ describe('OperationLogRecoveryService', () => {
 
   describe('attemptRecovery', () => {
     it('should recover from legacy data when available', async () => {
-      const legacyData = { task: { ids: ['task1'] } };
+      const legacyData = { task: { ids: ['task1'] }, project: { ids: [], entities: {} } };
       mockLegacyPfDb.hasUsableEntityData.and.resolveTo(true);
       mockLegacyPfDb.loadAllEntityData.and.resolveTo(legacyData as any);
       mockClientIdService.loadClientId.and.resolveTo('testClient');
@@ -91,9 +91,9 @@ describe('OperationLogRecoveryService', () => {
           actionType: ActionType.RECOVERY_DATA_IMPORT,
           opType: OpType.Batch,
           entityType: 'RECOVERY',
-          payload: legacyData,
+          payload: jasmine.objectContaining(legacyData),
         }),
-        legacyData,
+        jasmine.objectContaining(legacyData),
       );
       expect(mockOpLogStore.append).not.toHaveBeenCalled();
       expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
@@ -165,6 +165,7 @@ describe('OperationLogRecoveryService', () => {
     it('should create recovery operation with correct properties', async () => {
       const legacyData = {
         task: { ids: ['task1'], entities: { task1: { id: 'task1' } } },
+        project: { ids: [], entities: {} },
       };
       mockClientIdService.loadClientId.and.resolveTo('testClient');
       mockOpLogStore.append.and.resolveTo(undefined);
@@ -179,24 +180,24 @@ describe('OperationLogRecoveryService', () => {
           opType: OpType.Batch,
           entityType: 'RECOVERY',
           entityId: '*',
-          payload: legacyData,
+          payload: jasmine.objectContaining(legacyData),
           clientId: 'testClient',
           vectorClock: { testClient: 1 },
         }),
-        legacyData,
+        jasmine.objectContaining(legacyData),
       );
     });
 
     it('should throw when clientId cannot be loaded', async () => {
       mockClientIdService.loadClientId.and.resolveTo(null);
 
-      await expectAsync(service.recoverFromLegacyData({})).toBeRejectedWithError(
-        /Failed to load clientId/,
-      );
+      await expectAsync(
+        service.recoverFromLegacyData({ task: {}, project: {} }),
+      ).toBeRejectedWithError(/Failed to load clientId/);
     });
 
     it('should pass recovered state to the atomic persistence boundary', async () => {
-      const legacyData = { task: { ids: ['task1'] } };
+      const legacyData = { task: { ids: ['task1'] }, project: { ids: [], entities: {} } };
       mockClientIdService.loadClientId.and.resolveTo('testClient');
       mockOpLogStore.append.and.resolveTo(undefined);
       mockOpLogStore.getLastSeq.and.resolveTo(5);
@@ -206,12 +207,12 @@ describe('OperationLogRecoveryService', () => {
 
       expect(mockOpLogStore.appendRecoveryOperationAndSnapshot).toHaveBeenCalledWith(
         jasmine.any(Object),
-        legacyData,
+        jasmine.objectContaining(legacyData),
       );
     });
 
     it('should include the recovery clock in the atomically persisted operation', async () => {
-      const legacyData = { task: { ids: ['task1'] } };
+      const legacyData = { task: { ids: ['task1'] }, project: { ids: [], entities: {} } };
       mockClientIdService.loadClientId.and.resolveTo('testClient');
       mockOpLogStore.append.and.resolveTo(undefined);
       mockOpLogStore.getLastSeq.and.resolveTo(1);
@@ -221,8 +222,54 @@ describe('OperationLogRecoveryService', () => {
 
       expect(mockOpLogStore.appendRecoveryOperationAndSnapshot).toHaveBeenCalledWith(
         jasmine.objectContaining({ vectorClock: { testClient: 1 } }),
-        legacyData,
+        jasmine.objectContaining(legacyData),
       );
+    });
+
+    // #9770: an old `pf` database has no slice for models that did not exist
+    // when it was last written. Without defaults, validation refuses the import
+    // and the app is stuck on "Failed to load data".
+    it('should fill in model slices the legacy database is too old to contain', async () => {
+      const legacyData = {
+        task: { ids: ['task1'], entities: { task1: { id: 'task1' } } },
+        project: { ids: [], entities: {} },
+      };
+      mockClientIdService.loadClientId.and.resolveTo('testClient');
+      mockOpLogStore.getLastSeq.and.resolveTo(1);
+
+      await service.recoverFromLegacyData(legacyData);
+
+      const [, snapshotState] = (
+        mockOpLogStore as unknown as {
+          appendRecoveryOperationAndSnapshot: jasmine.Spy;
+        }
+      ).appendRecoveryOperationAndSnapshot.calls.mostRecent().args as [
+        unknown,
+        Record<string, unknown>,
+      ];
+      expect(snapshotState.task).toEqual(legacyData.task);
+      expect(snapshotState.timeTracking).toBeDefined();
+      expect(snapshotState.menuTree).toBeDefined();
+      expect(snapshotState.boards).toBeDefined();
+    });
+
+    // hasUsableEntityData() gets here on `globalConfig` alone, so a legacy
+    // database that has lost its task/project state reaches recovery. The #9770
+    // slice fill would make it validate as an all-defaults empty store, and the
+    // genesis snapshot written from it shadows that database forever — recovery
+    // refuses to run again once a snapshot or ops exist. Refusing keeps the
+    // database untouched and retryable on the next boot.
+    it('should refuse legacy data without task or project state', async () => {
+      mockClientIdService.loadClientId.and.resolveTo('testClient');
+      mockOpLogStore.getLastSeq.and.resolveTo(1);
+
+      await expectAsync(
+        service.recoverFromLegacyData({ globalConfig: { misc: {} } }),
+      ).toBeRejectedWithError(/corrupted and cannot be repaired/);
+
+      expect(mockOpLogStore.appendRecoveryOperationAndSnapshot).not.toHaveBeenCalled();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockStore.dispatch).not.toHaveBeenCalled();
     });
 
     it('should reject invalid legacy data before writing or dispatching it', async () => {
@@ -232,7 +279,7 @@ describe('OperationLogRecoveryService', () => {
       });
 
       await expectAsync(
-        service.recoverFromLegacyData({ task: null }),
+        service.recoverFromLegacyData({ task: {}, project: {} }),
       ).toBeRejectedWithError(/Legacy recovery data validation failed/);
 
       expect(mockOpLogStore.append).not.toHaveBeenCalled();

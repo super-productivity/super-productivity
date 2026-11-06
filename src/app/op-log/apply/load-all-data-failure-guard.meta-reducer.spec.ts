@@ -7,6 +7,7 @@ import {
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { AppDataComplete } from '../model/model-config';
 import { META_REDUCERS } from '../../root-store/meta/meta-reducer-registry';
+import { isReducerRejectedAction } from '../../root-store/meta/reducer-failure-guard.meta-reducer';
 
 describe('loadAllDataFailureGuardMetaReducer', () => {
   interface TestState {
@@ -156,24 +157,27 @@ describe('loadAllDataFailureGuardMetaReducer', () => {
       expect(readCount()).toBe(1);
     });
 
-    it('documents the unguarded failure mode: dispatch does not throw, the store silently freezes', () => {
-      // Without an active collector the guard is a pass-through, so this pins
-      // the raw NgRx/rxjs behavior the guard exists to prevent. The throw is
-      // diverted to an async unhandled-error report (a setTimeout) — swallow
-      // it via the jasmine clock so it cannot leak into other tests.
-      jasmine.clock().install();
+    it('falls through to reducerFailureGuardMetaReducer without a collector (#10195)', () => {
+      // Without an active collector this guard is a pass-through. Before
+      // #10195 the throw then escaped the NgRx State scan and froze the store;
+      // the outer guard at META_REDUCERS[0] now boxes it instead. devError's
+      // dev-mode prompt is declined so it does not throw (src/test.ts installs
+      // a global confirm spy returning true).
+      const confirmSpy = window.confirm as jasmine.Spy;
+      confirmSpy.and.returnValue(false);
       try {
-        expect(() =>
-          store.dispatch(
-            loadAllData({ appDataComplete: {} as unknown as AppDataComplete }),
-          ),
-        ).not.toThrow();
-
-        // The state subscription is torn down: later dispatches are dropped.
-        store.dispatch(incAction);
+        const bad = loadAllData({
+          appDataComplete: {} as unknown as AppDataComplete,
+        });
+        expect(() => store.dispatch(bad)).not.toThrow();
+        expect(isReducerRejectedAction(bad)).toBe(true);
         expect(readCount()).toBe(0);
+
+        // The store is alive: later dispatches still commit.
+        store.dispatch(incAction);
+        expect(readCount()).toBe(1);
       } finally {
-        jasmine.clock().uninstall();
+        confirmSpy.and.returnValue(true);
       }
     });
   });

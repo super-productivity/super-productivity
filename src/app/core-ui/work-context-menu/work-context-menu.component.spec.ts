@@ -1,6 +1,9 @@
+import { Component, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { MatMenuTrigger } from '@angular/material/menu';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { firstValueFrom, of } from 'rxjs';
 import { WorkContextMenuComponent } from './work-context-menu.component';
 import { WorkContextService } from '../../features/work-context/work-context.service';
@@ -14,29 +17,60 @@ import { TranslateModule } from '@ngx-translate/core';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { DialogCompleteResolveTasksComponent } from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { DateService } from '../../core/date/date.service';
 import { DialogProjectCompleteComponent } from '../../features/project/dialog-project-complete/dialog-project-complete.component';
 import { PlainspaceShareService } from '../../features/issue/providers/plainspace/plainspace-share.service';
 
+@Component({
+  standalone: true,
+  imports: [WorkContextMenuComponent, MatMenuTrigger],
+  template: `
+    <button [matMenuTriggerFor]="workContextMenu.menu()">open</button>
+    <work-context-menu
+      #workContextMenu
+      [contextId]="contextId()"
+      [contextType]="contextType()"
+    ></work-context-menu>
+  `,
+})
+class HostComponent {
+  readonly trigger = viewChild.required(MatMenuTrigger);
+  readonly workContextMenu = viewChild.required(WorkContextMenuComponent);
+  readonly contextId = signal('project-123');
+  readonly contextType = signal(WorkContextType.PROJECT);
+}
+
 describe('WorkContextMenuComponent', () => {
   let component: WorkContextMenuComponent;
-  let fixture: ComponentFixture<WorkContextMenuComponent>;
+  let host: HostComponent;
+  let fixture: ComponentFixture<HostComponent>;
   let mockProjectService: jasmine.SpyObj<ProjectService>;
+  let mockTagService: jasmine.SpyObj<TagService>;
   let mockWorkContextService: { activeWorkContextId: string | undefined };
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockPlainspaceShareService: jasmine.SpyObj<PlainspaceShareService>;
   let resolveResult$: any;
   let confirmResult$: any;
+  let promptResult$: any;
   let isSharedOnPlainspace$: any;
   let router: Router;
   const logicalDoneOn = new Date(2026, 5, 5, 1, 0, 0).getTime();
 
-  // Finds the rendered mat-menu-item whose icon matches `iconName`.
+  // The items render only into the open menu's overlay panel.
+  const openMenu = (): void => {
+    fixture.detectChanges();
+    host.trigger().openMenu();
+    fixture.detectChanges();
+  };
+
+  // Finds the open menu's item whose icon matches `iconName`.
   const menuButtonByIcon = (iconName: string): HTMLButtonElement | null => {
-    const icon = Array.from(fixture.nativeElement.querySelectorAll('mat-icon')).find(
-      (el) => (el as HTMLElement).textContent?.trim() === iconName,
+    const panel = document.getElementById(component.menu().panelId);
+    const icon = Array.from(panel?.querySelectorAll('mat-icon') ?? []).find(
+      (el) => el.textContent?.trim() === iconName,
     );
-    return (icon as HTMLElement)?.closest('button') ?? null;
+    return icon?.closest('button') ?? null;
   };
 
   beforeEach(() => {
@@ -49,6 +83,7 @@ describe('WorkContextMenuComponent', () => {
       'markTasksDone',
       'getByIdOnce$',
       'getByIdLive$',
+      'update',
     ]);
     mockProjectService.getByIdOnce$.and.returnValue(
       of({ id: 'project-123', title: 'Demo project' } as any),
@@ -68,13 +103,21 @@ describe('WorkContextMenuComponent', () => {
       of({ id: 'project-123', title: 'Demo project' } as any),
     );
     mockWorkContextService = { activeWorkContextId: undefined };
+    mockTagService = jasmine.createSpyObj('TagService', ['getTagById$', 'updateTag']);
+    mockTagService.getTagById$.and.returnValue(
+      of({ id: 'tag-1', title: 'Demo tag' } as any),
+    );
 
     const mockShareService = jasmine.createSpyObj('ShareService', ['getShareSupport']);
     mockShareService.getShareSupport.and.returnValue(Promise.resolve('none'));
 
     mockPlainspaceShareService = jasmine.createSpyObj('PlainspaceShareService', [
       'shareProjectOnPlainspace',
+      'inviteUrl$',
+      'copyInviteUrl',
     ]);
+    mockPlainspaceShareService.inviteUrl$.and.returnValue(of(null));
+    mockPlainspaceShareService.copyInviteUrl.and.resolveTo();
     mockPlainspaceShareService.shareProjectOnPlainspace.and.returnValue(
       Promise.resolve('space-1'),
     );
@@ -87,7 +130,11 @@ describe('WorkContextMenuComponent', () => {
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     resolveResult$ = of(undefined);
     confirmResult$ = of(true);
+    promptResult$ = of(undefined);
     mockMatDialog.open.and.callFake((componentOrTemplateRef) => {
+      if (componentOrTemplateRef === DialogPromptComponent) {
+        return { afterClosed: () => promptResult$ } as MatDialogRef<unknown>;
+      }
       if (componentOrTemplateRef === DialogCompleteResolveTasksComponent) {
         return { afterClosed: () => resolveResult$ } as MatDialogRef<unknown>;
       }
@@ -98,17 +145,14 @@ describe('WorkContextMenuComponent', () => {
     });
 
     TestBed.configureTestingModule({
-      imports: [WorkContextMenuComponent, TranslateModule.forRoot()],
+      imports: [HostComponent, NoopAnimationsModule, TranslateModule.forRoot()],
       providers: [
         provideRouter([]),
         { provide: ProjectService, useValue: mockProjectService },
         { provide: WorkContextService, useValue: mockWorkContextService },
         { provide: SnackService, useValue: { open: () => {} } },
         { provide: MatDialog, useValue: mockMatDialog },
-        {
-          provide: TagService,
-          useValue: jasmine.createSpyObj('TagService', ['getTagById$']),
-        },
+        { provide: TagService, useValue: mockTagService },
         { provide: WorkContextMarkdownService, useValue: {} },
         { provide: ShareService, useValue: mockShareService },
         { provide: Store, useValue: mockStore },
@@ -125,10 +169,13 @@ describe('WorkContextMenuComponent', () => {
       ],
     });
 
-    fixture = TestBed.createComponent(WorkContextMenuComponent);
-    component = fixture.componentInstance;
-    component.contextId = 'project-123';
-    component.contextTypeSet = WorkContextType.PROJECT;
+    fixture = TestBed.createComponent(HostComponent);
+    host = fixture.componentInstance;
+    component = host.workContextMenu();
+    // Set directly as well, for the tests that call methods without a change
+    // detection run (which is what binds the host's values).
+    component.contextId = host.contextId();
+    component.contextTypeSet = host.contextType();
     router = TestBed.inject(Router);
     spyOn(router, 'navigateByUrl').and.returnValue(Promise.resolve(true));
   });
@@ -311,12 +358,75 @@ describe('WorkContextMenuComponent', () => {
     });
   });
 
+  describe('rename()', () => {
+    it('updates the project title once when a different title is entered', async () => {
+      promptResult$ = of('  New project  ');
+      await component.rename();
+      expect(mockProjectService.update).toHaveBeenCalledOnceWith('project-123', {
+        title: 'New project',
+      });
+    });
+
+    it('does not update the project when the title is unchanged', async () => {
+      promptResult$ = of('Demo project');
+      await component.rename();
+      expect(mockProjectService.update).not.toHaveBeenCalled();
+    });
+
+    it('does not update the project when the prompt is empty or cancelled', async () => {
+      promptResult$ = of('   ');
+      await component.rename();
+      promptResult$ = of(undefined);
+      await component.rename();
+      expect(mockProjectService.update).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the project cannot be found', async () => {
+      mockProjectService.getByIdOnce$.and.returnValue(of(undefined as any));
+      promptResult$ = of('New project');
+      await component.rename();
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+      expect(mockProjectService.update).not.toHaveBeenCalled();
+    });
+
+    it('updates the tag title once when a different title is entered', async () => {
+      component.contextId = 'tag-1';
+      component.contextTypeSet = WorkContextType.TAG;
+      promptResult$ = of('New tag');
+      await component.rename();
+      expect(mockTagService.updateTag).toHaveBeenCalledOnceWith('tag-1', {
+        title: 'New tag',
+      });
+      expect(mockProjectService.update).not.toHaveBeenCalled();
+    });
+
+    it('does not update the tag when the title is unchanged or the prompt is cancelled', async () => {
+      component.contextId = 'tag-1';
+      component.contextTypeSet = WorkContextType.TAG;
+      promptResult$ = of('Demo tag');
+      await component.rename();
+      promptResult$ = of(undefined);
+      await component.rename();
+      expect(mockTagService.updateTag).not.toHaveBeenCalled();
+    });
+
+    it('does nothing and does not throw when the tag cannot be found', async () => {
+      component.contextId = 'missing-tag';
+      component.contextTypeSet = WorkContextType.TAG;
+      mockTagService.getTagById$.and.returnValue(of(undefined as any));
+      promptResult$ = of('New tag');
+      await expectAsync(component.rename()).toBeResolved();
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+      expect(mockTagService.updateTag).not.toHaveBeenCalled();
+    });
+  });
+
   describe('archived state', () => {
     it('detects an archived project on init', async () => {
       mockProjectService.getByIdLive$.and.returnValue(
         of({ id: 'project-123', title: 'Demo project', isArchived: true } as any),
       );
-      await component.ngOnInit();
+      fixture.detectChanges();
       expect(await firstValueFrom(component.isArchived$)).toBe(true);
     });
 
@@ -324,14 +434,31 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.getByIdLive$.and.returnValue(
         of({ id: 'project-123', title: 'Demo project', isArchived: false } as any),
       );
-      await component.ngOnInit();
+      fixture.detectChanges();
+      expect(await firstValueFrom(component.isArchived$)).toBe(false);
+    });
+
+    // The title bar keeps one instance across context switches.
+    it('follows a switch to another context', async () => {
+      fixture.detectChanges();
+      mockProjectService.getByIdLive$.and.callFake((id: string) =>
+        of({ id, isArchived: id === 'project-456' } as any),
+      );
+      host.contextId.set('project-456');
+      fixture.detectChanges();
+      expect(await firstValueFrom(component.isArchived$)).toBe(true);
+
+      host.contextId.set('tag-1');
+      host.contextType.set(WorkContextType.TAG);
+      fixture.detectChanges();
+      expect(component.isForProject).toBe(false);
       expect(await firstValueFrom(component.isArchived$)).toBe(false);
     });
 
     it('does not look up a project when the context is a tag', async () => {
-      component.contextTypeSet = WorkContextType.TAG;
+      host.contextType.set(WorkContextType.TAG);
       mockProjectService.getByIdLive$.calls.reset();
-      await component.ngOnInit();
+      fixture.detectChanges();
       expect(mockProjectService.getByIdLive$).not.toHaveBeenCalled();
       expect(await firstValueFrom(component.isArchived$)).toBe(false);
     });
@@ -354,7 +481,7 @@ describe('WorkContextMenuComponent', () => {
         of({ id: 'project-123', isArchived: true, isDone: false } as any),
       );
       mockProjectService.unarchive.and.returnValue(Promise.resolve());
-      fixture.detectChanges();
+      openMenu();
 
       expect(menuButtonByIcon('archive')).toBeNull();
       const restoreBtn = menuButtonByIcon('unarchive');
@@ -372,7 +499,7 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.getByIdOnce$.and.returnValue(
         of({ id: 'project-123', isArchived: true, isDone: true } as any),
       );
-      fixture.detectChanges();
+      openMenu();
 
       const reopenBtn = menuButtonByIcon('replay');
       expect(reopenBtn).toBeTruthy();
@@ -390,7 +517,7 @@ describe('WorkContextMenuComponent', () => {
       mockProjectService.getByIdLive$.and.returnValue(
         of({ id: 'project-123', isArchived: false } as any),
       );
-      fixture.detectChanges();
+      openMenu();
 
       // Archive was collapsed into Complete — it's the single retire path.
       expect(menuButtonByIcon('unarchive')).toBeNull();
@@ -427,7 +554,7 @@ describe('WorkContextMenuComponent', () => {
         of({ id: 'project-123', title: 'Demo project' } as any),
       );
       isSharedOnPlainspace$ = of(false);
-      fixture.detectChanges();
+      openMenu();
 
       const shareBtn = menuButtonByIcon('group_add');
       expect(shareBtn).toBeTruthy();
@@ -445,16 +572,45 @@ describe('WorkContextMenuComponent', () => {
         of({ id: 'project-123', isArchived: false } as any),
       );
       isSharedOnPlainspace$ = of(true);
-      fixture.detectChanges();
+      openMenu();
 
       expect(menuButtonByIcon('group_add')).toBeNull();
     });
 
     it('does not render the action for a tag context', async () => {
-      component.contextTypeSet = WorkContextType.TAG;
-      fixture.detectChanges();
+      host.contextType.set(WorkContextType.TAG);
+      openMenu();
 
       expect(menuButtonByIcon('group_add')).toBeNull();
+    });
+  });
+
+  describe('rendered Copy-invite-link action', () => {
+    beforeEach(() => {
+      mockProjectService.getByIdLive$.and.returnValue(
+        of({ id: 'project-123', isArchived: false } as any),
+      );
+    });
+
+    // The URL is resolved when the menu opens, so the click copies straight
+    // away, inside its user activation (WebKit refuses a later write).
+    it('copies the URL resolved when the menu opened', () => {
+      mockPlainspaceShareService.inviteUrl$.and.returnValue(
+        of('https://plainspace.org/demo'),
+      );
+      openMenu();
+
+      const copyBtn = menuButtonByIcon('link');
+      expect(copyBtn).toBeTruthy();
+      copyBtn!.click();
+      expect(mockPlainspaceShareService.copyInviteUrl).toHaveBeenCalledWith(
+        'https://plainspace.org/demo',
+      );
+    });
+
+    it('hides the action while no invite URL resolves (not shared, offline)', () => {
+      openMenu();
+      expect(menuButtonByIcon('link')).toBeNull();
     });
   });
 });

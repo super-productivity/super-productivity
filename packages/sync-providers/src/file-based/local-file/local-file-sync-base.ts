@@ -54,15 +54,6 @@ export abstract class LocalFileSyncBase implements FileSyncProvider<
 
   protected abstract getFilePath(targetPath: string): Promise<string>;
 
-  async listFiles(dirPath: string): Promise<string[]> {
-    this.logger.normal(`${LocalFileSyncBase.LB}.${this.listFiles.name}()`);
-    if (!this.fileAdapter.listFiles) {
-      throw new Error('FileAdapter does not support listFiles');
-    }
-    const fullPath = await this.getFilePath(dirPath);
-    return this.fileAdapter.listFiles(fullPath);
-  }
-
   async getFileRev(
     targetPath: string,
     _localRev: string | null,

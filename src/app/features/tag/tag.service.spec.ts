@@ -4,7 +4,7 @@ import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Store } from '@ngrx/store';
 import { Tag, TagState } from './tag.model';
 import { DEFAULT_TAG } from './tag.const';
-import { deleteTag, deleteTags, updateTag, updateTagOrder } from './store/tag.actions';
+import { deleteTag, deleteTags, updateTag } from './store/tag.actions';
 import {
   selectAllTags,
   selectAllTagsWithoutMyDay,
@@ -292,18 +292,6 @@ describe('TagService', () => {
             changes: { color: '#123456' },
           },
         }),
-      );
-    });
-  });
-
-  describe('updateOrder', () => {
-    it('should dispatch updateTagOrder action', () => {
-      const dispatchSpy = spyOn(store, 'dispatch');
-
-      service.updateOrder(['tag-2', 'tag-1']);
-
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        updateTagOrder({ ids: ['tag-2', 'tag-1'] }),
       );
     });
   });

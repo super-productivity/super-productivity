@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { SnackService } from '../../core/snack/snack.service';
+import { BackupRepairFailedError } from '../../op-log/core/errors/sync-errors';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SuperSyncProvider } from '@sp/sync-providers/super-sync';
 import {
@@ -69,9 +70,9 @@ export class SuperSyncRestoreService {
           true, // isForceConflict - gates page reload (isSkipReload=true overrides)
         );
 
-        // This profile's notes were just replaced wholesale, so every draft's
+        // The notes were just replaced wholesale, so every draft's
         // baseContent refers to content that no longer exists.
-        this._localDraftService.deleteDraftsForActiveProfile();
+        this._localDraftService.deleteAllDrafts();
 
         this._snackService.open({
           type: 'SUCCESS',
@@ -107,7 +108,9 @@ export class SuperSyncRestoreService {
           type: 'ERROR',
           msg: isEncryptionBlocked
             ? T.F.SYNC.S.RESTORE_ENCRYPTED
-            : T.F.SYNC.S.RESTORE_ERROR,
+            : error instanceof BackupRepairFailedError
+              ? T.FILE_IMEX.S_ERR_IMPORT_UNREPAIRABLE
+              : T.F.SYNC.S.RESTORE_ERROR,
         });
         throw error;
       }

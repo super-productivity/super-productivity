@@ -4,15 +4,14 @@ import { mapTo, take } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { allDataWasLoaded } from '../../root-store/meta/all-data-was-loaded.actions';
 import { DataInitStateService } from './data-init-state.service';
-import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { OperationLogHydratorService } from '../../op-log/persistence/operation-log-hydrator.service';
 import { OpLog } from '../log';
+import { markBoot } from '../startup/boot-timing';
 
 @Injectable({ providedIn: 'root' })
 export class DataInitService {
   private _store$ = inject<Store<any>>(Store);
   private _dataInitStateService = inject(DataInitStateService);
-  private _userProfileService = inject(UserProfileService);
   private _operationLogHydratorService = inject(OperationLogHydratorService);
 
   private _isAllDataLoadedInitially$: Observable<boolean> = from(this.reInit()).pipe(
@@ -23,6 +22,7 @@ export class DataInitService {
     // TODO better construction than this
     this._isAllDataLoadedInitially$.pipe(take(1)).subscribe({
       next: (v) => {
+        markBoot('data-loaded');
         // here because to avoid circular dependencies
         this._store$.dispatch(allDataWasLoaded());
         this._dataInitStateService._neverUpdateOutsideDataInitService$.next(v);
@@ -37,21 +37,7 @@ export class DataInitService {
   // NOTE: it's important to remember that this doesn't mean that no changes are occurring any more
   // because the data load is triggered, but not necessarily already reflected inside the store
   async reInit(): Promise<void> {
-    // localStorage check
-    // This check happens before ANY profile initialization code runs
-    const isProfilesEnabled =
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('sp_user_profiles_enabled') === 'true';
-
-    if (isProfilesEnabled) {
-      // Only initialize profile system if explicitly enabled
-      await this._userProfileService.initialize();
-    } else {
-      // Turning the feature off keeps profile data on disk, so this cohort still
-      // needs the removal warning even though the profile system stays asleep.
-      await this._userProfileService.warnAboutRemovalIfProfileDataExists();
-    }
-
+    markBoot('hydrate-start');
     // Hydrate from Operation Log (which handles migration from legacy if needed)
     await this._operationLogHydratorService.hydrateStore();
   }

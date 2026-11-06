@@ -1,6 +1,7 @@
 export {
   AdditionalLogErrorBase,
   AuthFailSPError,
+  ClientUpdateRequiredSPError,
   EmptyRemoteBodySPError,
   extractErrorMessage,
   FileHashCreationAPIError,

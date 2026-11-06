@@ -8,9 +8,13 @@ import {
 } from '../core/operation.types';
 import { getLwwEntityType } from '../core/lww-update-action-types';
 import { getEntityConfig, isLwwPayloadIdCanonical } from '../core/entity-registry';
-import { PersistentAction } from '../core/persistent-action.interface';
+import {
+  ENVELOPE_SHADOWED_KEYS,
+  PersistentAction,
+} from '../core/persistent-action.interface';
 import { SyncLog } from '../../core/log';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
+import { applyClearedFields } from '../../util/cleared-update-fields';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -26,6 +30,16 @@ const isValidDbDate = (value: unknown): value is string =>
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
+
+/** The LWW entity's own fields that the action envelope overwrites, if any. */
+const pickEnvelopeShadowedFields = (
+  entity: Record<string, unknown>,
+): Record<string, unknown> | undefined => {
+  const keys = ENVELOPE_SHADOWED_KEYS.filter((key) => entity[key] !== undefined);
+  return keys.length > 0
+    ? Object.fromEntries(keys.map((key) => [key, entity[key]]))
+    : undefined;
+};
 
 /**
  * Legacy operations did not capture the originating logical day or timezone.
@@ -250,6 +264,17 @@ const assertValidTaskTimeSyncPayload = (
   }
 };
 
+export interface ConvertOpToActionOptions {
+  /**
+   * Replay this op as a full-state `loadAllData` even though its opType is not
+   * a full-state type. Set by the bulk meta-reducer for the client's OWN
+   * genesis op (#9863): its payload is the complete pre-migration state and
+   * nothing else in the log carries it, so replaying it as a no-op would
+   * rebuild the store with only post-migration data.
+   */
+  replayAsFullState?: boolean;
+}
+
 /**
  * Converts an Operation from the operation log back into a PersistentAction.
  * Used during sync replay and recovery to re-dispatch operations.
@@ -261,14 +286,18 @@ const assertValidTaskTimeSyncPayload = (
  * For full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair), this wraps
  * the payload in `appDataComplete` to match the loadAllData action format.
  */
-export const convertOpToAction = (op: Operation): PersistentAction => {
+export const convertOpToAction = (
+  op: Operation,
+  options: ConvertOpToActionOptions = {},
+): PersistentAction => {
   // Resolve any aliased action types to their current names
   const actionType = ACTION_TYPE_ALIASES[op.actionType] ?? op.actionType;
   const lwwEntityType = getLwwEntityType(actionType);
 
   // Handle full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair) specially
   // These need their payload wrapped in appDataComplete for the loadAllData action
-  const isFullStateOp = FULL_STATE_OP_TYPES.has(op.opType as OpType);
+  const isFullStateOp =
+    FULL_STATE_OP_TYPES.has(op.opType as OpType) || options.replayAsFullState === true;
   const isSingletonLww =
     !isFullStateOp &&
     lwwEntityType !== undefined &&
@@ -346,6 +375,31 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
   // IMPORTANT: Spread actionPayload FIRST, then set type, to prevent entity properties
   // named 'type' (like SimpleCounter.type = 'ClickCounter') from overwriting the action type.
   const lwwPayload = isLwwUpdatePayload(op.payload) ? op.payload : undefined;
+
+  // Patch-mode LWW deltas list their field CLEARS out-of-band (#9776): JSON
+  // serialization dropped the undefined-valued keys on upload, so restore them
+  // here — the meta-reducer's updateOne then clears the field instead of
+  // silently leaving the losing value in place. `applyClearedFields` tolerates
+  // wire junk and never touches `id`. The isRecord guard keeps a malformed
+  // array payload from being object-spread into `{0: …}` (same trap as the
+  // singleton normalization above).
+  if (
+    lwwPayload?.lwwUpdateMode === 'patch' &&
+    Array.isArray(lwwPayload.clearedFields) &&
+    isRecord(actionPayload)
+  ) {
+    actionPayload = applyClearedFields(
+      actionPayload,
+      lwwPayload.clearedFields as string[],
+    ) as Record<string, unknown>;
+  }
+  // The envelope below overwrites the entity's own `type`/`meta` fields
+  // (SimpleCounter.type). Carry the sender's values so lwwUpdateMetaReducer
+  // applies them instead of keeping the receiver's own.
+  const lwwShadowedFields =
+    !isFullStateOp && lwwEntityType !== undefined && isRecord(actionPayload)
+      ? pickEnvelopeShadowedFields(actionPayload)
+      : undefined;
   return {
     ...actionPayload,
     type: replayActionType,
@@ -371,6 +425,7 @@ export const convertOpToAction = (op: Operation): PersistentAction => {
       ...(lwwPayload?.projectMoveFootprint !== undefined
         ? { projectMoveFootprint: lwwPayload.projectMoveFootprint }
         : {}),
+      ...(lwwShadowedFields ? { lwwShadowedFields } : {}),
     },
   };
 };

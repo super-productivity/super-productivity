@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { BackupService } from './backup.service';
+import { OpLog } from '../../core/log';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { StateSnapshotService } from './state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
@@ -9,9 +10,14 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { OpType } from '../core/operation.types';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { LockService } from '../sync/lock.service';
-import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
+import { WORKLOG_EXPORT_DEFAULTS } from '../../features/work-context/work-context.const';
+import { migrateState } from '@sp/shared-schema';
+import { BackupRepairFailedError } from '../core/errors/sync-errors';
+import legacyV10Backup from './test-fixtures/legacy-v10-backup.json';
+import legacyPfV13Partial from '../validation/test-fixtures/legacy-pf-v13-partial-models.json';
+import frozenV18State from '../validation/test-fixtures/frozen-state-v18.15.json';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -21,7 +27,6 @@ describe('BackupService', () => {
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockOperationWriteFlushService: jasmine.SpyObj<OperationWriteFlushService>;
   let mockLockService: jasmine.SpyObj<LockService>;
-  let mockConflictJournal: jasmine.SpyObj<ConflictJournalService>;
   const backupRef = { backupId: 'backup-123', savedAt: 123 };
   let mockTaskTimeSyncService: jasmine.SpyObj<TaskTimeSyncService>;
 
@@ -39,12 +44,21 @@ describe('BackupService', () => {
           noteIds: [],
           isHiddenFromMenu: false,
           isArchived: false,
+          advancedCfg: { worklogExportSettings: { ...WORKLOG_EXPORT_DEFAULTS } },
         },
       },
     },
     tag: {
       ids: ['TODAY'],
-      entities: { TODAY: { id: 'TODAY', title: 'Today', taskIds: [], icon: 'wb_sunny' } },
+      entities: {
+        TODAY: {
+          id: 'TODAY',
+          title: 'Today',
+          taskIds: [],
+          icon: 'wb_sunny',
+          advancedCfg: { worklogExportSettings: { ...WORKLOG_EXPORT_DEFAULTS } },
+        },
+      },
     },
     globalConfig: {
       misc: { isDisableInitialDialog: true },
@@ -63,6 +77,15 @@ describe('BackupService', () => {
     pluginMetadata: [],
     pluginUserData: [],
   });
+
+  // A project title typia rejects that neither dataRepair nor any
+  // autoFixTypiaErrors branch touches. Keep it outside every autofix: once a
+  // branch heals it, the refusal specs pass without exercising the refusal.
+  const createBackupInvalidAfterRepair = (): any => {
+    const backup = createMinimalValidBackup() as any;
+    backup.project.entities.INBOX_PROJECT.title = 42;
+    return backup;
+  };
 
   const createEmptyArchiveModel = (): ArchiveModel => ({
     task: { ids: [], entities: {} },
@@ -108,7 +131,9 @@ describe('BackupService', () => {
     ]);
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'saveImportBackup',
+      'pruneImportBackups',
       'loadImportBackup',
+      'loadImportBackupById',
       'clearImportBackup',
       'runDestructiveStateReplacement',
     ]);
@@ -116,8 +141,6 @@ describe('BackupService', () => {
       'flushPendingWrites',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
-    mockConflictJournal = jasmine.createSpyObj('ConflictJournalService', ['clearAll']);
-    mockConflictJournal.clearAll.and.resolveTo();
     mockTaskTimeSyncService = jasmine.createSpyObj('TaskTimeSyncService', ['clear']);
 
     // Default mock returns
@@ -143,12 +166,66 @@ describe('BackupService', () => {
           useValue: mockOperationWriteFlushService,
         },
         { provide: LockService, useValue: mockLockService },
-        { provide: ConflictJournalService, useValue: mockConflictJournal },
         { provide: TaskTimeSyncService, useValue: mockTaskTimeSyncService },
       ],
     });
 
     service = TestBed.inject(BackupService);
+  });
+
+  it('should refuse a truncated legacy backup with the repair-not-possible message', async () => {
+    const truncated = createMinimalValidBackup() as any;
+    delete truncated.task;
+    delete truncated.project;
+    truncated.taskArchive = { ids: [], entities: {} };
+
+    await expectAsync(
+      service.importCompleteBackup(truncated, true, true),
+    ).toBeRejectedWithError('Data validation failed and repair not possible');
+
+    expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('should refuse a legacy backup missing only the task slice', async () => {
+    const truncated = createMinimalValidBackup() as any;
+    delete truncated.task;
+    truncated.taskArchive = { ids: [], entities: {} };
+
+    await expectAsync(
+      service.importCompleteBackup(truncated, true, true),
+    ).toBeRejectedWithError('Data validation failed and repair not possible');
+
+    expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalled();
+  });
+
+  // #8279: a backup whose errors dataRepair cannot fix was persisted and
+  // broadcast as BACKUP_IMPORT, so every receiving client failed validation.
+  it('should refuse a backup that is still invalid after repair', async () => {
+    const backup = createBackupInvalidAfterRepair();
+
+    await expectAsync(
+      service.importCompleteBackup(backup, true, true),
+    ).toBeRejectedWithError(BackupRepairFailedError);
+
+    expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('should log that a refused backup was legacy, since the migration line never runs', async () => {
+    // The refusal returns the same message on the legacy and modern paths, so
+    // the exported log is the only place the two can be told apart.
+    const errSpy = spyOn(OpLog, 'err');
+    const truncated = createMinimalValidBackup() as any;
+    delete truncated.task;
+    truncated.taskArchive = { ids: [], entities: {} };
+
+    await expectAsync(service.importCompleteBackup(truncated, true, true)).toBeRejected();
+
+    expect(errSpy).toHaveBeenCalledWith(
+      'BackupService: legacy backup refused, core slice missing',
+    );
   });
 
   it('should discard task-time accumulated against the replaced pre-import state', async () => {
@@ -157,22 +234,194 @@ describe('BackupService', () => {
     expect(mockTaskTimeSyncService.clear).toHaveBeenCalledBefore(mockStore.dispatch);
   });
 
+  // Real backups from older app versions, run through the real legacy
+  // migration, validation and repair: the post-repair refusal (#8279) must
+  // never turn a backup that imported before into one that is refused.
+  describe('real legacy backup fixtures still import', () => {
+    const migrateFrozen = (): unknown => {
+      const migrated = migrateState(
+        structuredClone(frozenV18State.state),
+        frozenV18State.__frozenAtSchemaVersion,
+      );
+      if (!migrated.success) {
+        throw new Error(`migration of frozen fixture failed: ${migrated.error}`);
+      }
+      return migrated.data;
+    };
+    const fixtures: [string, () => unknown][] = [
+      ['v10 legacy backup', () => structuredClone(legacyV10Backup)],
+      ['v13 pf partial-model backup', () => structuredClone(legacyPfV13Partial)],
+      ['v18.15 frozen state', migrateFrozen],
+    ];
+
+    fixtures.forEach(([name, load]) => {
+      it(`imports the ${name}`, async () => {
+        await service.importCompleteBackup(load() as any, true, true);
+
+        expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
+        expect(mockStore.dispatch).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
+  describe('captureRecoveryPointIfMeaningful (local-recovery-points.md)', () => {
+    it('should skip a pristine device', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        createMinimalValidBackup() as any,
+      );
+
+      const meta = await service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT');
+
+      expect(meta).toBeNull();
+      expect(mockOpLogStore.saveImportBackup).not.toHaveBeenCalled();
+    });
+
+    it('should capture a device whose only data is a recurring-task config', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo({
+        ...createMinimalValidBackup(),
+        taskRepeatCfg: { ids: ['r1'], entities: { r1: { id: 'r1' } } },
+      } as any);
+
+      const meta = await service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT');
+
+      expect(meta?.taskCount).toBe(0);
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledTimes(1);
+    });
+
+    it('should capture with reason and task count when the device holds tasks', async () => {
+      const snapshot = {
+        ...createMinimalValidBackup(),
+        task: {
+          ids: ['t1', 't2'],
+          entities: { t1: { id: 't1' }, t2: { id: 't2' } },
+          currentTaskId: null,
+          selectedTaskId: null,
+        },
+      };
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(snapshot as any);
+      mockOpLogStore.saveImportBackup.and.resolveTo({ backupId: 'b1', savedAt: 5 });
+
+      const meta = await service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT');
+
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(snapshot, {
+        reason: 'REMOTE_IMPORT',
+        taskCount: 2,
+      });
+      expect(meta).toEqual({
+        backupId: 'b1',
+        savedAt: 5,
+        reason: 'REMOTE_IMPORT',
+        taskCount: 2,
+      });
+    });
+  });
+
+  describe('recovery point write fallback', () => {
+    const snapshotWithTask = (): unknown => ({
+      ...createMinimalValidBackup(),
+      task: { ids: ['t1'], entities: { t1: { id: 't1' } } },
+    });
+
+    it('should keep the newest snapshot, prune the rest and retry once on quota', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        snapshotWithTask() as any,
+      );
+      mockOpLogStore.saveImportBackup.and.returnValues(
+        Promise.reject(new DOMException('full', 'QuotaExceededError')),
+        Promise.resolve({ backupId: 'b2', savedAt: 2 }),
+      );
+      mockOpLogStore.pruneImportBackups.and.resolveTo(2);
+
+      const meta = await service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT');
+
+      expect(mockOpLogStore.pruneImportBackups).toHaveBeenCalledOnceWith(1, undefined);
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledTimes(2);
+      expect(meta?.backupId).toBe('b2');
+    });
+
+    it('should protect the snapshot being restored when the quota prune runs mid-restore', async () => {
+      mockOpLogStore.loadImportBackupById.and.resolveTo({
+        backupId: 'r1',
+        savedAt: 1,
+        state: createMinimalValidBackup(),
+      });
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        snapshotWithTask() as any,
+      );
+      mockOpLogStore.saveImportBackup.and.returnValues(
+        Promise.reject(new DOMException('full', 'QuotaExceededError')),
+        Promise.resolve({ backupId: 'b2', savedAt: 2 }),
+      );
+      mockOpLogStore.pruneImportBackups.and.resolveTo(2);
+
+      await service.restoreImportBackupById('r1');
+
+      // Pruning to the newest capture alone would delete r1 while it is still
+      // needed for a retry if the rest of the restore fails.
+      expect(mockOpLogStore.pruneImportBackups).toHaveBeenCalledOnceWith(1, 'r1');
+    });
+
+    it('should restore a recovery point that is still invalid after repair (#8279)', async () => {
+      const saved = createBackupInvalidAfterRepair();
+      mockOpLogStore.loadImportBackupById.and.resolveTo({
+        backupId: 'r1',
+        savedAt: 1,
+        state: saved,
+      });
+
+      await expectAsync(service.restoreImportBackupById('r1')).toBeResolvedTo(true);
+
+      expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
+    });
+
+    it('should still fail when the retry after pruning fails too', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        snapshotWithTask() as any,
+      );
+      mockOpLogStore.saveImportBackup.and.rejectWith(
+        new DOMException('full', 'QuotaExceededError'),
+      );
+      mockOpLogStore.pruneImportBackups.and.resolveTo(0);
+
+      await expectAsync(
+        service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT'),
+      ).toBeRejected();
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not touch the ring for a non-quota error', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        snapshotWithTask() as any,
+      );
+      mockOpLogStore.saveImportBackup.and.rejectWith(new Error('db closed'));
+
+      await expectAsync(
+        service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT'),
+      ).toBeRejectedWithError('db closed');
+      expect(mockOpLogStore.pruneImportBackups).not.toHaveBeenCalled();
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('captureImportBackup (#8107)', () => {
     it('should snapshot current state into the import backup store', async () => {
       const snapshot = createMinimalValidBackup();
       mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(snapshot as any);
 
-      await service.captureImportBackup();
+      await service.captureImportBackup('FORCE_DOWNLOAD');
 
       expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
-      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(snapshot);
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(snapshot, {
+        reason: 'FORCE_DOWNLOAD',
+        taskCount: jasmine.any(Number),
+      });
     });
 
     it('should return the opaque backup reference from the store', async () => {
       const expectedRef = { backupId: 'backup-456', savedAt: 456 };
       mockOpLogStore.saveImportBackup.and.resolveTo(expectedRef);
 
-      const token = await service.captureImportBackup();
+      const token = await service.captureImportBackup('FORCE_DOWNLOAD');
 
       expect(token).toEqual(expectedRef);
     });
@@ -180,7 +429,7 @@ describe('BackupService', () => {
     it('should propagate errors so the caller can abort the destructive op', async () => {
       mockOpLogStore.saveImportBackup.and.rejectWith(new Error('IDB quota exceeded'));
 
-      await expectAsync(service.captureImportBackup()).toBeRejected();
+      await expectAsync(service.captureImportBackup('FORCE_DOWNLOAD')).toBeRejected();
     });
   });
 
@@ -200,6 +449,7 @@ describe('BackupService', () => {
         true,
         true,
         backupRef.backupId,
+        true,
       );
     });
 
@@ -239,6 +489,7 @@ describe('BackupService', () => {
         true,
         true,
         expectedRef.backupId,
+        true,
       );
     });
 
@@ -277,6 +528,51 @@ describe('BackupService', () => {
       importSpy.and.resolveTo();
       await expectAsync(service.restoreImportBackup(backupRef)).toBeResolvedTo(true);
     });
+
+    // The recovery slot holds this device's own earlier live state; refusing it
+    // for errors repair cannot fix would leave the user no way back (#8279).
+    it('should restore own state that is still invalid after repair', async () => {
+      const saved = createBackupInvalidAfterRepair();
+      mockOpLogStore.loadImportBackup.and.resolveTo({ state: saved, ...backupRef });
+
+      await expectAsync(service.restoreImportBackup(backupRef)).toBeResolvedTo(true);
+
+      expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
+      expect(mockOpLogStore.clearImportBackup).toHaveBeenCalledWith(backupRef.backupId);
+    });
+
+    it('should leave the recovery slot intact when the restore is refused', async () => {
+      const saved = createMinimalValidBackup() as any;
+      delete saved.task;
+      delete saved.project;
+      mockOpLogStore.loadImportBackup.and.resolveTo({ state: saved, ...backupRef });
+
+      await expectAsync(service.restoreImportBackup(backupRef)).toBeRejectedWithError(
+        BackupRepairFailedError,
+      );
+
+      expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+      expect(mockOpLogStore.clearImportBackup).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression guard for the #9770 slice fill. That fill runs before validation,
+  // so it must not be allowed to manufacture the very `task`/`project` keys the
+  // isDataRepairPossible() refusal below is looking for — otherwise a truncated
+  // backup stops being refused and instead REPLACES the user's data with an
+  // all-defaults empty store, on every import path (JSON import, local-backup
+  // restore, SuperSync "Use Server Data").
+  it('refuses a backup with no task or project state instead of importing an empty store', async () => {
+    const truncated = createMinimalValidBackup() as any;
+    delete truncated.task;
+    delete truncated.project;
+
+    await expectAsync(
+      service.importCompleteBackup(truncated, true, true),
+    ).toBeRejectedWithError(/repair not possible/);
+
+    expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalled();
   });
 
   describe('importCompleteBackup', () => {
@@ -307,17 +603,6 @@ describe('BackupService', () => {
       expect((dispatchedAction.appDataComplete as any).task).toEqual(
         jasmine.objectContaining(backupData.task),
       );
-    });
-
-    it('should clear the conflict journal (full dataset replacement)', async () => {
-      // Journal entries reference entities of the REPLACED dataset. Every
-      // import path (profile switch, JSON import, local-backup restore,
-      // SuperSync restore) funnels through here — without the clear, the badge
-      // keeps its pre-restore count and the review page lists conflicts from
-      // the old dataset.
-      await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
-
-      expect(mockConflictJournal.clearAll).toHaveBeenCalledTimes(1);
     });
 
     it('should persist import to operation log', async () => {
@@ -368,8 +653,8 @@ describe('BackupService', () => {
         .args[0] as Parameters<typeof mockOpLogStore.runDestructiveStateReplacement>[0];
 
       const appendedPayload = args.syncImportOp.payload as any;
-      expect(appendedPayload.globalConfig.misc.startOfNextDay).toBe(4);
-      expect(appendedPayload.globalConfig.misc.startOfNextDayTime).toBe('04:00');
+      expect(appendedPayload.globalConfig.misc.startOfNextDay).toBe(0);
+      expect(appendedPayload.globalConfig.misc.startOfNextDayTime).toBe('00:00');
     });
 
     it('should pass archiveYoung to the atomic replacement when present in backup', async () => {
@@ -543,7 +828,10 @@ describe('BackupService', () => {
       await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
 
       expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
-      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(currentState);
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(currentState, {
+        reason: 'LOCAL_IMPORT',
+        taskCount: jasmine.any(Number),
+      });
     });
 
     it('should keep the recovery slot unchanged while restoring that backup', async () => {

@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
-import { concatMap, filter } from 'rxjs/operators';
+import { filter, mergeMap } from 'rxjs/operators';
 import {
   ArchiveOperationHandler,
   isArchiveAffectingAction,
@@ -20,13 +20,14 @@ import { T } from '../../t.const';
  *
  * - Uses LOCAL_ACTIONS to only process local user actions (not remote sync operations)
  * - Filters actions using isArchiveAffectingAction() helper
- * - Delegates all archive logic to ArchiveOperationHandler.handleOperation()
+ * - Delegates all archive logic to ArchiveOperationHandler.enqueueLocalOperation(),
+ *   which queues it and runs ArchiveOperationHandler.handleOperation()
  *
  * ## Why LOCAL_ACTIONS (Not Actions)
  *
  * Archive operations need different handling for local vs remote actions:
  *
- * - LOCAL actions: This effect calls ArchiveOperationHandler.handleOperation()
+ * - LOCAL actions: This effect calls ArchiveOperationHandler.enqueueLocalOperation()
  * - REMOTE actions: OperationApplierService calls ArchiveOperationHandler.handleOperation() directly
  *
  * If we used `Actions` (all actions), remote operations would be processed TWICE:
@@ -39,7 +40,7 @@ import { T } from '../../t.const';
  *
  * ```
  * LOCAL OPERATIONS:
- * User action -> Reducers -> This effect -> ArchiveOperationHandler.handleOperation()
+ * User action -> Reducers -> This effect -> ArchiveOperationHandler.enqueueLocalOperation()
  *
  * REMOTE OPERATIONS:
  * OperationApplierService -> dispatch() -> Reducers
@@ -72,17 +73,20 @@ export class ArchiveOperationHandlerEffects {
   /**
    * Processes all archive-affecting local actions through the central handler.
    *
-   * Uses concatMap to ensure operations are processed sequentially, which is
-   * important for archive consistency (e.g., deleteProject shouldn't overlap
-   * with other archive writes).
+   * Each action is enqueued as soon as it is dispatched; the handler's local
+   * queue runs them one at a time, which is important for archive consistency
+   * (e.g., deleteProject shouldn't overlap with other archive writes).
+   * Enqueueing on dispatch, rather than when the previous one finishes, lets
+   * callers await whenLocalOperationsSettled() for an action they just
+   * dispatched (#9952).
    */
   handleArchiveOperations$ = createEffect(
     () =>
       this._localActions$.pipe(
         filter(isArchiveAffectingAction),
-        concatMap(async (action) => {
+        mergeMap(async (action) => {
           try {
-            await this._archiveOperationHandler.handleOperation(action);
+            await this._archiveOperationHandler.enqueueLocalOperation(action);
           } catch (e) {
             // Archive operations failing is serious but not critical to app function.
             // Log the error and notify user but don't crash the effect stream.

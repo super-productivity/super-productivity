@@ -5,11 +5,12 @@ import {
   TestBed,
   tick,
 } from '@angular/core/testing';
-import { ElementRef, signal } from '@angular/core';
+import { Component, ElementRef, inject, NO_ERRORS_SCHEMA, signal } from '@angular/core';
+import { AsyncPipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 
 import { WorkViewComponent } from './work-view.component';
@@ -25,6 +26,7 @@ import { Section } from '../section/section.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskWithSubTasks } from '../tasks/task.model';
+import { T } from '../../t.const';
 import {
   selectLaterTodayTasksWithSubTasks,
   selectOverdueTasksWithSubTasks,
@@ -40,6 +42,22 @@ import {
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { getDbDateStr } from '../../util/get-db-date-str';
+import { getEndOfTodayTime } from '../tasks/util/later-today-window';
+import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
+import { MsToStringPipe } from '../../ui/duration/ms-to-string.pipe';
+import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe';
+
+/** `listmodelid` of every task-list created while rendering the real template. */
+const createdTaskListIds: (string | null)[] = [];
+
+@Component({ selector: 'task-list', template: '' })
+class TaskListStubComponent {
+  constructor() {
+    // recorded on creation: projected content is created even when never rendered
+    createdTaskListIds.push(inject(ElementRef).nativeElement.getAttribute('listmodelid'));
+  }
+}
 
 /** Shape the customizer emits, narrowed to what these specs vary. */
 type CustomizedStub = {
@@ -84,6 +102,10 @@ const configureWorkViewTestBed = (
     isTodayList?: boolean;
     /** Plugin id embedded in the work-view body; replaces the whole task list. */
     embedPluginId?: string | null;
+    /** What "move done to archive" sweeps; may exceed the rendered Done list. */
+    doneTasksToArchive?: TaskWithSubTasks[];
+    /** Renders the real template with a stub task-list; other children are skipped. */
+    isTemplateRendered?: boolean;
   } = {},
 ): void => {
   const workContextService = {
@@ -91,6 +113,7 @@ const configureWorkViewTestBed = (
       return activeContext.id;
     },
     undoneTasks$: of([]),
+    doneTasksToArchive$: of(overrides.doneTasksToArchive ?? []),
     todayRemainingInProject$: of(0),
     estimateRemainingToday$: of(0),
     workingToday$: of(0),
@@ -101,6 +124,10 @@ const configureWorkViewTestBed = (
     activeWorkContext$: of({ id: 'ctx', type: 'PROJECT' }),
     isActiveWorkContextProject$: of(true),
     isContextChanging$: of(false),
+    isContextChangingWithDelay$: of(false),
+    isHasTasksToWorkOn$: of(true),
+    doneTodayArchived$: of(0),
+    workingTodayArchived$: of(0),
   };
 
   // Reset the shared mutable context: a block that switched it to TODAY would
@@ -129,6 +156,7 @@ const configureWorkViewTestBed = (
           isXs: signal(false),
           isWorkViewScrolled: { set: () => {} },
           showAddTaskBar: () => {},
+          highlightTaskBriefly: () => {},
         },
       },
       {
@@ -178,7 +206,20 @@ const configureWorkViewTestBed = (
   // Stub the template and imports so children (task-list, backlog, …) don't have
   // to be instantiated; everything under test runs without rendering.
   TestBed.overrideComponent(WorkViewComponent, {
-    set: { template: '', imports: [], styles: [''] },
+    set: overrides.isTemplateRendered
+      ? {
+          imports: [
+            AsyncPipe,
+            TranslatePipe,
+            MsToStringPipe,
+            ScheduledDateGroupPipe,
+            CollapsibleComponent,
+            TaskListStubComponent,
+          ],
+          schemas: [NO_ERRORS_SCHEMA],
+          styles: [''],
+        }
+      : { template: '', imports: [], styles: [''] },
   });
 };
 
@@ -188,7 +229,9 @@ const overrideDefaultSelectors = (store: MockStore): void => {
   store.overrideSelector(selectLaterTodayTasksWithSubTasks, []);
   store.overrideSelector(selectTaskRepeatCfgsByProjectId, []);
   store.overrideSelector(selectTaskRepeatCfgsByTagId, []);
-  store.overrideSelector(selectTodayStr, '2026-06-23');
+  // real today: the component re-applies the later-today cutoff against the
+  // live clock, so a frozen day would put every fixture in the past
+  store.overrideSelector(selectTodayStr, getDbDateStr());
   store.overrideSelector(selectStartOfNextDayDiffMs, 0);
 };
 
@@ -360,6 +403,34 @@ describe('WorkViewComponent', () => {
     });
   });
 
+  describe('moveDoneToArchive', () => {
+    it('archives every done task, not only the ones listed on Today', async () => {
+      const moveToArchive = jasmine
+        .createSpy('moveToArchive')
+        .and.returnValue(Promise.resolve());
+      const listed = buildTask('done-today');
+      const earlier = buildTask('done-earlier');
+      configureWorkViewTestBed({
+        isTodayList: true,
+        taskService: { moveToArchive },
+        doneTasksToArchive: [listed, earlier],
+      });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', [listed]);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+
+      await fixture.componentInstance.moveDoneToArchive();
+
+      expect(moveToArchive).toHaveBeenCalledOnceWith([listed, earlier]);
+    });
+  });
+
   describe('undoneTasksBySection', () => {
     const buildSection = (id: string, taskIds: string[]): Section =>
       ({
@@ -467,9 +538,12 @@ describe('WorkViewComponent', () => {
     // The focus retry loop keeps rescheduling for ~5s; without an explicit
     // destroy those timers outlive the spec and run against a reset MockStore.
     let fixture: ComponentFixture<WorkViewComponent> | undefined;
+    /** Containers appended to the document by the success-branch spec. */
+    const revealContainers: HTMLElement[] = [];
     afterEach(() => {
       fixture?.destroy();
       fixture = undefined;
+      revealContainers.splice(0).forEach((el) => el.remove());
       // The panel signals persist to localStorage, and the component seeds them
       // from it at construction — a spec that left one collapsed would decide
       // the starting state of every later one under randomized spec order.
@@ -480,6 +554,8 @@ describe('WorkViewComponent', () => {
 
     const setup = (opts: {
       focusItem?: string;
+      /** Marks the `focusItem` as search-originated, as `navigate()` does. */
+      isFromSearch?: boolean;
       queryParams$?: Observable<Record<string, string>>;
       doneTasks?: TaskWithSubTasks[];
       overdueTasks?: TaskWithSubTasks[];
@@ -508,12 +584,17 @@ describe('WorkViewComponent', () => {
       configureWorkViewTestBed({
         customizerService: {
           customizeUndoneTasks: () =>
-            opts.customized$ ?? of({ list: undone, grouped: opts.grouped }),
+            opts.customized$ ??
+            of({
+              list: undone,
+              grouped: opts.grouped,
+              groups:
+                opts.grouped &&
+                Object.entries(opts.grouped).map(([key, tasks]) => ({ key, tasks })),
+            }),
           isCustomized: signal(opts.isCustomized ?? !!(opts.grouped || opts.customized$)),
           collapsedGroupIds: signal(opts.collapsedGroupIds ?? []),
           toggleGroupExpansion,
-          getOrderedGroupKeys: (grouped: Record<string, TaskWithSubTasks[]>) =>
-            Object.keys(grouped),
         },
         sectionService: {
           getSectionsByContextId$: () =>
@@ -522,7 +603,13 @@ describe('WorkViewComponent', () => {
         },
         queryParams$:
           opts.queryParams$ ??
-          (opts.focusItem ? of({ focusItem: opts.focusItem }) : undefined),
+          (opts.focusItem
+            ? of(
+                (opts.isFromSearch
+                  ? { focusItem: opts.focusItem, isFromSearch: 'true' }
+                  : { focusItem: opts.focusItem }) as Record<string, string>,
+              )
+            : undefined),
         isTodayList: opts.isTodayList,
         embedPluginId: opts.embedPluginId,
       });
@@ -532,7 +619,15 @@ describe('WorkViewComponent', () => {
         store.overrideSelector(selectOverdueTasksWithSubTasks, opts.overdueTasks);
       }
       if (opts.laterTodayTasks) {
-        store.overrideSelector(selectLaterTodayTasksWithSubTasks, opts.laterTodayTasks);
+        // the component drops entries whose start time has passed, so pin the
+        // fixtures to the very end of today
+        store.overrideSelector(
+          selectLaterTodayTasksWithSubTasks,
+          opts.laterTodayTasks.map((task) => ({
+            ...task,
+            dueWithTime: getEndOfTodayTime(getDbDateStr(), 0),
+          })),
+        );
       }
 
       fixture = TestBed.createComponent(WorkViewComponent);
@@ -853,6 +948,65 @@ describe('WorkViewComponent', () => {
       discardPeriodicTasks();
     }));
 
+    /**
+     * The success branch of the reveal — the one that scrolls, focuses and (for
+     * a search jump) highlights. Every spec above stops in the retry/expansion
+     * path, which never reaches it, so this needs a container that actually
+     * holds a rendered row. (#5476)
+     */
+    const revealRenderedRow = (
+      cmp: WorkViewComponent,
+    ): { row: HTMLElement; highlightTaskBriefly: jasmine.Spy } => {
+      const highlightTaskBriefly = spyOn(
+        TestBed.inject(LayoutService),
+        'highlightTaskBriefly',
+      );
+
+      // A real element: the reveal only accepts a row that is in the document
+      // and has a non-zero height (_isTaskElementReady).
+      const container = document.createElement('div');
+      container.style.height = '100px';
+      container.style.overflow = 'auto';
+      const row = document.createElement('div');
+      row.id = 't-wanted';
+      row.style.height = '400px';
+      container.appendChild(row);
+      document.body.appendChild(container);
+      revealContainers.push(container);
+      spyOn(row, 'focus');
+
+      // Mirrors the split pane rendering: the setter replays the pending reveal.
+      cmp.splitTopElRef = new ElementRef(container);
+      return { row, highlightTaskBriefly };
+    };
+
+    it('scrolls to, focuses and highlights the row of a search jump', () => {
+      const { cmp } = setup({
+        focusItem: 'wanted',
+        isFromSearch: true,
+        undone: [buildTask('wanted')],
+      });
+
+      const { row, highlightTaskBriefly } = revealRenderedRow(cmp);
+
+      expect(row.focus).toHaveBeenCalledOnceWith({ preventScroll: true });
+      expect(highlightTaskBriefly).toHaveBeenCalledOnceWith(row);
+    });
+
+    it('focuses but does not highlight a focusItem from any other caller', () => {
+      // `focusItem` is also set by reminder snacks, the tracked-task pill, issue
+      // creation and the calendar banner — none of those asked for attention.
+      const { cmp } = setup({
+        focusItem: 'wanted',
+        undone: [buildTask('wanted')],
+      });
+
+      const { row, highlightTaskBriefly } = revealRenderedRow(cmp);
+
+      expect(row.focus).toHaveBeenCalledOnceWith({ preventScroll: true });
+      expect(highlightTaskBriefly).not.toHaveBeenCalled();
+    });
+
     it('does not touch any container without a focusItem', () => {
       const { toggleGroupExpansion, updateSection } = setup({
         undone: [buildTask('wanted')],
@@ -863,6 +1017,115 @@ describe('WorkViewComponent', () => {
 
       expect(toggleGroupExpansion).not.toHaveBeenCalled();
       expect(updateSection).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isDoneListBuilt', () => {
+    const setup = async (isDoneHidden: boolean): Promise<WorkViewComponent> => {
+      // set both ways: the persistence effect of a previous spec's fixture can
+      // still write the key while it is torn down
+      if (isDoneHidden) {
+        localStorage.setItem(LS.DONE_TASKS_HIDDEN, 'true');
+      } else {
+        localStorage.removeItem(LS.DONE_TASKS_HIDDEN);
+      }
+      configureWorkViewTestBed();
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', []);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+      return fixture.componentInstance;
+    };
+
+    afterEach(() => {
+      localStorage.removeItem(LS.DONE_TASKS_HIDDEN);
+    });
+
+    it('builds the done list right away when it starts expanded', async () => {
+      const cmp = await setup(false);
+      expect(cmp.isDoneListBuilt()).toBe(true);
+    });
+
+    it('waits for the first expand when the done list starts collapsed', async () => {
+      const cmp = await setup(true);
+      expect(cmp.isDoneListBuilt()).toBe(false);
+
+      cmp.isDoneHidden.set(false);
+      expect(cmp.isDoneListBuilt()).toBe(true);
+    });
+
+    it('keeps the done list built after collapsing it again', async () => {
+      const cmp = await setup(true);
+      cmp.isDoneHidden.set(false);
+      // the template reads it on render; only a list that was built stays built
+      expect(cmp.isDoneListBuilt()).toBe(true);
+      cmp.isDoneHidden.set(true);
+      expect(cmp.isDoneListBuilt()).toBe(true);
+    });
+
+    it('creates no done task-list in the template until the first expand', async () => {
+      localStorage.setItem(LS.DONE_TASKS_HIDDEN, 'true');
+      createdTaskListIds.length = 0;
+      configureWorkViewTestBed({ isTemplateRendered: true });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', [buildTask('d1')]);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+      // the undone list proves the template rendered, so the check below isn't vacuous
+      expect(createdTaskListIds).toContain('UNDONE');
+      expect(createdTaskListIds).not.toContain('DONE');
+
+      fixture.componentInstance.isDoneHidden.set(false);
+      fixture.detectChanges();
+      expect(createdTaskListIds).toContain('DONE');
+    });
+  });
+
+  describe('emptyStateHint', () => {
+    const setup = async (
+      opts: {
+        backlog?: TaskWithSubTasks[];
+        isTodayList?: boolean;
+        overdue?: TaskWithSubTasks[];
+      } = {},
+    ): Promise<WorkViewComponent> => {
+      configureWorkViewTestBed({ isTodayList: opts.isTodayList });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+      store.overrideSelector(selectOverdueTasksWithSubTasks, opts.overdue ?? []);
+
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', []);
+      fixture.componentRef.setInput('backlogTasks', opts.backlog ?? []);
+      fixture.detectChanges();
+      return fixture.componentInstance;
+    };
+
+    it('explains the list when nothing else is on screen', async () => {
+      const component = await setup();
+      expect(component.emptyStateHint()).toBe(T.WW.EMPTY_HINT_PROJECT);
+    });
+
+    it('stays hidden while the backlog holds tasks', async () => {
+      const component = await setup({ backlog: [buildTask('b1')] });
+      expect(component.emptyStateHint()).toBeNull();
+    });
+
+    it('stays hidden while the overdue panel shows tasks', async () => {
+      const component = await setup({ isTodayList: true, overdue: [buildTask('o1')] });
+      expect(component.emptyStateHint()).toBeNull();
     });
   });
 });

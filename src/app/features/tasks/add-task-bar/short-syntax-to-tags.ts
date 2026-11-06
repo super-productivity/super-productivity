@@ -11,6 +11,7 @@ import { Project } from '../../project/project.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { TaskLog } from '../../../core/log';
+import { DateInputLocale } from '../../../core/date-time-format/date-input-locale';
 
 export interface ShortSyntaxTag {
   id?: string;
@@ -27,12 +28,14 @@ export const shortSyntaxToTags = async ({
   projects,
   defaultColor,
   shortSyntaxConfig,
+  dateLocale,
 }: {
   val: string;
   tags: Tag[];
   projects: Project[];
   defaultColor: string;
   shortSyntaxConfig: ShortSyntaxConfig;
+  dateLocale?: DateInputLocale;
 }): Promise<ShortSyntaxTag[]> => {
   const r = await shortSyntax(
     {
@@ -46,6 +49,7 @@ export const shortSyntaxToTags = async ({
     undefined,
     'combine',
     true,
+    dateLocale,
   );
   const shortSyntaxTags: ShortSyntaxTag[] = [];
 

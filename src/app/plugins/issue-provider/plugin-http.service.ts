@@ -15,20 +15,18 @@ const MIN_TIMEOUT = 1000;
 const MAX_TIMEOUT = 120000;
 
 /**
- * WebDAV/CalDAV verbs that Java's `HttpURLConnection` (the engine behind
+ * WebDAV/CalDAV verbs that Android's `HttpURLConnection` (the engine behind
  * Capacitor's native `CapacitorHttp`, which intercepts every non-GET/HEAD/
- * OPTIONS/TRACE XHR on-device) refuses with `ProtocolException`. On native
- * platforms these are issued through the OkHttp/URLSession-backed executor
- * instead, which accepts arbitrary method strings. Standard verbs keep using the
- * normal `HttpClient` path (it handles JSON + works on every platform).
+ * OPTIONS/TRACE XHR on-device) refuses with `ProtocolException`. Its allow-list
+ * (AOSP's OkHttp-based impl) is OPTIONS/GET/HEAD/POST/PUT/DELETE/TRACE/PATCH. On
+ * native platforms these are issued through the OkHttp/URLSession-backed
+ * `WebDavHttp` executor instead, which supports the WebDAV verbs. Standard verbs,
+ * including `PATCH`, keep using the normal `HttpClient` path (it handles JSON +
+ * works on every platform).
  *
  * Scoped to the verbs the CalDAV calendar plugin actually uses (discovery +
  * event query). Entries MUST stay within the set the native `WebDavHttp` plugin
- * implements (e.g. it rejects `MKCALENDAR`). `PATCH` is also rejected by
- * `HttpURLConnection` and would belong here, but it's used by other providers
- * (GitHub, Google Calendar) whose JSON round-trips need separate on-device
- * verification — tracked separately, intentionally not rerouted here.
- * See issue #8558.
+ * implements (e.g. it rejects `MKCALENDAR`). See issues #8558 and #8579.
  */
 const NATIVE_HTTP_METHODS = new Set(['PROPFIND', 'REPORT']);
 

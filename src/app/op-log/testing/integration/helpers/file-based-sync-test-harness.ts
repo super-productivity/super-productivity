@@ -121,6 +121,10 @@ class MockStateSnapshotService {
     return this._state;
   }
 
+  async getStateSnapshotAsync(): Promise<unknown> {
+    return this._state;
+  }
+
   getStateSnapshotForOperationLog(): unknown {
     return this._state;
   }
@@ -219,6 +223,9 @@ export class FileBasedSyncTestHarness {
 
     // Store the parent injector for use in _createAdapterService
     this._parentInjector = parentInjector!;
+    // Start clean: other specs (e.g. the adapter unit spec) only clear these keys
+    // before their own tests, so in random order their state can reach this one.
+    this._clearLocalStorage();
   }
 
   /**

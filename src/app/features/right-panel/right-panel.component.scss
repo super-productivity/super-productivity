@@ -118,6 +118,16 @@
   display: flex;
   flex-direction: column;
   position: relative;
+  // Win/Linux Electron with custom title bar: the window controls overlay the
+  // window's top-right corner, which is this panel's while it is open
+  // (main-header drops its reserve for them then). Start the content below the
+  // overlay band, so the controls cover none of it and the native drag region
+  // behind them swallows no clicks. Padded here rather than on `.side-inner`,
+  // whose padding would scroll away with the content. Needs no platform
+  // scoping: the env() is set only while Electron draws the overlay (not on
+  // macOS, web or mobile, with the native frame, or in fullscreen). A Linux
+  // button layout with every control on the left leaves this strip empty.
+  padding-top: env(titlebar-area-height, 0px);
 
   plugin-panel-container {
     flex: 1;
@@ -154,7 +164,9 @@
   touch-action: none; // allow pointer events to control without scrolling
   position: absolute;
   top: 50%;
-  left: -8px; // Position outside the panel
+  // -16px (width 20px, border-box) reaches only 4px into the panel, clear of
+  // the 8px margin on panel rows (was -8px, overlapping by 4px).
+  left: -16px;
   width: 20px;
   height: 48px;
   transform: translateY(-50%);
@@ -175,6 +187,20 @@
     font-size: 16px;
     width: 16px;
     height: 16px;
+  }
+
+  // The painted handle stays 20px so it keeps clearing the 8px row margin
+  // (#9506). Only the pointer target grows: 20px is under the 24px minimum
+  // target size, and the 4px between the handle's right edge and the first row
+  // is empty margin, so taking it widens the target without covering content
+  // or painting anything new (#10132).
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    left: 0;
   }
 
   &:hover {

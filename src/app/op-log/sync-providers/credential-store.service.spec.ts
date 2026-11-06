@@ -61,6 +61,26 @@ describe('SyncCredentialStore', () => {
       const result2 = await store.load();
       expect(result2).toEqual(testCredentials);
     });
+
+    it('should read the database again after invalidateInMemoryCache — a second tab may have rotated the credentials', async () => {
+      // Two store instances over the same IndexedDB stand in for two tabs.
+      const tabA = new SyncCredentialStore<SyncProviderId.Dropbox>(
+        SyncProviderId.Dropbox,
+      );
+      const original = createTestCredentials('tab-original');
+      await tabA.setComplete(original);
+      expect(await store.load()).toEqual(original); // store now caches `original`
+
+      const rotated = createTestCredentials('tab-rotated');
+      await tabA.setComplete(rotated);
+      // The stale cache is exactly the cross-tab hazard: without invalidation
+      // this tab keeps serving the revoked credentials.
+      expect(await store.load()).toEqual(original);
+
+      store.invalidateInMemoryCache();
+
+      expect(await store.load()).toEqual(rotated);
+    });
   });
 
   describe('setComplete', () => {

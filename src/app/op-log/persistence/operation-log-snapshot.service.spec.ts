@@ -50,6 +50,7 @@ describe('OperationLogSnapshotService', () => {
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
+      'clearVectorClockCache',
       'saveStateCache',
       'saveStateCacheBackup',
       'clearStateCacheBackup',
@@ -217,6 +218,25 @@ describe('OperationLogSnapshotService', () => {
           schemaVersion: CURRENT_SCHEMA_VERSION,
         }),
       );
+    });
+
+    it('should read the durable vector clock, not a stale per-tab cache', async () => {
+      mockStateSnapshotService.getStateSnapshot.and.returnValue({
+        task: { ids: ['t1'] },
+        project: { ids: ['p1'] },
+        globalConfig: {},
+      } as any);
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({ client1: 1 });
+      mockOpLogStore.getLastSeq.and.resolveTo(10);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      // Another tab can raise this client's counter in place (#10214).
+      expect(mockOpLogStore.clearVectorClockCache).toHaveBeenCalledBefore(
+        mockVectorClockService.getCurrentVectorClock,
+      );
+      expect(mockOpLogStore.saveStateCache).toHaveBeenCalled();
     });
 
     it('should include snapshotEntityKeys in saved snapshot', async () => {

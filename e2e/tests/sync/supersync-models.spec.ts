@@ -10,6 +10,21 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ProjectPage } from '../../pages/project.page';
+import {
+  countLocalRepairOps,
+  getStoreSummary,
+} from '../../utils/audit-error-paths-helpers';
+
+/**
+ * The tag is gone from the store and no task still references it. Chip text
+ * cannot tell: a dangling tagId renders no chip, and the repair it triggers
+ * (a REPAIR op) cleans it up behind the test's back.
+ */
+const expectTagGoneFromStore = async (page: Page, tagId: string): Promise<void> => {
+  const summary = await getStoreSummary(page);
+  expect(summary.tagIds).not.toContain(tagId);
+  expect(summary.tasks.filter((task) => task.tagIds.includes(tagId))).toEqual([]);
+};
 
 // Robust helper to create a tag
 const createTagReliably = async (page: Page, tagName: string): Promise<void> => {
@@ -170,21 +185,22 @@ test.describe('@supersync SuperSync Models', () => {
       await clientA.workView.addTask(taskName);
 
       // Helper to dismiss all overlays reliably
+      const tagClient = clientA;
       const dismissAllOverlays = async (): Promise<void> => {
         // Dismiss backdrops by pressing Escape multiple times
         for (let j = 0; j < 3; j++) {
-          await clientA.page.keyboard.press('Escape');
-          await clientA.page.waitForTimeout(100);
+          await tagClient.page.keyboard.press('Escape');
+          await tagClient.page.waitForTimeout(100);
         }
         // Wait for any overlays to disappear
-        const overlayBackdrop = clientA.page.locator('.cdk-overlay-backdrop');
+        const overlayBackdrop = tagClient.page.locator('.cdk-overlay-backdrop');
         try {
           await overlayBackdrop.waitFor({ state: 'hidden', timeout: 2000 });
         } catch {
           // If still visible, force click to dismiss
           if (await overlayBackdrop.isVisible()) {
             await overlayBackdrop.click({ force: true });
-            await clientA.page.waitForTimeout(200);
+            await tagClient.page.waitForTimeout(200);
           }
         }
       };
@@ -276,6 +292,12 @@ test.describe('@supersync SuperSync Models', () => {
         clientB.page.locator('nav-list-tree').filter({ hasText: tagName }),
       ).toBeVisible();
 
+      // B still shows Today, where A created the task: its chip shows the synced tag
+      await waitForTask(clientB.page, taskName);
+      const taskB = clientB.page.locator(`task:has-text("${taskName}")`);
+      await expect(taskB).toBeVisible();
+      await expect(taskB).toContainText(tagName);
+
       // Switch to the tag view and verify the task is present
       const tagNavItem = tagsTreeB
         .locator('nav-item')
@@ -283,17 +305,23 @@ test.describe('@supersync SuperSync Models', () => {
         .first();
       const tagId = await tagNavItem.getAttribute('data-tag-id');
       if (tagId) {
-        await clientB.page.goto(`/#/tag/${tagId}/work`);
+        // `/tag/:id/work` is no route: it fell through to the start page
+        // (Today), so the tag view itself was never checked.
+        await clientB.page.goto(`/#/tag/${tagId}/tasks`);
       } else {
         await tagNavItem.click({ force: true });
       }
       await clientB.page.waitForLoadState('networkidle');
+      await expect(clientB.page.locator('page-title .page-title-text')).toHaveText(
+        tagName,
+      );
 
-      await waitForTask(clientB.page, taskName);
-      const taskB = clientB.page.locator(`task:has-text("${taskName}")`);
-      await expect(taskB).toBeVisible();
-      // Check for tag text content in the task (more robust than finding specific tag element structure)
-      await expect(taskB).toContainText(tagName);
+      // A tag view hides the chip of its own tag (TagListComponent). That also
+      // tells its row apart from Today's, which fades out for 75ms after the
+      // switch, long enough for an unfiltered locator to match it instead.
+      await expect(
+        clientB.page.locator('task', { hasText: taskName, hasNotText: tagName }),
+      ).toBeVisible();
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -348,13 +376,15 @@ test.describe('@supersync SuperSync Models', () => {
         await projectBtnA.click({ force: true });
         await clientA.page.waitForLoadState('networkidle');
         const urlMatch = clientA.page.url().match(/project\/([^/?#]+)/);
-        projectId = urlMatch?.[1] || undefined;
+        projectId = urlMatch?.[1] ?? null;
       }
       if (!projectId) {
         throw new Error('Project id not found after creation');
       }
 
-      await clientA.page.goto(`/#/project/${projectId}`);
+      // `/project/:id` alone matches the componentless parent route and renders
+      // an empty outlet; the task list lives at `/project/:id/tasks`.
+      await clientA.page.goto(`/#/project/${projectId}/tasks`);
       await clientA.page.waitForLoadState('networkidle');
 
       // Add Note
@@ -389,7 +419,7 @@ test.describe('@supersync SuperSync Models', () => {
         }
       }
 
-      await clientB.page.goto(`/#/project/${projectId}`);
+      await clientB.page.goto(`/#/project/${projectId}/tasks`);
       await clientB.page.waitForLoadState('networkidle');
 
       // Verify Note
@@ -497,14 +527,22 @@ test.describe('@supersync SuperSync Models', () => {
       ).toBeVisible();
       console.log('[BulkTag] Client B sees the tag');
 
+      const tagId = (await getStoreSummary(clientA.page)).tags.find(
+        (tag) => tag.title === tagName,
+      )?.id;
+      expect(tagId).toBeTruthy();
+      const repairOpsBeforeA = await countLocalRepairOps(clientA.page);
+      const repairOpsBeforeB = await countLocalRepairOps(clientB.page);
+
       // 5. Client A deletes the tag
       // Navigate to Today view to ensure sidebar is visible
       await clientA.page.goto('/#/tag/TODAY/work');
       await clientA.page.waitForLoadState('networkidle');
 
       // Use toPass() to make tag deletion more robust
+      const deletingClient = clientA;
       await expect(async () => {
-        const tagsTreeA = clientA.page
+        const tagsTreeA = deletingClient.page
           .locator('nav-list-tree')
           .filter({ hasText: 'Tags' })
           .first();
@@ -516,7 +554,7 @@ test.describe('@supersync SuperSync Models', () => {
         const isExpanded = await expandBtnA.getAttribute('aria-expanded');
         if (isExpanded !== 'true') {
           await groupNavItemA.click();
-          await clientA.page.waitForTimeout(300);
+          await deletingClient.page.waitForTimeout(300);
         }
 
         // Find the specific tag and right-click
@@ -528,7 +566,7 @@ test.describe('@supersync SuperSync Models', () => {
         await tagNavItem.click({ button: 'right' });
 
         // Click delete option in context menu
-        const deleteBtn = clientA.page
+        const deleteBtn = deletingClient.page
           .locator('.mat-mdc-menu-panel button, .mat-mdc-menu-content button')
           .filter({ hasText: /delete/i })
           .first();
@@ -536,7 +574,7 @@ test.describe('@supersync SuperSync Models', () => {
         await deleteBtn.click();
 
         // Handle confirmation dialog
-        const confirmBtn = clientA.page
+        const confirmBtn = deletingClient.page
           .locator('dialog-confirm button, mat-dialog-container button')
           .filter({ hasText: /ok|delete|confirm|yes/i })
           .first();
@@ -548,6 +586,7 @@ test.describe('@supersync SuperSync Models', () => {
       }).toPass({ timeout: 30000, intervals: [1000, 2000, 3000, 5000] });
 
       console.log('[BulkTag] Tag deleted on Client A');
+      await expectTagGoneFromStore(clientA.page, tagId!);
 
       // 6. Client A syncs
       await clientA.sync.syncAndWait();
@@ -626,6 +665,12 @@ test.describe('@supersync SuperSync Models', () => {
       expect(countA).toBe(countB);
       expect(countA).toBeGreaterThanOrEqual(taskCount);
       console.log(`[BulkTag] ✓ Both clients have ${countA} tasks`);
+
+      // The clean end state came from the delete itself, not from a repair.
+      await expectTagGoneFromStore(clientA.page, tagId!);
+      await expectTagGoneFromStore(clientB.page, tagId!);
+      expect(await countLocalRepairOps(clientA.page)).toBe(repairOpsBeforeA);
+      expect(await countLocalRepairOps(clientB.page)).toBe(repairOpsBeforeB);
 
       console.log('[BulkTag] ✓ Tag deletion atomic cleanup test PASSED!');
     } finally {

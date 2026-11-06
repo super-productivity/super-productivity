@@ -11,12 +11,19 @@ on:
     paths:
       - 'packages/super-sync-server/**'
       - 'packages/shared-schema/**' # @sp/shared-schema is a direct dep
-      - 'packages/sync-core/**' # transitive dep via @sp/shared-schema
+      - 'packages/sync-core/**' # @sp/sync-core is a direct dep
+      # The sync fuzz harness's SuperSync port, checked by tests/sync-fuzz-server-parity.pglite.spec.ts
+      - 'src/app/op-log/testing/integration/sync-fuzz/**'
       - '.github/workflows/supersync-server-tests.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# Superseded PR pushes cancel the old run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   supersync-server-tests:
@@ -31,7 +38,9 @@ jobs:
     # all while the check still reported on it.
     services:
       postgres:
-        image: postgres:16-alpine
+        # AWS's mirror of the Docker Official Image (same digest): Docker Hub's
+        # unauthenticated pull limit on shared runner IPs failed this job before tests ran.
+        image: public.ecr.aws/docker/library/postgres:16-alpine
         env:
           POSTGRES_USER: supersync
           POSTGRES_PASSWORD: superpassword
@@ -48,17 +57,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: 22
-          cache: 'npm'
-      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
-      - name: Reconfigure git to use HTTP authentication
-        run: >
-          git config --global url."https://github.com/".insteadOf
-          ssh://git@github.com/
-      - name: Install npm Packages
-        run: npm i
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
       - name: Verify Helm upgrade value compatibility
         working-directory: packages/super-sync-server
         run: |
@@ -75,6 +75,28 @@ jobs:
             echo 'connectionLimit=0 unexpectedly passed Helm validation' >&2
             exit 1
           fi
+          # A blank required secret must fail the render, not reach a pod. Both the
+          # empty-string and the YAML-null spelling: `key:` with no value is nil.
+          for blank in '--set postgresql.password=' '--set postgresql.password=null'; do
+            if helm template supersync helm/supersync \
+              --set supersync.secret.jwtSecret=01234567890123456789012345678901 \
+              $blank >/dev/null 2>&1; then
+              echo "blank postgresql.password ($blank) unexpectedly passed Helm validation" >&2
+              exit 1
+            fi
+          done
+          # An external database with neither url nor existingSecret must fail too.
+          if helm template supersync helm/supersync \
+            --set supersync.secret.jwtSecret=01234567890123456789012345678901 \
+            --set postgresql.enabled=false >/dev/null 2>&1; then
+            echo 'externalDatabase with no url or existingSecret unexpectedly passed' >&2
+            exit 1
+          fi
+          # Liveness must stay off the DB-gated endpoint; readiness and startup keep it.
+          rendered=$(helm template "${chart_args[@]}")
+          printf '%s\n' "$rendered" | grep -A3 'livenessProbe:' | grep -q 'path: /live'
+          printf '%s\n' "$rendered" | grep -A3 'readinessProbe:' | grep -q 'path: /health'
+          printf '%s\n' "$rendered" | grep -A3 'startupProbe:' | grep -q 'path: /health'
       - name: Run SuperSync Server Tests
         run: cd packages/super-sync-server && npm test
       - name: Apply PostgreSQL Test Schema

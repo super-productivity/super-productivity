@@ -9,6 +9,28 @@ const baseManifest: PluginManifest = {
 } as PluginManifest;
 
 describe('validatePluginManifest', () => {
+  it('rejects only a minimum app version known to be newer than the host', () => {
+    for (const [minSupVersion, appVersion, isValid] of [
+      ['19.3.0', '19.2.0', false],
+      ['19.2.0', '19.2.0', true],
+      ['19.1.0', '19.2.0', true],
+      ['unknown', '19.2.0', true],
+      ['19.3.0', 'unknown', true],
+    ] as const) {
+      const result = validatePluginManifest(
+        { ...baseManifest, minSupVersion },
+        appVersion,
+      );
+      expect(result.isValid).withContext(String(minSupVersion)).toBe(isValid);
+      if (!isValid) {
+        const error = result.errors.join(' ');
+        expect(error).toContain(minSupVersion);
+        expect(error).toContain(appVersion);
+        expect(error).toMatch(/update/i);
+      }
+    }
+  });
+
   it('accepts a valid manifest', () => {
     const result = validatePluginManifest(baseManifest);
     expect(result.isValid).toBe(true);
@@ -79,6 +101,70 @@ describe('validatePluginManifest', () => {
       expect(result.errors).toContain(
         'allowedHosts entries must be non-empty hostnames without scheme, port, or path (e.g. "api.example.com")',
       );
+    });
+  });
+
+  describe('dataSharing', () => {
+    const dest = {
+      recipient: 'Example',
+      hosts: ['api.example.com'],
+      data: ['taskTitles'],
+    };
+    const validate = (
+      extra: Record<string, unknown>,
+    ): ReturnType<typeof validatePluginManifest> =>
+      validatePluginManifest({ ...baseManifest, ...extra } as PluginManifest);
+
+    it('accepts absent and []', () => {
+      expect(validate({}).isValid).toBeTrue();
+      expect(validate({ dataSharing: [] }).isValid).toBeTrue();
+    });
+
+    it('still accepts allowedHosts without dataSharing', () => {
+      expect(validate({ allowedHosts: ['api.example.com'] }).isValid).toBeTrue();
+    });
+
+    it('rejects allowedHosts missing from the declared hosts', () => {
+      expect(
+        validate({ dataSharing: [], allowedHosts: ['api.example.com'] }).isValid,
+      ).toBeFalse();
+      expect(
+        validate({ dataSharing: [dest], allowedHosts: ['api.example.com'] }).isValid,
+      ).toBeTrue();
+    });
+
+    it('warns on unknown data values instead of rejecting', () => {
+      const result = validate({ dataSharing: [{ ...dest, data: ['futureThing'] }] });
+      expect(result.isValid).toBeTrue();
+      expect(result.warnings.join()).toContain('futureThing');
+    });
+
+    it('rejects bad shapes, hosts and privacy links', () => {
+      expect(validate({ dataSharing: {} }).isValid).toBeFalse();
+      expect(validate({ dataSharing: [{ recipient: 'X' }] }).isValid).toBeFalse();
+      expect(
+        validate({ dataSharing: [{ ...dest, hosts: ['https://api.example.com'] }] })
+          .isValid,
+      ).toBeFalse();
+      expect(
+        validate({ dataSharing: [{ ...dest, privacyPolicyUrl: 'javascript:alert(1)' }] })
+          .isValid,
+      ).toBeFalse();
+      expect(
+        validate({ dataSharing: [{ ...dest, privacyPolicyUrl: 'https://example.com' }] })
+          .isValid,
+      ).toBeTrue();
+    });
+
+    it('matches allowedHosts to declared hosts as PluginAPI.request does', () => {
+      expect(
+        validate({ dataSharing: [dest], allowedHosts: ['API.Example.com.'] }).isValid,
+      ).toBeTrue();
+    });
+
+    it('reports a non-array allowedHosts instead of throwing', () => {
+      const result = validate({ dataSharing: [dest], allowedHosts: 'api.example.com' });
+      expect(result.isValid).toBeFalse();
     });
   });
 

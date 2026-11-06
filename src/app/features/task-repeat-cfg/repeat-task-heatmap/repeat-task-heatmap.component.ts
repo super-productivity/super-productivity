@@ -57,16 +57,26 @@ export class RepeatTaskHeatmapComponent {
     if (!tasks || tasks.length === 0) {
       return null;
     }
+    // Counts that are zero are left out rather than shown as "-".
     const summary = calcRepeatTaskSeriesTimeSpent(tasks);
+    if (!summary.total) {
+      return null;
+    }
     return {
       total: msToString(summary.total),
-      thisWeek: msToString(summary.thisWeek),
-      thisMonth: msToString(summary.thisMonth),
+      thisWeek: summary.thisWeek ? msToString(summary.thisWeek) : null,
+      thisMonth: summary.thisMonth ? msToString(summary.thisMonth) : null,
     };
+  });
+
+  /** Emits whenever the date locale changes so the month labels re-compute. */
+  private readonly _localeChange = toSignal(this._dateAdapter.localeChanges, {
+    initialValue: null,
   });
 
   readonly heatmapData = computed<HeatmapData | null>(() => {
     const rawData = this._rawHeatmapData();
+    this._localeChange();
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
 
     if (!rawData || !rawData.dayMap) {

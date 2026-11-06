@@ -14,6 +14,7 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { Task, TaskReminderOption, TaskReminderOptionId } from '../task.model';
+import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-alarm-hint.component';
 import { T } from 'src/app/t.const';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -49,6 +50,7 @@ type QuickDeadline = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
     MatDialogActions,
     MatDialogContent,
     DateTimePickerComponent,
+    ExactAlarmHintComponent,
   ],
   templateUrl: './dialog-deadline.component.html',
   styleUrl: './dialog-deadline.component.scss',
@@ -81,6 +83,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
   );
 
   T: typeof T = T;
+  readonly DO_NOT_REMIND = TaskReminderOptionId.DoNotRemind;
   reminderOptions: TaskReminderOption[] = DEADLINE_REMINDER_OPTIONS;
   task: Task | undefined = this.data.task;
 

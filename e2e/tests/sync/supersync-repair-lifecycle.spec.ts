@@ -1,19 +1,25 @@
 import { expect, test } from '../../fixtures/supersync.fixture';
-import type { Page, Response, Route } from '@playwright/test';
+import type { APIResponse, Page, Route } from '@playwright/test';
 import { SuperSyncPage } from '../../pages/supersync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
+import { allowDevErrorsInCurrentTest } from '../../utils/runtime-errors';
 import {
   closeClient,
   createSimulatedClient,
   createTestUser,
+  expectExactTaskTime,
   getSuperSyncConfig,
   parseSuperSyncRequestBody,
+  recordTaskTimeDelta,
   renameTask,
   SUPERSYNC_BASE_URL,
+  SUPERSYNC_SNAPSHOT_ROUTE,
   type SimulatedE2EClient,
   waitForTask,
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
+import type { Task } from '../../../src/app/features/tasks/task.model';
+import type { ArchiveModel } from '../../../src/app/features/time-tracking/time-tracking.model';
 
 interface SnapshotUploadRequest {
   opId?: string;
@@ -123,6 +129,9 @@ const addGhostTagReference = async (
   taskTitle: string,
   ghostTagId: string,
 ): Promise<void> => {
+  // The dangling tag reference is the corruption under test; the validator
+  // reports it through devError() before the REPAIR replaces it.
+  allowDevErrorsInCurrentTest(/tagId from task not existing/);
   await page.evaluate(
     ({ title, tagId }) => {
       type TaskLike = {
@@ -242,7 +251,7 @@ const getStoredRepairOperations = async (page: Page): Promise<StoredRepairOperat
 
 const forwardResponse = async (
   route: Route,
-  response: Response,
+  response: APIResponse,
 ): Promise<SnapshotUploadResponse> => {
   const body = await response.body();
   const decoded = JSON.parse(body.toString('utf8')) as SnapshotUploadResponse;
@@ -260,14 +269,231 @@ const expectConvergedTask = async (
     .poll(() => getTaskSnapshots(client.page, taskTitle), {
       message: `${client.clientName} did not converge to exactly one repaired task`,
     })
-    .toHaveLength(1);
-  expect((await getTaskSnapshots(client.page, taskTitle))[0].tagIds).not.toContain(
-    ghostTagId,
-  );
+    .toEqual([
+      expect.objectContaining({ tagIds: expect.not.arrayContaining([ghostTagId]) }),
+    ]);
 };
+
+// Seed real task shapes into both durable archive partitions. Retain unrelated
+// entries by default; the empty-partition case exercises the compatibility policy.
+const seedArchiveDuplicates = async (
+  page: Page,
+  taskTitles: string[],
+  keepUnrelatedTasks = true,
+): Promise<string[][]> =>
+  page.evaluate(
+    async ({ titles, keepUnrelated }) => {
+      type State = { tasks: { entities: Record<string, Task | undefined> } };
+      type Store = {
+        subscribe: (next: (state: State) => void) => { unsubscribe: () => void };
+      };
+      const store = (window as unknown as { __e2eTestHelpers: { store: Store } })
+        .__e2eTestHelpers.store;
+      let state!: State;
+      store.subscribe((value) => (state = value)).unsubscribe();
+      const tasks = titles.map((title) => {
+        const task = Object.values(state.tasks.entities).find((t) => t?.title === title);
+        if (!task) throw new Error(`Missing fixture task: ${title}`);
+        return task;
+      });
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('SUP_OPS');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const retainedIds: string[][] = [];
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const transaction = db.transaction(
+            ['archive_young', 'archive_old'],
+            'readwrite',
+          );
+          transaction.oncomplete = () => resolve();
+          transaction.onabort = () => reject(transaction.error);
+          for (const [index, name] of ['archive_young', 'archive_old'].entries()) {
+            const duplicate = tasks[index];
+            const retained = {
+              ...duplicate,
+              id: `retained-${duplicate.id}`,
+              title: `Unrelated archived ${index}`,
+              tagIds: [],
+              dueDay: undefined,
+              dueWithTime: undefined,
+              isDone: true,
+            };
+            retainedIds.push([keepUnrelated ? retained.id : duplicate.id]);
+            const data: ArchiveModel = {
+              task: {
+                ids: keepUnrelated ? [duplicate.id, retained.id] : [duplicate.id],
+                entities: {
+                  [duplicate.id]: duplicate,
+                  ...(keepUnrelated ? { [retained.id]: retained } : {}),
+                },
+              },
+              timeTracking: { project: {}, tag: {} },
+            };
+            transaction.objectStore(name).put({ id: 'current', data });
+          }
+        });
+        return retainedIds;
+      } finally {
+        db.close();
+      }
+    },
+    { titles: taskTitles, keepUnrelated: keepUnrelatedTasks },
+  );
+
+const getArchiveIds = async (page: Page): Promise<string[][]> =>
+  page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('SUP_OPS');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      return await Promise.all(
+        ['archive_young', 'archive_old'].map(
+          (name) =>
+            new Promise<string[]>((resolve, reject) => {
+              const request = db.transaction(name).objectStore(name).get('current');
+              request.onsuccess = () => {
+                const entry = request.result as { data?: ArchiveModel } | undefined;
+                resolve((entry?.data?.task.ids ?? []) as string[]);
+              };
+              request.onerror = () => reject(request.error);
+            }),
+        ),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+const failRepairCacheWrite = async (page: Page, keepFailing: boolean): Promise<void> =>
+  page.evaluate((failUntilReload) => {
+    const originalAdd = IDBObjectStore.prototype.add;
+    const originalPut = IDBObjectStore.prototype.put;
+    let repairAppended = false;
+    IDBObjectStore.prototype.add = function (value: unknown, key?: IDBValidKey) {
+      const entry = value as { source?: string; op?: { o?: string } };
+      if (this.name === 'ops' && entry.source === 'local' && entry.op?.o === 'REPAIR') {
+        repairAppended = true;
+      }
+      return originalAdd.call(this, value, key);
+    };
+    IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
+      if (this.name === 'state_cache' && repairAppended) {
+        if (!failUntilReload) {
+          IDBObjectStore.prototype.add = originalAdd;
+          IDBObjectStore.prototype.put = originalPut;
+        }
+        (window as unknown as { __repairCacheFailed: boolean }).__repairCacheFailed =
+          true;
+        throw new Error('Injected repair cache write failure');
+      }
+      return originalPut.call(this, value, key);
+    };
+  }, keepFailing);
 
 test.describe('@supersync REPAIR lifecycle', () => {
   test.describe.configure({ mode: 'serial' });
+
+  for (const scenario of [
+    'originating client',
+    'cache-write interruption',
+    'cache unavailable until reload',
+    'empty repair partition',
+  ]) {
+    test(`persists repaired archives: ${scenario}, across offline reloads`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      const titles = [`A-${testRunId}-RepairYoung`, `A-${testRunId}-RepairOld`];
+      const pendingTitle = `A-${testRunId}-UnrelatedWork`;
+      const ghostTagId = `ghost-archive-${testRunId}`;
+      const clients: SimulatedE2EClient[] = [];
+      try {
+        const config = getSuperSyncConfig(await createTestUser(testRunId));
+        for (const name of ['A', 'B']) {
+          const client = await createSimulatedClient(browser, baseURL!, name, testRunId);
+          clients.push(client);
+          await client.workView.waitForTaskList();
+          await client.sync.setupSuperSync(config);
+        }
+        const [origin, peer] = clients;
+        for (const title of titles) await origin.workView.addTask(title);
+        await recordTaskTimeDelta(origin, titles[0], '2026-09-20', 5000);
+        await origin.sync.syncAndWait();
+        await peer.sync.syncAndWait();
+        await waitForTask(peer.page, titles[1]);
+        const keepUnrelated = scenario !== 'empty repair partition';
+        const retainedIds = await seedArchiveDuplicates(
+          origin.page,
+          titles,
+          keepUnrelated,
+        );
+        expect(await seedArchiveDuplicates(peer.page, titles, keepUnrelated)).toEqual(
+          retainedIds,
+        );
+
+        // Active corruption triggers the normal post-download validator; archive
+        // duplicates alone do not trigger its cheap active-state validation gate.
+        await addGhostTagReference(peer.page, titles[0], ghostTagId);
+        await peer.sync.syncAndWait();
+        await origin.workView.addTask(pendingTitle);
+        if (scenario.startsWith('cache')) {
+          await failRepairCacheWrite(
+            origin.page,
+            scenario === 'cache unavailable until reload',
+          );
+          await origin.sync.syncBtn.click();
+          await expect
+            .poll(() =>
+              origin.page.evaluate(
+                () =>
+                  (window as unknown as { __repairCacheFailed?: boolean })
+                    .__repairCacheFailed,
+              ),
+            )
+            .toBe(true);
+          // Reboot before successful sync can redo repair. Persistent cache
+          // failure additionally forces boot to use the committed REPAIR tail.
+          await origin.page.route('**/api/**', (route) => route.abort());
+          await origin.page.reload();
+          await waitForAppReady(origin.page);
+          await expectConvergedTask(origin, titles[0], ghostTagId);
+          expect(await getArchiveIds(origin.page)).toEqual(retainedIds);
+          await origin.page.unroute('**/api/**');
+        } else {
+          await origin.sync.syncAndWait({ timeout: 60000 });
+        }
+        await expectConvergedTask(origin, titles[0], ghostTagId);
+        expect(await getStoredRepairOperations(origin.page)).not.toHaveLength(0);
+        expect(await getArchiveIds(origin.page)).toEqual(retainedIds);
+
+        await origin.sync.syncAndWait();
+        await peer.sync.syncAndWait({ timeout: 60000 });
+        for (const client of clients) {
+          expect(await getArchiveIds(client.page)).toEqual(retainedIds);
+          await waitForTask(client.page, pendingTitle);
+          await expectExactTaskTime(client, titles[0], 5000);
+          // Keep the app itself available while preventing sync on restart.
+          await client.page.route('**/api/**', (route) => route.abort());
+          for (let restart = 0; restart < 2; restart++) {
+            await client.page.reload();
+            await waitForAppReady(client.page);
+            await expectConvergedTask(client, titles[0], ghostTagId);
+            expect(await getArchiveIds(client.page)).toEqual(retainedIds);
+            await waitForTask(client.page, pendingTitle);
+            await expectExactTaskTime(client, titles[0], 5000);
+          }
+        }
+      } finally {
+        for (const client of clients) await closeClient(client);
+      }
+    });
+  }
 
   test('rebases a stale repair, retries it after reload, and converges all clients', async ({
     browser,
@@ -332,7 +558,7 @@ test.describe('@supersync REPAIR lifecycle', () => {
         markReplacementAccepted = resolve;
       });
 
-      await clientA.page.route('**/api/sync/snapshot', async (route) => {
+      await clientA.page.route(SUPERSYNC_SNAPSHOT_ROUTE, async (route) => {
         const request = parseSuperSyncRequestBody<SnapshotUploadRequest>(route.request());
         if (request.snapshotOpType !== 'REPAIR' || !request.opId) {
           await route.continue();
@@ -482,7 +708,7 @@ test.describe('@supersync REPAIR lifecycle', () => {
       let clientCRepairUploads = 0;
       clientC = await createSimulatedClient(browser, appUrl, 'C', testRunId);
       await clientC.workView.waitForTaskList();
-      await clientC.page.route('**/api/sync/snapshot', async (route) => {
+      await clientC.page.route(SUPERSYNC_SNAPSHOT_ROUTE, async (route) => {
         const request = parseSuperSyncRequestBody<SnapshotUploadRequest>(route.request());
         if (request.snapshotOpType === 'REPAIR') {
           clientCRepairUploads++;
@@ -505,6 +731,121 @@ test.describe('@supersync REPAIR lifecycle', () => {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
       if (clientC) await closeClient(clientC);
+    }
+  });
+});
+
+test.describe('@supersync REPAIR with an offline client', () => {
+  /**
+   * A causal REPAIR is automatic, so it must never reach the explicit
+   * import/restore conflict dialog. It used to: `SyncImportConflictGateService`
+   * matched on `FULL_STATE_OP_TYPES`, which includes REPAIR, so a device
+   * returning with pending work after another device's background repair was
+   * prompted with "replaces this device's data with the server's and discards N
+   * local change(s)" — and every answer lost something. Traced: the returning
+   * device issued no ops upload at all, so its work reached neither the server
+   * nor its own repaired state (#9773).
+   *
+   * Exempting REPAIR from the gate would have been worse than the prompt:
+   * applying a full-state op replaces the whole store and nothing replays local
+   * unsynced ops afterwards, so it would trade the dialog for silent
+   * divergence. The fix defers instead — a device holding pending work skips
+   * the incoming snapshot and heals its own copy of the same corruption, which
+   * is why a second REPAIR here is expected rather than a regression.
+   */
+  test('keeps an offline client’s pending work and does not resurrect what the REPAIR removed', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(240000);
+
+    const appUrl = baseURL || 'http://localhost:4242';
+    const sharedTaskTitle = `A-${testRunId}-RepairOfflineShared`;
+    const offlineTaskTitle = `A-${testRunId}-RepairOfflineWork`;
+    const ghostTagId = `ghost-tag-offline-${testRunId}`;
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
+      await clientA.workView.waitForTaskList();
+      await clientA.sync.setupSuperSync(syncConfig);
+
+      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
+      await clientB.workView.waitForTaskList();
+      await clientB.sync.setupSuperSync(syncConfig);
+
+      await clientA.workView.addTask(sharedTaskTitle);
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await waitForTask(clientB.page, sharedTaskTitle);
+
+      // B seeds the corruption that A will repair, then stops syncing. Both
+      // clients only ever sync through syncAndWait(), so B is simply offline
+      // from here on.
+      await addGhostTagReference(clientB.page, sharedTaskTitle, ghostTagId);
+      await clientB.sync.syncAndWait();
+      const corruptionServerSeq = await getLatestServerSeq(user.userId);
+
+      // Offline work A's repair snapshot cannot know about.
+      await clientB.workView.addTask(offlineTaskTitle);
+
+      // A downloads the corruption, auto-repairs, and uploads a causal REPAIR.
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await expect
+        .poll(
+          async () =>
+            (await getServerOperations(user.userId)).filter(
+              ({ opType }) => opType === 'REPAIR',
+            ).length,
+          { message: 'client A never uploaded a causal REPAIR', timeout: 60000 },
+        )
+        .toBe(1);
+      const repairOperation = (await getServerOperations(user.userId)).find(
+        ({ opType }) => opType === 'REPAIR',
+      );
+      expect(repairOperation?.serverSeq).toBeGreaterThan(corruptionServerSeq);
+      await expectConvergedTask(clientA, sharedTaskTitle, ghostTagId);
+
+      // B comes back with a cursor below the REPAIR and pending local work.
+      await clientB.sync.syncAndWait({ timeout: 60000 });
+
+      // B keeps both its own offline task and the repaired shared task.
+      await waitForTask(clientB.page, offlineTaskTitle);
+      await expectConvergedTask(clientB, sharedTaskTitle, ghostTagId);
+
+      // The offline work reached the server and replays on top of the repair
+      // for everyone else, and the repair's removal is not undone by it.
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await waitForTask(clientA.page, offlineTaskTitle);
+      await expectConvergedTask(clientA, sharedTaskTitle, ghostTagId);
+
+      // One more round each so B's own repair — if it uploaded one after
+      // healing itself — is on the server and applied by A.
+      await clientB.sync.syncAndWait({ timeout: 60000 });
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await expectConvergedTask(clientA, sharedTaskTitle, ghostTagId);
+      await expectConvergedTask(clientB, sharedTaskTitle, ghostTagId);
+      await waitForTask(clientA.page, offlineTaskTitle);
+      await waitForTask(clientB.page, offlineTaskTitle);
+      await waitForTask(clientA.page, sharedTaskTitle);
+      await waitForTask(clientB.page, sharedTaskTitle);
+
+      // A's repair, plus at most B's own after it healed its local copy.
+      // Anything beyond that is the two clients trading repairs.
+      const repairOperations = (await getServerOperations(user.userId)).filter(
+        ({ opType }) => opType === 'REPAIR',
+      );
+      expect(repairOperations.length).toBeGreaterThanOrEqual(1);
+      expect(repairOperations.length).toBeLessThanOrEqual(2);
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
     }
   });
 });

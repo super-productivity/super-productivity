@@ -31,6 +31,7 @@ export const actionLogger = (action: { type: string; [key: string]: unknown }): 
 
 export const saveBeforeLastErrorActionLog = (): void => {
   beforeLastErrorLog = [...actionLog];
+  // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
   Log.log('Last actions before error:', beforeLastErrorLog);
 };
 

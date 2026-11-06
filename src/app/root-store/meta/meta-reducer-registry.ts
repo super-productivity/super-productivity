@@ -3,6 +3,7 @@ import { isDevMode } from '@angular/core';
 import { operationCaptureMetaReducer } from '../../op-log/capture/operation-capture.meta-reducer';
 import { bulkOperationsMetaReducer } from '../../op-log/apply/bulk-hydration.meta-reducer';
 import { loadAllDataFailureGuardMetaReducer } from '../../op-log/apply/load-all-data-failure-guard.meta-reducer';
+import { reducerFailureGuardMetaReducer } from './reducer-failure-guard.meta-reducer';
 import { undoTaskDeleteMetaReducer } from './undo-task-delete.meta-reducer';
 import { taskSharedCrudMetaReducer } from './task-shared-meta-reducers/task-shared-crud.reducer';
 import { taskBatchUpdateMetaReducer } from './task-shared-meta-reducers/task-batch-update.reducer';
@@ -27,7 +28,15 @@ import { actionLoggerReducer } from './action-logger.reducer';
  * NgRx composes meta-reducers such that FIRST in array = OUTERMOST in call chain.
  * This means: Phase 1 runs first on the way IN and last on the way OUT.
  *
- * ## Phase 1: Operation Capture (MUST BE FIRST)
+ * ## Phase 0: Reducer Failure Guard (#10195, MUST BE FIRST)
+ * Boxes every reducer pass. A throw anywhere in the chain returns the previous
+ * state, marks the action rejected (not captured, not fed to LOCAL_ACTIONS)
+ * and reports via devError instead of tearing down the NgRx State
+ * subscription and silently freezing the store. Must be outermost so the
+ * capture meta-reducer never increments the pending counter for a rejected
+ * action.
+ *
+ * ## Phase 1: Operation Capture (MUST BE FIRST after the guard)
  * Captures the original state BEFORE any modifications for operation logging.
  * If moved, operation logs will capture post-modification state (wrong!).
  *
@@ -83,7 +92,15 @@ import { actionLoggerReducer } from './action-logger.reducer';
  */
 export const META_REDUCERS: MetaReducer[] = [
   // ═══════════════════════════════════════════════════════════════════════════
-  // PHASE 1: OPERATION CAPTURE (MUST BE FIRST - OUTERMOST)
+  // PHASE 0: REDUCER FAILURE GUARD (#10195, MUST BE FIRST - OUTERMOST)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Converts a reducer throw on any action into "previous state + rejected
+  // action + devError" so the store stays alive. Outermost so the capture
+  // meta-reducer below never counts a rejected action as pending.
+  reducerFailureGuardMetaReducer,
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PHASE 1: OPERATION CAPTURE (MUST DIRECTLY FOLLOW THE GUARD)
   // ═══════════════════════════════════════════════════════════════════════════
   // Captures original state BEFORE any other meta-reducer modifies it.
   // Critical for operation logging - if moved, logs will have wrong before-state.
@@ -159,8 +176,9 @@ export const META_REDUCERS: MetaReducer[] = [
  * Throws an error if constraints are violated to catch issues during development.
  *
  * Critical constraints:
- * 1. operationCaptureMetaReducer MUST be at index 0 (captures state BEFORE any modifications)
- * 2. bulkOperationsMetaReducer MUST be at index 1 (unwraps bulk dispatches early)
+ * 0. reducerFailureGuardMetaReducer MUST be at index 0 (outermost box, #10195)
+ * 1. operationCaptureMetaReducer MUST be at index 1 (captures state BEFORE any modifications)
+ * 2. bulkOperationsMetaReducer MUST be at index 2 (unwraps bulk dispatches early)
  * 3. sectionSharedMetaReducer (Phase 3.5) MUST run before taskSharedCrudMetaReducer
  *    (it reads pre-CRUD task state for moveToOtherProject and updateTask handlers)
  * 4. actionLoggerReducer MUST be last (pure logging after all modifications)
@@ -172,17 +190,24 @@ const validateMetaReducerOrdering = (): void => {
 
   const errors: string[] = [];
 
-  // Check operationCaptureMetaReducer is first
-  if (META_REDUCERS[0] !== operationCaptureMetaReducer) {
+  // Check reducerFailureGuardMetaReducer is first (outermost)
+  if (META_REDUCERS[0] !== reducerFailureGuardMetaReducer) {
     errors.push(
-      'operationCaptureMetaReducer MUST be at index 0 to capture state before modifications',
+      'reducerFailureGuardMetaReducer MUST be at index 0 to box every reducer pass (#10195)',
     );
   }
 
-  // Check bulkOperationsMetaReducer is second
-  if (META_REDUCERS[1] !== bulkOperationsMetaReducer) {
+  // Check operationCaptureMetaReducer is second
+  if (META_REDUCERS[1] !== operationCaptureMetaReducer) {
     errors.push(
-      'bulkOperationsMetaReducer MUST be at index 1 to unwrap bulk dispatches early',
+      'operationCaptureMetaReducer MUST be at index 1 to capture state before modifications',
+    );
+  }
+
+  // Check bulkOperationsMetaReducer is third
+  if (META_REDUCERS[2] !== bulkOperationsMetaReducer) {
+    errors.push(
+      'bulkOperationsMetaReducer MUST be at index 2 to unwrap bulk dispatches early',
     );
   }
 

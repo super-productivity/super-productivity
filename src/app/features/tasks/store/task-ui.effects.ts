@@ -19,6 +19,7 @@ import {
 import {
   selectCurrentTask,
   selectCurrentTaskId,
+  selectTaskEntities,
   selectUnplannedDeadlineTasksForToday,
 } from './task.selectors';
 import { NotifyService } from '../../../core/notify/notify.service';
@@ -32,7 +33,8 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { playDoneSound } from '../util/play-done-sound';
-import { Task } from '../task.model';
+import { Task, TaskWithSubTasks } from '../task.model';
+import { isWontDoTask } from '../util/is-wont-do-task';
 import { EMPTY } from 'rxjs';
 import { selectProjectById } from '../../project/store/project.selectors';
 import { Project } from '../../project/project.model';
@@ -44,6 +46,12 @@ import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { DateService } from '../../../core/date/date.service';
 import { isBlankTask } from '../util/is-blank-task';
+import { TaskMultiSelectService } from '../task-multi-select.service';
+import { TASK_DELETE_UNDO_WINDOW_MS } from '../../../app.constants';
+import {
+  isRecentlyDeletedTrashable,
+  RECENTLY_DELETED_RETENTION_DAYS,
+} from '../recently-deleted/recently-deleted.util';
 
 @Injectable()
 export class TaskUiEffects {
@@ -59,6 +67,7 @@ export class TaskUiEffects {
   private _navigateToTaskService = inject(NavigateToTaskService);
   private _layoutService = inject(LayoutService);
   private _dateService = inject(DateService);
+  private _taskMultiSelectService = inject(TaskMultiSelectService);
 
   taskCreatedSnack$ = createEffect(
     () =>
@@ -122,13 +131,16 @@ export class TaskUiEffects {
         ofType(TaskSharedActions.deleteTask),
         // Skip the undo snack for accidentally created blank tasks
         filter(({ task }) => !isBlankTask(task)),
+        // A bulk delete confirms up front and shows no per-task undo.
+        filter(() => !this._taskMultiSelectService.isBulkFeedbackSuppressed()),
         tap(({ task }) => {
           this._snackService.open({
             translateParams: {
               title: truncate(task.title),
+              days: RECENTLY_DELETED_RETENTION_DAYS,
             },
-            msg: T.F.TASK.S.DELETED,
-            config: { duration: 5000 },
+            msg: this._getDeletedSnackMsg(task),
+            config: { duration: TASK_DELETE_UNDO_WINDOW_MS },
             actionStr: T.G.UNDO,
             actionFn: () => {
               const payload = getLastDeletePayload();
@@ -207,11 +219,17 @@ export class TaskUiEffects {
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
         filter(({ task: { changes } }) => !!changes.isDone),
+        // A bulk "mark done" plays the sound once itself.
+        filter(() => !this._taskMultiSelectService.isBulkFeedbackSuppressed()),
         withLatestFrom(
           this._workContextService.flatDoneTodayNr$,
           this._globalConfigService.sound$,
+          this._store$.select(selectTaskEntities),
         ),
-        filter(([, , soundCfg]) => !!soundCfg.doneSound),
+        filter(([{ task }, , soundCfg, entities]) => {
+          const doneTask = entities[task.id as string];
+          return !!soundCfg.doneSound && !(doneTask && isWontDoTask(doneTask));
+        }),
         tap(([, doneToday, soundCfg]) => playDoneSound(soundCfg, doneToday)),
       ),
     { dispatch: false },
@@ -221,6 +239,8 @@ export class TaskUiEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.moveToOtherProject),
+        // A bulk move shows one summary snack instead of one per task.
+        filter(() => !this._taskMultiSelectService.isBulkFeedbackSuppressed()),
         filter(
           ({ task, targetProjectId }) =>
             // Don't announce *filing a project-less task into the Inbox*: that is
@@ -335,4 +355,15 @@ export class TaskUiEffects {
       ),
     { dispatch: false },
   );
+
+  // Point at the shortest way back once the undo window is gone: Search lists
+  // trashed tasks; without Search, the trash link at the bottom of History.
+  private _getDeletedSnackMsg(task: TaskWithSubTasks): string {
+    if (!isRecentlyDeletedTrashable(task, task.subTasks ?? [])) {
+      return T.F.TASK.S.DELETED;
+    }
+    return this._globalConfigService.appFeatures().isSearchEnabled
+      ? T.F.TASK.S.DELETED_FIND_IN_SEARCH
+      : T.F.TASK.S.DELETED_FIND_IN_HISTORY;
+  }
 }

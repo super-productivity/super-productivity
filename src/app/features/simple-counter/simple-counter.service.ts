@@ -6,6 +6,7 @@ import {
   selectEnabledSimpleCounters,
   selectEnabledSimpleStopWatchCounters,
   selectSimpleCounterById,
+  selectSimpleCounterEntities,
 } from './store/simple-counter.reducer';
 import {
   addSimpleCounter,
@@ -18,7 +19,6 @@ import {
   tickSimpleCounterLocal,
   toggleSimpleCounterCounter,
   turnOffAllSimpleCounterCounters,
-  updateAllSimpleCounters,
   updateSimpleCounter,
   updateSimpleCounterOrder,
   upsertSimpleCounter,
@@ -37,6 +37,7 @@ import { GlobalTrackingIntervalService } from '../../core/global-tracking-interv
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { BatchedTimeSyncAccumulator } from '../../core/util/batched-time-sync-accumulator';
 import { Log } from '../../core/log';
+import { toDeletedSimpleCounterSnapshot } from './to-deleted-simple-counter-snapshot.util';
 
 @Injectable({
   providedIn: 'root',
@@ -54,6 +55,7 @@ export class SimpleCounterService implements OnDestroy {
     (id, date, _duration) => this._syncStopwatchAbsoluteValue(id, date),
   );
   private _subscriptions = new Subscription();
+  private _counterEntities = this._store$.selectSignal(selectSimpleCounterEntities);
   private _visibilityHandler: (() => void) | null = null;
 
   // Cache for countdown remaining time (survives component destruction/recreation)
@@ -232,10 +234,6 @@ export class SimpleCounterService implements OnDestroy {
     this._store$.dispatch(updateSimpleCounterOrder({ ids }));
   }
 
-  updateAll(items: SimpleCounter[]): void {
-    this._store$.dispatch(updateAllSimpleCounters({ items }));
-  }
-
   setCounterToday(id: string, newVal: number): void {
     const today = this._dateService.todayStr();
     this._store$.dispatch(setSimpleCounterCounterToday({ id, newVal, today }));
@@ -325,10 +323,20 @@ export class SimpleCounterService implements OnDestroy {
   }
 
   deleteSimpleCounter(id: string): void {
+    const counter = this._counterEntities()[id];
+    const pendingTime = this._stopwatchAccumulator.getPendingEntries();
     // Clean up accumulators to prevent memory leak
     this._stopwatchAccumulator.clearOne(id);
     this.clearCountdownRemaining(id);
-    this._store$.dispatch(deleteSimpleCounter({ id }));
+    // Carry the deleted counter so a concurrent remote update that wins can
+    // restore it intact (#11465), as the other devices know it (#11495).
+    this._store$.dispatch(
+      deleteSimpleCounter(
+        counter
+          ? { id, simpleCounter: toDeletedSimpleCounterSnapshot(counter, pendingTime) }
+          : { id },
+      ),
+    );
   }
 
   deleteSimpleCounters(ids: string[]): void {

@@ -1,0 +1,73 @@
+<h1 mat-dialog-title>{{ T.F.SYNC.D_DEVICES.TITLE | translate }}</h1>
+
+<div mat-dialog-content>
+  @if (isLoading()) {
+    <div class="loading">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+  } @else if (error()) {
+    <div class="error">
+      <mat-icon>error</mat-icon>
+      <p>{{ error() | translate }}</p>
+    </div>
+  } @else {
+    <div class="devices">
+      @for (device of devices(); track device.clientId) {
+        <div class="device">
+          <mat-icon class="platform-icon">{{ device.icon }}</mat-icon>
+          <div class="device-info">
+            <div class="device-name">
+              {{ device.label | translate }}
+              @if (device.isCurrentDevice) {
+                <span class="this-device">{{
+                  T.F.SYNC.D_DEVICES.THIS_DEVICE | translate
+                }}</span>
+              }
+            </div>
+            <div class="device-meta">
+              {{
+                T.F.SYNC.D_DEVICES.LAST_SEEN
+                  | translate: { date: device.lastSeenAt | localeDate: 'medium' }
+              }}
+            </div>
+            <div class="device-id">{{ device.clientId }}</div>
+          </div>
+        </div>
+      } @empty {
+        <div class="empty">
+          <mat-icon>devices_other</mat-icon>
+          <p>{{ T.F.SYNC.D_DEVICES.NO_DEVICES | translate }}</p>
+        </div>
+      }
+    </div>
+
+    <p class="outro">{{ T.F.SYNC.D_DEVICES.REMOVE_HINT | translate }}</p>
+  }
+</div>
+
+<div
+  mat-dialog-actions
+  align="end"
+>
+  <!-- Deliberately shown even when the list failed to load: sign-out only
+       needs POST /api/replace-token, and the lost-device case (#9652) is
+       exactly when it must stay reachable. -->
+  @if (!isLoading()) {
+    <button
+      class="sign-out-btn"
+      mat-button
+      color="warn"
+      [disabled]="isSigningOut()"
+      (click)="signOutOtherDevices()"
+    >
+      {{ T.F.SYNC.D_DEVICES.BTN_SIGN_OUT_OTHERS | translate }}
+    </button>
+  }
+  <button
+    mat-button
+    mat-dialog-close
+    [disabled]="isSigningOut()"
+  >
+    {{ T.G.CLOSE | translate }}
+  </button>
+</div>

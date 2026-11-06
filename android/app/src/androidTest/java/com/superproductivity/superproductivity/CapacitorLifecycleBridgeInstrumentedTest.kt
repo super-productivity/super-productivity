@@ -29,16 +29,22 @@ import org.junit.runner.RunWith
 /**
  * Native smoke for the Capacitor shell.
  *
- * The test serves controlled HTML through Capacitor's real local server so the
- * production JavaScript injection, plugin bridge, activity lifecycle, and
- * WebDavHttp transport all participate. It deliberately stops at that native
- * boundary; configured-provider background sync is covered separately by #9152.
+ * Serves controlled HTML through Capacitor's real local server so the production
+ * JavaScript injection, plugin bridge, activity lifecycle and WebDavHttp
+ * transport all participate. Stops at the native boundary; configured-provider
+ * background sync is covered separately by #9152.
+ *
+ * Runs on the DEBUG variant, so it says nothing about minification. R8 is
+ * covered instead by android/run-android-checks.sh, which launches the minified
+ * r8Test APK — see that script for why instrumentation cannot do that job.
+ *
+ * Run: ./gradlew :app:connectedPlayDebugAndroidTest (emulator/device required).
  */
 @RunWith(AndroidJUnit4::class)
 class CapacitorLifecycleBridgeInstrumentedTest {
 
     @Test
-    fun bridgeAndWebDavRequestSurviveBackgroundResume() {
+    fun capacitorPluginBridgeSurvivesBackgroundResume() {
         val responseGate = CountDownLatch(1)
         val requestStarted = CountDownLatch(1)
         val recordedRequest = AtomicReference<RecordedRequest>()
@@ -87,7 +93,12 @@ class CapacitorLifecycleBridgeInstrumentedTest {
             assertTrue(readyState.getBoolean("hasAndroidBridge"))
             assertTrue(readyState.getBoolean("hasSupAndroid"))
             assertTrue(readyState.getBoolean("hasAppPlugin"))
+            assertTrue(readyState.getBoolean("hasLocalNotificationsPlugin"))
             assertTrue(readyState.getBoolean("hasWebDavPlugin"))
+            assertTrue(
+                "Capacitor plugin initialization should not reject: ${readyState.optString("readyError")}",
+                !readyState.has("readyError"),
+            )
 
             evaluateJavaScript(
                 webView,
@@ -214,6 +225,9 @@ class CapacitorLifecycleBridgeInstrumentedTest {
                       typeof window.SUPAndroid.getVersion === 'function',
                     hasAppPlugin:
                       typeof window.Capacitor?.Plugins?.App?.addListener === 'function',
+                    hasLocalNotificationsPlugin:
+                      typeof window.Capacitor?.Plugins?.LocalNotifications?.checkPermissions ===
+                      'function',
                     hasWebDavPlugin:
                       typeof window.Capacitor?.Plugins?.WebDavHttp?.request === 'function',
                     supPause: 0,
@@ -256,7 +270,10 @@ class CapacitorLifecycleBridgeInstrumentedTest {
                   window.Capacitor.Plugins.App.getState()
                     .then(() => smoke.ready = true)
                     .catch((error) => {
+                      // Still ready: a rejection has to reach the assertions as
+                      // readyError, not as an opaque predicate timeout.
                       smoke.readyError = String(error?.message || error);
+                      smoke.ready = true;
                     });
                 </script>
               </body>

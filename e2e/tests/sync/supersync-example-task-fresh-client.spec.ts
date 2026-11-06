@@ -34,12 +34,7 @@ import {
  *
  * Run: npm run e2e:supersync:file e2e/tests/sync/supersync-example-task-fresh-client.spec.ts -- --retries=0
  */
-const EXAMPLE_TASK_TITLES = [
-  'Create your first project',
-  'Set up Sync',
-  'Learn the keyboard shortcuts',
-  'Go further',
-];
+const EXAMPLE_TASK_TITLES = ['Optional: getting started tips'];
 
 test.describe('@supersync Fresh-client example tasks vs incoming import (#7976)', () => {
   test('import is accepted without an example-task conflict dialog', async ({
@@ -68,6 +63,25 @@ test.describe('@supersync Fresh-client example tasks vs incoming import (#7976)'
         allowExampleTasks: true,
       });
 
+      // Example tasks live in the INBOX project. Open it now and stay on it: seeing them
+      // here proves the "none survives" check below is not vacuous, and it keeps the list
+      // read after the import off a route swap. While a route animates (~225ms) the
+      // leaving view stays mounted next to the entering one, so right after navigating, a
+      // task listed in both TODAY and INBOX (the seeder's task is) shows up twice, and
+      // waitForTask is satisfied by either view.
+      await freshClient.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      // Same read and exact titles as the check after the import (waitForTask matches
+      // substrings), so that check cannot pass vacuously if a title drifts from
+      // EXAMPLE_TASK_TITLES.
+      await expect
+        .poll(() => getTaskTitles(freshClient!), {
+          message: 'INBOX should list the example tasks before sync is configured',
+        })
+        .toEqual(expect.arrayContaining(EXAMPLE_TASK_TITLES));
+
       // Configure sync but do NOT let setup auto-resolve the conflict dialog
       // (waitForInitialSync:true would click "Use Server Data" and hide the bug).
       await freshClient.sync.setupSuperSync({
@@ -91,19 +105,105 @@ test.describe('@supersync Fresh-client example tasks vs incoming import (#7976)'
       expect(syncResult).toBe('complete');
 
       // The import replaced local state: the real remote task is present and NONE of the
-      // onboarding example tasks survive. Example tasks live in the INBOX project.
-      // (If the seeder's task lands elsewhere on your setup, adjust this navigation.)
+      // onboarding example tasks survive.
+      await waitForTask(freshClient.page, realTask);
+
+      // `complete` above only means the check icon showed once, not that the import has
+      // been applied: for a few hundred ms after it the real task is listed next to the
+      // example tasks. So read the SETTLED list: poll the whole verdict, one atomic
+      // snapshot per attempt (a count() followed by per-row reads waits out its timeout on
+      // a row that a re-render removed in between).
+      await expect
+        .poll(
+          async () => {
+            const titles = await getTaskTitles(freshClient!);
+            return {
+              hasRealTask: titles.some((title) => title.includes(realTask)),
+              survivingExampleTasks: titles.filter((title) =>
+                EXAMPLE_TASK_TITLES.includes(title),
+              ),
+            };
+          },
+          {
+            message: 'INBOX should list the imported task and none of the example tasks',
+          },
+        )
+        .toEqual({ hasRealTask: true, survivingExampleTasks: [] });
+
+      // Still no conflict dialog once everything has settled (the race above only saw the
+      // first check icon).
+      await expect(freshClient.sync.syncImportConflictDialog).toBeHidden();
+      await expect(freshClient.sync.conflictDialog).toBeHidden();
+    } finally {
+      if (freshClient) {
+        await closeClient(freshClient);
+      }
+      if (seeder) {
+        await closeClient(seeder);
+      }
+    }
+  });
+
+  // A second device joining an existing account is not a new user: first-run
+  // guidance must end for good once sync is set up, and must not come back with
+  // the example tasks after a reload (#8824).
+  test('joining an account ends first-run guidance for good', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    const appUrl = baseURL || 'http://localhost:4242';
+    const uniqueId = Date.now();
+    let seeder: SimulatedE2EClient | null = null;
+    let freshClient: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      seeder = await createSimulatedClient(browser, appUrl, 'Seeder', testRunId);
+      await seeder.sync.setupSuperSync(syncConfig);
+      const realTask = `Joined-Task-${uniqueId}`;
+      await seeder.workView.addTask(realTask);
+      await seeder.sync.syncAndWait();
+
+      // A real first start: hints and example tasks both on.
+      freshClient = await createSimulatedClient(browser, appUrl, 'Fresh', testRunId, {
+        allowExampleTasks: true,
+        allowOnboardingHints: true,
+        isNewInstallAppFeatures: true,
+      });
+      const hint = freshClient.page.locator('onboarding-hint');
+      // Proves guidance actually started, so its absence below is not vacuous.
+      await expect(hint).toContainText('add your first task');
+
+      await freshClient.sync.setupSuperSync(syncConfig);
+      await waitForTask(freshClient.page, realTask);
+      await expect(hint).toHaveCount(0);
+      await expect
+        .poll(() =>
+          freshClient!.page.evaluate(() =>
+            localStorage.getItem('SUP_ONBOARDING_HINTS_DONE'),
+          ),
+        )
+        .toBe('true');
+
+      // A real reload first: the hash-route goto alone would not restart the app.
+      await freshClient.page.reload();
       await freshClient.page.goto('/#/project/INBOX_PROJECT/tasks', {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       });
-      await freshClient.page.waitForLoadState('networkidle');
       await waitForTask(freshClient.page, realTask);
-
-      const titles = await getTaskTitles(freshClient);
-      for (const exampleTitle of EXAMPLE_TASK_TITLES) {
-        expect(titles).not.toContain(exampleTitle);
-      }
+      await expect(hint).toHaveCount(0);
+      // Nothing re-seeds the example tasks the import replaced.
+      await expect
+        .poll(async () =>
+          (await getTaskTitles(freshClient!)).filter((title) =>
+            EXAMPLE_TASK_TITLES.includes(title),
+          ),
+        )
+        .toEqual([]);
     } finally {
       if (freshClient) {
         await closeClient(freshClient);

@@ -22,7 +22,7 @@
 // Mesa path before the switch is honored, which segfaults under Mesa ABI
 // drift. Injecting the flag via argv before Electron starts bypasses this.
 //
-// See docs/research/snap-wayland-gpu-fix-research.md §18.
+// See docs/research/snap-wayland-gpu-fix-research.md.
 
 const { promises: fs } = require('fs');
 const { join } = require('path');

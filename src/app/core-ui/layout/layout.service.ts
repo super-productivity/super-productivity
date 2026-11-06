@@ -3,11 +3,9 @@ import {
   hideAddTaskBar,
   hideIssuePanel,
   hideNonTaskSidePanelContent,
-  hideTaskViewCustomizerPanel,
   showAddTaskBar,
   toggleIssuePanel,
   toggleShowNotes,
-  toggleTaskViewCustomizerPanel,
   toggleScheduleDayPanel,
   hideScheduleDayPanel,
 } from './store/layout.actions';
@@ -20,7 +18,6 @@ import {
   selectIsShowIssuePanel,
   selectIsShowNotes,
   selectIsShowPluginPanel,
-  selectIsShowTaskViewCustomizerPanel,
   selectIsShowScheduleDayPanel,
 } from './store/layout.reducer';
 import { map } from 'rxjs/operators';
@@ -43,12 +40,16 @@ export class LayoutService {
   private static readonly _TASK_ACTION_DELAY = 50;
   private static readonly _TASK_FOCUS_RETRY_DELAY = 250;
   private static readonly _TASK_FOCUS_MAX_RETRIES = 16;
+  private static readonly _TASK_HIGHLIGHT_DURATION = 3000;
+  private static readonly _TASK_HIGHLIGHT_CLASS = 'highlight-searched-task';
 
   private _store$ = inject<Store<LayoutState>>(Store);
   private _breakPointObserver = inject(BreakpointObserver);
   private _previouslyFocusedElement: HTMLElement | null = null;
   private _pendingFocusTaskId: string | null = null; // store new task id until user closes the bar
   private _pendingTaskRevealTimeout?: number;
+  private _pendingTaskHighlightTimeout?: number;
+  private _highlightedTaskEl: HTMLElement | null = null;
 
   // Signal to trigger sidebar focus
   private _focusSideNavTrigger = signal(0);
@@ -68,6 +69,8 @@ export class LayoutService {
 
   readonly selectedTimeView = signal<'week' | 'month' | 'day'>('week');
   readonly isWorkViewScrolled = signal<boolean>(false);
+  /** The side nav is open as the phone layout's overlay menu. */
+  readonly isMobileSideNavOpen = signal<boolean>(false);
   readonly isShowAddTaskBar = toSignal(this.isShowAddTaskBar$, { initialValue: false });
 
   readonly isXs = toSignal(
@@ -97,11 +100,6 @@ export class LayoutService {
   readonly isShowNotes = toSignal(this._store$.pipe(select(selectIsShowNotes)), {
     initialValue: false,
   });
-
-  readonly isShowTaskViewCustomizerPanel = toSignal(
-    this._store$.pipe(select(selectIsShowTaskViewCustomizerPanel)),
-    { initialValue: false },
-  );
 
   readonly isShowIssuePanel = toSignal(this.isShowIssuePanel$, { initialValue: false });
 
@@ -210,6 +208,37 @@ export class LayoutService {
     }, LayoutService._TASK_FOCUS_RETRY_DELAY);
   }
 
+  /**
+   * Draws a temporary attention highlight on a task revealed by a SEARCH jump,
+   * so it stays findable even after the focus outline is gone. Deliberately not
+   * called from the reveal itself: `focusItem` is set by every navigation caller
+   * (reminder snacks, tracked-task pill, issue creation, calendar banner), and
+   * only search implies the user asked where the task is — so the callers opt in
+   * via `isFromSearch`.
+   *
+   * Mirrors the note reveal in NotesComponent, but deliberately uses its own
+   * class name: the note reveal strips `.highlight-searched-item` from every
+   * element in the document, and `focusItem` is a query param shared by tasks
+   * and notes, so a note reveal would otherwise cut a live task highlight short.
+   * Only one task is highlighted at a time. (#5476)
+   */
+  highlightTaskBriefly(el: HTMLElement): void {
+    if (this._pendingTaskHighlightTimeout) {
+      window.clearTimeout(this._pendingTaskHighlightTimeout);
+      this._pendingTaskHighlightTimeout = undefined;
+    }
+    this._highlightedTaskEl?.classList.remove(LayoutService._TASK_HIGHLIGHT_CLASS);
+    el.classList.add(LayoutService._TASK_HIGHLIGHT_CLASS);
+    this._highlightedTaskEl = el;
+    this._pendingTaskHighlightTimeout = window.setTimeout(() => {
+      this._pendingTaskHighlightTimeout = undefined;
+      el.classList.remove(LayoutService._TASK_HIGHLIGHT_CLASS);
+      if (this._highlightedTaskEl === el) {
+        this._highlightedTaskEl = null;
+      }
+    }, LayoutService._TASK_HIGHLIGHT_DURATION);
+  }
+
   private _runForTaskElement(
     taskId: string,
     cb: (el: HTMLElement) => void,
@@ -301,14 +330,6 @@ export class LayoutService {
 
   hideAddTaskPanel(): void {
     this._store$.dispatch(hideIssuePanel());
-  }
-
-  toggleTaskViewCustomizerPanel(): void {
-    this._store$.dispatch(toggleTaskViewCustomizerPanel());
-  }
-
-  hideTaskViewCustomizerPanel(): void {
-    this._store$.dispatch(hideTaskViewCustomizerPanel());
   }
 
   focusSideNav(): void {

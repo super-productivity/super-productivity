@@ -6,8 +6,8 @@ import {
   Signal,
   signal,
 } from '@angular/core';
-import { IssuePanelIntroComponent } from './issue-panel-intro/issue-panel-intro.component';
 import { MatTab, MatTabContent, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
+import { TabHeaderWheelScrollDirective } from '../../ui/tab-header-wheel-scroll/tab-header-wheel-scroll.directive';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { IssueProviderTabComponent } from './issue-provider-tab/issue-provider-tab.component';
@@ -39,8 +39,8 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
 @Component({
   selector: 'issue-panel',
   imports: [
-    IssuePanelIntroComponent,
     MatTabGroup,
+    TabHeaderWheelScrollDirective,
     MatTab,
     MatTabLabel,
     MatIcon,
@@ -69,7 +69,6 @@ export class IssuePanelComponent {
 
   dragStartDelay = { touch: 300, mouse: 0 };
   selectedTabIndex = signal(0);
-  isShowIntro = signal(false);
   issueProviders = toSignal(this._store.select(selectIssueProvidersWithDisabledLast));
 
   issueProvidersMapped: Signal<

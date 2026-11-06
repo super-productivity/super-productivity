@@ -425,11 +425,18 @@ describe('LockService', () => {
       expect(startTimes.size).toBe(10);
       expect(endTimes.size).toBe(10);
 
-      // Check no request waited unreasonably long (more than 500ms for 10 requests)
-      // Note: Using 500ms threshold to account for CI machine variability
-      // Theoretical max is ~63ms (sum of work times), but CI can add significant overhead
-      const maxWait = Math.max(...Array.from(startTimes.values()));
-      expect(maxWait).toBeLessThan(500);
+      // A starved request never runs, so Promise.all above would time out. A
+      // wall-clock bound here only measured runner speed and failed on loaded CI
+      // (622ms > 500ms for ~63ms of work); assert the lock held instead: each
+      // request starts only after the previous one ended.
+      const byStart = Array.from(startTimes.keys()).sort(
+        (a, b) => startTimes.get(a)! - startTimes.get(b)!,
+      );
+      for (let i = 1; i < byStart.length; i++) {
+        expect(startTimes.get(byStart[i])!).toBeGreaterThanOrEqual(
+          endTimes.get(byStart[i - 1])!,
+        );
+      }
     });
 
     it('should maintain correct execution order for FIFO-like behavior', async () => {

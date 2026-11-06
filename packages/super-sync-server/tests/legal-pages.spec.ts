@@ -89,6 +89,16 @@ describe('legal pages', () => {
       }
     });
 
+    it('does not call end-to-end encryption optional', () => {
+      // The server rejects unencrypted uploads (violatesE2eeGate, #9457).
+      const template = fs.readFileSync(
+        path.join(TEMPLATE_DIR, 'privacy.template.html'),
+        'utf-8',
+      );
+      expect(template).not.toMatch(/E2EE[^<]*optional/);
+      expect(template).not.toContain('If you enable E2EE');
+    });
+
     it('keeps our commercial roadmap off the landing page', () => {
       const template = fs.readFileSync(
         path.join(TEMPLATE_DIR, 'index.template.html'),
@@ -309,6 +319,37 @@ describe('legal pages', () => {
       // States what Art. 28 requires, not that the operator has signed one — we cannot
       // verify that on their behalf.
       expect(privacy).toMatch(/Art\. 28\s+GDPR requires a Data Processing Agreement/);
+    });
+
+    it('describes AI assistant connections only when the connector is enabled', async () => {
+      setFullPrivacyEnv();
+      const { createServer } = await importServer();
+      createServer({ dataDir: makeDataDir() });
+      const withoutCapture = fs.readFileSync(PRIVACY_OUTPUT, 'utf-8');
+      for (const capturePart of [
+        'AI Assistant Connections',
+        'AI Assistant Connection Data',
+        'Receiving tasks from AI assistants',
+        'aggregate counting of AI assistant connections',
+        'You connect an AI assistant: its provider receives',
+      ]) {
+        expect(withoutCapture).not.toContain(capturePart);
+      }
+      expect(withoutCapture).not.toContain('OPTIONAL:');
+
+      process.env.CAPTURE_CONNECTOR_ENABLED = 'true';
+      createServer({ dataDir: makeDataDir() });
+      const withCapture = fs.readFileSync(PRIVACY_OUTPUT, 'utf-8');
+      expect(withCapture).toContain('AI Assistant Connections');
+      expect(withCapture).toContain('AI Assistant Connection Data');
+      expect(withCapture).toContain('Receiving tasks from AI assistants');
+      expect(withCapture).toContain('<strong>45 days</strong>');
+      // Art. 13(1)(e): the assistant's provider is a recipient (Section 9).
+      expect(withCapture).toMatch(/You connect an AI assistant: its provider\s+receives/);
+      // Art. 21(4): the objection route is named, not only referenced.
+      expect(withCapture).toMatch(/object[\s\S]{0,200}mailto:operator@example\.test/);
+      expect(withCapture).not.toContain('{{');
+      expect(withCapture).not.toContain('OPTIONAL:');
     });
 
     it('does not link Terms when the operator supplied none', async () => {

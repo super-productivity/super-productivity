@@ -2,12 +2,14 @@ import { TestBed } from '@angular/core/testing';
 import { ScheduledDateGroupPipe } from './scheduled-date-group.pipe';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { TranslateService } from '@ngx-translate/core';
+import { DateService } from '../../core/date/date.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
 
 describe('ScheduledDateGroupPipe', () => {
   let pipe: ScheduledDateGroupPipe;
   let mockDateTimeFormatService: jasmine.SpyObj<DateTimeFormatService>;
   let mockTranslateService: jasmine.SpyObj<TranslateService>;
+  let mockDateService: jasmine.SpyObj<DateService>;
 
   beforeEach(() => {
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
@@ -20,12 +22,15 @@ describe('ScheduledDateGroupPipe', () => {
       if (key === 'G.TODAY_TAG_TITLE') return 'Today';
       return key;
     });
+    mockDateService = jasmine.createSpyObj('DateService', ['todayStr']);
+    mockDateService.todayStr.and.callFake(() => getDbDateStr());
 
     TestBed.configureTestingModule({
       providers: [
         ScheduledDateGroupPipe,
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
         { provide: TranslateService, useValue: mockTranslateService },
+        { provide: DateService, useValue: mockDateService },
       ],
     });
 
@@ -89,6 +94,20 @@ describe('ScheduledDateGroupPipe', () => {
     const result = pipe.transform(todayStr);
     expect(result).toBe('Today');
     expect(mockTranslateService.instant).toHaveBeenCalled();
+  });
+
+  // With a start-of-next-day offset, 01:00 still belongs to yesterday;
+  // the calendar day would format it as a normal date instead of "Today".
+  it('should format logical today as "Today" when called past midnight without today arg', () => {
+    jasmine.clock().install();
+    // calendar day 2026-01-06; the DateService mock's logical today is 2026-01-05
+    jasmine.clock().mockDate(new Date(2026, 0, 6, 1));
+    mockDateService.todayStr.and.returnValue('2026-01-05');
+    try {
+      expect(pipe.transform('2026-01-05')).toBe('Today');
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 
   it('should format weekend dates correctly', () => {

@@ -17,113 +17,16 @@
   @include mq(xs, max) {
     min-height: 300px;
   }
-
-  planner-task {
-    // Match the planner/task-list inter-row rhythm (4px), not the roomier 8px.
-    margin-bottom: var(--s-half);
-    margin-right: var(--s-half);
-  }
-
-  add-task-inline {
-    display: block;
-  }
 }
 
-header {
-  padding: var(--s-half) var(--s2);
-  padding-right: var(--s-half);
-  display: flex;
-  align-items: center;
-
-  //@include mousePrimaryDevice() {
-  //  button {
-  //    opacity: 0;
-  //  }
-  //  &:hover {
-  //    button {
-  //      opacity: 1;
-  //    }
-  //  }
-  //}
-
-  button {
-    //margin-left: auto;
-    margin-left: 10px;
-    opacity: 0.7;
-
-    &:hover {
-      opacity: 1;
-    }
-  }
-
-  .title {
-    font-size: 14px;
-    margin-right: var(--s);
-  }
-
-  .tasks-total-estimate {
-    white-space: nowrap;
-    margin-left: auto;
-    margin-right: var(--s-half);
-    //margin-right: auto;
-    font-style: italic;
-    opacity: 0.7;
-  }
-}
-
-.task-items {
-  overflow: auto;
-  padding: 0 var(--s);
-  border-radius: 8px;
-  min-height: 100px;
-  flex-grow: 1;
-  //border-color: var(--extra-border-color);
-}
-
-.empty {
-  text-align: center;
-  font-style: italic;
-  line-height: var(--planner-item-height);
-}
-
-.schedule-btn {
-  opacity: 0.7;
-  position: relative;
-  margin-top: auto;
-  margin-bottom: auto;
-  height: 100% !important;
-  border-radius: var(--card-border-radius);
-
-  ::ng-deep {
-    .mat-mdc-button-persistent-ripple {
-      border-radius: var(--card-border-radius);
-    }
-  }
-
-  &:hover {
-    opacity: 1;
-  }
-}
-
-.time-badge {
-  @include center;
-  margin-top: 10px;
-  font-size: 12px;
-  z-index: 10;
-  line-height: 1;
-  text-align: center;
-  padding: 1px var(--s-quarter) 0;
-  @include extraBorder();
-  border-radius: var(--card-border-radius);
-  white-space: nowrap;
-
-  // avoid affecting drag handle
-  pointer-events: none;
-
-  border-color: var(--extra-border-color);
-  background: var(--bg-lighter);
-
-  ::ng-deep span {
-    font-size: 10px;
-  }
+// Part of one task list (the view's only list, or one of its sections): no
+// box of its own, the page scrolls.
+:host(.isListLayout) {
+  border: 0;
+  border-radius: 0;
+  // As tall as its rows: a grid row of the board may not shrink it (`0`
+  // let a long section overlap the next one).
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
 }

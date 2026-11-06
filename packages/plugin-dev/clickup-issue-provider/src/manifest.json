@@ -10,6 +10,14 @@
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": [],
+  "dataSharing": [
+    {
+      "recipient": "ClickUp",
+      "hosts": ["api.clickup.com"],
+      "data": ["credentials"],
+      "privacyPolicyUrl": "https://clickup.com/terms/privacy"
+    }
+  ],
   "hooks": [],
   "i18n": {
     "languages": [

@@ -5,8 +5,8 @@ import {
   BrowserWindowConstructorOptions,
   ipcMain,
   Menu,
-  MenuItemConstructorOptions,
   nativeTheme,
+  screen,
   shell,
 } from 'electron';
 import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-inform';
@@ -15,9 +15,10 @@ import { pathToFileURL } from 'node:url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { isLocalFileUrl, openLocalPath } from './open-url';
-import { readFileSync, stat, writeFileSync } from 'fs';
+import { getApiUserAgent, isGitLabApiUrl } from './api-user-agent';
+import { readFileSync, watch } from 'fs';
 import { error, log } from 'electron-log/main';
-import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
+import { IS_MAC, IS_LINUX, IS_GNOME_WAYLAND } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
@@ -26,13 +27,38 @@ import {
   showTaskWidget,
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
+import { getStartMinimizedMode } from './start-minimized';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
+import { createMenuTemplate } from './menu';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
+import {
+  getWasMaximizedBeforeHide,
+  initWasMaximizedBeforeHide,
+  isUserUnmaximize,
+  setWasMaximizedBeforeHide,
+} from './window-maximized-state';
+import {
+  getWasFullScreen,
+  initWasFullScreen,
+  setWasFullScreen,
+} from './window-full-screen-state';
+import {
+  clampBoundsToDisplay,
+  initRestoreBounds,
+  isSampleableBounds,
+  parseStoredBounds,
+  setRestoreBounds,
+} from './window-restore-bounds';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
+import { isAllowedSessionPermission } from './session-permissions';
 import { applyJiraImageAuth } from './jira-image-auth';
+
+// Long enough to outlast a resize or move gesture, so a drag records one
+// sample rather than one per frame.
+const BOUNDS_SAMPLE_DEBOUNCE_MS = 250;
 
 let mainWin: BrowserWindow;
 
@@ -43,11 +69,17 @@ let mainWin: BrowserWindow;
 let appLoadedUrl: string | undefined;
 
 // Compact WCO band on Win/Linux. Native button width is OS-controlled
-// (~138px total); only height is configurable. Lower values may be
-// clamped to the OS minimum (~24–28px on Win11) — Electron silently
-// floors instead of rejecting. Stays well clear of the vertical action
-// strip which positions itself --bar-height (48px) down.
-const WCO_HEIGHT = 24;
+// (~138px total on Windows); only height is configurable. Lower values may
+// be clamped to the OS minimum (~24–28px on Win11) — Electron silently
+// floors instead of rejecting.
+// Since Electron 44, Linux draws theme-styled round buttons (24px circles
+// for Adwaita, 18px for Breeze) centered in the band and capped at its
+// height, so a 24px band makes the Adwaita circles touch the window's top
+// edge. 32px is Electron's own default band for them: 4px above and below
+// a 24px circle. Not taller: the strip behind the buttons is a native drag
+// region for the full band height, and with the right panel open it covers
+// the panel's top-right corner, swallowing clicks on the controls there.
+const WCO_HEIGHT = IS_LINUX ? 32 : 24;
 
 /**
  * Returns theme-aware background color for titlebar overlay.
@@ -120,12 +152,14 @@ export const createWindow = async ({
   quitApp,
   app,
   customUrl,
+  isStartMinimized = false,
 }: {
   IS_DEV: boolean;
   ICONS_FOLDER: string;
   quitApp: () => void;
   app: App;
   customUrl?: string;
+  isStartMinimized?: boolean;
 }): Promise<BrowserWindow> => {
   // make sure the main window isn't already created
   if (mainWin) {
@@ -141,6 +175,11 @@ export const createWindow = async ({
   const mainWindowState = windowStateKeeper({
     defaultWidth: 800,
     defaultHeight: 800,
+    // maximize() shows a hidden window, so a start-minimized launch must not
+    // restore it here. showOrFocus() re-maximizes on first show.
+    maximize: !isStartMinimized,
+    // Our own flag owns full screen, see window-full-screen-state.ts.
+    fullScreen: false,
   });
 
   const simpleStore = await loadSimpleStoreAll();
@@ -229,6 +268,7 @@ export const createWindow = async ({
     // frame: true,
   });
 
+  const apiUserAgent = getApiUserAgent(app.getVersion());
   // see: https://pratikpc.medium.com/bypassing-cors-with-electron-ab7eaf331605
   mainWin.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     const { requestHeaders } = details;
@@ -254,6 +294,30 @@ export const createWindow = async ({
       )
     ) {
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
+    } else if (isGitLabApiUrl(details.url)) {
+      // Anubis-protected instances challenge browser UAs (#10650)
+      removeKeyInAnyCase(requestHeaders, 'User-Agent');
+      requestHeaders['User-Agent'] = apiUserAgent;
+    }
+    // WebDavHttpAdapter marks desktop uploads because renderer fetch refuses to
+    // set Connection itself. Consume the marker here; it must not reach the
+    // server. The literal below mirrors that adapter's ELECTRON_UPLOAD_HEADER
+    // and is pinned to it by electron/webdav-connection.test.cjs — the two
+    // build targets cannot import each other.
+    const webdavUploadHeader = Object.keys(requestHeaders).find(
+      (key) => key.toLowerCase() === 'x-superproductivity-webdav-upload',
+    );
+    if (webdavUploadHeader) {
+      delete requestHeaders[webdavUploadHeader];
+      // #9985: avoid verifying on a PUT connection retaining the old file.
+      // HTTP/1.1 only — Connection is a connection-specific header that RFC 9113
+      // forbids over HTTP/2, so any conformant client drops it there. The
+      // WebdavApi verification retry budget is the cross-protocol safety net;
+      // the reported STRATO HiDrive failure was reproduced over HTTP/1.1.
+      if (details.method === 'PUT') {
+        removeKeyInAnyCase(requestHeaders, 'Connection');
+        requestHeaders.Connection = 'close';
+      }
     }
     applyJiraImageAuth(details.url, requestHeaders, details.resourceType);
     callback({ requestHeaders });
@@ -278,39 +342,79 @@ export const createWindow = async ({
   });
 
   // Deny unnecessary permissions (webcam, microphone, geolocation, etc.)
-  // The app only needs notifications for desktop reminders
-  const allowedPermissions = ['notifications'];
   mainWin.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback) => {
-      callback(allowedPermissions.includes(permission));
+      callback(isAllowedSessionPermission(permission));
     },
   );
   mainWin.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
-    return allowedPermissions.includes(permission);
+    return isAllowedSessionPermission(permission);
   });
 
   mainWindowState.manage(mainWin);
-  setWasMaximizedBeforeHide(mainWin.isMaximized());
 
-  // Fix for #7276: electron-window-state saves state in its `closed` handler,
-  // which calls win.isMaximized() on an already-hidden window (tray/shortcut
-  // hide → quit). electron#27838 makes isMaximized() return false in that
-  // case, so the persisted state loses the maximized flag. will-quit is the
-  // only process-level hook guaranteed to fire after every window `closed`
-  // event, so the library's write has always completed by the time we patch.
-  app.once('will-quit', () => {
-    if (!getWasMaximizedBeforeHide()) return;
-    const file = path.join(app.getPath('userData'), 'window-state.json');
-    try {
-      const state = JSON.parse(readFileSync(file, 'utf8'));
-      if (!state || typeof state !== 'object' || Array.isArray(state)) return;
-      if (state.isMaximized === true) return;
-      state.isMaximized = true;
-      writeFileSync(file, JSON.stringify(state));
-    } catch (err) {
-      error('Failed to patch window-state.json for maximized flag:', err);
-    }
-  });
+  // #7276: our own flag owns the maximized bit, electron-window-state only owns
+  // size/position. The library gets this bit wrong in two ways: its `closed`
+  // handler reads isMaximized() on an already-hidden window, which no longer
+  // reports the truth on every platform, and it silently drops the whole
+  // persisted state — isMaximized included — when the last un-maximized bounds
+  // no longer fit on any connected display.
+  const persistedWasMaximized = simpleStore[SimpleStoreKey.WINDOW_WAS_MAXIMIZED];
+  // First launch after this fix shipped there is no flag yet, so adopt whatever
+  // the library restored. Without this a user who is maximized at upgrade time
+  // loses it once: manage() maximizes above, before the 'maximize' listener is
+  // attached, so nothing would ever set the flag true.
+  const wasMaximized =
+    persistedWasMaximized === undefined
+      ? mainWindowState.isMaximized === true
+      : persistedWasMaximized === true;
+  initWasMaximizedBeforeHide(wasMaximized);
+
+  // Full screen is owned the same way. The first launch with this flag adopts
+  // what the library restored before.
+  const persistedWasFullScreen = simpleStore[SimpleStoreKey.WINDOW_WAS_FULL_SCREEN];
+  const wasFullScreen =
+    persistedWasFullScreen === undefined
+      ? mainWindowState.isFullScreen === true
+      : persistedWasFullScreen === true;
+  // Save an adopted value straight away: until then the library would still
+  // be the only record, and it saves false for a window closed while hidden.
+  initWasFullScreen(wasFullScreen, { isPersist: persistedWasFullScreen === undefined });
+
+  // #10058: the library gets the un-maximized geometry wrong the same two ways
+  // it gets the flag wrong, so our own copy owns it. Applied before the
+  // maximize below, so un-maximizing lands on these bounds and not on the
+  // full-screen ones the library may have recorded as the restore bounds.
+  const persistedBounds = parseStoredBounds(
+    simpleStore[SimpleStoreKey.WINDOW_RESTORE_BOUNDS],
+  );
+  // Clamp rather than discard. The library resets an overhanging window to
+  // the default size; nudging it onto the nearest display keeps the size the
+  // user actually chose. Tracked as the clamped value too: seeding the raw one
+  // leaves setRestoreBounds() deduping against geometry the window never had,
+  // so the correction would be re-applied on every launch instead of sticking.
+  const restoreBounds = persistedBounds
+    ? clampBoundsToDisplay(
+        persistedBounds,
+        screen.getDisplayMatching(persistedBounds).workArea,
+      )
+    : null;
+  initRestoreBounds(restoreBounds);
+  // Full screen is entered below, after this, so leaving it lands on these
+  // bounds.
+  if (restoreBounds && !mainWin.isMaximized()) {
+    mainWin.setBounds(restoreBounds);
+  }
+
+  if (wasMaximized && !mainWin.isMaximized() && !isStartMinimized) {
+    mainWin.maximize();
+  }
+
+  // setFullScreen() shows a hidden window too, so a start-minimized launch
+  // leaves it to the first show (showOrFocus()) or restore (below).
+  if (wasFullScreen && !isStartMinimized) {
+    mainWin.setFullScreen(true);
+  }
 
   const url = customUrl
     ? customUrl
@@ -329,27 +433,128 @@ export const createWindow = async ({
     if (IS_DEV) {
       mainWin.setTitle('Super Productivity D');
     }
+  });
 
-    // load custom stylesheet if any
-    const CSS_FILE_PATH = app.getPath('userData') + '/styles.css';
-    stat(app.getPath('userData') + '/styles.css', (err) => {
-      if (err) {
-        log('No custom styles detected at ' + CSS_FILE_PATH);
-      } else {
-        log('Loading custom styles from ' + CSS_FILE_PATH);
-        const styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
+  // load custom stylesheet if any, and re-apply it whenever the file changes
+  const CSS_FILE_PATH = path.join(app.getPath('userData'), 'styles.css');
+  // An inserted-stylesheet key is a counter scoped to the renderer process, so
+  // it only means anything for the document it was inserted into: after a
+  // reload the old key is inert, and after a renderer crash the counter starts
+  // over at 1 and a stale key can collide with — and silently remove — a live
+  // sheet (measured against Electron 43). So tag every key with the document it
+  // belongs to, and never touch a key from an earlier one.
+  let documentGeneration = 0;
+  let insertedCssKey: string | undefined;
+  let insertedCssGeneration = -1;
+  // Count committed navigations (`did-navigate`), not started ones: Electron
+  // emits `did-start-navigation` before `will-navigate`, and the
+  // `preventDefault()` in the navigation guard does not retract it, so a
+  // blocked navigation would bump the counter while the document stays the
+  // same — untracking the live sheet and leaking it on the next apply.
+  // `did-navigate` also doesn't fire for in-page navigations (hash routes).
+  mainWin.webContents.on('did-navigate', () => {
+    documentGeneration++;
+  });
+  // Applies are serialized through a promise chain: the key is read before and
+  // written after the `insertCSS` round-trip, which can take seconds while the
+  // renderer is still booting, so two overlapping runs would otherwise capture
+  // the same previous key and leave the sheet inserted in between untracked.
+  let cssApplyQueue: Promise<void> = Promise.resolve();
+  const applyCustomCss = (): Promise<void> => {
+    cssApplyQueue = cssApplyQueue.then(async () => {
+      if (mainWin.isDestroyed() || mainWin.webContents.isDestroyed()) {
+        return;
+      }
+      try {
+        let styles: string | undefined;
         try {
-          mainWin.webContents.insertCSS(styles);
-          log('Custom styles loaded successfully');
-        } catch (cssError) {
-          error('Failed to load custom styles:', cssError);
+          styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
+        } catch (readError) {
+          if ((readError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw readError;
+          }
         }
+        const isKeyFromCurrentDoc = insertedCssGeneration === documentGeneration;
+        const prevKey = isKeyFromCurrentDoc ? insertedCssKey : undefined;
+        if (styles === undefined) {
+          // Deleting the file un-applies it, just like emptying it does, and
+          // like removing a theme via the in-app installer.
+          insertedCssKey = undefined;
+          insertedCssGeneration = -1;
+          if (prevKey) {
+            await mainWin.webContents.removeInsertedCSS(prevKey);
+          }
+          log('No custom styles detected at ' + CSS_FILE_PATH);
+          return;
+        }
+        insertedCssKey = await mainWin.webContents.insertCSS(styles);
+        // re-read after the await: if a navigation completed while we were
+        // inserting, the sheet belongs to the document that is current now
+        insertedCssGeneration = documentGeneration;
+        if (prevKey) {
+          await mainWin.webContents.removeInsertedCSS(prevKey);
+        }
+        log('Custom styles loaded from ' + CSS_FILE_PATH);
+      } catch (cssError) {
+        error('Failed to load custom styles:', cssError);
       }
     });
-  });
+    return cssApplyQueue;
+  };
+  // covers the initial load as well as every renderer reload (e.g.
+  // `window.ea.reloadMainWin()`), which would otherwise drop the custom CSS
+  mainWin.webContents.on('did-finish-load', () => void applyCustomCss());
+
+  // Watch the folder rather than the file itself: the file may not exist
+  // yet, and editors often save atomically (write temp + rename), which
+  // detaches a watch bound to the original file. Debounced because a
+  // single save usually emits several events.
+  let cssReloadTimer: NodeJS.Timeout | undefined;
+  try {
+    const cssWatcher = watch(app.getPath('userData'), (_ev, fileName) => {
+      if (fileName && path.basename(fileName.toString()) !== 'styles.css') {
+        return;
+      }
+      clearTimeout(cssReloadTimer);
+      cssReloadTimer = setTimeout(() => void applyCustomCss(), 150);
+    });
+    mainWin.webContents.once('destroyed', () => {
+      clearTimeout(cssReloadTimer);
+      cssWatcher.close();
+    });
+  } catch (watchError) {
+    error('Could not watch for custom style changes:', watchError);
+  }
 
   // show gracefully
   mainWin.once('ready-to-show', () => {
+    if (isStartMinimized) {
+      const mode = getStartMinimizedMode({ hasTray: !!ensureIndicator(), isMac: IS_MAC });
+      log('Start minimized: main window', mode === 'hide' ? 'stays hidden' : 'minimized');
+      if (mode === 'minimize') {
+        // Minimizing a window that was never shown leaves it without a taskbar
+        // entry on some platforms, so map it first without taking focus.
+        mainWin.showInactive();
+        mainWin.minimize();
+        // createWindow() skipped the full-screen and #7276 maximize restore,
+        // and a taskbar click is an OS restore that never goes through
+        // showOrFocus(), so re-apply them on the first restore. Not before
+        // minimizing: maximize() on a hidden window activates it on Windows
+        // (SC_MAXIMIZE), stealing focus at login.
+        // Same order as showOrFocus(): maximize, then full screen, so leaving
+        // full screen lands on the maximized window.
+        mainWin.once('restore', () => {
+          if (getWasMaximizedBeforeHide() && !mainWin.isMaximized()) {
+            mainWin.maximize();
+          }
+          if (getWasFullScreen() && !mainWin.isFullScreen()) {
+            mainWin.setFullScreen(true);
+          }
+        });
+      }
+      return;
+    }
+
     mainWin.show();
 
     // Workaround for Windows phantom focus bug (electron#20464):
@@ -401,9 +606,20 @@ export const createWindow = async ({
 
   // Notify renderer of fullscreen state changes (used for app border visibility)
   mainWin.on('enter-full-screen', () => {
+    setWasFullScreen(true);
     mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
   });
   mainWin.on('leave-full-screen', () => {
+    // Same guard as unmaximize: leaving full screen while hidden or minimized
+    // is not the user leaving it.
+    if (
+      isUserUnmaximize({
+        isVisible: mainWin.isVisible(),
+        isMinimized: mainWin.isMinimized(),
+      })
+    ) {
+      setWasFullScreen(false);
+    }
     mainWin.webContents.send(IPC.LEAVE_FULL_SCREEN);
   });
   mainWin.webContents.on('did-finish-load', () => {
@@ -432,13 +648,9 @@ export const createWindow = async ({
   return mainWin;
 };
 
-// isMaximized() can return an incorrect value after hide() — this is a known issue on certain platforms/configurations (electron#27838).
-// to ensure maximized window state is restored reliably across all platforms, we manually track maximized state before hiding
-let wasMaximizedBeforeHide: boolean = false;
-export const getWasMaximizedBeforeHide = (): boolean => wasMaximizedBeforeHide;
-export const setWasMaximizedBeforeHide = (value: boolean): void => {
-  wasMaximizedBeforeHide = value;
-};
+// Re-exported so `various-shared.ts` keeps importing the window helpers from the
+// window module. Implementation lives in ./window-maximized-state.
+export { getWasMaximizedBeforeHide, setWasMaximizedBeforeHide };
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function initWinEventListeners(app: Electron.App): void {
@@ -564,12 +776,52 @@ function initWinEventListeners(app: Electron.App): void {
     showTaskWidget();
   });
 
+  // #10058: keep our own copy of the un-maximized geometry. Debounced because
+  // resize and move fire continuously while the user drags; only the settled
+  // value matters, and a sample lost to a crash leaves the previous one in place.
+  let boundsSampleTimeout: NodeJS.Timeout | undefined;
+  const sampleRestoreBounds = (): void => {
+    clearTimeout(boundsSampleTimeout);
+    boundsSampleTimeout = setTimeout(() => {
+      // 'closed' nulls mainWin, and a timer armed by the last resize/move can
+      // still be pending when it fires.
+      if (!mainWin || mainWin.isDestroyed()) {
+        return;
+      }
+      if (
+        !isSampleableBounds({
+          isVisible: mainWin.isVisible(),
+          isMinimized: mainWin.isMinimized(),
+          isMaximized: mainWin.isMaximized(),
+          isFullScreen: mainWin.isFullScreen(),
+        })
+      ) {
+        return;
+      }
+      setRestoreBounds(mainWin.getBounds());
+    }, BOUNDS_SAMPLE_DEBOUNCE_MS);
+  };
+  mainWin.on('resize', sampleRestoreBounds);
+  mainWin.on('move', sampleRestoreBounds);
+  // A pending sample would otherwise hold the event loop open past the close.
+  mainWin.on('closed', () => clearTimeout(boundsSampleTimeout));
+
   // Handle maximize and unmaximize events to change wasMaximizedBeforeHide flag accordingly
   mainWin.on('maximize', () => {
     setWasMaximizedBeforeHide(true);
   });
 
   mainWin.on('unmaximize', () => {
+    // A hide()/minimize() also emits unmaximize on some platforms; that is not
+    // the user un-maximizing, and acting on it drops the flag we need (#7276).
+    if (
+      !isUserUnmaximize({
+        isVisible: mainWin.isVisible(),
+        isMinimized: mainWin.isMinimized(),
+      })
+    ) {
+      return;
+    }
     setWasMaximizedBeforeHide(false);
   });
 }
@@ -577,36 +829,21 @@ function initWinEventListeners(app: Electron.App): void {
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function createMenu(quitApp: () => void): void {
   // Create application menu to enable copy & pasting on MacOS
-  const menuTpl: MenuItemConstructorOptions[] = [
-    {
-      label: 'Super Productivity',
-      submenu: [
-        { role: 'about', label: 'About Super Productivity' },
-        { type: 'separator' },
-        { role: 'hide', label: 'Hide Super Productivity' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        {
-          label: 'Quit',
-          accelerator: 'CmdOrCtrl+Q',
-          click: () => closeWinAndQuit(quitApp),
-        },
-      ],
+  const menuTpl = createMenuTemplate({
+    // hide() keeps the app running in the dock; clicking the dock icon
+    // re-shows via the 'activate' handler (showOrFocus)
+    onCloseWindow: (focusedWindow) => {
+      // only act when the main window itself is key; focusedWindow can be
+      // undefined during macOS menu tracking — treat that as "not ours"
+      if (!focusedWindow || focusedWindow !== mainWin) {
+        return;
+      }
+      if (!mainWin.isDestroyed() && mainWin.isVisible()) {
+        mainWin.hide();
+      }
     },
-    {
-      label: 'Edit',
-      submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
-      ],
-    },
-  ];
+    onQuit: () => closeWinAndQuit(quitApp),
+  });
 
   // we need to set a menu to get copy & paste working for mac os x
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTpl));
@@ -635,6 +872,8 @@ const appCloseHandler = (app: App): void => {
     if (ids.length === 0) {
       // Destroy task widget before closing main window
       destroyTaskWidget();
+      // The quit request can time out while the user answers the finish-day prompt
+      setIsQuitRequested(true);
       mainWin.close();
     }
   });
@@ -647,7 +886,6 @@ const appCloseHandler = (app: App): void => {
         const indicator = ensureIndicator();
         if (indicator) {
           event.preventDefault();
-          setWasMaximizedBeforeHide(mainWin.isMaximized());
           mainWin.hide();
           showTaskWidget();
           return;
@@ -656,7 +894,9 @@ const appCloseHandler = (app: App): void => {
 
       event.preventDefault();
 
-      if (ids.length > 0) {
+      // A gone renderer (killed, oom, ...) never answers, so waiting for it
+      // would leave no way to quit.
+      if (ids.length > 0 && !mainWin.webContents.isCrashed()) {
         log('Actions to wait for ', ids);
         mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
       } else {
@@ -697,7 +937,6 @@ const appMinimizeHandler = (app: App): void => {
           return;
         }
         event.preventDefault();
-        setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();
         showTaskWidget();
       } else {

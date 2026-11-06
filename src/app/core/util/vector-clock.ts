@@ -171,6 +171,7 @@ export const incrementVectorClock = (
   // Log for debugging
   OpLog.verbose('incrementVectorClock', {
     clientId,
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     currentValue,
     allClients: Object.keys(newClock),
   });
@@ -181,6 +182,7 @@ export const incrementVectorClock = (
   if (currentValue >= Number.MAX_SAFE_INTEGER - 1000) {
     OpLog.critical('Vector clock component overflow detected', {
       clientId,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       currentValue,
     });
     throw new Error(
@@ -270,6 +272,7 @@ export const hasVectorClockChanges = (
     if (refVal > 0 && !(clientId in current!)) {
       OpLog.warn('Vector clock change detected: client missing from current', {
         clientId,
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         refValue: refVal,
         currentClock: vectorClockToString(current),
         referenceClock: vectorClockToString(reference),

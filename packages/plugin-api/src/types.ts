@@ -14,6 +14,29 @@ export interface PluginMenuEntryCfg {
   onClick: () => void;
 }
 
+export type PluginTaskContextMenuTarget = 'TASK' | 'SUBTASK';
+
+export interface PluginTaskContextMenuContext {
+  readonly taskId: string;
+}
+
+/**
+ * A plugin action shown in the task context menu's dedicated plugin submenu.
+ * Register from plugin.js; callback registrations are not supported in iframe
+ * index.html files.
+ */
+export interface PluginTaskContextMenuEntryCfg {
+  /** Unique within this plugin. */
+  id: string;
+  /** A non-empty action label of at most 80 characters. */
+  label: string;
+  /** Optional Material icon ligature name. Custom SVG assets are not supported. */
+  icon?: string;
+  /** Defaults to both regular tasks and subtasks when omitted; an empty array is invalid. */
+  showFor?: readonly PluginTaskContextMenuTarget[];
+  onClick: (context: PluginTaskContextMenuContext) => void | Promise<void>;
+}
+
 export enum PluginHooks {
   TASK_CREATED = 'taskCreated',
   TASK_COMPLETE = 'taskComplete',
@@ -27,6 +50,19 @@ export enum PluginHooks {
   ANY_TASK_UPDATE = 'anyTaskUpdate',
   PROJECT_LIST_UPDATE = 'projectListUpdate',
   WORK_CONTEXT_CHANGE = 'workContextChange',
+  /**
+   * Tasks, projects or tags changed from any source (remote sync included), or
+   * the selected or tracked task changed. Coalesced; no payload. Refresh views
+   * only: it fires on every device for a synced change, so do not write data
+   * in response.
+   */
+  DATA_CHANGED = 'dataChanged',
+  /**
+   * The user's logical day changed while the app runs (see DayChangePayload).
+   * Not fired at startup; read getDayContext() on load. Fires on every device,
+   * so refresh views only and do not write data in response.
+   */
+  DAY_CHANGE = 'dayChange',
 }
 
 export type Hooks = PluginHooks;
@@ -71,6 +107,16 @@ export interface SnackCfg {
   msg: string;
   type?: 'SUCCESS' | 'ERROR' | 'WARNING' | 'INFO';
   ico?: string;
+  /**
+   * Optional action button; the snack stays visible longer when set.
+   * plugin.js only — functions cannot cross the iframe postMessage boundary.
+   */
+  action?: SnackActionCfg;
+}
+
+export interface SnackActionCfg {
+  label: string;
+  onClick: () => void;
 }
 
 export type SnackCfgLimited = SnackCfg;
@@ -119,6 +165,37 @@ export interface PluginNodeScriptResult {
   };
 }
 
+/**
+ * Kinds of user data a plugin can declare in `dataSharing`. The host renders each as a
+ * translated label; values unknown to an older app render as "other data".
+ */
+export type PluginSharedData =
+  | 'credentials' // tokens or passwords the user entered for this recipient
+  | 'userText' // free text the user types for the recipient: search terms, a request
+  | 'taskTitles'
+  | 'taskNotes'
+  | 'taskSchedule' // due dates and times, estimates, free time
+  | 'taskStatus' // done state
+  | 'timeTracked' // worklogs and their comments, time spent
+  | 'projectAndTagNames'
+  | 'ids'; // task, project or tag ids
+
+/** One recipient of a plugin's data. See `PluginManifest.dataSharing`. */
+export interface PluginDataDestination {
+  /** Shown as-is, e.g. "GitHub". */
+  recipient: string;
+  /** Exact hostnames, like `allowedHosts`. */
+  hosts?: string[];
+  /** The user enters the server, e.g. a self-hosted instance or a webhook URL. */
+  userServer?: boolean;
+  /** Sent whenever the plugin is in use. */
+  data: PluginSharedData[];
+  /** Sent only after the user turns on a plugin setting, e.g. pushing notes. */
+  optionalData?: PluginSharedData[];
+  /** Must be an `https:` URL. */
+  privacyPolicyUrl?: string;
+}
+
 export interface PluginManifest {
   name: string;
   id: string;
@@ -126,6 +203,8 @@ export interface PluginManifest {
   version: string;
   minSupVersion: string;
   description?: string;
+  /** Shown as "by {author}" on the plugins page. */
+  author?: string;
   hooks: Hooks[];
   permissions: string[];
   /**
@@ -150,6 +229,14 @@ export interface PluginManifest {
    * remains out of scope.
    */
   allowedHosts?: string[];
+  /**
+   * What user data this plugin sends off the device, and to whom. `[]` declares that it
+   * sends nothing. Shown to the user at install, in the integration setup dialog and in
+   * the plugin's details. Declared by the author: the host checks only `PluginAPI.request`
+   * against `allowedHosts`, so every `allowedHosts` entry must appear in some
+   * destination's `hosts`.
+   */
+  dataSharing?: PluginDataDestination[];
   iFrame?: boolean;
   isSkipMenuEntry?: boolean;
   type?: 'standard' | 'issueProvider';
@@ -203,7 +290,8 @@ export interface LanguageChangePayload {
 }
 
 export interface ActionPayload {
-  action: string;
+  /** The dispatched app action; read `action.type` to tell actions apart. */
+  action: { type: string; [key: string]: unknown };
   payload?: unknown;
 }
 
@@ -256,6 +344,26 @@ export interface ActiveWorkContext {
  */
 export type WorkContextChangePayload = ActiveWorkContext;
 
+/**
+ * Payload for DAY_CHANGE: the new logical day, which honours the user's
+ * "start of next day" setting. Fires when the day changes while the app runs: at
+ * the rollover, or when that setting moves it.
+ */
+export interface DayChangePayload {
+  todayStr: string;
+}
+
+/**
+ * The user's logical day, for plugins that bucket tasks by date.
+ * `todayStr` is the logical day as YYYY-MM-DD: before the configured start of
+ * the next day, it is still the previous calendar day. To find a timestamp's
+ * logical day, subtract `startOfNextDayDiffMs` before taking its local date.
+ */
+export interface PluginDayContext {
+  todayStr: string;
+  startOfNextDayDiffMs: number;
+}
+
 // Map hook types to their payload types
 export interface HookPayloadMap {
   [PluginHooks.TASK_CREATED]: TaskCreatedPayload;
@@ -270,6 +378,8 @@ export interface HookPayloadMap {
   [PluginHooks.ANY_TASK_UPDATE]: AnyTaskUpdatePayload;
   [PluginHooks.PROJECT_LIST_UPDATE]: ProjectListUpdatePayload;
   [PluginHooks.WORK_CONTEXT_CHANGE]: WorkContextChangePayload;
+  [PluginHooks.DATA_CHANGED]: void;
+  [PluginHooks.DAY_CHANGE]: DayChangePayload;
 }
 
 // Generic hook handler with typed payload
@@ -314,16 +424,6 @@ export interface Task {
   _hideSubTasksMode?: number;
 }
 
-export interface ProjectFolder {
-  id: string;
-  title: string;
-  icon?: string | null;
-  parentId?: string | null;
-  isExpanded?: boolean;
-  created: number;
-  updated?: number;
-}
-
 export interface Project {
   id: string;
   title: string;
@@ -340,7 +440,6 @@ export interface Project {
   noteIds: string[];
   isEnableBacklog?: boolean;
   isHiddenFromMenu?: boolean;
-  folderId?: string | null;
 
   // Advanced config (internal) - must be any to match WorkContextCommon
   advancedCfg: unknown;
@@ -533,11 +632,23 @@ export interface PluginAPI {
 
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void;
 
+  /** Register an action in the task context menu's plugin submenu. */
+  registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void;
+
   registerConfigHandler(handler: () => void): void;
 
   registerShortcut(
     shortcutCfg: Omit<PluginShortcutCfg, 'pluginId'> & { id?: string },
   ): void;
+
+  /**
+   * Remove a shortcut this plugin registered before, by the id it was
+   * registered with (when `id` was omitted there, that is the sanitized label).
+   * Registering the same id again replaces the existing entry, so this is only
+   * needed when a shortcut disappears for good. The user's key binding is kept
+   * in the keyboard settings, so re-registering the same id restores it.
+   */
+  unregisterShortcut(shortcutId: string): void;
 
   registerSidePanelButton(sidePanelBtnCfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>): void;
 
@@ -564,6 +675,22 @@ export interface PluginAPI {
    * only if the app has not finished its initial data load.
    */
   getActiveWorkContext(): Promise<ActiveWorkContext | null>;
+
+  /**
+   * The user's logical day and its start-of-next-day offset. Re-read it on the DAY_CHANGE hook.
+   * Feature-detect on older hosts.
+   */
+  getDayContext?(): Promise<PluginDayContext>;
+
+  /**
+   * Start tracking time on a task. Rejects for an unknown or done task (the play
+   * button would reopen it) and for a parent whose subtasks are all done. For a
+   * parent, tracks its first unfinished subtask. Feature-detect on older hosts.
+   */
+  startTracking?(taskId: string): Promise<void>;
+
+  /** Stop time tracking. Feature-detect on older hosts. */
+  stopTracking?(): Promise<void>;
 
   /**
    * Mount this plugin's index.html inside the work-view body, in place of
@@ -654,7 +781,17 @@ export interface PluginAPI {
   selectTask(taskId: string): Promise<void>;
 
   reInitData(): Promise<void>;
-  updateTask(taskId: string, updates: Partial<Task>): Promise<void>;
+
+  /**
+   * Update a task. Changing `projectId` moves it like the UI does: subtasks
+   * follow, and for a recurring task the repeat config and every instance
+   * (archived ones included) move without a confirmation.
+   */
+  updateTask(
+    taskId: string,
+    updates: Partial<Task>,
+    options?: PluginUpdateTaskOptions,
+  ): Promise<void>;
 
   addTask(taskData: PluginCreateTaskData): Promise<string>;
 
@@ -668,6 +805,14 @@ export interface PluginAPI {
   addProject(projectData: Partial<Project>): Promise<string>;
 
   updateProject(projectId: string, updates: Partial<Project>): Promise<void>;
+
+  /**
+   * Deletes a project AND the tasks it contains, matching what the UI's own
+   * "Delete project" does — the cascade lives in ProjectService.remove().
+   * Deleting the Inbox is refused. If the deleted project is the active work
+   * context, the app falls back to Today.
+   */
+  deleteProject(projectId: string): Promise<void>;
 
   // tags
   getAllTags(): Promise<Tag[]>;
@@ -707,6 +852,25 @@ export interface PluginAPI {
   persistDataSynced(dataStr: string, key?: string): Promise<void>;
 
   loadSyncedData(key?: string): Promise<string | null>;
+
+  /**
+   * Requests normal sync with the configured provider from plugin.js or an iframe.
+   * The promise also resolves on handled errors (HANDLED_ERROR) and skipped syncs.
+   * Resolution does not confirm successful sync or publication of specific plugin
+   * data. Bridge promise rejections propagate to the caller. The iframe's 30-second
+   * timeout does not cancel sync that has already started in the host.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  triggerSync(): Promise<void>;
+
+  /**
+   * Lists this plugin's sorted, non-empty keys from applied application state.
+   * Excludes the legacy unkeyed entry. The optional prefix is matched literally.
+   * New keys appear only after their writes reach applied application state.
+   * Existing keys remain listed while replacements are pending or compressing.
+   * Re-read after persistedDataChanged; this is not a disk or sync acknowledgement.
+   */
+  listSyncedDataKeys(prefix?: string): Promise<string[]>;
 
   getConfig<T = Record<string, unknown>>(): Promise<T | null>;
 
@@ -756,11 +920,13 @@ export interface PluginAPI {
   // download file
   downloadFile(filename: string, data: string): Promise<void>;
 
-  // node execution (Electron desktop only; currently grantable only to packaged
-  // built-in plugins with nodeExecution permission after main-process user consent)
+  // node execution (Electron desktop only; requires the nodeExecution permission and
+  // main-process user consent)
   executeNodeScript?(request: PluginNodeScriptRequest): Promise<PluginNodeScriptResult>;
 
-  // action execution - dispatch NgRx actions (limited to allowed subset)
+  // action execution - dispatch NgRx actions (limited to allowed subset).
+  // `{ type: '[Layout] Show PluginPanel', pluginId }` opens the plugin's own
+  // side panel, e.g. from a shortcut; another plugin's id is rejected.
   dispatchAction(action: { type: string; [key: string]: unknown }): void;
 
   // window state
@@ -805,6 +971,17 @@ export interface PluginCreateTaskData {
   isDone?: boolean;
   /** Due date as ISO date string (YYYY-MM-DD) */
   dueDay?: string | null;
+  /**
+   * Keep the title verbatim: skip short syntax parsing (`#tag`, `@date`,
+   * `+project`, `30m/1h`). Set this when the title comes from user content or
+   * a model rather than from the user typing short syntax.
+   */
+  isIgnoreShortSyntax?: boolean;
+}
+
+export interface PluginUpdateTaskOptions {
+  /** Keep a changed title verbatim, see `PluginCreateTaskData.isIgnoreShortSyntax`. */
+  isIgnoreShortSyntax?: boolean;
 }
 
 export interface PluginShortcutCfg {
@@ -906,14 +1083,3 @@ export enum PluginIframeMessageType {
   // Plugin lifecycle
   READY = 'plugin-ready',
 }
-
-// Global PluginAPI interface for runtime use
-// Note: This is commented out to avoid conflicts with node_modules version
-// declare global {
-//   interface Window {
-//     PluginAPI: PluginAPI;
-//   }
-//
-//   // For plugin development without window reference
-//   const PluginAPI: PluginAPI;
-// }

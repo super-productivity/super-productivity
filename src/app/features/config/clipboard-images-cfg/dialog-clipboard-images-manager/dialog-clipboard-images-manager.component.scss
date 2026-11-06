@@ -1,9 +1,7 @@
 @use '../../../../../styles/_globals.scss' as *;
 
-::ng-deep .mat-mdc-dialog-container {
-  .mat-mdc-dialog-content {
-    padding: 20px var(--s3);
-  }
+:host .mat-mdc-dialog-content {
+  padding: 20px var(--s3);
 }
 
 .loading-container {

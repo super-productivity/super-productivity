@@ -1,10 +1,18 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
-import { TaskViewCustomizerService } from './task-view-customizer.service';
+import { signal, type WritableSignal } from '@angular/core';
+import {
+  CustomizedUndoneTasks,
+  TaskViewCustomizerService,
+} from './task-view-customizer.service';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
 import { TaskWithSubTasks } from '../tasks/task.model';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { matchesTaskCriteria } from '../tasks/task-criteria/task-criteria';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../root-store/app-state/app-state.selectors';
 import { selectAllProjects } from '../project/store/project.selectors';
 import { getTomorrow } from '../../util/get-tomorrow';
 import { getDbDateStr } from '../../util/get-db-date-str';
@@ -20,6 +28,7 @@ import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
   FILTER_OPTION_TYPE,
+  FILTER_PRIORITY,
   FILTER_SCHEDULE,
   FilterOption,
   GROUP_OPTION_TYPE,
@@ -35,6 +44,29 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
+
+// The filter menu filters through the shared task-criteria module; this keeps
+// the per-filter cases below as its parity test.
+const filterTasks = (
+  svc: TaskViewCustomizerService,
+  tasks: TaskWithSubTasks[],
+  filter: FilterOption,
+): TaskWithSubTasks[] => {
+  const criteria = svc['_toCriteria'](filter);
+  const ctx = svc['_criteriaCtx']();
+  return criteria
+    ? tasks.filter((task) => matchesTaskCriteria(task, criteria, ctx))
+    : tasks;
+};
+const applyFilter = (
+  svc: TaskViewCustomizerService,
+  tasks: TaskWithSubTasks[],
+  type: FILTER_OPTION_TYPE | null,
+  preset: string,
+): TaskWithSubTasks[] =>
+  filterTasks(svc, tasks, { type, preset, label: '' } as FilterOption);
 
 describe('TaskViewCustomizerService', () => {
   let service: TaskViewCustomizerService;
@@ -52,8 +84,10 @@ describe('TaskViewCustomizerService', () => {
   let projectUpdateSpy: jasmine.Spy;
   let tagUpdateSpy: jasmine.Spy;
   // Stand-in for the sidebar (menu-tree) order. Defaults to identity so tags keep
-  // their _allTags order; individual tests override it to assert a custom order.
+  // their tagsInTreeOrder order; individual tests override it to assert a custom order.
   let menuTreeFlattenFn: (tags: Tag[]) => Tag[];
+  // The service reads tags straight from this signal (TagService.tagsInTreeOrder).
+  let tagsInTreeOrder: WritableSignal<Tag[]>;
   const mockLanguageService = { detect: () => DEFAULT_LOCALE };
 
   const todayStr = getDbDateStr(new Date());
@@ -168,7 +202,10 @@ describe('TaskViewCustomizerService', () => {
         { provide: ProjectService, useValue: { update: projectUpdateSpy } },
         {
           provide: TagService,
-          useValue: { updateTag: tagUpdateSpy, tagsInTreeOrder: signal(mockTags) },
+          useValue: {
+            updateTag: tagUpdateSpy,
+            tagsInTreeOrder: (tagsInTreeOrder = signal(mockTags)),
+          },
         },
         {
           provide: MenuTreeService,
@@ -181,32 +218,45 @@ describe('TaskViewCustomizerService', () => {
     });
     service = TestBed.inject(TaskViewCustomizerService);
     (service as any)._allProjects = mockProjects;
-    (service as any)._allTags = mockTags;
   });
 
   it('should filter by tag name', () => {
-    const filtered = service['applyFilter'](mockTasks, FILTER_OPTION_TYPE.tag, 'Tag A');
+    const filtered = applyFilter(service, mockTasks, FILTER_OPTION_TYPE.tag, 'Tag A');
     expect(filtered.length).toBe(2);
     expect(filtered[0].id).toBe('Alpha(Tag A)');
     expect(filtered[1].id).toBe('Third Task(Tag A, Tag B)');
   });
 
+  it('should include every tag whose title contains the term', () => {
+    // 'work' is a substring of both titles. Homework is first, so the old
+    // find() returned only that tag and dropped the Work task.
+    tagsInTreeOrder.set([
+      { id: 'homework', title: 'Homework' } as Tag,
+      { id: 'work', title: 'Work' } as Tag,
+    ]);
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'homework-task', tagIds: ['homework'] },
+      { ...mockTasks[1], id: 'work-task', tagIds: ['work'] },
+    ];
+
+    const filtered = applyFilter(service, tasks, FILTER_OPTION_TYPE.tag, 'work');
+
+    expect(filtered.map((task) => task.id)).toEqual(['homework-task', 'work-task']);
+  });
+
   it('should return an empty task list when filtering by a tag that doesnt exist', () => {
-    const filtered = service['applyFilter'](
-      mockTasks,
-      FILTER_OPTION_TYPE.tag,
-      'Tag Three',
-    );
+    const filtered = applyFilter(service, mockTasks, FILTER_OPTION_TYPE.tag, 'Tag Three');
     expect(filtered.length).toBe(0);
   });
 
   it('should not filter when filtering with an empty tag input', () => {
-    const filtered = service['applyFilter'](mockTasks, FILTER_OPTION_TYPE.tag, '');
+    const filtered = applyFilter(service, mockTasks, FILTER_OPTION_TYPE.tag, '');
     expect(filtered.length).toBe(4);
   });
 
   it('should filter by NOT_SPECIFIED tag (no tags)', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.tag,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -214,18 +264,148 @@ describe('TaskViewCustomizerService', () => {
     expect(filtered.length).toBe(1);
   });
 
+  it('should filter selected tag ids with OR and AND modes', () => {
+    const byTagIds = (tagFilterMode?: 'OR' | 'AND'): TaskWithSubTasks[] =>
+      filterTasks(service, mockTasks, {
+        type: FILTER_OPTION_TYPE.tag,
+        preset: null,
+        label: '',
+        tagIds: ['Tag A', 'Tag B'],
+        tagFilterMode,
+      });
+    const orFiltered = byTagIds();
+    const andFiltered = byTagIds('AND');
+
+    expect(orFiltered).toHaveSize(3);
+    expect(andFiltered.map((task) => task.id)).toEqual(['Third Task(Tag A, Tag B)']);
+  });
+
+  it('keeps tagIds and tagFilterMode when sanitizing a stored tag filter', () => {
+    const sanitized = service['_sanitizeFilter']({
+      type: FILTER_OPTION_TYPE.tag,
+      preset: null,
+      label: 'stale label',
+      tagIds: ['Tag A', 'Tag B'],
+      tagFilterMode: 'AND',
+    });
+
+    expect(sanitized.tagIds).toEqual(['Tag A', 'Tag B']);
+    expect(sanitized.tagFilterMode).toBe('AND');
+    expect(sanitized.preset).toBeNull();
+    expect(sanitized.type).toBe(FILTER_OPTION_TYPE.tag);
+    expect(sanitized.label).toBe(T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG);
+  });
+
+  // The tag title text input is gone, so a stored title would filter the list
+  // with no chip to show or remove it
+  it('drops a stored tag title filter from before tag ids', () => {
+    const sanitized = service['_sanitizeFilter']({
+      type: FILTER_OPTION_TYPE.tag,
+      preset: 'work',
+      label: 'stale label',
+    });
+
+    expect(sanitized).toEqual(DEFAULT_OPTIONS.filter);
+  });
+
+  it('keeps the "no tag" preset of a stored tag filter', () => {
+    const sanitized = service['_sanitizeFilter']({
+      type: FILTER_OPTION_TYPE.tag,
+      preset: FILTER_COMMON.NOT_SPECIFIED,
+      label: 'stale label',
+    });
+
+    expect(sanitized.type).toBe(FILTER_OPTION_TYPE.tag);
+    expect(sanitized.preset).toBe(FILTER_COMMON.NOT_SPECIFIED);
+  });
+
+  describe('customizeUndoneTasks date filters follow the logical day', () => {
+    it('re-filters when the logical day changes, without a task change', async () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectTodayStr, '2026-10-30');
+      store.overrideSelector(selectStartOfNextDayDiffMs, 0);
+      store.refreshState();
+      const tasks = [
+        { ...mockTasks[0], id: 'thu', dueDay: '2026-10-30' },
+        { ...mockTasks[1], id: 'fri', dueDay: '2026-10-31' },
+      ] as TaskWithSubTasks[];
+      service.setFilter({
+        type: FILTER_OPTION_TYPE.scheduledDate,
+        preset: FILTER_SCHEDULE.today,
+        label: '',
+      });
+      const emissions: CustomizedUndoneTasks[] = [];
+      TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(tasks)),
+      ).subscribe((result) => emissions.push(result));
+      const settle = async (): Promise<string[]> => {
+        TestBed.tick();
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        return emissions[emissions.length - 1].list.map((task) => task.id);
+      };
+      expect(await settle()).toEqual(['thu']);
+
+      store.overrideSelector(selectTodayStr, '2026-10-31');
+      store.refreshState();
+      expect(await settle()).toEqual(['fri']);
+    });
+  });
+
+  describe('customizeUndoneTasks tag id filter', () => {
+    const nextFrame = (): Promise<void> =>
+      new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+    const latestList = async (): Promise<string[]> => {
+      const emissions: CustomizedUndoneTasks[] = [];
+      TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(mockTasks)),
+      ).subscribe((result) => emissions.push(result));
+      TestBed.tick();
+      await nextFrame();
+      return emissions[emissions.length - 1].list.map((task) => task.id);
+    };
+
+    it('treats a null preset with tag ids as an active AND filter', async () => {
+      service.setFilter({
+        type: FILTER_OPTION_TYPE.tag,
+        preset: null,
+        label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG,
+        tagIds: ['Tag A', 'Tag B'],
+        tagFilterMode: 'AND',
+      });
+
+      expect(await latestList()).toEqual(['Third Task(Tag A, Tag B)']);
+    });
+
+    it('ignores tag ids that no longer exist', async () => {
+      service.setFilter({
+        type: FILTER_OPTION_TYPE.tag,
+        preset: null,
+        label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG,
+        tagIds: ['Tag A', 'deleted-tag'],
+        tagFilterMode: 'AND',
+      });
+
+      expect(await latestList()).toEqual(['Alpha(Tag A)', 'Third Task(Tag A, Tag B)']);
+    });
+  });
+
   it('should filter by project name', () => {
-    const filtered = service['applyFilter'](
-      mockTasks,
-      FILTER_OPTION_TYPE.project,
-      'Project B',
-    );
-    expect(filtered.length).toBe(1);
-    expect(filtered[0].id).toBe('Beta(Tag B)');
+    (service as any)._allProjects = [
+      ...mockProjects,
+      { id: 'Project B Extra', title: 'Project B Extra' } as Project,
+    ];
+    const tasks = [
+      ...mockTasks,
+      { ...mockTasks[1], id: 'Beta Extra', projectId: 'Project B Extra' },
+    ];
+    const filtered = applyFilter(service, tasks, FILTER_OPTION_TYPE.project, 'Project B');
+    expect(filtered.map((task) => task.id)).toEqual(['Beta(Tag B)', 'Beta Extra']);
   });
 
   it('should filter by schedule date', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.scheduledDate,
       FILTER_SCHEDULE.tomorrow,
@@ -235,7 +415,8 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should filter by NOT_SPECIFIED schedule date (no schedule date)', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.scheduledDate,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -244,7 +425,8 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should filter by NOT_SPECIFIED timeSpent (no timeSpent)', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.timeSpent,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -253,12 +435,51 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should filter by NOT_SPECIFIED estimatedTime (no estimatedTime)', () => {
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       mockTasks,
       FILTER_OPTION_TYPE.estimatedTime,
       FILTER_COMMON.NOT_SPECIFIED,
     );
     expect(filtered.length).toBe(1);
+  });
+
+  it('should filter by priority', () => {
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'high', priority: 3 },
+      { ...mockTasks[1], id: 'medium', priority: 2 },
+      { ...mockTasks[2], id: 'high-2', priority: 'high' },
+      { ...mockTasks[3], id: 'none' },
+    ];
+
+    const filtered = applyFilter(
+      service,
+      tasks,
+      FILTER_OPTION_TYPE.priority,
+      FILTER_PRIORITY.high,
+    );
+
+    expect(filtered.map((task) => task.id)).toEqual(['high', 'high-2']);
+  });
+
+  it('should filter by NOT_SPECIFIED priority (no priority)', () => {
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'undefined-priority' },
+      { ...mockTasks[1], id: 'null-priority', priority: null },
+      { ...mockTasks[2], id: 'low', priority: 'low' },
+    ];
+
+    const filtered = applyFilter(
+      service,
+      tasks,
+      FILTER_OPTION_TYPE.priority,
+      FILTER_COMMON.NOT_SPECIFIED,
+    );
+
+    expect(filtered.map((task) => task.id)).toEqual([
+      'undefined-priority',
+      'null-priority',
+    ]);
   });
 
   it('should sort by name', () => {
@@ -271,6 +492,105 @@ describe('TaskViewCustomizerService', () => {
     expect(sorted.asc[1].title).toBe('Beta');
     expect(sorted.desc[0].title).toBe('Zebra');
     expect(sorted.desc[1].title).toBe('Third Task');
+  });
+
+  it('should sort by priority with stable equal-rank ordering', () => {
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'none' },
+      { ...mockTasks[1], id: 'low', priority: 'low' },
+      { ...mockTasks[2], id: 'medium-first', priority: 2 },
+      { ...mockTasks[3], id: 'high', priority: 3 },
+      { ...mockTasks[0], id: 'medium-second', priority: 'medium' },
+    ];
+
+    const asc = service['applySort'](tasks, SORT_OPTION_TYPE.priority);
+    const desc = service['applySort'](tasks, SORT_OPTION_TYPE.priority, SORT_ORDER.DESC);
+
+    expect(asc.map((task) => task.id)).toEqual([
+      'high',
+      'medium-first',
+      'medium-second',
+      'low',
+      'none',
+    ]);
+    expect(desc.map((task) => task.id)).toEqual([
+      'none',
+      'low',
+      'medium-first',
+      'medium-second',
+      'high',
+    ]);
+  });
+
+  it('should place date-only tasks after timed tasks on the same scheduled day', () => {
+    const scheduledAt = (day: string, time: string): number =>
+      getDateTimeFromClockString(time, parseDbDateStr(day));
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[1], id: 'today-date-only', dueDay: todayStr },
+      {
+        ...mockTasks[0],
+        id: 'tomorrow-timed',
+        dueDay: undefined,
+        dueWithTime: scheduledAt(tomorrowStr, '08:00'),
+      },
+      {
+        ...mockTasks[2],
+        id: 'today-late',
+        dueDay: undefined,
+        dueWithTime: scheduledAt(todayStr, '23:00'),
+      },
+      {
+        ...mockTasks[3],
+        id: 'today-early',
+        dueDay: undefined,
+        dueWithTime: scheduledAt(todayStr, '09:00'),
+      },
+    ];
+
+    const asc = service['applySort'](
+      tasks,
+      SORT_OPTION_TYPE.scheduledDate,
+      SORT_ORDER.ASC,
+    );
+    const desc = service['applySort'](
+      tasks,
+      SORT_OPTION_TYPE.scheduledDate,
+      SORT_ORDER.DESC,
+    );
+
+    expect(asc.map((task) => task.id)).toEqual([
+      'today-early',
+      'today-late',
+      'today-date-only',
+      'tomorrow-timed',
+    ]);
+    expect(desc.map((task) => task.id)).toEqual([
+      'tomorrow-timed',
+      'today-date-only',
+      'today-late',
+      'today-early',
+    ]);
+  });
+
+  it('should place date-only deadlines after timed deadlines on the same day', () => {
+    const tasks: TaskWithSubTasks[] = [
+      {
+        ...mockTasks[0],
+        id: 'timed-deadline',
+        deadlineWithTime: getDateTimeFromClockString('09:00', parseDbDateStr(todayStr)),
+      },
+      {
+        ...mockTasks[1],
+        id: 'date-only-deadline',
+        deadlineDay: todayStr,
+      },
+    ];
+
+    const asc = service['applySort'](tasks, SORT_OPTION_TYPE.deadline, SORT_ORDER.ASC);
+    const desc = service['applySort'](tasks, SORT_OPTION_TYPE.deadline, SORT_ORDER.DESC);
+
+    expect(asc.map((task) => task.id)).toEqual(['timed-deadline', 'date-only-deadline']);
+    expect(desc.map((task) => task.id)).toEqual(['date-only-deadline', 'timed-deadline']);
   });
 
   it('should sort numeric prefixes in title correctly', () => {
@@ -359,10 +679,10 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should sort by primary-tag sidebar order, keeping manual order within a tag', () => {
-    (service as unknown as { _allTags: Tag[] })._allTags = [
+    tagsInTreeOrder.set([
       { id: 'Tag B', title: 'Tag B' } as Tag,
       { id: 'Tag A', title: 'Tag A' } as Tag,
-    ];
+    ]);
     const extra: TaskWithSubTasks[] = [
       {
         id: 'Aardvark(-)',
@@ -418,10 +738,10 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should sort tasks with unknown tag ids after known tree-ordered tags', () => {
-    (service as unknown as { _allTags: Tag[] })._allTags = [
+    tagsInTreeOrder.set([
       { id: 'Tag B', title: 'Tag B' } as Tag,
       { id: 'Tag A', title: 'Tag A' } as Tag,
-    ];
+    ]);
     const tasks: TaskWithSubTasks[] = [
       {
         id: 'unknown-tag',
@@ -533,10 +853,10 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should group by tag', () => {
-    (service as unknown as { _allTags: Tag[] })._allTags = [
+    tagsInTreeOrder.set([
       { id: 'Tag B', title: 'Tag B' } as Tag,
       { id: 'Tag A', title: 'Tag A' } as Tag,
-    ];
+    ]);
     const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
     expect(Object.keys(grouped)).toEqual(['Tag B', 'Tag A', 'No tag']);
     expect(grouped['Tag A'][0].id).toBe('Alpha(Tag A)');
@@ -565,10 +885,10 @@ describe('TaskViewCustomizerService', () => {
     // Two different tag entities can carry the same title; their tasks must all
     // land in the single title-keyed bucket instead of one tag overwriting the
     // other (regression: the second tag used to clobber the first's tasks).
-    (service as unknown as { _allTags: Tag[] })._allTags = [
+    tagsInTreeOrder.set([
       { id: 'work-1', title: 'Work' } as Tag,
       { id: 'work-2', title: 'Work' } as Tag,
-    ];
+    ]);
     const tasks = [
       { ...mockTasks[0], id: 'task-work-1', tagIds: ['work-1'] },
       { ...mockTasks[0], id: 'task-work-2', tagIds: ['work-2'] },
@@ -578,6 +898,38 @@ describe('TaskViewCustomizerService', () => {
 
     expect(Object.keys(grouped)).toEqual(['Work']);
     expect(grouped['Work'].map((t) => t.id)).toEqual(['task-work-1', 'task-work-2']);
+  });
+
+  describe('group by tag inside a tag view (#9630)', () => {
+    beforeEach(() => {
+      tagsInTreeOrder.set([
+        { id: 'Tag A', title: 'Tag A' } as Tag,
+        { id: 'Tag B', title: 'Tag B' } as Tag,
+      ]);
+    });
+
+    it('omits the active tag and puts tasks with no other tag into "No tag"', () => {
+      mockWorkContextService.activeWorkContextId = 'Tag A';
+      mockWorkContextService.activeWorkContextType = WorkContextType.TAG;
+
+      const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
+
+      expect(Object.keys(grouped)).toEqual(['Tag B', 'No tag']);
+      expect(grouped['Tag B'].map((t) => t.id)).toEqual([
+        'Beta(Tag B)',
+        'Third Task(Tag A, Tag B)',
+      ]);
+      expect(grouped['No tag'].map((t) => t.id)).toEqual(['Alpha(Tag A)', 'Zebra(-)']);
+    });
+
+    it('keeps every tag group in a project view', () => {
+      mockWorkContextService.activeWorkContextId = 'Tag A';
+      mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
+
+      const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
+
+      expect(Object.keys(grouped)).toEqual(['Tag A', 'Tag B', 'No tag']);
+    });
   });
 
   it('should group by scheduledDate using dueDay', () => {
@@ -664,22 +1016,123 @@ describe('TaskViewCustomizerService', () => {
       ]);
     });
 
+    const orderGroupKeys = (
+      grouped: Record<string, TaskWithSubTasks[]>,
+      type: GroupOption['type'],
+    ): string[] =>
+      (
+        service as unknown as {
+          _orderGroupKeys: (
+            g: Record<string, TaskWithSubTasks[]>,
+            t: GroupOption['type'],
+          ) => string[];
+        }
+      )._orderGroupKeys(grouped, type);
+
     it('should order tag group headers by sidebar order with untagged last', () => {
       service.selectedGroup.set({ type: GROUP_OPTION_TYPE.tag } as GroupOption);
       const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.tag);
 
-      expect(service.getOrderedGroupKeys(grouped)).toEqual(['Tag B', 'Tag A', 'No tag']);
+      expect(orderGroupKeys(grouped, GROUP_OPTION_TYPE.tag)).toEqual([
+        'Tag B',
+        'Tag A',
+        'No tag',
+      ]);
     });
 
     it('should keep non-tag group headers in ascending order', () => {
       service.selectedGroup.set({ type: GROUP_OPTION_TYPE.project } as GroupOption);
       const grouped = service['applyGrouping'](mockTasks, GROUP_OPTION_TYPE.project);
 
-      expect(service.getOrderedGroupKeys(grouped)).toEqual([
+      expect(orderGroupKeys(grouped, GROUP_OPTION_TYPE.project)).toEqual([
         'No project',
         'Project A',
         'Project B',
       ]);
+    });
+  });
+
+  describe('precomputed groups', () => {
+    const nextFrame = (): Promise<void> =>
+      new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+    const collect = (): { emissions: CustomizedUndoneTasks[] } => {
+      const sink = { emissions: [] as CustomizedUndoneTasks[] };
+      TestBed.runInInjectionContext(() =>
+        service.customizeUndoneTasks(of(mockTasks)),
+      ).subscribe((result) => sink.emissions.push(result));
+      return sink;
+    };
+
+    const groupKeys = (result: CustomizedUndoneTasks | undefined): string[] =>
+      (result?.groups ?? []).map((group) => group.key);
+
+    it('emits tag groups in sidebar order with their retag targets', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+
+      const result = sink.emissions[sink.emissions.length - 1];
+      expect(result.groups).toEqual([
+        { key: 'Tag A', tasks: result.grouped!['Tag A'], tagId: 'Tag A' },
+        { key: 'Tag B', tasks: result.grouped!['Tag B'], tagId: 'Tag B' },
+        { key: 'No tag', tasks: result.grouped!['No tag'], tagId: NO_TAG_GROUP_ID },
+      ]);
+    });
+
+    // `null`, not `undefined`: `TaskMultiDragService.canDrop` only treats
+    // `undefined` as a droppable list, so `undefined` here would let multi-select
+    // drops into these groups strip the tasks' sections.
+    it('emits non-tag groups in ascending order with a null retag target', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.project, label: 'Project' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+
+      const result = sink.emissions[sink.emissions.length - 1];
+      expect(groupKeys(result)).toEqual(['No project', 'Project A', 'Project B']);
+      expect(result.groups!.every((group) => group.tagId === null)).toBeTrue();
+    });
+
+    // The group order used to be recomputed in the template on every change
+    // detection pass. Now that it is computed in the stream, a sidebar reorder
+    // must re-emit on its own — the tasks don't change.
+    it('re-emits reordered groups when the sidebar tag order changes', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+      expect(groupKeys(sink.emissions[sink.emissions.length - 1])).toEqual([
+        'Tag A',
+        'Tag B',
+        'No tag',
+      ]);
+
+      tagsInTreeOrder.set([mockTags[1], mockTags[0]]);
+      TestBed.tick();
+      await nextFrame();
+
+      expect(groupKeys(sink.emissions[sink.emissions.length - 1])).toEqual([
+        'Tag B',
+        'Tag A',
+        'No tag',
+      ]);
+    });
+
+    it('does not re-run for tag updates that keep order and titles', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+      const count = sink.emissions.length;
+
+      // e.g. a task reorder inside a tag only rewrites its taskIds
+      tagsInTreeOrder.set(mockTags.map((tag) => ({ ...tag, taskIds: ['x'] })));
+      TestBed.tick();
+      await nextFrame();
+
+      expect(sink.emissions.length).toBe(count);
     });
   });
 
@@ -702,14 +1155,14 @@ describe('TaskViewCustomizerService', () => {
       )._buildGroupTagIdByKey(grouped);
 
     it('maps each real tag-title group to its tagId', () => {
-      (service as unknown as { _allTags: Tag[] })._allTags = mockTags;
+      tagsInTreeOrder.set(mockTags);
       const res = build(groupedOf('Tag A', 'Tag B'));
       expect(res['Tag A']).toBe('Tag A');
       expect(res['Tag B']).toBe('Tag B');
     });
 
     it('maps the No-tag bucket to the clear-tags sentinel and Unknown-tag to null', () => {
-      (service as unknown as { _allTags: Tag[] })._allTags = mockTags;
+      tagsInTreeOrder.set(mockTags);
       const res = build(groupedOf('Tag A', 'No tag', 'Unknown tag'));
       expect(res['Tag A']).toBe('Tag A');
       expect(res['No tag']).toBe(NO_TAG_GROUP_ID);
@@ -717,11 +1170,11 @@ describe('TaskViewCustomizerService', () => {
     });
 
     it('maps a title shared by multiple tags to null (ambiguous, cannot retag)', () => {
-      (service as unknown as { _allTags: Tag[] })._allTags = [
+      tagsInTreeOrder.set([
         { id: 'id1', title: 'Dup' } as Tag,
         { id: 'id2', title: 'Dup' } as Tag,
         { id: 'id3', title: 'Unique' } as Tag,
-      ];
+      ]);
       const res = build(groupedOf('Dup', 'Unique'));
       expect(res['Dup']).toBeNull();
       expect(res['Unique']).toBe('id3');
@@ -729,9 +1182,7 @@ describe('TaskViewCustomizerService', () => {
 
     it('prefers a real tag titled "No tag" over the clear-tags sentinel', () => {
       // Guards against silently clearing tags when a user names a tag "No tag".
-      (service as unknown as { _allTags: Tag[] })._allTags = [
-        { id: 'real-no-tag', title: 'No tag' } as Tag,
-      ];
+      tagsInTreeOrder.set([{ id: 'real-no-tag', title: 'No tag' } as Tag]);
       const res = build(groupedOf('No tag'));
       expect(res['No tag']).toBe('real-no-tag');
     });
@@ -773,7 +1224,8 @@ describe('TaskViewCustomizerService', () => {
       },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       deadlineTasks,
       FILTER_OPTION_TYPE.deadline,
       FILTER_SCHEDULE.today,
@@ -802,7 +1254,8 @@ describe('TaskViewCustomizerService', () => {
       },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       deadlineTasks,
       FILTER_OPTION_TYPE.deadline,
       FILTER_SCHEDULE.today,
@@ -844,7 +1297,8 @@ describe('TaskViewCustomizerService', () => {
       },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       deadlineTasks,
       FILTER_OPTION_TYPE.deadline,
       FILTER_COMMON.NOT_SPECIFIED,
@@ -887,7 +1341,8 @@ describe('TaskViewCustomizerService', () => {
       },
     ];
 
-    const filtered = service['applyFilter'](
+    const filtered = applyFilter(
+      service,
       deadlineTasks,
       FILTER_OPTION_TYPE.deadline,
       FILTER_SCHEDULE.tomorrow,
@@ -1245,7 +1700,8 @@ describe('TaskViewCustomizerService', () => {
     const savedGroup: GroupOption = { type: GROUP_OPTION_TYPE.tag, label: 'Tag' };
     const savedFilter: FilterOption = {
       type: FILTER_OPTION_TYPE.tag,
-      preset: 'Tag A',
+      preset: null,
+      tagIds: ['Tag A'],
       label: 'Tag',
     };
     const restoredSavedFilter: FilterOption = {
@@ -1282,7 +1738,10 @@ describe('TaskViewCustomizerService', () => {
           { provide: ProjectService, useValue: { update: projectUpdateSpy } },
           {
             provide: TagService,
-            useValue: { updateTag: tagUpdateSpy, tagsInTreeOrder: signal(mockTags) },
+            useValue: {
+              updateTag: tagUpdateSpy,
+              tagsInTreeOrder: (tagsInTreeOrder = signal(mockTags)),
+            },
           },
           {
             provide: MenuTreeService,
@@ -1345,6 +1804,39 @@ describe('TaskViewCustomizerService', () => {
       expect(newService.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
       expect(newService.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
     });
+
+    for (const [legacy, numeric] of [
+      ['high', 3],
+      ['medium', 2],
+      ['low', 1],
+    ] as const) {
+      it(`restores the saved ${legacy} priority preset for both task encodings`, () => {
+        localStorage.setItem(
+          LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT,
+          JSON.stringify({
+            ['TAG:TODAY']: {
+              filter: { type: FILTER_OPTION_TYPE.priority, preset: legacy },
+            },
+          }),
+        );
+        const newService = buildService(
+          of({ activeId: 'TODAY', activeType: WorkContextType.TAG }),
+        );
+        const filter = newService.selectedFilter();
+        expect(filter.preset).toBe(String(numeric));
+        expect(filter.label).toBe(T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY);
+        const candidates: TaskWithSubTasks[] = [
+          { ...mockTasks[0], id: 'legacy', priority: legacy },
+          { ...mockTasks[1], id: 'numeric', priority: numeric },
+          { ...mockTasks[2], id: 'none', priority: null },
+        ];
+        expect(
+          applyFilter(newService, candidates, filter.type, filter.preset!).map(
+            (t) => t.id,
+          ),
+        ).toEqual(['legacy', 'numeric']);
+      });
+    }
 
     it('should persist per-context state when options change', (done) => {
       service.setFilter(savedFilter);
@@ -1466,7 +1958,10 @@ describe('TaskViewCustomizerService', () => {
           { provide: ProjectService, useValue: { update: projectUpdateSpy } },
           {
             provide: TagService,
-            useValue: { updateTag: tagUpdateSpy, tagsInTreeOrder: signal(mockTags) },
+            useValue: {
+              updateTag: tagUpdateSpy,
+              tagsInTreeOrder: (tagsInTreeOrder = signal(mockTags)),
+            },
           },
           {
             provide: MenuTreeService,
@@ -1485,7 +1980,6 @@ describe('TaskViewCustomizerService', () => {
       });
       testService = TestBed.inject(TaskViewCustomizerService);
       (testService as any)._allProjects = allProjects;
-      (testService as any)._allTags = mockTags;
     });
 
     it('should only group tasks from the current project when group by tag is selected', (done) => {

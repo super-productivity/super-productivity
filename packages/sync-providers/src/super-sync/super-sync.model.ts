@@ -33,7 +33,103 @@ export interface SuperSyncPrivateCfg {
   expiresAt?: number;
   /** Whether E2E encryption is enabled for operation payloads. */
   isEncryptionEnabled?: boolean;
+  /**
+   * Experimental per-device opt-in for live tracking presence over the
+   * SuperSync WebSocket (header chip, Android notification, remote stop).
+   * Stored here rather than in the synced global config so each device
+   * opts in independently — it is never uploaded or shared across devices.
+   */
+  isTrackingPresenceEnabled?: boolean;
+  /**
+   * Optional per-device name announced with tracking presence ("Tracking on
+   * Work laptop") so two desktops can be told apart. Same per-device store
+   * as the opt-in above: never uploaded, only relayed inside presence frames
+   * (E2E-encrypted when sync encryption is on). Empty = platform default.
+   */
+  deviceName?: string;
 }
+
+/**
+ * One device syncing a SuperSync account, as listed by `GET /api/sync/devices`.
+ *
+ * Carries no name or user agent by design — see `DeviceService.listDevices` on
+ * the server. Devices are told apart by the platform prefix of `clientId`
+ * (`E_`/`A_`/`I_`/`B_`) plus their activity timestamps.
+ */
+export interface SuperSyncDeviceInfo {
+  clientId: string;
+  /** Unix ms of the device's last sync activity (upload or download). */
+  lastSeenAt: number;
+}
+
+/**
+ * Named differently from shared-schema's `SuperSyncDevicesResponse` on
+ * purpose: this package cannot import shared-schema (validator-port
+ * boundary), and identical twin names across the two packages invite
+ * silently importing the wrong one.
+ */
+export interface SuperSyncDeviceListResponse {
+  devices: SuperSyncDeviceInfo[];
+}
+
+/**
+ * Validated result of `POST /api/replace-token`: a fresh JWT for the calling
+ * client. Issuing it bumps the account-wide `tokenVersion`, which signs out
+ * every other device (they get 401s on their next sync). Deliberately not
+ * named like shared-schema's response type — see `SuperSyncDeviceListResponse`.
+ */
+export interface SuperSyncReplaceTokenResult {
+  token: string;
+}
+
+/** One sealed capture leased to this device by `POST /api/capture/claim`. */
+export interface SuperSyncCaptureItemInfo {
+  itemId: string;
+  /** The task id to create; stable while this device holds the lease. */
+  taskId: string;
+  /** Sealed to the account's capture key; open with sync-core `openCapture`. */
+  ciphertext: string;
+  createdAt: number;
+}
+
+/**
+ * `no_key`: the server has no active key; `key_mismatch`: it holds another
+ * key than the one claimed with; `unsupported`: the server has no capture
+ * routes (client-side, from a 404). Any status this client does not know is
+ * passed through and treated as "nothing to import".
+ */
+export interface SuperSyncCaptureClaimResult {
+  status: string;
+  items?: SuperSyncCaptureItemInfo[];
+}
+
+/** A connected assistant, as listed in settings. */
+export interface SuperSyncCaptureGrantInfo {
+  id: string;
+  clientName: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+  expiresAt: number;
+  /** Captures from this assistant no device has imported yet. */
+  pendingCount: number;
+}
+
+export interface SuperSyncCaptureGrantList {
+  grants: SuperSyncCaptureGrantInfo[];
+  /** Pending captures no listed grant counts (Android shares); absent on older servers. */
+  otherPendingCount?: number;
+}
+
+/**
+ * @invariant `token` is shown to the user once and never stored or logged.
+ */
+export interface SuperSyncCaptureTokenResult {
+  token: string;
+  grant: SuperSyncCaptureGrantInfo;
+}
+
+/** `disabled`: the user switched capture off; only a new key re-enables it. */
+export type SuperSyncCaptureKeyResult = 'registered' | 'unchanged' | 'disabled';
 
 /**
  * Structural typing surface for callers that need WebSocket connection
@@ -66,3 +162,9 @@ export const isSuperSyncWebSocketAccess = (
     typeof (value as { getWebSocketParams?: unknown }).getWebSocketParams === 'function'
   );
 };
+
+/** Short-lived, single-use code displayed only in settings. Never persisted. */
+export interface SuperSyncCaptureConnectCodeResult {
+  code: string;
+  expiresAt: number;
+}

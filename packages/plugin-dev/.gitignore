@@ -4,7 +4,7 @@ node_modules/
 
 # Build output
 */dist/
-minimal-plugin.zip
+*/plugin.zip
 
 # Logs
 *.log

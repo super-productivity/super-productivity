@@ -9,6 +9,7 @@ import {
   afterNextRender,
   inject,
   input,
+  linkedSignal,
   OnDestroy,
   OnInit,
   signal,
@@ -23,12 +24,12 @@ import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.comp
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   animationFrameScheduler,
+  firstValueFrom,
   from,
   fromEvent,
-  interval,
   Observable,
   ReplaySubject,
   Subscription,
@@ -36,7 +37,7 @@ import {
   zip,
 } from 'rxjs';
 import { TaskWithSubTasks } from '../tasks/task.model';
-import { delay, filter, map, observeOn, startWith, switchMap } from 'rxjs/operators';
+import { delay, filter, map, observeOn, switchMap } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
@@ -50,6 +51,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
+import { groupTasksBySection } from '../section/section.util';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -60,7 +62,7 @@ import {
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
-import { MatButton, MatMiniFabButton } from '@angular/material/button';
+import { MatButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { TaskListComponent } from '../tasks/task-list/task-list.component';
 import { SplitComponent } from './split/split.component';
 import { BacklogComponent } from './backlog/backlog.component';
@@ -79,12 +81,19 @@ import { CalendarIntegrationService } from '../calendar-integration/calendar-int
 import { PlannerCalendarEventComponent } from '../planner/planner-calendar-event/planner-calendar-event.component';
 import { ScheduleCalendarMapEntry } from '../schedule/schedule.model';
 import { getLaterTodayCalendarEvents } from './get-later-today-calendar-events';
+import {
+  getEndOfTodayTime,
+  isLaterTodayEntryUpcoming,
+} from '../tasks/util/later-today-window';
+import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
+import { fastArrayCompare } from '../../util/fast-array-compare';
 import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { SnackService } from '../../core/snack/snack.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TODAY_TAG } from '../tag/tag.const';
+import { getEmptyStateHint } from './get-empty-state-hint';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { FinishDayBtnComponent } from './finish-day-btn/finish-day-btn.component';
 import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe';
@@ -101,6 +110,7 @@ import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PlainspaceClaimPoolComponent } from '../plainspace/claim-pool/claim-pool.component';
 import { PlainspaceSharedTask } from '../plainspace/plainspace-shared-task.model';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 // Stable reference used as the toSignal initial value below so the deselect
 // effect can tell "the customized list hasn't emitted yet" apart from a
@@ -127,6 +137,8 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     MatIcon,
     MatMiniFabButton,
     MatButton,
+    MatIconButton,
+    RouterLink,
     TaskListComponent,
     SplitComponent,
     BacklogComponent,
@@ -165,17 +177,17 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _dateService = inject(DateService);
   private _pluginBridge = inject(PluginBridgeService);
   private _calendarIntegrationService = inject(CalendarIntegrationService);
+  private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
 
   isProjectContext = toSignal(this.workContextService.isActiveWorkContextProject$, {
     initialValue: false,
   });
 
-  private _isTodayContext = toSignal(
-    this.workContextService.activeWorkContext$.pipe(
-      map((ctx) => ctx.id === TODAY_TAG.id),
-    ),
-    { initialValue: false },
+  private _activeWorkContext = toSignal(this.workContextService.activeWorkContext$);
+
+  private _isTodayContext = computed(
+    () => this._activeWorkContext()?.id === TODAY_TAG.id,
   );
 
   /**
@@ -207,9 +219,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   overdueTasks = toSignal(this._store.select(selectOverdueTasksWithSubTasks), {
     initialValue: [],
   });
-  laterTodayTasks = toSignal(this._store.select(selectLaterTodayTasksWithSubTasks), {
-    initialValue: [],
-  });
+  private _laterTodayTaskCandidates = toSignal(
+    this._store.select(selectLaterTodayTasksWithSubTasks),
+    { initialValue: [] as TaskWithSubTasks[] },
+  );
   // Calendar events are not in the store — sourced live (cached + polled,
   // shareReplay/refCount) from the calendar integration. Shown as read-only
   // outlines in the "Later Today" section, mirroring the planner.
@@ -227,21 +240,42 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this._store.select(selectStartOfNextDayDiffMs),
     { initialValue: 0 },
   );
-  // Re-evaluate the now/end-of-today window on a coarse tick so events drop out
-  // of "Later Today" once they start, without waiting for the next calendar
-  // poll (iCal polls up to every 2h). Mirrors ScheduleService.scheduleRefreshTick.
-  private _refreshTick = toSignal(interval(2 * 60 * 1000).pipe(startWith(0)), {
-    initialValue: 0,
-  });
-  laterTodayCalendarEvents = computed(() => {
-    this._refreshTick();
-    return getLaterTodayCalendarEvents(
-      this._calendarEventEntries(),
-      this._todayStr(),
-      this._startOfNextDayDiffMs(),
-      Date.now(),
-    );
-  });
+  // Re-evaluate the now/end-of-today window on a coarse tick so tasks and events
+  // drop out of "Later Today" once they start. Nothing is dispatched when a start
+  // time passes, so without this both lists would keep showing an appointment
+  // that is already running (and the main list would keep hiding it).
+  private _refreshTick = toSignal(this._globalTrackingIntervalService.minuteTick$);
+  // `equal: fastArrayCompare` keeps the array ref stable across ticks that
+  // change nothing, so OnPush children are not re-rendered every minute.
+  laterTodayCalendarEvents = computed(
+    () => {
+      this._refreshTick();
+      return getLaterTodayCalendarEvents(
+        this._calendarEventEntries(),
+        this._todayStr(),
+        this._startOfNextDayDiffMs(),
+        Date.now(),
+      );
+    },
+    { equal: fastArrayCompare },
+  );
+  // The selector's cutoff is only as fresh as the last task-state change, so
+  // re-apply it here against the current clock. It can only ever include too
+  // much, which makes this filter enough to keep the panel exact.
+  laterTodayTasks = computed(
+    () => {
+      this._refreshTick();
+      const endOfTodayTime = getEndOfTodayTime(
+        this._todayStr(),
+        this._startOfNextDayDiffMs(),
+      );
+      const now = Date.now();
+      return this._laterTodayTaskCandidates().filter((task) =>
+        isLaterTodayEntryUpcoming(task, now, endOfTodayTime),
+      );
+    },
+    { equal: fastArrayCompare },
+  );
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
     this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
@@ -252,6 +286,24 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isShowBacklog = input<boolean>(false);
 
   hasDoneTasks = computed(() => this.doneTasks().length > 0);
+
+  // Only when the list is truly empty: overdue, later-today or backlog tasks
+  // on screen would contradict a sentence telling the user to add tasks.
+  emptyStateHint = computed(() => {
+    const ctx = this._activeWorkContext();
+    const hasLaterToday =
+      this.isOnTodayList() &&
+      (this.laterTodayTasks().length > 0 || this.laterTodayCalendarEvents().length > 0);
+    if (
+      !ctx ||
+      this.isShowOverduePanel() ||
+      hasLaterToday ||
+      (this.backlogTasks()?.length ?? 0) > 0
+    ) {
+      return null;
+    }
+    return getEmptyStateHint(ctx);
+  });
 
   todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
     initialValue: 0,
@@ -266,6 +318,13 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   selectedTaskId = this.taskService.selectedTaskId;
   isOnTodayList = toSignal(this.workContextService.isTodayList$, { initialValue: false });
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
+  // Projected content is built even while its collapsible is closed, so the Done
+  // list is created on first expand only; it is kept afterwards so collapsing
+  // animates the rows out and re-expanding is free.
+  isDoneListBuilt = linkedSignal<boolean, boolean>({
+    source: this.isDoneHidden,
+    computation: (isHidden, previous) => !!previous?.value || !isHidden,
+  });
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
   isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
@@ -312,37 +371,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     { initialValue: [] as readonly Section[] },
   );
 
-  undoneTasksBySection = computed(() => {
-    const tasks = this.undoneTasks();
-    const sections = this.sections();
-
-    if (!sections.length) {
-      return { dict: {} as Record<string, TaskWithSubTasks[]>, noSection: tasks };
-    }
-
-    // section.taskIds is authoritative for in-section order — drag-drop
-    // reorders go through addTaskToSection's reducer. Walking sections
-    // first (rather than tasks first) lets us respect that order while
-    // staying defensive against stale ids and tasks that aren't yet in
-    // any section.
-    const taskById = new Map(tasks.map((t) => [t.id, t]));
-    const dict: Record<string, TaskWithSubTasks[]> = {};
-    const inSection = new Set<string>();
-    for (const s of sections) {
-      const list: TaskWithSubTasks[] = [];
-      for (const tId of s.taskIds ?? []) {
-        const t = taskById.get(tId);
-        if (t) {
-          list.push(t);
-          inSection.add(tId);
-        }
-      }
-      dict[s.id] = list;
-    }
-    const noSection = tasks.filter((t) => !inSection.has(t.id));
-
-    return { dict, noSection };
-  });
+  undoneTasksBySection = computed(() =>
+    groupTasksBySection(this.undoneTasks(), this.sections()),
+  );
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
@@ -375,6 +406,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
 
   private _subs: Subscription = new Subscription();
   private _pendingFocusItemTaskId: string | null = null;
+  /**
+   * Whether the pending reveal came from global search. Kept as a field rather
+   * than a parameter because the `splitTopEl` setter replays the reveal without
+   * going through the query params again. (#5476)
+   */
+  private _isPendingFocusItemFromSearch = false;
   private _pendingFocusItemTimeout?: number;
   private _splitTopElement?: HTMLElement;
   private _switchListAnimationTimeout?: number;
@@ -489,6 +526,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
             splitInputPos: this.splitInputPos,
           });
           this._pendingFocusItemTaskId = params.focusItem;
+          this._isPendingFocusItemFromSearch = params.isFromSearch === 'true';
           this._focusItemInWorkViewWhenReady(params.focusItem);
         } else {
           // Cancel the chain too, not just the marker: a still-running loop
@@ -499,6 +537,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
             this._pendingFocusItemTimeout = undefined;
           }
           this._pendingFocusItemTaskId = null;
+          this._isPendingFocusItemFromSearch = false;
         }
         // NOTE: otherwise this is not triggered right away
         this._cd.detectChanges();
@@ -536,6 +575,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   editSection(id: string, title: string): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         data: {
           placeholder: T.WW.ADD_SECTION_TITLE,
           txtValue: title,
@@ -555,7 +595,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   }
 
   async moveDoneToArchive(): Promise<void> {
-    const doneTasks = this.doneTasks();
+    // not this.doneTasks(): on Today that hides done tasks from earlier days,
+    // which should still be swept
+    const doneTasks = await firstValueFrom(this.workContextService.doneTasksToArchive$);
 
     if (!doneTasks || doneTasks.length === 0) {
       return;
@@ -675,6 +717,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       const centeredTop = relativeTop - containerCenterOffset + elementCenterOffset;
       container.scrollTop = Math.max(centeredTop, 0);
       el.focus({ preventScroll: true });
+      // Search only: every other `focusItem` caller (reminder snacks, tracked-task
+      // pill, issue creation, calendar banner) navigates without the user having
+      // asked where the task is. (#5476)
+      if (this._isPendingFocusItemFromSearch) {
+        this.layoutService.highlightTaskBriefly(el);
+      }
       recordSearchNavDebug('workView:focusSuccess', {
         taskId,
         selectedTaskId: this.selectedTaskId(),
@@ -695,6 +743,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         });
       }, 0);
       this._pendingFocusItemTaskId = null;
+      this._isPendingFocusItemFromSearch = false;
       return;
     }
 
@@ -703,6 +752,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       // setter replay the whole loop on every later context change, re-opening
       // containers the user has since collapsed by hand.
       this._pendingFocusItemTaskId = null;
+      this._isPendingFocusItemFromSearch = false;
       return;
     }
 

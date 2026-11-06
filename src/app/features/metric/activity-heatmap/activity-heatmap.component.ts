@@ -9,7 +9,7 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { WorklogService } from '../../worklog/worklog.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { combineLatestWith, map, tap } from 'rxjs/operators';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconButton } from '@angular/material/button';
@@ -18,7 +18,6 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { SnackService } from '../../../core/snack/snack.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { ShareService } from '../../../core/share/share.service';
 import {
   DayData,
@@ -56,6 +55,7 @@ export class ActivityHeatmapComponent {
   private readonly _snackService = inject(SnackService);
   private readonly _shareService = inject(ShareService);
   private readonly _dateAdapter = inject(DateAdapter);
+  private readonly _translateService = inject(TranslateService);
   private readonly _userSelectedYear = signal<number | null>(null);
   availableYears = signal<number[]>([]);
   selectedYear = computed(() => {
@@ -80,9 +80,15 @@ export class ActivityHeatmapComponent {
     this._userSelectedYear.set(year); // Only update user selection
   }
 
+  /** Emits whenever the date locale changes so locale-derived labels re-compute. */
+  private readonly _localeChange = toSignal(this._dateAdapter.localeChanges, {
+    initialValue: null,
+  });
+
   // Day labels adjusted for first day of week
   readonly dayLabels = computed(() => {
-    const allDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    this._localeChange();
+    const allDays = this._dateAdapter.getDayOfWeekNames('short');
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
     return [...allDays.slice(firstDay), ...allDays.slice(0, firstDay)];
   });
@@ -107,6 +113,7 @@ export class ActivityHeatmapComponent {
   // Compute heatmap data - reacts to both data changes AND firstDayOfWeek setting changes
   heatmapData = computed(() => {
     const rawData = this._rawHeatmapData();
+    this._localeChange();
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
 
     if (!rawData || !rawData.dayMap) {
@@ -214,6 +221,7 @@ export class ActivityHeatmapComponent {
   ): { weeks: WeekData[]; monthLabels: string[] } {
     const weeks: WeekData[] = [];
     const monthLabels: string[] = [];
+    const monthNames = this._dateAdapter.getMonthNames('short');
     let currentMonth = -1;
 
     // Find the first day (based on firstDayOfWeek setting) before or on the start date
@@ -243,38 +251,10 @@ export class ActivityHeatmapComponent {
           const month = currentDate.getMonth();
           if (month !== currentMonth && currentDate.getDate() <= 7 && weekCount > 0) {
             // Add month label at the start of the month
-            const monthNames = [
-              'Jan',
-              'Feb',
-              'Mar',
-              'Apr',
-              'May',
-              'Jun',
-              'Jul',
-              'Aug',
-              'Sep',
-              'Oct',
-              'Nov',
-              'Dec',
-            ];
             monthLabels.push(monthNames[month]);
             currentMonth = month;
           } else if (monthLabels.length === 0 && weekCount === 0) {
             // Add first month
-            const monthNames = [
-              'Jan',
-              'Feb',
-              'Mar',
-              'Apr',
-              'May',
-              'Jun',
-              'Jul',
-              'Aug',
-              'Sep',
-              'Oct',
-              'Nov',
-              'Dec',
-            ];
             monthLabels.push(monthNames[month]);
             currentMonth = month;
           }
@@ -295,20 +275,6 @@ export class ActivityHeatmapComponent {
     }
 
     return { weeks, monthLabels };
-  }
-
-  getDayClass(day: DayData | null): string {
-    if (!day) {
-      return 'day empty';
-    }
-    return `day level-${day.level}`;
-  }
-
-  getDayTitle(day: DayData | null): string {
-    if (!day) {
-      return '';
-    }
-    return `${day.dateStr}: ${day.taskCount} tasks, ${msToString(day.timeSpent)}`;
   }
 
   private _extractAvailableYearsFromWorklog(worklog: Worklog): number[] {
@@ -344,14 +310,11 @@ export class ActivityHeatmapComponent {
       const result = await this._shareService.shareCanvasImage({
         canvas,
         filename: 'activity-heatmap.png',
-        shareTitle: 'Activity Heatmap',
+        shareTitle: this._translateService.instant(T.F.METRIC.CMP.ACTIVITY_HEATMAP),
       });
 
       if (result.success) {
         if (result.target === 'download') {
-          const message = result.path
-            ? `Heatmap saved to ${result.path}`
-            : 'Heatmap saved to device storage';
           const canOpen = this._shareService.canOpenDownloadResult(result);
           const actionConfig = canOpen
             ? {
@@ -363,8 +326,10 @@ export class ActivityHeatmapComponent {
             : {};
           this._snackService.open({
             type: 'SUCCESS',
-            msg: message,
-            isSkipTranslate: true,
+            msg: result.path
+              ? T.F.METRIC.CMP.HEATMAP_SHARED_TO_PATH
+              : T.F.METRIC.CMP.HEATMAP_SHARED_TO_DEVICE,
+            translateParams: result.path ? { path: result.path } : {},
             ...actionConfig,
           });
         }
@@ -372,7 +337,7 @@ export class ActivityHeatmapComponent {
         Log.err('Share failed:', result.error);
         this._snackService.open({
           type: 'ERROR',
-          msg: 'Failed to share heatmap',
+          msg: T.F.METRIC.CMP.HEATMAP_SHARE_FAILED,
         });
       }
     } catch (error: any) {
@@ -381,7 +346,7 @@ export class ActivityHeatmapComponent {
         Log.err('Share failed:', error);
         this._snackService.open({
           type: 'ERROR',
-          msg: 'Failed to share heatmap',
+          msg: T.F.METRIC.CMP.HEATMAP_SHARE_FAILED,
         });
       }
     } finally {
@@ -478,7 +443,10 @@ export class ActivityHeatmapComponent {
     const normalizedTitle = contextTitle?.trim().length
       ? contextTitle.trim()
       : 'Super Productivity';
-    const shareLabel = `${normalizedTitle} – With the Super Productivity App`;
+    const shareLabel = this._translateService.instant(
+      T.F.METRIC.CMP.HEATMAP_SHARE_TAGLINE,
+      { title: normalizedTitle },
+    );
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.font = '14px system-ui, -apple-system, sans-serif';

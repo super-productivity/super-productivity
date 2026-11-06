@@ -1606,6 +1606,22 @@ describe('DialogViewTaskRemindersComponent single-task delete', () => {
     expect(matDialogRefSpy.close).toHaveBeenCalledTimes(1);
   });
 
+  // #8583: Enter in the delete confirm deletes the task.
+  it('focuses the confirm button of the delete dialog', () => {
+    const reminder = buildReminder('task-1');
+    mockConfirmResult(false);
+
+    const component = createComponent([reminder], [buildTask('task-1')]);
+    component.deleteTask(reminder);
+
+    expect(matDialogSpy.open).toHaveBeenCalledWith(
+      jasmine.anything(),
+      jasmine.objectContaining({
+        data: jasmine.objectContaining({ isFocusConfirm: true }),
+      }),
+    );
+  });
+
   it('does NOT remove the task when the confirm dialog is cancelled', () => {
     const reminder = buildReminder('task-1');
     mockConfirmResult(false);
