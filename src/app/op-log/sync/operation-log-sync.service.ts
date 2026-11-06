@@ -741,7 +741,7 @@ export class OperationLogSyncService {
           snapshotVectorClock: result.snapshotVectorClock,
         });
       }
-      if (hydrationPlan.shouldSkipHydration) {
+      if (await this.syncLocalStateService.confirmSnapshotSkip(hydrationPlan, result)) {
         OpLog.normal(
           `OperationLogSyncService: Local vector clock ${hydrationPlan.comparison} remote snapshot — ` +
             'skipping snapshot hydration (local already has all remote data).',
