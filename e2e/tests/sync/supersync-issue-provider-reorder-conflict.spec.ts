@@ -191,7 +191,10 @@ const pinSearch = async (page: Page): Promise<void> => {
   await tab.locator('mat-icon', { hasText: /^bookmark_add$/ }).click();
   await expect(tab.locator('mat-icon', { hasText: /^bookmark$/ })).toBeVisible();
 };
-type ProviderKey = 'GITLAB' | 'JIRA';
+// GITLAB: all GitLab-plugin providers. JIRA: a built-in Jira at index 0 beside
+// GitLab-plugin siblings. ALL_JIRA: built-in Jira only, so released clients that
+// predate the GitLab plugin can still render, edit and reorder every tab.
+type ProviderKey = 'GITLAB' | 'JIRA' | 'ALL_JIRA';
 const provider = (id: string, index: number, providerKey: ProviderKey): IssueProvider => {
   const common = {
     id,
@@ -206,12 +209,16 @@ const provider = (id: string, index: number, providerKey: ProviderKey): IssuePro
     defaultNote: `Synthetic note ${index}`,
   };
   // Keep the two siblings on GitLab to exercise mixed provider membership too.
-  return providerKey === 'JIRA' && index === 0
+  return (providerKey === 'JIRA' && index === 0) || providerKey === 'ALL_JIRA'
     ? {
         ...common,
         issueProviderKey: 'JIRA',
         _isBlockAccess: false,
-        host: 'https://jira.example.invalid/',
+        // Distinct hosts keep the tab initials (P0, P1, P2) tellable apart.
+        host:
+          providerKey === 'ALL_JIRA'
+            ? `https://p${index}.example.invalid/`
+            : 'https://jira.example.invalid/',
         userName: 'synthetic-user',
         password: 'synthetic-only-not-a-credential',
         usePAT: false,
@@ -263,7 +270,7 @@ const mockProviderRequests = async (page: Page): Promise<void> => {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(
-        new URL(route.request().url()).hostname === 'jira.example.invalid'
+        new URL(route.request().url()).hostname !== 'issues.example.invalid'
           ? { issues: [], total: 0, startAt: 0, maxResults: 50 }
           : [],
       ),
@@ -724,15 +731,16 @@ test.describe('@supersync released provider reorder compatibility', () => {
   });
   test.afterAll(async () => assets?.close());
 
-  for (const { oldReorders, oldResolvesFirst, providerKey } of [
-    { oldReorders: false, oldResolvesFirst: false, providerKey: 'GITLAB' as const },
-    { oldReorders: true, oldResolvesFirst: false, providerKey: 'GITLAB' as const },
-    { oldReorders: false, oldResolvesFirst: true, providerKey: 'GITLAB' as const },
-    { oldReorders: true, oldResolvesFirst: true, providerKey: 'GITLAB' as const },
-    { oldReorders: false, oldResolvesFirst: false, providerKey: 'JIRA' as const },
-    { oldReorders: true, oldResolvesFirst: false, providerKey: 'JIRA' as const },
+  // Released clients predate the GitLab plugin: they show a synced GitLab-plugin
+  // provider as "plugin not installed" (disabled, no editor), so this suite seeds
+  // built-in Jira providers only.
+  for (const { oldReorders, oldResolvesFirst } of [
+    { oldReorders: false, oldResolvesFirst: false },
+    { oldReorders: true, oldResolvesFirst: false },
+    { oldReorders: false, oldResolvesFirst: true },
+    { oldReorders: true, oldResolvesFirst: true },
   ]) {
-    test(`${oldResolvesFirst ? 'old resolves first and retains pending work' : 'old uploads first, new resolves, old receives'} / old ${oldReorders ? 'order' : 'update'} / ${providerKey}`, async ({
+    test(`${oldResolvesFirst ? 'old resolves first and retains pending work' : 'old uploads first, new resolves, old receives'} / old ${oldReorders ? 'order' : 'update'}`, async ({
       browser,
       baseURL,
       testRunId,
@@ -754,7 +762,7 @@ test.describe('@supersync released provider reorder compatibility', () => {
           (id) => id + '-' + testRunId,
         );
         const reordered = [ids[1], ids[0], ids[2]];
-        await seedProviders(current.page, ids, providerKey);
+        await seedProviders(current.page, ids, 'ALL_JIRA');
         await current.workView.addTask('baseline witness');
         await sync(current);
         const released = await createSimulatedClient(
@@ -951,11 +959,7 @@ test.describe('@supersync released provider reorder compatibility', () => {
             await expect.poll(() => releasedSnapshot(client.page)).toEqual(final);
             await openPanel(client.page);
             const tabs = client.page.locator('issue-panel .tab-header-item.cdk-drag');
-            await expect(tabs.locator('.initials')).toHaveText([
-              'P1',
-              providerKey === 'JIRA' ? 'JI' : 'P0',
-              'P2',
-            ]);
+            await expect(tabs.locator('.initials')).toHaveText(['P1', 'P0', 'P2']);
             await expect(tabs.nth(0)).not.toHaveClass(/disabled/);
             await expect(tabs.nth(1)).toHaveClass(/disabled/);
             await expect(tabs.nth(2)).toHaveClass(/disabled/);
