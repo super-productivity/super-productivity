@@ -3161,6 +3161,8 @@
     "FILE_DOWNLOADED": "{{fileName}} downloaded",
     "FILE_DOWNLOADED_BTN": "Open folder",
     "NAVIGATE_TO_TASK_ERR": "Could not focus the task. Did you delete it?",
+    "NAVIGATE_TO_TASK_FILTERED": "This task is hidden by the current filter",
+    "NAVIGATE_TO_TASK_FILTERED_BTN": "Clear filter",
     "NO_TASKS_TO_COPY": "No tasks to copy",
     "NO_TASKS_TO_UNPLAN": "No tasks to unplan",
     "OPEN_SETTINGS_ERROR": "Could not open settings",
