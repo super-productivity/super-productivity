@@ -310,7 +310,6 @@ interface Scenario {
   remoteNewer: boolean;
   interrupted?: boolean;
   compact?: boolean;
-  providerKey?: ProviderKey;
   pinnedSearch?: boolean;
 }
 const scenarios: Scenario[] = [
@@ -321,15 +320,11 @@ const scenarios: Scenario[] = [
   { pendingOrder: true, remoteNewer: true, interrupted: true },
   { pendingOrder: false, remoteNewer: true, interrupted: true },
   { pendingOrder: true, remoteNewer: true, interrupted: true, compact: true },
-  { pendingOrder: true, remoteNewer: true, providerKey: 'JIRA' },
-  { pendingOrder: false, remoteNewer: true, providerKey: 'JIRA' },
-  { pendingOrder: true, remoteNewer: false, providerKey: 'JIRA' },
-  { pendingOrder: false, remoteNewer: false, providerKey: 'JIRA' },
   { pendingOrder: true, remoteNewer: true, pinnedSearch: true },
   { pendingOrder: false, remoteNewer: false, pinnedSearch: true },
 ];
 for (const scenario of scenarios) {
-  test(`@supersync provider ${scenario.pendingOrder ? 'local-order' : 'local-edit'} / ${scenario.remoteNewer ? 'remote-newer' : 'local-newer'}${scenario.providerKey ? ' / ' + scenario.providerKey : ''}${scenario.pinnedSearch ? ' / pinned search' : ''}${scenario.compact ? ' / compacted missing proof' : scenario.interrupted ? ' / interrupted upload retry' : ''}`, async ({
+  test(`@supersync provider ${scenario.pendingOrder ? 'local-order' : 'local-edit'} / ${scenario.remoteNewer ? 'remote-newer' : 'local-newer'}${scenario.pinnedSearch ? ' / pinned search' : ''}${scenario.compact ? ' / compacted missing proof' : scenario.interrupted ? ' / interrupted upload retry' : ''}`, async ({
     browser,
     baseURL,
     testRunId,
@@ -363,7 +358,9 @@ for (const scenario of scenarios) {
       const ids = ['provider-a', 'provider-b', 'provider-witness'].map(
         (id) => `${id}-${testRunId}`,
       );
-      await seedProviders(a.page, ids, scenario.providerKey);
+      // The edited/pinned provider (index 0) must be built-in: GitLab is a bundled
+      // plugin now, and the E2E build (plugin-dev build-all.js) does not ship it.
+      await seedProviders(a.page, ids, 'JIRA');
       await a.workView.addTask('baseline witness');
       if (scenario.compact) await a.workView.addTask('Compaction activity');
       await sync(a);
