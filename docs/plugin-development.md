@@ -1161,6 +1161,11 @@ Happy plugin development! 🚀
 
 ## Bonus: Vibe Coding your Plugins
 
+The quickest way is in the app: **Help** → **Build your own plugin** writes the
+prompt below for you, installs the AI's answer and hands load errors back to the
+AI. Its prompt is based on the rules below; when you change a rule, update both
+(`src/app/plugins/ui/dialog-build-plugin/build-plugin.util.ts`).
+
 ### Tips
 
 - Don't test on your real world data! Use a test instance! (you can use https://test-app.super-productivity.com/ if you don't know how get one)
