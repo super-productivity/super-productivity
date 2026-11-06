@@ -15,21 +15,21 @@ import {
 } from '../../utils/sync-helpers';
 
 /**
- * Reproduction (no fix): after "Keep remote" on a rolled-back sync file, the
- * phone's next edit of a task the desktop already knows must reach the desktop.
+ * Regression test for #11564: after "Keep remote" on a rolled-back sync file,
+ * the phone's next edit of a task the desktop already knows must reach the
+ * desktop.
  *
- * Keep remote rebuilds the phone's vector clock from the remote file only
- * (`forceDownloadRemoteState`); file-snapshot hydration then bumps the phone's
- * own counter once (`hydrateFromRemoteSync`). If the rollback dropped more of
- * the phone's ops than that one bump covers, the phone's next op reuses a
- * counter the desktop already saw on that task, and the desktop skips it as a
- * duplicate/superseded op: permanent divergence, no dialog.
+ * Keep remote rebuilds the phone's vector clock from the remote file
+ * (`forceDownloadRemoteState`). Taking the remote's lower own counter made the
+ * phone's next op reuse a counter the desktop already saw on that task, so the
+ * desktop skipped it as a duplicate/superseded op: permanent divergence, no
+ * dialog. The rebuild now keeps the own counter at max(local, remote).
  *
- * `lostOps` is how many uploaded phone renames the rollback drops. With one,
- * the bump covers the gap; with two, it should not.
+ * `lostOps` is how many uploaded phone renames the rollback drops. One lost op
+ * was masked by the single own-counter bump of file-snapshot hydration
+ * (`hydrateFromRemoteSync`); two exposed the bug.
  *
- * Needs the own-uploads dialog for a plain rollback (PR #11551); on master the
- * phone skips silently (#10916) and the test fails at the dialog step.
+ * Relies on the own-uploads dialog for a plain rollback (#11551).
  *
  * Run: npm run quiet -- e2e:webdav:file e2e/tests/sync/webdav-keep-remote-own-clock-regression.spec.ts --retries=0
  */
