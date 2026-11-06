@@ -27,27 +27,57 @@ export type BuildPluginParseResult =
   | { files: BuildPluginFiles }
   | { errorKey: BuildPluginParseErrorKey };
 
+export const PLUGIN_GUIDE_URL =
+  'https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md';
+
 /** Raw link to the plugin API types of this exact release, so the AI builds
  * against the API the user has, not master. */
 export const getPluginApiTypesUrl = (appVersion: string): string =>
   `https://raw.githubusercontent.com/super-productivity/super-productivity/v${appVersion}/packages/plugin-api/src/types.ts`;
 
+/** Where the build copies packages/plugin-api/src/types.ts (angular.json assets). */
+export const PLUGIN_API_TYPES_ASSET = 'assets/plugin-api/types.ts';
+
+/**
+ * Cheap AI models without web access ask for types.ts instead of writing the
+ * plugin, so the file goes into the prompt; the link only stands in when the
+ * bundled copy failed to load.
+ */
+const apiSection = (appVersion: string, apiTypes: string | null): string =>
+  apiTypes
+    ? `Its API (the global PluginAPI object) is this types.ts:
+
+\`\`\`ts
+${apiTypes.trimEnd()}
+\`\`\``
+    : `Its API (the global PluginAPI object): ${getPluginApiTypesUrl(appVersion)}
+If you can't open that link, ask me to paste the file instead of guessing.`;
+
 /**
  * The prompt stays English on purpose: it is read by the AI, not shown in the
  * UI, and AI assistants follow English rules most reliably.
  */
-export const buildPluginPrompt = (idea: string, appVersion: string): string =>
-  `Write me a plugin for Super Productivity (app version ${appVersion}). It should:
+export const buildPluginPrompt = (
+  idea: string,
+  appVersion: string,
+  apiTypes: string | null,
+): string =>
+  `Write me a plugin for Super Productivity (app version ${appVersion}).
+
+${apiSection(appVersion, apiTypes)}
+
+Guide: ${PLUGIN_GUIDE_URL}
+
+The plugin should:
 
 ${idea.trim()}
 
-The complete API (the global PluginAPI object): ${getPluginApiTypesUrl(appVersion)}
-
 Rules:
 
-- Only use PluginAPI methods and hooks listed in types.ts. If something is not possible with them, say so instead of inventing a method.
+- Only use PluginAPI members and hooks defined in types.ts. If something is not possible with them, say so instead of inventing a method.
 - manifest.json needs id (lowercase letters, numbers and dashes), name, version, "manifestVersion": 1,
-  "minSupVersion": "${appVersion}", "hooks": [] and "permissions": [].
+  "minSupVersion": "${appVersion}", "hooks": [] (registerHook works without listing hooks there)
+  and "permissions": [].
 - plugin.js is not a module: no import/export, no top-level await. Put async startup code in PluginAPI.onReady(async () => { ... }).
 - Header buttons, menu entries, shortcuts and side panel buttons can only be registered from plugin.js, not from index.html.
 - A UI goes in index.html with "iFrame": true in the manifest. Inline all CSS and JavaScript; other files are not served to it.

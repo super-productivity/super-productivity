@@ -8,6 +8,9 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { HttpClient } from '@angular/common/http';
+import { catchError, of } from 'rxjs';
 import {
   MatDialog,
   MatDialogActions,
@@ -37,6 +40,8 @@ import {
   buildPluginPrompt,
   createPluginZipFile,
   parsePluginAnswer,
+  PLUGIN_API_TYPES_ASSET,
+  PLUGIN_GUIDE_URL,
 } from './build-plugin.util';
 
 const PARSE_ERROR_MSG: Record<BuildPluginParseErrorKey, string> = {
@@ -54,9 +59,6 @@ export interface BuildPluginInstallResult {
   status: 'running' | 'error' | 'off';
   error?: string;
 }
-
-export const PLUGIN_GUIDE_URL =
-  'https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md';
 
 /**
  * Guides a non-developer from an idea to an installed plugin: writes the AI
@@ -88,6 +90,7 @@ export class DialogBuildPluginComponent {
   private readonly _snackService = inject(SnackService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _translateService = inject(TranslateService);
+  private readonly _http = inject(HttpClient);
 
   readonly T: typeof T = T;
   readonly guideUrl = PLUGIN_GUIDE_URL;
@@ -105,6 +108,18 @@ export class DialogBuildPluginComponent {
   private readonly _focusTarget = viewChild<ElementRef<HTMLElement>>('focusTarget');
   // a step change removes the clicked button; move focus to what the new step is about
   private readonly _focusStep = effect(() => this._focusTarget()?.nativeElement.focus());
+
+  // loaded on open, so the copy stays inside the click (Safari drops clipboard
+  // writes after an await); null until loaded or on failure: the prompt links it
+  private readonly _apiTypes = toSignal(
+    this._http.get(PLUGIN_API_TYPES_ASSET, { responseType: 'text' }).pipe(
+      catchError((error: unknown) => {
+        PluginLog.err('Failed to load the plugin API types for the AI prompt', error);
+        return of(null);
+      }),
+    ),
+    { initialValue: null },
+  );
 
   readonly parsed = computed(() =>
     this.answer().trim() ? parsePluginAnswer(this.answer(), environment.version) : null,
@@ -134,7 +149,8 @@ export class DialogBuildPluginComponent {
   });
 
   async copyPrompt(): Promise<void> {
-    if (await this._copy(buildPluginPrompt(this.idea(), environment.version), 'Prompt')) {
+    const prompt = buildPluginPrompt(this.idea(), environment.version, this._apiTypes());
+    if (await this._copy(prompt, 'Prompt')) {
       this.step.set(2);
     }
   }

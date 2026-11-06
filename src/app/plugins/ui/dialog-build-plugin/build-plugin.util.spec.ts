@@ -13,14 +13,29 @@ const answerOf = (...blocks: [string, string][]): string =>
   blocks.map(([lang, body]) => `${FENCE}${lang}\n${body}\n${FENCE}`).join('\n\nAnd:\n\n');
 
 describe('buildPluginPrompt', () => {
-  it('includes the idea and pins the API link and minSupVersion to the app version', () => {
-    const prompt = buildPluginPrompt('  Beep on task complete \n', '19.3.1');
+  it('embeds the API types, so an AI without web access needs no second round', () => {
+    const prompt = buildPluginPrompt(
+      '  Beep on task complete \n',
+      '19.3.1',
+      'export interface PluginAPI {}\n',
+    );
 
-    expect(prompt).toContain('It should:\n\nBeep on task complete\n');
+    expect(prompt).toContain('```ts\nexport interface PluginAPI {}\n```');
+    expect(prompt).toContain('should:\n\nBeep on task complete\n');
+    expect(prompt).toContain('"minSupVersion": "19.3.1"');
+    expect(prompt).not.toContain('raw.githubusercontent.com');
+    // cheap models asked whether an empty manifest "hooks" list blocks registerHook
+    expect(prompt).toContain('registerHook works without listing hooks there');
+  });
+
+  it('links the API types of the app version when they could not be loaded', () => {
+    const prompt = buildPluginPrompt('Beep', '19.3.1', null);
+
     expect(prompt).toContain(
       'https://raw.githubusercontent.com/super-productivity/super-productivity/v19.3.1/packages/plugin-api/src/types.ts',
     );
-    expect(prompt).toContain('"minSupVersion": "19.3.1"');
+    expect(prompt).toContain('ask me to paste the file instead of guessing');
+    expect(prompt).not.toContain('```ts');
   });
 });
 

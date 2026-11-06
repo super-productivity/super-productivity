@@ -1,8 +1,9 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { HttpClient } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { unzipSync, strFromU8 } from 'fflate';
 import { ShareService } from '../../../core/share/share.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -27,12 +28,14 @@ describe('DialogBuildPluginComponent', () => {
   let shareService: jasmine.SpyObj<ShareService>;
   let matDialog: jasmine.SpyObj<MatDialog>;
   const pluginStates = signal(new Map<string, PluginState>());
+  let apiTypesResponse: () => Observable<string>;
   const confirmWith = (isOk: boolean): void => {
     matDialog.open.and.returnValue({ afterClosed: () => of(isOk) } as never);
   };
 
   beforeEach(() => {
     pluginStates.set(new Map());
+    apiTypesResponse = () => of('export interface PluginAPI {}');
     pluginService = jasmine.createSpyObj<PluginService>(
       'PluginService',
       ['loadPluginFromZip', 'enableAndActivatePlugin'],
@@ -50,6 +53,10 @@ describe('DialogBuildPluginComponent', () => {
         { provide: PluginService, useValue: pluginService },
         { provide: ShareService, useValue: shareService },
         { provide: MatDialog, useValue: matDialog },
+        {
+          provide: HttpClient,
+          useValue: { get: () => apiTypesResponse() },
+        },
         {
           provide: SnackService,
           useValue: jasmine.createSpyObj('SnackService', ['open']),
@@ -211,10 +218,23 @@ describe('DialogBuildPluginComponent', () => {
 
     shareService.copyToClipboard.and.resolveTo({ success: true });
     await component.copyPrompt();
-    expect(shareService.copyToClipboard.calls.mostRecent().args[0]).toContain(
-      'Beep when a task is done',
-    );
+    const prompt = shareService.copyToClipboard.calls.mostRecent().args[0];
+    expect(prompt).toContain('Beep when a task is done');
+    expect(prompt).toContain('export interface PluginAPI {}');
     expect(component.step()).toBe(2);
+  });
+
+  it('links the API types in the prompt when the bundled copy fails to load', async () => {
+    apiTypesResponse = () => throwError(() => new Error('404'));
+    const offline = TestBed.createComponent(DialogBuildPluginComponent).componentInstance;
+    offline.idea.set('Beep when a task is done');
+
+    await offline.copyPrompt();
+
+    const prompt = shareService.copyToClipboard.calls.mostRecent().args[0];
+    expect(prompt).toContain('raw.githubusercontent.com');
+    expect(prompt).not.toContain('export interface PluginAPI');
+    expect(offline.step()).toBe(2);
   });
 
   it('does not announce replacing a built-in plugin, whose id an upload cannot take', () => {
