@@ -7,6 +7,7 @@ import {
   WEBDAV_CONFIG_TEMPLATE,
   WEBDAV_SYNC_FILE,
   closeContextsSafely,
+  confirmSyncConflictOverwriteIfShown,
   createSyncFolder,
   generateSyncFolderName,
   setupSyncClient,
@@ -26,7 +27,10 @@ import {
  * phone's next upload carries a later change. "Not deleted, but not syncing."
  *
  * Restoring the pre-upload file over WebDAV stands in for a folder-sync tool or
- * server that rolls the file back.
+ * server that rolls the file back. Expected: the phone shows the
+ * own-uploads-missing dialog instead of skipping. Keep local restores the task
+ * on the desktop; Keep remote drops it on the phone and does not ask again.
+ * Both conflict directions are covered (AGENTS.md rule 12).
  *
  * Run: npm run quiet -- e2e:webdav:file e2e/tests/sync/webdav-reverted-remote-own-uploads-10916.spec.ts --retries=0
  */
@@ -61,77 +65,99 @@ const writeRaw = async (
 };
 
 test.describe('@webdav Remote reverted below own uploads (#10916)', () => {
-  test('phone tasks lost by a remote rollback still reach the desktop', async ({
-    browser,
-    baseURL,
-    request,
-  }) => {
-    // Restoring one file only stands in for a rollback in the single-file format.
-    test.skip(WEBDAV_SYNC_FILE !== 'sync-data.json', 'single-file format only');
-    test.slow();
-    const folder = generateSyncFolderName('e2e-reverted-remote-10916');
-    await createSyncFolder(request, folder);
-    const config = { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` };
-    const url = baseURL || 'http://localhost:4242';
-    const lostTask = `Phone-lost-${Date.now()}`;
-    const laterTask = `Phone-later-${Date.now()}`;
+  for (const choice of ['local', 'remote'] as const) {
+    test(`phone asks after a remote rollback of its synced task; Keep ${choice} converges both devices`, async ({
+      browser,
+      baseURL,
+      request,
+    }) => {
+      // Restoring one file only stands in for a rollback in the single-file format.
+      test.skip(WEBDAV_SYNC_FILE !== 'sync-data.json', 'single-file format only');
+      test.slow();
+      const folder = generateSyncFolderName('e2e-reverted-remote-10916');
+      await createSyncFolder(request, folder);
+      const config = { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` };
+      const url = baseURL || 'http://localhost:4242';
+      const lostTask = `Phone-lost-${Date.now()}`;
+      const laterTask = `Phone-later-${Date.now()}`;
 
-    const phone = await setupSyncClient(browser, url);
-    let desktop: Awaited<ReturnType<typeof setupSyncClient>> | undefined;
+      const phone = await setupSyncClient(browser, url);
+      let desktop: Awaited<ReturnType<typeof setupSyncClient>> | undefined;
 
-    try {
-      const syncPhone = new SyncPage(phone.page);
-      const workPhone = new WorkViewPage(phone.page);
-      await workPhone.waitForTaskList();
-      await syncPhone.setupWebdavSync(config);
-      expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('success');
+      try {
+        const syncPhone = new SyncPage(phone.page);
+        const workPhone = new WorkViewPage(phone.page);
+        await workPhone.waitForTaskList();
+        await syncPhone.setupWebdavSync(config);
+        expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('success');
 
-      desktop = await setupSyncClient(browser, url);
-      const syncDesktop = new SyncPage(desktop.page);
-      const workDesktop = new WorkViewPage(desktop.page);
-      await workDesktop.waitForTaskList();
-      await syncDesktop.setupWebdavSync(config);
-      expect(await waitForSyncComplete(desktop.page, syncDesktop)).toBe('success');
+        desktop = await setupSyncClient(browser, url);
+        const syncDesktop = new SyncPage(desktop.page);
+        const workDesktop = new WorkViewPage(desktop.page);
+        await workDesktop.waitForTaskList();
+        await syncDesktop.setupWebdavSync(config);
+        expect(await waitForSyncComplete(desktop.page, syncDesktop)).toBe('success');
 
-      // The file both devices agree on before the phone's upload.
-      const staleFile = await readRaw(request, folder);
+        // The file both devices agree on before the phone's upload.
+        const staleFile = await readRaw(request, folder);
 
-      // --- Phone adds a task and uploads it ---
-      await workPhone.addTask(lostTask);
-      await waitForStatePersistence(phone.page);
-      await syncPhone.triggerSync();
-      expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('success');
-      expect(await readRaw(request, folder)).toContain(lostTask);
+        // --- Phone adds a task and uploads it ---
+        await workPhone.addTask(lostTask);
+        await waitForStatePersistence(phone.page);
+        await syncPhone.triggerSync();
+        expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('success');
+        expect(await readRaw(request, folder)).toContain(lostTask);
 
-      // --- The file rolls back; nobody writes on top ---
-      await writeRaw(request, folder, staleFile);
+        // --- The file rolls back; nobody writes on top ---
+        await writeRaw(request, folder, staleFile);
 
-      // --- Phone syncs: nothing is deleted locally ---
-      await syncPhone.triggerSync();
-      expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('success');
-      await phone.page.goto(INBOX_URL);
-      await expect(
-        phone.page.locator('task', { hasText: lostTask }).first(),
-      ).toBeVisible();
+        // --- Phone syncs: it must ask instead of silently skipping ---
+        await syncPhone.triggerSync();
+        expect(
+          await waitForSyncComplete(phone.page, syncPhone, 30000, {
+            expectConflict: true,
+          }),
+        ).toBe('conflict');
+        const conflictDialog = phone.page.locator('dialog-sync-conflict');
+        await expect(conflictDialog).toContainText(
+          'Changes this device already synced are missing',
+        );
+        syncPhone.prepareForNextSyncCycle(choice === 'local' ? 'write' : 'read');
+        await conflictDialog
+          .locator('button', {
+            hasText: choice === 'local' ? /Keep local/i : /Keep remote/i,
+          })
+          .click();
+        await confirmSyncConflictOverwriteIfShown(phone.page, conflictDialog);
+        expect(
+          await waitForSyncComplete(phone.page, syncPhone, 30000, {
+            allowResponseOnlyCompletion: true,
+          }),
+        ).toBe('success');
+        await phone.page.goto(INBOX_URL);
+        await expect(phone.page.locator('task', { hasText: lostTask })).toHaveCount(
+          choice === 'local' ? 1 : 0,
+        );
 
-      // --- Phone makes a later change and uploads it ---
-      await workPhone.addTask(laterTask);
-      await waitForStatePersistence(phone.page);
-      await syncPhone.triggerSync();
-      expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('success');
+        // --- Phone makes a later change; the next sync must not ask again ---
+        await workPhone.addTask(laterTask);
+        await waitForStatePersistence(phone.page);
+        await syncPhone.triggerSync();
+        expect(await waitForSyncComplete(phone.page, syncPhone)).toBe('success');
 
-      // --- Desktop syncs: it must end up with both phone tasks ---
-      await syncDesktop.triggerSync();
-      expect(await waitForSyncComplete(desktop.page, syncDesktop)).toBe('success');
-      await desktop.page.goto(INBOX_URL);
-      await expect(
-        desktop.page.locator('task', { hasText: laterTask }).first(),
-      ).toBeVisible();
-      await expect(
-        desktop.page.locator('task', { hasText: lostTask }).first(),
-      ).toBeVisible();
-    } finally {
-      await closeContextsSafely(phone.context, desktop?.context);
-    }
-  });
+        // --- Desktop syncs without a dialog and matches the phone ---
+        await syncDesktop.triggerSync();
+        expect(await waitForSyncComplete(desktop.page, syncDesktop)).toBe('success');
+        await desktop.page.goto(INBOX_URL);
+        await expect(
+          desktop.page.locator('task', { hasText: laterTask }).first(),
+        ).toBeVisible();
+        await expect(desktop.page.locator('task', { hasText: lostTask })).toHaveCount(
+          choice === 'local' ? 1 : 0,
+        );
+      } finally {
+        await closeContextsSafely(phone.context, desktop?.context);
+      }
+    });
+  }
 });
