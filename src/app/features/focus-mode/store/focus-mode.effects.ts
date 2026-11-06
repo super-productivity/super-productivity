@@ -31,7 +31,11 @@ import { startLoopingAlarm, stopLoopingAlarm } from '../../../util/looping-alarm
 import { FocusModeLocalSettingsService } from '../../config/focus-mode-local-settings.service';
 import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { setCurrentTask, unsetCurrentTask } from '../../tasks/store/task.actions';
-import { selectLastCurrentTask, selectTaskById } from '../../tasks/store/task.selectors';
+import {
+  selectLastCurrentTask,
+  selectTaskById,
+  selectTaskEntities,
+} from '../../tasks/store/task.selectors';
 import { openIdleDialog } from '../../idle/store/idle.actions';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import {
@@ -233,8 +237,14 @@ export class FocusModeEffects {
         }
         return this.store.select(selectTaskById, { id: pausedTaskId }).pipe(
           take(1),
-          filter((task) => !!task),
-          map(() => setCurrentTask({ id: pausedTaskId })),
+          switchMap((task) => {
+            if (!task) return EMPTY;
+            if (!task.isDone) return of(setCurrentTask({ id: pausedTaskId }));
+            // Resume already restarted the timer; completed work needs task selection.
+            return timer.purpose === 'work'
+              ? of(actions.selectFocusTask(), actions.showFocusOverlay())
+              : EMPTY;
+          }),
         );
       }),
     ),
@@ -270,7 +280,7 @@ export class FocusModeEffects {
               ? of(setCurrentTask({ id: taskIdToResume }))
               : action.taskId
                 ? of(actions.selectFocusTask())
-                : of(actions.showFocusOverlay()),
+                : of(actions.selectFocusTask(), actions.showFocusOverlay()),
           ),
         );
       }),
@@ -632,8 +642,16 @@ export class FocusModeEffects {
     this.actions$.pipe(
       ofType(actions.completeBreak),
       filter((action) => !!action.pausedTaskId),
-      withLatestFrom(this.taskService.currentTaskId$),
-      filter(([_, currentTaskId]) => !currentTaskId),
+      withLatestFrom(
+        this.taskService.currentTaskId$,
+        this.store.select(selectTaskEntities),
+      ),
+      filter(
+        ([action, currentTaskId, entities]) =>
+          !currentTaskId &&
+          !!entities[action.pausedTaskId!] &&
+          !entities[action.pausedTaskId!]!.isDone,
+      ),
       map(([action]) => setCurrentTask({ id: action.pausedTaskId! })),
     ),
   );
@@ -678,15 +696,19 @@ export class FocusModeEffects {
         this.store.select(selectors.selectMode),
         this.store.select(selectFocusModeConfig),
         this.taskService.currentTaskId$,
+        this.store.select(selectTaskEntities),
       ),
-      switchMap(([action, mode, config, currentTaskId]) => {
+      switchMap(([action, mode, config, currentTaskId, entities]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
         const actionsToDispatch: any[] = [];
 
         // Resume task tracking if we paused it during break
         // Bug #6726 fix: Don't override if user is already tracking a different task
-        if (action.pausedTaskId && !currentTaskId) {
-          actionsToDispatch.push(setCurrentTask({ id: action.pausedTaskId }));
+        const pausedTask = action.pausedTaskId
+          ? entities[action.pausedTaskId]
+          : undefined;
+        if (pausedTask && !pausedTask.isDone && !currentTaskId) {
+          actionsToDispatch.push(setCurrentTask({ id: pausedTask.id }));
         }
 
         // Auto-start next session if configured

@@ -17,10 +17,20 @@ import { BannerId } from '../../../core/banner/banner.model';
 import { T } from '../../../t.const';
 import * as actions from './focus-mode.actions';
 import * as selectors from './focus-mode.selectors';
-import { FocusModeMode, FocusScreen, TimerState } from '../focus-mode.model';
+import {
+  FocusMainUIState,
+  FocusModeMode,
+  FocusScreen,
+  TimerState,
+} from '../focus-mode.model';
+import { focusModeReducer } from './focus-mode.reducer';
 import { unsetCurrentTask, setCurrentTask } from '../../tasks/store/task.actions';
 import { openIdleDialog } from '../../idle/store/idle.actions';
-import { selectLastCurrentTask, selectTaskById } from '../../tasks/store/task.selectors';
+import {
+  selectLastCurrentTask,
+  selectTaskById,
+  selectTaskEntities,
+} from '../../tasks/store/task.selectors';
 import {
   selectFocusModeConfig,
   selectSoundConfig,
@@ -143,6 +153,12 @@ describe('FocusModeEffects', () => {
             { selector: selectIsFocusModeEnabled, value: true },
             { selector: selectSoundConfig, value: { volume: 75 } },
             { selector: selectLastCurrentTask, value: null },
+            {
+              selector: selectTaskEntities,
+              value: {
+                ['test-paused-task-id']: { ...DEFAULT_TASK, id: 'test-paused-task-id' },
+              },
+            },
           ],
         }),
         { provide: FocusModeStrategyFactory, useValue: strategyFactoryMock },
@@ -921,7 +937,7 @@ describe('FocusModeEffects', () => {
 
       // Bug #6726 fix: Don't override user's task switch during break
       it('should NOT dispatch setCurrentTask when pausedTaskId exists but a different task is already being tracked', (done) => {
-        const pausedTaskId = 'original-task-id';
+        const pausedTaskId = 'test-paused-task-id';
         currentTaskId$.next('different-task-id');
         actions$ = of(actions.completeBreak({ pausedTaskId }));
 
@@ -1007,7 +1023,7 @@ describe('FocusModeEffects', () => {
 
     // Bug #6726 fix: Don't override user's task switch during break
     it('should NOT dispatch setCurrentTask when pausedTaskId exists but a different task is already being tracked', (done) => {
-      const pausedTaskId = 'original-task-id';
+      const pausedTaskId = 'test-paused-task-id';
       currentTaskId$.next('different-task-id');
       actions$ = of(actions.skipBreak({ pausedTaskId }));
       store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
@@ -1030,6 +1046,42 @@ describe('FocusModeEffects', () => {
       });
     });
   });
+
+  for (const isDeleted of [false, true]) {
+    it(`does not reopen a ${isDeleted ? 'deleted' : 'done'} task when a break ends`, (done) => {
+      const id = 'test-paused-task-id';
+      store.overrideSelector(
+        selectTaskEntities,
+        isDeleted
+          ? {}
+          : {
+              [id]: { ...DEFAULT_TASK, id, projectId: 'INBOX', isDone: true },
+            },
+      );
+      actions$ = of(actions.completeBreak({ pausedTaskId: id }));
+      effects.resumeTrackingOnBreakComplete$.pipe(toArray()).subscribe((result) => {
+        expect(result).toEqual([]);
+        done();
+      });
+    });
+
+    it(`does not reopen a ${isDeleted ? 'deleted' : 'done'} task when a break is skipped`, (done) => {
+      const id = 'test-paused-task-id';
+      store.overrideSelector(
+        selectTaskEntities,
+        isDeleted
+          ? {}
+          : {
+              [id]: { ...DEFAULT_TASK, id, projectId: 'INBOX', isDone: true },
+            },
+      );
+      actions$ = of(actions.skipBreak({ pausedTaskId: id }));
+      effects.skipBreak$.pipe(toArray()).subscribe((result) => {
+        expect(result).toEqual([actions.startFocusSession({ duration: 25 * 60 * 1000 })]);
+        done();
+      });
+    });
+  }
 
   describe('cancelSession$', () => {
     it('should dispatch unsetCurrentTask when session is cancelled', (done) => {
@@ -2109,6 +2161,64 @@ describe('FocusModeEffects', () => {
       });
     });
 
+    for (const purpose of ['work', 'break'] as const) {
+      it(`should NOT reopen a paused task completed during a paused ${purpose}`, (done) => {
+        const startedState = focusModeReducer(
+          undefined,
+          purpose === 'work'
+            ? actions.startFocusSession({ duration: 25 * 60 * 1000 })
+            : actions.startBreak({ duration: 5 * 60 * 1000 }),
+        );
+        const pausedState = focusModeReducer(
+          startedState,
+          actions.pauseFocusSession({ pausedTaskId: 'task-123' }),
+        );
+        const resumeAction = actions.unPauseFocusSession();
+        const resumedState = focusModeReducer(pausedState, resumeAction);
+        store.overrideSelector(selectFocusModeConfig, {
+          isPauseTrackingDuringBreak: false,
+          isSkipPreparation: false,
+        });
+        store.overrideSelector(selectors.selectTimer, resumedState.timer);
+        store.overrideSelector(selectors.selectPausedTaskId, resumedState.pausedTaskId);
+        store.overrideSelector(selectTaskById, {
+          ...DEFAULT_TASK,
+          id: 'task-123',
+          projectId: 'INBOX',
+          title: 'Test Task',
+          isDone: true,
+        });
+        currentTaskId$.next(null);
+        store.refreshState();
+
+        actions$ = of(resumeAction);
+
+        effects.syncSessionResumeToTracking$
+          .pipe(toArray())
+          .subscribe((actionsArr: Action[]) => {
+            const resultingState = actionsArr.reduce(focusModeReducer, resumedState);
+            if (purpose === 'work') {
+              expect(actionsArr).toEqual([
+                actions.selectFocusTask(),
+                actions.showFocusOverlay(),
+              ]);
+              expect(resultingState.timer.isRunning).toBe(false);
+              expect(resultingState.timer.purpose).toBeNull();
+              expect(resultingState.mainState).toBe(FocusMainUIState.Preparation);
+              expect(resultingState.currentScreen).toBe(FocusScreen.Main);
+              expect(resultingState.isOverlayShown).toBe(true);
+            } else {
+              expect(actionsArr).toEqual([]);
+              expect(resultingState.timer.isRunning).toBe(true);
+              expect(resultingState.timer.purpose).toBe('break');
+              expect(resultingState.currentScreen).toBe(FocusScreen.Break);
+              expect(resultingState.isOverlayShown).toBe(false);
+            }
+            done();
+          });
+      });
+    }
+
     it('should NOT dispatch when no pausedTaskId', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,
@@ -2377,8 +2487,8 @@ describe('FocusModeEffects', () => {
 
       actions$ = of(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
 
-      effects.syncSessionStartToTracking$.subscribe((action) => {
-        expect(action.type).toEqual('[FocusMode] Show Overlay');
+      effects.syncSessionStartToTracking$.pipe(toArray()).subscribe((result) => {
+        expect(result).toEqual([actions.selectFocusTask(), actions.showFocusOverlay()]);
         done();
       });
     });
@@ -2432,8 +2542,8 @@ describe('FocusModeEffects', () => {
 
       actions$ = of(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
 
-      effects.syncSessionStartToTracking$.subscribe((action) => {
-        expect(action.type).toEqual('[FocusMode] Show Overlay');
+      effects.syncSessionStartToTracking$.pipe(toArray()).subscribe((result) => {
+        expect(result).toEqual([actions.selectFocusTask(), actions.showFocusOverlay()]);
         done();
       });
     });
@@ -2928,8 +3038,8 @@ describe('FocusModeEffects', () => {
 
         actions$ = of(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
 
-        effects.syncSessionStartToTracking$.subscribe((action) => {
-          expect(action.type).toEqual('[FocusMode] Show Overlay');
+        effects.syncSessionStartToTracking$.pipe(toArray()).subscribe((result) => {
+          expect(result).toEqual([actions.selectFocusTask(), actions.showFocusOverlay()]);
           done();
         });
       });
