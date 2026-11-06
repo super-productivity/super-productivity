@@ -312,10 +312,11 @@ export class TaskRepeatCfgEffects {
 
                 // If the user moved startDate earlier than the existing
                 // lastTaskCreationDay, the anchor is stale — re-anchor on
-                // the new startDate (#7423). Skip for repeatFromCompletionDate
-                // configs: there startDate is decoupled from scheduling
-                // (getEffectiveRepeatStartDate uses lastTaskCreationDay), so
-                // editing startDate must not clear completion history.
+                // the new startDate (#7423). A repeatFromCompletionDate config
+                // does so only with an open copy: there is no completion after
+                // it to protect, and moving the copy forward moved the anchor
+                // along (#11266). Without one, the anchor is the completion day,
+                // which an earlier startDate must not clear.
                 const changes = taskRepeatCfg.changes as Partial<TaskRepeatCfgCopy>;
                 // A pause or resume alone moves no occurrence: the open copy
                 // stays where it is, as for an end date (#10091). Relocating
@@ -326,7 +327,7 @@ export class TaskRepeatCfgEffects {
                 const lastCreationDay = getEffectiveLastTaskCreationDay(fullCfg);
                 const isStartDateMovedEarlier =
                   'startDate' in changes &&
-                  !fullCfg.repeatFromCompletionDate &&
+                  (!fullCfg.repeatFromCompletionDate || undoneInstances.length > 0) &&
                   !!fullCfg.startDate &&
                   !!lastCreationDay &&
                   fullCfg.startDate < lastCreationDay;
@@ -727,9 +728,9 @@ export class TaskRepeatCfgEffects {
         const today = this._dateService.todayStr();
         const isLatestInstance = this._isLatestInstance(task, cfg);
 
-        // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay
-        // because getEffectiveRepeatStartDate() prioritizes lastTaskCreationDay when set.
-        // Without updating lastTaskCreationDay, the recurrence stays anchored to the old date.
+        // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay.
+        // getEffectiveRepeatStartDate() counts from lastTaskCreationDay, and a later
+        // startDate alone would make today due again and create another copy (#11266).
         if (cfg.repeatFromCompletionDate && isLatestInstance) {
           return rxOf([
             updateTaskRepeatCfg({
