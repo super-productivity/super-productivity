@@ -1,8 +1,11 @@
 import { TaskHistoryEnvelope } from './task-history.model';
 import { isTaskHistoryEnvelope } from './task-history.validation';
 
-/** App-owned namespace, separate from the task-history viewer's plugin ID. */
-export const TASK_HISTORY_DELIVERY_PREFIX = 'sp-internal-task-history:';
+/**
+ * App-owned namespace. A leading ':' cannot be produced by a valid plugin ID,
+ * so keyed plugin writes and uninstall sweeps cannot touch these records.
+ */
+export const TASK_HISTORY_DELIVERY_PREFIX = ':sp-internal-task-history:';
 
 /**
  * A standard opaque user-data record carries immutable author facts across
