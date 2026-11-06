@@ -25,11 +25,13 @@ export class TaskHistoryDeliveryService {
    * records have independent conflict keys and never reapply task values.
    */
   async create(conflicts: readonly EntityConflict[]): Promise<Operation[]> {
+    return this.createForOperations(
+      conflicts.flatMap((conflict) => [...conflict.localOps, ...conflict.remoteOps]),
+    );
+  }
+
+  async createForOperations(sources: readonly Operation[]): Promise<Operation[]> {
     const envelopes = new Map<string, TaskHistoryEnvelope>();
-    const sources = conflicts.flatMap((conflict) => [
-      ...conflict.localOps,
-      ...conflict.remoteOps,
-    ]);
     for (const op of sources) {
       // Delivery records themselves must never produce another delivery loop.
       if (op.entityType === 'PLUGIN_USER_DATA') continue;

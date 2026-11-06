@@ -3,7 +3,9 @@ import {
   supersededTaskSnapshotIds,
   isTaskResolutionSnapshot,
 } from './time-preserving-task-snapshot.util';
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
+import { OperationApplierService } from '../apply/operation-applier.service';
+import { TaskHistoryDeliveryService } from './task-history-delivery.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ActionType,
@@ -152,6 +154,7 @@ const buildSectionCausalReplayContext = (
   providedIn: 'root',
 })
 export class SupersededOperationResolverService {
+  private readonly _injector = inject(Injector);
   private opLogStore = inject(OperationLogStoreService);
   private vectorClockService = inject(VectorClockService);
   private conflictResolutionService = inject(ConflictResolutionService);
@@ -948,6 +951,17 @@ export class SupersededOperationResolverService {
         );
       }
 
+      const retiredIds = new Set(opsToReject);
+      const historyDeliveries = await this._injector
+        .get(TaskHistoryDeliveryService)
+        .createForOperations(
+          supersededOps.filter(({ opId }) => retiredIds.has(opId)).map(({ op }) => op),
+        );
+      for (const delivery of historyDeliveries) {
+        newOpsCreated.push(delivery);
+        auxiliaryOpIds.add(delivery.id);
+      }
+
       // Persist replacements, rebase their clocks, and retire their stale
       // predecessors in one transaction. A crash can therefore expose neither
       // half of the recovery on its own.
@@ -956,6 +970,21 @@ export class SupersededOperationResolverService {
           [{ ops: newOpsCreated, source: 'local' }],
           { rejectOpIds: opsToReject },
         );
+        const deliveryIds = new Set(historyDeliveries.map((op) => op.id));
+        const deliveriesToApply = written
+          .map(({ op }) => op)
+          .filter((op) => deliveryIds.has(op.id));
+        if (deliveriesToApply.length) {
+          const applied = await this._injector
+            .get(OperationApplierService)
+            .applyOperations(deliveriesToApply, {
+              isLocalHydration: true,
+              skipDeferredLocalActions: true,
+            });
+          if (applied.failedOp || applied.reducerFailures?.length) {
+            throw new Error('Failed to apply durable task history deliveries');
+          }
+        }
         for (const { op } of written) {
           OpLog.normal(
             `SupersededOperationResolverService: Appended LWW update op ${op.id} for ${op.entityType}:${op.entityId}`,

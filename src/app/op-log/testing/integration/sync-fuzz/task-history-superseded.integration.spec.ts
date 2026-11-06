@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { PluginUserDataState } from '../../../../plugins/plugin-persistence.model';
 import { TaskState } from '../../../../features/tasks/task.model';
 import { TaskHistoryEnvelope } from '../../../../features/tasks/task-history/task-history.model';
 import { extractActionPayload } from '../../../core/operation.types';
@@ -13,6 +14,12 @@ describe('Task history during superseded-operation recovery', () => {
   it('retains every original author fact after replacement, restart and fresh-client sync', async () => {
     const harness = await SyncFuzzHarness.create();
     const author = await harness.addDevice('A');
+    const deliveries = async (device: FuzzDevice): Promise<PluginUserDataState> =>
+      (
+        (await harness.syncedState(device)) as unknown as {
+          pluginUserData: PluginUserDataState;
+        }
+      ).pluginUserData;
     const taskState = async (device: FuzzDevice): Promise<TaskState> =>
       ((await harness.syncedState(device)) as unknown as { task: TaskState }).task;
     await harness.as(author, async () => {
@@ -55,15 +62,21 @@ describe('Task history during superseded-operation recovery', () => {
     });
     expect((await taskState(author)).taskHistory!.t2).toEqual(expected);
 
+    const expectedDeliveries = await deliveries(author);
+    expect(expectedDeliveries.length).toBeGreaterThanOrEqual(2);
+
     // Local hydration can still replay rejected originals, but fresh clients
     // cannot download them. Delivery must preserve their exact author facts.
     await harness.restart(author);
+    expect(await deliveries(author)).toEqual(expectedDeliveries);
     expect((await taskState(author)).taskHistory!.t2).toEqual(expected);
     expect(await harness.sync(author)).toBeTrue();
     const fresh = await harness.addDevice('F');
     expect(await harness.sync(fresh)).toBeTrue();
     expect((await taskState(fresh)).taskHistory!.t2).toEqual(expected);
+    expect(await deliveries(fresh)).toEqual(expectedDeliveries);
     await harness.restart(fresh);
+    expect(await deliveries(fresh)).toEqual(expectedDeliveries);
     expect((await taskState(fresh)).taskHistory!.t2).toEqual(expected);
     expect(await harness.pendingOpCount(author)).toBe(0);
     expect(await harness.pendingOpCount(fresh)).toBe(0);
