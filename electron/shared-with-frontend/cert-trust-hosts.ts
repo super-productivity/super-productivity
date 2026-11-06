@@ -60,17 +60,23 @@ export const toTrustedHostSet = (payload: unknown): Set<string> => {
   );
 };
 
+/** `URL.host` of a request URL, or null if unparsable. */
+export const getUrlHost = (url: string): string | null => {
+  try {
+    return new URL(url).host;
+  } catch {
+    // unparsable URL — callers fail closed
+    return null;
+  }
+};
+
 /** True only if the failing request's exact host (incl. port) is allowlisted. */
 export const isCertErrorTrusted = (
   url: string,
   trustedHosts: ReadonlySet<string>,
 ): boolean => {
-  try {
-    return trustedHosts.has(new URL(url).host);
-  } catch {
-    // unparsable URL — fail closed
-    return false;
-  }
+  const host = getUrlHost(url);
+  return host !== null && trustedHosts.has(host);
 };
 
 /** One-shot preload API; claimed by trusted startup code before plugins load. */

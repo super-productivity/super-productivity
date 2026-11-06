@@ -2,6 +2,7 @@ import { App, ipcMain } from 'electron';
 import { warn } from 'electron-log/main';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import {
+  getUrlHost,
   isCertErrorTrusted,
   toTrustedHostSet,
 } from './shared-with-frontend/cert-trust-hosts';
@@ -23,14 +24,15 @@ export const initCertTrust = (appIN: App): void => {
   });
 
   appIN.on('certificate-error', (event, _webContents, url, err, _cert, callback) => {
+    const host = getUrlHost(url);
     if (isCertErrorTrusted(url, trustedHosts)) {
-      warn(
-        `Accepting certificate error for configured host ${new URL(url).host}: ${err}`,
-      );
+      warn(`Accepting certificate error for configured host ${host}: ${err}`);
       event.preventDefault();
       callback(true);
       return;
     }
+    // Self-signed hosts are only trusted once saved in a provider's settings (#11097)
+    warn(`Rejecting certificate error for ${host} (not a configured host): ${err}`);
     callback(false);
   });
 };
