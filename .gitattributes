@@ -8,4 +8,3 @@
 # dependency), so keep them LF in the working tree on Windows checkouts too.
 *.yml text eol=lf
 *.yaml text eol=lf
-*.sh text eol=lf

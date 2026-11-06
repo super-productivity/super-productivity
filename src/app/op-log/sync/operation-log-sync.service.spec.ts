@@ -3819,6 +3819,44 @@ describe('OperationLogSyncService', () => {
           expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
         });
 
+        it('should show the conflict dialog, not skip, when a remote rolled back below the local clock lost this client’s synced changes (#10916)', async () => {
+          // The local clock dominates the rolled-back snapshot, so the #7339 skip
+          // would apply. Skipping would commit the rolled-back cursor and leave
+          // the lost changes out of the remote for good.
+          opLogStoreSpy.getUnsynced.and.resolveTo([]);
+          opLogStoreSpy.getLastSeq.and.resolveTo(3);
+          opLogStoreSpy.getVectorClock.and.resolveTo({ clientA: 2, clientB: 5 });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { tasks: [] },
+            snapshotVectorClock: { clientA: 2, clientB: 4 },
+            latestServerSeq: 1,
+            ownUploadsMissing: true,
+          });
+
+          const setLastServerSeq = jasmine.createSpy('setLastServerSeq').and.resolveTo();
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq,
+          } as any;
+
+          await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejectedWith(
+            jasmine.any(OwnUploadsMissingConflictError),
+          );
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
+          expect(setLastServerSeq).not.toHaveBeenCalled();
+        });
+
         it('should throw LocalDataConflictError when only config ops but store has meaningful data (provider switch)', async () => {
           const unsyncedEntry: OperationLogEntry = {
             seq: 1,
