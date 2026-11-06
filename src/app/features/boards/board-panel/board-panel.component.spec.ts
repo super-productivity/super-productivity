@@ -304,7 +304,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     fixture.detectChanges();
     expect(deadlineBtn().getAttribute('data-scheduled-date-color')).toBe('');
 
-    interval.clockTimestamp.set(deadlineWithTime + 1);
+    interval.clockTimestamp.set(deadlineWithTime);
     fixture.detectChanges();
     expect(deadlineBtn().getAttribute('data-scheduled-date-color')).toBe('overdue');
   });
