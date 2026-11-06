@@ -332,6 +332,7 @@
       }
     },
     "CLIPBOARD_IMAGE": {
+      "PASTE_ERROR": "Could not save or preview the pasted image. Please try again.",
       "PASTE_SUCCESS": "Image pasted successfully",
       "SIZE_EXCEEDED": "Image size ({{actualSize}}) exceeds maximum allowed size ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Storage quota exceeded! Please free up space or reduce image sizes."
