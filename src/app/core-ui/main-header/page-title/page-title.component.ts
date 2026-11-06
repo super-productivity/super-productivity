@@ -436,6 +436,10 @@ export class PageTitleComponent {
 
   readonly T = T;
 
+  private _langChange = toSignal(this._translateService.onLangChange, {
+    initialValue: null,
+  });
+
   // On the work view; absent elsewhere (and on xxxs screens), where the
   // shortcut then does nothing — matching the button not being there to click.
   private _customizerMenuTrigger = viewChild('customizerMenuTrigger', {
@@ -551,6 +555,7 @@ export class PageTitleComponent {
     }
     const key = this._routeTitleKey();
     if (key) {
+      this._langChange();
       return this._translateService.instant(key);
     }
     const pluginId = this.pluginId();
