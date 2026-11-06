@@ -65,8 +65,15 @@ const writeRaw = async (
 };
 
 test.describe('@webdav Remote reverted below own uploads (#10916)', () => {
-  for (const choice of ['local', 'remote'] as const) {
-    test(`phone asks after a remote rollback of its synced task; Keep ${choice} converges both devices`, async ({
+  // `pending`: the phone also holds an unsynced task when it meets the rollback,
+  // so the gate must fire with pending ops too and Keep local must ship both.
+  const cases = [
+    { choice: 'local', pending: false },
+    { choice: 'remote', pending: false },
+    { choice: 'local', pending: true },
+  ] as const;
+  for (const { choice, pending } of cases) {
+    test(`phone asks after a remote rollback of its synced task; Keep ${choice}${pending ? ' with a pending task' : ''} converges both devices`, async ({
       browser,
       baseURL,
       request,
@@ -80,6 +87,7 @@ test.describe('@webdav Remote reverted below own uploads (#10916)', () => {
       const url = baseURL || 'http://localhost:4242';
       const lostTask = `Phone-lost-${Date.now()}`;
       const laterTask = `Phone-later-${Date.now()}`;
+      const pendingTask = `Phone-pending-${Date.now()}`;
 
       const phone = await setupSyncClient(browser, url);
       let desktop: Awaited<ReturnType<typeof setupSyncClient>> | undefined;
@@ -110,6 +118,11 @@ test.describe('@webdav Remote reverted below own uploads (#10916)', () => {
 
         // --- The file rolls back; nobody writes on top ---
         await writeRaw(request, folder, staleFile);
+
+        if (pending) {
+          await workPhone.addTask(pendingTask);
+          await waitForStatePersistence(phone.page);
+        }
 
         // --- Phone syncs: it must ask instead of silently skipping ---
         await syncPhone.triggerSync();
@@ -155,6 +168,11 @@ test.describe('@webdav Remote reverted below own uploads (#10916)', () => {
         await expect(desktop.page.locator('task', { hasText: lostTask })).toHaveCount(
           choice === 'local' ? 1 : 0,
         );
+        if (pending) {
+          await expect(
+            desktop.page.locator('task', { hasText: pendingTask }).first(),
+          ).toBeVisible();
+        }
       } finally {
         await closeContextsSafely(phone.context, desktop?.context);
       }
