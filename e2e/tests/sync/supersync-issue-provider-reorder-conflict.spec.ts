@@ -232,7 +232,9 @@ const provider = (id: string, index: number, providerKey: ProviderKey): IssuePro
         availableTransitions: [],
         userToAssignOnDone: null,
       }
-    : {
+    : // legacy built-in GitLab shape: released clients still create and sync it,
+      // the current client migrates it to the plugin shape only on load
+      ({
         ...common,
         issueProviderKey: 'GITLAB',
         project: `synthetic/provider-${index}`,
@@ -242,7 +244,7 @@ const provider = (id: string, index: number, providerKey: ProviderKey): IssuePro
         scope: 'all',
         filter: 'state=opened',
         isEnableTimeTracking: false,
-      };
+      } as unknown as IssueProvider);
 };
 const mockProviderRequests = async (page: Page): Promise<void> => {
   await page.route('https://*.example.invalid/**', (route) =>

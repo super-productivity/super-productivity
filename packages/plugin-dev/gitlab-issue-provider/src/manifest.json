@@ -1,0 +1,64 @@
+{
+  "id": "gitlab-issue-provider",
+  "name": "GitLab Issues",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "13.0.0",
+  "description": "GitLab issue provider plugin",
+  "author": "Super Productivity",
+  "type": "issueProvider",
+  "icon": "icon.svg",
+  "iFrame": false,
+  "permissions": [],
+  "dataSharing": [
+    {
+      "recipient": "GitLab",
+      "userServer": true,
+      "data": ["credentials", "userText"]
+    }
+  ],
+  "hooks": [],
+  "i18n": {
+    "languages": [
+      "ar",
+      "cs",
+      "de",
+      "en",
+      "es",
+      "fa",
+      "fi",
+      "fr",
+      "hr",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nb",
+      "nl",
+      "pl",
+      "pt",
+      "pt-br",
+      "ro",
+      "ro-md",
+      "ru",
+      "sk",
+      "sv",
+      "tr",
+      "uk",
+      "vi",
+      "zh",
+      "zh-tw"
+    ]
+  },
+  "issueProvider": {
+    "pollIntervalMs": 600000,
+    "icon": "gitlab",
+    "humanReadableName": "GitLab",
+    "issueProviderKey": "GITLAB",
+    "allowPrivateNetwork": true,
+    "issueStrings": {
+      "singular": "Issue",
+      "plural": "Issues"
+    }
+  }
+}

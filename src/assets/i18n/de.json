@@ -436,52 +436,6 @@
         "WRITE_A_COMMENT": "Schreibe einen Kommentar"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Die vorab ausgefüllte Dauer enthält nicht erfasste Daten vergangener Tage.",
-        "T_ALREADY_TRACKED": "Bereits erfasst",
-        "T_TITLE": "Titel",
-        "T_TO_BE_SUBMITTED": "Noch einzureichen",
-        "TITLE": "Zeit für Issues an GitLab senden",
-        "TOTAL_MSG": "Du wirst <em>{{totalTimeToSubmit}}</em> Arbeitszeit für heute insgesamt an <em>{{nrOfTasksToSubmit}}</em> verschiedene Aufgaben übermitteln."
-      },
-      "FORM": {
-        "FILTER": "Benutzerdefinierte Filter",
-        "FILTER_DESCRIPTION": "Siehe https://docs.gitlab.com/ee/api/issues.html#list-issues. Mehrere können durch \"&\" kombiniert werden",
-        "FILTER_USER": "Benutzername (z. B. um Änderungen selbst herauszufiltern)",
-        "GITLAB_BASE_URL": "Benutzerdefinierte GitLab-Basis-URL",
-        "PROJECT": "Vollständiger Pfad oder Benutzername / Projekt",
-        "PROJECT_HINT": "z.B. super-productivity/super-productivity",
-        "SCOPE": "Bereich",
-        "SCOPE_ALL": "Alles",
-        "SCOPE_ASSIGNED": "Mir zugewiesen",
-        "SCOPE_CREATED": "Von mir erstellt",
-        "SOURCE": "Quelle",
-        "SOURCE_GLOBAL": "Alles",
-        "SOURCE_GROUP": "Gruppe",
-        "SOURCE_PROJECT": "Projekt",
-        "SUBMIT_TIMELOGS": "Timelogs an Gitlab senden",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Zeiterfassungsdialog anzeigen, nachdem du auf „Tag beenden” geklickt hast",
-        "TOKEN": "Zugangstoken"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p> Hier kannst du SuperProductivity so konfigurieren, dass offene GitLab-Issues (entweder die Online-Version oder eine selbst gehostete Instanz) für ein bestimmtes Projekt im Bereich zur Aufgabenerstellung in der täglichen Planungsansicht aufgelistet werden. Sie werden als Vorschläge angezeigt und enthalten einen Link zum Issue sowie weitere Informationen dazu. </p> <p> Außerdem kannst du alle offenen Issues automatisch zu deinem Aufgaben-Backlog hinzufügen und synchronisieren. </p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Bearbeiter",
-        "AT": "am",
-        "DESCRIPTION": "Beschreibung",
-        "LABELS": "Labels",
-        "MARK_AS_CHECKED": "Updates als erledigt markieren",
-        "PROJECT": "Projekt",
-        "STATUS": "Status",
-        "SUMMARY": "Zusammenfassung",
-        "WRITE_A_COMMENT": "Schreibe einen Kommentar"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Unbekannter Fehler {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Diese Integration wird in deinem Browser wahrscheinlich nicht funktionieren. Bitte lade die Desktop- oder Android-Version von Super Productivity herunter!",
       "DEFAULT": {

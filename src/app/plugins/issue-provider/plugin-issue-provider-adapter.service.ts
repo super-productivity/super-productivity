@@ -557,7 +557,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       issueWasUpdated: false,
       issueLastUpdated: data.lastUpdated ?? 0,
       issueAttachmentNr: 0,
-      issuePoints: undefined,
+      issuePoints: typeof data.points === 'number' ? data.points : undefined,
       issueTimeTracked: undefined,
       isDone,
       ...(dueWithTime != null

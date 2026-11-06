@@ -316,6 +316,17 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result.issueLastUpdated).toBe(0);
     });
 
+    // GitLab weight; shown next to the task title in tag lists and focus mode
+    it('takes issuePoints from a numeric points field', () => {
+      const result = service.getAddTaskData({
+        id: 'ISS-10',
+        title: 'Weighted',
+        points: 3,
+      } as PluginSearchResult);
+
+      expect(result.issuePoints).toBe(3);
+    });
+
     it('should derive dueDay from start timestamp when start is a number', () => {
       // 2026-03-19 12:00:00 UTC
       const issueData = {
@@ -533,6 +544,26 @@ describe('PluginIssueProviderAdapterService', () => {
 
       expect(result!.taskChanges.issueWasUpdated).toBe(true);
       expect(Object.keys(result!.taskChanges)).not.toContain('issueTimeTracked');
+    });
+
+    it('refreshes issuePoints from the issue', async () => {
+      const provider = createMockProvider({
+        getById: jasmine
+          .createSpy('getById')
+          .and.resolveTo({ id: 'ISS-5', title: 'Issue', lastUpdated: 2000, points: 5 }),
+      });
+      registrySpy.getProvider.and.returnValue(provider);
+      const task = {
+        id: 'task-1',
+        issueId: 'ISS-5',
+        issueProviderId: PROVIDER_ID,
+        issueLastUpdated: 1000,
+        issuePoints: 2,
+      } as unknown as Task;
+
+      const result = await service.getFreshDataForIssueTask(task);
+
+      expect(result!.taskChanges.issuePoints).toBe(5);
     });
 
     it('should return fresh data with taskChanges when issue is updated', async () => {
