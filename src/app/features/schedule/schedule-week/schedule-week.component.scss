@@ -499,7 +499,7 @@
 .drag-time-preview {
   position: fixed;
   transform: translate(-50%, -100%);
-  z-index: 2000;
+  z-index: var(--z-schedule-drag-time-preview);
   pointer-events: none;
   margin-top: -44px;
 
