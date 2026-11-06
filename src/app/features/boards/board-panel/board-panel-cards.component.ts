@@ -99,7 +99,12 @@ export class BoardPanelCardsComponent {
     if (task.isDone) return '';
     // Timed deadlines read the shared clock so an idle OnPush board recolors at expiry.
     const isOverdue = task.deadlineWithTime
-      ? task.deadlineWithTime < this._trackingInterval.clockTimestamp()
+      ? task.deadlineWithTime <=
+        readClockUntilDue(
+          this._trackingInterval.clockTimestamp,
+          this._trackingInterval.clockMinute,
+          task.deadlineWithTime,
+        )
       : isDeadlineOverdue(task, this._trackingInterval.todayDateStr());
     return isOverdue ? 'overdue' : '';
   }
