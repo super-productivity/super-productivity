@@ -345,6 +345,7 @@ describe('OperationLogSyncService', () => {
             'getSnapshotVectorClock',
             'getSnapshotEntityKeys',
             'getCurrentVectorClock',
+            'keepOwnCounter',
           ]),
         },
         {
@@ -5380,6 +5381,7 @@ describe('OperationLogSyncService', () => {
 
   describe('forceDownloadRemoteState', () => {
     let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
+    let vectorClockServiceSpy: jasmine.SpyObj<VectorClockService>;
 
     const makeRemoteOp = (id: string = 'op1'): Operation => ({
       id,
@@ -5400,6 +5402,55 @@ describe('OperationLogSyncService', () => {
       ) as jasmine.SpyObj<OperationLogDownloadService>;
 
       opLogStoreSpy.runRemoteStateReplacement.calls.reset();
+      vectorClockServiceSpy = TestBed.inject(
+        VectorClockService,
+      ) as jasmine.SpyObj<VectorClockService>;
+      vectorClockServiceSpy.keepOwnCounter.and.callFake(async (clock) => clock);
+    });
+
+    it("keeps this device's own counter in the rebuilt clock (#11564)", async () => {
+      const callOrder: string[] = [];
+      writeFlushServiceSpy.flushThenRunExclusive.and.callFake(
+        async <T>(fn: () => Promise<T>) => {
+          callOrder.push('exclusive');
+          return fn();
+        },
+      );
+      vectorClockServiceSpy.keepOwnCounter.and.callFake(async (clock) => {
+        callOrder.push('keepOwnCounter');
+        return { ...clock, own: 4 };
+      });
+      opLogStoreSpy.runRemoteStateReplacement.and.callFake(async () => {
+        callOrder.push('runRemoteStateReplacement');
+      });
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [makeRemoteOp()],
+        allOpClocks: [{ remote: 1, own: 2 }],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 1,
+      });
+
+      await service.forceDownloadRemoteState({
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any);
+
+      expect(vectorClockServiceSpy.keepOwnCounter).toHaveBeenCalledWith({
+        remote: 1,
+        own: 2,
+      });
+      expect(
+        opLogStoreSpy.runRemoteStateReplacement.calls.mostRecent().args[0].vectorClock,
+      ).toEqual({ remote: 1, own: 4 });
+      // Read under the op-log lock so no own op lands between read and write.
+      expect(callOrder.slice(0, 3)).toEqual([
+        'exclusive',
+        'keepOwnCounter',
+        'runRemoteStateReplacement',
+      ]);
     });
 
     it('should download BEFORE any destructive local mutation', async () => {
