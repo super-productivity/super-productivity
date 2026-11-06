@@ -12,6 +12,7 @@ import {
 } from '../../utils/sync-helpers';
 import { waitForAppReady } from '../../utils/waits';
 import type { TaskHistoryRecord } from '../../../src/app/features/tasks/task-history/task-history.model';
+import type { PluginUserDataState } from '../../../src/app/plugins/plugin-persistence.model';
 
 interface Client {
   context: BrowserContext;
@@ -37,6 +38,7 @@ const taskState = async (
   doneOn?: number;
   wontDoOn?: number;
   history?: TaskHistoryRecord;
+  deliveries: PluginUserDataState;
 }> =>
   page.evaluate(
     async ({ id, update }) => {
@@ -62,6 +64,7 @@ const taskState = async (
       return new Promise((resolve) => {
         const subscription = helpers.store.subscribe((value) => {
           const root = value as {
+            pluginUserData: PluginUserDataState;
             tasks: {
               entities: Record<
                 string,
@@ -85,6 +88,7 @@ const taskState = async (
             doneOn: task?.doneOn,
             wontDoOn: task?.wontDoOn,
             history: root.tasks.taskHistory?.[id],
+            deliveries: root.pluginUserData,
           });
         });
       });
@@ -204,8 +208,18 @@ test.describe('@webdav task history survives concurrent offline edits', () => {
         for (const client of [a, b, a, b]) await sync(client);
 
         const expectedIds = expectedEvents.map((event) => event.id).sort();
+        const expectedDeliveries = (await taskState(a.page, taskId)).deliveries;
+        expect(expectedDeliveries.length).toBeGreaterThan(1);
         const assertClient = async (client: Client): Promise<void> => {
           const result = await taskState(client.page, taskId);
+          // Full rows must converge as well as the projected author events.
+          // Comparing by ID separately distinguishes content loss from ordering.
+          expect(
+            Object.fromEntries(result.deliveries.map(({ id, data }) => [id, data])),
+          ).toEqual(
+            Object.fromEntries(expectedDeliveries.map(({ id, data }) => [id, data])),
+          );
+          expect(result.deliveries).toEqual(expectedDeliveries);
           expect({ dueDay: result.dueDay, deadlineDay: result.deadlineDay }).toEqual({
             dueDay: changeB.dueDay,
             deadlineDay: changeB.deadlineDay,
