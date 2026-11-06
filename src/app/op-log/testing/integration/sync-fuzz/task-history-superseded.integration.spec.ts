@@ -1,0 +1,72 @@
+import { TestBed } from '@angular/core/testing';
+import { TaskState } from '../../../../features/tasks/task.model';
+import { TaskHistoryEnvelope } from '../../../../features/tasks/task-history/task-history.model';
+import { extractActionPayload } from '../../../core/operation.types';
+import { OperationLogStoreService } from '../../../persistence/operation-log-store.service';
+import { SupersededOperationResolverService } from '../../../sync/superseded-operation-resolver.service';
+import { executeIntent, SETUP_INTENTS } from './sync-fuzz-actions';
+import { FuzzDevice, SyncFuzzHarness } from './sync-fuzz-harness';
+
+describe('Task history during superseded-operation recovery', () => {
+  afterEach(() => SyncFuzzHarness.dispose());
+
+  it('retains every original author fact after replacement, restart and fresh-client sync', async () => {
+    const harness = await SyncFuzzHarness.create();
+    const author = await harness.addDevice('A');
+    const taskState = async (device: FuzzDevice): Promise<TaskState> =>
+      ((await harness.syncedState(device)) as unknown as { task: TaskState }).task;
+    await harness.as(author, async () => {
+      for (const intent of SETUP_INTENTS) await executeIntent(harness, intent);
+    });
+    expect(await harness.sync(author)).toBeTrue();
+
+    // The final Task is open again. Its LWW replacement alone cannot represent
+    // either author event; the history lives alongside entities in TaskState.
+    for (const isDone of [true, false]) {
+      harness.tick();
+      await harness.as(author, () => executeIntent(harness, ['doneTask', 't2', isDone]));
+    }
+    const expected = (await taskState(author)).taskHistory!.t2;
+    const expectedEvents = Object.values(expected.events);
+    expect(expectedEvents.map((event) => event.after)).toEqual([
+      { kind: 'status', value: 'done' },
+      { kind: 'status', value: 'open' },
+    ]);
+
+    await harness.as(author, async () => {
+      const db = TestBed.inject(OperationLogStoreService);
+      const originals = (await db.getUnsynced()).map(({ op }) => op);
+      expect(originals).toHaveSize(2);
+      const envelopes = originals.map(
+        (op) => extractActionPayload(op.payload)['taskHistory'] as TaskHistoryEnvelope,
+      );
+      expect(envelopes.flatMap((envelope) => envelope.events)).toEqual(expectedEvents);
+
+      // Enter the real recovery boundary used by RejectedOpsHandlerService
+      // when downloaded clocks leave server-rejected local edits pending.
+      // Capture, IndexedDB writes, replacement, retirement and hydration are
+      // real; neither the recorder nor the resolver is mocked here.
+      await TestBed.inject(SupersededOperationResolverService).resolveSupersededLocalOps(
+        originals.map((op) => ({ opId: op.id, op })),
+      );
+      for (const op of originals) {
+        expect((await db.getOpById(op.id))?.rejectedAt).toBeDefined();
+      }
+    });
+    expect((await taskState(author)).taskHistory!.t2).toEqual(expected);
+
+    // Retired originals are omitted on hydration. Delivery must preserve the
+    // exact IDs, before/after values and original timestamps, not make new facts.
+    await harness.restart(author);
+    expect((await taskState(author)).taskHistory!.t2).toEqual(expected);
+    expect(await harness.sync(author)).toBeTrue();
+    const fresh = await harness.addDevice('F');
+    expect(await harness.sync(fresh)).toBeTrue();
+    expect((await taskState(fresh)).taskHistory!.t2).toEqual(expected);
+    await harness.restart(fresh);
+    expect((await taskState(fresh)).taskHistory!.t2).toEqual(expected);
+    expect(await harness.pendingOpCount(author)).toBe(0);
+    expect(await harness.pendingOpCount(fresh)).toBe(0);
+    expect(harness.events).toEqual([]);
+  }, 60_000);
+});
