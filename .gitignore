@@ -96,7 +96,6 @@ electron/wayland-idle-helper/target/
 tools/mac-profiles
 all-certs.p12
 mac-cert.tar
-build/electron-builder.appx.yaml
 electron-builder.win-store.yaml
 
 # ignore changes
