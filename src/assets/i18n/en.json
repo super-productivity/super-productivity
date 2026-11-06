@@ -491,52 +491,6 @@
         "WRITE_A_COMMENT": "Write a comment"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "The prefilled duration contains untracked data from past days.",
-        "T_ALREADY_TRACKED": "Already Tracked",
-        "T_TITLE": "Title",
-        "T_TO_BE_SUBMITTED": "To be submitted",
-        "TITLE": "Submit Time Spent on Issues to GitLab",
-        "TOTAL_MSG": "You will submit <em>{{totalTimeToSubmit}}</em> work time for today in total to <em>{{nrOfTasksToSubmit}}</em> different issues."
-      },
-      "FORM": {
-        "FILTER": "Custom Filter",
-        "FILTER_DESCRIPTION": "See https://docs.gitlab.com/ee/api/issues.html#list-issues. Multiple can be combined with &",
-        "FILTER_USER": "Filter username",
-        "GITLAB_BASE_URL": "Custom GitLab base URL (optional)",
-        "PROJECT": "user name/project",
-        "PROJECT_HINT": "Project path (namespace/project-slug) or numeric project ID, not the display name (e.g. super-productivity/super-productivity or 12345)",
-        "SCOPE": "Scope",
-        "SCOPE_ALL": "All",
-        "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me",
-        "SOURCE": "Source",
-        "SOURCE_GLOBAL": "All",
-        "SOURCE_GROUP": "Group",
-        "SOURCE_PROJECT": "Project",
-        "SUBMIT_TIMELOGS": "Submit timelogs to GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Show time tracking dialog after clicking on \"Finish Day\"",
-        "TOKEN": "Access Token"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically import all open issues.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Assignee",
-        "AT": "at",
-        "DESCRIPTION": "Description",
-        "LABELS": "Labels",
-        "MARK_AS_CHECKED": "Mark updates as checked",
-        "PROJECT": "Project",
-        "STATUS": "Status",
-        "SUMMARY": "Summary",
-        "WRITE_A_COMMENT": "Write a comment"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Unknown error {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "This integration will likely not work in your web browser. Please download the desktop or Android version of Super Productivity!",
       "DEFAULT": {
@@ -606,7 +560,8 @@
         "REMOTE_ISSUE_DELETED": "Remote issue was deleted. Delete linked task \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote issue was deleted but task \"{{taskTitle}}\" has tracked time. Delete anyway?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}",
-        "POST_TIME_SUCCESS": "{{providerName}}: Successfully created time entry for {{issueTitle}}"
+        "POST_TIME_SUCCESS": "{{providerName}}: Successfully created time entry for {{issueTitle}}",
+        "WORKLOG_FOR_DAY_SUCCESS": "{{providerName}}: Time submitted (issues: {{nrOfIssues}})"
       },
       "SYNC_STATE": {
         "COULD_NOT_SYNC": "Couldn't sync: {{reason}}",
@@ -646,6 +601,14 @@
         "RELOAD_OPTIONS": "Reload Options",
         "SETUP_TITLE": "Setup {{title}} Config",
         "TEST_CONNECTION": "Test Connection"
+      },
+      "DIALOG_SUBMIT_WORKLOG": {
+        "OTHER_DAYS_INFO": "Includes unsubmitted time from other days",
+        "T_ALREADY_LOGGED": "Already logged",
+        "T_TITLE": "Title",
+        "T_TO_BE_SUBMITTED": "To be submitted",
+        "TITLE": "{{providerName}}: Submit Time for the Day",
+        "TOTAL_MSG": "Total to submit: <em>{{totalTime}}</em> (issues: <em>{{nrOfIssues}}</em>)"
       },
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Activity",
