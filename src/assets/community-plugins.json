@@ -232,9 +232,9 @@
     "authorUrl": "https://github.com/calmpunct",
     "id": "milestone",
     "release": {
-      "version": "1.4.0",
-      "downloadUrl": "https://github.com/calmpunct/sp-milestone/releases/download/v1.4.0/sp-milestone-v1.4.0.zip",
-      "sha256": "65f890e57228c830b2db25f65d93bce54e555a4a84cdeef9a4ee3592bcb82adc"
+      "version": "1.5.0",
+      "downloadUrl": "https://github.com/calmpunct/sp-milestone/releases/download/v1.5.0/sp-milestone-v1.5.0.zip",
+      "sha256": "e2ae688b29509f4ee6f9b07d5ea2a259e4c52624aeea6f3a3f0c3b041bfde958"
     }
   }
 ]
