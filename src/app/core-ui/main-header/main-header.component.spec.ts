@@ -145,6 +145,40 @@ class HeaderLayoutHostComponent {
 })
 class OverflowingRowHostComponent {}
 
+// The header is a drag region on Electron with a custom title bar, but the
+// action row is `no-drag` throughout, so the slack in `.pill-slot` is the only
+// part of it the window can be grabbed by. In a narrow window that slack is
+// zero and the row fills the whole header (#9843).
+@Component({
+  standalone: true,
+  styleUrls: ['./main-header.component.scss'],
+  template: `
+    <div
+      class="wrapper"
+      style="width: 260px; box-sizing: border-box"
+    >
+      <div
+        class="pill-slot"
+        data-test="pill-slot"
+      ></div>
+
+      <nav class="action-nav-right">
+        <div class="action-nav-scroll">
+          @for (n of buttons; track n) {
+            <button
+              type="button"
+              style="width: 40px; height: 40px"
+            ></button>
+          }
+        </div>
+      </nav>
+    </div>
+  `,
+})
+class DragHandleHostComponent {
+  readonly buttons = [1, 2, 3, 4, 5, 6];
+}
+
 // The Electron custom-title-bar reserve. `main-header` keeps the window
 // controls clear by padding its own right edge -- but the controls sit in the
 // top-right corner of the WINDOW, and with the right panel open that corner
@@ -237,6 +271,7 @@ describe('MainHeaderComponent layout', () => {
         TranslateModule.forRoot(),
         HeaderLayoutHostComponent,
         OverflowingRowHostComponent,
+        DragHandleHostComponent,
         WindowControlsHostComponent,
         TitleFloorHostComponent,
       ],
@@ -370,6 +405,42 @@ describe('MainHeaderComponent layout', () => {
       scroller.scrollLeft = scroller.scrollWidth;
       expect(scroller.scrollLeft).toBeGreaterThan(0);
     } finally {
+      document.body.removeChild(fixture.nativeElement);
+    }
+  });
+
+  it('keeps a draggable handle when the row fills the header (#9843)', () => {
+    // Setup inside the `try`: these body classes gate real CSS, so leaking them
+    // on a throw would turn the drag region on for every later fixture.
+    const fixture = TestBed.createComponent(DragHandleHostComponent);
+    try {
+      document.body.appendChild(fixture.nativeElement);
+      const host = fixture.nativeElement as HTMLElement;
+      const slot = host.querySelector('[data-test="pill-slot"]') as HTMLElement;
+      const scroller = host.querySelector('.action-nav-scroll') as HTMLElement;
+      const buttonSize = parseFloat(
+        getComputedStyle(host).getPropertyValue('--header-button-size'),
+      );
+
+      // Without a drag region there is nothing to reserve, so the slack stays
+      // exactly what it is: nothing, once the actions use the whole row.
+      fixture.detectChanges();
+      expect(slot.getBoundingClientRect().width).toBe(0);
+
+      document.body.classList.add(...WINDOW_CONTROL_BODY_CLASSES);
+
+      // Precondition: the actions alone overflow the row, so the slack really
+      // is zero without the reserve and this is the reported case.
+      expect(scroller.scrollWidth).toBeGreaterThan(scroller.clientWidth);
+      expect(buttonSize).toBeGreaterThan(0);
+
+      // A button-sized handle stays, and the actions scroll to make room.
+      expect(slot.getBoundingClientRect().width).toBeGreaterThanOrEqual(buttonSize);
+      expect(getComputedStyle(slot).getPropertyValue('-webkit-app-region')).not.toBe(
+        'no-drag',
+      );
+    } finally {
+      document.body.classList.remove(...WINDOW_CONTROL_BODY_CLASSES);
       document.body.removeChild(fixture.nativeElement);
     }
   });
