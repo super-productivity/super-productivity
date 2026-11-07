@@ -76,6 +76,9 @@
             [showLabels]="showLabels()"
             (clicked)="onChildClick(node)"
             [folderId]="node.id"
+            [folderChildren]="
+              node.data?.k === MenuTreeKind.FOLDER ? node.data.children : []
+            "
             [treeKind]="treeKind()"
           ></nav-item>
         </div>

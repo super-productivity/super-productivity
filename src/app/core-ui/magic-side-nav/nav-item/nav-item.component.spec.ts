@@ -12,6 +12,10 @@ import { GlobalThemeService } from '../../../core/theme/global-theme.service';
 import { MagicNavConfigService } from '../magic-nav-config.service';
 import { selectAllDoneIds } from '../../../features/tasks/store/task.selectors';
 import { ContextMenuComponent } from '../../../ui/context-menu/context-menu.component';
+import {
+  MenuTreeKind,
+  MenuTreeViewNode,
+} from '../../../features/menu-tree/store/menu-tree.model';
 
 @Component({
   template: `
@@ -131,5 +135,99 @@ describe('NavItemComponent row menu', () => {
     const btn: HTMLButtonElement = fixture.nativeElement.querySelector('.additional-btn');
     expect(btn).not.toBeNull();
     expect(btn.getAttribute('aria-label')).toBeTruthy();
+  });
+});
+
+@Component({
+  template: `
+    <nav-item
+      [mode]="'folder'"
+      [folderId]="'folder-f1'"
+      [label]="'Folder'"
+      [folderChildren]="children()"
+      [expanded]="expanded()"
+    ></nav-item>
+  `,
+  imports: [NavItemComponent],
+})
+class FolderHostComponent {
+  readonly children = signal<MenuTreeViewNode[]>([]);
+  readonly expanded = signal(false);
+}
+
+describe('NavItemComponent folder open-task count (#5931)', () => {
+  let fixture: ComponentFixture<FolderHostComponent>;
+
+  const project = (id: string, taskIds: string[]): MenuTreeViewNode =>
+    ({ k: MenuTreeKind.PROJECT, project: { id, taskIds } }) as MenuTreeViewNode;
+  const tag = (id: string, taskIds: string[]): MenuTreeViewNode =>
+    ({ k: MenuTreeKind.TAG, tag: { id, taskIds } }) as MenuTreeViewNode;
+  const folder = (id: string, children: MenuTreeViewNode[]): MenuTreeViewNode => ({
+    k: MenuTreeKind.FOLDER,
+    id,
+    name: id,
+    isExpanded: true,
+    children,
+  });
+  const countText = (): string | undefined =>
+    fixture.nativeElement.querySelector('.task-count')?.textContent?.trim();
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [FolderHostComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        provideMockStore({ selectors: [{ selector: selectAllDoneIds, value: ['t3'] }] }),
+        { provide: GlobalThemeService, useValue: { registerSvgIcon: () => undefined } },
+        { provide: MagicNavConfigService, useValue: {} },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(FolderHostComponent);
+  });
+
+  it('shows no count for an empty folder', () => {
+    fixture.detectChanges();
+    expect(countText()).toBeUndefined();
+  });
+
+  it('sums the open tasks of the projects inside, skipping done ones', () => {
+    fixture.componentInstance.children.set([
+      project('p1', ['t1', 't2']),
+      project('p2', ['t3', 't4']),
+    ]);
+    fixture.detectChanges();
+
+    expect(countText()).toBe('3');
+  });
+
+  it('includes nested folders', () => {
+    fixture.componentInstance.children.set([
+      project('p1', ['t1']),
+      folder('inner', [project('p2', ['t2']), folder('deep', [project('p3', ['t5'])])]),
+    ]);
+    fixture.detectChanges();
+
+    expect(countText()).toBe('3');
+  });
+
+  it('counts a task that is in several tags only once', () => {
+    fixture.componentInstance.children.set([tag('a', ['t1', 't2']), tag('b', ['t2'])]);
+    fixture.detectChanges();
+
+    expect(countText()).toBe('2');
+  });
+
+  it('hides the count while the folder is expanded', () => {
+    fixture.componentInstance.children.set([project('p1', ['t1', 't2'])]);
+    fixture.componentInstance.expanded.set(true);
+    fixture.detectChanges();
+
+    expect(countText()).toBeUndefined();
+
+    fixture.componentInstance.expanded.set(false);
+    fixture.detectChanges();
+
+    expect(countText()).toBe('2');
   });
 });
