@@ -1418,6 +1418,14 @@ describe('PluginIssueProviderAdapterService', () => {
         taskServiceSpy.getByIdOnce$.and.returnValue(of(task as Task));
       };
 
+      const getSnackAction = (): (() => void) => {
+        const snackParams = snackSpy.open.calls.mostRecent().args[0];
+        if (typeof snackParams === 'string' || !snackParams.actionFn) {
+          throw new Error('Expected an actionable warning');
+        }
+        return snackParams.actionFn;
+      };
+
       it('should warn with the current task instead of the stale request snapshot', async () => {
         const provider = createMockProvider({
           getById: jasmine
@@ -1451,24 +1459,9 @@ describe('PluginIssueProviderAdapterService', () => {
           }),
         );
 
-        const snackParams = snackSpy.open.calls.mostRecent().args[0];
-        if (typeof snackParams === 'string') {
-          fail('Expected an actionable warning');
-          return;
-        }
-        const actionFn = snackParams.actionFn;
-        expect(actionFn).toBeDefined();
-        actionFn?.();
+        getSnackAction()();
         expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledOnceWith(['task-1']);
       });
-
-      const getSnackAction = (): (() => void) => {
-        const snackParams = snackSpy.open.calls.mostRecent().args[0];
-        if (typeof snackParams === 'string' || !snackParams.actionFn) {
-          throw new Error('Expected an actionable warning');
-        }
-        return snackParams.actionFn;
-      };
 
       for (const status of [404, 410]) {
         it(`should only warn, not delete, an untracked task when getById returns ${status}`, async () => {
@@ -1498,6 +1491,7 @@ describe('PluginIssueProviderAdapterService', () => {
               msg: T.F.ISSUE.S.ISSUE_NOT_FOUND,
               translateParams: { taskTitle: 'Untracked task' },
               actionStr: T.G.DELETE,
+              config: { duration: 0 },
             }),
           );
 
@@ -1569,8 +1563,9 @@ describe('PluginIssueProviderAdapterService', () => {
               timeSpent: 0,
             }) as unknown as Task,
         );
+        // task-3 was deleted while the request was in flight
         taskServiceSpy.getByIdOnce$.and.callFake((id: string) =>
-          of(tasks.find((t) => t.id === id) as Task),
+          of(tasks.find((t) => t.id === id && id !== 'task-3') as Task),
         );
 
         const result = await service.getFreshDataForIssueTasks(tasks);
@@ -1580,7 +1575,7 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(snackSpy.open).toHaveBeenCalledOnceWith({
           type: 'WARNING',
           msg: T.F.ISSUE.S.ISSUES_NOT_FOUND,
-          translateParams: { nr: 3 },
+          translateParams: { nr: 2 },
         });
         expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
       });

@@ -633,9 +633,11 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
           type: 'WARNING',
           msg: T.F.ISSUE.S.ISSUE_NOT_FOUND,
           translateParams: { taskTitle: task.title },
-          ico: 'delete_forever',
           actionStr: T.G.DELETE,
           actionFn: () => this._removeIfIssueStillMatches(task),
+          // Sticky, so the "No update required" / "Updated data" snack that
+          // follows a refresh cannot replace the only warning of this session.
+          config: { duration: 0 },
         });
       } else if (tasksToWarn.length > 1) {
         // Many misses at once usually mean a wrong setting, not deleted

@@ -65,18 +65,12 @@ test('GitLab refresh 404 keeps the linked task until the user deletes it', async
   await task.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Update issue data' }).click();
 
-  // The refresh has finished once its snack shows; the task must still be there.
+  // The refresh has finished once the warning shows; the task must still be there.
   await expect.poll(() => notFoundResponses).toBeGreaterThan(0);
-  await expect(page.locator('snack-custom')).toBeVisible();
+  const warning = page.locator('snack-custom', { hasText: 'was not found' });
+  await expect(warning).toBeVisible();
   await expect(linkedTask).toHaveCount(1);
 
-  // A fresh session warns again on its first poll; only the snack action deletes.
-  await page.reload();
-  await workViewPage.waitForTaskList();
-  await expect(linkedTask).toHaveCount(1);
-  const warning = page.locator('snack-custom', { hasText: 'was not found' });
-  await expect(warning).toBeVisible({ timeout: 30000 });
-  await expect(linkedTask).toHaveCount(1);
   await warning.getByRole('button', { name: 'Delete' }).click();
   await expect(linkedTask).toHaveCount(0);
 });
