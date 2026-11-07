@@ -1,3 +1,4 @@
+import { reloadControlledDocument } from './controlled-reload';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test } from '../fixtures/test.fixture';
 import { expectNoGlobalError, expectTaskVisible } from '../utils/assertions';
@@ -63,31 +64,10 @@ test.describe('Production PWA service worker script switch', () => {
       )
       .toMatch(/\/ngsw-worker\.js$/);
 
-    // Same controlled-document setup as update-activation.spec.ts.
     const manifestRequestsBeforeControlledReload = await getManifestRequestCount(
       page.request,
     );
-    const controlledDocumentMarker = 'PWA_E2E_CONTROLLED_DOCUMENT';
-    let didStartControlledDocument = false;
-    await page.addInitScript((marker) => console.info(marker), controlledDocumentMarker);
-    const initialUpdateCheck = page.waitForEvent('console', {
-      predicate: (message) => {
-        if (message.text() === controlledDocumentMarker) {
-          didStartControlledDocument = true;
-          return false;
-        }
-        return (
-          didStartControlledDocument &&
-          message
-            .text()
-            .includes('___________isServiceWorkerUpdateAvailable____________ false')
-        );
-      },
-      timeout: 30000,
-    });
-    await page.goto('/?ngsw-bypass=true', { waitUntil: 'domcontentloaded' });
-    await waitForAppReady(page);
-    await initialUpdateCheck;
+    await reloadControlledDocument(page, { bypassCachedImports: true });
     await expect.poll(() => getControllerScript(page)).toMatch(/\/ngsw-worker\.js$/);
     await expect
       .poll(() => getManifestRequestCount(page.request), { timeout: 15000 })
