@@ -282,6 +282,11 @@
     "url": "https://github.com/xavifernando/super-productivity-ai-calendar-planner",
     "author": "xavier sethu",
     "authorUrl": "https://github.com/xavifernando",
-    "id": "ai-calendar-planner"
+    "id": "ai-calendar-planner",
+    "release": {
+      "version": "4.6.0",
+      "downloadUrl": "https://raw.githubusercontent.com/xavifernando/super-productivity-ai-calendar-planner/c3cc8a1c0c3ece3f28313ae4dcf3a74cd00a1dd0/ai-calendar-planner.zip",
+      "sha256": "fa42d4484f30867903d19b24246139e3ce86378fda4db846f47262facc93109c"
+    }
   }
 ]
