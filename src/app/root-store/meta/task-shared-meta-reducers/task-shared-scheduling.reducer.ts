@@ -1,4 +1,4 @@
-import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
+import { Action, MetaReducer } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-state';
 import { TaskSharedActions } from '../task-shared.actions';
@@ -18,6 +18,7 @@ import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { moveItemBeforeItem } from '../../../util/move-item-before-item';
 import {
   ActionHandlerMap,
+  createActionHandlerMetaReducer,
   getTag,
   removeTasksFromList,
   removeTasksFromPlannerDays,
@@ -398,17 +399,5 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   },
 });
 
-export const taskSharedSchedulingMetaReducer: MetaReducer = (
-  reducer: ActionReducer<RootState, Action>,
-) => {
-  return (state: unknown, action: Action) => {
-    if (!state) return reducer(state as RootState | undefined, action);
-
-    const rootState = state as RootState;
-    const actionHandlers = createActionHandlers(rootState, action);
-    const handler = actionHandlers[action.type];
-    const updatedState = handler ? handler(rootState) : rootState;
-
-    return reducer(updatedState, action);
-  };
-};
+export const taskSharedSchedulingMetaReducer: MetaReducer =
+  createActionHandlerMetaReducer(createActionHandlers);
