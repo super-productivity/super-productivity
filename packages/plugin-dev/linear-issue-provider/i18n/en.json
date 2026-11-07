@@ -1,9 +1,12 @@
 {
   "CFG": {
     "API_KEY": "API Key",
-    "TEAM_ID": "Team ID (optional, filter to a specific team)",
-    "PROJECT_ID": "Project ID (optional, filter to a specific project)",
-    "HOW_TO_GET_TOKEN": "Get your API key"
+    "TEAM_ID": "Team (optional)",
+    "PROJECT_ID": "Project (optional)",
+    "HOW_TO_GET_TOKEN": "Get your API key",
+    "SKIP_BACKLOG_ON_AUTO_IMPORT": "Skip issues in Linear's Backlog status",
+    "ALL_TEAMS": "All teams",
+    "ALL_PROJECTS": "All projects"
   },
   "DISPLAY": {
     "SUMMARY": "Summary",
