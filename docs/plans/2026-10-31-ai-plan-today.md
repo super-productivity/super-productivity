@@ -34,8 +34,10 @@ of those commands.
     **Apply without review** skips the list for small change sets and shows
     what was done, old → new, instead (§ 8.1). No undo in the MVP.
   - **A temporary selection:** "what should I focus on today, top 10", "show
-    what's overdue in Work". A list with a reason per task, gone when the
-    panel closes. Rows have the usual done, track and open actions.
+    what's overdue in Work". A list with a reason per task, kept in memory
+    until it is cleared or the app restarts, so closing and reopening the
+    panel shows it again. Rows have add to today, and done, track and open in
+    a menu; picked rows can be added to today or marked done together.
   - **A day plan:** "plan my day". The rev. 2 planner: what to pull in, what
     to move to tomorrow, fitted to today's free time.
 - **Not:** a chat, a companion, nudges, check-ins, "you're behind", streaks,
@@ -242,8 +244,11 @@ Motion, Reclaim and earlier complaints: rev. 2 sources
      are listed last, **unticked by default**, and say "kept in Recently
      deleted on this device for 30 days" (that store is local, never synced).
    - **Selection:** a titled list ("Focus today, top 10") with a reason per
-     row. Each row has done, start tracking and open. These are the user's own
-     clicks, through existing API calls, not AI actions.
+     row. Each row has add to today (a sun icon) and a ⋮ menu with done,
+     start tracking and open; a checkbox per row picks tasks for "Mark done"
+     and "Add N to today" in the footer, and narrows "these" for the next
+     request. These are the user's own clicks, through existing API calls, not
+     AI actions.
    - **Day plan:** _Pull in_ and _Move to tomorrow_ groups plus a local summary
      line ("Today: 7 tasks, 4 h 50 min of 5 h 30 min free").
    - **A sentence** when there is nothing to do or the request is unclear ("Two
@@ -572,7 +577,7 @@ Selections never change anything; day plans follow the same rule.
 **After applying** the panel lists what was done, one row per task with
 old → new ("Today → Tomorrow", "Marked done", "Added"), and each row opens
 the task, so a wrong change is a quick manual fix. The list stays until the
-next request or until the panel closes.
+next request, also across closing and reopening the panel.
 
 **No undo in the MVP.** Applying without review makes the same calls as
 Apply, one ordinary op per task, so it adds no sync behaviour; the

@@ -2,34 +2,36 @@ import { LS } from '../persistence/storage-keys.const';
 import { LaunchFrames, readLaunchFrame, saveLaunchFrame } from './launch-frame';
 
 describe('launch-frame', () => {
+  let iframe: HTMLIFrameElement;
+  let doc: Document;
   let host: HTMLElement;
-  let style: HTMLStyleElement;
   let storedFrames: string | null;
-  let origBodyStyle: string;
 
   beforeEach(() => {
     storedFrames = localStorage.getItem(LS.LAUNCH_FRAME);
     localStorage.removeItem(LS.LAUNCH_FRAME);
-    origBodyStyle = document.body.getAttribute('style') ?? '';
-    document.body.style.backgroundColor = 'rgb(10, 20, 30)';
-    document.body.style.color = 'rgb(200, 210, 220)';
+    // Other suites retain fixtures in the runner document. Use a real, isolated
+    // browsing context so selectors, theme styles and viewport measurements agree.
+    iframe = document.createElement('iframe');
+    iframe.height = '600';
+    document.body.appendChild(iframe);
+    doc = iframe.contentDocument!;
+    doc.body.style.backgroundColor = 'rgb(10, 20, 30)';
+    doc.body.style.color = 'rgb(200, 210, 220)';
 
-    style = document.createElement('style');
+    const style = doc.createElement('style');
     style.textContent = `
       .mobile-bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; height: 44px; }
     `;
-    document.head.appendChild(style);
+    doc.head.appendChild(style);
 
-    host = document.createElement('div');
+    host = doc.createElement('div');
     host.className = 'app-container';
-    document.body.appendChild(host);
+    doc.body.appendChild(host);
   });
 
   afterEach(() => {
-    host.remove();
-    style.remove();
-    document.body.setAttribute('style', origBodyStyle);
-    document.documentElement.dir = '';
+    iframe.remove();
     if (storedFrames === null) {
       localStorage.removeItem(LS.LAUNCH_FRAME);
     } else {
@@ -41,7 +43,7 @@ describe('launch-frame', () => {
     JSON.parse(localStorage.getItem(LS.LAUNCH_FRAME) as string);
 
   it('reads the theme colors of the rendered shell', () => {
-    expect(readLaunchFrame(document)).toEqual(
+    expect(readLaunchFrame(doc)).toEqual(
       jasmine.objectContaining({
         bg: 'rgb(10, 20, 30)',
         fg: 'rgb(200, 210, 220)',
@@ -52,15 +54,15 @@ describe('launch-frame', () => {
   });
 
   it('records RTL', () => {
-    document.documentElement.dir = 'rtl';
+    doc.documentElement.dir = 'rtl';
 
-    expect(readLaunchFrame(document)?.isRtl).toBe(true);
+    expect(readLaunchFrame(doc)?.isRtl).toBe(true);
   });
 
   it('measures the bottom bar from the viewport bottom', () => {
     host.insertAdjacentHTML('beforeend', '<div class="mobile-bottom-nav"></div>');
 
-    expect(readLaunchFrame(document)?.bottomBar).toBe(44);
+    expect(readLaunchFrame(doc)?.bottomBar).toBe(44);
   });
 
   it('ignores a bottom bar that is hidden', () => {
@@ -69,19 +71,35 @@ describe('launch-frame', () => {
       '<div class="mobile-bottom-nav" style="display: none"></div>',
     );
 
-    expect(readLaunchFrame(document)?.bottomBar).toBeNull();
+    expect(readLaunchFrame(doc)?.bottomBar).toBeNull();
+  });
+
+  it('ignores a shell and bottom bar in the runner document', () => {
+    const foreignHost = document.createElement('div');
+    foreignHost.className = 'app-container';
+    foreignHost.innerHTML =
+      '<div class="mobile-bottom-nav" style="position: fixed; bottom: 0; height: 44px"></div>';
+    document.body.appendChild(foreignHost);
+
+    try {
+      expect(readLaunchFrame(doc)?.bottomBar).toBeNull();
+      host.classList.remove('app-container');
+      expect(readLaunchFrame(doc)).toBeNull();
+    } finally {
+      foreignHost.remove();
+    }
   });
 
   it('reads nothing while the shell is not rendered', () => {
     host.classList.remove('app-container');
 
-    expect(readLaunchFrame(document)).toBeNull();
+    expect(readLaunchFrame(doc)).toBeNull();
   });
 
   it('stores frames per mode, keeping the other one', () => {
-    saveLaunchFrame(document, true);
-    document.body.style.backgroundColor = 'rgb(250, 250, 250)';
-    saveLaunchFrame(document, false);
+    saveLaunchFrame(doc, true);
+    doc.body.style.backgroundColor = 'rgb(250, 250, 250)';
+    saveLaunchFrame(doc, false);
 
     expect(stored().dark?.bg).toBe('rgb(10, 20, 30)');
     expect(stored().light?.bg).toBe('rgb(250, 250, 250)');
@@ -90,7 +108,7 @@ describe('launch-frame', () => {
   it('replaces a corrupt entry instead of throwing', () => {
     localStorage.setItem(LS.LAUNCH_FRAME, '{not json');
 
-    expect(() => saveLaunchFrame(document, true)).not.toThrow();
+    expect(() => saveLaunchFrame(doc, true)).not.toThrow();
     expect(stored().dark?.bg).toBe('rgb(10, 20, 30)');
   });
 });

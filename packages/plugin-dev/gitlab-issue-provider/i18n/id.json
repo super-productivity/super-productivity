@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "(default) ID proyek atau nama pengguna/proyek",
+    "PROJECT_HINT": "contoh: johannesjo/produktivitas super",
+    "TOKEN": "Akses Token",
+    "HOW_TO_GET_TOKEN": "Bagaimana cara mendapatkan token?",
+    "SCOPE": "Cakupan",
+    "SCOPE_ALL": "Semua",
+    "SCOPE_CREATED": "Dibuat oleh saya",
+    "SCOPE_ASSIGNED": "Ditugaskan kepada saya",
+    "GITLAB_BASE_URL": "URL dasar GitLab khusus (opsional)",
+    "FILTER_USER": "Nama pengguna (misalnya untuk memfilter perubahan sendiri)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Filter Khusus",
+    "FILTER_DESCRIPTION": "Lihat https://docs.gitlab.com/ee/api/issues.html#list-issues. Beberapa dapat digabungkan dengan &",
+    "SUBMIT_TIMELOGS": "Mengirimkan catatan waktu ke Gitlab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Tampilkan Dialog Pelacakan Waktu setelah mengklik hari selesai"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Ringkasan",
+    "STATE": "Status",
+    "ASSIGNEE": "Penerima tugas",
+    "LABELS": "Label",
+    "DESCRIPTION": "Deskripsi"
+  },
+  "FORM_HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar open GitLab issues (baik versi online atau instance yang dihosting sendiri) untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke masalah tersebut serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua masalah yang terbuka ke backlog tugas Anda.</p>"
+}

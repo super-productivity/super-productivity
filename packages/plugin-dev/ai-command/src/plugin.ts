@@ -29,7 +29,11 @@ const saveSettings = async (patch: Partial<Settings>): Promise<Settings> => {
   return next;
 };
 
-type Message = { type?: string; apiKey?: unknown; settings?: unknown };
+type Message = { type?: string; apiKey?: unknown; settings?: unknown; panel?: unknown };
+
+// What the panel showed, so closing and reopening it brings it back. Memory
+// only: it holds task titles and is gone on app restart.
+let panel: Record<string, unknown> = {};
 
 const HANDLERS: Record<string, (msg: Message) => Promise<unknown>> = {
   getState: async () => ({
@@ -50,6 +54,11 @@ const HANDLERS: Record<string, (msg: Message) => Promise<unknown>> = {
     return { ok: true };
   },
   saveSettings: async (msg) => saveSettings((msg.settings || {}) as Partial<Settings>),
+  getPanel: async () => panel,
+  savePanel: async (msg) => {
+    panel = { ...panel, ...(msg.panel as Record<string, unknown>) };
+    return { ok: true };
+  },
 };
 
 PluginAPI.onMessage?.(async (message: unknown) => {

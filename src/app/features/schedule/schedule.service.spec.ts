@@ -18,6 +18,7 @@ import { BehaviorSubject, of } from 'rxjs';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { HiddenCalendarProvidersService } from '../calendar-integration/hidden-calendar-providers.service';
 import { TaskService } from '../tasks/task.service';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { ScheduleCalendarMapEntry, ScheduleEvent } from './schedule.model';
 import { SVEType } from './schedule.const';
 
@@ -52,6 +53,7 @@ describe('ScheduleService', () => {
           provide: TaskService,
           useValue: { currentTaskId: () => null },
         },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-us' } },
       ],
     });
     service = TestBed.inject(ScheduleService);
@@ -903,6 +905,7 @@ describe('ScheduleService – calendar visibility filter', () => {
         }),
         { provide: CalendarIntegrationService, useValue: { calendarEvents$ } },
         { provide: TaskService, useValue: { currentTaskId: () => null } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-us' } },
         {
           provide: HiddenCalendarProvidersService,
           useValue: { hiddenProviderIds },

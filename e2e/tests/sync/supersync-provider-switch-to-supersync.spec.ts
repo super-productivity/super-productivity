@@ -4,9 +4,11 @@ import {
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  seedSuperSyncCredentials,
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { countServerOpsOfType } from '../../utils/audit-error-paths-helpers';
 import {
   WEBDAV_CONFIG_TEMPLATE,
   createSyncFolder,
@@ -18,7 +20,7 @@ import {
 import { SyncPage } from '../../pages/sync.page';
 import { SuperSyncPage } from '../../pages/supersync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
-import { waitForStatePersistence } from '../../utils/waits';
+import { waitForAppReady, waitForStatePersistence } from '../../utils/waits';
 import { isWebDavServerUp } from '../../utils/check-webdav';
 
 /**
@@ -30,6 +32,11 @@ import { isWebDavServerUp } from '../../utils/check-webdav';
  * the server migration logic detects the empty SuperSync server and the
  * client's existing synced ops, creating a SYNC_IMPORT to migrate data.
  * Another client joining the SuperSync account should receive all tasks.
+ *
+ * The SuperSync encryption key is seeded before the switch. Otherwise the
+ * setup's enable-encryption step deletes the server data and re-uploads it as
+ * its own clean-slate SYNC_IMPORT, which carries the data even when the
+ * migration does nothing.
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true
@@ -119,20 +126,30 @@ test.describe('@supersync Provider Switch WebDAV to SuperSync', () => {
       // ============ PHASE 2: Switch to SuperSync on the same page ============
       console.log('[I.7] Phase 2: Switching to SuperSync (same browser context)');
 
+      // Seed the encryption key, then reload so the credential store reads it:
+      // the setup then skips the enable-encryption clean slate (see header).
+      await seedSuperSyncCredentials(pageA, {
+        baseUrl: syncConfig.baseUrl,
+        accessToken: syncConfig.accessToken,
+        encryptKey: syncConfig.password!,
+      });
+      await pageA.reload({ waitUntil: 'domcontentloaded' });
+      await waitForAppReady(pageA);
+      await workViewPageA.waitForTaskList();
+
       // Use SuperSyncPage on the SAME page to switch providers
       // setupSuperSync right-clicks the sync button to open settings,
       // which works even when another provider is already configured
       const superSyncPageA = new SuperSyncPage(pageA);
-      await superSyncPageA.setupSuperSync({
-        ...syncConfig,
-        isEncryptionEnabled: true,
-        password: 'test-password-123',
-      });
-      console.log('[I.7] Client A: Switched to SuperSync with encryption');
+      await superSyncPageA.setupSuperSync({ ...syncConfig, isEncryptionEnabled: false });
+      console.log('[I.7] Client A: Switched to SuperSync (seeded encryption key)');
 
       // Sync to upload all data to SuperSync
       await superSyncPageA.syncAndWait();
       console.log('[I.7] Client A: Synced to SuperSync');
+
+      // The data reached the server through the migration: exactly one SYNC_IMPORT.
+      expect(await countServerOpsOfType(user.userId, 'SYNC_IMPORT')).toBe(1);
 
       // Verify tasks still exist after the switch
       await expect(pageA.locator('task', { hasText: task1 })).toBeVisible({
@@ -146,12 +163,15 @@ test.describe('@supersync Provider Switch WebDAV to SuperSync', () => {
       // ============ PHASE 3: Client B joins SuperSync ============
       console.log('[I.7] Phase 3: Client B joins SuperSync');
 
-      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
-      await clientB.sync.setupSuperSync({
-        ...syncConfig,
-        isEncryptionEnabled: true,
-        password: 'test-password-123',
+      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId, {
+        seedBeforeBoot: (page) =>
+          seedSuperSyncCredentials(page, {
+            baseUrl: syncConfig.baseUrl,
+            accessToken: syncConfig.accessToken,
+            encryptKey: syncConfig.password!,
+          }),
       });
+      await clientB.sync.setupSuperSync({ ...syncConfig, isEncryptionEnabled: false });
       await clientB.sync.syncAndWait();
 
       // Verify Client B received the tasks

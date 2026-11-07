@@ -74,7 +74,7 @@ main {
   height: 56px;
   z-index: var(--z-focus-mode-close-btn);
   @include mousePrimaryDevice {
-    transition: opacity var(--transition-leave);
+    transition: opacity var(--transition-duration-m) var(--ani-leave-timing);
     //visibility: hidden;
     opacity: 0;
 
@@ -84,7 +84,7 @@ main {
   }
 
   :host:hover & {
-    transition: opacity var(--transition-enter);
+    transition: opacity var(--transition-duration-m) var(--ani-enter-timing);
     //visibility: visible;
     opacity: 1;
   }

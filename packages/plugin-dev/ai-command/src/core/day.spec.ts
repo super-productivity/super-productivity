@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addDays,
+  canAddToToday,
   dayLabel,
   freeMinutesToday,
   isDayStr,
@@ -78,4 +79,18 @@ test('plannedMinutesToday counts open untimed top-level tasks for today', () => 
     task('e', { dueDay: '2026-11-04', timeEstimate: H }),
   ];
   assert.equal(plannedMinutesToday(tasks, DAY), 90);
+});
+
+test('canAddToToday offers only open tasks not already today and without a fixed time', () => {
+  assert.equal(canAddToToday(task('a'), DAY), true);
+  assert.equal(canAddToToday(task('a', { dueDay: '2026-11-01' }), DAY), true); // overdue
+  assert.equal(canAddToToday(task('a', { dueDay: '2026-11-05' }), DAY), true);
+  assert.equal(canAddToToday(task('a', { dueDay: TODAY }), DAY), false);
+  assert.equal(canAddToToday(task('a', { isDone: true }), DAY), false);
+  // A fixed time would be dropped by moving the plain day.
+  assert.equal(
+    canAddToToday(task('a', { dueWithTime: localTs('2026-11-05', 9) }), DAY),
+    false,
+  );
+  assert.equal(canAddToToday(undefined, DAY), false);
 });

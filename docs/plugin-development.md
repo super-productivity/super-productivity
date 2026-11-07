@@ -1161,6 +1161,12 @@ Happy plugin development! 🚀
 
 ## Bonus: Vibe Coding your Plugins
 
+The quickest way is in the app: **Help** → **Build your own plugin** writes the
+prompt below for you, installs the AI's answer and hands load errors back to the
+AI. Its prompt is based on the rules below and includes the `types.ts` of your
+version, so the AI needs no web access; when you change a rule, update both
+(`src/app/plugins/ui/dialog-build-plugin/build-plugin.util.ts`).
+
 ### Tips
 
 - Don't test on your real world data! Use a test instance! (you can use https://test-app.super-productivity.com/ if you don't know how get one)
@@ -1178,13 +1184,14 @@ even for a small plugin.
 ```md
 Write me a plugin for Super Productivity that plays a beep sound every time I click on a header button.
 
-The complete API (the global PluginAPI object): https://raw.githubusercontent.com/super-productivity/super-productivity/master/packages/plugin-api/src/types.ts
+The API (the global PluginAPI object): https://raw.githubusercontent.com/super-productivity/super-productivity/master/packages/plugin-api/src/types.ts
+If you can't open that link, ask me to paste the file instead of guessing.
 A working starter: https://github.com/super-productivity/super-productivity/tree/master/packages/plugin-starter
 
 Rules:
 
-- Only use PluginAPI methods and hooks listed in types.ts. If something is not possible with them, say so instead of inventing a method.
-- manifest.json needs id (letters, numbers and dashes), name, version, "manifestVersion": 1, minSupVersion, "hooks": [] and "permissions": [].
+- Only use PluginAPI members and hooks defined in types.ts. If something is not possible with them, say so instead of inventing a method.
+- manifest.json needs id (lowercase letters, numbers and dashes), name, version, "manifestVersion": 1, minSupVersion, "hooks": [] (registerHook works without listing hooks there) and "permissions": [].
 - plugin.js is not a module: no import/export, no top-level await. Put async startup code in PluginAPI.onReady(async () => { ... }).
 - Header buttons, menu entries, shortcuts and side panel buttons can only be registered from plugin.js, not from index.html.
 - A UI goes in index.html with "iFrame": true in the manifest. Inline all CSS and JavaScript; other files are not served to it.

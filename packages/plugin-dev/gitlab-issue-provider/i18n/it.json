@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "Percorso completo o nome utente / progetto",
+    "PROJECT_HINT": "es. super-productivity/super-productivity",
+    "TOKEN": "Token di accesso",
+    "HOW_TO_GET_TOKEN": "Come ottenere un token?",
+    "SCOPE": "Scopo",
+    "SCOPE_ALL": "Tutti",
+    "SCOPE_CREATED": "Creato da me",
+    "SCOPE_ASSIGNED": "Assegnato a me",
+    "GITLAB_BASE_URL": "URL di base GitLab personalizzato",
+    "FILTER_USER": "Nome utente (es. per filtrare le modifiche fatte da te)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Filtro Personalizzato",
+    "FILTER_DESCRIPTION": "Vedi https://docs.gitlab.com/ee/api/issues.html#list-issues. I filtri multipli possono essere combinati con &",
+    "SUBMIT_TIMELOGS": "Invia timelog a GitLab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Mostra la finestra di dialogo del Time Tracking dopo aver cliccato sulla conclusione della giornata"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Riepilogo",
+    "STATE": "Stato",
+    "ASSIGNEE": "Assegnatario",
+    "LABELS": "Etichette",
+    "DESCRIPTION": "Descrizione"
+  },
+  "FORM_HELP": "<p> Qui puoi configurare SuperProductivity per elencare i problemi di GitLab aperti (sia la versione online o un'istanza ospitata autonomamente) per un progetto specifico nel pannello di creazione dell'attività nella vista di pianificazione giornaliera. Saranno elencati come suggerimenti e forniranno un collegamento al problema, nonché ulteriori informazioni al riguardo. </p> <p> Inoltre puoi aggiungere e sincronizzare automaticamente tutti i problemi aperti nelle attività arretrate. </p>"
+}

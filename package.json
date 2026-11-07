@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "19.3.1",
+  "version": "20.0.0",
   "description": "A to-do list, time tracker and daily planner for focused personal work",
   "keywords": [
     "ToDo",
@@ -78,12 +78,13 @@
     "screenshots:capture": "npx playwright test --config e2e/playwright.store-screenshots.config.ts",
     "screenshots:capture:desktop": "npx playwright test --config e2e/playwright.store-screenshots.config.ts --project=desktopMaster",
     "screenshots:capture:mobile": "npx playwright test --config e2e/playwright.store-screenshots.config.ts --project=iphone69 --project=ipad13 --project=androidPhone --project=android7Tablet --project=android10Tablet",
-    "screenshots:build": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' npx ts-node --transpile-only e2e/store-screenshots/build-store-assets.ts",
+    "screenshots:build": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"ignoreDeprecations\":\"6.0\",\"rootDir\":\".\"}' npx ts-node --transpile-only e2e/store-screenshots/build-store-assets.ts",
     "screenshots:build:flathub": "SP_SCREENSHOTS_STORE=flathub npm run screenshots:build",
     "screenshots:capture:electron": "npm run electron:build && SCREENSHOT_MODE=electron npx playwright test --config e2e/playwright.store-screenshots.electron.config.ts",
     "screenshots:capture:flathub": "SP_SCREENSHOT_BG_DISABLE=1 npm run screenshots:capture:electron",
     "screenshots:electron": "npm run screenshots:capture:electron && npm run screenshots:build",
     "screenshots:flathub": "npm run screenshots:capture:flathub && npm run screenshots:build:flathub",
+    "screenshots:flathub:native": "node -e \"require('fs').rmSync('dist/screenshots/_master_electron',{recursive:true,force:true})\" && SP_SCREENSHOT_NATIVE=1 SP_SCREENSHOT_FORCE_THEME=light npm run screenshots:capture:flathub && SP_SCREENSHOT_NATIVE=1 npm run screenshots:build:flathub",
     "video": "npm run video:capture && npm run video:build && npm run video:open",
     "video:capture": "npx playwright test --config e2e/playwright.store-video.config.ts",
     "video:kit-test": "npx playwright test --config e2e/playwright.video-kit.config.ts",
@@ -115,7 +116,7 @@
     "lint": "npm run lint:ts && npm run lint:scss && npm run lint:css-vars && npm run test:lint-rules && npm run test:tools && npm run test:mac-icon",
     "sync-fuzz:compare": "node tools/sync-fuzz-compare.js",
     "test:lint-rules": "node eslint-local-rules/run-specs.js",
-    "test:tools": "node --test --test-reporter=dot tools/verify-electron-test-exclusion.test.js tools/theme-assets.test.js tools/check-css-vars.test.js tools/verify-linux-wm-class.test.js tools/verify-linux-rpm-exec.test.js tools/verify-windows-artifact-contract.test.js tools/strip-service-worker-assets.test.js tools/verify-ios-quick-actions.test.js tools/verify-android-url-hosts.test.js tools/verify-android-shortcuts.test.js tools/check-file.test.js tools/pre-check.test.js tools/sync-fuzz-compare.test.js tools/ios-testflight-version.test.js tools/test-affected.test.js tools/verify-community-plugins.test.js tools/quiet.test.js",
+    "test:tools": "node --test --test-reporter=dot tools/verify-electron-test-exclusion.test.js tools/theme-assets.test.js tools/check-css-vars.test.js tools/verify-linux-wm-class.test.js tools/verify-linux-rpm-exec.test.js tools/verify-windows-artifact-contract.test.js tools/verify-appx-config.test.js tools/strip-service-worker-assets.test.js tools/verify-ios-quick-actions.test.js tools/verify-android-url-hosts.test.js tools/verify-android-shortcuts.test.js tools/check-file.test.js tools/pre-check.test.js tools/sync-fuzz-compare.test.js tools/ios-testflight-version.test.js tools/test-affected.test.js tools/verify-community-plugins.test.js tools/quiet.test.js",
     "test:mac-icon": "node --test --test-reporter=dot tools/verify-mac-icon.test.js",
     "lint:ts": "ng lint",
     "lint:scss": "stylelint \"**/*.scss\" \"src/assets/themes/*.css\" -- --custom-formatter @csstools/stylelint-formatter-github",
@@ -195,10 +196,6 @@
     "plugins:build": "npm run plugin-api:build && npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
     "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent",
     "plugin-starter:check": "node tools/check-plugin-starter.js"
-  },
-  "resolutions": {
-    "sass": "1.32.6",
-    "@ctrl/tinycolor": "4.1.0"
   },
   "dependencies": {
     "@capacitor/browser": "^8.0.5",
@@ -368,11 +365,11 @@
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-x64": "^3.5.4",
-    "@lmdb/lmdb-linux-x64": "^3.5.4",
+    "@lmdb/lmdb-linux-x64": "^3.5.9",
     "@lmdb/lmdb-win32-x64": "^3.5.4",
-    "@rollup/rollup-darwin-x64": "4.60.2",
-    "@rollup/rollup-linux-x64-gnu": "4.60.2",
-    "@rollup/rollup-win32-x64-msvc": "4.60.2"
+    "@rollup/rollup-darwin-x64": "4.66.0",
+    "@rollup/rollup-linux-x64-gnu": "4.66.0",
+    "@rollup/rollup-win32-x64-msvc": "4.66.0"
   },
   "workspaces": [
     "packages/*",
