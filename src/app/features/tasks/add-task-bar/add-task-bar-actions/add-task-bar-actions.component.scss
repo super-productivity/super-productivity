@@ -19,6 +19,15 @@
   }
 }
 
+// The action row is the last child of `.add-task-container` unless the note
+// field is expanded, so its bottom edge is the card's bottom edge. The card
+// does not clip (it keeps `overflow: visible`), and the edge cue above is an
+// opaque square strip, so without a matching corner it paints over the card's
+// rounded bottom end.
+:host(:last-child)::after {
+  border-end-end-radius: var(--card-border-radius);
+}
+
 :host-context([dir='rtl'])::after {
   background: linear-gradient(to left, transparent, var(--bg-lighter));
 }
