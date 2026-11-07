@@ -64,7 +64,6 @@ describe('GitLab Plugin - manifest-facing config', () => {
       'tokenHelp',
       'scope',
       'gitlabBaseUrl',
-      'filterUsername',
       'filter',
       'isSubmitWorklogOnFinishDay',
     ]);

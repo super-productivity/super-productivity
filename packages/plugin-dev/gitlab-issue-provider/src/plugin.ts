@@ -56,7 +56,6 @@ interface GitlabConfig {
   token?: string;
   gitlabBaseUrl?: string;
   scope?: GitlabScope;
-  filterUsername?: string;
   filter?: string;
   isSubmitWorklogOnFinishDay?: boolean;
 }
@@ -245,13 +244,6 @@ registerIssueProvider({
       type: 'input',
       label: t('CFG.GITLAB_BASE_URL'),
       pattern: BASE_URL_PATTERN,
-      advanced: true,
-    },
-    {
-      key: 'filterUsername',
-      type: 'input',
-      label: t('CFG.FILTER_USER'),
-      description: t('CFG.FILTER_USER_DESC'),
       advanced: true,
     },
     {
