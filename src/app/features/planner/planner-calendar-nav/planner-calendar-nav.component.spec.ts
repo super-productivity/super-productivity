@@ -1,7 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { of } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   DAYS_IN_VIEW,
   MIN_ROW_HEIGHT,
@@ -57,15 +59,25 @@ describe('PlannerCalendarNavComponent', () => {
         todayDateStr: mockTodayDateStr,
       },
     );
+    const mockTranslateService = {
+      get: (key: string) => of(key),
+      instant: (key: string) => key,
+      getCurrentLang: () => 'en',
+      getFallbackLang: () => 'en',
+      onTranslationChange: { subscribe: () => ({ unsubscribe: () => {} }) },
+      onLangChange: { subscribe: () => ({ unsubscribe: () => {} }) },
+      onFallbackLangChange: { subscribe: () => ({ unsubscribe: () => {} }) },
+    };
 
     TestBed.configureTestingModule({
-      imports: [PlannerCalendarNavComponent],
+      imports: [PlannerCalendarNavComponent, TranslateModule],
       providers: [
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         {
           provide: GlobalTrackingIntervalService,
           useValue: mockGlobalTrackingIntervalService,
         },
+        { provide: TranslateService, useValue: mockTranslateService },
         {
           provide: DateTimeFormatService,
           // monthLabel formats a spelled-out month, so it reads textLocale().

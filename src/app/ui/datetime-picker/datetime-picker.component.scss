@@ -212,3 +212,51 @@
     cursor: pointer;
   }
 }
+
+// Week number column for the calendar
+.calendar-week-number-wrapper {
+  display: flex;
+  flex-direction: row;
+
+  .week-number-col {
+    display: flex;
+    flex-direction: column;
+    width: 32px;
+    padding-right: 8px;
+    margin-top: 55px; // Adjust for header (was 36px, was 22px too high, now -3px for header alignment)
+    flex-shrink: 0;
+
+    .week-number-header {
+      font-size: 11px;
+      color: var(--text-color-muted);
+      text-align: center;
+      line-height: 1;
+      padding: 4px 0; // Header height ~8px
+      margin-bottom: 12px; // Spacing between header and cells
+      flex-shrink: 0;
+    }
+
+    .week-number-cell {
+      font-size: 11px;
+      color: var(--text-color-muted);
+      text-align: center;
+      line-height: 1;
+      height: 54.85px; // Match calendar row height
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      &.blank-week {
+        visibility: hidden; // Hide blank rows but preserve spacing
+      }
+    }
+  }
+
+  .calendar-wrapper {
+    flex: 1;
+
+    mat-calendar {
+      width: 100%;
+    }
+  }
+}
