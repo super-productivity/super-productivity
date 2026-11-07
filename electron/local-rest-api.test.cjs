@@ -1165,8 +1165,9 @@ test('recovering a token does not start a server the user disabled', async () =>
 
 test('switching the API off clears a token storage error', () => {
   const brokenProfileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-clear-'));
+  const port = takeIsolatedPort();
   const ctx = createContext({
-    port: takeIsolatedPort(),
+    port,
     userDataDir: path.join(brokenProfileDir, 'not-created-yet'),
   });
   const isolated = loadModule(ctx);
@@ -1180,6 +1181,7 @@ test('switching the API off clears a token storage error', () => {
     assert.deepEqual(isolated.getLocalRestApiState(), {
       isEnabled: false,
       isListening: false,
+      port,
     });
   } finally {
     fs.rmSync(brokenProfileDir, { recursive: true, force: true });
@@ -1243,6 +1245,87 @@ const waitFor = async (predicate, label) => {
 const readSimpleStore = (dir) =>
   JSON.parse(fs.readFileSync(path.join(dir, 'simpleSettings'), 'utf8'));
 
+// A second profile runs on its own port; the port is read once, at load.
+test('SP_LOCAL_REST_API_PORT moves the listener, the Host check and the state', async () => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-port-'));
+  const defaultPort = takeIsolatedPort();
+  const customPort = takeIsolatedPort();
+  const ctx = createContext({ port: defaultPort, userDataDir: profileDir });
+  const originalEnv = process.env.SP_LOCAL_REST_API_PORT;
+  process.env.SP_LOCAL_REST_API_PORT = String(customPort);
+  let isolated;
+  try {
+    isolated = loadModule(ctx);
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.SP_LOCAL_REST_API_PORT;
+    } else {
+      process.env.SP_LOCAL_REST_API_PORT = originalEnv;
+    }
+  }
+
+  try {
+    isolated.initLocalRestApi();
+    const state = await ctx.handleHandlers.get('LOCAL_REST_API_SET_ENABLED')({}, true);
+    assert.deepEqual(state, { isEnabled: true, isListening: true, port: customPort });
+
+    const health = await makeRequest(
+      { method: 'GET', path: '/health' },
+      undefined,
+      customPort,
+    );
+    assert.equal(health.status, 200);
+    const staleHost = await makeRequest(
+      { method: 'GET', path: '/health', headers: { Host: `127.0.0.1:${defaultPort}` } },
+      undefined,
+      customPort,
+    );
+    assert.equal(staleHost.status, 403);
+    await assert.rejects(
+      makeRequest({ method: 'GET', path: '/health' }, undefined, defaultPort),
+      /ECONNREFUSED/,
+    );
+
+    const assistantState = await ctx.handleHandlers.get('ASSISTANT_ACCESS_GET_STATE')();
+    assert.equal(assistantState.port, customPort);
+  } finally {
+    isolated.applyLocalRestApiEnabled(false);
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
+});
+
+test('a rejected SP_LOCAL_REST_API_PORT is logged and the default is used', async () => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-bad-port-'));
+  const port = takeIsolatedPort();
+  const ctx = createContext({ port, userDataDir: profileDir });
+  const originalEnv = process.env.SP_LOCAL_REST_API_PORT;
+  process.env.SP_LOCAL_REST_API_PORT = '80';
+  let isolated;
+  try {
+    isolated = loadModule(ctx);
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.SP_LOCAL_REST_API_PORT;
+    } else {
+      process.env.SP_LOCAL_REST_API_PORT = originalEnv;
+    }
+  }
+
+  try {
+    isolated.initLocalRestApi();
+    assert.ok(
+      ctx.warnings.some((args) =>
+        String(args[0]).includes('Ignoring SP_LOCAL_REST_API_PORT="80"'),
+      ),
+      'the rejected value must be logged',
+    );
+    assert.equal(isolated.getLocalRestApiState().port, port);
+  } finally {
+    isolated.applyLocalRestApiEnabled(false);
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
+});
+
 // The switch is device-local now: a fresh profile starts off, whatever any
 // synced config says, and nothing is written until the user chooses.
 test('a fresh profile starts disabled and does not listen', async () => {
@@ -1258,6 +1341,7 @@ test('a fresh profile starts disabled and does not listen', async () => {
     assert.deepEqual(isolated.getLocalRestApiState(), {
       isEnabled: false,
       isListening: false,
+      port,
     });
     await assert.rejects(
       makeRequest({ method: 'GET', path: '/health' }, undefined, port),
@@ -1279,7 +1363,7 @@ test('the enable IPC persists the choice and a restart restores it', async () =>
     first.initLocalRestApi();
     const setEnabled = ctx.handleHandlers.get('LOCAL_REST_API_SET_ENABLED');
     const state = await setEnabled({}, true);
-    assert.deepEqual(state, { isEnabled: true, isListening: true });
+    assert.deepEqual(state, { isEnabled: true, isListening: true, port });
     assert.equal(readSimpleStore(profileDir).localRestApiEnabled, true);
     const health = await makeRequest({ method: 'GET', path: '/health' }, undefined, port);
     assert.equal(health.status, 200);
@@ -1288,6 +1372,7 @@ test('the enable IPC persists the choice and a restart restores it', async () =>
     assert.deepEqual(await setEnabled({}, false), {
       isEnabled: false,
       isListening: false,
+      port,
     });
     assert.equal(readSimpleStore(profileDir).localRestApiEnabled, false);
     await settleListen();
@@ -1364,6 +1449,7 @@ test('a port that is already taken is reported in the state', async () => {
     assert.deepEqual(state, {
       isEnabled: true,
       isListening: false,
+      port,
       error: 'PORT_IN_USE',
     });
   } finally {
@@ -1392,6 +1478,7 @@ test('disabling REST retries a failed bind when assistant access still needs it'
     assert.deepEqual(await setRest({}, false), {
       isEnabled: false,
       isListening: true,
+      port,
     });
     assert.equal(
       (await makeRequest({ method: 'GET', path: '/health' }, undefined, port)).status,
