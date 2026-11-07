@@ -52,6 +52,7 @@ For each changed file:
 - Replace `<element>Text</element>` with `<element>{{ T.KEY | translate }}</element>`
 - Replace `attribute="Text"` with `[attribute]="T.KEY | translate"`
 - `T.KEY` alone renders the raw key string; always add the `translate` pipe
+- If the component does not use the pipe yet, add `TranslatePipe` (from `@ngx-translate/core`) to its standalone `imports`
 
 2. **In TS files**:
 
@@ -87,7 +88,7 @@ Optional arguments:
   <input placeholder="Search..." />
 
   <!-- Skip these -->
-  <button>{{ T.F.TASK.BUTTON_CLICK | translate }}</button>
+  <button>{{ T.G.CANCEL | translate }}</button>
   <mat-label>{{ 'LABEL_NAME' | translate }}</mat-label>
 </div>
 ```
@@ -101,15 +102,15 @@ const message = 'Error occurred';
 dialogConfig.data = { title: 'Confirm' };
 
 // Skip these
-this._snackService.open({ type: 'SUCCESS', msg: T.F.TASK.S.SAVED });
-const message = this._translateService.instant(T.F.TASK.S.ERROR);
+this._snackService.open({ type: 'SUCCESS', msg: T.F.TASK.S.DELETED });
+const message = this._translateService.instant(T.F.TASK.D_TIME.TITLE);
 ```
 
 ### Key Naming Conventions
 
 Follow the existing nested pattern in en.json (`T` mirrors it):
 
-- Features live under `F.<FEATURE>`, e.g. `F.TASK.D_EDIT.TITLE`, `F.TAG.FORM_BASIC.L_TITLE`
+- Features live under `F.<FEATURE>`, e.g. `F.TASK.D_TIME.TITLE`, `F.TAG.FORM_BASIC.L_TITLE`
 - Snack messages under `F.<FEATURE>.S.*`, dialogs under `F.<FEATURE>.D_<NAME>.*`
 - Shared labels under `G.*` (e.g. `G.CANCEL`, `G.DELETE`); reuse them before adding new keys
 
