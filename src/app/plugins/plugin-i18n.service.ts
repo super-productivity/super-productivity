@@ -3,6 +3,7 @@ import { PluginLog } from '../core/log';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { DEFAULT_LANGUAGE } from '../core/locale.constants';
 import { environment } from '../../environments/environment';
+import { LanguageService } from '../core/language/language.service';
 
 interface PluginTranslations {
   [language: string]: Record<string, unknown>;
@@ -17,6 +18,7 @@ interface PluginTranslations {
 })
 export class PluginI18nService {
   private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _languageService = inject(LanguageService);
 
   // Map of pluginId -> translations by language
   private readonly _translations = new Map<string, PluginTranslations>();
@@ -28,7 +30,8 @@ export class PluginI18nService {
   constructor() {
     // Reactively sync with global config language
     effect(() => {
-      const lng = this._globalConfigService.localization()?.lng;
+      const lng =
+        this._globalConfigService.localization()?.lng || this._languageService.detect();
       if (lng && lng !== this._currentLanguage()) {
         this._currentLanguage.set(lng);
         PluginLog.log(`[PluginI18n] Language initialized/updated to: ${lng}`);
