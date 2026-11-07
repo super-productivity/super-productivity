@@ -14,6 +14,8 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.superproductivity.superproductivity.App
 import com.superproductivity.superproductivity.BuildConfig
+import com.superproductivity.superproductivity.CapacitorMainActivity
+import com.superproductivity.superproductivity.FullscreenActivity
 import com.superproductivity.superproductivity.FullscreenActivity.Companion.WINDOW_INTERFACE_PROPERTY
 import com.superproductivity.superproductivity.app.LaunchDecider
 import com.superproductivity.superproductivity.review.InAppReview
@@ -90,6 +92,25 @@ class JavaScriptInterface(
         val launchDecider = LaunchDecider(activity)
         val launchMode = launchDecider.getLaunchMode()
         return "${versionName}_L$launchMode"
+    }
+
+    /**
+     * Online-mode sunset (#8832): the web bundle calls this once it has written
+     * and verified the native-store backup, which the offline app restores on
+     * its blank first start. Only the legacy online activity may hand over, so a
+     * misdetecting offline caller can never trigger a restart.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun switchToOfflineMode(): Boolean {
+        if (activity !is FullscreenActivity || !LaunchDecider(activity).switchToOfflineMode()) {
+            return false
+        }
+        activity.runOnUiThread {
+            activity.startActivity(Intent(activity, CapacitorMainActivity::class.java))
+            activity.finish()
+        }
+        return true
     }
 
     // Tells the web bundle that snooze/tap events carry the reminder type, so it
