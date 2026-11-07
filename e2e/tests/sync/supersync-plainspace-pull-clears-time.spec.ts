@@ -16,7 +16,15 @@ import {
 } from '../../utils/plainspace-fake';
 
 const TASK_ID = 'task-1';
-const REMOTE_TIME = '2026-11-03T14:30:00.000Z';
+// A time in the future: a past time would fire its reminder and the reminder
+// dialog would block the rest of the test. Whole minutes keep ISO round-trips exact.
+const inDays = (days: number): string => {
+  const offsetMs = days * 24 * 60 * 60 * 1000;
+  const d = new Date(Date.now() + offsetMs);
+  d.setUTCSeconds(0, 0);
+  return d.toISOString();
+};
+const REMOTE_TIME = inDays(7);
 
 /** The task's `dueWithTime` as this client's store has it, or null. */
 const dueWithTime = (page: Page): Promise<number | null> =>

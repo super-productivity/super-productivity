@@ -80,12 +80,13 @@ describe('BoardsService', () => {
     expect(navigate).toHaveBeenCalledOnceWith(['/boards', 'new-id']);
   });
 
-  it('opens the edit dialog full screen on phones', async () => {
+  it('opens the edit dialog full screen on phones, focusing the dialog itself', async () => {
     await service.editBoard(board);
     expect(open).toHaveBeenCalledOnceWith(DialogBoardEditComponent, {
       restoreFocus: true,
       panelClass: 'fullscreen-xs-dialog',
       data: { board },
+      autoFocus: 'dialog',
     });
   });
 

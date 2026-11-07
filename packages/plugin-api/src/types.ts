@@ -165,6 +165,37 @@ export interface PluginNodeScriptResult {
   };
 }
 
+/**
+ * Kinds of user data a plugin can declare in `dataSharing`. The host renders each as a
+ * translated label; values unknown to an older app render as "other data".
+ */
+export type PluginSharedData =
+  | 'credentials' // tokens or passwords the user entered for this recipient
+  | 'userText' // free text the user types for the recipient: search terms, a request
+  | 'taskTitles'
+  | 'taskNotes'
+  | 'taskSchedule' // due dates and times, estimates, free time
+  | 'taskStatus' // done state
+  | 'timeTracked' // worklogs and their comments, time spent
+  | 'projectAndTagNames'
+  | 'ids'; // task, project or tag ids
+
+/** One recipient of a plugin's data. See `PluginManifest.dataSharing`. */
+export interface PluginDataDestination {
+  /** Shown as-is, e.g. "GitHub". */
+  recipient: string;
+  /** Exact hostnames, like `allowedHosts`. */
+  hosts?: string[];
+  /** The user enters the server, e.g. a self-hosted instance or a webhook URL. */
+  userServer?: boolean;
+  /** Sent whenever the plugin is in use. */
+  data: PluginSharedData[];
+  /** Sent only after the user turns on a plugin setting, e.g. pushing notes. */
+  optionalData?: PluginSharedData[];
+  /** Must be an `https:` URL. */
+  privacyPolicyUrl?: string;
+}
+
 export interface PluginManifest {
   name: string;
   id: string;
@@ -198,6 +229,14 @@ export interface PluginManifest {
    * remains out of scope.
    */
   allowedHosts?: string[];
+  /**
+   * What user data this plugin sends off the device, and to whom. `[]` declares that it
+   * sends nothing. Shown to the user at install, in the integration setup dialog and in
+   * the plugin's details. Declared by the author: the host checks only `PluginAPI.request`
+   * against `allowedHosts`, so every `allowedHosts` entry must appear in some
+   * destination's `hosts`.
+   */
+  dataSharing?: PluginDataDestination[];
   iFrame?: boolean;
   isSkipMenuEntry?: boolean;
   type?: 'standard' | 'issueProvider';
@@ -748,7 +787,11 @@ export interface PluginAPI {
    * follow, and for a recurring task the repeat config and every instance
    * (archived ones included) move without a confirmation.
    */
-  updateTask(taskId: string, updates: Partial<Task>): Promise<void>;
+  updateTask(
+    taskId: string,
+    updates: Partial<Task>,
+    options?: PluginUpdateTaskOptions,
+  ): Promise<void>;
 
   addTask(taskData: PluginCreateTaskData): Promise<string>;
 
@@ -881,7 +924,9 @@ export interface PluginAPI {
   // main-process user consent)
   executeNodeScript?(request: PluginNodeScriptRequest): Promise<PluginNodeScriptResult>;
 
-  // action execution - dispatch NgRx actions (limited to allowed subset)
+  // action execution - dispatch NgRx actions (limited to allowed subset).
+  // `{ type: '[Layout] Show PluginPanel', pluginId }` opens the plugin's own
+  // side panel, e.g. from a shortcut; another plugin's id is rejected.
   dispatchAction(action: { type: string; [key: string]: unknown }): void;
 
   // window state
@@ -926,6 +971,17 @@ export interface PluginCreateTaskData {
   isDone?: boolean;
   /** Due date as ISO date string (YYYY-MM-DD) */
   dueDay?: string | null;
+  /**
+   * Keep the title verbatim: skip short syntax parsing (`#tag`, `@date`,
+   * `+project`, `30m/1h`). Set this when the title comes from user content or
+   * a model rather than from the user typing short syntax.
+   */
+  isIgnoreShortSyntax?: boolean;
+}
+
+export interface PluginUpdateTaskOptions {
+  /** Keep a changed title verbatim, see `PluginCreateTaskData.isIgnoreShortSyntax`. */
+  isIgnoreShortSyntax?: boolean;
 }
 
 export interface PluginShortcutCfg {

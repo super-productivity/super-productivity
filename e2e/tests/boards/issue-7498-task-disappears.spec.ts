@@ -49,13 +49,12 @@ test.describe('Boards #7498', () => {
 
     await taskPage.markTaskAsDone(task);
 
-    // Fixed behavior: the task is still in its original quadrant, in its
-    // collapsed Done group (as in task lists).
-    const doneGroup = notUrgentNotImportantPanel.locator('.done-group');
-    await expect(doneGroup).toContainText('(1)');
-    await doneGroup.locator('.collapsible-header').click();
+    // Fixed behavior: the task is still in its original quadrant, after its
+    // open cards and outside the drop list (done cards stay put).
     await expect(
-      doneGroup.locator('planner-task').filter({ hasText: taskName }),
+      notUrgentNotImportantPanel
+        .locator('.task-items > planner-task')
+        .filter({ hasText: taskName }),
     ).toBeVisible();
   });
 });

@@ -4,6 +4,9 @@ import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForStatePersistence } from '../../utils/waits';
 import {
   WEBDAV_CONFIG_TEMPLATE,
+  WEBDAV_SYNC_FILE,
+  WEBDAV_SYNC_FORMAT,
+  readPrefixedFile,
   setupSyncClient,
   createSyncFolder,
   waitForSyncComplete,
@@ -24,6 +27,10 @@ import {
  *
  * Run with: npm run e2e:file e2e/tests/sync/webdav-encryption-disable.spec.ts
  */
+
+const WEBDAV_AUTHORIZATION = `Basic ${Buffer.from(
+  `${WEBDAV_CONFIG_TEMPLATE.username}:${WEBDAV_CONFIG_TEMPLATE.password}`,
+).toString('base64')}`;
 
 test.describe('@webdav @encryption WebDAV Encryption Disable', () => {
   test.describe.configure({ mode: 'serial' });
@@ -73,8 +80,17 @@ test.describe('@webdav @encryption WebDAV Encryption Disable', () => {
     await waitForStatePersistence(pageA);
 
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
-    console.log(`[EncryptDisable] Client A created and synced: ${encryptedTask}`);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
+    console.log('[EncryptDisable] Client A created and synced the encrypted task');
+
+    // Precondition: the remote file is really encrypted, so the plaintext
+    // check after the disable below proves the re-upload happened.
+    const syncFileUrl = `${WEBDAV_CONFIG.baseUrl}${SYNC_FOLDER_NAME}/DEV/${WEBDAV_SYNC_FILE}`;
+    const encryptedResponse = await request.get(syncFileUrl, {
+      headers: { Authorization: WEBDAV_AUTHORIZATION },
+    });
+    expect(encryptedResponse.ok()).toBe(true);
+    expect(await encryptedResponse.text()).not.toContain(encryptedTask);
 
     // Wait for state to fully persist before proceeding
     await waitForStatePersistence(pageA);
@@ -94,6 +110,19 @@ test.describe('@webdav @encryption WebDAV Encryption Disable', () => {
     await syncPageA.disableEncryptionForFileBased();
     console.log('[EncryptDisable] Client A disabled encryption');
 
+    // v2 only: the v3 split format keeps state in other files, so a v3 run
+    // does not prove the re-upload here.
+    if (WEBDAV_SYNC_FORMAT === 'v2') {
+      // The disable itself uploads an unencrypted snapshot: right away, before
+      // any further sync, the file parses as plain JSON and holds the task.
+      const plain = await readPrefixedFile<unknown>(
+        request,
+        syncFileUrl,
+        WEBDAV_AUTHORIZATION,
+      );
+      expect(JSON.stringify(plain)).toContain(encryptedTask);
+    }
+
     // Verify task still exists after encryption removal
     await expect(pageA.locator(`task:has-text("${encryptedTask}")`)).toBeVisible();
 
@@ -103,8 +132,8 @@ test.describe('@webdav @encryption WebDAV Encryption Disable', () => {
     await waitForStatePersistence(pageA);
 
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
-    console.log(`[EncryptDisable] Client A created unencrypted: ${unencryptedTask}`);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
+    console.log('[EncryptDisable] Client A created and synced an unencrypted task');
 
     // ============ PHASE 3: Fresh Client B joins without encryption ============
     console.log('[EncryptDisable] Phase 3: Client B joining without encryption');
@@ -124,7 +153,7 @@ test.describe('@webdav @encryption WebDAV Encryption Disable', () => {
 
     // Sync to receive data
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[EncryptDisable] Client B synced');
 
     // Verify Client B has both tasks (use .first() in case task appears in multiple views)
@@ -144,11 +173,11 @@ test.describe('@webdav @encryption WebDAV Encryption Disable', () => {
     await waitForStatePersistence(pageB);
 
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
 
     // Client A should receive the new task
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     await expect(pageA.locator(`task:has-text("${finalTask}")`).first()).toBeVisible();
 
     console.log('[EncryptDisable] ✓ Encryption disabled successfully!');

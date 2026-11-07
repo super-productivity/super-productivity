@@ -2,10 +2,21 @@ import { InjectionToken, Signal } from '@angular/core';
 import type { TaskCopy } from './task.model';
 import type { TaskAddEvent } from './add-task-bar/add-task-bar.component';
 
+/**
+ * What a view's column fills into the add-task bar as chips the user can
+ * remove: the user's choice wins over the column's rules.
+ */
+export interface ViewTaskPrefill {
+  fields: { projectId?: string; tagIds?: string[]; dueDay?: string };
+  /** Whether a task with these fields would not show in the column. */
+  isHidden(fields: Partial<TaskCopy>): boolean;
+}
+
 /** What the regular add-task bar needs to add a task into a view's column. */
 export interface ViewNewTaskTarget {
   /** Always carries a `projectId`: the bar must not fall back to the stale context. */
   additionalFields: Partial<TaskCopy>;
+  prefill: ViewTaskPrefill;
   tagsToRemove: string[];
   taskIdsToExclude: string[];
 }

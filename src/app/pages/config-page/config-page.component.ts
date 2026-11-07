@@ -87,6 +87,7 @@ import {
   SETTINGS_SYNC_BACKUP_TAB_INDEX,
   SettingsSearchTarget,
 } from '../../features/config/settings-search.util';
+import { openSyncSettingsDialog } from '../../imex/sync/open-sync-settings-dialog';
 
 /**
  * Starts expanded so the feature toggles are visible on opening Settings —
@@ -401,9 +402,7 @@ export class ConfigPageComponent implements OnInit {
   }
 
   async openSyncCfgDialog(): Promise<void> {
-    const { DialogSyncCfgComponent } =
-      await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component');
-    this._matDialog.open(DialogSyncCfgComponent);
+    await openSyncSettingsDialog(this._matDialog, this.configService.sync());
   }
 
   triggerSync(): void {

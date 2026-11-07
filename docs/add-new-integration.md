@@ -66,6 +66,13 @@ Minimal manifest:
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": ["http"],
+  "dataSharing": [
+    {
+      "recipient": "Example",
+      "userServer": true,
+      "data": ["credentials", "userText"]
+    }
+  ],
   "hooks": [],
   "issueProvider": {
     "pollIntervalMs": 600000,
@@ -88,6 +95,11 @@ must name a built-in SVG icon (`BUILT_IN_SVG_ICONS` in
 Omit `issueProvider.issueProviderKey` for a new provider. The host assigns
 `plugin:<plugin-id>`. That field is reserved for repository-managed plugins that
 migrate an existing built-in key and its persisted configurations.
+
+`dataSharing` lists what the provider sends and to whom. It is shown when the user
+connects an account, so declare everything the provider can send; see
+[Declaring what your plugin sends](plugin-development.md#declaring-what-your-plugin-sends-datasharing).
+Bundled plugins must declare it (`electron/bundled-plugin-ids.test.cjs`).
 
 ## 2. Register the provider
 

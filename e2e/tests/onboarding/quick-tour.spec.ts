@@ -8,7 +8,7 @@ import {
 import { waitForStatePersistence } from '../../utils/waits';
 
 // Up to the inline icon, whose ligature name is part of the text content.
-const INBOX_TIP = 'Tasks without a project of your own stay in';
+const INBOX_TIP = 'Tasks without a project of your own go to';
 const DECLINED = "It's under Help → Quick tour";
 
 /** First run without the seeded Inbox tasks, so the user's task is the only one. */
@@ -109,9 +109,19 @@ test.describe('Quick tour', () => {
     await expect(page).toHaveURL(/\/planner/);
     const card = page.locator('quick-tour-card');
     await expect(card).toContainText('Want more?');
-    await expect(card).toContainText('5 of 5');
+    // 5: it names the features a new install starts without, and sync.
+    await expect(card).toContainText('Switched off for now');
+    await expect(card.locator('.features li span')).toHaveText([
+      'Views',
+      'Schedule',
+      'Habits',
+      'Focus mode',
+      'Finish day',
+      'Issues panel',
+    ]);
+    await expect(card).toContainText('Your data stays on this device');
 
-    // 5: the card leads to the feature switches in Settings.
+    // The card leads to the feature switches in Settings.
     await card.getByRole('button', { name: 'Open settings ›' }).click();
     await expect(page).toHaveURL(/\/config\?section=appFeatures/);
     await expect(card).toHaveCount(0);
@@ -313,8 +323,8 @@ test.describe('Quick tour', () => {
       await page.locator('magic-side-nav .tour-planner').first().tap();
       await expect(page).toHaveURL(/\/planner/);
       const card = page.locator('quick-tour-card');
-      await expect(card).toContainText('3 of 3');
-      await expect(card).toContainText('Search everything from ☰');
+      await expect(card).toContainText('Switched off for now');
+      await expect(card).toContainText('Focus mode');
       await card.getByRole('button', { name: 'Done' }).tap();
       await expect(card).toHaveCount(0);
 

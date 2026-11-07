@@ -37,7 +37,7 @@ const run = (dir, ...args) =>
   spawnSync(process.execPath, [quiet, ...args], { cwd: dir, encoding: 'utf8' });
 
 const logPathOf = (dir, output) =>
-  path.resolve(dir, output.match(/(?:log: |lines of )(\S+)/)[1]);
+  path.resolve(dir, output.match(/(?:log: |lines of )(.+?)(?: ---)?$/m)[1]);
 
 test('quiet prints one result line and the test counts for a passing script', () => {
   const dir = makePackage();

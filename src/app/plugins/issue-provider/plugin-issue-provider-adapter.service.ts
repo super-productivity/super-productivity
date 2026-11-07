@@ -20,6 +20,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { TaskService } from '../../features/tasks/task.service';
 import { TagService } from '../../features/tag/tag.service';
 import { sortTagLabels } from './plugin-tag-utils';
+import { extractPluginSyncValues } from './plugin-sync-values';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { T } from '../../t.const';
 import { PluginLog } from '../../core/log';
@@ -155,7 +156,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     }
 
     const issue = issueData as PluginIssue;
-    const syncValues = this._extractSyncValues(issue, provider);
+    const syncValues = extractPluginSyncValues(provider.definition, issue);
     const tagIds = this._extractInitialTagIds(provider, syncValues, pluginCfg, issue);
 
     return {
@@ -358,7 +359,10 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       issue.lastUpdated != null && issue.lastUpdated > (task.issueLastUpdated || 0);
     if (isUpdated) {
       // Compute sync values once and pass through to avoid redundant calls
-      const issueLastSyncedValues = this._extractSyncValues(issue, resolved.provider);
+      const issueLastSyncedValues = extractPluginSyncValues(
+        resolved.provider.definition,
+        issue,
+      );
 
       // _buildBaseIssueTask emits content fields — title, isDone, and a due
       // date when the issue carries one — straight from the raw issue. Two
@@ -383,6 +387,9 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       );
       delete baseTaskData.dueDay;
       delete baseTaskData.dueWithTime;
+      // local bookkeeping of time already submitted (finish-day worklog);
+      // the issue carries no such data, so a refresh must not reset it
+      delete baseTaskData.issueTimeTracked;
       // Completion is only re-pulled from a provider that declares what done
       // means. Without doneStates the default word list is a guess, and a
       // calendar's 'confirmed' would reopen a task the user completed (#9905);
@@ -460,35 +467,6 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return typeof n === 'number' ? n : undefined;
   }
 
-  private _extractSyncValues(
-    issue: PluginIssue,
-    provider: RegisteredPluginIssueProvider,
-  ): Record<string, unknown> {
-    const fieldMappings = provider.definition.fieldMappings;
-    if (!fieldMappings?.length) {
-      return {};
-    }
-
-    const data = provider.definition.extractSyncValues
-      ? provider.definition.extractSyncValues(issue)
-      : (issue as Record<string, unknown>);
-    const issueRecord = issue as Record<string, unknown>;
-    const result: Record<string, unknown> = {};
-
-    for (const mapping of fieldMappings) {
-      const value = Object.prototype.hasOwnProperty.call(data, mapping.issueField)
-        ? data[mapping.issueField]
-        : issueRecord[mapping.issueField];
-      if (value === undefined) {
-        continue;
-      }
-      result[mapping.issueField] =
-        mapping.taskField === 'tagIds' ? sortTagLabels(value) : value;
-    }
-
-    return result;
-  }
-
   /**
    * Maps issue fields onto task fields for the IMPORT path only, where there is
    * no local content to protect and every mapping applies. Refreshing an
@@ -554,7 +532,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       issueWasUpdated: false,
       issueLastUpdated: data.lastUpdated ?? 0,
       issueAttachmentNr: 0,
-      issuePoints: undefined,
+      issuePoints: typeof data.points === 'number' ? data.points : undefined,
       issueTimeTracked: undefined,
       isDone,
       ...(dueWithTime != null

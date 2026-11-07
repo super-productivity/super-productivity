@@ -1,130 +1,233 @@
+@use '../../../../../styles/_globals.scss' as *;
+
 :host {
   display: block;
-  padding: var(--s) var(--s2) var(--s2);
-  border: 1px solid var(--divider-color);
+  // The label column, shared with the view's Layout row.
+  --view-editor-label-w: 88px;
+}
+
+// On the dialog's own surface, outlined: a card is never darker than the
+// dialog (dark themes too). Open or closed, it looks the same; the chevron
+// and the rules tell them apart.
+// Two columns: the drag handle, centred on the bar, then the bar and below it
+// the summary or rules, all starting where the title starts.
+.card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--s-half);
+  padding: var(--s-half) var(--s) var(--s-half) var(--s-half);
+  border: 1px solid var(--extra-border-color);
   border-radius: var(--card-border-radius);
+  background: transparent;
+  transition: var(--transition-standard);
+}
+
+.card.is-open {
+  --view-editor-label-w: 64px;
+}
+
+// Phones: full-width rows, the list's own top and bottom lines only (the
+// editor overlaps neighbours so two cards share one line).
+.card {
+  @include mq(xs, max) {
+    border-inline: 0;
+    border-radius: 0;
+    // The chevron's icon ends where the dialog's content does.
+    padding-inline-end: var(--s2);
+  }
+}
+
+.card > :not(.drag-handle) {
+  grid-column: 2;
+}
+
+.drag-handle {
+  flex: 0 0 auto;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--text-color-muted);
+  cursor: grab;
+}
+
+// Keeps a bar-less card's rules where they are once it has a bar.
+.drag-handle.is-placeholder {
+  visibility: hidden;
+}
+
+// With a mouse, the handle shows where the pointer is (and while dragged);
+// touch has no hover, so it always shows there.
+.drag-handle {
+  transition: opacity var(--transition-duration-s);
+
+  @include mousePrimaryDevice {
+    opacity: 0;
+  }
+}
+
+.card:hover > .drag-handle {
+  @include mousePrimaryDevice {
+    opacity: 1;
+  }
+}
+
+// A finger needs more than the 18px glyph, which on phones also sits at the
+// screen's edge: a press beside it landed on the card and scrolled the list
+// instead. On touch the handle is a finger-wide strip down the whole card,
+// the glyph still level with the bar. The placeholder keeps the same width,
+// so a flat list's rules stay put once it gets bars.
+.drag-handle {
+  @include touchPrimaryDevice {
+    box-sizing: content-box;
+    padding-inline: 11px;
+  }
+}
+
+.drag-handle:not(.is-placeholder) {
+  @include touchPrimaryDevice {
+    grid-row: span 2;
+    align-self: stretch;
+    height: auto;
+    min-height: 18px;
+    padding-top: calc((var(--s6) - 18px) / 2);
+    // The strip drags, never pans: the browser can't claim the gesture as a
+    // scroll before the drag starts (as on notes, note.component.scss).
+    touch-action: none;
+  }
+}
+
+:host(.cdk-drag-preview) .drag-handle {
+  opacity: 1;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   gap: var(--s);
+  min-height: var(--s6);
 }
 
 .section-title {
   flex: 1 1 auto;
   min-width: 0;
+  color: var(--text-color);
+  font-weight: var(--font-weight-semibold);
+}
+
+// The bar of a card that opens and closes: all of it is the target.
+.card.is-collapsible .section-header {
+  cursor: pointer;
+}
+
+// A closed card answers the pointer, as its bar and summary open it.
+@media (hover: hover) {
+  .card.is-collapsible:not(.is-open):hover {
+    background: var(--state-hover);
+  }
+}
+
+// Below the bar, inside what animates: a gap between the bar and the summary
+// or rules would count twice while one leaves and the other enters.
+.card .summary,
+.card .section-body {
+  padding-top: var(--s-half);
+}
+
+// A collapsed card's title, as the open card's text shows it.
+.title-static {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.section-toggle mat-icon {
+  // --transition-standard already embeds `all`; do not prefix a property
+  transition: var(--transition-standard);
+
+  .card.is-open & {
+    transform: rotate(180deg);
+  }
 }
 
 .count {
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
+  // A live preview, not a label: set apart from "Rules" above it.
+  font-style: italic;
   white-space: nowrap;
-}
-
-.rules-heading,
-.section-label,
-.rules-heading-label {
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-wide);
-}
-
-.rules-heading {
-  margin: var(--s2) 0 var(--s);
-}
-
-.no-rules {
-  margin: 0 0 var(--s);
-  color: var(--text-color-muted);
-}
-
-// One row per rule on every width: the control (a select labelled with the
-// rule's name) fills it, the remove button ends it.
-.rule-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s);
-  padding: var(--s-half) 0;
-}
-
-.rule-control {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-half);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-// A tag rule's name above its chips, where a select has its floating label.
-.rule-label--field {
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-}
-
-.rule-note {
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-}
-
-// Keeps the sort row's control aligned with the rule rows above it.
-.remove-rule {
-  flex: 0 0 auto;
-}
-
-span.remove-rule {
-  width: var(--s5);
-}
-
-.add-rule {
-  margin: var(--s-half) 0 var(--s);
-}
-
-.sort-row {
-  border-top: 1px solid var(--divider-color);
-  padding-top: var(--s);
-}
-
-// The collapsed card's line: count and rule summary, opens the card. Open,
-// it is the rules' heading with the count, like a single section's header.
-.section-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--s);
-  width: 100%;
-  margin-top: var(--s);
-  padding: var(--s);
-  border: 0;
-  border-radius: var(--card-border-radius);
-  background: transparent;
-  color: var(--text-color-muted);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-
-  &:hover {
-    background: var(--state-hover);
-  }
 }
 
 // Two lines: on a phone one line ends before the rules that tell the cards
 // apart.
-.section-summary {
-  flex: 1 1 auto;
-  min-width: 0;
+.summary {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
+  padding-bottom: var(--s);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  cursor: pointer;
 }
 
-.section-toggle-icon {
-  flex: 0 0 auto;
-  transition: transform var(--transition-duration-m) var(--ani-standard-timing);
+.section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-bottom: var(--s);
+}
 
-  [aria-expanded='true'] > & {
-    transform: rotate(180deg);
+// Label column, then the controls: aligned with the view's Layout row. On a
+// phone the label goes above, so the chips get the card's whole width.
+.form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-half) var(--s2);
+  align-items: start;
+
+  @include mq(xs) {
+    grid-template-columns: var(--view-editor-label-w) minmax(0, 1fr);
   }
+}
+
+.form-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-quarter) var(--s);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+
+  @include mq(xs) {
+    flex-direction: column;
+    padding-top: var(--s-half);
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s);
+}
+
+.divider {
+  border-top: 1px solid var(--divider-color);
+
+  // Phones: the line between sections is a full-width border too; a line
+  // inside a section would read as one more boundary.
+  @include mq(xs, max) {
+    display: none;
+  }
+}
+
+.rule-note {
+  margin: 0;
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
 }

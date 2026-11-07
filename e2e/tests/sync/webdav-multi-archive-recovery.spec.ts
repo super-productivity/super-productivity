@@ -11,6 +11,10 @@ import {
   waitForSyncComplete,
   closeContextsSafely,
 } from '../../utils/sync-helpers';
+import {
+  expectArchivedNotLive,
+  getStoreTaskIdByTitle,
+} from '../../utils/audit-webdav-helpers';
 
 const blockBackgroundSync = async (page: Page): Promise<void> => {
   await page.evaluate(() => {
@@ -76,17 +80,21 @@ test.describe('@webdav overlapping bulk archive recovery (#10102)', () => {
         }
 
         await localSync.setupWebdavSync(config);
-        await waitForSyncComplete(local.page, localSync);
+        expect(await waitForSyncComplete(local.page, localSync)).toBe('success');
         await blockBackgroundSync(local.page);
         for (const title of titles) await localWork.addTask(title);
+        const titleIds: string[] = [];
+        for (const title of titles) {
+          titleIds.push(await getStoreTaskIdByTitle(local.page, title));
+        }
         await localSync.triggerSync();
-        await waitForSyncComplete(local.page, localSync);
+        expect(await waitForSyncComplete(local.page, localSync)).toBe('success');
         // Finish Day requests its own sync. Model an offline device so those
         // requests cannot upload the first archive before the second exists.
         await local.page.route('http://127.0.0.1:2345/**', (route) => route.abort());
 
         await remoteSync.setupWebdavSync(config);
-        await waitForSyncComplete(remote.page, remoteSync);
+        expect(await waitForSyncComplete(remote.page, remoteSync)).toBe('success');
         await blockBackgroundSync(remote.page);
         await expect(remote.page.locator('task')).toHaveCount(2);
         await new TaskPage(remote.page).markTaskAsDone(
@@ -94,7 +102,7 @@ test.describe('@webdav overlapping bulk archive recovery (#10102)', () => {
         );
         await remoteWork.addTask('Remote-only task');
         await remoteSync.triggerSync();
-        await waitForSyncComplete(remote.page, remoteSync);
+        expect(await waitForSyncComplete(remote.page, remoteSync)).toBe('success');
 
         await archiveTasks(local.page, titles);
         for (const title of titles) {
@@ -178,6 +186,13 @@ test.describe('@webdav overlapping bulk archive recovery (#10102)', () => {
                 page.locator('.task-summary-table tr', { hasText: title }),
               ).toBeVisible();
             }
+            // The history also lists live tasks: prove they are archived.
+            await page.goto('/#/tag/TODAY/tasks');
+            await new WorkViewPage(page).waitForTaskList();
+            for (const title of titles) {
+              await expect(page.locator('task', { hasText: title })).toHaveCount(0);
+            }
+            await expectArchivedNotLive(page, titleIds, 'archived titles');
           } else {
             for (const title of titles) {
               await expect(page.locator('task', { hasText: title })).toBeVisible();

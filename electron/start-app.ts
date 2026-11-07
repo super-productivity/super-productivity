@@ -1,5 +1,6 @@
 import { initIpcInterfaces } from './ipc-handler';
 import { initPluginOAuth } from './plugin-oauth';
+import { initCertTrust } from './cert-trust';
 import electronLog, { info, log, warn } from 'electron-log/main';
 import {
   App,
@@ -32,6 +33,7 @@ import {
 import { getIsQuiting } from './shared-state';
 import { initPowerMonitorHandlers } from './power-monitor-handlers';
 import { evaluateGpuStartupGuard } from './gpu-startup-guard';
+import { START_MINIMIZED_ARG } from './start-minimized';
 import * as fs from 'fs';
 
 const ICONS_FOLDER = __dirname + '/assets/icons/';
@@ -52,6 +54,7 @@ let isShowDevTools: boolean = IS_DEV;
 let customUrl: string;
 let isDisableTray = false;
 let forceDarkTray = false;
+let isStartMinimized = false;
 
 if (IS_DEV) {
   log('Starting in DEV Mode!!!');
@@ -125,6 +128,11 @@ export const startApp = (): void => {
     if (val && val.includes('--force-dark-tray')) {
       forceDarkTray = true;
       log('Force dark mode for tray icon');
+    }
+
+    if (val && val.includes(START_MINIMIZED_ARG)) {
+      isStartMinimized = true;
+      log('Start minimized');
     }
 
     if (val && val.includes('--user-data-dir=')) {
@@ -219,16 +227,7 @@ export const startApp = (): void => {
     });
   }
 
-  // Allow invalid certificates for self-hosted services (Jira, GitLab, Redmine, etc.)
-  // WARNING: This bypasses certificate validation for ALL URLs. Many users rely on
-  // self-signed certificates for their self-hosted integrations, so removing this
-  // would be a breaking change. The trade-off is reduced TLS security in exchange
-  // for compatibility with self-hosted servers.
-  appIN.on('certificate-error', (event, webContents, url, err, certificate, callback) => {
-    warn(`Certificate error for ${url}: ${err}`);
-    event.preventDefault();
-    callback(true);
-  });
+  initCertTrust(appIN);
 
   // APP EVENT LISTENERS
   // -------------------
@@ -408,7 +407,7 @@ export const startApp = (): void => {
     }, CONFIG.IDLE_PING_INTERVAL);
     // --------END IDLE HANDLING---------
 
-    initPowerMonitorHandlers(powerMonitor, mainWin, sendIdleMsgIfOverMin);
+    initPowerMonitorHandlers(powerMonitor, () => mainWin, sendIdleMsgIfOverMin);
   });
 
   appIN.on('will-quit', () => {
@@ -500,6 +499,7 @@ export const startApp = (): void => {
       ICONS_FOLDER,
       quitApp,
       customUrl,
+      isStartMinimized,
     });
 
     initPluginOAuth(mainWin);

@@ -4,7 +4,9 @@ import {
   NO_ERRORS_SCHEMA,
   Provider,
   WritableSignal,
+  input,
   signal,
+  viewChild,
 } from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -49,6 +51,35 @@ import { BoardsService } from '../../../features/boards/boards.service';
 })
 class TitleHostComponent {}
 
+// The title bar's ⋮ menus are components that own their `mat-menu`; these
+// stand in for them without their services.
+@Component({
+  selector: 'work-context-menu',
+  standalone: true,
+  imports: [MatMenu],
+  template: `<mat-menu></mat-menu>`,
+  // As the real ones: no box, so no flex gap in the measured row.
+  styles: [':host { display: contents; }'],
+})
+class WorkContextMenuStubComponent {
+  readonly contextId = input<string>();
+  readonly contextType = input<WorkContextType>();
+  readonly menu = viewChild.required(MatMenu);
+}
+
+@Component({
+  selector: 'view-menu',
+  standalone: true,
+  imports: [MatMenu],
+  template: `<mat-menu></mat-menu>`,
+  // As the real ones: no box, so no flex gap in the measured row.
+  styles: [':host { display: contents; }'],
+})
+class ViewMenuStubComponent {
+  readonly board = input<BoardCfg>();
+  readonly menu = viewChild.required(MatMenu);
+}
+
 describe('PageTitleComponent', () => {
   let routerEvents$: Subject<NavigationEnd>;
   let routerStub: { events: Subject<NavigationEnd>; url: string };
@@ -64,6 +95,8 @@ describe('PageTitleComponent', () => {
   let pluginStates: Map<string, PluginState>;
   let editBoardSpy: jasmine.Spy;
   let setViewLayoutSpy: jasmine.Spy;
+  let langChange$: Subject<unknown>;
+  let translateInstant: (key: string) => string;
 
   // `color` is a Tag-only field not surfaced on WorkContext's type.
   const wc = (o: Partial<WorkContext> & { color?: string | null }): WorkContext =>
@@ -127,13 +160,18 @@ describe('PageTitleComponent', () => {
       : [
           {
             provide: TranslateService,
-            useValue: { instant: (key: string) => key },
+            useValue: {
+              instant: (key: string) => translateInstant(key),
+              onLangChange: langChange$,
+            },
           },
         ]),
   ];
 
   beforeEach(async () => {
     routerEvents$ = new Subject<NavigationEnd>();
+    langChange$ = new Subject<unknown>();
+    translateInstant = (key) => key;
     routerStub = { events: routerEvents$, url: '/' };
     typeAndId$ = new BehaviorSubject<{ activeId: string; activeType: WorkContextType }>({
       activeId: 'TODAY',
@@ -225,6 +263,15 @@ describe('PageTitleComponent', () => {
 
       routerEvents$.next(new NavigationEnd(2, '/config', '/config#plugins'));
       expect(c.displayTitle()).toBe(T.PS.GLOBAL_SETTINGS);
+    });
+
+    it('re-translates the section title when the language changes', () => {
+      const c = setupComponent('/config');
+      expect(c.displayTitle()).toBe(T.PS.GLOBAL_SETTINGS);
+
+      translateInstant = (key) => `de:${key}`;
+      langChange$.next({ lang: 'de' });
+      expect(c.displayTitle()).toBe(`de:${T.PS.GLOBAL_SETTINGS}`);
     });
   });
 
@@ -430,12 +477,11 @@ describe('PageTitleComponent', () => {
   });
 
   // Keeps the real template — that is the whole point — but drops the
-  // directives that only decorate it. Four have to stay: `MatMenu`, because
-  // the template resolves `#activeWorkContextMenu="matMenu"` and an
-  // unresolvable `exportAs` is a compile error NO_ERRORS_SCHEMA does not cover,
-  // `MatMenuTrigger`, which the filter-shortcut specs drive, and
-  // `MatIconButton`/`MatIcon`, because the specs below measure the boxes they
-  // draw. `RouterLink` stays out, so no `ActivatedRoute` is needed.
+  // directives that only decorate it. These have to stay: the ⋮ menu stubs,
+  // because the triggers read their `menu()`, `MatMenuTrigger`, which the
+  // filter-shortcut specs drive, and `MatIconButton`/`MatIcon`, because the
+  // specs below measure the boxes they draw. `RouterLink` stays out, so no
+  // `ActivatedRoute` is needed.
   const configureRender = async (): Promise<void> => {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -444,7 +490,14 @@ describe('PageTitleComponent', () => {
     })
       .overrideComponent(PageTitleComponent, {
         set: {
-          imports: [TranslatePipe, MatMenu, MatMenuTrigger, MatIconButton, MatIcon],
+          imports: [
+            TranslatePipe,
+            WorkContextMenuStubComponent,
+            ViewMenuStubComponent,
+            MatMenuTrigger,
+            MatIconButton,
+            MatIcon,
+          ],
           schemas: [NO_ERRORS_SCHEMA],
         },
       })
@@ -628,7 +681,8 @@ describe('PageTitleComponent', () => {
           set: {
             imports: [
               TranslatePipe,
-              MatMenu,
+              WorkContextMenuStubComponent,
+              ViewMenuStubComponent,
               MatMenuTrigger,
               MatIconButton,
               MatIcon,
