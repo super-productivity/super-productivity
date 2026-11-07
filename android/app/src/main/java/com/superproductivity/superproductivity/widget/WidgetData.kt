@@ -14,6 +14,12 @@ data class WidgetTask(
     val isPending: Boolean = false
 )
 
+/** A project a widget instance can be pointed at (#9518). */
+data class WidgetProject(
+    val id: String,
+    val title: String
+)
+
 /** The task currently being tracked — on this device or, via SuperSync presence, a remote one. */
 data class WidgetCurrentTask(
     val title: String,
@@ -66,19 +72,37 @@ object WidgetData {
     private const val DAY_STR_PATTERN = "yyyy-MM-dd"
 
     /**
+     * How long a queued "open this project" request from a widget tap stays valid.
+     * A background launch that Android blocks fails silently, so without a deadline
+     * the request would wait for the next app start, however much later, and open
+     * the project unasked. A minute covers a slow cold start.
+     */
+    const val PROJECT_OPEN_REQUEST_TTL_MS = 60_000L
+
+    /**
      * @param pendingDoneTargets per-task done-state targets queued via
      * [WidgetDoneQueue] but not yet applied by Angular — overlaid so a checkbox
      * tap is reflected immediately even while the app process is dead.
+     * @param selectedProjectId the project this widget instance shows, or null for
+     * Today. An id missing from the snapshot (deleted, archived or hidden project,
+     * or a blob written before `projects` existed) falls back to Today.
      */
     fun parse(
         json: String,
-        pendingDoneTargets: Map<String, Boolean> = emptyMap()
+        pendingDoneTargets: Map<String, Boolean> = emptyMap(),
+        selectedProjectId: String? = null
     ): List<WidgetTask> {
         val root = JSONObject(json)
         if (root.optInt("v", -1) != SUPPORTED_VERSION) {
             return emptyList()
         }
-        val tasksArray = root.optJSONArray("tasks") ?: return emptyList()
+        // Project lists hold open tasks only (Angular leaves done ones out), so a
+        // checked row there shows only until the next push applies the tap.
+        val tasksArray = selectedProjectId
+            ?.let { usableProject(root, it) }
+            ?.optJSONArray("tasks")
+            ?: root.optJSONArray("tasks")
+            ?: return emptyList()
         val projectColors = root.optJSONObject("projectColors")
         val result = mutableListOf<WidgetTask>()
         for (i in 0 until tasksArray.length()) {
@@ -101,6 +125,50 @@ object WidgetData {
         }
         return result
     }
+
+    /** The projects the snapshot offers for the widget's project picker. */
+    fun parseProjects(json: String): List<WidgetProject> {
+        val root = JSONObject(json)
+        if (root.optInt("v", -1) != SUPPORTED_VERSION) {
+            return emptyList()
+        }
+        val projects = root.optJSONArray("projects") ?: return emptyList()
+        return (0 until projects.length()).mapNotNull { i ->
+            projects.getJSONObject(i).takeIf(::isUsableProject)?.let {
+                WidgetProject(it.getString("id"), it.getString("title"))
+            }
+        }
+    }
+
+    /**
+     * The header for a project widget, or null when [projectId] is not a usable
+     * project in the snapshot — the same check [parse] uses, so header and rows
+     * always fall back to Today together.
+     */
+    fun projectTitle(json: String, projectId: String): String? {
+        val root = JSONObject(json)
+        if (root.optInt("v", -1) != SUPPORTED_VERSION) {
+            return null
+        }
+        return usableProject(root, projectId)?.getString("title")
+    }
+
+    /** Whether a project-open request queued at [queuedAtMs] may still be acted on. */
+    fun isProjectOpenRequestFresh(queuedAtMs: Long, nowMs: Long): Boolean =
+        queuedAtMs > 0L && nowMs >= queuedAtMs && nowMs - queuedAtMs < PROJECT_OPEN_REQUEST_TTL_MS
+
+    private fun usableProject(root: JSONObject, projectId: String): JSONObject? {
+        val projects = root.optJSONArray("projects") ?: return null
+        return (0 until projects.length())
+            .map { projects.getJSONObject(it) }
+            .firstOrNull { !it.isNull("id") && it.optString("id") == projectId }
+            ?.takeIf(::isUsableProject)
+    }
+
+    private fun isUsableProject(project: JSONObject): Boolean =
+        !project.isNull("id") && project.optString("id").isNotEmpty() &&
+            !project.isNull("title") && project.optString("title").isNotEmpty() &&
+            project.optJSONArray("tasks") != null
 
     /**
      * Puts the title captures from [CaptureInbox.pendingJson] (widget quick adds)

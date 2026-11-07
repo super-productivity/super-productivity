@@ -7,7 +7,10 @@ import {
   selectTaskEntities,
   SnapshotStructureEntry,
 } from '../../tasks/store/task.selectors';
-import { selectProjectFeatureState } from '../../project/store/project.selectors';
+import {
+  selectProjectFeatureState,
+  selectUnarchivedVisibleProjects,
+} from '../../project/store/project.selectors';
 import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
@@ -15,6 +18,7 @@ import {
 import {
   AndroidWidgetCurrentTask,
   AndroidWidgetData,
+  AndroidWidgetProject,
   AndroidWidgetTask,
 } from '../android-widget.model';
 import { Task } from '../../tasks/task.model';
@@ -177,15 +181,25 @@ const orderTodayTasksLikeTodayScreen = (
   ];
 };
 
+/** Rows a project widget can show; matches the native list's MAX_TASKS. */
+const MAX_WIDGET_PROJECT_TASKS = 20;
+
 /**
- * Projects today's tasks into the exact `widget_data` blob shape, so downstream
+ * Projects today's tasks, plus the open tasks of every project a widget can be
+ * pointed at (#9518), into the exact `widget_data` blob shape, so downstream
  * consumers get referential stability from the selector memoization and cheap
  * change detection via JSON comparison in WidgetDataService.
+ *
+ * A project widget lists only OPEN tasks, in the project's own order (list, then
+ * backlog). Done tasks are left out here rather than filtered natively, so they
+ * never take one of the 20 rows. A checkbox tap still shows as checked at once
+ * through the native pending-done overlay; the row goes on the next push.
  */
 export const selectAndroidWidgetData = createSelector(
   selectTodayTaskIds,
   selectTaskEntities,
   selectProjectFeatureState,
+  selectUnarchivedVisibleProjects,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
   selectCurrentTaskId,
@@ -195,6 +209,7 @@ export const selectAndroidWidgetData = createSelector(
     todayTaskIds,
     taskEntities,
     projectState,
+    visibleProjects,
     dayStr,
     startOfNextDayDiffMs,
     currentTaskId,
@@ -203,12 +218,7 @@ export const selectAndroidWidgetData = createSelector(
   ): AndroidWidgetData => {
     const tasks: AndroidWidgetTask[] = [];
     const projectColors: { [projectId: string]: string } = {};
-
-    for (const task of orderTodayTasksLikeTodayScreen(todayTaskIds, taskEntities, {
-      laterTodayStructure,
-      todaySections: sectionsByContextId.get(TODAY_TAG.id) ?? [],
-      endOfTodayTime: getEndOfTodayTime(dayStr, startOfNextDayDiffMs),
-    })) {
+    const toWidgetTask = (task: Task): AndroidWidgetTask => {
       const widgetTask: AndroidWidgetTask = {
         id: task.id,
         title: task.title,
@@ -221,8 +231,33 @@ export const selectAndroidWidgetData = createSelector(
           projectColors[task.projectId] = color;
         }
       }
-      tasks.push(widgetTask);
+      return widgetTask;
+    };
+
+    for (const task of orderTodayTasksLikeTodayScreen(todayTaskIds, taskEntities, {
+      laterTodayStructure,
+      todaySections: sectionsByContextId.get(TODAY_TAG.id) ?? [],
+      endOfTodayTime: getEndOfTodayTime(dayStr, startOfNextDayDiffMs),
+    })) {
+      tasks.push(toWidgetTask(task));
     }
+
+    const projects: AndroidWidgetProject[] = visibleProjects.map((project) => {
+      const projectTasks: AndroidWidgetTask[] = [];
+      for (const taskId of [
+        ...(project.taskIds || []),
+        ...(project.backlogTaskIds || []),
+      ]) {
+        if (projectTasks.length >= MAX_WIDGET_PROJECT_TASKS) {
+          break;
+        }
+        const task = taskEntities[taskId];
+        if (task && !task.isDone) {
+          projectTasks.push(toWidgetTask(task));
+        }
+      }
+      return { id: project.id, title: project.title, tasks: projectTasks };
+    });
 
     return {
       v: 1,
@@ -231,6 +266,7 @@ export const selectAndroidWidgetData = createSelector(
       tasks,
       projectColors,
       currentTask: buildLocalCurrentTask(currentTaskId, taskEntities),
+      projects,
     };
   },
 );
