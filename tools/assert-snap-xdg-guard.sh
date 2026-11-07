@@ -4,6 +4,9 @@
 # unguarded XDG migration aborts every launch after the first when an XDG dir is
 # a symlink to an empty dir (#10576). A failed or dropped patch still builds
 # green, so CI checks the payload. Needs unsquashfs (squashfs-tools).
+#
+# core24 builds do not use the template path — use tools/assert-snap-core24.sh
+# instead (wired from build.yml / build-publish-to-snap-on-release.yml).
 set -euo pipefail
 
 SNAP_FILE="${1:?usage: assert-snap-xdg-guard.sh <file.snap>}"

@@ -142,6 +142,30 @@ jobs:
       - name: Build Frontend & Electron
         run: npm run build
 
+      # core24 snaps need snapcraft + an LXD build environment (the GNOME
+      # extension is incompatible with destructive mode). Retry the snap
+      # installs: contacting the Snap Store from runners has been flaky, which
+      # is why upload uses the snapcraft container — but packaging itself still
+      # has to invoke snapcraft on the host (electron-builder SnapCore24).
+      - name: Install snapcraft and LXD for core24
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 30
+          shell: bash
+          command: |
+            set -euo pipefail
+            sudo snap install lxd
+            sudo snap install snapcraft --classic
+            sudo lxd init --auto
+            # electron-builder runs as the runner user; grant LXD socket access
+            # without requiring a re-login for the new group membership.
+            sudo usermod -aG lxd "$USER"
+            sudo chmod a+rw /var/snap/lxd/common/lxd/unix.socket
+            snapcraft --version
+            lxc info >/dev/null
+
       - name: Build/Release Electron app
         if: startsWith(github.ref, 'refs/tags/v')
         uses: johannesjo/action-electron-builder@9ea9e2d991c97668843d57337848e3e2b1ffab3d # v1
@@ -171,12 +195,11 @@ jobs:
           release: false
           args: '--publish never'
 
-      # electron-builder 26.15.0-26.15.6 only 7z-decompressed the snap template's
-      # .tar.7z and shipped the inner .tar verbatim at the snap root, so the
-      # desktop-integration scripts command.sh sources were missing and every
-      # edge revision failed to start (#9992, electron-builder#10002). The build
-      # itself stayed green, so assert on the packaged payload instead.
-      - name: Verify snap template was unpacked
+      # core24 no longer ships the core22 template's desktop-*.sh at the snap
+      # root (#9992 / #10576). Assert the payload is actually core24 + gpu-2404
+      # instead — a green electron-builder exit alone does not prove SnapCore24
+      # was selected or that the GNOME extension wired the Mesa content snap.
+      - name: Verify snap is core24 with gpu-2404
         run: |
           set -euo pipefail
           SNAP_FILE=$(find ./.tmp/app-builds -type f -name '*.snap' -print -quit)
@@ -190,18 +213,9 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y --no-install-recommends squashfs-tools
           fi
-          unsquashfs -l "$SNAP_FILE" > "$RUNNER_TEMP/snap-listing.txt"
-          for script in desktop-init.sh desktop-common.sh desktop-gnome-specific.sh; do
-            grep -qx "squashfs-root/$script" "$RUNNER_TEMP/snap-listing.txt" || {
-              echo "::error::$script missing from the snap root -- the template archive was not unpacked"
-              grep -E '^squashfs-root/[^/]+$' "$RUNNER_TEMP/snap-listing.txt"
-              exit 1
-            }
-          done
-          # #10576: the app-builder-lib patch must have swapped in the guarded launcher.
           # On tag builds the snap is already published by now; the release workflow
           # re-checks it before the store upload.
-          bash tools/assert-snap-xdg-guard.sh "$SNAP_FILE"
+          bash tools/assert-snap-core24.sh "$SNAP_FILE"
 
       # #11117: the app-builder-lib patch must point the .deb desktop entry at the
       # spaceless /usr/bin link. On tag builds the .deb is already published by now.
