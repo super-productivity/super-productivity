@@ -288,5 +288,18 @@
       "downloadUrl": "https://github.com/Jontata/deadlines-plugin/releases/download/v0.0.1/deadlines-plugin-0.0.1.zip",
       "sha256": "e7b147b25dbda9b232fff0bdb51b773a11a528d647e93bc34e2bf5e02d2ec6b7"
     }
+  },
+  {
+    "name": "Milestone",
+    "shortDescription": "Countdowns, anniversaries, birthdays and festivals, with optional lunar calendar conversion, festival presets and cross-device sync.",
+    "url": "https://github.com/calmpunct/sp-milestone",
+    "author": "calmpunct",
+    "authorUrl": "https://github.com/calmpunct",
+    "id": "milestone",
+    "release": {
+      "version": "1.5.0",
+      "downloadUrl": "https://github.com/calmpunct/sp-milestone/releases/download/v1.5.0/sp-milestone-v1.5.0.zip",
+      "sha256": "e2ae688b29509f4ee6f9b07d5ea2a259e4c52624aeea6f3a3f0c3b041bfde958"
+    }
   }
 ]
