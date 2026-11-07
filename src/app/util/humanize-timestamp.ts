@@ -28,13 +28,13 @@ export const humanizeTimestamp = (
   const diffYears = Math.floor(diffDays / 365);
 
   if (diffSeconds < 0) {
-    // Future dates
-    const futureDiffSeconds = Math.abs(diffSeconds);
-    const futureDiffMinutes = Math.abs(diffMinutes);
-    const futureDiffHours = Math.abs(diffHours);
-    const futureDiffDays = Math.abs(diffDays);
-    const futureDiffMonths = Math.abs(diffMonths);
-    const futureDiffYears = Math.abs(diffYears);
+    // Future dates: floor the absolute diff so rounding matches the past branch
+    const futureDiffSeconds = Math.floor(-diffMs / 1000);
+    const futureDiffMinutes = Math.floor(futureDiffSeconds / 60);
+    const futureDiffHours = Math.floor(futureDiffMinutes / 60);
+    const futureDiffDays = Math.floor(futureDiffHours / 24);
+    const futureDiffMonths = Math.floor(futureDiffDays / 30);
+    const futureDiffYears = Math.floor(futureDiffDays / 365);
 
     if (futureDiffSeconds < 45) {
       return translateService.instant(T.GLOBAL_RELATIVE_TIME.FUTURE.FEW_SECONDS);
@@ -62,7 +62,7 @@ export const humanizeTimestamp = (
       return translateService.instant(T.GLOBAL_RELATIVE_TIME.FUTURE.MONTHS, {
         count: futureDiffMonths,
       });
-    } else if (futureDiffYears === 1) {
+    } else if (futureDiffYears <= 1) {
       return translateService.instant(T.GLOBAL_RELATIVE_TIME.FUTURE.A_YEAR);
     } else {
       return translateService.instant(T.GLOBAL_RELATIVE_TIME.FUTURE.YEARS, {
