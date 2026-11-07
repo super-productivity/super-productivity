@@ -1,3 +1,4 @@
+import { getTextDirection } from '../util/get-text-direction';
 import { MarkedOptions, MarkedRenderer } from 'ngx-markdown';
 import {
   Hooks,
@@ -139,18 +140,21 @@ export const markedOptionsFactory = (): MarkedOptions => {
       // For task items, strip outer <p></p> wrapper to keep checkbox and text on same line.
       // Loose lists wrap content in <p> tags which pushes text to new line after checkbox.
       // Only strip if it's a simple wrapper (no nested block content).
-      const strippedText = renderedText.replace(/^<p>([\s\S]*)<\/p>\n?$/, '$1');
-      if (strippedText !== renderedText && !strippedText.includes('<p>')) {
+      const strippedText = renderedText.replace(
+        /^<p(?: dir="(?:auto|ltr|rtl)")?>([\s\S]*)<\/p>\n?$/,
+        '$1',
+      );
+      if (strippedText !== renderedText && !/<p(?:\s|>)/.test(strippedText)) {
         renderedText = strippedText;
       }
 
       const isChecked = checked === true;
-      const checkboxHtml = `<span class="checkbox material-icons">${isChecked ? 'check_box' : 'check_box_outline_blank'}</span>`;
+      const checkboxHtml = `<span class="checkbox material-icons" dir="ltr">${isChecked ? 'check_box' : 'check_box_outline_blank'}</span>`;
       // Wrap the text in its own element so only the checkbox and the label —
       // not the empty rest of the row — are clickable (see clickPreview).
-      return `<li class="checkbox-wrapper ${isChecked ? 'done' : 'undone'}">${checkboxHtml} <span class="checkbox-label">${renderedText}</span></li>`;
+      return `<li dir="${getTextDirection(renderedText)}" class="checkbox-wrapper ${isChecked ? 'done' : 'undone'}">${checkboxHtml} <span class="checkbox-label">${renderedText}</span></li>`;
     }
-    return `<li>${renderedText}</li>`;
+    return `<li dir="${getTextDirection(renderedText)}">${renderedText}</li>`;
   };
 
   // In marked v17, link renderer receives tokens that need to be parsed for inline content
@@ -214,6 +218,11 @@ export const markedOptionsFactory = (): MarkedOptions => {
     return `<img alt="${escapeHtmlAttr(text)}"${srcAttr}${titleAttr}${widthAttr}${heightAttr} loading="lazy">`;
   };
 
+  renderer.heading = function ({ tokens, depth }) {
+    const text = this.parser.parseInline(tokens);
+    return `<h${depth} dir="${getTextDirection(text)}">${text}</h${depth}>\n`;
+  };
+
   // In marked v17, paragraph renderer receives tokens that need to be parsed
   renderer.paragraph = function ({ tokens }: { tokens: Token[] }) {
     const text = tokens ? this.parser.parseInline(tokens) : '';
@@ -222,14 +231,20 @@ export const markedOptionsFactory = (): MarkedOptions => {
       const result = /h(\d)\./.exec(p);
       if (result !== null) {
         const h = `h${result[1]}`;
-        return acc + `<${h}>${p.replace(result[0], '')}</${h}>`;
+        return (
+          acc + `<${h} dir="${getTextDirection(p)}">${p.replace(result[0], '')}</${h}>`
+        );
       }
 
       if (split.length === 1) {
-        return `<p>` + p + `</p>`;
+        return `<p dir="${getTextDirection(text)}">` + p + `</p>`;
       }
 
-      return acc ? (split.length - 1 === i ? acc + p + `</p>` : acc + p) : `<p>` + p;
+      return acc
+        ? split.length - 1 === i
+          ? acc + p + `</p>`
+          : acc + p
+        : `<p dir="${getTextDirection(text)}">` + p;
     }, '');
   };
 

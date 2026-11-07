@@ -1,3 +1,4 @@
+import { TextDirectionDirective } from '../../../ui/text-direction/text-direction.directive';
 import {
   afterRenderEffect,
   AfterViewInit,
@@ -117,6 +118,7 @@ export interface TaskAddEvent {
   },
   /* eslint-enable @typescript-eslint/naming-convention*/
   imports: [
+    TextDirectionDirective,
     FormsModule,
     CdkTextareaAutosize,
     MatIconButton,
