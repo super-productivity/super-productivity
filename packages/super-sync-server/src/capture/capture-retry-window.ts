@@ -6,7 +6,7 @@ import type { CreateTaskArgs } from './create-task.tool';
  * Best-effort dedupe of assistant retries: assistants re-send a create after a
  * timeout without an idempotency id (Stage A probe: 0 of 7 calls sent one).
  * Per grant, calls run one at a time and an identical call (title, notes,
- * due date/time and recurrence) within the window answers "Saved" again without
+ * due date/time, recurrence and project) within the window answers "Saved" again without
  * a new item. A deliberate identical repeat inside the window is merged too.
  *
  * shortcut: in-process lock and map, single SuperSync instance (helm max 1).
@@ -28,6 +28,8 @@ const contentKey = (c: CreateTaskArgs): string =>
         c.dueDate ?? null,
         c.dueTime ?? null,
         c.repeat ?? null,
+        // As the app matches it, so a retry in other case is merged too.
+        c.project?.normalize('NFC').toLowerCase() ?? null,
       ]),
     )
     .digest('base64');

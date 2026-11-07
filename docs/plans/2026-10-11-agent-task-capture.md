@@ -56,7 +56,8 @@ bump.
 ## Tool contract
 
 `create_task(title, notes?)`: `title` 1–500 characters after trimming,
-`notes` up to 8 KiB UTF-8, `additionalProperties: false`. Always the Inbox;
+`notes` up to 8 KiB UTF-8, `additionalProperties: false`. The Inbox unless
+`project` names one (added Oct 29, below);
 `#tag`, `+project` and dates stay literal (`isIgnoreShortSyntax: true`).
 Annotations `readOnlyHint: false`, `destructiveHint: false`.
 
@@ -84,6 +85,22 @@ is "Saved", so no task or setting data reaches the assistant.
 The local `create_task` of #10251 takes the same optional fields with the
 same validation (#10833); invalid input is rejected, not dropped, and a timed
 one-off is likewise scheduled in its one `addTask`.
+
+Added Oct 29 2026: optional `project`, the title of an existing project (1–200
+characters after trimming). It travels as an optional v1 field like the
+schedule, so released apps ignore it and use the Inbox. The importing device
+reads its projects when it creates the task, not when it claims, and files
+the task (and its repeat config) into the one whose title matches ignoring
+case and surrounding space, still in the one `addTask`. Only unarchived,
+visible projects that no enabled issue provider is bound to count: the
+`addTask` would otherwise auto-create an issue (implicitly for Plainspace) and
+post text an assistant may have been steered into writing to a shared or
+public tracker. No match or
+several matches keep the Inbox; a project is never created. The server can't
+check the title against sealed state, so the answer stays "Saved" either way
+and names the Inbox fallback; no project data reaches the assistant. The
+retry window keys on `project` too. The local `create_task` does not take it
+yet.
 
 ## Flow
 
@@ -373,7 +390,7 @@ Each step has its check; the next starts only after it passes.
 
 ## Out of scope
 
-Reading tasks remotely, editing, project/tag, DCR, generic CIMD
+Reading tasks remotely, editing, tags, project creation, DCR, generic CIMD
 fetching, WebSocket push for captures, server-created ops, non-SuperSync
 providers.
 

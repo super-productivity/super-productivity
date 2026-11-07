@@ -9,12 +9,13 @@ import {
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from './android-interface';
 import {
-  addInboxTaskAction,
+  addCaptureTaskAction,
   AgentCapture,
   toCaptureTask,
 } from '../tasks/agent-capture/super-sync-capture-source';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { INBOX_PROJECT } from '../project/project.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TODAY_TAG } from '../tag/tag.const';
 import { WorkContextType } from '../work-context/work-context.model';
@@ -165,11 +166,12 @@ export class AndroidCaptureImportService {
       createTask: (share) => {
         const cfg = this._globalConfig.cfg();
         this._store.dispatch(
-          addInboxTaskAction(
+          addCaptureTaskAction(
             share,
             cfg?.timeTracking.defaultEstimate || 0,
             cfg?.reminder.defaultTaskRemindOption ??
               DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+            INBOX_PROJECT.id,
           ),
         );
       },

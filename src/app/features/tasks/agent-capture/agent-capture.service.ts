@@ -28,6 +28,8 @@ import { SyncProviderManager } from '../../../op-log/sync-providers/provider-man
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
+import { selectUnarchivedVisibleProjects } from '../../project/store/project.selectors';
+import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
 import {
   getCaptureImportErrorReason,
   NativeCaptureImporter,
@@ -64,6 +66,18 @@ export class AgentCaptureService {
   private _source = createSuperSyncCaptureSource({
     startRun: () => this._startRun(),
     dispatch: (action) => this._store.dispatch(action),
+  });
+
+  private _visibleProjects = this._store.selectSignal(selectUnarchivedVisibleProjects);
+  private _enabledIssueProviders = this._store.selectSignal(selectEnabledIssueProviders);
+  /**
+   * Projects a capture may name. Not hidden ones, where it would go unseen, and
+   * not ones bound to an issue provider: auto-create (implicit for Plainspace)
+   * would post the assistant's text to a shared or public tracker.
+   */
+  private _captureTargetProjects = computed(() => {
+    const bound = new Set(this._enabledIssueProviders().map((p) => p.defaultProjectId));
+    return this._visibleProjects().filter((p) => !bound.has(p.id));
   });
 
   readonly isEnabled = computed(() => !!this._globalConfig.sync()?.captureKey);
@@ -222,6 +236,7 @@ export class AgentCaptureService {
         this._globalConfig.cfg()?.reminder.defaultTaskRemindOption ??
         DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
       todayStr: this._dateService.todayStr(),
+      getTargetProjects: () => this._captureTargetProjects(),
       assertUnchanged: (context) => {
         // The epoch bumps only after a provider swap completes; the identity
         // check covers the moment in between.
