@@ -49,7 +49,11 @@ class FullscreenActivity : AppCompatActivity() {
     private lateinit var wvContainer: FrameLayout
     private var isForegroundServiceFailureReceiverRegistered = false
     private var isNotificationActionDrainReceiverRegistered = false
-    private var webViewRequestHandler = WebViewRequestHandler(this, BuildConfig.ONLINE_SERVICE_HOST)
+    private var webViewRequestHandler = WebViewRequestHandler(
+        this,
+        BuildConfig.ONLINE_SERVICE_PROTOCOL,
+        BuildConfig.ONLINE_SERVICE_HOST,
+    )
     val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
     val appUrl =
