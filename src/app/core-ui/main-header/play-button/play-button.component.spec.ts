@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { NEVER, Observable, of, Subject } from 'rxjs';
+import { Task } from '../../../features/tasks/task.model';
 import { TaskService } from '../../../features/tasks/task.service';
 import { MagicNavConfigService } from '../../magic-side-nav/magic-nav-config.service';
 import { PlayButtonComponent } from './play-button.component';
@@ -11,10 +12,13 @@ describe('PlayButtonComponent', () => {
   let navConfigService: jasmine.SpyObj<MagicNavConfigService>;
   let component: PlayButtonComponent;
 
-  beforeEach(() => {
+  const createComponent = (
+    currentTask$: Observable<Task | null>,
+    currentTaskProgress$: Observable<number>,
+  ): void => {
     taskService = jasmine.createSpyObj<TaskService>('TaskService', ['toggleStartTask'], {
-      currentTask$: of(null),
-      currentTaskProgress$: of(0),
+      currentTask$,
+      currentTaskProgress$,
     });
     navConfigService = jasmine.createSpyObj<MagicNavConfigService>(
       'MagicNavConfigService',
@@ -31,6 +35,10 @@ describe('PlayButtonComponent', () => {
     const fixture = TestBed.createComponent(PlayButtonComponent);
     fixture.detectChanges();
     component = fixture.componentInstance;
+  };
+
+  beforeEach(() => {
+    createComponent(of(null), NEVER);
   });
 
   it('toggles tracking on a normal click', () => {
@@ -61,6 +69,27 @@ describe('PlayButtonComponent', () => {
     expect(navConfigService.disableFeature).toHaveBeenCalledOnceWith(
       'isTimeTrackingEnabled',
       jasmine.any(String),
+    );
+  });
+
+  it('draws only the latest progress when several ticks arrive before a frame', () => {
+    // A hidden window runs no animation frames; ticks must not queue up until it is shown.
+    TestBed.resetTestingModule();
+    const frames: FrameRequestCallback[] = [];
+    spyOn(window, 'requestAnimationFrame').and.callFake((cb) => frames.push(cb));
+    const progress$ = new Subject<number>();
+    createComponent(of({ timeEstimate: 60000 } as Task), progress$);
+    const setStyle = spyOn(component['_renderer'], 'setStyle').and.callThrough();
+
+    progress$.next(0.1);
+    progress$.next(0.2);
+    progress$.next(0.3);
+    frames.splice(0).forEach((cb) => cb(performance.now()));
+
+    expect(setStyle).toHaveBeenCalledOnceWith(
+      jasmine.any(SVGCircleElement),
+      'stroke-dashoffset',
+      10 * 2 * Math.PI * -0.3,
     );
   });
 });

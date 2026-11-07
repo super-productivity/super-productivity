@@ -47,6 +47,15 @@ let _lastTrayMsg: string | undefined;
 let _lastIsRunning: boolean | undefined;
 let _lastCurrentTaskId: string | null | undefined;
 let _lastTodayTasksStr: string | undefined;
+// Key of the menu's task entries, computed when the list arrives rather than on
+// every tick.
+let _todayTasksStr = '[]';
+
+// Building a native menu costs time per item, and the menu is rebuilt each
+// minute while tracking, so a long Today list stalls the main process: about
+// 0.75 s per rebuild at 5,000 tasks (measured 2026-10). A menu taller than the
+// screen is not usable anyway.
+const MAX_TRAY_MENU_TASKS = 20;
 
 let _lastCurrentTask: any;
 let _lastIsPomodoroEnabled: boolean;
@@ -214,22 +223,18 @@ function initListeners(): void {
         _lastFocusModeMode,
       );
 
-      const todayTasksStr = JSON.stringify(
-        (_todayTasks || []).map((t) => ({ id: t.id, title: t.title })),
-      );
-
       const isMenuChanged =
         menuMsg !== _lastMsg ||
         _isRunning !== _lastIsRunning ||
         _currentTaskId !== _lastCurrentTaskId ||
-        todayTasksStr !== _lastTodayTasksStr;
+        _todayTasksStr !== _lastTodayTasksStr;
 
       if (isMenuChanged) {
         tray.setContextMenu(createContextMenu(menuMsg));
         _lastMsg = menuMsg;
         _lastIsRunning = _isRunning;
         _lastCurrentTaskId = _currentTaskId;
-        _lastTodayTasksStr = todayTasksStr;
+        _lastTodayTasksStr = _todayTasksStr;
       }
 
       if (_lastTrayMsg !== trayMsg) {
@@ -304,21 +309,18 @@ function initListeners(): void {
 
       if (tray) {
         // tray handling
-        const todayTasksStr = JSON.stringify(
-          (_todayTasks || []).map((t) => ({ id: t.id, title: t.title })),
-        );
         const isMenuChanged =
           menuMsg !== _lastMsg ||
           _isRunning !== _lastIsRunning ||
           _currentTaskId !== _lastCurrentTaskId ||
-          todayTasksStr !== _lastTodayTasksStr;
+          _todayTasksStr !== _lastTodayTasksStr;
 
         if (isMenuChanged) {
           tray.setContextMenu(createContextMenu(menuMsg));
           _lastMsg = menuMsg;
           _lastIsRunning = _isRunning;
           _lastCurrentTaskId = _currentTaskId;
-          _lastTodayTasksStr = todayTasksStr;
+          _lastTodayTasksStr = _todayTasksStr;
         }
 
         if (_lastTrayMsg !== trayMsg) {
@@ -359,13 +361,13 @@ function initListeners(): void {
 
   ipcMain.on(IPC.TODAY_TASKS_UPDATED, (ev: IpcMainEvent, tasks: any[]) => {
     _todayTasks = tasks;
+    _todayTasksStr = JSON.stringify(
+      (_todayTasks || []).map((t) => ({ id: t.id, title: t.title })),
+    );
     if (tray) {
-      const todayTasksStr = JSON.stringify(
-        (_todayTasks || []).map((t) => ({ id: t.id, title: t.title })),
-      );
-      if (todayTasksStr !== _lastTodayTasksStr) {
+      if (_todayTasksStr !== _lastTodayTasksStr) {
         tray.setContextMenu(createContextMenu(_lastMsg));
-        _lastTodayTasksStr = todayTasksStr;
+        _lastTodayTasksStr = _todayTasksStr;
       }
     }
   });
@@ -504,7 +506,15 @@ function createContextMenu(msg?: string): Menu {
   }
 
   if (_todayTasks && _todayTasks.length > 0) {
-    _todayTasks.forEach((t) => {
+    const menuTasks = _todayTasks.slice(0, MAX_TRAY_MENU_TASKS);
+    // Keep the running task reachable, so it can be paused from the menu.
+    const currentTask = _todayTasks.find(
+      (t, i) => i >= MAX_TRAY_MENU_TASKS && t.id === _currentTaskId,
+    );
+    if (currentTask) {
+      menuTasks.push(currentTask);
+    }
+    menuTasks.forEach((t) => {
       template.push({
         label: t.title.length > 40 ? t.title.substring(0, 37) + '...' : t.title,
         type: 'radio',
@@ -523,6 +533,9 @@ function createContextMenu(msg?: string): Menu {
         },
       });
     });
+    if (_todayTasks.length > menuTasks.length) {
+      template.push({ label: '…', enabled: false });
+    }
     template.push({ type: 'separator' });
   }
 
