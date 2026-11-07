@@ -149,13 +149,12 @@ describe('encrypted-only upload gate (E2EE_REQUIRED)', () => {
     expect(mocks.syncService.checkSnapshotRequestDedup).not.toHaveBeenCalled();
     expect(mocks.syncService.cacheOpsRequestResults).not.toHaveBeenCalled();
     expect(mocks.syncService.cacheSnapshotRequestResult).not.toHaveBeenCalled();
-    expect(mocks.syncService.checkStorageQuota).not.toHaveBeenCalled();
     expect(mocks.syncService.prepareSnapshotCache).not.toHaveBeenCalled();
     expect(mocks.syncService.cacheSnapshotIfReplayable).not.toHaveBeenCalled();
     // The snapshot pre-quota gate sits directly below the E2EE gate and both
     // reads and (via reconcile) writes storage state — pin that a rejected
     // upload never reaches it either.
-    expect(mocks.syncService.getStorageInfo).not.toHaveBeenCalled();
+    expect(mocks.syncService.checkStorageQuota).not.toHaveBeenCalled();
     expect(mocks.syncService.updateStorageUsage).not.toHaveBeenCalled();
     expect(mocks.syncService.getCachedSnapshotBytes).not.toHaveBeenCalled();
     expect(mocks.notifyNewOps).not.toHaveBeenCalled();
