@@ -53,6 +53,8 @@ import { T } from '../../t.const';
 const COLLAPSED_WIDTH = 56;
 const MOBILE_NAV_WIDTH = 300;
 const FOCUS_DELAY_MS = 10;
+// Matches the `'group-' + item.id` id nav-list-tree gives the projects list.
+const PROJECTS_GROUP_ID = 'group-projects';
 const INITIAL_ENTER_ANIMATION_DURATION_MS = 425;
 // `--transition-duration-l` (375ms) plus a 50ms buffer — the duration the panel
 // animates its width over (`--sidenav-transition-duration` in the stylesheet).
@@ -253,6 +255,15 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
         // Small delay to ensure DOM is ready
         window.setTimeout(() => {
           this.toggleNavFocus();
+        });
+      }
+    });
+
+    effect(() => {
+      const trigger = this._layoutService.focusSideNavProjectsTrigger();
+      if (trigger > 0) {
+        window.setTimeout(() => {
+          this.focusProjectsSection();
         });
       }
     });
@@ -702,6 +713,31 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       // Nav is not focused, focus it
       this._focusFirstNavElement();
     }
+  }
+
+  // Public method to focus the projects section (for keyboard shortcuts)
+  focusProjectsSection(): void {
+    if (this.isMobile() && !this.showMobileMenuOverlay()) {
+      this.showMobileMenuOverlay.set(true);
+      setTimeout(() => {
+        this._focusFirstProjectsElement();
+      });
+      return;
+    }
+    this._focusFirstProjectsElement();
+  }
+
+  // Focuses the first project (or folder) in the projects section, or its
+  // header when the section is collapsed, so the user can press Enter to expand it.
+  private _focusFirstProjectsElement(): void {
+    const focusableElements = this._getFocusableNavElements();
+    const projectsList = document.querySelector(`.nav-sidenav #${PROJECTS_GROUP_ID}`);
+    const target =
+      (projectsList && focusableElements.find((el) => projectsList.contains(el))) ||
+      focusableElements.find(
+        (el) => el.getAttribute('aria-controls') === PROJECTS_GROUP_ID,
+      );
+    target?.focus();
   }
 
   private _focusFirstNavElement(): void {

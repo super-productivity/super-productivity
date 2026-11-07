@@ -55,6 +55,10 @@ export class LayoutService {
   private _focusSideNavTrigger = signal(0);
   readonly focusSideNavTrigger = this._focusSideNavTrigger.asReadonly();
 
+  // Signal to trigger focusing the projects section of the sidebar
+  private _focusSideNavProjectsTrigger = signal(0);
+  readonly focusSideNavProjectsTrigger = this._focusSideNavProjectsTrigger.asReadonly();
+
   // Signal to trigger sidebar compact/full mode toggle
   private _toggleSideNavModeTrigger = signal(0);
   readonly toggleSideNavModeTrigger = this._toggleSideNavModeTrigger.asReadonly();
@@ -335,6 +339,10 @@ export class LayoutService {
   focusSideNav(): void {
     // Trigger the focus signal - components listening to this signal will handle the focus
     this._focusSideNavTrigger.update((value) => value + 1);
+  }
+
+  focusSideNavProjects(): void {
+    this._focusSideNavProjectsTrigger.update((value) => value + 1);
   }
 
   toggleSideNavMode(): void {

@@ -2848,6 +2848,7 @@
       "TOGGLE_BACKLOG": "Show/hide project backlog",
       "TOGGLE_ISSUE_PANEL": "Show/hide issue provider panel",
       "TOGGLE_PLAY": "Start/stop time tracking for task",
+      "FOCUS_SIDE_NAV_PROJECTS": "Focus projects in sidenav",
       "TOGGLE_SIDE_NAV": "Focus sidenav",
       "TOGGLE_SIDE_NAV_MODE": "Toggle sidebar compact/full mode",
       "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Open filter/group/sort menu",

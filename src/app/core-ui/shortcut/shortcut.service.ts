@@ -278,6 +278,9 @@ export class ShortcutService {
     } else if (checkKeyCombo(ev, keys.focusSideNav)) {
       this._focusSideNav();
       ev.preventDefault();
+    } else if (checkKeyCombo(ev, keys.focusSideNavProjects)) {
+      this._layoutService.focusSideNavProjects();
+      ev.preventDefault();
     } else if (checkKeyCombo(ev, keys.toggleSideNavMode)) {
       this._layoutService.toggleSideNavMode();
       ev.preventDefault();

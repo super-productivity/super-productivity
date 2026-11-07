@@ -85,6 +85,7 @@ describe('MagicSideNavComponent', () => {
           useValue: {
             isXs,
             focusSideNavTrigger: signal(0),
+            focusSideNavProjectsTrigger: signal(0),
             toggleSideNavModeTrigger: signal(0),
             isMobileSideNavOpen,
           },
@@ -454,6 +455,51 @@ describe('MagicSideNavComponent', () => {
     );
 
     expect(fixture.componentInstance.showMobileMenuOverlay()).toBe(false);
+  });
+
+  describe('focusProjectsSection', () => {
+    // Stands in for the projects group nav-list-tree renders: a header button
+    // controlling the list, plus the list itself while the group is expanded.
+    const renderProjectsGroup = (isExpanded: boolean): HTMLElement => {
+      // The nav list only renders once the app data and nav trees are ready.
+      TestBed.overrideProvider(DataInitStateService, {
+        useValue: { isAllDataLoadedInitially$: of(true) },
+      });
+      navConfigServiceMock.areInitialTreesReady.set(true);
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+      fixture.detectChanges();
+      const navList = fixture.nativeElement.querySelector('.nav-list') as HTMLElement;
+      navList.insertAdjacentHTML(
+        'beforeend',
+        `<button class="nav-link" id="other-item">Today</button>
+         <button class="nav-link" aria-controls="group-projects">Projects</button>` +
+          (isExpanded
+            ? `<div id="group-projects">
+                 <button class="nav-link" id="first-project">Project A</button>
+                 <button class="nav-link">Project B</button>
+               </div>`
+            : ''),
+      );
+      return navList;
+    };
+
+    it('focuses the first project when the projects group is expanded', () => {
+      const navList = renderProjectsGroup(true);
+
+      fixture.componentInstance.focusProjectsSection();
+
+      expect(document.activeElement).toBe(navList.querySelector('#first-project'));
+    });
+
+    it('focuses the projects header when the projects group is collapsed', () => {
+      const navList = renderProjectsGroup(false);
+
+      fixture.componentInstance.focusProjectsSection();
+
+      expect(document.activeElement).toBe(
+        navList.querySelector('[aria-controls="group-projects"]'),
+      );
+    });
   });
 
   describe('onItemClick', () => {
