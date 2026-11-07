@@ -1,6 +1,7 @@
 import { expect, test } from '../../fixtures/test.fixture';
 import {
   gotoHashRoute,
+  gotoToday,
   openRecurDialog,
   openRecurDialogFromProjection,
   saveRecurDialog,
@@ -96,11 +97,7 @@ test.describe('Recurring Task - Move startDate to Today Creates Real Instance (#
     //    lastTaskCreationDay to yesterday and addAllDueToday() materialises
     //    the task for May 1. The task must appear in the Today list as a real
     //    task element, NOT as a planner-repeat-projection.
-    await gotoHashRoute(
-      page,
-      '/#/tag/TODAY/tasks',
-      page.locator('task').filter({ hasText: taskTitle }).first(),
-    );
+    await gotoToday(page);
     const realTaskInToday = page.locator('task').filter({ hasText: taskTitle }).first();
     await expect(realTaskInToday).toBeVisible({ timeout: 15000 });
 

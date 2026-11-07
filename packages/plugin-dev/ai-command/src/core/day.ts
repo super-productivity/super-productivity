@@ -61,6 +61,10 @@ export const plannedDayOf = (task: TaskLike, day: Day): string | null =>
     ? logicalDayOf(task.dueWithTime, day.startOfNextDayDiffMs)
     : task.dueDay || null;
 
+/** Not for done tasks, nor fixed-time ones: moving the plain day would drop their time. */
+export const canAddToToday = (task: TaskLike | undefined, day: Day): boolean =>
+  !!task && !task.isDone && !task.dueWithTime && plannedDayOf(task, day) !== day.todayStr;
+
 export const deadlineDayOf = (task: TaskLike, day: Day): string | null =>
   task.deadlineWithTime
     ? logicalDayOf(task.deadlineWithTime, day.startOfNextDayDiffMs)

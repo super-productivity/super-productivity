@@ -14,6 +14,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
 import { trigger, transition, style, animate } from '@angular/animations';
+import { ANI_ENTER_TIMING } from '../../../ui/animations/animation.const';
+import { PAGE_ENTER_FROM } from '../../../ui/animations/warp-route';
 import { PluginService } from '../../plugin.service';
 import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCleanupService } from '../../plugin-cleanup.service';
@@ -58,14 +60,12 @@ import { CustomThemeService } from '../../../core/theme/custom-theme.service';
     TranslatePipe,
   ],
   animations: [
+    // Another plugin in the reused page: the content swap of a page change
+    // (`workViewProjectChangeAnimation` offset).
     trigger('pluginSwitch', [
-      transition(':enter', [
-        style({ opacity: 0, transform: 'translateX(20px)' }),
-        animate('300ms ease-in-out', style({ opacity: 1, transform: 'translateX(0)' })),
-      ]),
       transition('* => *', [
-        style({ opacity: 0, transform: 'translateX(-20px)' }),
-        animate('300ms ease-in-out', style({ opacity: 1, transform: 'translateX(0)' })),
+        style({ opacity: 0, transform: PAGE_ENTER_FROM }),
+        animate(ANI_ENTER_TIMING, style({ opacity: 1, transform: 'none' })),
       ]),
     ]),
   ],

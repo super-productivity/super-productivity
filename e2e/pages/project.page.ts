@@ -421,9 +421,12 @@ export class ProjectPage extends BasePage {
   }
 
   async addNote(noteContent: string, projectId?: string): Promise<void> {
-    // Ensure we are on the correct project route if an id is provided
-    if (projectId && !this.page.url().includes(projectId)) {
-      await this.page.goto(`/#/project/${projectId}`);
+    // Ensure we are on the project's task list if an id is provided. A bare
+    // `/project/:id` matches only the componentless parent route: the outlet
+    // stays empty, and `work-view` below is found only while the previous page
+    // is still animating out.
+    if (projectId && !this.page.url().includes(`/project/${projectId}/tasks`)) {
+      await this.page.goto(`/#/project/${projectId}/tasks`);
       await this.page.waitForLoadState('networkidle');
     }
 

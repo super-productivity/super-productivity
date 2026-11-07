@@ -1,21 +1,30 @@
-@switch (mode()) {
-  @case ('card') {
-    <!-- No expand animation for how the card first shows (`isReady`). -->
-    <div
-      class="card"
-      role="group"
-      [class.is-open]="!isCollapsed()"
-      [class.is-collapsible]="isCollapsible()"
-      [attr.aria-label]="groupLabel() | translate: { nr: index() + 1 }"
-      [@.disabled]="!isReady()"
-    >
-      <!-- Keyboard users move it with the ⋮ menu. -->
-      <mat-icon
-        class="drag-handle"
-        aria-hidden="true"
-        cdkDragHandle
-        >drag_indicator</mat-icon
-      >
+<!-- One card in both modes: a list's only section is the open card without
+     its bar, so switching to a board only expands the bar in and the
+     rules stay where they are. No animation for how it first shows
+     (`isReady`). -->
+<div
+  class="card"
+  [class.is-open]="!isCollapsed()"
+  [class.is-collapsible]="isCollapsible()"
+  [attr.role]="isShowTitle() ? 'group' : null"
+  [attr.aria-label]="
+    isShowTitle() ? (groupLabel() | translate: { nr: index() + 1 }) : null
+  "
+  [@.disabled]="!isReady()"
+>
+  <!-- Keyboard users move it with the ⋮ menu. Without the bar it is a
+       hidden, zero-height placeholder that grows with the bar. -->
+  <mat-icon
+    class="drag-handle"
+    [class.is-placeholder]="!isShowTitle()"
+    aria-hidden="true"
+    cdkDragHandle
+    >drag_indicator</mat-icon
+  >
+  @if (isShowTitle()) {
+    <!-- The animation sits on a bare wrapper: the bar's min-height would win
+         over the animated height (as with `summary-wrap`). -->
+    <div @expandFadeFast>
       <!-- The whole bar opens and closes the card, a larger target than the
            chevron; the chevron is the keyboard control. -->
       <header
@@ -51,39 +60,26 @@
           </button>
         }
       </header>
-      @if (isCollapsed()) {
-        <div
-          class="summary-wrap"
-          @expandFadeFast
-        >
-          <div
-            class="summary"
-            (click)="openRules()"
-          >
-            <ng-container *ngTemplateOutlet="summaryTpl"></ng-container>
-          </div>
-        </div>
-      } @else {
-        <div @expandFadeFast>
-          <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
-        </div>
-      }
     </div>
   }
-
-  @case ('flat') {
-    <!-- The same open card, without its bar: adding a section only adds the
-         bars, the rules stay where they are. -->
-    <div class="card is-open">
-      <mat-icon
-        class="drag-handle is-placeholder"
-        aria-hidden="true"
-        >drag_indicator</mat-icon
+  @if (isCollapsed()) {
+    <div
+      class="summary-wrap"
+      @expandFadeFast
+    >
+      <div
+        class="summary"
+        (click)="openRules()"
       >
+        <ng-container *ngTemplateOutlet="summaryTpl"></ng-container>
+      </div>
+    </div>
+  } @else {
+    <div @expandFadeFast>
       <ng-container *ngTemplateOutlet="rulesTpl"></ng-container>
     </div>
   }
-}
+</div>
 
 <ng-template #countTpl>
   <span class="count">{{ countLabel().key | translate: { nr: countLabel().nr } }}</span>

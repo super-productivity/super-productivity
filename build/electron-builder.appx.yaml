@@ -1,0 +1,42 @@
+# Microsoft Store (appx) build. Extends the shared config so the Store package
+# gets the same file set as every other target. It previously lived whole in a
+# CI secret that never declared the URI scheme (#8572).
+# The identity values are public: they ship in every appx's AppxManifest.xml.
+# Checked by tools/verify-appx-config.test.js.
+extends: ./electron-builder.yaml
+
+# A single object, not a list: `extends` concatenates arrays, so a list would
+# add appx to the shared nsis/portable targets instead of replacing them.
+win:
+  target:
+    target: appx
+    arch:
+      - x64
+
+appx:
+  applicationId: SuperProductivity
+  displayName: Super Productivity
+  publisherDisplayName: johannesjo
+  publisher: CN=AC30A249-AFE7-4B23-AE54-A95B4FDF8928
+  identityName: 53707johannesjo.SuperProductivity
+  showNameOnTiles: true
+  languages:
+    - en-US
+    - de-DE
+    - es-ES
+    - fr-FR
+    - it-IT
+    - ja-JP
+    - ko-KR
+    - pt-BR
+    - ru-RU
+    - zh-CN
+    - zh-TW
+
+# `setAsDefaultProtocolClient` cannot register a scheme from inside an appx;
+# without this manifest entry the OneDrive OAuth callback
+# (superproductivity://oauth-callback/onedrive) never reaches the app.
+protocols:
+  - name: Super Productivity
+    schemes:
+      - superproductivity

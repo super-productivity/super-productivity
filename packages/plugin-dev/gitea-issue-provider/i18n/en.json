@@ -9,6 +9,7 @@
     "SCOPE_ASSIGNED": "Assigned to me",
     "FILTER_LABELS": "Filter by labels (optional)",
     "EXCLUDE_LABELS": "Exclude labels (optional)",
+    "INCLUDE_PULL_REQUESTS": "Include pull requests (search and backlog return PRs alongside issues)",
     "HOW_TO_GET_TOKEN": "How to get a token?"
   },
   "DISPLAY": {
