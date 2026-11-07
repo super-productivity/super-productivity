@@ -35,6 +35,7 @@ Privacy is never traded away; the others are ranked, and the earlier one wins a 
 npm run checkFile <files...>   # prettier + lint
 npm run prettier               # multi-file format
 npm run lint                   # multi-file lint
+npm run typecheck              # app incl. templates, specs, Electron (not worker/e2e/packages)
 npm test                       # shared packages + release tooling + Angular specs (Berlin, LA subset; CI: test:ci, full LA)
 npm run test:affected          # Angular specs importing files changed vs master (Berlin + LA subset); `-- --list` to preview
 npm run test:file <filepath>   # single Angular spec; package tests use package scripts
@@ -54,7 +55,7 @@ While iterating on app code, use `npm run test:affected` instead of a full `npm 
 
 For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e2e-scheduled.yml) (`grep` filters SuperSync; `webdav_grep` + `run_webdav` for WebDAV); focused local runs and provider-switch prerequisites are in [e2e/AGENTS.md](e2e/AGENTS.md) (they need both servers and both flags, else they silently skip). Skipped tests do not validate a fix.
 
-`tsc -p tsconfig.json --noEmit` validates nothing (root config has `files: []`); use the app/spec/Electron config or package checks ([why](docs/hardening-earns-its-place.md#the-three-failure-modes-worth-remembering)).
+`tsc -p tsconfig.json --noEmit` validates nothing (root config has `files: []`); use `npm run typecheck` or package checks ([why](docs/hardening-earns-its-place.md#the-three-failure-modes-worth-remembering)).
 
 ## Project rules
 
