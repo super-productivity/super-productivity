@@ -1,10 +1,12 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
   computed,
   ElementRef,
   inject,
+  Injector,
   input,
   OnDestroy,
   OnInit,
@@ -192,6 +194,7 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   private _renderer = inject(Renderer2);
   private _cd = inject(ChangeDetectorRef);
   private _navConfigService = inject(MagicNavConfigService);
+  private _injector = inject(Injector);
   private _translateService = inject(TranslateService);
   private _isLongPressClick = false;
 
@@ -243,7 +246,23 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   }
 
   onFeatureMenuClosed(): void {
-    this.playBtn()?.nativeElement.focus();
+    const btn = this.playBtn()?.nativeElement;
+    btn?.focus();
+    // mat-menu queues "focus first item" for the render after opening and doesn't
+    // cancel it on close, so an Escape before that render (zoneless) lets it pull
+    // focus into the detaching panel, dropping it to <body>. The `read` phase runs
+    // after that hook; only reclaim focus it took, so Tab-out still moves on.
+    afterNextRender(
+      {
+        read: () => {
+          const active = document.activeElement;
+          if (active === document.body || active?.closest('.mat-mdc-menu-panel')) {
+            btn?.focus();
+          }
+        },
+      },
+      { injector: this._injector },
+    );
   }
 
   disableTimeTracking(): void {

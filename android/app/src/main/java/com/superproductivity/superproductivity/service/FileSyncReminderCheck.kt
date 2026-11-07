@@ -177,13 +177,3 @@ private fun readBody(source: BufferedSource?, eTag: String?): SyncFileFetch {
     if (source.request(MAX_SYNC_FILE_BYTES + 1)) return SyncFileFetch.TooLarge(eTag)
     return SyncFileFetch.Body(source.buffer.readUtf8(), eTag)
 }
-
-private fun cancelReminderById(context: Context, reminderId: String) {
-    try {
-        ReminderNotificationHelper.cancelReminder(
-            context, SuperSyncBackgroundProvider.generateNotificationId(reminderId)
-        )
-    } catch (e: Exception) {
-        Log.w(TAG, "Failed to cancel a reminder", e)
-    }
-}

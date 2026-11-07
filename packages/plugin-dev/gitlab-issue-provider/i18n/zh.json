@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "用户名/项目",
+    "PROJECT_HINT": "例如 super-productivity/super-productivity",
+    "TOKEN": "访问令牌",
+    "HOW_TO_GET_TOKEN": "如何获取令牌？",
+    "SCOPE": "范围",
+    "SCOPE_ALL": "全部",
+    "SCOPE_CREATED": "由我创建",
+    "SCOPE_ASSIGNED": "分配给我",
+    "GITLAB_BASE_URL": "自定义 GitLab 基本 URL（可选）",
+    "FILTER_USER": "筛选用户名",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "自定义筛选",
+    "FILTER_DESCRIPTION": "参见 https://docs.gitlab.com/ee/api/issues.html#list-issues。可以通过 & 组合多个",
+    "SUBMIT_TIMELOGS": "向 Gitlab 提交时间日志",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "单击完成一天后显示时间跟踪对话框"
+  },
+  "DISPLAY": {
+    "SUMMARY": "摘要",
+    "STATE": "状态",
+    "ASSIGNEE": "负责人",
+    "LABELS": "标签",
+    "DESCRIPTION": "描述"
+  },
+  "FORM_HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定项目的未结 GitLab（无论是在线版本还是自托管实例）问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动导入所有未结问题。</p>"
+}

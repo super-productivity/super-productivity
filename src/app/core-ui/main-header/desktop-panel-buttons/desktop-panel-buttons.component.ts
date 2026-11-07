@@ -67,11 +67,11 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 
       .panel-btn {
         position: relative;
-        transition: all 0.2s ease;
+        transition: all var(--transition-duration-m) ease;
         overflow: visible !important;
 
         .mat-icon {
-          transition: transform 0.2s ease;
+          transition: transform var(--transition-duration-m) ease;
           display: block;
         }
 

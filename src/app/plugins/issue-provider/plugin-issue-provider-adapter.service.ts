@@ -387,6 +387,9 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       );
       delete baseTaskData.dueDay;
       delete baseTaskData.dueWithTime;
+      // local bookkeeping of time already submitted (finish-day worklog);
+      // the issue carries no such data, so a refresh must not reset it
+      delete baseTaskData.issueTimeTracked;
       // Completion is only re-pulled from a provider that declares what done
       // means. Without doneStates the default word list is a guess, and a
       // calendar's 'confirmed' would reopen a task the user completed (#9905);
@@ -529,7 +532,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       issueWasUpdated: false,
       issueLastUpdated: data.lastUpdated ?? 0,
       issueAttachmentNr: 0,
-      issuePoints: undefined,
+      issuePoints: typeof data.points === 'number' ? data.points : undefined,
       issueTimeTracked: undefined,
       isDone,
       ...(dueWithTime != null

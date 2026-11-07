@@ -404,7 +404,7 @@ done-toggle {
 .attachment-btn,
 .show-additional-info-btn {
   mat-icon {
-    transition: transform var(--transition-standard);
+    transition: transform var(--transition-duration-m) var(--ani-standard-timing);
   }
 }
 

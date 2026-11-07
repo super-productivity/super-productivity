@@ -185,9 +185,19 @@ describe('DailySummaryComponent', () => {
           },
           {
             provide: DateService,
-            useValue: { todayStr: () => '2026-01-15', getStartOfNextDayDiffMs: () => 0 },
+            useValue: {
+              todayStr: () => '2026-01-15',
+              getStartOfNextDayDiffMs: () => 0,
+              getLogicalTodayDate: () => new Date(2026, 0, 15),
+            },
           },
-          { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({})) } },
+          {
+            provide: ActivatedRoute,
+            useValue: {
+              paramMap: of(convertToParamMap({})),
+              snapshot: { queryParamMap: convertToParamMap({}) },
+            },
+          },
           { provide: SimpleCounterService, useValue: { enabledSimpleCounters$: of([]) } },
           ...[
             ConfettiService,

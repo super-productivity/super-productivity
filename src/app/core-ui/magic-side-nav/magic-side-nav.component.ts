@@ -63,7 +63,7 @@ const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
 
 /**
  * The element at a point, looking through tooltips: one shown by a button the
- * drag passed over (e.g. "Show/hide projects") can sit on the nav item a task
+ * drag passed over (e.g. "Show/hide in sidebar") can sit on the nav item a task
  * is dropped on.
  */
 const elementUnderTooltips = (point: { x: number; y: number }): Element | null =>
