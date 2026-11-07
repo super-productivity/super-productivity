@@ -22,6 +22,8 @@ import {
   ProjectWithTasks,
 } from './map-to-project-with-tasks.util';
 import { DateService } from 'src/app/core/date/date.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { MatIcon } from '@angular/material/icon';
 import { TaskSummaryTableComponent } from '../task-summary-table/task-summary-table.component';
 import { MatButton } from '@angular/material/button';
@@ -152,9 +154,12 @@ export class TaskSummaryTablesComponent {
   ): ProjectWithTasks {
     let yesterdayStr: string | undefined;
     if (this.isShowYesterday() && this.isForToday()) {
-      const t = new Date();
-      t.setDate(t.getDate() - 1);
-      yesterdayStr = this._dateService.todayStr(t);
+      // Derive from the summary day (logical today): between midnight and the
+      // configured day start, the calendar yesterday IS the logical today and
+      // would double-count its time.
+      const yesterday = parseDbDateStr(this.dayStr());
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterdayStr = getDbDateStr(yesterday);
     }
 
     return mapToProjectWithTasks(project, this.flatTasks(), this.dayStr(), yesterdayStr);
