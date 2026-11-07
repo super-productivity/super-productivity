@@ -122,8 +122,23 @@ test.describe('Sections', () => {
     source: import('@playwright/test').Locator,
     target: import('@playwright/test').Locator,
   ): Promise<void> => {
-    const sBox = await stableBoundingBox(source);
-    const tBox = await stableBoundingBox(target);
+    const getBox = async (
+      locator: import('@playwright/test').Locator,
+    ): Promise<import('@playwright/test').BoundingBox> => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await locator.scrollIntoViewIfNeeded();
+        await expect(locator).toBeVisible({ timeout: 5000 });
+        const box = await locator.boundingBox();
+        if (box) {
+          return box;
+        }
+        await page.waitForTimeout(100);
+      }
+      throw new Error('drag source/target has no bounding box');
+    };
+
+    const sBox = await getBox(source);
+    const tBox = await getBox(target);
     /* eslint-disable no-mixed-operators */
     const sx = sBox.x + sBox.width / 2;
     const sy = sBox.y + sBox.height / 2;
