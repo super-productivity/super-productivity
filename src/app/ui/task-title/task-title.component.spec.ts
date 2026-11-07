@@ -263,6 +263,61 @@ describe('TaskTitleComponent', () => {
     });
   });
 
+  describe('clearing the title', () => {
+    let valueEditedSpy: jasmine.Spy;
+
+    // Types into the rendered textarea and leaves it, as a user would.
+    const editAndBlur = (text: string): void => {
+      component.focusInput();
+      fixture.detectChanges();
+      const textarea = fixture.nativeElement.querySelector(
+        'textarea',
+      ) as HTMLTextAreaElement;
+      textarea.value = text;
+      textarea.dispatchEvent(new Event('input'));
+      textarea.dispatchEvent(new FocusEvent('blur'));
+      fixture.detectChanges();
+    };
+
+    const displayedTitle = (): string | undefined =>
+      (
+        fixture.nativeElement.querySelector('.display-value') as HTMLElement | null
+      )?.textContent?.trim();
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('value', 'Write report');
+      valueEditedSpy = jasmine.createSpy('valueEdited');
+      component.valueEdited.subscribe(valueEditedSpy);
+    });
+
+    it('keeps the previous title when the title is cleared', () => {
+      editAndBlur('');
+
+      expect(valueEditedSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ newVal: 'Write report', wasChanged: false }),
+      );
+      expect(displayedTitle()).toBe('Write report');
+    });
+
+    it('keeps the previous title when only whitespace is left', () => {
+      editAndBlur('   ');
+
+      expect(valueEditedSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ newVal: 'Write report', wasChanged: false }),
+      );
+      expect(displayedTitle()).toBe('Write report');
+    });
+
+    it('still saves a trimmed non-empty edit', () => {
+      editAndBlur('  Write summary  ');
+
+      expect(valueEditedSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ newVal: 'Write summary', wasChanged: true }),
+      );
+      expect(displayedTitle()).toBe('Write summary');
+    });
+  });
+
   describe('handleKeyDown trigger routing', () => {
     const buildKey = (key: string, opts: KeyboardEventInit = {}): KeyboardEvent =>
       new KeyboardEvent('keydown', { key, ...opts });
