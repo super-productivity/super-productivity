@@ -78,12 +78,13 @@ export const CALDAV_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderCaldav>[]
     },
   },
   {
+    // The edit dialog fills the options from the server ("Load Options").
     key: 'resourceName',
-    type: 'input',
+    type: 'select',
     templateOptions: {
       required: true,
       label: T.F.CALDAV.FORM.CALDAV_RESOURCE,
-      type: 'text',
+      options: [],
     },
   },
   {

@@ -71,17 +71,23 @@ export class CaldavClientService {
 
   private _clientCache = new Map<string, ClientCache>();
 
-  private static _isValidSettings(cfg: CaldavCfg): boolean {
+  private static _hasConnectionSettings(cfg: CaldavCfg): boolean {
     return (
       !!cfg &&
       !!cfg.caldavUrl &&
       cfg.caldavUrl.length > 0 &&
-      !!cfg.resourceName &&
-      cfg.resourceName.length > 0 &&
       !!cfg.username &&
       cfg.username.length > 0 &&
       !!cfg.password &&
       cfg.password.length > 0
+    );
+  }
+
+  private static _isValidSettings(cfg: CaldavCfg): boolean {
+    return (
+      CaldavClientService._hasConnectionSettings(cfg) &&
+      !!cfg.resourceName &&
+      cfg.resourceName.length > 0
     );
   }
 
@@ -289,8 +295,8 @@ export class CaldavClientService {
     return value === null && name.toLowerCase() === 'dav' ? '' : value;
   }
 
-  async _get_client(cfg: CaldavCfg): Promise<ClientCache> {
-    this._checkSettings(cfg);
+  async _get_client(cfg: CaldavCfg, isQuiet = false): Promise<ClientCache> {
+    this._checkSettings(CaldavClientService._hasConnectionSettings(cfg), isQuiet);
 
     const client_key = `${cfg.caldavUrl}|${cfg.username}|${cfg.password}`;
 
@@ -307,7 +313,7 @@ export class CaldavClientService {
 
       await client
         .connect({ enableCalDAV: true })
-        .catch((err) => this._handleNetErr(err));
+        .catch((err) => this._handleNetErr(err, isQuiet));
 
       const cache = {
         client,
@@ -319,7 +325,62 @@ export class CaldavClientService {
     }
   }
 
+  /**
+   * The calendars that can hold tasks, as options for the resource name dropdown.
+   * `isQuiet` skips the error snacks, for a load the user did not ask for.
+   */
+  async listTaskCalendarOptions(
+    cfg: CaldavCfg,
+    isQuiet = false,
+  ): Promise<{ value: string; label: string }[]> {
+    const clientCache = await this._get_client(cfg, isQuiet);
+    const calendars: { name: string; uri: string }[] = [];
+    let lastCalendarHomeError: unknown;
+    let hasReadAnyHome = false;
+
+    for (const calendarHome of clientCache.client.calendarHomes as CalendarHomeLike[]) {
+      const homeCalendars = await calendarHome
+        .findAllCalendars()
+        .catch((err: unknown) => {
+          lastCalendarHomeError = err;
+          return null;
+        });
+      if (!homeCalendars) {
+        continue;
+      }
+      hasReadAnyHome = true;
+      for (const calendar of homeCalendars) {
+        const components = (calendar as { components?: string[] }).components;
+        if (
+          CaldavClientService._isSameCalDavPath(calendar.url, calendarHome.url) ||
+          (components?.length && !components.includes('VTODO'))
+        ) {
+          continue;
+        }
+        const uri = CaldavClientService._getCalendarUriFromUrl(calendar.url);
+        calendars.push({ name: calendar.displayname || uri, uri });
+      }
+    }
+
+    if (!hasReadAnyHome && lastCalendarHomeError) {
+      this._handleNetErr(lastCalendarHomeError, isQuiet);
+    }
+
+    // _findMatchingCalendar resolves a shared name to the first calendar,
+    // so a calendar whose name is not unique is selected by its URL segment.
+    const nameCounts = new Map<string, number>();
+    for (const { name } of calendars) {
+      nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+    }
+    return calendars.map(({ name, uri }) =>
+      (nameCounts.get(name) ?? 0) > 1
+        ? { value: uri, label: `${name} (${uri})` }
+        : { value: name, label: name },
+    );
+  }
+
   async _getCalendar(cfg: CaldavCfg): Promise<Calendar> {
+    this._checkSettings(CaldavClientService._isValidSettings(cfg));
     const clientCache = await this._get_client(cfg);
     const resource = cfg.resourceName as string;
 
@@ -610,26 +671,30 @@ export class CaldavClientService {
     };
   }
 
-  private _handleNetErr(err: unknown): never {
-    this._snackService.open({
-      type: 'ERROR',
-      msg: T.F.ISSUE.S.ERR_NETWORK,
-      translateParams: {
-        issueProviderName: ISSUE_PROVIDER_HUMANIZED[CALDAV_TYPE],
-      },
-    });
-    throw new Error('CALDAV NETWORK ERROR: ' + err);
-  }
-
-  private _checkSettings(cfg: CaldavCfg): void {
-    if (!CaldavClientService._isValidSettings(cfg)) {
+  private _handleNetErr(err: unknown, isQuiet = false): never {
+    if (!isQuiet) {
       this._snackService.open({
         type: 'ERROR',
-        msg: T.F.ISSUE.S.ERR_NOT_CONFIGURED,
+        msg: T.F.ISSUE.S.ERR_NETWORK,
         translateParams: {
           issueProviderName: ISSUE_PROVIDER_HUMANIZED[CALDAV_TYPE],
         },
       });
+    }
+    throw new Error('CALDAV NETWORK ERROR: ' + err);
+  }
+
+  private _checkSettings(isValid: boolean, isQuiet = false): void {
+    if (!isValid) {
+      if (!isQuiet) {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.ISSUE.S.ERR_NOT_CONFIGURED,
+          translateParams: {
+            issueProviderName: ISSUE_PROVIDER_HUMANIZED[CALDAV_TYPE],
+          },
+        });
+      }
       throwHandledError('CalDav: Not enough settings');
     }
   }

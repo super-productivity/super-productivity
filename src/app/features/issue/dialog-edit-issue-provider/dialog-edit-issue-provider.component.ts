@@ -26,6 +26,7 @@ import {
   BuiltInIssueProviderKey,
 } from '../issue.model';
 import {
+  CALDAV_TYPE,
   DEFAULT_ISSUE_PROVIDER_CFGS,
   ICAL_TYPE,
   ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
@@ -79,6 +80,8 @@ import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-in
 import { unique } from '../../../util/unique';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
+import { CaldavClientService } from '../providers/caldav/caldav-client.service';
+import { CaldavCfg } from '../providers/caldav/caldav.model';
 import {
   PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY,
   shouldScopePluginOAuth,
@@ -195,6 +198,7 @@ export class DialogEditIssueProviderComponent {
   private _destroyRef = inject(DestroyRef);
   private _taskService = inject(TaskService);
   private _tagService = inject(TagService);
+  private _caldavClient = inject(CaldavClientService);
 
   private _isSubmitSuccessful = false;
   private _isClosedOrDestroyed = false;
@@ -478,10 +482,13 @@ export class DialogEditIssueProviderComponent {
   /**
    * @returns whether all fields loaded successfully and at least one field has options
    */
-  private async _loadDynamicOptions(): Promise<{
+  private async _loadDynamicOptions(isQuiet = false): Promise<{
     isSuccess: boolean;
     hasOptions: boolean;
   }> {
+    if (this.issueProviderKey === CALDAV_TYPE) {
+      return this._loadCaldavCalendars(isQuiet);
+    }
     const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
     if (!provider) {
       return { isSuccess: false, hasOptions: false };
@@ -543,9 +550,70 @@ export class DialogEditIssueProviderComponent {
     return { isSuccess: !anyFailed, hasOptions };
   }
 
-  private async _loadAndSetDynamicOptionsState(): Promise<void> {
+  private async _loadCaldavCalendars(isQuiet: boolean): Promise<{
+    isSuccess: boolean;
+    hasOptions: boolean;
+  }> {
+    try {
+      const options = await this._caldavClient.listTaskCalendarOptions(
+        this.model as CaldavCfg,
+        isQuiet,
+      );
+      if (options.length) {
+        this._setCaldavResourceOptions(options);
+      } else {
+        this._setCaldavResourceInput();
+      }
+      this.model = { ...this.model };
+      return { isSuccess: true, hasOptions: options.length > 0 };
+    } catch (e) {
+      // Unless the load is quiet, the client service shows a snack for
+      // settings and network errors.
+      IssueLog.err(
+        '[DialogEditIssueProvider] loading CalDAV calendars failed',
+        getSafeErrorLogMeta(e),
+      );
+      this._setCaldavResourceInput();
+      return { isSuccess: false, hasOptions: false };
+    }
+  }
+
+  /** The saved name stays selectable, also when the server is not reachable. */
+  private _setCaldavResourceOptions(options: { value: string; label: string }[]): void {
+    const saved = (this.model as Partial<CaldavCfg>).resourceName;
+    const isSavedListed = !saved || options.some((o) => o.value === saved);
+    this._replaceCaldavResourceField((f) => ({
+      ...f,
+      type: 'select',
+      templateOptions: {
+        ...f.templateOptions,
+        options: isSavedListed ? options : [...options, { value: saved, label: saved }],
+      },
+    }));
+  }
+
+  /** A server that lists no calendars still accepts a typed name or URL segment. */
+  private _setCaldavResourceInput(): void {
+    this._replaceCaldavResourceField((f) => ({
+      ...f,
+      type: 'input',
+      templateOptions: { ...f.templateOptions, options: undefined },
+    }));
+  }
+
+  // A new field object, so the shared CALDAV_CONFIG_FORM stays unchanged
+  // and formly renders the new field type.
+  private _replaceCaldavResourceField(
+    update: (field: FormlyFieldConfig) => FormlyFieldConfig,
+  ): void {
+    this.fields = (this.fields as FormlyFieldConfig[]).map((f) =>
+      (f.key as string) === 'resourceName' ? update(f) : f,
+    ) as typeof this.fields;
+  }
+
+  private async _loadAndSetDynamicOptionsState(isQuiet = false): Promise<void> {
     this._setOptionsLoadState('loading');
-    const result = await this._loadDynamicOptions();
+    const result = await this._loadDynamicOptions(isQuiet);
     this._setOptionsLoadState(
       result.isSuccess ? (result.hasOptions ? 'loaded' : 'empty') : 'failed',
     );
@@ -886,6 +954,18 @@ export class DialogEditIssueProviderComponent {
   }
 
   private async _initOAuthAndOptions(): Promise<void> {
+    if (this.issueProviderKey === CALDAV_TYPE) {
+      this._setCaldavResourceOptions([]);
+      this.showLoadOptionsButton = true;
+      if (this.isEdit) {
+        // The constructor calls this; detectChanges() needs the view to exist.
+        await Promise.resolve();
+        // The user did not ask for this load, so a failure shows only the
+        // failed status, not an error snack.
+        await this._loadAndSetDynamicOptionsState(true);
+      }
+      return;
+    }
     const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
     if (!provider) {
       return;
