@@ -118,6 +118,7 @@ const toPluginTaskCopy = (
 
 // New imports for simple counters
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
+import { SimpleCounterService } from '../features/simple-counter/simple-counter.service';
 import { selectTaskRepeatCfgFeatureState } from '../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import {
   SimpleCounter,
@@ -125,7 +126,6 @@ import {
 } from '../features/simple-counter/simple-counter.model';
 import { EMPTY_SIMPLE_COUNTER } from '../features/simple-counter/simple-counter.const';
 import {
-  deleteSimpleCounter,
   toggleSimpleCounterCounter,
   updateSimpleCounter,
   upsertSimpleCounter,
@@ -2247,7 +2247,9 @@ export class PluginBridgeService implements OnDestroy {
    * @param id The counter ID.
    */
   async deleteSimpleCounter(id: string): Promise<void> {
-    this._store.dispatch(deleteSimpleCounter({ id }));
+    // The service builds the delete op's counter snapshot (#11465, #11495).
+    // Resolved lazily: it runs the stopwatch tracking.
+    this._injector.get(SimpleCounterService).deleteSimpleCounter(id);
   }
 
   /**

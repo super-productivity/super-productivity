@@ -12,12 +12,9 @@
   72dp, well inside the mask. Path and 64-unit viewBox match the launcher
   foreground and the web logo.
 
-  The system splash centres the icon on the whole screen; on phones the web
-  logo is centred above the 44px bottom bar plus the bottom inset (24dp with
-  gesture navigation), i.e. (44 + 24) / 2 = 34dp higher. The glyph is shifted
-  up by that much (translateY 108 - 34 = 74) so it does not jump at the
-  hand-off. drawable-w600dp/ic_splash.xml is the centred variant for wider
-  windows, where the web splash has no bottom bar (its max-width: 599px query).
+  The system splash centres the icon on the whole screen; the web logo is
+  fixed to the centre of the window too (not of the content area above the
+  phone bottom bar), so they line up on any screen, inset or bar size.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="288dp"
@@ -28,7 +25,7 @@
       android:scaleX="1.125"
       android:scaleY="1.125"
       android:translateX="108"
-      android:translateY="74">
+      android:translateY="108">
     <path
         android:fillColor="@color/splash_icon"
         android:pathData="M0.6554,34.5828 L32.4523,63.8553 63.7915,0.9436 30.2226,47.722Z" />

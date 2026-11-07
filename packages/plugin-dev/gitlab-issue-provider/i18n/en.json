@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "user name/project",
+    "PROJECT_HINT": "Project path (namespace/project-slug) or numeric project ID, not the display name (e.g. super-productivity/super-productivity or 12345)",
+    "TOKEN": "Access Token",
+    "HOW_TO_GET_TOKEN": "How to get a token?",
+    "SCOPE": "Scope",
+    "SCOPE_ALL": "All",
+    "SCOPE_CREATED": "Created by me",
+    "SCOPE_ASSIGNED": "Assigned to me",
+    "GITLAB_BASE_URL": "Custom GitLab base URL (optional)",
+    "FILTER_USER": "Filter username",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Custom Filter",
+    "FILTER_DESCRIPTION": "See https://docs.gitlab.com/ee/api/issues.html#list-issues. Multiple can be combined with &",
+    "SUBMIT_TIMELOGS": "Submit timelogs to GitLab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Show time tracking dialog after clicking on \"Finish Day\""
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "STATE": "Status",
+    "ASSIGNEE": "Assignee",
+    "LABELS": "Labels",
+    "DESCRIPTION": "Description"
+  },
+  "FORM_HELP": "<p>Here you can configure Super Productivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically import all open issues.</p>"
+}

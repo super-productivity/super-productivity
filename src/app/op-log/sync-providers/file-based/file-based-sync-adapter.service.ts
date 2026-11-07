@@ -13,7 +13,10 @@ import {
 import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-compress-handler.service';
 import { extractSyncFileStateFromPrefix } from '../../util/sync-file-prefix';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
-import { REPAIR_STALE_ERROR_CODE } from '../../core/operation-log.const';
+import {
+  isRepairBuiltAtCommittedSeq,
+  repairStaleResponse,
+} from './file-based-repair-base.util';
 import { VectorClock } from '../../core/operation.types';
 import {
   FileBasedSyncData,
@@ -636,6 +639,7 @@ export class FileBasedSyncAdapterService {
         _isCleanSlate?: boolean, // Not used - file-based sync replaces entire file
         snapshotOpType?: RestorePointType, // REPAIR triggers a rev-based concurrency guard; see _uploadSnapshot
         _syncImportReason?: string, // Not used - file-based sync has no server-side conflict dialog
+        repairBaseServerSeq?: number, // #11483: the server seq a REPAIR was built at
       ): Promise<SnapshotUploadResponse> => {
         return this._uploadSnapshot(
           provider,
@@ -647,6 +651,7 @@ export class FileBasedSyncAdapterService {
           vectorClock,
           schemaVersion,
           snapshotOpType,
+          repairBaseServerSeq,
         );
       },
 
@@ -1332,16 +1337,27 @@ export class FileBasedSyncAdapterService {
     vectorClock: Record<string, number>,
     schemaVersion: number,
     snapshotOpType?: RestorePointType,
+    repairBaseServerSeq?: number,
   ): Promise<SnapshotUploadResponse> {
-    // Same in-flight target guard as _uploadOps: this is the second remote-write
-    // entry point (initial/recovery/migration + REPAIR snapshot writes, incl.
-    // _conditionalUploadRepairSnapshot and backups). A mid-operation target
-    // switch aborts before any write instead of committing this target's
-    // snapshot to the next one. (Task 2.)
+    // Same in-flight target guard as _uploadOps, for every snapshot write (incl.
+    // REPAIR and backups): a mid-operation target switch aborts before any write
+    // instead of committing this target's snapshot to the next one. (Task 2.)
     const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
     const providerKey = this._getProviderKey(provider);
 
     OpLog.normal(`FileBasedSyncAdapter: Uploading snapshot (reason=${reason})`);
+    // #11483: a REPAIR built before the last applied download lacks its ops; the
+    // rev guard below cannot tell, as that download advanced `_lastSeenRevs`.
+    if (
+      snapshotOpType === 'REPAIR' &&
+      !isRepairBuiltAtCommittedSeq(
+        repairBaseServerSeq,
+        this._localSeqCounters.get(providerKey),
+      )
+    ) {
+      OpLog.warn('FileBasedSyncAdapter: REPAIR predates the last download; rebasing.');
+      return repairStaleResponse();
+    }
 
     // SPAP-11: split-file force-upload / recovery / initial — write both files
     // (state THEN ops) so the ops file's snapshotRef always points at a snapshot
@@ -1395,18 +1411,13 @@ export class FileBasedSyncAdapterService {
     this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._uploadSnapshot');
     let snapshotUploadRes: { rev: string };
     if (snapshotOpType === 'REPAIR') {
-      // #9023: an automatic REPAIR recovery snapshot must never overwrite a remote
-      // that advanced since this client last synced — otherwise a concurrent edit
-      // from another device (uploaded after our last download) is silently dropped.
-      // Mirror the SuperSync repairBaseServerSeq guard by writing CONDITIONALLY on
-      // the rev we last downloaded+applied (`_lastSeenRevs` — the repair's base).
-      // A rev, not a vector clock, is used deliberately: two independently-pruned
-      // clocks (MAX_VECTOR_CLOCK_SIZE) can compare CONCURRENT even when one
-      // dominates, which would wedge the repair forever. On a rev mismatch we
-      // signal REPAIR_STALE so the shared rebase path (RejectedOpsHandlerService)
-      // downloads the concurrent ops and rebuilds the repair; that download
-      // promotes `_lastSeenRevs`, so the retry converges. BACKUP_IMPORT / initial /
-      // migration keep force-overwrite: explicit restores or first-time uploads.
+      // #9023: a REPAIR must not overwrite a remote that advanced since our last
+      // sync (a concurrent edit would be dropped), so it writes CONDITIONALLY on
+      // the rev we last downloaded and applied (`_lastSeenRevs`), like SuperSync's
+      // repairBaseServerSeq. A rev, not a clock: independently pruned clocks can
+      // compare CONCURRENT and wedge the repair. A mismatch answers REPAIR_STALE;
+      // the rebase path downloads, which promotes `_lastSeenRevs`, and retries.
+      // Explicit restores and first-time uploads keep force-overwrite.
       const baseRev = this._lastSeenRevs.get(providerKey) ?? null;
       try {
         snapshotUploadRes = await this._conditionalUploadRepairSnapshot(
@@ -1422,11 +1433,7 @@ export class FileBasedSyncAdapterService {
             'FileBasedSyncAdapter: REPAIR snapshot is stale (remote advanced since ' +
               'our last sync); requesting rebase instead of overwriting.',
           );
-          return {
-            accepted: false,
-            error: 'REPAIR snapshot does not include current remote state',
-            errorCode: REPAIR_STALE_ERROR_CODE,
-          };
+          return repairStaleResponse();
         }
         throw e;
       }
@@ -2797,16 +2804,10 @@ export class FileBasedSyncAdapterService {
     const newSyncVersion = 1;
     const clock = vectorClock as VectorClock;
 
-    // #9023: same concurrency guard as the single-file path — a REPAIR recovery
-    // snapshot must not overwrite a remote that advanced since our last sync.
-    // The commit-point sync-ops.json is what other clients read, so gate on ITS
-    // rev vs the rev we last downloaded+applied (`_lastSeenRevs`). A rev, not a
-    // vector clock, is used deliberately (see _uploadSnapshot). `getFileRev`
-    // reads metadata only — no decode — so a torn/undecryptable remote does not
-    // block the repair. Missing ops file → no history to clobber, safe.
-    // NOTE: this pre-check closes the concurrent *merge* window; a conditional
-    // (rev-matched) write across the two-file (state + ops) protocol to close the
-    // residual sub-second check→write race is tracked as a follow-up.
+    // #9023: the single-file REPAIR guard (see _uploadSnapshot), on the rev of the
+    // commit-point sync-ops.json. `getFileRev` reads metadata only, so a torn or
+    // undecryptable remote does not block the repair; no ops file, no history.
+    // Residual: a sub-second check→write race across the two files (follow-up).
     if (snapshotOpType === 'REPAIR') {
       const baseRev = this._lastSeenRevs.get(providerKey) ?? null;
       let remoteOpsRev: string | null = null;
@@ -2824,11 +2825,7 @@ export class FileBasedSyncAdapterService {
           'FileBasedSyncAdapter: REPAIR split snapshot is stale (remote advanced ' +
             'since our last sync); requesting rebase instead of overwriting.',
         );
-        return {
-          accepted: false,
-          error: 'REPAIR snapshot does not include current remote state',
-          errorCode: REPAIR_STALE_ERROR_CODE,
-        };
+        return repairStaleResponse();
       }
     }
 

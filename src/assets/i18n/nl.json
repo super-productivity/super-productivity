@@ -419,52 +419,6 @@
         "WRITE_A_COMMENT": "Schrijf een opmerking"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "De vooraf ingevulde duur bevat niet-traceerbare gegevens van de afgelopen dagen.",
-        "T_ALREADY_TRACKED": "Reeds gevolgd",
-        "T_TITLE": "Titel",
-        "T_TO_BE_SUBMITTED": "In te dienen",
-        "TITLE": "Tijd besteed aan issues aan GitLab doorgeven",
-        "TOTAL_MSG": "Je zult <em>{{totalTimeToSubmit}}</em> werktijd voor vandaag in totaal aan <em>{{nrOfTasksToSubmit}}</em> verschillende onderwerpen."
-      },
-      "FORM": {
-        "FILTER": "Aangepast filter",
-        "FILTER_DESCRIPTION": "Zie https://docs.gitlab.com/ee/api/issues.html#list-issues. Meerdere kunnen worden gecombineerd door &",
-        "FILTER_USER": "Gebruikersnaam (bijv. Om wijzigingen zelf uit te filteren)",
-        "GITLAB_BASE_URL": "Aangepaste GitLab base URL",
-        "PROJECT": "Volledig pad of gebruikersnaam / project",
-        "PROJECT_HINT": "bijv. johannesjo/superproductiviteit",
-        "SCOPE": "strekking",
-        "SCOPE_ALL": "Allemaal",
-        "SCOPE_ASSIGNED": "Toegewezen aan mij",
-        "SCOPE_CREATED": "Gecreëerd door mij",
-        "SOURCE": "bron",
-        "SOURCE_GLOBAL": "Allemaal",
-        "SOURCE_GROUP": "Groep",
-        "SOURCE_PROJECT": "project",
-        "SUBMIT_TIMELOGS": "Tijdlogs aan Gitlab toevoegen",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Tijdregistratiedialoogvenster tonen na klikken op einddag",
-        "TOKEN": "Toegangstoken"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p> Hier kunt u SuperProductivity configureren om open GitLab (ofwel de online versie of een zelf-gehoste instantie) problemen voor een specifiek project in het taakcreatiepaneel in de dagelijkse planningsweergave op te sommen. Ze worden vermeld als suggesties en bevatten een link naar het probleem en meer informatie erover. </p> <p> Daarnaast kunt u automatisch alle openstaande problemen toevoegen aan en synchroniseren met uw backlog. </p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Toegewezen aan",
-        "AT": "Bij",
-        "DESCRIPTION": "Omschrijving",
-        "LABELS": "Etiketten",
-        "MARK_AS_CHECKED": "Markeer updates als aangevinkt",
-        "PROJECT": "project",
-        "STATUS": "Toestand",
-        "SUMMARY": "Overzicht",
-        "WRITE_A_COMMENT": "Schrijf een reactie"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: onbekende fout {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Deze integratie werkt waarschijnlijk niet in uw browser. Download de desktop- of Android-versie van Super Productivity!",
       "DEFAULT": {

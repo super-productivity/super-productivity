@@ -12,7 +12,11 @@ import {
   moveTaskToTopInTodayList,
   moveTaskUpInTodayList,
 } from '../../work-context/store/work-context-meta.actions';
-import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
+import {
+  moveItemAfterAnchor,
+  moveUndoneTaskDownInList,
+  moveUndoneTaskUpInList,
+} from '../../work-context/store/work-context-meta.helper';
 import {
   arrayMoveLeftUntil,
   arrayMoveRightUntil,
@@ -362,10 +366,10 @@ export const projectReducer = createReducer<ProjectState>(
             {
               id: workContextId,
               changes: {
-                taskIds: arrayMoveLeftUntil(
+                taskIds: moveUndoneTaskUpInList(
                   (state.entities[workContextId] as Project).taskIds,
                   taskId,
-                  (id) => !undoneTaskIds.includes(id),
+                  undoneTaskIds,
                 ),
               },
             },
@@ -383,10 +387,10 @@ export const projectReducer = createReducer<ProjectState>(
             {
               id: workContextId,
               changes: {
-                taskIds: arrayMoveRightUntil(
+                taskIds: moveUndoneTaskDownInList(
                   (state.entities[workContextId] as Project).taskIds,
                   taskId,
-                  (id) => !undoneTaskIds.includes(id),
+                  undoneTaskIds,
                 ),
               },
             },

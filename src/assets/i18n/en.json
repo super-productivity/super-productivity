@@ -491,52 +491,6 @@
         "WRITE_A_COMMENT": "Write a comment"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "The prefilled duration contains untracked data from past days.",
-        "T_ALREADY_TRACKED": "Already Tracked",
-        "T_TITLE": "Title",
-        "T_TO_BE_SUBMITTED": "To be submitted",
-        "TITLE": "Submit Time Spent on Issues to GitLab",
-        "TOTAL_MSG": "You will submit <em>{{totalTimeToSubmit}}</em> work time for today in total to <em>{{nrOfTasksToSubmit}}</em> different issues."
-      },
-      "FORM": {
-        "FILTER": "Custom Filter",
-        "FILTER_DESCRIPTION": "See https://docs.gitlab.com/ee/api/issues.html#list-issues. Multiple can be combined with &",
-        "FILTER_USER": "Filter username",
-        "GITLAB_BASE_URL": "Custom GitLab base URL (optional)",
-        "PROJECT": "user name/project",
-        "PROJECT_HINT": "Project path (namespace/project-slug) or numeric project ID, not the display name (e.g. super-productivity/super-productivity or 12345)",
-        "SCOPE": "Scope",
-        "SCOPE_ALL": "All",
-        "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me",
-        "SOURCE": "Source",
-        "SOURCE_GLOBAL": "All",
-        "SOURCE_GROUP": "Group",
-        "SOURCE_PROJECT": "Project",
-        "SUBMIT_TIMELOGS": "Submit timelogs to GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Show time tracking dialog after clicking on \"Finish Day\"",
-        "TOKEN": "Access Token"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition, you can automatically import all open issues.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Assignee",
-        "AT": "at",
-        "DESCRIPTION": "Description",
-        "LABELS": "Labels",
-        "MARK_AS_CHECKED": "Mark updates as checked",
-        "PROJECT": "Project",
-        "STATUS": "Status",
-        "SUMMARY": "Summary",
-        "WRITE_A_COMMENT": "Write a comment"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Unknown error {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "This integration will likely not work in your web browser. Please download the desktop or Android version of Super Productivity!",
       "DEFAULT": {
@@ -606,7 +560,8 @@
         "REMOTE_ISSUE_DELETED": "Remote issue was deleted. Delete linked task \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote issue was deleted but task \"{{taskTitle}}\" has tracked time. Delete anyway?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}",
-        "POST_TIME_SUCCESS": "{{providerName}}: Successfully created time entry for {{issueTitle}}"
+        "POST_TIME_SUCCESS": "{{providerName}}: Successfully created time entry for {{issueTitle}}",
+        "WORKLOG_FOR_DAY_SUCCESS": "{{providerName}}: Time submitted (issues: {{nrOfIssues}})"
       },
       "SYNC_STATE": {
         "COULD_NOT_SYNC": "Couldn't sync: {{reason}}",
@@ -646,6 +601,14 @@
         "RELOAD_OPTIONS": "Reload Options",
         "SETUP_TITLE": "Setup {{title}} Config",
         "TEST_CONNECTION": "Test Connection"
+      },
+      "DIALOG_SUBMIT_WORKLOG": {
+        "OTHER_DAYS_INFO": "Includes unsubmitted time from other days",
+        "T_ALREADY_LOGGED": "Already logged",
+        "T_TITLE": "Title",
+        "T_TO_BE_SUBMITTED": "To be submitted",
+        "TITLE": "{{providerName}}: Submit Time for the Day",
+        "TOTAL_MSG": "Total to submit: <em>{{totalTime}}</em> (issues: <em>{{nrOfIssues}}</em>)"
       },
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Activity",
@@ -1058,7 +1021,6 @@
       },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Enable Project Backlog",
-        "L_IS_HIDDEN_FROM_MENU": "Hide project from sidebar",
         "L_TITLE": "Project Name",
         "TITLE": "Basic Settings"
       },
@@ -1121,7 +1083,7 @@
         "PLACEHOLDER": "Select folder"
       },
       "TOOLTIP_CREATE": "Create project folder",
-      "TOOLTIP_VISIBILITY": "Show/hide projects",
+      "TOOLTIP_VISIBILITY": "Show/hide in sidebar",
       "ADD_SUBFOLDER": "Add subfolder",
       "ADD_PROJECT": "Add project"
     },
@@ -3161,6 +3123,8 @@
     "FILE_DOWNLOADED": "{{fileName}} downloaded",
     "FILE_DOWNLOADED_BTN": "Open folder",
     "NAVIGATE_TO_TASK_ERR": "Could not focus the task. Did you delete it?",
+    "NAVIGATE_TO_TASK_FILTERED": "This task is hidden by the current filter",
+    "NAVIGATE_TO_TASK_FILTERED_BTN": "Clear filter",
     "NO_TASKS_TO_COPY": "No tasks to copy",
     "NO_TASKS_TO_UNPLAN": "No tasks to unplan",
     "OPEN_SETTINGS_ERROR": "Could not open settings",
@@ -3203,6 +3167,7 @@
     "HABITS": "Habits",
     "HELP": "Help",
     "HM": {
+      "BUILD_PLUGIN": "Build your own plugin",
       "CALENDARS": "How to: Connect calendars",
       "CONTRIBUTE": "Contribute",
       "CREATE_TASK": "How to: Create a task",
@@ -3560,6 +3525,39 @@
     "UPLOAD_PLUGIN_INSTRUCTION": "Upload a plugin ZIP file to install it:",
     "BUILD_YOUR_OWN": "Want to build your own?",
     "BUILD_YOUR_OWN_LINK": "Read the plugin guide",
+    "BUILD_WITH_AI": "Build one with AI",
+    "BUILD_DIALOG": {
+      "TITLE": "Build your own plugin",
+      "STEP_DESCRIBE": "1. Describe your idea",
+      "IDEA_LABEL": "What should your plugin do?",
+      "IDEA_PLACEHOLDER": "e.g. Add a header button that starts a 25-minute focus timer on my current task",
+      "COPY_PROMPT": "Copy prompt for your AI",
+      "COPY_FAILED": "Copying to the clipboard failed.",
+      "COPY_PROMPT_HINT": "Paste the copied prompt into an AI chat like ChatGPT, Claude or Gemini. Then paste its answer here.",
+      "SAFETY_HINT": "Plugins can read and change your data. Try new ones on test data first, e.g. at test-app.super-productivity.com.",
+      "NEXT": "Next: paste the answer",
+      "STEP_PASTE": "2. Paste the AI's answer",
+      "ANSWER_LABEL": "The AI's complete answer",
+      "ANSWER_HINT": "Copy the whole answer with the chat's copy button, not a single code block.",
+      "WILL_INSTALL": "Will install \"{{name}}\". Extra permissions it asks for: {{permissions}}",
+      "NO_PERMISSIONS": "none",
+      "REPLACES": "It replaces your installed plugin with the same id.",
+      "INSTALL": "Install and try",
+      "ERR_NO_CODE_BLOCKS": "No code found. Copy the AI's whole answer with the chat's copy button, so the code blocks come along.",
+      "ERR_NO_MANIFEST": "The answer has no manifest.json. Ask the AI to include it.",
+      "ERR_INVALID_MANIFEST": "The manifest.json is not valid JSON. Ask the AI to fix it.",
+      "ERR_NO_NAME": "The manifest.json needs a name and an id (lowercase letters, numbers and dashes). Ask the AI to add them.",
+      "ERR_NO_PLUGIN_CODE": "The answer has no plugin.js or index.html. Ask the AI to include it.",
+      "STEP_TRY": "3. Try it",
+      "INSTALLED": "\"{{name}}\" is installed. Try it out in the app.",
+      "INSTALLED_OFF": "\"{{name}}\" is installed but turned off. Turn it on in Settings → Plugins to try it.",
+      "LOAD_ERROR": "\"{{name}}\" stopped with an error:",
+      "COPY_ERROR": "Copy error for your AI",
+      "PASTE_FIXED": "Paste a new version",
+      "LATER_ERRORS_HINT": "Something breaks later? Open the developer tools (F12 or Ctrl+Shift+I), copy the red error lines and send them to your AI. Pasting a fixed version replaces this one.",
+      "BACK": "Back",
+      "GUIDE": "Plugin guide"
+    },
     "VALIDATION_FAILED": "Validation failed: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin.",
     "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" failed to load: {{error}}",
