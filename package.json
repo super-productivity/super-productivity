@@ -175,6 +175,7 @@
     "test:shard:core": "cross-env TZ='Europe/Berlin' ng test --watch=false --include='src/app/core/**/*.spec.ts'",
     "test:shard:util": "cross-env TZ='Europe/Berlin' ng test --watch=false --include='src/app/util/**/*.spec.ts'",
     "checkFile": "node tools/check-file.js",
+    "typecheck": "ngc -p src/tsconfig.app.json --noEmit --rootDir . && tsc -p src/tsconfig.spec.json --noEmit --rootDir . && tsc -p electron/tsconfig.electron.json --noEmit",
     "quiet": "node tools/quiet.js",
     "docs:check-links": "node ./tools/check-doc-links.js docs",
     "release-notes:generate": "node ./tools/release-notes.js generate",
