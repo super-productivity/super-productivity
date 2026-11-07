@@ -59,6 +59,7 @@
         class="habit-row"
         cdkDrag
         [cdkDragStartDelay]="dragDelayForTouch()"
+        (cdkDragStarted)="onDragStarted()"
       >
         <div
           class="habit-title"
