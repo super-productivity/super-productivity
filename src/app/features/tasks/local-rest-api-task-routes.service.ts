@@ -1015,6 +1015,14 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
     }
 
     const archivedTask = await this._taskArchiveService.getById(taskId);
+    if (archivedTask.parentId) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        'Cannot restore a subtask on its own; restore its parent task, which takes its subtasks with it',
+      );
+    }
     const subTasks: Task[] = [];
 
     if (archivedTask.subTaskIds?.length) {
