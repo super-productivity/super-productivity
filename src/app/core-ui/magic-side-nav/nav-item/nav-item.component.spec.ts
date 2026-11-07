@@ -145,12 +145,14 @@ describe('NavItemComponent row menu', () => {
       [folderId]="'folder-f1'"
       [label]="'Folder'"
       [folderChildren]="children()"
+      [expanded]="expanded()"
     ></nav-item>
   `,
   imports: [NavItemComponent],
 })
 class FolderHostComponent {
   readonly children = signal<MenuTreeViewNode[]>([]);
+  readonly expanded = signal(false);
 }
 
 describe('NavItemComponent folder open-task count (#5931)', () => {
@@ -211,6 +213,19 @@ describe('NavItemComponent folder open-task count (#5931)', () => {
 
   it('counts a task that is in several tags only once', () => {
     fixture.componentInstance.children.set([tag('a', ['t1', 't2']), tag('b', ['t2'])]);
+    fixture.detectChanges();
+
+    expect(countText()).toBe('2');
+  });
+
+  it('hides the count while the folder is expanded', () => {
+    fixture.componentInstance.children.set([project('p1', ['t1', 't2'])]);
+    fixture.componentInstance.expanded.set(true);
+    fixture.detectChanges();
+
+    expect(countText()).toBeUndefined();
+
+    fixture.componentInstance.expanded.set(false);
     fixture.detectChanges();
 
     expect(countText()).toBe('2');
