@@ -5,8 +5,13 @@ import { T } from '../../../t.const';
 import { TestBed, fakeAsync, tick, flush, flushMicrotasks } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { Subject, of, Subscription } from 'rxjs';
-import { TimeBlockSyncEffects, COALESCE_MS } from './time-block-sync.effects';
+import { Store, provideStore } from '@ngrx/store';
+import { EMPTY, Subject, of, Subscription } from 'rxjs';
+import {
+  TimeBlockSyncEffects,
+  COALESCE_MS,
+  TIME_BLOCK_TITLE_RESYNC_MS,
+} from './time-block-sync.effects';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { TaskService } from '../../tasks/task.service';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
@@ -18,6 +23,13 @@ import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.se
 import { DEFAULT_TASK, Task, TaskWithDueTime } from '../../tasks/task.model';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { IssueProviderActions } from '../../issue/store/issue-provider.actions';
+import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
+import {
+  CONFIG_FEATURE_NAME,
+  globalConfigReducer,
+  selectTimelineConfig,
+} from '../../config/store/global-config.reducer';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 
 interface TestProvider {
   id: string;
@@ -37,6 +49,7 @@ describe('TimeBlockSyncEffects', () => {
   let bulkDeleteSidecarIds: string[];
   let oauthTokensSpy: jasmine.Spy;
   let configFields: Array<{ type: string }>;
+  let registeredPluginId: string;
 
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -65,6 +78,7 @@ describe('TimeBlockSyncEffects', () => {
     bulkDeleteSidecarIds = [];
     oauthTokensSpy = jasmine.createSpy('restoreAndCheckOAuthTokens').and.resolveTo(true);
     configFields = [{ type: 'oauthButton' }];
+    registeredPluginId = 'google-calendar-provider';
 
     TestBed.configureTestingModule({
       providers: [
@@ -87,7 +101,7 @@ describe('TimeBlockSyncEffects', () => {
           useValue: {
             getConfigFields: () => configFields,
             getProvider: () => ({
-              pluginId: 'google-calendar-provider',
+              pluginId: registeredPluginId,
               definition: {
                 getHeaders: () => ({}),
                 timeBlock: {
@@ -124,6 +138,8 @@ describe('TimeBlockSyncEffects', () => {
 
   afterEach(() => {
     sub?.unsubscribe();
+    // Overrides live on the shared selector objects; don't leak them.
+    store.resetSelectors();
   });
 
   it('offers Connect for missing provider credentials and opens that provider settings', fakeAsync(() => {
@@ -644,6 +660,176 @@ describe('TimeBlockSyncEffects', () => {
     }));
   });
 
+  describe('time block title setting', () => {
+    const setTimeBlockTitle = (timeBlockTitle: string): void => {
+      store.overrideSelector(selectTimelineConfig, {
+        ...DEFAULT_GLOBAL_CONFIG.schedule,
+        timeBlockTitle,
+      });
+      store.refreshState();
+    };
+
+    const saveSchedule = (changes: Record<string, unknown>): void => {
+      actions$.next(
+        updateGlobalConfigSection({
+          sectionKey: 'schedule',
+          sectionCfg: { ...DEFAULT_GLOBAL_CONFIG.schedule, ...changes },
+        }),
+      );
+    };
+
+    const triggerUpsert = (task: Task): void => {
+      getByIdOnce$Spy.and.callFake(() => of(task));
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: task.id, changes: { isDone: task.isDone } },
+        }),
+      );
+      tick(COALESCE_MS);
+    };
+
+    const lastEventData = (): { title: string; isDone: boolean } =>
+      upsertEventSpy.calls.mostRecent().args[1];
+
+    const writtenTitles = (): string[][] =>
+      upsertEventSpy.calls
+        .allArgs()
+        .map(([taskId, eventData]) => [taskId, eventData.title]);
+
+    it('uses the task title when the setting is empty', fakeAsync(() => {
+      triggerUpsert(createTask('task-1'));
+      expect(lastEventData().title).toBe('Task task-1');
+      flush();
+    }));
+
+    it('uses the task title when the setting is only whitespace', fakeAsync(() => {
+      setTimeBlockTitle('   ');
+      triggerUpsert(createTask('task-1'));
+      expect(lastEventData().title).toBe('Task task-1');
+      flush();
+    }));
+
+    for (const [issueProviderKey, pluginId] of [
+      ['plugin:google-calendar-provider', 'google-calendar-provider'],
+      ['plugin:caldav-calendar-provider', 'caldav-calendar-provider'],
+    ]) {
+      describe(`for ${pluginId}`, () => {
+        beforeEach(() => {
+          provider.issueProviderKey = issueProviderKey;
+          registeredPluginId = pluginId;
+        });
+
+        it('sends the custom title instead of the task title', fakeAsync(() => {
+          setTimeBlockTitle(' Focus time ');
+          triggerUpsert(createTask('task-1'));
+          expect(lastEventData()).toEqual(
+            jasmine.objectContaining({ title: 'Focus time', isDone: false }),
+          );
+          flush();
+        }));
+
+        it('keeps the done flag, so the plugin still marks a done block', fakeAsync(() => {
+          setTimeBlockTitle('Focus time');
+          triggerUpsert(createTask('task-1', { isDone: true }));
+          expect(lastEventData()).toEqual(
+            jasmine.objectContaining({ title: 'Focus time', isDone: true }),
+          );
+          flush();
+        }));
+      });
+    }
+
+    describe('when the setting changes', () => {
+      let resyncSub: Subscription;
+
+      beforeEach(() => {
+        const oneHourMs = 60 * 60 * 1000;
+        const fiveWeeksMs = 5 * 7 * 24 * oneHourMs;
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const tasks = [
+          createTask('task-yesterday', {
+            dueWithTime: startOfToday.getTime() - oneHourMs,
+          }),
+          // Still on today's calendar, so it is re-written too.
+          createTask('task-1', { dueWithTime: startOfToday.getTime() }),
+          createTask('task-2', { dueWithTime: Date.now() + oneHourMs }),
+          // Beyond the 2-week sync range, but it has a block as well.
+          createTask('task-3', { dueWithTime: Date.now() + fiveWeeksMs }),
+        ] as TaskWithDueTime[];
+        store.overrideSelector(selectAllTasksWithDueTimeSorted, tasks);
+        getByIdOnce$Spy.and.callFake((id: string) =>
+          of(tasks.find((task) => task.id === id)),
+        );
+        resyncSub = effects.resyncOnTimeBlockTitleChange$.subscribe();
+      });
+
+      afterEach(() => resyncSub.unsubscribe());
+
+      it('re-writes existing blocks with the new title once typing stops', fakeAsync(() => {
+        setTimeBlockTitle('F');
+        saveSchedule({ timeBlockTitle: 'F' });
+        tick(COALESCE_MS);
+        setTimeBlockTitle('Focus time');
+        saveSchedule({ timeBlockTitle: 'Focus time' });
+        tick(TIME_BLOCK_TITLE_RESYNC_MS - 1);
+        expect(upsertEventSpy).not.toHaveBeenCalled();
+
+        tick(1);
+        flushMicrotasks();
+
+        expect(writtenTitles()).toEqual([
+          ['task-1', 'Focus time'],
+          ['task-2', 'Focus time'],
+          ['task-3', 'Focus time'],
+        ]);
+        flush();
+      }));
+
+      it('restores the task titles when the setting is cleared', fakeAsync(() => {
+        setTimeBlockTitle('Focus time');
+        setTimeBlockTitle('');
+        saveSchedule({ timeBlockTitle: '' });
+        tick(TIME_BLOCK_TITLE_RESYNC_MS);
+        flushMicrotasks();
+
+        expect(writtenTitles()).toEqual([
+          ['task-1', 'Task task-1'],
+          ['task-2', 'Task task-2'],
+          ['task-3', 'Task task-3'],
+        ]);
+        flush();
+      }));
+
+      it('does not re-write blocks when another schedule field is saved', fakeAsync(() => {
+        setTimeBlockTitle('Focus time');
+        // The save of another field emits a state with the same title.
+        store.refreshState();
+        saveSchedule({ timeBlockTitle: 'Focus time', workEnd: '18:00' });
+        tick(TIME_BLOCK_TITLE_RESYNC_MS);
+        flushMicrotasks();
+
+        expect(upsertEventSpy).not.toHaveBeenCalled();
+        flush();
+      }));
+
+      it('does not re-write blocks for another settings section', fakeAsync(() => {
+        setTimeBlockTitle('Focus time');
+        actions$.next(
+          updateGlobalConfigSection({
+            sectionKey: 'misc',
+            sectionCfg: { isConfirmBeforeExit: true },
+          }),
+        );
+        tick(TIME_BLOCK_TITLE_RESYNC_MS);
+        flushMicrotasks();
+
+        expect(upsertEventSpy).not.toHaveBeenCalled();
+        flush();
+      }));
+    });
+  });
+
   it('caps bulk-delete HTTP fan-out so it does not burst rate limits', fakeAsync(() => {
     const bulkSub = effects.deleteOnBulkTaskDelete$.subscribe();
     const taskIds = ['t-1', 't-2', 't-3', 't-4', 't-5'];
@@ -674,6 +860,57 @@ describe('TimeBlockSyncEffects', () => {
     flushMicrotasks();
     expect(deleteEventSpy).toHaveBeenCalledTimes(5);
     bulkSub.unsubscribe();
+    flush();
+  }));
+});
+
+// The title-change check relies on the real store emitting the new state just
+// before effects see the action, which MockStore cannot show.
+describe('TimeBlockSyncEffects title re-sync with the real store', () => {
+  it('re-writes blocks only for a save that changes the title', fakeAsync(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        TimeBlockSyncEffects,
+        provideStore({ [CONFIG_FEATURE_NAME]: globalConfigReducer }),
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginBridgeService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: SnackService, useValue: {} },
+        { provide: TimeBlockDeleteSidecarService, useValue: {} },
+      ],
+    });
+    const effects = TestBed.inject(TimeBlockSyncEffects);
+    const store = TestBed.inject(Store);
+    const resyncSpy = spyOn(
+      effects as unknown as { _withTimeBlockContext$: () => unknown },
+      '_withTimeBlockContext$',
+    ).and.returnValue(EMPTY);
+    const sub = effects.resyncOnTimeBlockTitleChange$.subscribe();
+    const saveSchedule = (changes: Record<string, unknown>): void => {
+      store.dispatch(
+        updateGlobalConfigSection({
+          sectionKey: 'schedule',
+          sectionCfg: { ...DEFAULT_GLOBAL_CONFIG.schedule, ...changes },
+        }),
+      );
+      tick(TIME_BLOCK_TITLE_RESYNC_MS);
+    };
+
+    saveSchedule({ workEnd: '18:00' });
+    expect(resyncSpy).not.toHaveBeenCalled();
+
+    saveSchedule({ timeBlockTitle: 'Focus time' });
+    expect(resyncSpy).toHaveBeenCalledTimes(1);
+
+    saveSchedule({ timeBlockTitle: 'Focus time', workEnd: '19:00' });
+    expect(resyncSpy).toHaveBeenCalledTimes(1);
+
+    saveSchedule({ timeBlockTitle: '' });
+    expect(resyncSpy).toHaveBeenCalledTimes(2);
+
+    sub.unsubscribe();
     flush();
   }));
 });
