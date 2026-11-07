@@ -6,6 +6,7 @@ import { selectEnabledIssueProviders } from './store/issue-provider.selectors';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { CurrentProviderPrivateCfg } from '../../op-log/core/types/sync.types';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { IssueLog } from '../../core/log';
 
 describe('CertTrustService', () => {
   let store: MockStore;
@@ -119,5 +120,20 @@ describe('CertTrustService', () => {
     acks[1]();
     await applied;
     expect(isApplied).toBe(true);
+  });
+
+  it('still resolves setPendingConfig when the main process call fails', async () => {
+    spyOn(IssueLog, 'err');
+    service.init({ setTrustedHosts: () => Promise.reject(new Error('ipc down')) });
+
+    await service.setPendingConfig({}, { baseUrl: 'https://nas.lan' });
+
+    expect(IssueLog.err).toHaveBeenCalled();
+  });
+
+  it('resolves setPendingConfig at once without the Electron API (web)', async () => {
+    await expectAsync(
+      service.setPendingConfig({}, { baseUrl: 'https://nas.lan' }),
+    ).toBeResolved();
   });
 });
