@@ -58,6 +58,8 @@
     "e2e:all": "npx playwright test --config e2e/playwright.config.ts --reporter=line",
     "e2e:ci": "npm run e2e",
     "e2e:pwa": "npm run buildFrontend:prodWeb && npx playwright test --config e2e/playwright.pwa.config.ts --reporter=line",
+    "perf": "npm run buildFrontend:prodWeb && npm run perf:run",
+    "perf:run": "npx playwright test --config e2e/performance/playwright.performance.config.ts",
     "e2e:ui": "npx playwright test --config e2e/playwright.config.ts --ui",
     "e2e:file": "npx playwright test --config e2e/playwright.config.ts --reporter=list",
     "e2e:debug": "npx playwright test --config e2e/playwright.config.ts --debug",
