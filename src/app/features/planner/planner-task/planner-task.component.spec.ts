@@ -25,6 +25,7 @@ import {
 } from '../../work-context/store/work-context-meta.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TODAY_TAG } from '../../tag/tag.const';
+import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
 
 const makeTask = (overrides: Partial<TaskCopy> = {}): TaskCopy =>
   ({
@@ -147,7 +148,14 @@ describe('PlannerTaskComponent', () => {
         // `done-toggle` stays REAL: the planner's modifier-click behaviour is a
         // property of how this template configures that shared component, so
         // stubbing it would test nothing (see the spec at the bottom).
-        imports: [DoneToggleComponent, MsToStringPipe, RenderLinksPipe, TranslatePipe],
+        // Inline estimates also need the real input and its duration value accessor.
+        imports: [
+          DoneToggleComponent,
+          InlineInputComponent,
+          MsToStringPipe,
+          RenderLinksPipe,
+          TranslatePipe,
+        ],
         schemas: [NO_ERRORS_SCHEMA],
       },
     });
@@ -965,6 +973,49 @@ describe('PlannerTaskComponent', () => {
   });
 
   describe('timeEstimate', () => {
+    it('does not overwrite an externally updated estimate when the same duration is pasted inline', fakeAsync(() => {
+      const hour = 60 * 60 * 1000;
+      const task = makeTask({ timeEstimate: 0, timeSpent: 0 });
+      const { fixture, component } = create(task);
+      tick();
+      const input = fixture.nativeElement.querySelector(
+        'inline-input input',
+      ) as HTMLInputElement;
+      const update = taskServiceMock['update'] as jasmine.Spy;
+
+      input.focus();
+      input.value = '1h';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.blur();
+      expect(update).toHaveBeenCalledOnceWith(task.id, { timeEstimate: hour });
+      fixture.componentRef.setInput('task', { ...task, timeEstimate: hour });
+      fixture.detectChanges();
+      tick();
+
+      // The estimation dialog can update this task while Planner retains its row.
+      fixture.componentRef.setInput('task', { ...task, timeEstimate: 2 * hour });
+      fixture.detectChanges();
+      tick();
+      expect(fixture.nativeElement.querySelector('inline-input input')).toBe(input);
+      expect(input.value).toBe('2h');
+      update.calls.reset();
+
+      input.focus();
+      input.value = '2h';
+      input.dispatchEvent(
+        new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertFromPaste',
+          data: '2h',
+        }),
+      );
+      input.blur();
+
+      expect(update.calls.allArgs()).toEqual([]);
+      expect(component.timeEstimate()).toBe(2 * hour);
+      expect(input.value).toBe('2h');
+    }));
+
     it('returns the raw estimate when the task has subTaskIds', () => {
       const { component } = create(
         makeTask({ timeEstimate: 5000, timeSpent: 2000, subTaskIds: ['s1'] }),

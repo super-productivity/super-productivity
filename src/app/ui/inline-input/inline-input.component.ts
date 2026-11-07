@@ -69,6 +69,8 @@ export class InlineInputComponent implements AfterViewInit {
     ) {
       this.changed.emit(this.newValue);
     }
+    // Pending edits belong only to the editing session that just ended.
+    this.newValue = undefined;
   }
 
   onChange(v: string | number): void {
