@@ -26,6 +26,7 @@
 
 const { promises: fs } = require('fs');
 const { join } = require('path');
+const { Arch } = require('builder-util');
 
 const BIN_NAME = 'superproductivity'; // must match linux.executableName
 const RENAMED = 'superproductivity-bin';
@@ -80,6 +81,11 @@ async function afterPack(context) {
   const helperDestPath = join(appOutDir, WAYLAND_IDLE_HELPER_DEST);
 
   const installWaylandIdleHelper = async () => {
+    if (context.arch !== Arch.x64) {
+      console.log('[afterPack] Skipping Wayland idle helper for non-x64 Linux package');
+      return;
+    }
+
     if (isTruthyEnv(process.env.SP_SKIP_WAYLAND_IDLE_HELPER_BUILD)) {
       console.warn(
         '[afterPack] Skipping Wayland idle helper copy because SP_SKIP_WAYLAND_IDLE_HELPER_BUILD is set',
