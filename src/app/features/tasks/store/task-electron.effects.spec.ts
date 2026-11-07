@@ -14,7 +14,7 @@ import {
   selectTaskEntities,
 } from './task.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
-import { GlobalConfigService } from '../../config/global-config.service';
+import { DueTaskBadgeLocalSettingsService } from '../../config/due-task-badge-local-settings.service';
 import { FocusModeService } from '../../focus-mode/focus-mode.service';
 import { TaskService } from '../task.service';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
@@ -26,7 +26,6 @@ import {
 } from '../../../root-store/app-state/app-state.selectors';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
-import { MiscConfig } from '../../config/global-config.model';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 
 /**
@@ -41,7 +40,7 @@ describe('TaskElectronEffects', () => {
   let actions$: Subject<any>;
   let store: MockStore;
   let setProgressBarSpy: jasmine.Spy;
-  let misc$: BehaviorSubject<Partial<MiscConfig>>;
+  let isBadgeEnabled$: BehaviorSubject<boolean>;
   let inSyncWindow$: BehaviorSubject<boolean>;
   let initialSyncGateOpen$: BehaviorSubject<boolean>;
 
@@ -68,7 +67,7 @@ describe('TaskElectronEffects', () => {
   beforeEach(() => {
     actions$ = new Subject<any>();
     setProgressBarSpy = jasmine.createSpy('setProgressBar');
-    misc$ = new BehaviorSubject<Partial<MiscConfig>>({ isShowDueTaskBadge: true });
+    isBadgeEnabled$ = new BehaviorSubject<boolean>(true);
     inSyncWindow$ = new BehaviorSubject(false);
     initialSyncGateOpen$ = new BehaviorSubject(true);
     (window as any).ea = {
@@ -104,7 +103,10 @@ describe('TaskElectronEffects', () => {
           ],
         }),
         { provide: LOCAL_ACTIONS, useValue: actions$ },
-        { provide: GlobalConfigService, useValue: { misc$ } },
+        {
+          provide: DueTaskBadgeLocalSettingsService,
+          useValue: { isEnabled$: isBadgeEnabled$ },
+        },
         {
           provide: HydrationStateService,
           useValue: {
@@ -158,13 +160,13 @@ describe('TaskElectronEffects', () => {
         schedulingTask({ dueDay: '2026-10-02' }),
       ]);
       store.refreshState();
-      misc$.next({ isShowDueTaskBadge: false });
+      isBadgeEnabled$.next(false);
       expect(counts).toEqual([1, 0, 1, 0]);
       sub.unsubscribe();
     });
 
     it('sends nothing to the main process while the badge was never enabled', () => {
-      misc$.next({ isShowDueTaskBadge: false });
+      isBadgeEnabled$.next(false);
       const counts: number[] = [];
       const sub = effects.syncDueTaskBadge$.subscribe((count) => counts.push(count));
       store.overrideSelector(selectTaskSchedulingSnapshot, []);

@@ -7,13 +7,14 @@ import { T } from '../../../t.const';
 import { IS_ELECTRON, IS_GNOME_WAYLAND } from '../../../app.constants';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { isUpdateCheckPossible } from '../../../core/update-check/is-update-check-possible.util';
+import { IS_DUE_TASK_BADGE_SUPPORTED } from '../../tasks/util/is-due-task-badge-supported';
 
 export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
   title: T.GCF.MISC.TITLE,
   key: 'misc',
   help: T.GCF.MISC.HELP,
   items: [
-    ...(IS_ELECTRON
+    ...(IS_DUE_TASK_BADGE_SUPPORTED
       ? ([
           {
             key: 'isShowDueTaskBadge',

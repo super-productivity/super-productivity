@@ -1,15 +1,14 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
-import { combineLatest } from 'rxjs';
 import { selectTaskSchedulingSnapshot } from './task.selectors';
 import {
   selectTodayStr,
   selectStartOfNextDayDiffMs,
 } from '../../../root-store/app-state/app-state.selectors';
-import { countDueTasks } from '../util/count-due-tasks';
 import { createDueTaskBadgeIcon } from '../util/create-due-task-badge-icon';
+import { DueTaskBadgeLocalSettingsService } from '../../config/due-task-badge-local-settings.service';
+import { createDueTaskBadgeCount$ } from '../util/due-task-badge-count$';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
-import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { setCurrentTask, unsetCurrentTask } from './task.actions';
@@ -87,6 +86,7 @@ export class TaskElectronEffects {
   private _hydrationState = inject(HydrationStateService);
   private _syncTrigger = inject(SyncTriggerService);
   private _isElectron = inject(IS_ELECTRON_TOKEN);
+  private _dueTaskBadgeSettings = inject(DueTaskBadgeLocalSettingsService);
 
   // -----------------------------------------------------------------------------------
   // NOTE: IS_ELECTRON checks not necessary, since we check before importing this module
@@ -141,25 +141,18 @@ export class TaskElectronEffects {
 
   syncDueTaskBadge$ = createEffect(
     () =>
-      combineLatest([
+      createDueTaskBadgeCount$(
         this._store$.select(selectTaskSchedulingSnapshot),
         this._store$.select(selectTodayStr),
         this._store$.select(selectStartOfNextDayDiffMs),
-        this._configService.misc$,
+        this._dueTaskBadgeSettings.isEnabled$,
         // Re-evaluate the latest count when the window opens, even if the
         // last task emission was suppressed during hydration/remote apply.
         this._hydrationState.isInSyncWindow$,
         this._syncTrigger.initialSyncGateOpen$,
-      ]).pipe(
-        skipDuringSyncWindow(),
-        map(([tasks, today, dayOffset, misc]) =>
-          misc.isShowDueTaskBadge && today
-            ? countDueTasks(tasks, today, dayOffset ?? 0)
-            : 0,
-        ),
-        distinctUntilChanged(),
-        // Opt-in: until a badge was ever shown there is nothing to clear, so
-        // users who never enabled it don't touch the taskbar/dock at all.
+      ).pipe(
+        // Opt-in: the overlay/Dock badge vanishes on quit, so never touch
+        // the platform until the badge was first non-zero.
         skipWhile((count) => count === 0),
         tap((count) => {
           if (this._isElectron) {

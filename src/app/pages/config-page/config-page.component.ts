@@ -14,9 +14,11 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { getChangedConfigFields } from '../../features/config/get-changed-config-fields.util';
 import { NEW_INSTALL_CONFIG_SECTION_KEYS } from '../../features/config/new-install-config.const';
 import { TaskWidgetSettingsService } from '../../features/config/task-widget-settings.service';
+import { DueTaskBadgeLocalSettingsService } from '../../features/config/due-task-badge-local-settings.service';
 import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
 import {
   FocusModeLocalConfig,
+  MiscConfig,
   TaskWidgetConfig,
 } from '../../features/config/global-config.model';
 import {
@@ -149,6 +151,7 @@ export class ConfigPageComponent implements OnInit {
   readonly syncSettingsService = inject(SyncConfigService);
   readonly taskWidgetSettingsService = inject(TaskWidgetSettingsService);
   readonly focusModeLocalSettingsService = inject(FocusModeLocalSettingsService);
+  private readonly _dueTaskBadgeSettings = inject(DueTaskBadgeLocalSettingsService);
 
   T: typeof T = T;
 
@@ -442,6 +445,14 @@ export class ConfigPageComponent implements OnInit {
     // From here on we know it's a real GlobalConfigState section.
     const sectionKey = formSectionKey as GlobalConfigSectionKey;
 
+    // The due-task badge toggle sits in the misc form but is device-local.
+    if (sectionKey === 'misc' && 'isShowDueTaskBadge' in config) {
+      const { isShowDueTaskBadge, ...syncedMisc } = config;
+      this._dueTaskBadgeSettings.setEnabled(!!isShowDueTaskBadge);
+      this.configService.updateSection(sectionKey, syncedMisc);
+      return;
+    }
+
     if ((NEW_INSTALL_CONFIG_SECTION_KEYS as readonly string[]).includes(sectionKey)) {
       // Sync only the fields that changed, never this device's untouched defaults.
       const changed = getChangedConfigFields<Record<string, unknown>>(
@@ -554,6 +565,9 @@ export class ConfigPageComponent implements OnInit {
     if (sectionKey === 'focusModeLocal') {
       return this.focusModeLocalSettingsService.settings() as GlobalSectionConfig;
     }
+    if (sectionKey === 'misc' && this.globalCfg) {
+      return this._miscWithLocalSettings();
+    }
     return (this.globalCfg as unknown as Record<string, GlobalSectionConfig>)[sectionKey];
   }
 
@@ -563,6 +577,22 @@ export class ConfigPageComponent implements OnInit {
       maxWidth: '95vw',
       data: { logs: Log.exportLogHistory() },
     });
+  }
+
+  private _miscCache?: { misc: MiscConfig; isBadge: boolean; merged: MiscConfig };
+
+  // Memoized so the form model keeps a stable reference between change detections.
+  private _miscWithLocalSettings(): MiscConfig {
+    const misc = this.globalCfg!.misc;
+    const isBadge = this._dueTaskBadgeSettings.isEnabled();
+    if (this._miscCache?.misc !== misc || this._miscCache.isBadge !== isBadge) {
+      this._miscCache = {
+        misc,
+        isBadge,
+        merged: { ...misc, isShowDueTaskBadge: isBadge },
+      };
+    }
+    return this._miscCache.merged;
   }
 
   private async _ensureFocusNotificationPermission(): Promise<void> {

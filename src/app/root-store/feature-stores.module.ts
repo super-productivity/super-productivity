@@ -72,7 +72,9 @@ import { AndroidForegroundTrackingEffects } from '../features/android/store/andr
 import { AndroidSyncBridgeEffects } from '../features/android/store/android-sync-bridge.effects';
 import { AndroidWidgetEffects } from '../features/android/store/android-widget.effects';
 import { MobileNotificationEffects } from '../features/mobile/store/mobile-notification.effects';
+import { DueTaskBadgeEffects } from '../features/mobile/store/due-task-badge.effects';
 import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from '../util/is-native-platform';
+import { IS_MOBILE_DUE_TASK_BADGE_ENABLED } from '../features/tasks/util/is-due-task-badge-supported';
 import { IosBackgroundTrackingEffects } from '../features/ios/store/ios-background-tracking.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
 import { TimeBlockSyncEffects } from '../features/calendar-integration/time-block/time-block-sync.effects';
@@ -196,6 +198,8 @@ import { ReducerFailureSnackEffects } from './meta/reducer-failure-snack.effects
     EffectsModule.forFeature([...(IS_IOS_NATIVE ? [IosBackgroundTrackingEffects] : [])]),
     EffectsModule.forFeature([
       ...(IS_NATIVE_PLATFORM ? [MobileNotificationEffects] : []),
+      // iOS now; widen IS_MOBILE_DUE_TASK_BADGE_ENABLED for Android (#11147).
+      ...(IS_MOBILE_DUE_TASK_BADGE_ENABLED ? [DueTaskBadgeEffects] : []),
     ]),
     EffectsModule.forFeature([IssueTwoWaySyncEffects]),
     EffectsModule.forFeature([CalendarIntegrationEffects]),
