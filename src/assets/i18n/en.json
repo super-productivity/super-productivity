@@ -3543,7 +3543,7 @@
       "NO_PERMISSIONS": "none",
       "REPLACES": "It replaces your installed plugin with the same id.",
       "INSTALL": "Install and try",
-      "ERR_NO_CODE_BLOCKS": "No code found. Copy the AI's whole answer, including its code blocks.",
+      "ERR_NO_CODE_BLOCKS": "No code found. Copy the AI's whole answer with the chat's copy button, so the code blocks come along.",
       "ERR_NO_MANIFEST": "The answer has no manifest.json. Ask the AI to include it.",
       "ERR_INVALID_MANIFEST": "The manifest.json is not valid JSON. Ask the AI to fix it.",
       "ERR_NO_NAME": "The manifest.json needs a name and an id (lowercase letters, numbers and dashes). Ask the AI to add them.",

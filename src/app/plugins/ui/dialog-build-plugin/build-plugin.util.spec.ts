@@ -122,6 +122,81 @@ describe('parsePluginAnswer', () => {
     );
   });
 
+  // ChatGPT's copy button drops the language tags of its code blocks
+  it('recognizes code blocks without a language tag by their content', () => {
+    const answer =
+      '### manifest.json\n\n' +
+      `${FENCE}\n\n{\n  "id": "siren",\n  "name": "Siren"\n}\n\n${FENCE}\n\n` +
+      '### plugin.js\n\n' +
+      `${FENCE}\n\nPluginAPI.onReady(async () => {});\n\n${FENCE}\n\n` +
+      '### index.html\n\n' +
+      `${FENCE}\n<!doctype html>\n<p>Hi</p>\n${FENCE}`;
+
+    const result = parsePluginAnswer(answer, '20.0.0');
+
+    expect('files' in result && result.files.manifest.id).toBe('siren');
+    expect('files' in result && result.files.pluginJs).toBe(
+      '\nPluginAPI.onReady(async () => {});\n\n',
+    );
+    expect('files' in result && result.files.indexHtml).toBe(
+      '<!doctype html>\n<p>Hi</p>\n',
+    );
+  });
+
+  it('prefers tagged code blocks over untagged ones, like a file tree', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['', 'siren/\n  plugin.js'],
+        ['json', '{ "name": "Siren" }'],
+        ['js', 'beep();'],
+      ),
+      '20.0.0',
+    );
+
+    expect('files' in result && result.files.pluginJs).toBe('beep();\n');
+  });
+
+  it('ignores untagged blocks that are no plugin code', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['', 'zip -r siren.zip .'],
+        ['json', '{ "name": "Siren" }'],
+        ['html', '<p>Hi</p>'],
+      ),
+      '20.0.0',
+    );
+
+    expect('files' in result && result.files.pluginJs).toBeUndefined();
+  });
+
+  it('reads file names and JSON dialects as language tags', () => {
+    const result = parsePluginAnswer(
+      answerOf(['manifest.json', '{ "name": "Siren" }'], ['plugin.js', 'beep();']),
+      '20.0.0',
+    );
+    const jsonc = parsePluginAnswer(
+      answerOf(['jsonc', '{ "name": "Siren" }'], ['js', 'beep();']),
+      '20.0.0',
+    );
+
+    expect('files' in result && result.files.pluginJs).toBe('beep();\n');
+    expect('files' in jsonc && jsonc.files.manifest.name).toBe('Siren');
+  });
+
+  it('ignores a file name comment above the manifest', () => {
+    const tagged = parsePluginAnswer(
+      answerOf(['json', '// manifest.json\n{ "name": "Siren" }'], ['js', 'beep();']),
+      '20.0.0',
+    );
+    const untagged = parsePluginAnswer(
+      answerOf(['', '// manifest.json\n{ "name": "Siren" }'], ['js', 'beep();']),
+      '20.0.0',
+    );
+
+    expect('files' in tagged && tagged.files.manifest.name).toBe('Siren');
+    expect('files' in untagged && untagged.files.manifest.name).toBe('Siren');
+  });
+
   it('reports what is missing', () => {
     expect(parsePluginAnswer('PluginAPI.log("no fences");', '19.3.1')).toEqual({
       errorKey: 'NO_CODE_BLOCKS',
