@@ -8,6 +8,7 @@ import { McpToolDefinition, McpToolResult } from './mcp-protocol';
 import {
   DUE_DATE_PATTERN,
   DUE_TIME_PATTERN,
+  ESTIMATE_MINUTES_MAX,
   REPEAT_CYCLES,
   REPEAT_EVERY_MAX,
   REPEAT_WEEKDAYS,
@@ -320,7 +321,8 @@ const createTask: ToolSpec = {
       'It gets the same defaults as a task the user adds to the Inbox by hand; no project or tag ' +
       'comes from the request, and #tags, +projects and dates in the title or notes are not parsed. ' +
       'Pass dueDate (and optionally dueTime) to schedule the task, and repeat to make it recurring. ' +
-      'Retrying after an error can create a duplicate.',
+      'Pass deadlineDate (and optionally deadlineTime) when the work is due, and estimateMinutes ' +
+      'for how long it takes. Retrying after an error can create a duplicate.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -367,6 +369,28 @@ const createTask: ToolSpec = {
           required: ['cycle'],
           additionalProperties: false,
         },
+        deadlineDate: {
+          type: 'string',
+          description:
+            "Optional day the work is due, as YYYY-MM-DD in the user's local calendar. " +
+            'Separate from dueDate, the day to work on it. Not with repeat.',
+          pattern: DUE_DATE_PATTERN,
+        },
+        deadlineTime: {
+          type: 'string',
+          description:
+            "Optional time on deadlineDate, as 24-hour HH:MM in the user's local " +
+            'time zone. Requires deadlineDate.',
+          pattern: DUE_TIME_PATTERN,
+        },
+        estimateMinutes: {
+          type: 'integer',
+          description:
+            `Optional estimate of the work in whole minutes, 1 to ${ESTIMATE_MINUTES_MAX}. ` +
+            "Replaces the user's default estimate.",
+          minimum: 1,
+          maximum: ESTIMATE_MINUTES_MAX,
+        },
       },
       required: ['title'],
       additionalProperties: false,
@@ -379,6 +403,9 @@ const createTask: ToolSpec = {
       'dueDate',
       'dueTime',
       'repeat',
+      'deadlineDate',
+      'deadlineTime',
+      'estimateMinutes',
     ]);
     if (unknownArg) {
       return invalid(unknownArg);
