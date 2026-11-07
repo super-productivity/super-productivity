@@ -1418,12 +1418,12 @@ describe('PluginIssueProviderAdapterService', () => {
         taskServiceSpy.getByIdOnce$.and.returnValue(of(task as Task));
       };
 
-      const getSnackAction = (): (() => void) => {
+      const runSnackAction = (): void => {
         const snackParams = snackSpy.open.calls.mostRecent().args[0];
         if (typeof snackParams === 'string' || !snackParams.actionFn) {
           throw new Error('Expected an actionable warning');
         }
-        return snackParams.actionFn;
+        snackParams.actionFn();
       };
 
       it('should warn with the current task instead of the stale request snapshot', async () => {
@@ -1459,7 +1459,7 @@ describe('PluginIssueProviderAdapterService', () => {
           }),
         );
 
-        getSnackAction()();
+        runSnackAction();
         expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledOnceWith(['task-1']);
       });
 
@@ -1495,7 +1495,7 @@ describe('PluginIssueProviderAdapterService', () => {
             }),
           );
 
-          getSnackAction()();
+          runSnackAction();
           expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledOnceWith(['task-1']);
         });
       }
