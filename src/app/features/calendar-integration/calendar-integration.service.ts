@@ -427,8 +427,35 @@ export class CalendarIntegrationService {
     if (!calEv) {
       return;
     }
+    this._rememberSkippedEventIds(getCalendarEventIdCandidates(calEv));
+  }
 
-    const idsToAdd = getCalendarEventIdCandidates(calEv).filter(
+  /**
+   * Skip by the ids a task stores. A modified recurring instance is also skipped
+   * under its base UID, which only the cached event knows.
+   */
+  skipCalendarEvents(eventIds: string[]): void {
+    if (!eventIds.length) {
+      return;
+    }
+    this._rememberSkippedEventIds(this._idsWithCachedLegacyIds(eventIds));
+  }
+
+  unskipCalendarEvents(eventIds: string[]): void {
+    const current = this.skippedEventIds$.getValue();
+    if (!eventIds.some((id) => current.includes(id))) {
+      return;
+    }
+
+    // Skipping also stored the event's legacy ids, which only the event itself knows.
+    const idsToRemove = new Set(this._idsWithCachedLegacyIds(eventIds));
+    const updated = current.filter((id) => !idsToRemove.has(id));
+    this.skippedEventIds$.next(updated);
+    localStorage.setItem(LS.CALENDER_EVENTS_SKIPPED_TODAY, JSON.stringify(updated));
+  }
+
+  private _rememberSkippedEventIds(ids: string[]): void {
+    const idsToAdd = ids.filter(
       (id): id is string => typeof id === 'string' && id.length > 0,
     );
     if (!idsToAdd.length) {
@@ -436,10 +463,28 @@ export class CalendarIntegrationService {
     }
 
     const current = this.skippedEventIds$.getValue();
-    const updated = [...current, ...idsToAdd.filter((id) => !current.includes(id))];
+    const seen = new Set(current);
+    const updated = [...current];
+    for (const id of idsToAdd) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        updated.push(id);
+      }
+    }
     this.skippedEventIds$.next(updated);
     localStorage.setItem(LS.CALENDER_EVENTS_SKIPPED_TODAY, JSON.stringify(updated));
     localStorage.setItem(LS.CALENDER_EVENTS_LAST_SKIP_DAY, getDbDateStr());
+  }
+
+  private _idsWithCachedLegacyIds(eventIds: string[]): string[] {
+    return [
+      ...eventIds,
+      ...this._getCalProviderFromCache().flatMap(({ items }) =>
+        items
+          .filter((calEv) => matchesAnyCalendarEventId(calEv, eventIds))
+          .flatMap((calEv) => getCalendarEventIdCandidates(calEv)),
+      ),
+    ];
   }
 
   requestEvents$(
