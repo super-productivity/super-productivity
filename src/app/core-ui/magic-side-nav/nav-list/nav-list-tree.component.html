@@ -76,6 +76,7 @@
             [showLabels]="showLabels()"
             (clicked)="onChildClick(node)"
             [folderId]="node.id"
+            [folderTaskIds]="folderTaskIds().get(node.id) ?? []"
             [treeKind]="treeKind()"
           ></nav-item>
         </div>

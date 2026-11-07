@@ -45,6 +45,35 @@ export const getProjectVisibilityIconColor = (project: Project): string | null =
     ? null
     : (project.theme?.primary ?? null);
 
+// Task ids of all projects and tags inside each folder (nested folders
+// included), keyed by tree node id. A task in several tags is listed once.
+// Projects hidden from the menu are left out, as their rows are not shown.
+export const getFolderTaskIds = (
+  nodes: TreeNode<MenuTreeViewNode>[],
+): Map<string, string[]> => {
+  const folderTaskIds = new Map<string, string[]>();
+  const collect = (node: TreeNode<MenuTreeViewNode>): Set<string> => {
+    const data = node.data;
+    if (data?.k === MenuTreeKind.FOLDER) {
+      const ids = new Set<string>();
+      for (const child of node.children ?? []) {
+        collect(child).forEach((id) => ids.add(id));
+      }
+      folderTaskIds.set(node.id, Array.from(ids));
+      return ids;
+    }
+    if (data?.k === MenuTreeKind.PROJECT) {
+      return new Set(data.project.isHiddenFromMenu ? [] : data.project.taskIds);
+    }
+    if (data?.k === MenuTreeKind.TAG) {
+      return new Set(data.tag.taskIds);
+    }
+    return new Set<string>();
+  };
+  nodes.forEach((node) => collect(node));
+  return folderTaskIds;
+};
+
 const ARCHIVED_PROJECTS_NAV_ITEM: NavRouteItem = {
   type: 'route',
   id: 'archived-projects',
@@ -102,6 +131,7 @@ export class NavListTreeComponent {
   visibilityMenuTrigger = viewChild('visibilityBtn', { read: MatMenuTrigger });
 
   readonly treeNodes = signal<TreeNode<MenuTreeViewNode>[]>([]);
+  readonly folderTaskIds = computed(() => getFolderTaskIds(this.treeNodes()));
   readonly treeKind = computed<MenuTreeKind>(() => this.item().treeKind);
   readonly archivedProjectsCount = this._navConfigService.archivedProjectsCount;
   readonly isArchivedProjectsLinkShown = computed(
