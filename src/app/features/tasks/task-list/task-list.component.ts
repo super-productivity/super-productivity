@@ -163,6 +163,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   noTasksMsg = input<string | undefined>(undefined);
   isBacklog = input(false);
   isSubTaskList = input(false);
+  // Collapsed section headers render no rows, so a drop has no predecessor
+  // and would insert at the start. When set, that drop is anchored after this
+  // task instead (the section's last task id — the drop appends).
+  appendAfterTaskId = input<string>();
 
   currentTaskId = toSignal(this._taskService.currentTaskId$);
   dropModelDataForList = computed<DropModelDataForList>(() => {
@@ -579,8 +583,9 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       newIds: newIds.map((t) => t.id),
     });
 
+    const orderedIds = newIds.map((task) => task.id);
     const groupOrderedIds = this._isListGroupDrag()
-      ? newIds.map((task) => task.id)
+      ? this._idsWithAppendAnchor(draggedTask.id, orderedIds)
       : null;
     if (
       groupOrderedIds &&
@@ -674,6 +679,25 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     });
   }
 
+  /**
+   * Splice {@link appendAfterTaskId} in front of `movedId` so
+   * {@link getAnchorFromDragDrop} returns it. No-op when the input is unset,
+   * or when that id is already the moved item or already in the list.
+   */
+  private _idsWithAppendAnchor(movedId: string, ids: string[]): string[] {
+    const anchorId = this.appendAfterTaskId();
+    if (!anchorId || anchorId === movedId || ids.includes(anchorId)) {
+      return ids;
+    }
+    const index = ids.indexOf(movedId);
+    if (index < 0) {
+      return [anchorId, ...ids];
+    }
+    const next = [...ids];
+    next.splice(index, 0, anchorId);
+    return next;
+  }
+
   // Dispatches a drag-drop to the right list-type action (regular/backlog/
   // section/subtask/overdue). NOTE: grouped-by-tag cross-group drops are
   // handled earlier, in drop(), and never reach here (see the groupTagId branch).
@@ -763,7 +787,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       const srcIsSection = srcListId === 'PARENT' && !RESERVED_LIST_IDS.has(src);
 
       if (targetIsSection) {
-        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        const afterTaskId = getAnchorFromDragDrop(
+          taskId,
+          this._idsWithAppendAnchor(taskId, newOrderedIds),
+        );
         // Pass the source section explicitly so replay is deterministic.
         // `null` means the task wasn't in a section before the drag.
         const sourceSectionId = srcIsSection ? (src as string) : null;

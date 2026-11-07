@@ -217,6 +217,18 @@
                       "
                       [isTitleDragHandle]="true"
                     >
+                      @if (!section.isExpanded) {
+                        <!-- No rows: the anchor is the section's last task, so the drop appends. -->
+                        <task-list
+                          class="collapsed-section-drop-target"
+                          header-drop-target
+                          [tasks]="[]"
+                          [listId]="'PARENT'"
+                          [listModelId]="section.id"
+                          [appendAfterTaskId]="bySection.dict[section.id]?.at(-1)?.id"
+                        ></task-list>
+                      }
+
                       <ng-container actions>
                         <button
                           mat-icon-button
