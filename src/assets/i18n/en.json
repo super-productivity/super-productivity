@@ -2703,6 +2703,7 @@
       "BROWSER_WARNING": "Due to cross-origin and WebView restrictions <b>this will likely NOT work with the web browser or Android app versions of Super Productivity.<br /> Please <a href=\"https://super-productivity.com/download/\">download the desktop version</a> to use this feature!</b>",
       "CAL_COLOR": "Calendar color",
       "CAL_PATH": "URL of the iCal source",
+      "CAL_NAME": "Displayed name (optional)",
       "CHECK_UPDATES": "Check for remote updates every X",
       "DISABLE_FOR_WEB_APP": "Disable in web or Android app",
       "FILTER_EXCLUDE_REGEX": "Exclude events matching regex (optional)",
