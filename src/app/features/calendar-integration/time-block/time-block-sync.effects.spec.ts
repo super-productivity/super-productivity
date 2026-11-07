@@ -15,9 +15,21 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { TimeBlockDeleteSidecarService } from './time-block-delete-sidecar.service';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
-import { DEFAULT_TASK, Task, TaskWithDueTime } from '../../tasks/task.model';
-import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
+import {
+  DEFAULT_TASK,
+  Task,
+  TaskWithDueDay,
+  TaskWithDueTime,
+} from '../../tasks/task.model';
+import {
+  selectAllTasksWithDueTimeSorted,
+  selectAllUndoneTasksWithDueDay,
+} from '../../tasks/store/task.selectors';
 import { IssueProviderActions } from '../../issue/store/issue-provider.actions';
+import { PlannerActions } from '../../planner/store/planner.actions';
+import { DateService } from '../../../core/date/date.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { WorkContextType } from '../../work-context/work-context.model';
 
 interface TestProvider {
   id: string;
@@ -31,6 +43,9 @@ describe('TimeBlockSyncEffects', () => {
   let sub: Subscription;
   let upsertEventSpy: jasmine.Spy;
   let deleteEventSpy: jasmine.Spy;
+  let upsertAllDayEventSpy: jasmine.Spy;
+  let timeBlockDef: Record<string, jasmine.Spy>;
+  let bulkDeleteSidecarDayOnlyIds: string[];
   let getByIdOnce$Spy: jasmine.Spy;
   let store: MockStore;
   let provider: TestProvider;
@@ -53,6 +68,15 @@ describe('TimeBlockSyncEffects', () => {
     actions$ = new Subject<any>();
     upsertEventSpy = jasmine.createSpy('upsertEvent').and.resolveTo(undefined);
     deleteEventSpy = jasmine.createSpy('deleteEvent').and.resolveTo(undefined);
+    upsertAllDayEventSpy = jasmine
+      .createSpy('upsertAllDayEvent')
+      .and.resolveTo(undefined);
+    timeBlockDef = {
+      upsertEvent: upsertEventSpy,
+      upsertAllDayEvent: upsertAllDayEventSpy,
+      deleteEvent: deleteEventSpy,
+    };
+    bulkDeleteSidecarDayOnlyIds = [];
     getByIdOnce$Spy = jasmine
       .createSpy('getByIdOnce$')
       .and.callFake((id: string) => of(createTask(id)));
@@ -74,6 +98,7 @@ describe('TimeBlockSyncEffects', () => {
           selectors: [
             { selector: selectEnabledIssueProviders, value: [provider] },
             { selector: selectAllTasksWithDueTimeSorted, value: [] },
+            { selector: selectAllUndoneTasksWithDueDay, value: [] },
           ],
         }),
         { provide: MatDialog, useValue: jasmine.createSpyObj('MatDialog', ['open']) },
@@ -90,10 +115,7 @@ describe('TimeBlockSyncEffects', () => {
               pluginId: 'google-calendar-provider',
               definition: {
                 getHeaders: () => ({}),
-                timeBlock: {
-                  upsertEvent: upsertEventSpy,
-                  deleteEvent: deleteEventSpy,
-                },
+                timeBlock: timeBlockDef,
               },
               allowPrivateNetwork: false,
             }),
@@ -111,7 +133,12 @@ describe('TimeBlockSyncEffects', () => {
           provide: TimeBlockDeleteSidecarService,
           useValue: {
             consume: () => bulkDeleteSidecarIds,
+            consumeDayOnly: () => bulkDeleteSidecarDayOnlyIds,
           },
+        },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => getDbDateStr() },
         },
         { provide: LOCAL_ACTIONS, useValue: actions$ },
       ],
@@ -676,4 +703,323 @@ describe('TimeBlockSyncEffects', () => {
     bulkSub.unsubscribe();
     flush();
   }));
+
+  describe('all-day blocks (isAutoTimeBlockAllDay)', () => {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const dayStr = (offsetDays: number): string => {
+      const offsetMs = offsetDays * dayMs;
+      return getDbDateStr(Date.now() + offsetMs);
+    };
+    const createDayTask = (
+      id: string,
+      dueDay: string,
+      partial: Partial<Task> = {},
+    ): Task => createTask(id, { dueWithTime: undefined, dueDay, ...partial });
+    const planForDay = (task: Task, day: string): void => {
+      actions$.next(PlannerActions.planTaskForDay({ task, day }));
+    };
+
+    beforeEach(() => {
+      provider.pluginConfig = { isAutoTimeBlock: true, isAutoTimeBlockAllDay: true };
+    });
+
+    it('writes nothing for a day task while the option is off (default)', fakeAsync(() => {
+      provider.pluginConfig = { isAutoTimeBlock: true };
+      const task = createDayTask('task-1', '2026-05-14');
+      getByIdOnce$Spy.and.returnValue(of(task));
+
+      planForDay(task, '2026-05-14');
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-2', changes: { dueDay: undefined } },
+        }),
+      );
+      tick(COALESCE_MS);
+
+      expect(upsertAllDayEventSpy).not.toHaveBeenCalled();
+      expect(upsertEventSpy).not.toHaveBeenCalled();
+      expect(deleteEventSpy).not.toHaveBeenCalled();
+      flush();
+    }));
+
+    it('writes an all-day block when a task is planned for a day', fakeAsync(() => {
+      const task = createDayTask('task-1', '2026-05-14');
+      getByIdOnce$Spy.and.returnValue(of(task));
+
+      planForDay(task, '2026-05-14');
+      tick(COALESCE_MS);
+
+      expect(upsertAllDayEventSpy).toHaveBeenCalledTimes(1);
+      expect(upsertAllDayEventSpy.calls.mostRecent().args.slice(0, 2)).toEqual([
+        'task-1',
+        { title: 'Task task-1', dueDay: '2026-05-14', isDone: false },
+      ]);
+      expect(upsertEventSpy).not.toHaveBeenCalled();
+      flush();
+    }));
+
+    it('writes all-day blocks for tasks added to Today', fakeAsync(() => {
+      getByIdOnce$Spy.and.callFake((id: string) => of(createDayTask(id, dayStr(0))));
+
+      actions$.next(
+        TaskSharedActions.planTasksForToday({ taskIds: ['task-1', 'task-2'] }),
+      );
+      tick(COALESCE_MS);
+
+      expect(upsertAllDayEventSpy.calls.allArgs().map((args) => args[0])).toEqual([
+        'task-1',
+        'task-2',
+      ]);
+      flush();
+    }));
+
+    it('writes an all-day block for a new task created on a day, not one with a time', fakeAsync(() => {
+      const dayTask = createDayTask('day-task', dayStr(0));
+      const timedTask = createTask('timed-task');
+      getByIdOnce$Spy.and.callFake((id: string) =>
+        of(id === dayTask.id ? dayTask : timedTask),
+      );
+      const add = (task: Task): void =>
+        actions$.next(
+          TaskSharedActions.addTask({
+            task,
+            workContextId: 'TODAY',
+            workContextType: WorkContextType.TAG,
+            isAddToBacklog: false,
+            isAddToBottom: false,
+          }),
+        );
+
+      add(dayTask);
+      add(timedTask);
+      tick(COALESCE_MS);
+
+      expect(upsertAllDayEventSpy).toHaveBeenCalledTimes(1);
+      expect(upsertAllDayEventSpy.calls.mostRecent().args[0]).toBe('day-task');
+      expect(upsertEventSpy).not.toHaveBeenCalled();
+      flush();
+    }));
+
+    it('ignores the option when the plugin does not implement all-day blocks', fakeAsync(() => {
+      delete timeBlockDef['upsertAllDayEvent'];
+      const task = createDayTask('task-1', '2026-05-14');
+      getByIdOnce$Spy.and.returnValue(of(task));
+
+      planForDay(task, '2026-05-14');
+      tick(COALESCE_MS);
+
+      expect(upsertEventSpy).not.toHaveBeenCalled();
+      expect(deleteEventSpy).not.toHaveBeenCalled();
+      flush();
+    }));
+
+    it('marks a completed day task done', fakeAsync(() => {
+      getByIdOnce$Spy.and.returnValue(
+        of(createDayTask('task-1', '2026-05-14', { isDone: true })),
+      );
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick(COALESCE_MS);
+
+      expect(upsertAllDayEventSpy.calls.mostRecent().args[1].isDone).toBe(true);
+      flush();
+    }));
+
+    it('does not mirror a day task imported from the same provider', fakeAsync(() => {
+      const task = createDayTask('task-1', '2026-05-14', {
+        issueId: 'cal::event-1',
+        issueProviderId: provider.id,
+      });
+      getByIdOnce$Spy.and.returnValue(of(task));
+
+      planForDay(task, '2026-05-14');
+      tick(COALESCE_MS);
+
+      expect(upsertAllDayEventSpy).not.toHaveBeenCalled();
+      flush();
+    }));
+
+    it('replaces a timed block with an all-day one when a planner move drops the time', fakeAsync(() => {
+      const deleteSub = effects.deleteOnUnschedule$.subscribe();
+      const timedTask = createTask('task-1');
+      getByIdOnce$Spy.and.returnValue(of(createDayTask('task-1', '2026-05-15')));
+
+      actions$.next(
+        PlannerActions.transferTask({
+          task: timedTask,
+          prevDay: '2026-05-14',
+          newDay: '2026-05-15',
+          targetIndex: 0,
+          today: '2026-05-14',
+        }),
+      );
+      flushMicrotasks();
+
+      expect(upsertAllDayEventSpy).toHaveBeenCalledTimes(1);
+      expect(upsertAllDayEventSpy.calls.mostRecent().args[1].dueDay).toBe('2026-05-15');
+      expect(deleteEventSpy).not.toHaveBeenCalled();
+      deleteSub.unsubscribe();
+      flush();
+    }));
+
+    it('keeps the old delete for a timed block when the option is off', fakeAsync(() => {
+      provider.pluginConfig = { isAutoTimeBlock: true };
+      const deleteSub = effects.deleteOnUnschedule$.subscribe();
+      getByIdOnce$Spy.and.returnValue(of(createDayTask('task-1', '2026-05-15')));
+
+      actions$.next(
+        PlannerActions.transferTask({
+          task: createTask('task-1'),
+          prevDay: '2026-05-14',
+          newDay: '2026-05-15',
+          targetIndex: 0,
+          today: '2026-05-14',
+        }),
+      );
+      flushMicrotasks();
+
+      expect(deleteEventSpy).toHaveBeenCalledTimes(1);
+      expect(upsertAllDayEventSpy).not.toHaveBeenCalled();
+      deleteSub.unsubscribe();
+      flush();
+    }));
+
+    it('deletes the block when a task loses its day', fakeAsync(() => {
+      getByIdOnce$Spy.and.returnValue(
+        of(createTask('task-1', { dueWithTime: undefined })),
+      );
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { dueDay: undefined } },
+        }),
+      );
+      tick(COALESCE_MS);
+
+      expect(deleteEventSpy).toHaveBeenCalledTimes(1);
+      expect(upsertAllDayEventSpy).not.toHaveBeenCalled();
+      flush();
+    }));
+
+    it('keeps an all-day block for a task unscheduled but left in Today', fakeAsync(() => {
+      const deleteSub = effects.deleteOnUnschedule$.subscribe();
+      getByIdOnce$Spy.and.returnValue(of(createDayTask('task-1', dayStr(0))));
+
+      actions$.next(
+        TaskSharedActions.unscheduleTask({ id: 'task-1', isLeaveInToday: true }),
+      );
+      flushMicrotasks();
+
+      expect(upsertAllDayEventSpy).toHaveBeenCalledTimes(1);
+      expect(deleteEventSpy).not.toHaveBeenCalled();
+      deleteSub.unsubscribe();
+      flush();
+    }));
+
+    it('deletes the block of a deleted day task only while the option is on', fakeAsync(() => {
+      const deleteSub = effects.deleteOnTaskDelete$.subscribe();
+      getByIdOnce$Spy.and.returnValue(of(undefined));
+      const task = createDayTask('task-1', '2026-05-14');
+
+      provider.pluginConfig = { isAutoTimeBlock: true };
+      actions$.next(TaskSharedActions.deleteTask({ task: { ...task, subTasks: [] } }));
+      flushMicrotasks();
+      expect(deleteEventSpy).not.toHaveBeenCalled();
+
+      provider.pluginConfig = { isAutoTimeBlock: true, isAutoTimeBlockAllDay: true };
+      actions$.next(TaskSharedActions.deleteTask({ task: { ...task, subTasks: [] } }));
+      flushMicrotasks();
+      expect(deleteEventSpy).toHaveBeenCalledTimes(1);
+      deleteSub.unsubscribe();
+      flush();
+    }));
+
+    it('deletes bulk-deleted day tasks only while the option is on', fakeAsync(() => {
+      const bulkSub = effects.deleteOnBulkTaskDelete$.subscribe();
+      getByIdOnce$Spy.and.returnValue(of(undefined));
+
+      provider.pluginConfig = { isAutoTimeBlock: true };
+      bulkDeleteSidecarDayOnlyIds = ['d-1'];
+      actions$.next(TaskSharedActions.deleteTasks({ taskIds: ['d-1'] }));
+      flushMicrotasks();
+      expect(deleteEventSpy).not.toHaveBeenCalled();
+
+      provider.pluginConfig = { isAutoTimeBlock: true, isAutoTimeBlockAllDay: true };
+      bulkDeleteSidecarDayOnlyIds = ['d-2'];
+      actions$.next(TaskSharedActions.deleteTasks({ taskIds: ['d-2'] }));
+      flushMicrotasks();
+      expect(deleteEventSpy).toHaveBeenCalledTimes(1);
+      expect(deleteEventSpy.calls.mostRecent().args[0]).toBe('d-2');
+      bulkSub.unsubscribe();
+      flush();
+    }));
+
+    it('backfills day tasks from today to the end of the sync range', fakeAsync(() => {
+      const backfillSub = effects.backfillOnAutoTimeBlockEnabled$.subscribe();
+      const dayTasks = [
+        createDayTask('past', dayStr(-1)),
+        createDayTask('today', dayStr(0)),
+        createDayTask('in-range', dayStr(10)),
+        createDayTask('out-of-range', dayStr(20)),
+      ] as TaskWithDueDay[];
+      store.overrideSelector(selectAllUndoneTasksWithDueDay, dayTasks);
+      store.refreshState();
+      getByIdOnce$Spy.and.callFake((id: string) => of(dayTasks.find((t) => t.id === id)));
+
+      actions$.next(
+        IssueProviderActions.updateIssueProvider({
+          issueProvider: { id: provider.id, changes: { pluginConfig: {} } },
+        }),
+      );
+      flushMicrotasks();
+
+      expect(upsertAllDayEventSpy.calls.allArgs().map((args) => args[0])).toEqual([
+        'today',
+        'in-range',
+      ]);
+      backfillSub.unsubscribe();
+      flush();
+    }));
+
+    it('backfills day tasks once the option is turned on after timed blocks', fakeAsync(() => {
+      const backfillSub = effects.backfillOnAutoTimeBlockEnabled$.subscribe();
+      const oneHourMs = 60 * 60 * 1000;
+      const timed = createTask('timed', {
+        dueWithTime: Date.now() + oneHourMs,
+      }) as TaskWithDueTime;
+      const day = createDayTask('day', dayStr(1)) as TaskWithDueDay;
+      store.overrideSelector(selectAllTasksWithDueTimeSorted, [timed]);
+      store.overrideSelector(selectAllUndoneTasksWithDueDay, [day]);
+      store.refreshState();
+      getByIdOnce$Spy.and.callFake((id: string) => of(id === 'day' ? day : timed));
+      const configChanged = (): void =>
+        actions$.next(
+          IssueProviderActions.updateIssueProvider({
+            issueProvider: { id: provider.id, changes: { pluginConfig: {} } },
+          }),
+        );
+
+      provider.pluginConfig = { isAutoTimeBlock: true };
+      configChanged();
+      flushMicrotasks();
+      expect(upsertEventSpy).toHaveBeenCalledTimes(1);
+      expect(upsertAllDayEventSpy).not.toHaveBeenCalled();
+
+      provider.pluginConfig = { isAutoTimeBlock: true, isAutoTimeBlockAllDay: true };
+      configChanged();
+      flushMicrotasks();
+      expect(upsertEventSpy).toHaveBeenCalledTimes(1);
+      expect(upsertAllDayEventSpy).toHaveBeenCalledTimes(1);
+
+      configChanged();
+      flushMicrotasks();
+      expect(upsertAllDayEventSpy).toHaveBeenCalledTimes(1);
+      backfillSub.unsubscribe();
+      flush();
+    }));
+  });
 });
