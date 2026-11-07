@@ -94,9 +94,6 @@ interface GitlabTimeStats {
   total_time_spent?: number | null;
 }
 
-const hasProject = (cfg: GitlabConfig): cfg is GitlabConfig & { project: string } =>
-  !!cfg.project;
-
 const assertProject = (cfg: GitlabConfig): string => {
   if (!cfg.project) {
     throw new Error('GitLab project is not configured.');
@@ -302,12 +299,18 @@ registerIssueProvider({
 
   getIssueLink(issueId: string, config: Record<string, unknown>): string {
     const cfg = asConfig<GitlabConfig>(config);
-    if (!hasProject(cfg)) {
+    // 'group/repo#123' links to the issue's own project, so a numeric project ID in the
+    // config still yields a path URL; legacy '#123' or '123' falls back to the config.
+    const id = issueId.toString();
+    const hashIndex = id.lastIndexOf('#');
+    const project = (id.slice(0, Math.max(hashIndex, 0)) || cfg.project || '').replace(
+      /%2F/gi,
+      '/',
+    );
+    if (!project) {
       return '';
     }
-    // 'project/repo#123' or '#123' -> '123'
-    const iid = issueId.toString().replace(/^.*#/, '');
-    return `${getBaseUrl(cfg)}${cfg.project}/-/issues/${iid}`;
+    return `${getBaseUrl(cfg)}${project}/-/issues/${id.slice(hashIndex + 1)}`;
   },
 
   async testConnection(
