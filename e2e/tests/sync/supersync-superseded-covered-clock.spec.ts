@@ -1,5 +1,8 @@
 import type { Page, Route } from '@playwright/test';
+import type { TaskHistoryRecord } from '../../../src/app/features/tasks/task-history/task-history.model';
+import type { RootState } from '../../../src/app/root-store/root-state';
 import { test, expect } from '../../fixtures/supersync.fixture';
+import { TaskPage } from '../../pages/task.page';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -14,6 +17,28 @@ import {
 } from '../../utils/supersync-helpers';
 
 type VectorClock = Record<string, number>;
+
+const getTaskHistory = (page: Page, taskId: string): Promise<TaskHistoryRecord> =>
+  page.evaluate(async (id) => {
+    const helpers = (
+      window as unknown as {
+        __e2eTestHelpers: {
+          store: {
+            subscribe: (read: (state: RootState) => void) => {
+              unsubscribe: () => void;
+            };
+          };
+          flushPendingWrites: () => Promise<void>;
+        };
+      }
+    ).__e2eTestHelpers;
+    await helpers.flushPendingWrites();
+    let root: RootState | undefined;
+    helpers.store.subscribe((state) => (root = state)).unsubscribe();
+    const history = root?.tasks.taskHistory?.[id];
+    if (!history) throw new Error(`Missing task history: ${id}`);
+    return history;
+  }, taskId);
 
 // Reads one op-log entry's sync state straight from IndexedDB.
 const getOpState = (
@@ -103,16 +128,17 @@ interface DownloadBody {
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-superseded-covered-clock.spec.ts
  */
 test.describe('@supersync Superseded edit with covered server clock', () => {
-  test('resolves without a forced download and uploads the edit', async ({
+  test('resolves without a forced download and preserves the edit and author history', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
-    test.setTimeout(240000);
+    test.setTimeout(300000);
     const appUrl = baseURL || 'http://localhost:4242';
     const MAX_SYNCS = 3;
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
+    let clientC: SimulatedE2EClient | null = null;
 
     try {
       const user = await createTestUser(testRunId);
@@ -135,6 +161,24 @@ test.describe('@supersync Superseded edit with covered server clock', () => {
       await blockBackgroundSync(clientB.page);
       const renamed = `${taskName}-ByB`;
       await renameTask(clientB, taskName, renamed);
+      const row = clientB.page.locator('task', { hasText: renamed }).first();
+      const taskId = (await row.getAttribute('id'))!.replace(/^t-/, '');
+      expect(taskId).toBeTruthy();
+      // Both real UI transitions must survive even though the final task is
+      // open again, so the replacement Task alone cannot recover these facts.
+      const task = clientB.page.locator(`task[id="t-${taskId}"]`).first();
+      await new TaskPage(clientB.page).markTaskAsDone(task);
+      await task.locator('done-toggle').click();
+      await expect(task).not.toHaveClass(/isDone/);
+      const expectedHistory = await getTaskHistory(clientB.page, taskId);
+      expect(
+        Object.values(expectedHistory.events)
+          .filter((event) => event.field === 'status')
+          .map((event) => event.after),
+      ).toEqual([
+        { kind: 'status', value: 'done' },
+        { kind: 'status', value: 'open' },
+      ]);
 
       // 3. A keeps working, so B's next sync downloads ops that move B's clock
       //    past the op's before the op is uploaded.
@@ -252,9 +296,23 @@ test.describe('@supersync Superseded edit with covered server clock', () => {
       await clientB.sync.syncAndWait();
       await clientA.sync.syncAndWait();
       await waitForTask(clientA.page, renamed);
+      expect(await getTaskHistory(clientA.page, taskId)).toEqual(expectedHistory);
+      expect(await getTaskHistory(clientB.page, taskId)).toEqual(expectedHistory);
+
+      clientC = await createSimulatedClient(browser, appUrl, 'C', testRunId);
+      await clientC.sync.setupSuperSync(syncConfig);
+      await clientC.sync.syncAndWait();
+      await waitForTask(clientC.page, renamed);
+      expect(await getTaskHistory(clientC.page, taskId)).toEqual(expectedHistory);
+      for (const client of [clientA, clientB, clientC]) {
+        await client.page.reload();
+        await client.workView.waitForTaskList();
+        expect(await getTaskHistory(client.page, taskId)).toEqual(expectedHistory);
+      }
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
+      if (clientC) await closeClient(clientC);
     }
   });
 });

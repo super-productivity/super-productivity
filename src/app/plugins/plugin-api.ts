@@ -19,6 +19,9 @@ import {
   PluginManifest,
   PluginMenuEntryCfg,
   PluginTaskContextMenuEntryCfg,
+  PluginTaskDetailBlockCfg,
+  TaskHistoryPage,
+  TaskHistoryQuery,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginRequestOptions,
@@ -128,6 +131,14 @@ export class PluginAPI implements PluginAPIInterface {
 
   registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void {
     this.#boundMethods.registerTaskContextMenuEntry(cfg);
+  }
+
+  registerTaskDetailBlock(cfg: PluginTaskDetailBlockCfg): void {
+    this.#boundMethods.registerTaskDetailBlock(cfg);
+  }
+
+  getTaskHistory(taskId: string, options?: TaskHistoryQuery): Promise<TaskHistoryPage> {
+    return this.#boundMethods.getTaskHistory(taskId, options);
   }
 
   registerConfigHandler(handler: () => void): void {

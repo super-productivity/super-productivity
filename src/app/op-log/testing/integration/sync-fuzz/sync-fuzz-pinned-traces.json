@@ -596,7 +596,7 @@
   },
   {
     "class": "restart-changes-state",
-    "ref": "#10381; the title loss is a time-only local side winning with a snapshot read before the batch (#10421), seen since #10428",
+    "ref": "#10381; the title loss is a time-only local side winning with a snapshot read before the batch (#10421), seen since #10428; #11343 preserves author facts in independent deliveries, whose identical concurrent uploads add one transport rejection class; state signatures remain unchanged",
     "name": "after a delete, a recreate and concurrent renames, a restart moves the task in Today; title and time stay",
     "steps": [
       {
@@ -637,7 +637,10 @@
       "restart-changed:.tag.entities.*.taskIds.*",
       "restart-changed:.task.ids.*"
     ],
-    "rejections": ["CONFLICT_CONCURRENT [TASK] LWW Update"]
+    "rejections": [
+      "CONFLICT_CONCURRENT [Plugin] Upsert User Data",
+      "CONFLICT_CONCURRENT [TASK] LWW Update"
+    ]
   },
   {
     "class": "list-order-divergence",
