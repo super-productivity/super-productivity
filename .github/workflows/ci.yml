@@ -220,14 +220,14 @@ jobs:
           retention-days: 1
 
   e2e:
-    name: E2E ${{ matrix.shard }}/3
+    name: E2E ${{ matrix.shard }}/4
     needs: e2e-build
     runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     steps:
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -243,7 +243,7 @@ jobs:
       - name: Test E2E
         # `e2e`, not `e2e:ci`: that alias calls `npm run e2e` without `--`, so
         # npm would swallow the --shard flag and every shard would run everything.
-        run: npm run e2e -- --project=chromium --shard=${{ matrix.shard }}/3
+        run: npm run e2e -- --project=chromium --shard=${{ matrix.shard }}/4
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
