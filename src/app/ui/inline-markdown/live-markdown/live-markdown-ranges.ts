@@ -165,6 +165,17 @@ export interface BuildLiveMarkdownRangesArgs {
 
 const HEADING_NODE_RE = /^ATXHeading([1-6])$/;
 
+/**
+ * Jira-style `h1.`–`h6.` headings. These are not CommonMark, so lezer parses
+ * such a line as a plain `Paragraph` — but the read-only `marked` renderer turns
+ * it into an `<hN>` (marked-options-factory.ts). Without this the same note text
+ * reads as a heading on the note card and as literal `h1. …` the moment it is
+ * opened for editing (#10153 case 2). Anchored at the line start and limited to
+ * a single trailing space, matching the `marked` regex exactly so the two
+ * renderers agree.
+ */
+const JIRA_HEADING_RE = /^h([1-6])\.\s/;
+
 /** Inline nodes that only get a class, never hide anything themselves. */
 const INLINE_CLASS_BY_NODE: Readonly<Record<string, string>> = {
   StrongEmphasis: 'cm-md-strong',
@@ -252,6 +263,30 @@ export const buildLiveMarkdownRanges = ({
       const headingMatch = HEADING_NODE_RE.exec(name);
       if (headingMatch) {
         pushLineClass(from, `cm-md-h${headingMatch[1]}`);
+        return true;
+      }
+
+      // Jira-style `hN.` headings have no lezer node, so they only surface here,
+      // inside the paragraph that holds them. Style each matching line like a
+      // real heading and hide its `hN. ` marker on unrevealed lines, mirroring
+      // the ATX path above. A paragraph may span several soft-wrapped source
+      // lines, each a candidate in its own right (as in the `marked` renderer).
+      if (name === 'Paragraph') {
+        const lastLine = doc.lineAt(to).number;
+        for (let n = line.number; n <= lastLine; n++) {
+          const paraLine = doc.line(n);
+          const jira = JIRA_HEADING_RE.exec(paraLine.text);
+          if (jira) {
+            pushLineClass(paraLine.from, `cm-md-h${jira[1]}`);
+            if (!revealedLines.has(n)) {
+              ranges.push({
+                from: paraLine.from,
+                to: paraLine.from + jira[0].length,
+                type: 'hide',
+              });
+            }
+          }
+        }
         return true;
       }
       if (name === 'Blockquote') {
