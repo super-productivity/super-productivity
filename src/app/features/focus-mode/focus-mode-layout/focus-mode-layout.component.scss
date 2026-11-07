@@ -1,5 +1,17 @@
 @use '../../../../styles/_globals.scss' as *;
 
+// Phone windows too short for the centered group to clear the mode selector.
+// The old padding layout keeps clear above ~690px even with the tallest
+// safe-area insets; staying on it there keeps the clock's start-of-session
+// shift as small as before.
+@mixin short-phone {
+  @include mq(xs, max) {
+    @media (max-height: 700px) {
+      @content;
+    }
+  }
+}
+
 :host {
   position: absolute;
   inset: 0;
@@ -19,12 +31,17 @@
 
   &.has-mode-selector {
     @include mq(xs, max) {
-      // Phones: the selector sits in flow below the close button's row and
-      // the auto margins on .top/.bottom center the group in the space left
-      // under it. Unlike padding plus centering, this cannot push the group
-      // up into the selector when the window gets short, e.g. while the
-      // iOS keyboard shrinks the web view (#10179); it overflows at the
-      // bottom instead. flex-start: centering would spread overflow upward.
+      // Reserve the close button's top row on phones. Padding shifts the
+      // centered timer group just enough to keep it clear of the selector.
+      padding-top: calc(var(--s8) + var(--s2));
+    }
+
+    @include short-phone {
+      // Too short for that slack, e.g. while the iOS keyboard shrinks the web
+      // view (#10179): the centered group would ride up under the selector.
+      // Put the selector in flow and let the auto margins on .top/.bottom
+      // center the group below it; it overflows at the bottom instead.
+      // flex-start: centering would spread overflow upward.
       justify-content: flex-start;
       padding-top: calc(var(--s8) + var(--s));
     }
@@ -35,7 +52,8 @@
 // Mode selector (preparation) / simple counters (in progress) on the focus
 // session; empty on breaks. Absolutely positioned with an --s2 inset so it
 // floats above the centered group without shifting the clock when it
-// appears/disappears. Exception: the phone mode selector is in flow (see :host).
+// appears/disappears. Exception: the mode selector on short phones is in flow
+// (see :host).
 .top {
   position: absolute;
   top: var(--s2);
@@ -53,6 +71,10 @@
 
   :host(.has-mode-selector) & {
     @include mq(xs, max) {
+      top: calc(var(--s8) + var(--s));
+    }
+
+    @include short-phone {
       // z-index still applies: this is a flex item.
       position: static;
       align-self: stretch;
@@ -89,7 +111,7 @@
   padding-top: var(--s2);
 
   :host(.has-mode-selector) & {
-    @include mq(xs, max) {
+    @include short-phone {
       margin-bottom: auto;
     }
   }
