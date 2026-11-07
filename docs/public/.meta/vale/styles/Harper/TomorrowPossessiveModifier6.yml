@@ -1,0 +1,23 @@
+---
+# Generated from Harper's TomorrowPossessiveModifier rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags `tomorrows` in attributive contexts and suggests the possessive form instead.
+extends: sequence
+message: "Use the possessive form when this time word modifies a following noun phrase."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "tomorrow's"
+tokens:
+  - pattern: 'tomorrows'
+    target: true
+  - upos: NUM
+  - upos: NOUN

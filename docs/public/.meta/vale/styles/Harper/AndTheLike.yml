@@ -1,0 +1,24 @@
+---
+# Hand-written from Harper's AndTheLike: the idiom is `and the like`.
+#
+# The generated rule keyed on punctuation.
+#
+# Harper matches `and`, `or` or `an` before an optional `the` and one of
+# `alike`/`alikes`/`like`/`likes`, then excludes the forms that are already
+# right: `and the like`, `and like`, `or likes`. What survives is the plural
+# after `the`, which is the mistake -- "or the likes", "an the likes".
+#
+# `the` is optional before `alike` and `alikes`. Harper's exclusion covers
+# only `like` and `likes`, so a bare "or alikes" is still an error -- and it
+# is how most of the corpus writes it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "If you intended the idiom meaning `similar things`, the correct form is with `the like`."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '\b(?:and|or|an)\s+(?:(?:the\s+)?(?:alikes|alike)|the\s+likes)\b'

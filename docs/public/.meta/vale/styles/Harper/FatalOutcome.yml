@@ -1,0 +1,19 @@
+---
+# Generated from Harper's FatalOutcome rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Replaces `fatal outcome` with the more direct term `death` for conciseness.
+extends: existence
+message: "Consider using `death` for clarity."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "death"
+tokens:
+  - "fatal(?!\\s*\\n\\s*\\n)\\s+outcome(?!['\\x{2019}]s\\b)"

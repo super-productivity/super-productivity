@@ -1,0 +1,22 @@
+---
+# Hand-written from Harper's ExpandMinimum: prose spells `minimum` out.
+#
+# Only the identifier case is ported. Harper's tokenizer breaks on the
+# underscore and so sees the `min` in `min_resources`; Vale keeps the
+# identifier whole, and a word boundary will not fall between a letter and an
+# underscore. A bare `min` is left to ExpandTimeShorthands, where it is the
+# unit of time rather than this word.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Use `minimum` instead of `min`"
+level: suggestion
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<![A-Za-z])min(?=_)': "minimum"

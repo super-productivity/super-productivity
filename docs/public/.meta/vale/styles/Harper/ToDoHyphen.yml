@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ToDoHyphen rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures `to-do` is correctly hyphenated.
+extends: existence
+message: "Hyphenate `to-do`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "to-do"
+tokens:
+  - "todo(?!['\\x{2019}]s\\b)"

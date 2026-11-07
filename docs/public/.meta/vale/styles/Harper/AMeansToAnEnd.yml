@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AMeansToAnEnd rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `a mean to an end` to `a means to an end`
+extends: existence
+message: "The correct idiom is `a means to an end`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "a means to an end"
+tokens:
+  - "a(?!\\s*\\n\\s*\\n)\\s+mean(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+an(?!\\s*\\n\\s*\\n)\\s+end(?!['\\x{2019}]s\\b)"

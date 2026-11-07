@@ -1,0 +1,19 @@
+---
+# Generated from Harper's SameAs rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the incorrect phrase `same then` to the standard `same as`.
+extends: existence
+message: "Did you mean `same as`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "same as"
+tokens:
+  - "same(?!\\s*\\n\\s*\\n)\\s+then(?!['\\x{2019}]s\\b)"

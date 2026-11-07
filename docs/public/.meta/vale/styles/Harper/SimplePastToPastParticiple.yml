@@ -1,0 +1,84 @@
+---
+# Hand-written from Harper's SimplePastToPastParticiple: a perfect tense takes
+# the participle, not the simple past -- "I've gone", not "I've went".
+#
+# The generated rule came from its tests and covered a handful of sentences
+# verbatim. 14 missed findings, on ordinary text: "you'd wrote a terminal
+# emulator", "I've went thru all the steps".
+#
+# Only irregular verbs are listed, because only they differ: for a regular verb
+# the two forms are the same word, so there is nothing to correct. The auxiliary
+# has to be there -- a bare "I went" is right, and it is the perfect that makes
+# the participle obligatory.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+# A bare `'s` was reading possessives as `has`: "that guy's bit" is a noun,
+# and Harper skips it because its tagger says so. A substitution cannot ask for
+# a tag, so the `'s` has to follow a pronoun -- "he's bit" still lints, "guy's
+# bit" no longer does.
+#
+#
+# The auxiliary set also carries the `be` forms and the unapostrophed
+# contractions. Only the `have` forms were here, and every one of this rule's
+# twelve missed findings was one of the others: "were gave", "are broke",
+# "can be saw", "was began", "being took", "youve ran", "its broke".
+# A modal comes free -- "can be saw" has `be` directly before the verb.
+#
+# `woke` is deliberately not among the pairs. It is the one simple past that
+# is also an ordinary adjective after `be`, and with the `be` forms in the
+# lookbehind it flagged "being woke to gender discrimination" and "the path
+# to becoming woke".
+extends: substitution
+message: "Use the past participle after a form of `have` or `be`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)ate\b': "eaten"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)became\b': "become"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)began\b': "begun"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)bit\b': "bitten"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)blew\b': "blown"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)bore\b': "borne"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)broke\b': "broken"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)came\b': "come"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)chose\b': "chosen"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)did\b': "done"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)drank\b': "drunk"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)drew\b': "drawn"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)drove\b': "driven"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)fell\b': "fallen"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)flew\b': "flown"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)forgot\b': "forgotten"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)froze\b': "frozen"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)gave\b': "given"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)grew\b': "grown"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)hid\b': "hidden"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)knew\b': "known"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)mistook\b': "mistaken"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)ran\b': "run"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)rang\b': "rung"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)rode\b': "ridden"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)rose\b': "risen"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)sang\b': "sung"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)sank\b': "sunk"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)saw\b': "seen"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)shook\b': "shaken"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)shrank\b': "shrunk"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)spoke\b': "spoken"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)sprang\b': "sprung"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)stole\b': "stolen"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)swam\b': "swum"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)swore\b': "sworn"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)threw\b': "thrown"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)took\b': "taken"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)tore\b': "torn"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)went\b': "gone"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)wore\b': "worn"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)wove\b': "woven"
+  '(?<=\b(?:have|has|had|having)\s|(?:''ve|''d)\s|\b(?:he|she|it|who|that|there|this|what)''s\s|\b(?:am|is|are|was|were|be|been|being)\s|\b(?:ive|youve|weve|theyve|its|hes|shes|thats|theres)\s)wrote\b': "written"

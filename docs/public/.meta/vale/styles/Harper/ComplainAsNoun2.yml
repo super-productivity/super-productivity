@@ -1,0 +1,27 @@
+---
+# Hand-written companion to ComplainAsNoun: the plural.
+#
+# Split from it only because the correction differs. A `sequence` action
+# replaces its target with one fixed word, so a rule matching both `complain`
+# and `complains` would offer `complaint` for either -- turning "Many complains
+# were raised" into "Many complaint were raised", which is worse than the
+# sentence it corrects.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean the noun `complaints`?"
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "complaints"
+tokens:
+  - tag: 'DT|PRP\$|JJ'
+  - pattern: 'complains'
+    target: true
+  - tag: 'NNP?S?'
+    negate: true

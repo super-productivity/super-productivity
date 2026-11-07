@@ -1,0 +1,19 @@
+---
+# Generated from Harper's MayOfPronoun rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the typo `may of them` to `many of them`
+extends: substitution
+message: "Did you mean %[1]s?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "may(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+them(?!['\\x{2019}]s\\b)": "many of them"
+  "may(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+us(?!['\\x{2019}]s\\b)": "many of us"
+  "may(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+you(?!['\\x{2019}]s\\b)": "many of you"

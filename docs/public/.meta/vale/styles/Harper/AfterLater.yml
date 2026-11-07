@@ -1,0 +1,23 @@
+---
+# Hand-written from Harper's AfterLater: `after` and `later` say the same
+# thing, so a duration needs only one of them.
+#
+# The generated rule keyed on punctuation and caught only its own examples.
+#
+# Harper's expression is `after`, an optional hedge, a duration, then `later`.
+# The duration is Harper's DurationExpr, a number and a unit of time, spelled
+# either way.
+#
+# Reported without a fix: Harper offers two corrections, dropping `after` or
+# dropping `later`, and a rule that picked one would be picking for the writer.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "`after` and `later` are redundant together."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '\bafter\s+(?:(?:about|almost|approximately|around|circa|exactly|just|maybe|nearly|only|perhaps|precisely|probably|roughly)\s+)?(?:[0-9]+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)\s+(?:second|seconds|minute|minutes|hour|hours|day|days|week|weeks|fortnight|fortnights|month|months|year|years|decade|decades|century|centuries)\s+later\b'

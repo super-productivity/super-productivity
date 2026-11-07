@@ -1,0 +1,41 @@
+---
+# Hand-written from Harper's WebScraping: to `scrape` a site is to extract from
+# it; to `scrap` something is to throw it away.
+#
+# The generated rule only covered the compound forms -- "web scrap", "webscrap",
+# "web-scrap" -- so the bare verb went unreported: "scrap page", "scraps html",
+# "Scrapped various news article ... using scrapy framework". 11 missed findings.
+#
+# Harper builds the same compounds and also matches the verb on its own. The
+# bare forms are the risky half, since `scrap` and `scrapped` are ordinary words
+# meaning "discard", so they are kept to the shapes that only make sense as
+# extraction: followed by something a scraper would read.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The object list allows one word in front of the noun and `web` after the
+# verb. Without those, "Scrapping different websites" and "Scrapping web
+# content" went unreported -- the modifier and the reversed order are both
+# ordinary ways to write it.
+extends: substitution
+message: "Use %s: `scrape` means to extract, `scrap` means to discard."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bweb[\s-]?scrapping\b': "web scraping"
+  '\bweb[\s-]?scrapped\b': "web scraped"
+  '\bweb[\s-]?scrappers\b': "web scrapers"
+  '\bweb[\s-]?scrapper\b': "web scraper"
+  '\bweb[\s-]?scraps\b': "web scrapes"
+  '\bweb[\s-]?scrap\b': "web scrape"
+  '\bscrapping\s+(?=web\b)': "scraping "
+  '\bscrapping\s+(?=(?:the\s+|a\s+|an\s+)?(?:\w+\s+)?(?:page|pages|site|sites|website|websites|html|data|url|urls|content|news|articles|posts|items|links|images|products|listings|reviews|comments|tweets|prices|results))': "scraping "
+  '\bscrapped\s+(?=(?:the\s+|a\s+|an\s+)?(?:page|pages|site|sites|website|websites|html|data|url|urls|content|news|articles|posts|items|links|images|products|listings|reviews|comments|tweets|prices|results|various))': "scraped "
+  '\bscraps\s+(?=(?:the\s+|a\s+|an\s+)?(?:page|pages|site|sites|website|websites|html|data|url|urls|content|news|articles|posts|items|links|images|products|listings|reviews|comments|tweets|prices|results))': "scrapes "
+  '\bscrap\s+(?=(?:the\s+|a\s+|an\s+)?(?:page|pages|site|sites|website|websites|html|data|url|urls|content|news|articles|posts|items|links|images|products|listings|reviews|comments|tweets|prices|results))': "scrape "

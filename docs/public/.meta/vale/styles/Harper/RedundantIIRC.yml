@@ -1,0 +1,19 @@
+---
+# Generated from Harper's RedundantIIRC rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags redundant use of 'if' or 'correctly' with `IIRC`, since `IIRC` already stands for 'if I recall correctly'.
+extends: existence
+message: "`IIRC` already means 'if I recall correctly', so adding 'if' or 'correctly' is redundant."
+level: suggestion
+ignorecase: true
+action:
+  name: replace
+  params:
+    - "IIRC"
+tokens:
+  - "IIRC(?!\\s*\\n\\s*\\n)\\s+correctly(?!['\\x{2019}]s\\b)"
+  - "if(?!\\s*\\n\\s*\\n)\\s+IIRC(?!['\\x{2019}]s\\b)"

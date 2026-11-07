@@ -1,0 +1,21 @@
+---
+# Generated from Harper's ToLoseTooLoose rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects mixing up `to` with `too` and `lose` with `loose`.
+extends: existence
+message: "For `not to win`, use `to lose`. For `not tight enough`, use `too loose`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "to lose"
+    - "too loose"
+tokens:
+  - "to(?!\\s*\\n\\s*\\n)\\s+loose(?!['\\x{2019}]s\\b)"
+  - "too(?!\\s*\\n\\s*\\n)\\s+lose(?!['\\x{2019}]s\\b)"

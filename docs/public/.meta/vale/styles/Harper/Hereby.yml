@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's Hereby: the closed compound `hereby`, as in a
+# formal declaration.
+#
+# The generated rule swapped any `here by` for `hereby`, which is wrong far more
+# often than it is right: `here` and `by` sit next to each other in ordinary
+# sentences all the time. "I got here by car" and "I got here by skill" were 4
+# false positives, and the rule had no true positives in the corpus at all.
+#
+# Harper is conservative enough that it reports neither of those, nor even
+# "I here by declare the meeting open" -- verified against harper-cli. So this
+# is narrowed to the performative verbs the compound actually introduces, which
+# is where a writer splitting it is plausibly making the mistake rather than
+# writing two ordinary words.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Did you mean the closed compound `hereby`?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  'here\s+by(?=\s+(?:declare|declares|declared|certify|certifies|certified|state|states|stated|acknowledge|acknowledges|acknowledged|authorize|authorizes|authorized|authorise|grant|grants|granted|confirm|confirms|confirmed|agree|agrees|agreed|resign|resolve|resolved|give\s+notice|submit|waive)\b)': "hereby"

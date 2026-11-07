@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AsEvidentBy rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `evident by` to `evidenced by` in passive constructions where `evidence` is used as a verb.
+extends: substitution
+message: "Did you mean `evidenced`? The correct phrase uses the past participle of the verb `evidence`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "as(?!\\s*\\n\\s*\\n)\\s+evident(?!\\s*\\n\\s*\\n)\\s+by(?!['\\x{2019}]s\\b)": "as evidenced by"
+  "as(?!\\s*\\n\\s*\\n)\\s+is(?!\\s*\\n\\s*\\n)\\s+evident(?!\\s*\\n\\s*\\n)\\s+by(?!['\\x{2019}]s\\b)": "as is evidenced by"
+  "is(?!\\s*\\n\\s*\\n)\\s+evident(?!\\s*\\n\\s*\\n)\\s+by(?!['\\x{2019}]s\\b)": "is evidenced by"

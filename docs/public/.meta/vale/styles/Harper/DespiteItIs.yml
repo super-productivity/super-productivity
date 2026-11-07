@@ -1,0 +1,13 @@
+---
+# Hand-written from Harper's DespiteItIs:
+#   "despite" + subject pronoun + a form of "be"
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Use the gerund form of the verb after `despite`."
+level: warning
+ignorecase: true
+tokens:
+  - 'despite\s+(?:i|we|you|he|she|it|they)\s+(?:am|are|is|was|were)'

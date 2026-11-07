@@ -1,0 +1,23 @@
+---
+# Hand-written from Harper's ThePointFor: the idiom is `the point of`.
+#
+# Both of Harper's guards are here, and without them the rule invents. It
+# wants `is`, `was` or `what's` in front -- "thats the point for being
+# public" has none and Harper stays quiet -- and it drops the match before
+# `which`, where `for` belongs to the relative clause: "p0 is the point for
+# which we want to find the closest point". The second guard lives in
+# Harper's match_to_lint rather than its expression.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Did you mean `the point of`?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:is|was|what''s|whats)\s+the\s+point\s)for\b(?!\s+which\b)': "of"

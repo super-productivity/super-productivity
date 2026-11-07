@@ -1,0 +1,30 @@
+# Technical terms with a history their replacements don't carry. Each
+# replacement is the one the major style guides have settled on.
+extends: substitution
+message: "Consider '%s' instead of '%s'."
+level: suggestion
+ignorecase: true
+action:
+  name: replace
+swap:
+  whitelist(?:ed|ing)?: allowlist
+  blacklist(?:ed|ing)?: blocklist
+  master/slave: primary/replica
+  slave: replica
+  grandfathered: exempted
+  dummy (?:value|data|text|variable): placeholder
+  tribal knowledge: institutional knowledge
+  native (?:feature|support): built-in
+
+tests:
+  - name: fires
+    input: |
+      Add the domain to the whitelist; the slave copies it from the master/slave pair.
+    want: |
+      1:23:Inclusive.Loaded:Consider 'allowlist' instead of 'whitelist'.
+      1:38:Inclusive.Loaded:Consider 'replica' instead of 'slave'.
+      1:63:Inclusive.Loaded:Consider 'primary/replica' instead of 'master/slave'.
+  - name: clean
+    input: |
+      Add the domain to the allowlist; the replica copies it from the primary.
+    want: ""

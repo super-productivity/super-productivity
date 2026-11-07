@@ -1,0 +1,19 @@
+---
+# Generated from Harper's InAnyWay rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects ungrammatical `in anyway` to `in any way`.
+extends: existence
+message: "Use `in any way` for emphasizing a point."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "in any way"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+anyway(?!['\\x{2019}]s\\b)"

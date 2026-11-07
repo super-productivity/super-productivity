@@ -1,0 +1,31 @@
+---
+# Generated from Harper's ImitateFrom rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# After `imitate ...`, idiomatic phrasing points to the inspiration with `of` instead of `from`.
+extends: existence
+message: "Use `of` with `imitate` when naming the source you copy."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "of"
+nonword: true
+tokens:
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"
+  - "(?<=\\b(?:imitating|imitated|imitates|imitate)(?!\\s*\\n\\s*\\n)\\s+\\S+(?!\\s*\\n\\s*\\n)\\s+)(?:from)(?=(?!\\s*\\n\\s*\\n)\\s+\\S+\\b)"

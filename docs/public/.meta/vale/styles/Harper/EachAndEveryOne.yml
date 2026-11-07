@@ -1,0 +1,19 @@
+---
+# Generated from Harper's EachAndEveryOne rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `each and everyone` to `each and every one`.
+extends: existence
+message: "Use `each and every one` for referring to a group of people or things."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "each and every one"
+tokens:
+  - "each(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+everyone(?!['\\x{2019}]s\\b)"

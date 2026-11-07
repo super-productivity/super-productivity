@@ -1,0 +1,19 @@
+---
+# Generated from Harper's BluRayHyphen rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Joins the two-word spelling of the optical disc format into the standard compound form.
+extends: existence
+message: "Use the hyphenated spelling for this media format."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "blu-ray"
+tokens:
+  - "blu(?!\\s*\\n\\s*\\n)\\s+ray(?!['\\x{2019}]s\\b)"

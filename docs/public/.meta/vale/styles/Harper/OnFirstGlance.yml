@@ -1,0 +1,19 @@
+---
+# Generated from Harper's OnFirstGlance rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The standard idiom starts with `at` for quick appraisals, so swap the preposition to keep the phrase idiomatic.
+extends: substitution
+message: "Use `at first glance` instead of `on first glance` when describing an immediate impression."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "on(?!\\s*\\n\\s*\\n)\\s+a(?!\\s*\\n\\s*\\n)\\s+first(?!\\s*\\n\\s*\\n)\\s+glance(?!['\\x{2019}]s\\b)": "at a first glance"
+  "on(?!\\s*\\n\\s*\\n)\\s+first(?!\\s*\\n\\s*\\n)\\s+glance(?!['\\x{2019}]s\\b)": "at first glance"
+  "on(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+first(?!\\s*\\n\\s*\\n)\\s+glance(?!['\\x{2019}]s\\b)": "at the first glance"

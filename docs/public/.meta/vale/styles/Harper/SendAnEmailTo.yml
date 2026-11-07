@@ -1,0 +1,18 @@
+---
+# Generated from Harper's SendAnEmailTo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Replaces the verbose phrase `send an email to` with the concise verb `email`.
+extends: existence
+message: "Use the shorter verb form."
+level: suggestion
+ignorecase: true
+action:
+  name: replace
+  params:
+    - "email"
+tokens:
+  - "send(?!\\s*\\n\\s*\\n)\\s+an(?!\\s*\\n\\s*\\n)\\s+email(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"

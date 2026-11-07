@@ -1,0 +1,22 @@
+# WCAG 1.1.1: every image has a text alternative. Markdown has no way to say
+# an image is decorative, so an empty alt is an image nobody described.
+# https://www.w3.org/WAI/WCAG22/Understanding/non-text-content
+extends: existence
+message: "An image with no alt text. Describe what it shows, or, if it's decorative, write it as an HTML img with alt=\"\"."
+link: https://www.w3.org/WAI/tutorials/images/decision-tree/
+level: warning
+scope: raw.md
+nonword: true
+raw:
+  - '!\[\s*\]\('
+
+tests:
+  - name: fires
+    input: |
+      ![](chart.png)
+    want: |
+      1:1:A11y.AltEmpty:An image with no alt text. Describe what it shows, or, if it's decorative, write it as an HTML img with alt="".
+  - name: clean
+    input: |
+      ![A bar chart of sales by quarter](chart.png)
+    want: ""

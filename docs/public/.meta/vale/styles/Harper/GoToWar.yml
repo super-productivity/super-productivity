@@ -1,0 +1,18 @@
+---
+# Hand-written from Harper's GoToWar: the idiom is `go to war`.
+#
+# The generated rule matched a form of `go` + any preposition + `war`, which is
+# Harper's chain -- but Harper then returns nothing when the preposition is
+# already `to`. So the rule flagged `go to war`, the phrase its own message asks
+# for. 9 false positives.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Use `to` instead of `at`."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '\b(?:go|goes|going|gone|went)\s+(?!to\b)(?:at|in|into|on|onto|for|with|against|toward|towards|over|under|through|from|by|about)\s+war\b'

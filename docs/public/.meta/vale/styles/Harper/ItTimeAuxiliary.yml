@@ -1,0 +1,20 @@
+---
+# Generated from Harper's ItTimeAuxiliary rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes missing auxiliary usage in `it time to/for ...` patterns by inserting the contraction form.
+extends: substitution
+message: "This phrase usually needs the contraction `it's` before `time` in this construction."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "It(?!\\s*\\n\\s*\\n)\\s+time(?!\\s*\\n\\s*\\n)\\s+for(?!['\\x{2019}]s\\b)": "it's time for"
+  "It(?!\\s*\\n\\s*\\n)\\s+time(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)": "it's time to"
+  "it(?!\\s*\\n\\s*\\n)\\s+time(?!\\s*\\n\\s*\\n)\\s+for(?!['\\x{2019}]s\\b)": "it's time for"
+  "it(?!\\s*\\n\\s*\\n)\\s+time(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)": "it's time to"

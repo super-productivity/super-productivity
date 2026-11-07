@@ -1,0 +1,20 @@
+---
+# Generated from Harper's PaleByComparison linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+extends: substitution
+message: "In this idiom, the word `pale` is correctly a verb, not an adjective."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "is(?!\\s*\\n\\s*\\n)\\s+pale": "pales"
+  "was(?!\\s*\\n\\s*\\n)\\s+pale": "paled"
+  "were(?!\\s*\\n\\s*\\n)\\s+pale": "paled"

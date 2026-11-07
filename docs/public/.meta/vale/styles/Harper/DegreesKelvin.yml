@@ -1,0 +1,23 @@
+---
+# Generated from Harper's DegreesKelvin rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects use of `degrees kelvin` to `kelvins`.
+extends: existence
+message: "Use `kelvins` when discussing the unit Kelvin."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "kelvins"
+    - "kelvin"
+tokens:
+  - "degrees(?!\\s*\\n\\s*\\n)\\s+Kelvin(?!['\\x{2019}]s\\b)"
+  - "degrees(?!\\s*\\n\\s*\\n)\\s+kelvin(?!['\\x{2019}]s\\b)"
+  - "degree(?!\\s*\\n\\s*\\n)\\s+Kelvin(?!['\\x{2019}]s\\b)"
+  - "degree(?!\\s*\\n\\s*\\n)\\s+kelvin(?!['\\x{2019}]s\\b)"

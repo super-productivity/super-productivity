@@ -1,0 +1,19 @@
+---
+# Generated from Harper's FaceFirst rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures `face first` is correctly hyphenated as `face-first` when used before `into`.
+extends: existence
+message: "Should this be `face-first`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "face-first into"
+tokens:
+  - "face(?!\\s*\\n\\s*\\n)\\s+first(?!\\s*\\n\\s*\\n)\\s+into(?!['\\x{2019}]s\\b)"

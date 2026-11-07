@@ -1,0 +1,24 @@
+# WCAG 1.1.1: an img element without an alt attribute. A screen reader falls
+# back to the file name. The attribute list is the common ones, so a tag
+# carrying alt never matches; alt="" is a decorative image, and is fine.
+# https://www.w3.org/WAI/WCAG22/Understanding/non-text-content
+extends: existence
+message: "An img without an alt attribute. Describe it, or mark it decorative with alt=\"\"."
+link: https://www.w3.org/WAI/tutorials/images/decision-tree/
+level: error
+scope: raw
+nonword: true
+raw:
+  - '(?i)<img(?:\s+(?:src|srcset|sizes|width|height|class|id|style|loading|decoding|title|role)(?:\s*=\s*(?:"[^"]*"|''[^'']*''|[^\s>]+))?)*\s*/?>'
+
+tests:
+  - name: fires
+    input: |
+      <img src="chart.png" width="400">
+    want: |
+      1:1:A11y.AltMissing:An img without an alt attribute. Describe it, or mark it decorative with alt="".
+  - name: clean
+    input: |
+      <img src="chart.png" alt="A bar chart of sales by quarter">
+      <img src="rule.png" alt="">
+    want: ""

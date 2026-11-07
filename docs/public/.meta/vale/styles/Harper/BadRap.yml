@@ -1,0 +1,20 @@
+---
+# Generated from Harper's BadRap rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Changes `bed rap` to the proper idiom `bad rap`.
+extends: existence
+message: "Did you mean `bad rap`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "bad rap"
+tokens:
+  - "bad(?!\\s*\\n\\s*\\n)\\s+rep(?!['\\x{2019}]s\\b)"
+  - "bed(?!\\s*\\n\\s*\\n)\\s+rap(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's TrialAndError rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `trail` to `trial` in `trial and error`.
+extends: existence
+message: "You misspelled `trial`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "trial and error"
+tokens:
+  - "trail(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+error(?!['\\x{2019}]s\\b)"

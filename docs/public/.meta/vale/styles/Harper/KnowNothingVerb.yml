@@ -1,0 +1,23 @@
+---
+# Generated from Harper's KnowNothingVerb rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes `no` to `know` in common `subject + no nothing` constructions.
+extends: substitution
+message: "This looks like a misspelled verb in this phrase."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "he(?!\\s*\\n\\s*\\n)\\s+no(?!\\s*\\n\\s*\\n)\\s+nothing(?!['\\x{2019}]s\\b)": "he know nothing"
+  "i(?!\\s*\\n\\s*\\n)\\s+no(?!\\s*\\n\\s*\\n)\\s+nothing(?!['\\x{2019}]s\\b)": "i know nothing"
+  "it(?!\\s*\\n\\s*\\n)\\s+no(?!\\s*\\n\\s*\\n)\\s+nothing(?!['\\x{2019}]s\\b)": "it know nothing"
+  "she(?!\\s*\\n\\s*\\n)\\s+no(?!\\s*\\n\\s*\\n)\\s+nothing(?!['\\x{2019}]s\\b)": "she know nothing"
+  "they(?!\\s*\\n\\s*\\n)\\s+no(?!\\s*\\n\\s*\\n)\\s+nothing(?!['\\x{2019}]s\\b)": "they know nothing"
+  "we(?!\\s*\\n\\s*\\n)\\s+no(?!\\s*\\n\\s*\\n)\\s+nothing(?!['\\x{2019}]s\\b)": "we know nothing"
+  "you(?!\\s*\\n\\s*\\n)\\s+no(?!\\s*\\n\\s*\\n)\\s+nothing(?!['\\x{2019}]s\\b)": "you know nothing"

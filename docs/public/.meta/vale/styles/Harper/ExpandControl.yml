@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ExpandControl rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Expands the informal abbreviation `ctrl` to the full word `control` for clarity.
+extends: existence
+message: "Use `control` instead of informal `ctrl`"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "control"
+tokens:
+  - "ctrl(?!['\\x{2019}]s\\b)"

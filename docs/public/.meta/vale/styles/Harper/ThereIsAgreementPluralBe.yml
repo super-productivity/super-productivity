@@ -1,0 +1,69 @@
+---
+# Hand-written companion to ThereIsAgreement: the other direction.
+#
+# Harper's linter builds eight sequences -- singular-be with a plural noun and
+# plural-be with a singular noun, each as a statement and as a question, each
+# in the present and the past. ThereIsAgreement.yml and its Inverted siblings
+# are the singular-be half:
+#
+#   there is bugs        singular verb, plural noun
+#
+# This is the plural-be half, which was missing entirely and was the largest
+# single source of missed findings in the port -- 23 of 443, more than any
+# other rule.
+#
+#   there are bug        plural verb, singular noun
+#   there were child
+#
+# No `action`: Harper's own fix rewrites two words and inserts an article
+# ("there are bug" -> "there is a bug"), and a `sequence` can only replace its
+# target token. Offering `are` -> `is` alone would produce "there is bug",
+# which is a worse sentence than the one it corrects. ThereIsAgreement.yml
+# reports without a fix for the same reason.
+#
+# The noun's tag is anchored. Vale matches a tag pattern anywhere in the tag,
+# so a bare `NN` also matches `NNS` and would flag the agreeing case this
+# exists to leave alone.
+#
+# The two exclusions on the noun are Harper's, not this port's:
+#
+#   spelled numbers  Harper rejects them through SpelledNumberExpr, and Vale
+#                    tags `two` and `three` as NN, so without this "there were
+#                    two little shrieks" is a false positive.
+#   problem          Harper's singular-noun slot rejects nouns its dictionary
+#                    also lists as adjectives, which catches this one. Its own
+#                    source marks that as a bug ("TODO but this rejects
+#                    'problem'"); reproducing it is what agreeing with Harper
+#                    means here.
+#
+# The trailing slot is Harper's compound guard: it drops the match when
+# another noun follows, reading the pair as a compound -- "there are config
+# errors" -- and likewise for a following `and` or `or`. Harper excepts `in`
+# from that ("there are bug in svelte" is still an error), which comes free
+# because `in` is not tagged as a noun. `JJ` is here for the same compound
+# reason: "are there tool specific constraints" is `tool-specific` written
+# without its hyphen, where Harper's tagger reads `tool` as the adjective it
+# is. Adding it cost nothing -- no finding this rule makes depends on an
+# adjective following the noun.
+#
+# One false positive survives, "if there were bias, the average size of the
+# classes": Harper reads `bias` as already plural and stays quiet. Excluding
+# the word outright would buy the number back and is the trade DIFFERENCES.md
+# argues against, so it is recorded there instead.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "There is disagreement in number between the verb and the noun."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'there'
+  - pattern: 'are|were'
+    target: true
+  - tag: '^NNP?$'
+    pattern: '(?i)^(?!(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|zero|hundred|thousand|million|billion|problem)$).+'
+  - tag: 'NNP?S?|WP|WDT|CC|JJ'
+    negate: true

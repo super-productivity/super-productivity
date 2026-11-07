@@ -1,0 +1,27 @@
+# A URL as link text is read out character by character. The page has a
+# name; use it.
+# https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context
+extends: existence
+message: "A URL as link text. A screen reader spells it out; name the page instead."
+link: https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context
+level: warning
+scope: raw
+nonword: true
+raw:
+  - '(?i)(?:\[\s*(?:https?://|www\.)[^\]]*\]\(|<a\b[^>]*>\s*(?:https?://|www\.)[^<]*</a>)'
+
+tests:
+  - name: fires
+    input: |
+      Read [https://example.com/docs](https://example.com/docs).
+    want: |
+      1:6:A11y.LinkURL:A URL as link text. A screen reader spells it out; name the page instead.
+  - name: html
+    input: |
+      Read <a href="https://example.com/docs">https://example.com/docs</a>.
+    want: |
+      1:6:A11y.LinkURL:A URL as link text. A screen reader spells it out; name the page instead.
+  - name: clean
+    input: |
+      Read the [documentation](https://example.com/docs).
+    want: ""

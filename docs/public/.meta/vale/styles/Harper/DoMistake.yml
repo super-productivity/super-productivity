@@ -1,0 +1,35 @@
+---
+# Hand-written from Harper's DoMistake: `make` a mistake, not `do` one.
+#
+# Harper drops the match when a verb follows -- "does this mistake invalidate
+# your thesis?" has the mistake as the subject, not the object, and nothing is
+# being done to it. The old rule asked the same question with a list of verbs
+# copied from the examples, so `invalidate` and `change` were not on it. A
+# tag answers for every verb; a progressive one still lints, as Harper has it.
+#
+# The multi-word quantifiers ("a lot of", "so many") are more tokens than one
+# slot holds, so they stay in DoMistake2 with the list they had.
+#
+# A word has to come first. "Does the mistake change the meaning?" is the same
+# inversion, but Vale's tagger reads `change` as a noun there, so the verb slot
+# lets it through -- and a yes/no question opening on `do` is exactly where the
+# noun phrase after it is the subject. The cost is a sentence-initial
+# imperative, "Do a mistake and learn from it", which Harper's own examples do
+# not contain.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use `make` with `mistake`, not `do`."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: '\S+'
+  - pattern: 'do|did|does|doing|done'
+    target: true
+  - pattern: 'a|an|the|that|these|this|those|another|many|several|some|my|our|your|his|her|its|their'
+  - pattern: 'mistakes|mistake'
+  - tag: 'VB[DNPZ]?'
+    negate: true

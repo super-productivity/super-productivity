@@ -1,0 +1,16 @@
+---
+# Hand-written from Harper's NotOnlyInversion:
+#   "not only" + subject pronoun + a form of "be"
+#
+# `existence` rather than `sequence`: every position names words, so this
+# needs no part-of-speech tagging.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Invert the subject and the verb after `not only`."
+level: warning
+ignorecase: true
+tokens:
+  - 'not\s+only\s+(?:i|we|you|he|she|it|they)\s+(?:am|are|is|was|were)'

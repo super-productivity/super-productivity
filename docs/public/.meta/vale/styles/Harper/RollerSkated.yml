@@ -1,0 +1,31 @@
+---
+# Hand-written from Harper's RollerSkated: the verb takes a hyphen.
+#
+# Harper wants the phrase preceded by a word that is not a determiner, by
+# punctuation, or by nothing at all. After a determiner, `roller` is the noun
+# and `skated` is what it did -- "the roller skated across the stage" is a
+# sentence about a roller. The generated rule had no such guard, and had learnt
+# `roller skated,laughed,` as a phrase besides.
+#
+# A negated token has nothing to reject at the start of a sentence, so that
+# case is RollerSkated2.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Hyphenate this verb as `roller-skated`."
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "roller-skated"
+tokens:
+  - tag: 'DT|PDT|PRP\$'
+    negate: true
+  - pattern: 'roller'
+    target: true
+  - pattern: 'skated'
+    target: true

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's TryOnesLuck linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reports the problem without a fix: Harper builds this correction in
+# code, from the text it matched, which the rule itself does not record.
+extends: sequence
+message: "`Try out` is a different idiom than `try one's luck`"
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'trying|tried|tries|try'
+  - pattern: 'out'
+  - pattern: 'their|your|her|his|its|our|my'
+  - pattern: 'luck'

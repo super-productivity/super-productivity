@@ -1,0 +1,42 @@
+---
+# Hand-written from Harper's RedundantSelf: a `self-` verb followed by a
+# reflexive pronoun says the same thing twice.
+#
+# The generated rule was the single largest source of false positives in the
+# port -- 31 of them -- because it was built from the tests, and diffing a test
+# sentence against its correction leaves the bare compound behind: `self-harm`
+# -> `harm`. So it flagged every `self-harm`, `self-host` and `self-describe`
+# on its own. Those are correct English; the redundancy only exists when the
+# reflexive pronoun is also there.
+#
+# Harper matches three shapes, all of which require that pronoun:
+#
+#   self-harm myself          verb + reflexive
+#   self-harm to myself       harm as a noun, with `to`
+#   self-host it themselves   transitive verb + object + reflexive
+#
+# `self harm itself` is deliberately exempt -- Harper excludes that one pairing
+# through a `but_not`, which is the negative lookahead below.
+#
+# The separator is `[-\s]+` because Harper joins the two halves with `t_ws_h`,
+# matching a hyphen or a space equally: `self-harm` and `self harm` both count.
+#
+# Either half of the redundancy can go -- drop the `self` or drop the pronoun --
+# so, as with AmInTheMorning, this reports the problem instead of choosing a
+# correction. Harper offers both as suggestions.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Avoid redundancy by using `self` only once."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  # Reflexive verb: self-harm myself. The lookahead is Harper's `but_not`.
+  - '\bself[-\s]+(?!harm\s+itself\b)(?:censor|censored|censors|censoring|correct|corrected|correcting|corrects|defend|defended|defending|defends|describe|described|describes|describing|diagnose|diagnosed|diagnoses|diagnosing|govern|governed|governs|governing|harm|harmed|harming|harms|identify|identified|identifies|identifying|medicate|medicated|medicates|medicating|regulate|regulated|regulates|regulating|right|righted|righting|rights|sabotage|sabotaged|sabotages|sabotaging|taught|teach|teaches|teaching)\s+(?:myself|yourself|himself|herself|itself|ourselves|yourselves|themselves|hisself|oneselves|theirself|theirselves|themself)\b'
+  # Noun: self-harm to myself.
+  - '\bself[-\s]+harm\s+to\s+(?:myself|yourself|himself|herself|itself|ourselves|yourselves|themselves|hisself|oneselves|theirself|theirselves|themself)\b'
+  # Transitive verb: self-host it themselves.
+  - '\bself[-\s]+(?:host|hosted|hosting|hosts)\s+(?:it|them|one)\s+(?:myself|yourself|himself|herself|itself|ourselves|yourselves|themselves|hisself|oneselves|theirself|theirselves|themself)\b'

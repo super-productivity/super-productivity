@@ -1,0 +1,19 @@
+---
+# Generated from Harper's NotLongAfter rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `not along after` to `not long after`.
+extends: substitution
+message: "Did you mean %[1]s?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "not(?!\\s*\\n\\s*\\n)\\s+along(?!\\s*\\n\\s*\\n)\\s+after(?!['\\x{2019}]s\\b)": "not long after"
+  "not(?!\\s*\\n\\s*\\n)\\s+along(?!\\s*\\n\\s*\\n)\\s+afterward(?!['\\x{2019}]s\\b)": "not long afterward"
+  "not(?!\\s*\\n\\s*\\n)\\s+along(?!\\s*\\n\\s*\\n)\\s+afterwards(?!['\\x{2019}]s\\b)": "not long afterwards"

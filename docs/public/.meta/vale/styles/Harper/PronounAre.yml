@@ -1,0 +1,23 @@
+---
+# Hand-written from Harper's PronounAre: `r` is not a verb.
+#
+# The generated rule keyed on punctuation, so "they r late again" was reported
+# and "They r, of course, arriving tomorrow" was not.
+#
+# The pronouns are Harper's: second person, first person plural, third person
+# plural -- the ones that take `are`.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Use the full verb or the contraction after this pronoun."
+level: warning
+matchcase: true
+nonword: true
+action:
+  name: replace
+  params:
+    - "are"
+tokens:
+  - '(?<=\b(?:[Yy]ou|[Ww]e|[Tt]hey)\s)r\b'

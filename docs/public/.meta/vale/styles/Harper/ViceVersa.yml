@@ -1,0 +1,21 @@
+---
+# Generated from Harper's ViceVersa linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+extends: substitution
+message: "The expression \"vice versa\" is spelled without hyphens."
+level: warning
+ignorecase: true
+action:
+  name: replace
+swap:
+  "vice-a-versa": "vice versa"
+  "vice-versa": "VICE VERSA|Vice versa|vice versa"
+  "vice-versa-like": "vice versa-like"
+  "vise-a-versa": "Vice versa"
+  "vise-versa": "vice versa"

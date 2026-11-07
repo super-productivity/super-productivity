@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's FreePredicate: `fee` where `free` was meant.
+#
+# The generated rule keyed on punctuation, so "The trial is fee for new
+# members." went unreported.
+#
+# Harper's expression is a linking verb, optionally an adverb, then `fee`. The
+# linking verb is what makes it a predicate rather than a noun -- "the fee is
+# high" is a fee, "the trial is fee" is a typo.
+#
+# `fee` is not matched before a hyphen: "the pricing model is fee-based"
+# and "fee-free for students" are compounds in which the word is right.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Use `free` here to show that something costs nothing."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:is|are|was|were|be|been|being|am|seems|seemed|seem|looks|looked|look|appears|appeared|appear|remains|remained|remain|stays|stayed|stay|becomes|became|become)\s(?:\w+ly\s)?)fee\b(?!-)': "free"

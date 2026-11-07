@@ -1,0 +1,21 @@
+---
+# Generated from Harper's AnotherOnes rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `another ones`.
+extends: existence
+message: "`another` is singular but `ones` is plural. Or maybe you meant the possessive `one's`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "another one"
+    - "another one's"
+    - "other ones"
+tokens:
+  - "another(?!\\s*\\n\\s*\\n)\\s+ones(?!['\\x{2019}]s\\b)"

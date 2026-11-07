@@ -1,0 +1,19 @@
+---
+# Generated from Harper's BareInMind rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures the phrase `bear in mind` is used correctly instead of `bare in mind`.
+extends: existence
+message: "Did you mean `bear in mind`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "bear in mind"
+tokens:
+  - "bare(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+mind(?!['\\x{2019}]s\\b)"

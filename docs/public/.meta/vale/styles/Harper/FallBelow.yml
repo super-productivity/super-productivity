@@ -1,0 +1,24 @@
+---
+# Hand-written from Harper's FallBelow: a fall of a distance does not go
+# "below" it.
+#
+# The generated rule learned the punctuation after `below` and so caught only
+# the examples that ended the same way.
+#
+# Harper asks for a form of `fall`, a number, a unit of length, then `below`,
+# and only at the end of a sentence or before `and` -- which is what keeps it
+# off "fell 20 meters below the ridge", where `below` has an object and is
+# doing its job.
+#
+# Reported without a fix, since Harper's correction deletes the word.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "`below` is redundant after a distance fallen."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '(?<=\b(?:fall|fallen|falling|falls|fell)\s+(?:[0-9]+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)\s+(?:feet|meters|metres))\s+below\b(?=\s*(?:[.!?,;]|$)|\s+and\b)'

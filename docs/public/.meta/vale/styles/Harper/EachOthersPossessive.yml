@@ -1,0 +1,37 @@
+---
+# Hand-written from Harper's EachOthersPossessive.
+#
+# The generated rule asked for a noun after `each others`, and `make verify`
+# failed on all four of Harper's own examples: Vale tags `code` in "each others
+# code" and `schedules` in "Each others schedules" as verbs, because the
+# sentence is already wrong and that is where reading the context stops
+# helping.
+#
+# No tag is needed. `each others` is not a phrase in English -- the reciprocal
+# is possessive and takes the apostrophe -- so the two words together are the
+# error, whatever follows them.
+#
+# The lookahead is for the apostrophe alone, not for an apostrophe-s. Harper
+# keeps "each others' code" among its examples as text to leave alone, and an
+# apostrophe-s lookahead lets it through: there is no word boundary between an
+# apostrophe and the space after it, so the inner pattern fails and the
+# negative lookahead succeeds.
+#
+# A following word is still required, though. Harper asks for a noun there,
+# and where nothing follows at all it stays quiet -- "the colleges went to war
+# with each others." is left alone. Dropping the tag is what this rule is for;
+# dropping the slot as well would report two findings Harper does not.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Use the reciprocal possessive form here."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\beach\s+others\b(?![\u2019''])(?=\s+[A-Za-z])': "each other's"

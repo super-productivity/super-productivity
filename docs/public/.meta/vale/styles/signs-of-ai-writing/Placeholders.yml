@@ -1,0 +1,17 @@
+extends: existence
+message: "Placeholder text detected: '%s'"
+level: error
+link: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
+tokens:
+  - '\[INSERT TEXT\]'
+  - '\[PLACEHOLDER\]'
+  - '\[YOUR_[A-Z]+\]'
+  - '\[TBD\]'
+  - '\[CITATION NEEDED\]'
+  - '\[COMPANY NAME\]'
+  - '\[YEAR\]'
+  - '\[FOUNDER NAME\]'
+  - '\{\{TEMPLATE\}\}'
+  - '<INSERT_TEXT>'
+  - '<PLACEHOLDER>'
+  - 'Lorem ipsum'

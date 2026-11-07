@@ -1,0 +1,31 @@
+---
+# Generated from Harper's ThereMissingIsClause rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Inserts `is` in common subordinate clauses like `if there a ...` where the copula is omitted.
+extends: substitution
+message: "This clause usually needs a linking verb after `there`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "because(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+a(?!['\\x{2019}]s\\b)": "because there is a"
+  "because(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+an(?!['\\x{2019}]s\\b)": "because there is an"
+  "because(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+another(?!['\\x{2019}]s\\b)": "because there is another"
+  "if(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+a(?!['\\x{2019}]s\\b)": "if there is a"
+  "if(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+an(?!['\\x{2019}]s\\b)": "if there is an"
+  "if(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+another(?!['\\x{2019}]s\\b)": "if there is another"
+  "unless(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+a(?!['\\x{2019}]s\\b)": "unless there is a"
+  "unless(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+an(?!['\\x{2019}]s\\b)": "unless there is an"
+  "unless(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+another(?!['\\x{2019}]s\\b)": "unless there is another"
+  "when(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+a(?!['\\x{2019}]s\\b)": "when there is a"
+  "when(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+an(?!['\\x{2019}]s\\b)": "when there is an"
+  "when(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+another(?!['\\x{2019}]s\\b)": "when there is another"
+  "whether(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+a(?!['\\x{2019}]s\\b)": "whether there is a"
+  "whether(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+an(?!['\\x{2019}]s\\b)": "whether there is an"
+  "whether(?!\\s*\\n\\s*\\n)\\s+there(?!\\s*\\n\\s*\\n)\\s+another(?!['\\x{2019}]s\\b)": "whether there is another"

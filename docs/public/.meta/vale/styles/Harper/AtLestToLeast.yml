@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AtLestToLeast rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes the mistake `at lest` when the intended expression is `at least`.
+extends: existence
+message: "Use the standard phrase with `least` here."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "at least"
+tokens:
+  - "at(?!\\s*\\n\\s*\\n)\\s+lest(?!['\\x{2019}]s\\b)"

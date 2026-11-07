@@ -1,0 +1,19 @@
+---
+# Generated from Harper's CaseSensitive rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures `case-sensitive` is correctly hyphenated.
+extends: existence
+message: "Use the hyphenated form for `case-sensitive`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "case-sensitive"
+tokens:
+  - "case(?!\\s*\\n\\s*\\n)\\s+sensitive(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,22 @@
+---
+# Generated from Harper's WroughtIron rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# `Wrought iron` is low-carbon, malleable iron used for decorative work; variants like `rod iron` or `rot iron` are phonetic misspellings that may confuse readers.
+extends: existence
+message: "Prefer the standard term `wrought iron`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "wrought iron"
+tokens:
+  - "rod(?!\\s*\\n\\s*\\n)\\s+iron(?!['\\x{2019}]s\\b)"
+  - "rot(?!\\s*\\n\\s*\\n)\\s+iron(?!['\\x{2019}]s\\b)"
+  - "rod-iron(?!['\\x{2019}]s\\b)"
+  - "rot-iron(?!['\\x{2019}]s\\b)"

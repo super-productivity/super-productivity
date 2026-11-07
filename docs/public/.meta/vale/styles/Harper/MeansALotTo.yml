@@ -1,0 +1,19 @@
+---
+# Generated from Harper's MeansALotTo linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+extends: substitution
+message: "Did you mean %s?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "alot(?!\\s*\\n\\s*\\n)\\s+for": "a lot to"
+  "lot(?!\\s*\\n\\s*\\n)\\s+for": "a lot to"

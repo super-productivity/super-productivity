@@ -1,0 +1,28 @@
+---
+# Generated from Harper's TruthToTheFact rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags the redundant phrase `truth to the fact`.
+extends: existence
+message: "A `fact` is something that is true. Did you mean a `claim`, `story`, `allegation`, or etc.?"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "truth to the allegation"
+    - "truth to the allegations"
+    - "truth to the claim"
+    - "truth to the claims"
+    - "truth to the idea"
+    - "truth to the rumor"
+    - "truth to the rumors"
+    - "truth to the rumour"
+    - "truth to the rumours"
+    - "truth to the story"
+tokens:
+  - "truth(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+fact(?!['\\x{2019}]s\\b)"

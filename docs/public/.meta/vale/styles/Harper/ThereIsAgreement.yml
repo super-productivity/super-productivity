@@ -1,0 +1,36 @@
+---
+# Hand-written. Harper's ThereIsAgreement decides this from sentence
+# structure, which the generator cannot read off its examples.
+#
+# Four shapes, all "there" + a form of "be" disagreeing in number with the
+# noun that follows:
+#
+#   there is bugs      singular verb, plural noun
+#
+# The contracted and inverted forms are handled separately; see
+# ThereIsAgreementContracted.yml.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+# Harper drops the match when a noun follows the plural one, reading the pair
+# as a compound -- "there are config errors" -- It also skips when `and` or `or` follows, which this does
+# not: negating the whole conjunction tag cost one of Harper's findings and
+# bought none back. The two findings this rule still gives up are the `WP|WDT`
+# slot, which is the price of `who`. Its tagger counts `who` among the nouns, so "there is people who
+# have a deprecated app installed" is a match it never makes.
+#
+# The trailing slot says the same thing. It also has to be satisfied at the end
+# of a sentence, and it is: the full stop is a token, and it is not a noun.
+#
+extends: sequence
+message: "There is disagreement in number between the verb and the noun."
+level: warning
+ignorecase: true
+tokens:
+  - pattern: 'there'
+  - pattern: 'is|was'
+    target: true
+  - tag: 'NNS'
+  - tag: 'NNP?S?|WP|WDT'
+    negate: true

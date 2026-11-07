@@ -1,0 +1,43 @@
+---
+# Hand-written from Harper's IfWouldve: a counterfactual takes `had`, not `would
+# have` -- "if I had known", not "if I would have known".
+#
+# The generated rule was an unconditional substitution: `would have` -> `had`,
+# `would of` -> `had`, with no surrounding context at all. It fired on every
+# `would have` in the corpus, which is why it was the single largest source of
+# false positives left in the port -- 22 of them, on sentences like "Would have
+# been useful a few centuries ago" that contain no conditional whatever.
+#
+# Harper's chain is `if` + a nominal phrase + (`would`/`had`) + (`have`/`of`) +
+# a past participle. Two of those three constraints matter here:
+#
+#   * `if` has to be there. Without it there is no counterfactual to correct.
+#   * a participle has to follow. This is what separates perfect aspect from
+#     plain possession -- "if every tip would have a unique identifier" is
+#     ordinary English, and Harper leaves it alone, because `a` is not a
+#     participle.
+#
+# The nominal phrase is approximated as up to four intervening words rather than
+# parsed. The participle is matched as `-ed`/`-en` plus the irregular forms,
+# deliberately not by tag: the tagger is unreliable exactly here, since `model:
+# harper` only overlays a lexicon on prose's perceptron and the perceptron is
+# swayed by the error itself. See the note in ThenThan.yml.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "If this is counterfactual or hypothetical, use `had` after `if` rather than `would have` or `had have`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\bif\s(?:\w+[\s,]+){0,4})(?:would|had)\s+have(?=\s+(?:\w+(?:ed|en)|been|done|gone|come|become|seen|made|taken|given|known|shown|written|said|had|got|gotten|left|kept|felt|found|thought|brought|bought|caught|taught|held|heard|met|paid|put|read|run|sent|set|sat|sold|spent|stood|told|understood|won|lost|built|begun|drunk|swum|sung|rung|worn|torn|chosen|frozen|spoken|broken|stolen|driven|risen|eaten|fallen|forgotten|hidden|beaten|let|cut|hit|hurt|shut|split|spread|cost|fit|quit)\b)': "had"
+  '(?<=\bif\s(?:\w+[\s,]+){0,4})(?:would|had)\s+of(?=\s+(?:\w+(?:ed|en)|been|done|gone|come|become|seen|made|taken|given|known|shown|written|said|had|got|gotten|left|kept|felt|found|thought|brought|bought|caught|taught|held|heard|met|paid|put|read|run|sent|set|sat|sold|spent|stood|told|understood|won|lost|built|begun|drunk|swum|sung|rung|worn|torn|chosen|frozen|spoken|broken|stolen|driven|risen|eaten|fallen|forgotten|hidden|beaten|let|cut|hit|hurt|shut|split|spread|cost|fit|quit)\b)': "had"
+  '(?<=\bif\s(?:\w+[\s,]+){0,4})would''ve(?=\s+(?:\w+(?:ed|en)|been|done|gone|come|become|seen|made|taken|given|known|shown|written|said|had|got|gotten|left|kept|felt|found|thought|brought|bought|caught|taught|held|heard|met|paid|put|read|run|sent|set|sat|sold|spent|stood|told|understood|won|lost|built|begun|drunk|swum|sung|rung|worn|torn|chosen|frozen|spoken|broken|stolen|driven|risen|eaten|fallen|forgotten|hidden|beaten|let|cut|hit|hurt|shut|split|spread|cost|fit|quit)\b)': "had"
+  '(?<=\bif\s(?:\w+[\s,]+){0,4})wouldve(?=\s+(?:\w+(?:ed|en)|been|done|gone|come|become|seen|made|taken|given|known|shown|written|said|had|got|gotten|left|kept|felt|found|thought|brought|bought|caught|taught|held|heard|met|paid|put|read|run|sent|set|sat|sold|spent|stood|told|understood|won|lost|built|begun|drunk|swum|sung|rung|worn|torn|chosen|frozen|spoken|broken|stolen|driven|risen|eaten|fallen|forgotten|hidden|beaten|let|cut|hit|hurt|shut|split|spread|cost|fit|quit)\b)': "had"
+  '(?<=\bif\s(?:\w+[\s,]+){0,4})had''ve(?=\s+(?:\w+(?:ed|en)|been|done|gone|come|become|seen|made|taken|given|known|shown|written|said|had|got|gotten|left|kept|felt|found|thought|brought|bought|caught|taught|held|heard|met|paid|put|read|run|sent|set|sat|sold|spent|stood|told|understood|won|lost|built|begun|drunk|swum|sung|rung|worn|torn|chosen|frozen|spoken|broken|stolen|driven|risen|eaten|fallen|forgotten|hidden|beaten|let|cut|hit|hurt|shut|split|spread|cost|fit|quit)\b)': "had"
+  '(?<=\bif\s(?:\w+[\s,]+){0,4})hadve(?=\s+(?:\w+(?:ed|en)|been|done|gone|come|become|seen|made|taken|given|known|shown|written|said|had|got|gotten|left|kept|felt|found|thought|brought|bought|caught|taught|held|heard|met|paid|put|read|run|sent|set|sat|sold|spent|stood|told|understood|won|lost|built|begun|drunk|swum|sung|rung|worn|torn|chosen|frozen|spoken|broken|stolen|driven|risen|eaten|fallen|forgotten|hidden|beaten|let|cut|hit|hurt|shut|split|spread|cost|fit|quit)\b)': "had"

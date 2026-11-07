@@ -1,0 +1,19 @@
+---
+# Generated from Harper's Insensitive rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Suggests the more standard and common synonym `insensitive`.
+extends: existence
+message: "This word has a more standard, more common synonym."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "insensitive"
+tokens:
+  - "unsensitive(?!['\\x{2019}]s\\b)"

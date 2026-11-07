@@ -1,0 +1,21 @@
+---
+# Generated from Harper's DoNotWant rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# In English, negation still requires the complete verb form (`want`), so avoid truncating it to `wan.`
+extends: existence
+message: "Use the full verb `want` after negation: `don't want` or `do not want.`"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "don't want"
+    - "do not want"
+tokens:
+  - "do(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+wan(?!['\\x{2019}]s\\b)"
+  - "don't(?!\\s*\\n\\s*\\n)\\s+wan(?!['\\x{2019}]s\\b)"

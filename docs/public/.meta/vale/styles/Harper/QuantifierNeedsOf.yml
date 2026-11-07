@@ -1,0 +1,21 @@
+---
+# Generated from Harper's QuantifierNeedsOf linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reports the problem without a fix: Harper builds this correction in
+# code, from the text it matched, which the rule itself does not record.
+#
+# Detects missing `of` after the quantifier “a couple” when it precedes
+# a plural noun
+extends: sequence
+message: "Add `of` in this quantity phrase."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'an|a'
+  - pattern: 'couple|lot'
+  - upos: NOUN

@@ -1,0 +1,25 @@
+---
+# Generated from Harper's Whereas linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The Whereas rule is designed to identify instances where the phrase `where
+# as` is used in text and suggests replacing it with the single word
+# `whereas`.
+extends: sequence
+message: "`Whereas` is commonly mistaken for `where as`."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "whereas"
+tokens:
+  - pattern: 'where'
+    target: true
+  - pattern: 'as'
+    target: true

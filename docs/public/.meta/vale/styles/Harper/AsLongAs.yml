@@ -1,0 +1,20 @@
+---
+# Generated from Harper's AsLongAs rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `aslong as` and `as long that` to `as long as`.
+extends: existence
+message: "`As long` is two words and the last word should be `as`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "as long as"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+long(?!\\s*\\n\\s*\\n)\\s+that(?!['\\x{2019}]s\\b)"
+  - "aslong(?!\\s*\\n\\s*\\n)\\s+as(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,21 @@
+---
+# Generated from Harper's Unless rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `unless if`.
+extends: existence
+message: "`Unless if` is not idiomatic English. `Unless`, `except if`, and `except when` express a condition that is true in all cases except one."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "unless"
+    - "except if"
+    - "except when"
+tokens:
+  - "unless(?!\\s*\\n\\s*\\n)\\s+if(?!['\\x{2019}]s\\b)"

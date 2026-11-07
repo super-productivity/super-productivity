@@ -1,0 +1,19 @@
+---
+# Generated from Harper's TongueInCheek rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the idiom when `and` replaces the needed preposition.
+extends: existence
+message: "Use `tongue in cheek` for the idiom."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "tongue in cheek"
+tokens:
+  - "tongue(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+cheek(?!['\\x{2019}]s\\b)"

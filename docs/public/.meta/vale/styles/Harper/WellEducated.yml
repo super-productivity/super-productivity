@@ -1,0 +1,20 @@
+---
+# Generated from Harper's WellEducated linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+#
+# Replaces `good-educated` with the accepted compound `well-educated`.
+extends: substitution
+message: "Prefer `well-educated` for this compound."
+level: warning
+ignorecase: true
+action:
+  name: replace
+swap:
+  "good(?!\\s*\\n\\s*\\n)\\s+-(?!\\s*\\n\\s*\\n)\\s+educated": "well-educated"
+  "good-educated": "WELL-EDUCATED|Well-Educated|well-educated"

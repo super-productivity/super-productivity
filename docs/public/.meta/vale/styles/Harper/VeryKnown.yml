@@ -1,0 +1,20 @@
+---
+# Generated from Harper's VeryKnown rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# `very well-known` (or `well-known`) is the standard way to describe something widely recognized, so we flag the uncommon `very known` word pair.
+extends: existence
+message: "Replace `very known` with the idiomatic phrasing that mentions recognition explicitly."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "very well-known"
+    - "well-known"
+tokens:
+  - "very(?!\\s*\\n\\s*\\n)\\s+known(?!['\\x{2019}]s\\b)"

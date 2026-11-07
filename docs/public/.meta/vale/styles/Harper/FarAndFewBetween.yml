@@ -1,0 +1,19 @@
+---
+# Generated from Harper's FarAndFewBetween rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `far and few between` to the standard idiom `few and far between`.
+extends: existence
+message: "The correct idiom is `few and far between`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "few and far between"
+tokens:
+  - "far(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+few(?!\\s*\\n\\s*\\n)\\s+between(?!['\\x{2019}]s\\b)"

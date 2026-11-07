@@ -1,0 +1,20 @@
+---
+# Generated from Harper's InOfItself rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects nonstandard `in of itself` to standard `in itself` or `in and of itself`.
+extends: existence
+message: "Use `in itself` (more common) or `in and of itself` (more formal) to mean 'intrinsically'."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "in itself"
+    - "in and of itself"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+itself(?!['\\x{2019}]s\\b)"

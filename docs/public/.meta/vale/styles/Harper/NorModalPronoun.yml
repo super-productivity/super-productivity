@@ -1,0 +1,20 @@
+---
+# Hand-written from Harper's NorModalPronoun: after `nor`, the modal comes
+# before the subject -- "nor could I".
+#
+# Harper skips the correlative, where `nor` joins two subjects rather than two
+# clauses and no inversion is wanted: "neither they nor I could figure it out",
+# "neither my tool nor I shall feel disrespected". It recognises that by what
+# sits in front of the `nor` -- a subject pronoun, or a possessive and a noun
+# -- and both are lookbehinds here.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Invert the subject and the modal verb after `nor`."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '(?<!\b(?:i|we|you|he|she|it|they)\s)(?<!\b(?:my|your|his|her|its|our|their)\s\w+\s)\bnor\s+(?:i|we|you|he|she|it|they)\s+(?:can|could|will|would|shall|should|may|might|must)'

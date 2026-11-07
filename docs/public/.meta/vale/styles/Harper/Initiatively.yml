@@ -1,0 +1,20 @@
+---
+# Generated from Harper's Initiatively rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects nonstandard `initiatively`.
+extends: existence
+message: "Did you mean `proactive` (taking initiative, acting in advance) or `initially` (at first, in the beginning)?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "proactively"
+    - "initially"
+tokens:
+  - "initiatively(?!['\\x{2019}]s\\b)"

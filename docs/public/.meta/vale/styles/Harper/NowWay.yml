@@ -1,0 +1,23 @@
+---
+# Generated from Harper's NowWay rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `now way` to `no way` in high-confidence contexts while avoiding comparative contexts like `now way too`.
+extends: substitution
+message: "Did you mean `no way`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "in(?!\\s*\\n\\s*\\n)\\s+now(?!\\s*\\n\\s*\\n)\\s+way(?!['\\x{2019}]s\\b)": "in no way"
+  "now(?!\\s*\\n\\s*\\n)\\s+way(?!\\s*\\n\\s*\\n)\\s+finished(?!['\\x{2019}]s\\b)": "no way finished"
+  "now(?!\\s*\\n\\s*\\n)\\s+way(?!\\s*\\n\\s*\\n)\\s+for(?!['\\x{2019}]s\\b)": "no way for"
+  "now(?!\\s*\\n\\s*\\n)\\s+way(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "no way of"
+  "now(?!\\s*\\n\\s*\\n)\\s+way(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)": "no way to"
+  "now(?!\\s*\\n\\s*\\n)\\s+way(?!\\s*\\n\\s*\\n)\\s+workflows(?!['\\x{2019}]s\\b)": "no way workflows"
+  "of(?!\\s*\\n\\s*\\n)\\s+now(?!\\s*\\n\\s*\\n)\\s+way(?!['\\x{2019}]s\\b)": "of no way"
