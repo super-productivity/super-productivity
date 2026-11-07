@@ -28,6 +28,7 @@ import {
 } from 'rxjs/operators';
 import { BannerService } from '../../../core/banner/banner.service';
 import { BannerId } from '../../../core/banner/banner.model';
+import { NotifyService } from '../../../core/notify/notify.service';
 import { MatIconButton } from '@angular/material/button';
 import { LongPressDirective } from '../../../ui/longpress/longpress.directive';
 import { MatIcon } from '@angular/material/icon';
@@ -60,6 +61,7 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _dateService = inject(DateService);
   private _bannerService = inject(BannerService);
+  private _notifyService = inject(NotifyService);
   private _todayStr$ = this._globalTrackingIntervalService.todayDateStr$;
 
   T: typeof T = T;
@@ -128,14 +130,23 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
 
   ngOnInit(): void {
     if (this.simpleCounter()?.type === SimpleCounterType.RepeatedCountdownReminder) {
+      let prevCountdownTime: number | null = null;
       this._subs.add(
         this.countdownTime$.subscribe((countdownTime) => {
           if (countdownTime === 0) {
             this.isTimeUp.set(true);
+            const counterTitle =
+              this.simpleCounter()?.title || 'Simple Counter Countdown';
+            if (prevCountdownTime !== null && prevCountdownTime > 0) {
+              this._notifyService.notify({
+                title: counterTitle,
+                body: T.F.SIMPLE_COUNTER.N.COUNTDOWN_COMPLETE,
+              });
+            }
             this._bannerService.open({
               id: BannerId.SimpleCounterCountdownComplete,
               isHideDismissBtn: true,
-              msg: `<i>${this.simpleCounter()?.title || 'Simple Counter Countdown'}</i> is finished!`,
+              msg: `<i>${counterTitle}</i> is finished!`,
               action: {
                 label: 'Count up and restart!',
                 fn: () => {
@@ -144,6 +155,7 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
               },
             });
           }
+          prevCountdownTime = countdownTime;
         }),
       );
     }

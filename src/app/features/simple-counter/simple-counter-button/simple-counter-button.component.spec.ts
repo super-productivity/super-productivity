@@ -5,6 +5,8 @@ import { of, Subject } from 'rxjs';
 import { DateService } from 'src/app/core/date/date.service';
 import { BannerService } from '../../../core/banner/banner.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { NotifyService } from '../../../core/notify/notify.service';
+import { T } from 'src/app/t.const';
 import { EMPTY_SIMPLE_COUNTER } from '../simple-counter.const';
 import { SimpleCounter, SimpleCounterType } from '../simple-counter.model';
 import { SimpleCounterService } from '../simple-counter.service';
@@ -25,6 +27,7 @@ describe('SimpleCounterButtonComponent', () => {
       | 'toggleCounter'
     >
   >;
+  let notifyService: jasmine.SpyObj<Pick<NotifyService, 'notify'>>;
 
   const TODAY = '2026-04-22';
   let countdownRemaining: Map<string, number>;
@@ -64,6 +67,9 @@ describe('SimpleCounterButtonComponent', () => {
       countdownRemaining.delete(id);
     });
 
+    notifyService = jasmine.createSpyObj('NotifyService', ['notify']);
+    notifyService.notify.and.returnValue(Promise.resolve(undefined));
+
     await TestBed.configureTestingModule({
       imports: [SimpleCounterButtonComponent, NoopAnimationsModule],
       providers: [
@@ -86,6 +92,7 @@ describe('SimpleCounterButtonComponent', () => {
           provide: BannerService,
           useValue: jasmine.createSpyObj('BannerService', ['open', 'dismiss']),
         },
+        { provide: NotifyService, useValue: notifyService },
       ],
     }).compileComponents();
 
@@ -136,6 +143,26 @@ describe('SimpleCounterButtonComponent', () => {
     expect(simpleCounterService.clearCountdownRemaining).toHaveBeenCalledWith('counter1');
     expect(simpleCounterService.startCountdown).toHaveBeenCalledWith('counter1', 120000);
     expect(getExtraLabelText()).toBe('2:00');
+  });
+
+  it('triggers a desktop notification when countdown reaches 0', () => {
+    simpleCounterService.startCountdown('counter1', 1000);
+    setSimpleCounterInput({ isOn: true });
+
+    emitTick(1000);
+
+    expect(notifyService.notify).toHaveBeenCalledWith({
+      title: 'Stretch',
+      body: T.F.SIMPLE_COUNTER.N.COUNTDOWN_COMPLETE,
+    });
+  });
+
+  it('does not trigger a desktop notification when initialized with remaining time at 0', () => {
+    countdownRemaining.set('counter1', 0);
+    startedCountdowns.add('counter1');
+    setSimpleCounterInput({ isOn: true });
+
+    expect(notifyService.notify).not.toHaveBeenCalled();
   });
 
   const emitTick = (duration = 0): void => {
