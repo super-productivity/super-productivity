@@ -32,3 +32,16 @@ describe('getChecklistProgress', () => {
     expect(getChecklistProgress(notes)).toEqual({ done: 1, total: 2 });
   });
 });
+
+describe('fenced code is not checklist progress', () => {
+  it('counts only the rendered list items', () => {
+    expect(
+      getChecklistProgress(
+        '```\n- [x] source\n- [ ] source\n```\n- [x] done\n- [ ] todo',
+      ),
+    ).toEqual({ done: 1, total: 2 });
+  });
+  it('does not create a progress badge for a code example', () => {
+    expect(getChecklistProgress('```\n- [x] source\n- [ ] source\n```')).toBeNull();
+  });
+});
