@@ -25,7 +25,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { Router } from '@angular/router';
 import { TODAY_TAG } from '../tag.const';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
 import { TranslateService } from '@ngx-translate/core';
 import { PlannerService } from '../../planner/planner.service';
 import { selectAllTasksDueToday } from '../../planner/store/planner.selectors';
@@ -45,6 +45,7 @@ export class TagEffects {
   private _router = inject(Router);
   private _translateService = inject(TranslateService);
   private _plannerService = inject(PlannerService);
+  private _dateService = inject(DateService);
 
   snackUpdateBaseSettings$ = createEffect(
     () =>
@@ -78,7 +79,9 @@ export class TagEffects {
             ico: 'today',
             translateParams: {
               date: formattedDate,
-              extra: await this._plannerService.getSnackExtraStr(getDbDateStr()),
+              extra: await this._plannerService.getSnackExtraStr(
+                this._dateService.todayStr(),
+              ),
             },
           });
         }),
