@@ -141,12 +141,39 @@ jobs:
       - name: Test issue-triage helpers
         run: node --test ".github/scripts/*.test.js"
 
+  # Angular specs, split by tools/test-shards.js: Karma runs one Chrome tab,
+  # so a single run uses about one core. Same split as the local `npm test`.
   unit-tests:
-    name: Unit Tests
+    name: Unit Tests (${{ matrix.suite }} ${{ matrix.shard }})
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [berlin, la]
+        shard: ['1/2', '2/2']
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
+      - run: npm run env # Generate env.generated.ts from environment variables
+      - name: Run Angular specs
+        env:
+          SUITE: ${{ matrix.suite }}
+          SHARD: ${{ matrix.shard }}
+        run: node tools/test-shards.js "$SUITE" --shard "$SHARD"
+
+  unit-tests-tooling:
+    name: Unit Tests (tooling and packages)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -160,7 +187,8 @@ jobs:
       - run: npm run env # Generate env.generated.ts from environment variables
       - run: npm run int:test # Validate i18n JSON files
       - run: npm run test:electron # Node-side unit tests for electron/*.cjs
-      - run: npm run test:ci
+      - run: npm run packages:test
+      - run: npm run release-notes:test
 
   e2e-build:
     name: Build E2E Frontend
@@ -339,6 +367,7 @@ jobs:
       - dependency-vulnerability-review
       - lint
       - unit-tests
+      - unit-tests-tooling
       - e2e-build
       - e2e
       - e2e-webkit-smoke
