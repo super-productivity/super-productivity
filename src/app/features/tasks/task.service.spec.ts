@@ -827,7 +827,10 @@ describe('TaskService', () => {
         workContextId: TODAY_TAG.id,
       });
 
-      expect(task.dueDay).toBeTruthy();
+      // The logical today (DateService.todayStr, mocked to '2026-01-05'), not
+      // the calendar date — between midnight and the configured day start
+      // they differ and the task would not be considered due "today".
+      expect(task.dueDay).toBe('2026-01-05');
     });
 
     // With a start-of-next-day offset, 01:00 still belongs to yesterday: the

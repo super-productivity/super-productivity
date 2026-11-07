@@ -721,8 +721,10 @@ describe('IssueService', () => {
       expect(taskData.dueDay).toBeUndefined();
     });
 
-    it('should set dueDay to today when isAddToBacklog is not set', async () => {
+    it('should set dueDay to the logical today when isAddToBacklog is not set', async () => {
       setupForNewTask();
+      const dateService = TestBed.inject(DateService);
+      spyOn(dateService, 'todayStr').and.returnValue('2026-01-05');
 
       await service.addTaskFromIssue({
         issueDataReduced: jiraIssue as any,
@@ -732,7 +734,7 @@ describe('IssueService', () => {
 
       const addCall = taskServiceSpy.add.calls.mostRecent();
       const taskData = addCall.args[2] as Partial<Task>;
-      expect(taskData.dueDay).toBeDefined();
+      expect(taskData.dueDay).toBe('2026-01-05');
     });
 
     // Past midnight but before the configured start of the next day, Today
