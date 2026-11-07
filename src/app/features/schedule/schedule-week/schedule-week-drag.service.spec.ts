@@ -18,6 +18,8 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 const TEN_MINUTES_MS = 10 * 60 * 1000;
 const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+const FORTY_MINUTES_MS = 40 * 60 * 1000;
+const TWO_WEEKS_MS = 14 * 24 * ONE_HOUR_MS;
 
 describe('ScheduleWeekDragService', () => {
   let service: ScheduleWeekDragService;
@@ -496,6 +498,37 @@ describe('ScheduleWeekDragService', () => {
       const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
       // When task already has a reminder, it updates to the new schedule time directly
       expect(dispatchedAction.remindAt).toBe(newScheduleTime);
+    });
+
+    for (const [label, lead] of [
+      ['30 minutes', THIRTY_MINUTES_MS],
+      ['1 week', 7 * 24 * ONE_HOUR_MS],
+    ] as const) {
+      it(`should keep a reminder ${label} before when moving a scheduled task`, () => {
+        setupTestBed(TaskReminderOptionId.AtStart);
+        const dueWithTime = Date.now() + TWO_WEEKS_MS;
+        const task = { ...baseTask, dueWithTime, remindAt: dueWithTime - lead };
+        const newScheduleTime = dueWithTime + ONE_HOUR_MS;
+
+        (service as any)._scheduleTask(task, newScheduleTime);
+
+        const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
+        expect(dispatchedAction.type).toBe(TaskSharedActions.reScheduleTaskWithTime.type);
+        expect(dispatchedAction.remindAt).toBe(newScheduleTime - lead);
+      });
+    }
+
+    it('should snap a reminder lead to its reminder option when moving a scheduled task, like the planner', () => {
+      setupTestBed(TaskReminderOptionId.AtStart);
+      const dueWithTime = Date.now() + TWO_WEEKS_MS;
+      // e.g. a snoozed reminder: 40 minutes before counts as "30 minutes before"
+      const task = { ...baseTask, dueWithTime, remindAt: dueWithTime - FORTY_MINUTES_MS };
+      const newScheduleTime = dueWithTime + ONE_HOUR_MS;
+
+      (service as any)._scheduleTask(task, newScheduleTime);
+
+      const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
+      expect(dispatchedAction.remindAt).toBe(newScheduleTime - THIRTY_MINUTES_MS);
     });
 
     it('should not add reminder when task already has schedule but no reminder', () => {

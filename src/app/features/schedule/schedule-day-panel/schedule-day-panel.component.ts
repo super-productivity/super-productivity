@@ -36,7 +36,10 @@ import { ScheduleService } from '../schedule.service';
 import { ScheduleEvent } from '../schedule.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
-import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
+import {
+  millisecondsDiffToRemindOption,
+  remindOptionToMilliseconds,
+} from '../../tasks/util/remind-option-to-milliseconds';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { MatBottomSheetRef } from '@angular/material/bottom-sheet';
@@ -352,7 +355,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
       if (!hasExistingSchedule && !hasReminder) {
         remindAt = remindOptionToMilliseconds(dropTime, this._getDefaultReminderOption());
       } else if (hasReminder) {
-        remindAt = dropTime;
+        // Keep the reminder's option (e.g. 30 minutes before), like the planner.
+        remindAt =
+          task.dueWithTime && typeof task.remindAt === 'number'
+            ? remindOptionToMilliseconds(
+                dropTime,
+                millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt),
+              )
+            : dropTime;
       }
 
       const payload = {

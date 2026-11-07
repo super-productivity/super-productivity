@@ -9,7 +9,10 @@ import {
   SVEType,
   T_ID_PREFIX,
 } from '../schedule.const';
-import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
+import {
+  millisecondsDiffToRemindOption,
+  remindOptionToMilliseconds,
+} from '../../tasks/util/remind-option-to-milliseconds';
 import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
@@ -729,12 +732,18 @@ export class ScheduleWeekDragService {
     const hasReminder = !!(task?.remindAt ?? task?.reminderId);
     const defaultReminderOption = this._getDefaultReminderOption();
     // Smart reminder logic: if task is brand new to scheduling, add a reminder based on user's default setting.
-    // If it already has a reminder, update it. Otherwise, leave reminders unchanged.
+    // If it already has a reminder, move it along, keeping its option (e.g. 30 minutes before) like the planner.
+    // Otherwise, leave reminders unchanged.
     const remindAt =
       !hasExistingSchedule && !hasReminder
         ? remindOptionToMilliseconds(scheduleTime, defaultReminderOption)
         : hasReminder
-          ? scheduleTime
+          ? task.dueWithTime && typeof task.remindAt === 'number'
+            ? remindOptionToMilliseconds(
+                scheduleTime,
+                millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt),
+              )
+            : scheduleTime
           : undefined;
 
     const payload = {
