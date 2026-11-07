@@ -34,6 +34,15 @@ export interface AndroidWidgetCurrentTask {
    * run once Android reclaims the process, so the native widget enforces it itself.
    */
   expiresAt?: number;
+  /**
+   * DISPLAY ONLY — wall-clock ms this continuous tracking session began, never
+   * accounting. Omitted when unknown (only tracking presence knows it, so it
+   * needs SuperSync with live tracking presence enabled) — native then shows
+   * no "since" line rather than a fabricated one.
+   */
+  sinceTs?: number;
+  /** Focus-session cycle number, present while a focus session is running. */
+  focusCycle?: number;
 }
 
 export interface AndroidWidgetData {

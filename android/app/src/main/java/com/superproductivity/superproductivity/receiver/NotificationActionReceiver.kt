@@ -72,6 +72,34 @@ class NotificationActionReceiver : BroadcastReceiver() {
             return true
         }
 
+        /**
+         * Stop on the live-tracking widget: the notification's Pause, for
+         * [taskId] only — ignored while the service tracks another task (one
+         * started since the widget last rendered). With no native session at
+         * all (focus mode hides the tracking service) the pause is still queued,
+         * with no native time to credit, so the app pauses the task when it
+         * next runs; Angular drops it unless [taskId] is still current.
+         */
+        fun handleWidgetStop(context: Context, taskId: String) {
+            val snapshot = TrackingForegroundService.takeForNotificationAction(context, taskId)
+            if (snapshot != null) {
+                queueAndStop(context, NotificationActionQueue.TRACKING_PAUSE, snapshot)
+            } else if (TrackingForegroundService.currentTaskId == null) {
+                Log.d(TAG, "Widget stop without native session: taskId=$taskId")
+                NotificationActionQueue.addTrackingAction(
+                    context,
+                    NotificationActionQueue.TRACKING_PAUSE,
+                    taskId,
+                    0L,
+                    System.currentTimeMillis()
+                )
+            } else {
+                Log.d(TAG, "Widget stop ignored - another task is tracked")
+                return
+            }
+            LocalBroadcastManager.getInstance(context).sendBroadcast(Intent(ACTION_DRAIN))
+        }
+
         private fun handleTracking(context: Context, type: String) {
             val snapshot = TrackingForegroundService.takeForNotificationAction(context)
             if (snapshot == null) {
@@ -81,6 +109,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 Log.d(TAG, "Tracking $type ignored - not tracking")
                 return
             }
+            queueAndStop(context, type, snapshot)
+        }
+
+        private fun queueAndStop(
+            context: Context,
+            type: String,
+            snapshot: TrackingForegroundService.Companion.ActionSnapshot
+        ) {
             Log.d(TAG, "Tracking $type: taskId=${snapshot.taskId}")
             NotificationActionQueue.addTrackingAction(
                 context,

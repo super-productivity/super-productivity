@@ -6,6 +6,7 @@ import { ANDROID_WIDGET_DATA_KEY, AndroidWidgetData } from './android-widget.mod
 import {
   resolveRemoteCurrentTask,
   selectAndroidWidgetData,
+  withLocalTrackingInfo,
 } from './store/android-widget.selectors';
 import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { TrackingPresenceService } from '../tracking-presence/tracking-presence.service';
@@ -27,7 +28,9 @@ export class WidgetDataService {
     // The selector only knows about local tracking; when nothing is tracked here,
     // fall back to the last-known remote tracking-presence session (SuperSync
     // only) so the widget can still say "tracking on <device>".
-    let currentTask = data.currentTask;
+    let currentTask =
+      data.currentTask &&
+      withLocalTrackingInfo(data.currentTask, this._trackingPresence.localTrackingInfo());
     if (!currentTask) {
       const taskEntities = await firstValueFrom(this._store.select(selectTaskEntities));
       currentTask = resolveRemoteCurrentTask(

@@ -114,6 +114,23 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
+  // The local current task's since/focus fields come from a service signal
+  // (TrackingPresenceService.localTrackingInfo), not the store, so store
+  // emissions miss a focus-cycle change — this is their trigger.
+  pushOnLocalTrackingChange$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        toObservable(this._trackingPresence.localTrackingInfo, {
+          injector: this._injector,
+        }).pipe(
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          debounceTime(500),
+          tap(() => this._widgetDataService.pushCurrent()),
+        ),
+      { dispatch: false },
+    );
+
   // Last chance to hand the freshest state to the widget before the WebView may
   // be frozen or killed in the background — deliberately not debounced.
   pushOnPause$ =

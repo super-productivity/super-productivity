@@ -34,6 +34,24 @@ The serializer and Kotlin parser are locked to the same golden shape by
 `android-widget.selectors.spec.ts` and `WidgetDataTest.kt`. Update both ends and
 both tests when the contract changes.
 
+## Live tracking widget
+
+`TrackingWidgetProvider` renders the snapshot's `currentTask` field. Its Stop
+button must work with no activity alive (dismissed from recents while the
+tracking foreground service runs), so it takes the tracking notification's
+Pause path (`NotificationActionReceiver.handleWidgetStop`): native samples the
+total and stops the service at the tap, and Angular books it from
+`NotificationActionQueue` when it next runs (#10683). Both widgets hide a
+local task whose stop is still queued.
+
+## Appearance
+
+Widgets follow the theme's `@color/widget_*` resources unless the user picks a
+background in `WidgetBackgroundConfigActivity` (optional, reconfigurable from
+API 31). A custom background gets a contrast-picked foreground palette
+(`WidgetStyle`); all foreground colors go through it so a reapplied
+RemoteViews never keeps colors from a previous background.
+
 ## Day and freshness semantics
 
 Angular supplies `dayStr` and `validUntil`. Native code judges staleness only as
@@ -50,7 +68,7 @@ until the app writes a current snapshot.
 
 - No undo or per-task deep link. Quick add takes a title only (short syntax
   covers project, tags and dates); no list picker or configurable list.
-- Native widget chrome is English-only and uses fixed styling.
+- Native widget chrome is English-only.
 - At most 20 tasks are rendered.
 - Cross-client freshness while the app is dead requires a separate background
   sync design. The reminder worker's cursor is not an authoritative app-state
