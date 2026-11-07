@@ -19,9 +19,14 @@
 
   &.has-mode-selector {
     @include mq(xs, max) {
-      // Reserve the close button's top row on phones. Padding shifts the
-      // centered timer group just enough to keep it clear of the selector.
-      padding-top: calc(var(--s8) + var(--s2));
+      // Phones: the selector sits in flow below the close button's row and
+      // the auto margins on .top/.bottom center the group in the space left
+      // under it. Unlike padding plus centering, this cannot push the group
+      // up into the selector when the window gets short, e.g. while the
+      // iOS keyboard shrinks the web view (#10179); it overflows at the
+      // bottom instead. flex-start: centering would spread overflow upward.
+      justify-content: flex-start;
+      padding-top: calc(var(--s8) + var(--s));
     }
   }
 }
@@ -30,7 +35,7 @@
 // Mode selector (preparation) / simple counters (in progress) on the focus
 // session; empty on breaks. Absolutely positioned with an --s2 inset so it
 // floats above the centered group without shifting the clock when it
-// appears/disappears.
+// appears/disappears. Exception: the phone mode selector is in flow (see :host).
 .top {
   position: absolute;
   top: var(--s2);
@@ -48,7 +53,10 @@
 
   :host(.has-mode-selector) & {
     @include mq(xs, max) {
-      top: calc(var(--s8) + var(--s));
+      // z-index still applies: this is a flex item.
+      position: static;
+      align-self: stretch;
+      margin-bottom: auto;
     }
   }
 }
@@ -79,4 +87,10 @@
   width: 100%;
   height: var(--focus-mode-edge-row-height);
   padding-top: var(--s2);
+
+  :host(.has-mode-selector) & {
+    @include mq(xs, max) {
+      margin-bottom: auto;
+    }
+  }
 }

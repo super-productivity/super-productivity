@@ -5,7 +5,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
  * Slots, top-down:
  *
  *   [fmTop]    top controls (mode selector / simple counters) — pinned to the
- *              top, out of flow
+ *              top, out of flow (in flow for the phone mode selector)
  *   [fmTask]   task title — reserved height, content bottom-aligned (toward
  *              the clock)
  *   [fmClock]  clock face — natural height, centered within the group
