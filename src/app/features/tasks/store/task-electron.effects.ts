@@ -6,6 +6,7 @@ import {
   selectStartOfNextDayDiffMs,
 } from '../../../root-store/app-state/app-state.selectors';
 import { createDueTaskBadgeIcon } from '../util/create-due-task-badge-icon';
+import { DueTaskBadgeLocalSettingsService } from '../../config/due-task-badge-local-settings.service';
 import { createDueTaskBadgeCount$ } from '../util/due-task-badge-count$';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
@@ -15,6 +16,7 @@ import { createSelector, select, Store } from '@ngrx/store';
 import {
   filter,
   map,
+  skipWhile,
   startWith,
   take,
   tap,
@@ -83,6 +85,7 @@ export class TaskElectronEffects {
   private _hydrationState = inject(HydrationStateService);
   private _syncTrigger = inject(SyncTriggerService);
   private _isElectron = inject(IS_ELECTRON_TOKEN);
+  private _dueTaskBadgeSettings = inject(DueTaskBadgeLocalSettingsService);
 
   // -----------------------------------------------------------------------------------
   // NOTE: IS_ELECTRON checks not necessary, since we check before importing this module
@@ -141,12 +144,15 @@ export class TaskElectronEffects {
         this._store$.select(selectTaskSchedulingSnapshot),
         this._store$.select(selectTodayStr),
         this._store$.select(selectStartOfNextDayDiffMs),
-        this._configService.misc$,
+        this._dueTaskBadgeSettings.isEnabled$,
         // Re-evaluate the latest count when the window opens, even if the
         // last task emission was suppressed during hydration/remote apply.
         this._hydrationState.isInSyncWindow$,
         this._syncTrigger.initialSyncGateOpen$,
       ).pipe(
+        // Opt-in: the overlay/Dock badge vanishes on quit, so never touch
+        // the platform until the badge was first non-zero.
+        skipWhile((count) => count === 0),
         tap((count) => {
           if (this._isElectron) {
             const iconDataUrl =

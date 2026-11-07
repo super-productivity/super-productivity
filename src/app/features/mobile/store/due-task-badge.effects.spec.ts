@@ -3,10 +3,9 @@ import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { BehaviorSubject } from 'rxjs';
 import { DueTaskBadgeEffects } from './due-task-badge.effects';
 import { DueTaskBadgeService } from '../../../core/platform/due-task-badge.service';
-import { GlobalConfigService } from '../../config/global-config.service';
+import { DueTaskBadgeLocalSettingsService } from '../../config/due-task-badge-local-settings.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
-import { MiscConfig } from '../../config/global-config.model';
 import { DEFAULT_TASK, Task } from '../../tasks/task.model';
 import {
   SchedulingSnapshot,
@@ -20,7 +19,7 @@ import {
 describe('DueTaskBadgeEffects', () => {
   let effects: DueTaskBadgeEffects;
   let store: MockStore;
-  let misc$: BehaviorSubject<Partial<MiscConfig>>;
+  let isEnabled$: BehaviorSubject<boolean>;
   let inSyncWindow$: BehaviorSubject<boolean>;
   let initialSyncGateOpen$: BehaviorSubject<boolean>;
   let setCount: jasmine.Spy;
@@ -36,7 +35,7 @@ describe('DueTaskBadgeEffects', () => {
     selectTaskSchedulingSnapshot.projector([{ ...task, ...changes }])[0];
 
   beforeEach(() => {
-    misc$ = new BehaviorSubject<Partial<MiscConfig>>({ isShowDueTaskBadge: true });
+    isEnabled$ = new BehaviorSubject<boolean>(true);
     inSyncWindow$ = new BehaviorSubject(false);
     initialSyncGateOpen$ = new BehaviorSubject(true);
     setCount = jasmine.createSpy('setCount').and.resolveTo();
@@ -54,7 +53,7 @@ describe('DueTaskBadgeEffects', () => {
             { selector: selectStartOfNextDayDiffMs, value: 0 },
           ],
         }),
-        { provide: GlobalConfigService, useValue: { misc$ } },
+        { provide: DueTaskBadgeLocalSettingsService, useValue: { isEnabled$ } },
         {
           provide: HydrationStateService,
           useValue: {
@@ -87,26 +86,19 @@ describe('DueTaskBadgeEffects', () => {
     expect(counts).toEqual([1]);
     expect(setCount).toHaveBeenCalledWith(1);
 
-    store.overrideSelector(selectTaskSchedulingSnapshot, [
-      schedulingTask({ dueDay: '2026-10-03', isDone: true }),
-    ]);
-    store.refreshState();
+    isEnabled$.next(false);
     expect(counts).toEqual([1, 0]);
-    expect(setCount).toHaveBeenCalledWith(0);
-
-    misc$.next({ isShowDueTaskBadge: false });
-    expect(setCount).toHaveBeenCalledWith(0);
+    expect(setCount).toHaveBeenCalledTimes(2);
+    expect(setCount.calls.mostRecent().args).toEqual([0]);
     sub.unsubscribe();
   });
 
-  it('does not touch native until the badge was ever non-zero', () => {
-    misc$.next({ isShowDueTaskBadge: false });
+  it('clears a stale badge on launch when nothing is due', () => {
+    isEnabled$.next(false);
     const counts: number[] = [];
     const sub = effects.syncDueTaskBadge$.subscribe((count) => counts.push(count));
-    store.overrideSelector(selectTaskSchedulingSnapshot, []);
-    store.refreshState();
-    expect(counts).toEqual([]);
-    expect(setCount).not.toHaveBeenCalled();
+    expect(counts).toEqual([0]);
+    expect(setCount).toHaveBeenCalledOnceWith(0);
     sub.unsubscribe();
   });
 });
