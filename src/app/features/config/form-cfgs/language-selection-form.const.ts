@@ -81,6 +81,10 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
           { label: T.GCF.LANG.TIME_LOCALE_ISO, value: DateTimeLocales.sv },
           { label: T.GCF.LANG.TIME_LOCALE_TR_TR, value: DateTimeLocales.tr_tr },
           { label: T.GCF.LANG.TIME_LOCALE_DE_DE, value: DateTimeLocales.de_de },
+          // Dutch maps to the plain `nl` locale, which is already in the shipped
+          // DateTimeLocale set (via LanguageCode) — so, like the ISO option above,
+          // picking it never sends an unknown locale value to older clients.
+          { label: T.GCF.LANG.TIME_LOCALE_NL_NL, value: DateTimeLocales.nl },
           { label: T.GCF.LANG.TIME_LOCALE_FR_FR, value: DateTimeLocales.fr_fr },
           { label: T.GCF.LANG.TIME_LOCALE_ES_ES, value: DateTimeLocales.es_es },
           { label: T.GCF.LANG.TIME_LOCALE_IT_IT, value: DateTimeLocales.it_it },
