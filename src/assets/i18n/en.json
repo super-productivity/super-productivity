@@ -546,6 +546,8 @@
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Not properly configured",
         "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}: Imported {{nr}} new {{issuesStr}}",
         "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}: Imported {{issueStr}} \"{{issueTitle}}\"",
+        "ISSUE_NOT_FOUND": "Linked issue of \"{{taskTitle}}\" was not found. It may have been deleted, or your access or the integration settings changed. Delete the task?",
+        "ISSUES_NOT_FOUND": "{{nr}} linked issues were not found. They may have been deleted, or your access or the integration settings changed.",
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: No update required",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Updated data for {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Updated data for \"{{issueTitle}}\"",
