@@ -1,13 +1,21 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideMockStore } from '@ngrx/store/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { ArchivedProjectsPageComponent } from './archived-projects-page.component';
 import { ProjectService } from '../../features/project/project.service';
 import { Project } from '../../features/project/project.model';
 import { selectArchivedProjectsSortedByTitle } from '../../features/project/store/project.selectors';
+import { signal } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeDe from '@angular/common/locales/de';
+import localeSv from '@angular/common/locales/sv';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+
+registerLocaleData(localeDe, 'de');
+registerLocaleData(localeSv, 'sv');
 
 const makeProject = (id: string, title: string, over: Partial<Project> = {}): Project =>
   ({
@@ -39,8 +47,18 @@ describe('ArchivedProjectsPageComponent', () => {
           selectors: [{ selector: selectArchivedProjectsSortedByTitle, value: projects }],
         }),
         { provide: ProjectService, useValue: projectService },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: signal('sv'), textLocale: signal('de') },
+        },
       ],
     }).compileComponents();
+
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('en', {
+      F: { PROJECT: { COMPLETE: { COMPLETED_ON: 'Completed {{date}}' } } },
+    });
+    translateService.use('en');
 
     fixture = TestBed.createComponent(ArchivedProjectsPageComponent);
     component = fixture.componentInstance;
@@ -75,6 +93,18 @@ describe('ArchivedProjectsPageComponent', () => {
     const rows = fixture.debugElement.queryAll(By.css('.project-row'));
     expect(rows.length).toBe(1);
     expect(rows[0].nativeElement.textContent).toContain('Beta');
+  });
+
+  it('formats the completed date in the text locale', async () => {
+    await setUp([
+      makeProject('p-a', 'Alpha', {
+        isDone: true,
+        doneOn: new Date(2026, 9, 25).getTime(),
+      }),
+    ]);
+
+    const badge = fixture.debugElement.query(By.css('.completed-badge'));
+    expect(badge.nativeElement.textContent).toContain('Completed 25.10.2026');
   });
 
   it('links each row to /project/<id>/tasks', async () => {

@@ -8,6 +8,7 @@ import {
   SimpleCounter,
   SimpleCounterType,
 } from '../../simple-counter/simple-counter.model';
+import { T } from '../../../t.const';
 
 export const selectMetricFeatureState =
   createFeatureSelector<MetricState>(METRIC_FEATURE_NAME);
@@ -113,8 +114,8 @@ export const selectFocusSessionLineChartDataComplete = createSelector(
     const chart: LineChartData = {
       labels: [],
       datasets: [
-        { data: [], label: 'Focus sessions' },
-        { data: [], label: 'Focus minutes' },
+        { data: [], label: T.F.METRIC.CMP.CHART_FOCUS_SESSIONS },
+        { data: [], label: T.F.METRIC.CMP.CHART_FOCUS_MINUTES },
       ],
     };
 
@@ -158,8 +159,8 @@ export const selectEvaluationLineChartData = createSelector(
     const chart: LineChartData = {
       labels: [],
       datasets: [
-        { data: [], label: 'Impact (1-4)' },
-        { data: [], label: 'Energy (1-3)' },
+        { data: [], label: T.F.METRIC.CMP.CHART_IMPACT },
+        { data: [], label: T.F.METRIC.CMP.CHART_ENERGY },
       ],
     };
 
