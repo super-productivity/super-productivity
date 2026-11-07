@@ -23,13 +23,12 @@ import {
   moveTaskToTopInTodayList,
   moveTaskUpInTodayList,
 } from '../../work-context/store/work-context-meta.actions';
-import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 import {
-  arrayMoveLeftUntil,
-  arrayMoveRightUntil,
-  arrayMoveToEnd,
-  arrayMoveToStart,
-} from '../../../util/array-move';
+  moveItemAfterAnchor,
+  moveUndoneTaskDownInList,
+  moveUndoneTaskUpInList,
+} from '../../work-context/store/work-context-meta.helper';
+import { arrayMoveToEnd, arrayMoveToStart } from '../../../util/array-move';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import {
   addTag,
@@ -268,16 +267,14 @@ export const tagReducer = createReducer<TagState>(
       if (workContextType !== WORK_CONTEXT_TYPE) {
         return state;
       }
-      // Use Set for O(1) lookup instead of O(n) .includes() in callback
-      const undoneTaskIdSet = new Set(undoneTaskIds);
       return tagAdapter.updateOne(
         {
           id: workContextId,
           changes: {
-            taskIds: arrayMoveLeftUntil(
+            taskIds: moveUndoneTaskUpInList(
               (state.entities[workContextId] as Tag).taskIds,
               taskId,
-              (id) => !undoneTaskIdSet.has(id),
+              undoneTaskIds,
             ),
           },
         },
@@ -295,16 +292,14 @@ export const tagReducer = createReducer<TagState>(
       if (workContextType !== WORK_CONTEXT_TYPE) {
         return state;
       }
-      // Use Set for O(1) lookup instead of O(n) .includes() in callback
-      const undoneTaskIdSet = new Set(undoneTaskIds);
       return tagAdapter.updateOne(
         {
           id: workContextId,
           changes: {
-            taskIds: arrayMoveRightUntil(
+            taskIds: moveUndoneTaskDownInList(
               (state.entities[workContextId] as Tag).taskIds,
               taskId,
-              (id) => !undoneTaskIdSet.has(id),
+              undoneTaskIds,
             ),
           },
         },

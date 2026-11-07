@@ -228,11 +228,62 @@ describe('SimpleCounterService', () => {
   });
 
   describe('deleteSimpleCounter', () => {
-    it('should dispatch deleteSimpleCounter action', fakeAsync(() => {
+    it('should dispatch deleteSimpleCounter carrying the deleted counter (#11465)', fakeAsync(() => {
       service.deleteSimpleCounter('counter1');
       tick();
 
-      expect(dispatchSpy).toHaveBeenCalledWith(deleteSimpleCounter({ id: 'counter1' }));
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        deleteSimpleCounter({
+          id: 'counter1',
+          simpleCounter: createCounter('counter1', {
+            countOnDay: { '2024-01-15': 5 },
+          }),
+        }),
+      );
+    }));
+
+    // #11495: a restore from this snapshot must match the other devices.
+    it('should carry a running stopwatch stopped and without its unflushed time', fakeAsync(() => {
+      mockCounters([
+        createCounter('counter1', {
+          type: SimpleCounterType.StopWatch,
+          isOn: true,
+          countOnDay: { '2024-01-14': 60000, '2024-01-15': 9000 },
+        }),
+        createCounter('counter2', {
+          type: SimpleCounterType.StopWatch,
+          isOn: true,
+          countOnDay: { '2024-01-15': 20000 },
+        }),
+      ]);
+      // Ticked locally since the last flush, never an op.
+      service['_stopwatchAccumulator'].accumulate('counter1', 9000, '2024-01-15');
+      service['_stopwatchAccumulator'].accumulate('counter2', 5000, '2024-01-15');
+
+      service.deleteSimpleCounter('counter1');
+      tick();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        deleteSimpleCounter({
+          id: 'counter1',
+          simpleCounter: createCounter('counter1', {
+            type: SimpleCounterType.StopWatch,
+            isOn: false,
+            countOnDay: { '2024-01-14': 60000 },
+          }),
+        }),
+      );
+      // The other stopwatch keeps its pending time.
+      expect(service['_stopwatchAccumulator'].getPendingEntries()).toEqual([
+        { id: 'counter2', duration: 5000, date: '2024-01-15' },
+      ]);
+    }));
+
+    it('should dispatch an id-only delete for an unknown counter', fakeAsync(() => {
+      service.deleteSimpleCounter('missing');
+      tick();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(deleteSimpleCounter({ id: 'missing' }));
     }));
   });
 

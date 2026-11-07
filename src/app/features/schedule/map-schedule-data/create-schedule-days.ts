@@ -34,8 +34,11 @@ export const createScheduleDays = (
   workStartEndCfg: ScheduleWorkStartEndCfg | undefined,
   now: number,
   realNow?: number, // Actual current time for determining "current week"
+  // Date.getDay() numbers (0 = Sunday) that work overflowing an earlier day
+  // skips (#9418). Empty = flow onto every day.
+  weekendDays: number[] = [],
 ): ScheduleDay[] => {
-  let viewEntriesPushedToNextDay: SVEEntryForNextDay[];
+  let viewEntriesPushedToNextDay: SVEEntryForNextDay[] = [];
   let flowTasksLeftAfterDay: ScheduleFlowTask[] = nonScheduledTasks.map((task) => {
     if (task.timeEstimate === 0 && task.timeSpent === 0) {
       return {
@@ -95,6 +98,12 @@ export const createScheduleDays = (
     // Check if this day is within the current week (today through next 6 days)
     const isInCurrentWeek =
       dayStartTime >= todayStart && dayStartTime < currentWeekEndTime;
+
+    // Only entries pushed past an earlier day's end (untimed repeat
+    // projections split by blockers) wait for the next work day. Work put on
+    // this day (dueDay, planner, repeats due) still lands, and nothing is
+    // pushed into day 0, so today's tasks never vanish on a weekend.
+    const isDayOff = weekendDays.includes(dayStartDate.getDay());
 
     let startTime = i == 0 ? now : dayStartTime;
     if (workStartEndCfg && isWorkStartTimeUsable) {
@@ -181,13 +190,15 @@ export const createScheduleDays = (
         )
       : nonScheduledRepeatCfgsDueOnDay;
 
+    const entriesCarriedPastDayOff = isDayOff ? viewEntriesPushedToNextDay : [];
+
     viewEntries = createViewEntriesForDay(
       dayDate,
       startTime,
       repeatCfgsToProjectForDay,
       within,
       blockerBlocksForDay,
-      viewEntriesPushedToNextDay,
+      isDayOff ? [] : viewEntriesPushedToNextDay,
     );
     beyondBudgetTasks = dayAssignedBeyondBudgetTasks;
     // For the current week (days within 7 days from today), include all tasks including unscheduled ones
@@ -205,7 +216,7 @@ export const createScheduleDays = (
     ]);
 
     const viewEntriesToRenderForDay: SVE[] = [];
-    viewEntriesPushedToNextDay = [];
+    viewEntriesPushedToNextDay = [...entriesCarriedPastDayOff];
     viewEntries.forEach((entry) => {
       const taskId = getEntryTaskId(entry);
       if (taskId && overBudgetTaskIds.has(taskId)) {

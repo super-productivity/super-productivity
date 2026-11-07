@@ -90,7 +90,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
   animations: [
     trigger('modeSwitchFade', [
       transition('* => *', [
-        style({ opacity: 0, transform: 'scale(0.8)' }),
+        style({ opacity: 0, transform: 'scale(0.95)' }),
         animate(ANI_STANDARD_TIMING, style({ opacity: 1, transform: 'scale(1)' })),
       ]),
     ]),

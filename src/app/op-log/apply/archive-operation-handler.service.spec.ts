@@ -18,6 +18,8 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { OpType } from '../core/operation.types';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectAllTagIds } from '../../features/tag/store/tag.reducer';
 
 describe('isArchiveAffectingAction', () => {
   it('should return true for moveToArchive action', () => {
@@ -98,6 +100,7 @@ describe('ArchiveOperationHandler', () => {
   let mockArchiveDbAdapter: jasmine.SpyObj<ArchiveDbAdapter>;
   let mockTimeTrackingService: jasmine.SpyObj<TimeTrackingService>;
   let mockLockService: jasmine.SpyObj<LockService>;
+  let store: MockStore;
 
   const createMockTaskWithSubTasks = (
     id: string,
@@ -196,11 +199,15 @@ describe('ArchiveOperationHandler', () => {
         { provide: ArchiveDbAdapter, useValue: mockArchiveDbAdapter },
         { provide: TimeTrackingService, useValue: mockTimeTrackingService },
         { provide: LockService, useValue: mockLockService },
+        provideMockStore({
+          selectors: [{ selector: selectAllTagIds, value: ['tag-kept'] }],
+        }),
       ],
     });
 
     // Get the service through TestBed to use proper DI
     service = TestBed.inject(ArchiveOperationHandler);
+    store = TestBed.inject(MockStore);
   });
 
   describe('local operation queue', () => {
@@ -338,6 +345,51 @@ describe('ArchiveOperationHandler', () => {
         expect(mockArchiveService.writeTasksToArchiveForRemoteSync).toHaveBeenCalledTimes(
           1,
         );
+      });
+
+      it('should drop tag ids deleted locally before writing remote archived tasks (#11466)', async () => {
+        const tasks = [
+          {
+            ...createMockTaskWithSubTasks('task-1'),
+            projectId: 'INBOX',
+            tagIds: ['tag-deleted', 'tag-kept'],
+          } as TaskWithSubTasks,
+        ];
+        const action = {
+          type: TaskSharedActions.moveToArchive.type,
+          tasks,
+          meta: { isPersistent: true, isRemote: true },
+        } as unknown as PersistentAction;
+
+        await service.handleOperation(action);
+
+        const written =
+          mockArchiveService.writeTasksToArchiveForRemoteSync.calls.mostRecent().args[0];
+        expect(written.map((t) => t.tagIds)).toEqual([['tag-kept']]);
+        expect(tasks[0].tagIds).toEqual(['tag-deleted', 'tag-kept']);
+      });
+
+      it('should read the tag state at apply time, not at construction', async () => {
+        store.overrideSelector(selectAllTagIds, []);
+        store.refreshState();
+        const tasks = [
+          {
+            ...createMockTaskWithSubTasks('task-1'),
+            projectId: 'INBOX',
+            tagIds: ['tag-kept'],
+          } as TaskWithSubTasks,
+        ];
+        const action = {
+          type: TaskSharedActions.moveToArchive.type,
+          tasks,
+          meta: { isPersistent: true, isRemote: true },
+        } as unknown as PersistentAction;
+
+        await service.handleOperation(action);
+
+        const written =
+          mockArchiveService.writeTasksToArchiveForRemoteSync.calls.mostRecent().args[0];
+        expect(written[0].tagIds).toEqual([]);
       });
 
       it('should handle empty tasks array', async () => {

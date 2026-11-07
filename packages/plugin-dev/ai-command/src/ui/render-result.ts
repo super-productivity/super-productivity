@@ -1,11 +1,14 @@
 // The proposal: a sentence, a selection, and the change rows with checkboxes.
 
+import { canAddToToday } from '../core/day';
 import { describeRow, planSummary } from '../core/describe';
-import type { ChangeRow, Proposal, Snapshot } from '../core/types';
+import type { ChangeRow, Proposal, Snapshot, TaskLike } from '../core/types';
 import { button, el, heading } from './dom';
+import { moreMenu, type MenuItem } from './menu';
 
 export interface SelectionActions {
-  done(taskId: string): void;
+  addToToday(taskIds: string[]): void;
+  done(taskIds: string[]): void;
   start(taskId: string): void;
   open(taskId: string): void;
   canStart: boolean;
@@ -17,6 +20,11 @@ export interface ResultInput {
   ticked: Set<string>;
   onToggle(key: string, isOn: boolean): void;
   selection: SelectionActions;
+  /** Selection rows the user picked for a bulk action. */
+  picked: Set<string>;
+  onPick(taskId: string, isOn: boolean): void;
+  /** Current task state: the selection rows show it, not the snapshot's. */
+  live: Map<string, TaskLike>;
 }
 
 const KEPT = 'Kept in Recently deleted on this device for 30 days';
@@ -87,28 +95,44 @@ const changeGroups = (input: ResultInput): HTMLElement[] => {
   ];
 };
 
+const selectionMenu = (task: TaskLike, input: ResultInput): MenuItem[] => {
+  const a = input.selection;
+  const items: MenuItem[] = [];
+  if (!task.isDone) items.push(['Mark done', () => a.done([task.id])]);
+  if (!task.isDone && a.canStart) items.push(['Start tracking', () => a.start(task.id)]);
+  items.push(['Open', () => a.open(task.id)]);
+  return items;
+};
+
 const selectionRow = (
   taskId: string,
   reason: string,
   i: number,
   input: ResultInput,
 ): HTMLLIElement => {
-  const task = input.snapshot.tasks.find((t) => t.id === taskId);
-  const li = el('li', 'row');
-  const main = el('div', 'main');
-  main.append(el('span', 'title', task?.title || ''), el('span', 'what', reason));
+  // Live only: a task deleted since the answer gets no actions, just its old title.
+  const task = input.live.get(taskId);
+  const title = task?.title ?? input.snapshot.tasks.find((t) => t.id === taskId)?.title;
+  const li = el('li', `row${task?.isDone ? ' off' : ''}`);
+  const label = el('label', 'main');
+  const box = el('input');
+  box.type = 'checkbox';
+  box.checked = input.picked.has(taskId);
+  box.addEventListener('change', () => input.onPick(taskId, box.checked));
+  const text = el('span', 'text');
+  text.append(el('span', 'title', title || ''), el('span', 'what', reason));
+  label.append(box, el('span', 'rank', String(i + 1)), text);
   const acts = el('div', 'acts');
-  const a = input.selection;
-  const done = button('Done', () => {
-    li.classList.add('off');
-    done.disabled = true;
-    a.done(taskId);
-  });
-  done.disabled = !!task?.isDone;
-  acts.append(done);
-  if (a.canStart) acts.append(button('Start', () => a.start(taskId)));
-  acts.append(button('Open', () => a.open(taskId)));
-  li.append(el('span', 'rank', String(i + 1)), main, acts);
+  if (canAddToToday(task, input.snapshot.day)) {
+    // An icon: a text button would squeeze the titles in the narrow side panel.
+    const today = button('', () => input.selection.addToToday([taskId]), 'btn-icon');
+    today.title = 'Add to today';
+    today.setAttribute('aria-label', 'Add to today');
+    today.append(el('span', 'material-icons', 'wb_sunny'));
+    acts.append(today);
+  }
+  if (task) acts.append(...moreMenu(selectionMenu(task, input)));
+  li.append(label, acts);
   return li;
 };
 

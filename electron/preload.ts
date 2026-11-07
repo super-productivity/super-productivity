@@ -27,6 +27,8 @@ import {
   createJiraPreloadApiConsumer,
   toPayloadOnlyIpcListener,
 } from './shared-with-frontend/preload-api';
+import { createOneShotApiConsumer } from './shared-with-frontend/one-shot-api-consumer';
+import { CertTrustElectronApi } from './shared-with-frontend/cert-trust-hosts';
 
 let pluginNodeExecutionApiConsumed = false;
 
@@ -38,6 +40,9 @@ const _invoke: (channel: IPCEventValue, ...args: unknown[]) => Promise<unknown> 
 ) => ipcRenderer.invoke(channel, ...args);
 
 const consumeJiraApi = createJiraPreloadApiConsumer(_invoke);
+const consumeCertTrustApi = createOneShotApiConsumer<CertTrustElectronApi>(() => ({
+  setTrustedHosts: (hosts) => _send('SET_CERT_TRUSTED_HOSTS', hosts),
+}));
 
 const ea: ElectronAPI = {
   on: (channel: string, listener: (...args: unknown[]) => void) => {
@@ -247,6 +252,8 @@ const ea: ElectronAPI = {
   },
 
   consumeJiraApi: () => consumeJiraApi(),
+
+  consumeCertTrustApi: () => consumeCertTrustApi(),
 
   // Plugin API
   consumePluginNodeExecutionApi: () => {

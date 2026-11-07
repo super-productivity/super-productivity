@@ -27,6 +27,8 @@ import { TaskService } from '../tasks/task.service';
 import { startWith } from 'rxjs/operators';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 import { anchorContextNow } from './anchor-context-now';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { getLocaleWeekendDays } from '../../util/get-locale-weekend-days';
 
 @Injectable({
   providedIn: 'root',
@@ -37,6 +39,7 @@ export class ScheduleService {
   private _calendarIntegrationService = inject(CalendarIntegrationService);
   private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
   private _taskService = inject(TaskService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
 
   private _timelineTasks = toSignal(this._store.select(selectTimelineTasks));
   private _taskRepeatCfgs = toSignal(
@@ -65,6 +68,10 @@ export class ScheduleService {
     }
     return colors;
   });
+  // untimed work flows past the locale's weekend instead of onto it (#9418)
+  private _weekendDays = computed(() =>
+    getLocaleWeekendDays(this._dateTimeFormatService.currentLocale()),
+  );
   scheduleRefreshTick = toSignal(interval(2 * 60 * 1000).pipe(startWith(0)), {
     initialValue: 0,
   });
@@ -132,6 +139,7 @@ export class ScheduleService {
       timelineCfg?.isLunchBreakEnabled ? createLunchBreakCfg(timelineCfg) : undefined,
       realNow,
       this._startOfNextDayDiffMs() ?? 0,
+      this._weekendDays(),
     );
   }
 

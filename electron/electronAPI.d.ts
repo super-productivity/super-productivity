@@ -27,6 +27,7 @@ import {
   LocalRestApiState,
 } from './shared-with-frontend/local-rest-api.model';
 import { ElectronDistChannel } from './shared-with-frontend/get-dist-channel';
+import { CertTrustElectronApi } from './shared-with-frontend/cert-trust-hosts';
 import {
   AssistantAccessCredentialResult,
   AssistantAccessScope,
@@ -282,6 +283,8 @@ export interface ElectronAPI {
   onSwitchTask(listener: (taskId: string) => void): void;
 
   consumeJiraApi(): JiraElectronApi | null;
+
+  consumeCertTrustApi(): CertTrustElectronApi | null;
 
   consumePluginNodeExecutionApi(): PluginNodeExecutionElectronApi | null;
 
