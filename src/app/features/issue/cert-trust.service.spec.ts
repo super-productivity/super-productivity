@@ -11,6 +11,7 @@ describe('CertTrustService', () => {
   let store: MockStore;
   let privateCfg$: BehaviorSubject<CurrentProviderPrivateCfg | null>;
   let emitted: string[][];
+  let service: CertTrustService;
 
   beforeEach(() => {
     privateCfg$ = new BehaviorSubject<CurrentProviderPrivateCfg | null>(null);
@@ -27,7 +28,8 @@ describe('CertTrustService', () => {
     });
     store = TestBed.inject(MockStore);
     emitted = [];
-    TestBed.inject(CertTrustService).trustedHosts$.subscribe((h) => emitted.push(h));
+    service = TestBed.inject(CertTrustService);
+    service.trustedHosts$.subscribe((h) => emitted.push(h));
   });
 
   it('combines enabled issue provider and active sync provider hosts', () => {
@@ -73,5 +75,49 @@ describe('CertTrustService', () => {
     } as never);
 
     expect(emitted).toEqual([[], ['nas.lan']]);
+  });
+
+  it('merges pending configs until their owner clears them', () => {
+    const issueDialog = {};
+    const syncDialog = {};
+    store.overrideSelector(selectEnabledIssueProviders, [
+      { id: 'a', host: 'https://jira.corp.local' },
+    ] as never);
+    store.refreshState();
+
+    void service.setPendingConfig(issueDialog, {
+      pluginConfig: { gitlabBaseUrl: 'gitlab.corp.lan', project: 'group/repo' },
+    });
+    void service.setPendingConfig(syncDialog, { baseUrl: 'https://nas.lan/dav' });
+    expect(emitted.at(-1)).toEqual(['gitlab.corp.lan', 'jira.corp.local', 'nas.lan']);
+
+    void service.setPendingConfig(issueDialog, null);
+    expect(emitted.at(-1)).toEqual(['jira.corp.local', 'nas.lan']);
+    void service.setPendingConfig(syncDialog, null);
+    expect(emitted.at(-1)).toEqual(['jira.corp.local']);
+  });
+
+  it('resolves setPendingConfig only once the main process applied the hosts', async () => {
+    const sent: string[][] = [];
+    const acks: (() => void)[] = [];
+    service.init({
+      setTrustedHosts: (hosts) => {
+        sent.push(hosts);
+        return new Promise<void>((resolve) => acks.push(resolve));
+      },
+    });
+    acks[0]();
+
+    let isApplied = false;
+    const applied = service
+      .setPendingConfig({}, { serverUrl: ' https://cloud.lan ' })
+      .then(() => (isApplied = true));
+    await Promise.resolve();
+
+    expect(sent.at(-1)).toEqual(['cloud.lan']);
+    expect(isApplied).toBe(false);
+    acks[1]();
+    await applied;
+    expect(isApplied).toBe(true);
   });
 });

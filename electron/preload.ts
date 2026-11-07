@@ -39,7 +39,8 @@ const _invoke: (channel: IPCEventValue, ...args: unknown[]) => Promise<unknown> 
 
 const consumeJiraApi = createJiraPreloadApiConsumer(_invoke);
 const consumeCertTrustApi = createOneShotApiConsumer<CertTrustElectronApi>(() => ({
-  setTrustedHosts: (hosts) => _send('SET_CERT_TRUSTED_HOSTS', hosts),
+  setTrustedHosts: (hosts) =>
+    _invoke('SET_CERT_TRUSTED_HOSTS', hosts).then(() => undefined),
 }));
 
 const ea: ElectronAPI = {
