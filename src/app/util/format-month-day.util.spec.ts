@@ -139,9 +139,9 @@ describe('formatMonthDay', () => {
   });
 
   describe('Swedish locale (sv), the ISO 8601 option', () => {
-    it('should not take padding from the year-first ISO short date', () => {
-      const result = formatMonthDay(singleDigitDate, DateTimeLocales.sv);
-      expect(result).toBe('5/1');
+    it('should use month/day order without padding or a year', () => {
+      expect(formatMonthDay(testDate, DateTimeLocales.sv)).toBe('12/25');
+      expect(formatMonthDay(singleDigitDate, DateTimeLocales.sv)).toBe('1/5');
     });
   });
 
