@@ -28,6 +28,7 @@ export const DEFAULT_JIRA_CFG: JiraCfg = {
   worklogDialogDefaultTime: JiraWorklogExportDefaultTime.AllTime,
   isAllowSelfSignedCertificate: false,
   isUpdateIssueFromLocal: false,
+  isSyncDeadlineToJira: false,
 
   isShowComponents: true,
 
