@@ -14,6 +14,7 @@ import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { setCurrentTask, unsetCurrentTask } from './task.actions';
 import { createSelector, select, Store } from '@ngrx/store';
 import {
+  distinctUntilChanged,
   filter,
   map,
   skipWhile,
