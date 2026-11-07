@@ -306,6 +306,17 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       updateOn: 'blur',
     },
   },
+  {
+    key: 'deadlineOffsetDays',
+    type: 'input',
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.DEADLINE_OFFSET_DAYS,
+      description: T.F.TASK_REPEAT.F.DEADLINE_OFFSET_DAYS_DESCRIPTION,
+      type: 'number',
+      min: 0,
+      max: 1000,
+    },
+  },
 
   {
     key: 'notes',
