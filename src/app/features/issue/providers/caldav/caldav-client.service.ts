@@ -196,6 +196,22 @@ export class CaldavClientService {
     return await calendar.calendarQuery([query]);
   }
 
+  // The UID text-match is a substring match (RFC 4791 §9.7.5), and some
+  // servers (e.g. Vikunja) ignore the filter and return every VTODO, so the
+  // result has to be narrowed to the VTODO whose UID is exactly this one.
+  private static async _findExactTask(
+    tasks: CalDavTaskData[],
+    taskUid: string,
+  ): Promise<CalDavTaskData | undefined> {
+    const ICAL = await loadIcalModule();
+    return tasks.find(
+      (t) =>
+        new ICAL.Component(ICAL.parse(t.data))
+          .getFirstSubcomponent('vtodo')
+          ?.getFirstPropertyValue('uid') === taskUid,
+    );
+  }
+
   // RFC 5545 lists COMPLETED, STATUS, and PERCENT-COMPLETE as independent
   // optional VTODO properties — a server may send any one of them alone to
   // mark a todo done, so the COMPLETED timestamp alone misses STATUS-only
@@ -654,11 +670,12 @@ export class CaldavClientService {
 
   private async _getTask(cfg: CaldavCfg, uid: string): Promise<CaldavIssue> {
     const cal = await this._getCalendar(cfg);
-    const task = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
+    const tasks = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
       this._handleNetErr(err),
     );
+    const task = await CaldavClientService._findExactTask(tasks, uid);
 
-    if (task.length < 1) {
+    if (!task) {
       this._snackService.open({
         type: 'ERROR',
         msg: T.F.CALDAV.S.ISSUE_NOT_FOUND,
@@ -666,7 +683,7 @@ export class CaldavClientService {
       throw new Error('ISSUE NOT FOUND: ' + uid);
     }
 
-    return await CaldavClientService._mapTask(task[0]);
+    return await CaldavClientService._mapTask(task);
   }
 
   private async _createTask(
@@ -727,13 +744,14 @@ export class CaldavClientService {
       // doesn't prove the VTODO is missing — whether the UID now exists decides.
       createErr = err;
     }
-    const created = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
+    const found = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
       this._handleNetErr(err),
     );
-    if (created.length < 1) {
-      this._handleNetErr(createErr ?? 'created VTODO not found: ' + uid);
+    const created = await CaldavClientService._findExactTask(found, uid);
+    if (!created) {
+      return this._handleNetErr(createErr ?? 'created VTODO not found: ' + uid);
     }
-    return CaldavClientService._mapTask(created[0]);
+    return CaldavClientService._mapTask(created);
   }
 
   private async _deleteTask(cfg: CaldavCfg, uid: string): Promise<void> {
@@ -753,15 +771,7 @@ export class CaldavClientService {
     const tasks = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
       this._handleNetErr(err),
     );
-    // The UID text-match is a substring match (RFC 4791 §9.7.5), so it can also
-    // return VTODOs whose UID merely contains this one; delete only the exact one.
-    const ICAL = await loadIcalModule();
-    const task = tasks.find(
-      (t) =>
-        new ICAL.Component(ICAL.parse(t.data))
-          .getFirstSubcomponent('vtodo')
-          ?.getFirstPropertyValue('uid') === uid,
-    );
+    const task = await CaldavClientService._findExactTask(tasks, uid);
     // Already gone on the server (deleted there, or by another device) — the
     // goal state is reached, so stay silent.
     if (!task) {
@@ -803,8 +813,9 @@ export class CaldavClientService {
     const tasks = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
       this._handleNetErr(err),
     );
+    const task = await CaldavClientService._findExactTask(tasks, uid);
 
-    if (tasks.length < 1) {
+    if (!task) {
       this._snackService.open({
         type: 'ERROR',
         translateParams: {
@@ -815,7 +826,6 @@ export class CaldavClientService {
       throw new Error('ISSUE NOT FOUND: ' + uid);
     }
 
-    const task = tasks[0];
     const ICAL = await loadIcalModule();
     const jCal = ICAL.parse(task.data);
     const comp = new ICAL.Component(jCal);
