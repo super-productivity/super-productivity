@@ -94,7 +94,7 @@ import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 import { toPersistableRemindOption } from '../../planner/dialog-schedule-task/task-reminder-options.const';
 import { AddTaskBarImagesService } from './add-task-bar-images.service';
-import { DialogDraftImageComponent } from './dialog-draft-image.component';
+import { EnlargeImgDirective } from '../../../ui/enlarge-img/enlarge-img.directive';
 
 export interface TaskAddEvent {
   taskId: string;
@@ -137,6 +137,7 @@ export interface TaskAddEvent {
     AddTaskBarActionsComponent,
     TranslateModule,
     SelectOptionRowComponent,
+    EnlargeImgDirective,
   ],
   providers: [AddTaskBarStateService, AddTaskBarParserService],
 })
@@ -905,19 +906,6 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this.stateService.updateInputTxt(value);
   }
 
-  previewDraftImage(id: string): void {
-    const images = this.draftImages.images().filter((image) => !!image.preview);
-    const index = images.findIndex((image) => image.id === id);
-    if (index < 0) return;
-    this._matDialog.open(DialogDraftImageComponent, {
-      data: { images, index },
-      width: '720px',
-      maxWidth: '95vw',
-      ariaLabel: images[index].title,
-      restoreFocus: true,
-    });
-  }
-
   onPaste(event: ClipboardEvent): void {
     if (!this.isSearchMode() && this.draftImages.paste(event)) return;
     const pastedText = event.clipboardData?.getData('text/plain');
@@ -939,7 +927,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   onDocumentClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     const component = target.closest('add-task-bar');
-    const overlayContainer = target.closest('.cdk-overlay-container');
+    const overlayContainer = target.closest(
+      '.cdk-overlay-container, .enlarged-image-wrapper',
+    );
 
     // If click is outside the component and not on autocomplete or menu options, close it
     if (!component && !overlayContainer && !this.isScheduleDialogOpen()) {

@@ -35,11 +35,10 @@ test('pastes image attachments, previews them, removes one and saves the task', 
   await expect(images).toHaveCount(3);
   await expect(images.first()).toHaveJSProperty('naturalWidth', 32);
   await images.first().click();
-  const preview = page.locator('dialog-draft-image');
-  await expect(preview).toContainText('1 / 3');
-  await page.keyboard.press('ArrowRight');
-  await expect(preview).toContainText('2 / 3');
-  await page.keyboard.press('Escape');
+  const preview = page.locator('.enlarged-image-wrapper');
+  await expect(preview).toBeVisible();
+  await expect(preview.locator('img')).toHaveJSProperty('naturalWidth', 32);
+  await preview.click({ position: { x: 5, y: 5 } });
   await expect(preview).toBeHidden();
   await expect(input).toHaveValue(`${testPrefix} image task`);
   await page.locator('add-task-bar.global .draft-image-remove').nth(1).click();
@@ -49,7 +48,6 @@ test('pastes image attachments, previews them, removes one and saves the task', 
   await ensureGlobalAddTaskBarOpen(page);
   await expect(images).toHaveCount(2);
   await expect(input).toHaveValue(`${testPrefix} image task`);
-  await page.screenshot({ path: '.tmp/quick-add-images-preview.png' });
   await input.focus();
   await page.keyboard.press('Enter');
   const task = page.locator('task').filter({ hasText: `${testPrefix} image task` });

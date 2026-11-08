@@ -285,7 +285,7 @@ describe('AddTaskBarComponent', () => {
     component = fixture.componentInstance;
   });
 
-  describe('highlightSegments', () => {
+  describe('draft images', () => {
     it('includes draft images in the task creation and clears them after saving', async () => {
       mockTaskService.add.and.returnValue('task-1');
       const attachment = {
@@ -309,7 +309,9 @@ describe('AddTaskBarComponent', () => {
       await component.addTask();
       expect(mockTaskService.add).not.toHaveBeenCalled();
     });
+  });
 
+  describe('highlightSegments', () => {
     it('splits the input by the ranges parsed from that exact text', () => {
       component.stateService.updateInputTxt('Buy milk #shop');
       component.stateService.updateSyntaxHighlight({
@@ -1563,6 +1565,16 @@ describe('AddTaskBarComponent', () => {
   describe('document click handling', () => {
     beforeEach(() => {
       fixture.detectChanges();
+    });
+
+    it('keeps the draft open when clicking the image preview overlay', () => {
+      const overlay = document.createElement('div');
+      overlay.className = 'enlarged-image-wrapper';
+      const image = document.createElement('img');
+      overlay.appendChild(image);
+      const done = spyOn(component.done, 'emit');
+      component.onDocumentClick({ target: image } as unknown as MouseEvent);
+      expect(done).not.toHaveBeenCalled();
     });
 
     it('should emit done when clicking outside and no dialog is open', () => {

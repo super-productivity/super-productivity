@@ -1,4 +1,6 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
+import { Log } from '../../../core/log';
 import { nanoid } from 'nanoid';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -14,11 +16,12 @@ export interface DraftTaskImage {
   isLoading: boolean;
 }
 
-/** Shared in memory so closing the desktop popup preserves its image draft. */
+/** Shared in memory so closing and reopening the Add Task Bar preserves its image draft. */
 @Injectable({ providedIn: 'root' })
 export class AddTaskBarImagesService {
   private readonly _clipboard = inject(ClipboardImageService);
   private readonly _snack = inject(SnackService);
+  private readonly _translate = inject(TranslateService);
   private readonly _images = signal<DraftTaskImage[]>([]);
   readonly images = this._images.asReadonly();
   readonly isLoading = computed(() => this.images().some((image) => image.isLoading));
@@ -40,7 +43,7 @@ export class AddTaskBarImagesService {
     for (const file of files) {
       const image: DraftTaskImage = {
         id: nanoid(),
-        title: file.name,
+        title: this._translate.instant(T.F.TASK.ADDITIONAL_INFO.PASTED_IMAGE_TITLE),
         isLoading: true,
       };
       this._images.update((images) => [...images, image]);
@@ -72,16 +75,19 @@ export class AddTaskBarImagesService {
         this.remove(id);
         return;
       }
-      const preview = await this._clipboard.resolveClipboardImageUrl(path);
-      if (!preview) throw new Error('Image preview unavailable');
+      const preview = (await this._clipboard.resolveClipboardImageUrl(path)) ?? path;
       this._images.update((images) =>
         images.map((image) =>
           image.id === id ? { ...image, path, preview, isLoading: false } : image,
         ),
       );
-    } catch {
+    } catch (error) {
+      Log.err('Failed to save draft clipboard image', error);
       this.remove(id);
-      this._snack.open({ type: 'ERROR', msg: T.F.CLIPBOARD_IMAGE.PASTE_ERROR });
+      // ClipboardImageService already reports this failure with a specific snack.
+      if (!(error instanceof Error && error.message === 'Storage quota exceeded')) {
+        this._snack.open({ type: 'ERROR', msg: T.F.CLIPBOARD_IMAGE.PASTE_ERROR });
+      }
     }
   }
 }

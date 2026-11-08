@@ -113,7 +113,7 @@
             [disabled]="image.isLoading"
             [matTooltip]="image.title"
             [attr.aria-label]="image.title"
-            (click)="previewDraftImage(image.id)"
+            [enlargeImg]="image.preview"
           >
             @if (image.preview) {
               <img

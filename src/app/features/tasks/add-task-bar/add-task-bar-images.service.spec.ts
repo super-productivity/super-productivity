@@ -1,3 +1,6 @@
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { T } from '../../../t.const';
+import { Log } from '../../../core/log';
 import { TestBed } from '@angular/core/testing';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -35,11 +38,15 @@ describe('AddTaskBarImagesService', () => {
     );
     snack = jasmine.createSpyObj('SnackService', ['open']);
     TestBed.configureTestingModule({
+      imports: [TranslateModule.forRoot()],
       providers: [
         { provide: ClipboardImageService, useValue: clipboard },
         { provide: SnackService, useValue: snack },
       ],
     });
+    TestBed.inject(TranslateService).setTranslation('en', {});
+    spyOn(TestBed.inject(TranslateService), 'instant').and.returnValue('Pasted image');
+    spyOn(Log, 'err');
     service = TestBed.inject(AddTaskBarImagesService);
   });
 
@@ -85,12 +92,44 @@ describe('AddTaskBarImagesService', () => {
     expect(service.images()).toEqual([]);
   });
 
+  it('uses the resolved preview for an attachment saved in a custom folder', async () => {
+    const path = 'file:///home/u/Pictures/sp/image.png';
+    clipboard.saveImage.and.resolveTo(path);
+    clipboard.resolveClipboardImageUrl.and.resolveTo('blob:custom-image');
+    service.paste(paste(['one.png']));
+    await settled();
+    expect(service.images()[0]).toEqual(
+      jasmine.objectContaining({
+        path,
+        preview: 'blob:custom-image',
+        isLoading: false,
+        title: 'Pasted image',
+      }),
+    );
+    expect(service.attachments()[0].path).toBe(path);
+    expect(snack.open).not.toHaveBeenCalled();
+  });
+
+  it('preserves the quota error already reported by the clipboard service', async () => {
+    const error = new Error('Storage quota exceeded');
+    clipboard.saveImage.and.rejectWith(error);
+    service.paste(paste(['one.png']));
+    await settled();
+    expect(service.images()).toEqual([]);
+    expect(service.isLoading()).toBeFalse();
+    expect(snack.open).not.toHaveBeenCalled();
+    expect(Log.err).toHaveBeenCalledWith('Failed to save draft clipboard image', error);
+  });
+
   it('reports failure and allows another paste', async () => {
     clipboard.saveImage.and.rejectWith(new Error('storage failed'));
     service.paste(paste(['one.png']));
     await settled();
     expect(service.images()).toEqual([]);
     expect(service.isLoading()).toBeFalse();
-    expect(snack.open).toHaveBeenCalled();
+    expect(snack.open).toHaveBeenCalledWith({
+      type: 'ERROR',
+      msg: T.F.CLIPBOARD_IMAGE.PASTE_ERROR,
+    });
   });
 });
