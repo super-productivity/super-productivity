@@ -6,7 +6,16 @@ export const stringToMs = (strValue: string, args?: unknown): number => {
   }
 
   // Replace commas by dots to allow using them as float separator.
-  strValue = strValue.replace(',', '.');
+  strValue = strValue.replace(/,/g, '.');
+
+  // Accept a space between a number and its unit ("45 m", "1 h 30 m") and
+  // spelled-out units ("30 min", "2 hours", "1hr"), which would otherwise
+  // be dropped and parse as 0.
+  strValue = strValue
+    .replace(/(\d)\s+(?=(?:[hms]|hours?|hrs?|minutes?|mins?|seconds?|secs?)\b)/gi, '$1')
+    .replace(/(\d)(?:hours?|hrs?)\b/gi, '$1h')
+    .replace(/(\d)(?:minutes?|mins?)\b/gi, '$1m')
+    .replace(/(\d)(?:seconds?|secs?)\b/gi, '$1s');
 
   // First try to parse simple formats like "1.5h", "30m", etc.
   // also accept (fractional) numbers without specifier
