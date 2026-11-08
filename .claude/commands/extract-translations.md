@@ -18,7 +18,7 @@ For each changed file:
 
 - Look for: `<element>Text</element>`
 - Look for: `placeholder="Text"`, `title="Text"`, etc.
-- Ignore: `{{ T.KEY }}`, `{{ 'KEY' | translate }}`
+- Ignore: `{{ T.KEY | translate }}`, `{{ 'KEY' | translate }}`
 
 2. **In TS files**: Find hardcoded strings in:
 
@@ -49,13 +49,13 @@ For each changed file:
 
 1. **In HTML files**:
 
-- Replace `<element>Text</element>` with `<element>{{ T.KEY }}</element>`
-- Replace `attribute="Text"` with `[attribute]="T.KEY"`
+- Replace `<element>Text</element>` with `<element>{{ T.KEY | translate }}</element>`
+- Replace `attribute="Text"` with `[attribute]="T.KEY | translate"`
 
 2. **In TS files**:
 
 - Ensure T is imported: `import { T } from '../../t.const';`
-- Replace string literals with `T.KEY`
+- Replace string literals with `T.KEY` (T values are keys, not text: render them with `TranslateService` or pass them to an API that translates, e.g. `SnackService`)
 
 ## Phase 6: Finalize
 
@@ -86,7 +86,7 @@ Optional arguments:
   <input placeholder="Search..." />
 
   <!-- Skip these -->
-  <button>{{ T.BUTTON_CLICK }}</button>
+  <button>{{ T.BUTTON_CLICK | translate }}</button>
   <mat-label>{{ 'LABEL_NAME' | translate }}</mat-label>
 </div>
 ```
