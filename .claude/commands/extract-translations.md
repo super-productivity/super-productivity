@@ -51,15 +51,17 @@ For each changed file:
 
 - Replace `<element>Text</element>` with `<element>{{ T.KEY | translate }}</element>`
 - Replace `attribute="Text"` with `[attribute]="T.KEY | translate"`
+- `T.KEY` alone renders the raw key string; always add the `translate` pipe
+- If the component does not use the pipe yet, add `TranslatePipe` (from `@ngx-translate/core`) to its standalone `imports`
 
 2. **In TS files**:
 
 - Ensure T is imported: `import { T } from '../../t.const';`
-- Replace string literals with `T.KEY` (T values are keys, not text: render them with `TranslateService` or pass them to an API that translates, e.g. `SnackService`)
+- Replace string literals with `T.KEY` where the consumer translates keys (e.g. `SnackService`, dialog data); otherwise use `TranslateService.instant(T.KEY)`
 
 ## Phase 6: Finalize
 
-1. Run `npm run int` to update translation configurations
+1. Run `npm run int` to regenerate `src/app/t.const.ts` from en.json
 2. Verify changes compile correctly
 3. Report summary of changes
 
@@ -86,7 +88,7 @@ Optional arguments:
   <input placeholder="Search..." />
 
   <!-- Skip these -->
-  <button>{{ T.BUTTON_CLICK | translate }}</button>
+  <button>{{ T.G.CANCEL | translate }}</button>
   <mat-label>{{ 'LABEL_NAME' | translate }}</mat-label>
 </div>
 ```
@@ -95,28 +97,22 @@ Optional arguments:
 
 ```typescript
 // Extract these
-this.snackBar.open('Success!', 'OK');
+this._snackService.open({ type: 'SUCCESS', msg: 'Success!' });
 const message = 'Error occurred';
 dialogConfig.data = { title: 'Confirm' };
 
 // Skip these
-this.snackBar.open(T.SUCCESS_MESSAGE, T.OK);
-const message = T.ERROR_OCCURRED;
+this._snackService.open({ type: 'SUCCESS', msg: T.F.TASK.S.DELETED });
+const message = this._translateService.instant(T.F.TASK.D_TIME.TITLE);
 ```
 
 ### Key Naming Conventions
 
-Follow the existing pattern in en.json:
+Follow the existing nested pattern in en.json (`T` mirrors it):
 
-- Feature-based grouping: `FEATURE_COMPONENT_ELEMENT`
-- Action-based: `ACTION_CONTEXT`
-- Common elements: `COMMON_ELEMENT_TYPE`
-
-Examples:
-
-- `TASK_LIST_EMPTY_MESSAGE`
-- `DIALOG_CONFIRM_TITLE`
-- `BUTTON_SAVE`
+- Features live under `F.<FEATURE>`, e.g. `F.TASK.D_TIME.TITLE`, `F.TAG.FORM_BASIC.L_TITLE`
+- Snack messages under `F.<FEATURE>.S.*`, dialogs under `F.<FEATURE>.D_<NAME>.*`
+- Shared labels under `G.*` (e.g. `G.CANCEL`, `G.DELETE`); reuse them before adding new keys
 
 </extraction_patterns>
 
@@ -157,10 +153,10 @@ Keys generated: 8
 
 Changes by file:
 - src/app/features/tasks/task-list.component.html
-  ✓ "No tasks" → T.TASK_LIST_EMPTY
-  ✓ "Add task" → T.TASK_ADD_BUTTON
+  ✓ "No tasks" → T.F.TASK.LIST.EMPTY
+  ✓ "Add task" → T.F.TASK.LIST.ADD
 - src/app/features/tasks/task.service.ts
-  ✓ "Task saved" → T.TASK_SAVED_MESSAGE
+  ✓ "Task saved" → T.F.TASK.S.SAVED
 
 Translation file updated: src/assets/i18n/en.json
 Build command executed: npm run int
