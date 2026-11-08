@@ -987,14 +987,15 @@ test.describe('@supersync released provider reorder compatibility', () => {
               // it must show it as not installed rather than drop or rewrite it.
               await expect(tabs.nth(0)).toHaveClass(/disabled/);
               await client.page.locator('issue-panel [role="tab"]').nth(0).click();
-              await expect(
-                client.page.locator('issue-panel [role="tabpanel"]:visible'),
-              ).toContainText(
+              // `:visible` can match inactive tab bodies while the tab animation
+              // runs; scope to the one panel Material marks as active.
+              const activePanel = client.page.locator(
+                'issue-panel [role="tabpanel"][aria-hidden="false"]',
+              );
+              await expect(activePanel).toContainText(
                 'Required plugin "gitlab-issue-provider" is not installed.',
               );
-              await expect(client.page.locator('issue-provider-tab:visible')).toHaveCount(
-                0,
-              );
+              await expect(activePanel.locator('issue-provider-tab')).toHaveCount(0);
             } else await expect(tabs.nth(0)).not.toHaveClass(/disabled/);
             await expect(tabs.nth(1)).toHaveClass(/disabled/);
             await expect(tabs.nth(2)).toHaveClass(/disabled/);
