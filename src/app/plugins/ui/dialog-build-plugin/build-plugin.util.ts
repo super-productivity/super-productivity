@@ -130,9 +130,17 @@ const TAG_ALIASES: Record<string, string> = {
   json5: 'json',
 };
 
-// tags like `manifest.json` name the file; its extension is the language
+// a tag may name the file instead of the language; other file names like
+// `package.json` map to '' (never read), so they can't take a plugin file's slot
+const PLUGIN_FILE_KINDS = new Map([
+  ['manifest.json', 'json'],
+  ['plugin.js', 'js'],
+  ['index.html', 'html'],
+]);
+
 const kindOfTag = (tag: string): string => {
-  const lang = tag.toLowerCase().split('.').pop() ?? '';
+  const lang = tag.toLowerCase();
+  if (lang.includes('.')) return PLUGIN_FILE_KINDS.get(lang) ?? '';
   return TAG_ALIASES[lang] ?? lang;
 };
 

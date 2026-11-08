@@ -244,6 +244,21 @@ describe('parsePluginAnswer', () => {
     expect('files' in jsonc && jsonc.files.manifest.name).toBe('Siren');
   });
 
+  it('ignores blocks named after other files', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['package.json', '{ "name": "siren-dev" }'],
+        ['example.js', 'demo();'],
+        ['manifest.json', '{ "name": "Siren" }'],
+        ['plugin.js', 'beep();'],
+      ),
+      '20.0.0',
+    );
+
+    expect('files' in result && result.files.manifest.name).toBe('Siren');
+    expect('files' in result && result.files.pluginJs).toBe('beep();\n');
+  });
+
   it('ignores a file name comment above the manifest', () => {
     const tagged = parsePluginAnswer(
       answerOf(['json', '// manifest.json\n{ "name": "Siren" }'], ['js', 'beep();']),
