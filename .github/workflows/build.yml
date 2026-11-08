@@ -149,11 +149,6 @@ jobs:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
           release: true
-          # electron-builder downloads its packaging tools (snap template,
-          # AppImage/fpm binaries) at build time; a 504 from that host failed
-          # run 42465141114. A retry re-uploads to the draft, which
-          # electron-builder overwrites.
-          max_attempts: 3
 
       # The Claude Desktop extension (tools/mcpb), linked from the app's
       # assistant access settings by its asset name. Packed here because this
@@ -175,8 +170,6 @@ jobs:
           github_token: ${{ secrets.github_token }}
           release: false
           args: '--publish never'
-          # Rides out transient 5xx on electron-builder's tool downloads (see above).
-          max_attempts: 3
 
       # electron-builder 26.15.0-26.15.6 only 7z-decompressed the snap template's
       # .tar.7z and shipped the inner .tar verbatim at the snap root, so the
