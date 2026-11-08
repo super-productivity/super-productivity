@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { EnvironmentInjector, runInInjectionContext } from '@angular/core';
 import { FocusModeTaskSelectorComponent } from './focus-mode-task-selector.component';
 import { TaskService } from '../../tasks/task.service';
+import { SelectTaskComponent } from '../../tasks/select-task/select-task.component';
 
 describe('FocusModeTaskSelectorComponent', () => {
   let component: FocusModeTaskSelectorComponent;
@@ -125,6 +126,33 @@ describe('FocusModeTaskSelectorComponent', () => {
       expect(closedSpy).not.toHaveBeenCalled();
     });
   });
+
+  for (const eventInit of [
+    { key: 'Enter', isComposing: true, keyCode: 13 },
+    { key: 'Enter', isComposing: false, keyCode: 229 },
+    { key: 'Escape', isComposing: true, keyCode: 27 },
+  ]) {
+    it(`preserves the task draft for IME ${eventInit.key}/${eventInit.keyCode}`, () => {
+      const createSpy = spyOn(component, 'createAndSelectTaskFromInput');
+      const selectTask = jasmine.createSpyObj<SelectTaskComponent>(
+        'SelectTaskComponent',
+        ['isInCreateMode'],
+      );
+      selectTask.isInCreateMode.and.returnValue(true);
+      component.selectTaskComponent = selectTask;
+      const closedSpy = spyOn(component.closed, 'emit');
+      const event = new KeyboardEvent('keydown', eventInit);
+      component.currentTaskInputText.set('Draft');
+      if (eventInit.key === 'Enter') {
+        component.handleEnter(event);
+      } else {
+        component.onKeyDown(event);
+      }
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(closedSpy).not.toHaveBeenCalled();
+      expect(component.currentTaskInputText()).toBe('Draft');
+    });
+  }
 
   describe('handleEnter', () => {
     it('should call createAndSelectTaskFromInput when in create mode', () => {

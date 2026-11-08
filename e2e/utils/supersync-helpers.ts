@@ -28,6 +28,7 @@ import {
   assertNoRuntimeBrowserErrors,
   attachPageErrorCollector,
   installDevErrorDialogHandler,
+  registerPageWithErrorCollector,
   type RuntimeBrowserError,
 } from './runtime-errors';
 
@@ -412,6 +413,12 @@ export const createSimulatedClient = async (
 
   const page = await context.newPage();
   const runtimeErrors = attachPageErrorCollector(page, `Client ${clientName}`);
+  // Pages a spec opens later in this context (context.newPage() after closing
+  // the first) report page errors and devError() into the same list
+  // closeClient() checks.
+  context.on('page', (contextPage) => {
+    registerPageWithErrorCollector(contextPage, runtimeErrors, `Client ${clientName}`);
+  });
 
   // Skip onboarding, hints, and example tasks before the app boots.
   // This runs before any page JavaScript, so Angular sees the flags immediately.
@@ -423,7 +430,7 @@ export const createSimulatedClient = async (
         localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
         localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
       }
-      // getInitialAppFeatures() starts E2E clients with every feature on only
+      // getInitialNewInstallSections() starts E2E clients with every feature on only
       // while this flag is set.
       if (!isNewInstall) {
         localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');

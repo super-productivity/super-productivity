@@ -19,6 +19,14 @@
   </style>
 
 
+  <!-- Widget quick add: a floating dialog over the home screen that follows
+       the system day/night setting, in the widget's brand color. -->
+  <style name="AppTheme.QuickAdd" parent="Theme.AppCompat.DayNight.Dialog.Alert">
+    <item name="colorAccent">@color/widget_brand</item>
+    <item name="windowNoTitle">true</item>
+  </style>
+
+
   <style name="AppTheme.NoActionBarLaunch" >
     <item name="android:windowActionBarOverlay">true</item>
     <!--
@@ -43,6 +51,13 @@
       values-night variant (#131314), so the splash tracks system day/night.
     -->
     <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/windowBackground</item>
+    <!--
+      Without an explicit icon the system splash shows the adaptive launcher
+      icon (a large blue circle), which then cuts to the web boot splash's
+      small grey/white checkmark. Use that same checkmark here instead, so the
+      system splash and the web splash look identical.
+    -->
+    <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@drawable/ic_splash</item>
   </style>
 
 </resources>

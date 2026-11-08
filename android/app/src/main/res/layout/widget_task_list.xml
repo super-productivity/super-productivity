@@ -36,6 +36,15 @@
             android:textColor="@color/widget_ink"
             android:textSize="16sp"
             android:textStyle="bold" />
+
+        <!-- Own click target inside the header: opens QuickAddActivity, not the app -->
+        <ImageView
+            android:id="@+id/widget_add"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_widget_add"
+            android:contentDescription="@string/widget_add_task" />
     </LinearLayout>
 
     <!-- Currently tracked task (local or, via SuperSync presence, remote); gone when

@@ -943,6 +943,22 @@ describe('CaldavClientService._getNativeXhrProvider – native platform', () => 
     expect(callArgs.data).toBe('<body/>');
   });
 
+  // #11232: cdav-library's propFind() and principal REPORTs set a numeric Depth
+  // (`headers.Depth = 0`). The iOS plugin casts headers to [String: String], so
+  // one non-string value made it drop every header and Nextcloud returned 404.
+  it('send() stringifies numeric header values like a real XHR', async () => {
+    const xhr = getFakeXhr();
+    xhr.open('PROPFIND', 'https://cal.example.com/');
+    xhr.setRequestHeader('Depth', 0 as unknown as string);
+    xhr.send('<body/>');
+    await Promise.resolve();
+    const callArgs = svc.webDavRequestSpy.calls.mostRecent().args[0];
+    expect(callArgs.headers?.['Depth']).toBe('0');
+    expect(
+      Object.values(callArgs.headers ?? {}).every((v) => typeof v === 'string'),
+    ).toBeTrue();
+  });
+
   it('fires onload and sets status/responseText after send() resolves', async () => {
     svc.webDavRequestSpy.and.resolveTo({
       status: 207,

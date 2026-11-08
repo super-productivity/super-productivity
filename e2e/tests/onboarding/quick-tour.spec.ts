@@ -8,7 +8,7 @@ import {
 import { waitForStatePersistence } from '../../utils/waits';
 
 // Up to the inline icon, whose ligature name is part of the text content.
-const INBOX_TIP = 'Tasks without a project of your own stay in';
+const INBOX_TIP = 'Tasks without a project of your own go to';
 const DECLINED = "It's under Help → Quick tour";
 
 /** First run without the seeded Inbox tasks, so the user's task is the only one. */
@@ -77,6 +77,9 @@ test.describe('Quick tour', () => {
     await expect(hint).toContainText('Break it down');
     await expect(hint).toContainText('2 of 5');
     await expect(hint).toContainText("Timer's running");
+    // The running task shows ⏸, not ▶, so the note must name that icon.
+    await expect(hint.locator('.inline-icon', { hasText: 'pause' })).toBeVisible();
+    await expect(hint.locator('.inline-icon', { hasText: 'play_arrow' })).toHaveCount(0);
 
     // 2: add a subtask from the task's menu.
     await task.click({ button: 'right' });
@@ -106,9 +109,19 @@ test.describe('Quick tour', () => {
     await expect(page).toHaveURL(/\/planner/);
     const card = page.locator('quick-tour-card');
     await expect(card).toContainText('Want more?');
-    await expect(card).toContainText('5 of 5');
+    // 5: it names the features a new install starts without, and sync.
+    await expect(card).toContainText('Switched off for now');
+    await expect(card.locator('.features li span')).toHaveText([
+      'Views',
+      'Schedule',
+      'Habits',
+      'Focus mode',
+      'Finish day',
+      'Issues panel',
+    ]);
+    await expect(card).toContainText('Your data stays on this device');
 
-    // 5: the card leads to the feature switches in Settings.
+    // The card leads to the feature switches in Settings.
     await card.getByRole('button', { name: 'Open settings ›' }).click();
     await expect(page).toHaveURL(/\/config\?section=appFeatures/);
     await expect(card).toHaveCount(0);
@@ -292,8 +305,16 @@ test.describe('Quick tour', () => {
       await expect(addTagBtn).toHaveClass(/onboarding-pulse/);
       await expect(hint).toContainText('Create one with +');
       await addTagBtn.tap();
-      await page.locator('dialog-create-tag input[name="title"]').fill('Phone tag');
-      await page.getByRole('button', { name: 'Save' }).tap();
+      // Phones open dialogs without autofocus, so nothing signals that the form
+      // is ready. In run 40151758322 the title was empty after the fill (likely
+      // cleared by ngModel's initial write) and Save stayed disabled. Refill
+      // until the form has the title.
+      const saveTagBtn = page.getByRole('button', { name: 'Save' });
+      await expect(async () => {
+        await page.locator('dialog-create-tag input[name="title"]').fill('Phone tag');
+        await expect(saveTagBtn).toBeEnabled({ timeout: 1000 });
+      }).toPass();
+      await saveTagBtn.tap();
       await expect(page.locator('dialog-create-tag')).toHaveCount(0);
       await expect(hint).toContainText('Plan the next days');
       await expect(hint).toContainText('2 of 3');
@@ -302,8 +323,8 @@ test.describe('Quick tour', () => {
       await page.locator('magic-side-nav .tour-planner').first().tap();
       await expect(page).toHaveURL(/\/planner/);
       const card = page.locator('quick-tour-card');
-      await expect(card).toContainText('3 of 3');
-      await expect(card).toContainText('Search everything from ☰');
+      await expect(card).toContainText('Switched off for now');
+      await expect(card).toContainText('Focus mode');
       await card.getByRole('button', { name: 'Done' }).tap();
       await expect(card).toHaveCount(0);
 

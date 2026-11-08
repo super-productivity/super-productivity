@@ -162,6 +162,19 @@ export class WebdavApi {
   // ==============================
 
   /**
+   * URL and Authorization header value of a GET for `path`, as this API sends
+   * it — for a reader outside this runtime (the Android background reminder
+   * worker). The header carries credentials: never log it.
+   */
+  async getReadRequest(path: string): Promise<{ url: string; authorization: string }> {
+    const cfg = await this._deps.getCfg();
+    return {
+      url: this._buildFullPath(cfg.baseUrl, path),
+      authorization: getAuthorizationHeader(cfg),
+    };
+  }
+
+  /**
    * Retrieve metadata for a file or folder via PROPFIND.
    * Only caller: the #9030 upload pre-check, which swallows failures and falls
    * back to GET — hence errors log at `normal`, not `critical`.
@@ -640,16 +653,8 @@ export class WebdavApi {
   }): Promise<WebDavHttpResponse> {
     const cfg = await this._deps.getCfg();
 
-    let authHeaderVal;
-    if (cfg.accessToken) {
-      authHeaderVal = `Bearer ${cfg.accessToken}`;
-    } else {
-      const auth = btoa(`${cfg.userName}:${cfg.password}`);
-      authHeaderVal = `Basic ${auth}`;
-    }
-
     const allHeaders = {
-      [WebDavHttpHeader.AUTHORIZATION]: authHeaderVal,
+      [WebDavHttpHeader.AUTHORIZATION]: getAuthorizationHeader(cfg),
       ...headers,
     };
 
@@ -795,3 +800,8 @@ export class WebdavApi {
     }
   }
 }
+
+const getAuthorizationHeader = (cfg: WebdavPrivateCfg): string =>
+  cfg.accessToken
+    ? `Bearer ${cfg.accessToken}`
+    : `Basic ${btoa(`${cfg.userName}:${cfg.password}`)}`;

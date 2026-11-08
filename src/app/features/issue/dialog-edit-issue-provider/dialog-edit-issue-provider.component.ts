@@ -60,6 +60,10 @@ import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { PluginService } from '../../../plugins/plugin.service';
+import { BUNDLED_PLUGIN_IDS } from '../../../plugins/bundled-plugins.const';
+import { renderDataSharingHtml } from '../../../plugins/util/plugin-data-sharing.util';
+import { TranslateService } from '@ngx-translate/core';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { OAuthFlowConfig, PluginSyncDirection } from '@super-productivity/plugin-api';
 import { applyPluginOAuthOverrides } from './plugin-oauth-config-overrides.util';
@@ -75,6 +79,7 @@ import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-in
 import { unique } from '../../../util/unique';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
+import { CertTrustService } from '../cert-trust.service';
 import {
   PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY,
   shouldScopePluginOAuth,
@@ -133,6 +138,10 @@ export class DialogEditIssueProviderComponent {
     this.d.issueProviderKey) as IssueProviderKey;
   issueProvider?: IssueProvider = this.d.issueProvider;
   isEdit: boolean = !!this.issueProvider && !this.d.isDuplicate;
+  private _pluginService = inject(PluginService);
+  private _translateService = inject(TranslateService);
+  // Shown when the user connects an account: that is the moment they agree to send it data.
+  readonly dataSharingHtml: string = this.isEdit ? '' : this._getDataSharingHtml();
 
   model: Partial<IssueProvider> = this.isEdit
     ? this._migratePluginConfigForEdit({ ...this.issueProvider })
@@ -187,6 +196,7 @@ export class DialogEditIssueProviderComponent {
   private _destroyRef = inject(DestroyRef);
   private _taskService = inject(TaskService);
   private _tagService = inject(TagService);
+  private _certTrustService = inject(CertTrustService);
 
   private _isSubmitSuccessful = false;
   private _isClosedOrDestroyed = false;
@@ -223,6 +233,7 @@ export class DialogEditIssueProviderComponent {
     });
     const onClose = (): void => {
       this._isClosedOrDestroyed = true;
+      void this._certTrustService.setPendingConfig(this, null);
       this._cleanupUnsavedOAuthToken().catch((err) => {
         IssueLog.err(
           '[DialogEditIssueProvider] OAuth cleanup failed',
@@ -308,6 +319,7 @@ export class DialogEditIssueProviderComponent {
 
   async testConnection(): Promise<void> {
     try {
+      await this._trustModelHosts();
       const isSuccess = await this._issueService.testConnection(
         this.model as IssueProvider,
       );
@@ -336,6 +348,13 @@ export class DialogEditIssueProviderComponent {
         translateParams: { errorMsg: this._connectionErrorTxt(error) },
       });
     }
+  }
+
+  /** Self-signed hosts must be testable before the provider is saved or enabled (#11097). */
+  private _trustModelHosts(): Promise<void> {
+    return this._isClosedOrDestroyed
+      ? Promise.resolve()
+      : this._certTrustService.setPendingConfig(this, this.model);
   }
 
   /**
@@ -484,6 +503,7 @@ export class DialogEditIssueProviderComponent {
       return { isSuccess: true, hasOptions: true };
     }
 
+    await this._trustModelHosts();
     const pluginConfig = this._getPluginConfigForOAuth();
     const http = this._pluginHttp.createHttpHelper(
       () => provider.definition.getHeaders(pluginConfig),
@@ -932,6 +952,20 @@ export class DialogEditIssueProviderComponent {
 
   async loadDynamicOptions(): Promise<void> {
     await this._loadAndSetDynamicOptionsState();
+  }
+
+  private _getDataSharingHtml(): string {
+    const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
+    const manifest =
+      pluginId && this._pluginService.pluginStates().get(pluginId)?.manifest;
+    if (!manifest) {
+      return '';
+    }
+    return renderDataSharingHtml(
+      manifest,
+      { isBundled: BUNDLED_PLUGIN_IDS.has(manifest.id) },
+      (key, params) => this._translateService.instant(key, params),
+    );
   }
 }
 

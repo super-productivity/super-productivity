@@ -419,52 +419,6 @@
         "WRITE_A_COMMENT": "Napíšte komentár"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Predvyplnené trvanie obsahuje nesledované údaje z minulých dní.",
-        "T_ALREADY_TRACKED": "Už sledované",
-        "T_TITLE": "Názov",
-        "T_TO_BE_SUBMITTED": "Predkladá sa",
-        "TITLE": "Odoslanie času stráveného nad problémami do aplikácie GitLab",
-        "TOTAL_MSG": "Odovzdáte <em>{{totalTimeToSubmit}}</em> pracovný čas za dnešný deň celkovo do <em>{{nrOfTasksToSubmit}}</em> rôznych otázok."
-      },
-      "FORM": {
-        "FILTER": "Vlastný filter",
-        "FILTER_DESCRIPTION": "Pozri https://docs.gitlab.com/ee/api/issues.html#list-issues. Viaceré možno kombinovať pomocou &",
-        "FILTER_USER": "Používateľské meno (napr. na odfiltrovanie vlastných zmien)",
-        "GITLAB_BASE_URL": "Vlastná základná adresa URL aplikácie GitLab (voliteľné)",
-        "PROJECT": "(predvolené) ID projektu alebo meno používateľa/projektu",
-        "PROJECT_HINT": "napr. johannesjo/superproduktivita",
-        "SCOPE": "Rozsah",
-        "SCOPE_ALL": "Všetko",
-        "SCOPE_ASSIGNED": "Pridelené mne",
-        "SCOPE_CREATED": "Vytvorené mnou",
-        "SOURCE": "Zdroj",
-        "SOURCE_GLOBAL": "Všetky",
-        "SOURCE_GROUP": "Skupina",
-        "SOURCE_PROJECT": "Projekt",
-        "SUBMIT_TIMELOGS": "Odosielanie časových záznamov do systému Gitlab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Zobrazenie dialógového okna sledovania času po kliknutí na deň ukončenia",
-        "TOKEN": "Prístupový token"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and sync all open issues to your task backlog.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Príjemca",
-        "AT": "at",
-        "DESCRIPTION": "Popis",
-        "LABELS": "Štítky",
-        "MARK_AS_CHECKED": "Označiť aktualizácie ako skontrolované",
-        "PROJECT": "Projekt",
-        "STATUS": "Stav",
-        "SUMMARY": "Súhrn",
-        "WRITE_A_COMMENT": "Napísať komentár"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Neznáma chyba {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Táto integrácia pravdepodobne nebude fungovať vo vašom prehliadači. Stiahnite si verziu aplikácie Super Productivity pre počítače alebo Android!",
       "DEFAULT": {
@@ -3123,8 +3077,8 @@
       "PLANNER": "Naplánujte ďalšie dni v {{plannerIcon}} <b>Plánovač</b>",
       "TASK_MENU_TOUCH": "Potiahnutím úlohy doľava otvoríte jej ponuku: {{playIcon}} <b>Začať sledovanie času</b>, {{subtaskIcon}} <b>Pridať podúlohu</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Potiahnutím úlohy doľava otvoríte jej ponuku, napr. {{subtaskIcon}} <b>Pridať podúlohu</b>",
-      "TIMER_RUNNING": "Časovač beží. Na pozastavenie znova stlačte {{playIcon}} alebo <kbd>{{key}}</kbd>.",
-      "TIMER_RUNNING_TOUCH": "Časovač beží. Na pozastavenie ťuknite hore na {{playIcon}}.",
+      "TIMER_RUNNING": "Časovač beží. Na pozastavenie znova stlačte {{pauseIcon}} alebo <kbd>{{key}}</kbd>.",
+      "TIMER_RUNNING_TOUCH": "Časovač beží. Na pozastavenie ťuknite hore na {{pauseIcon}}.",
       "TRACK_TIME": "Prejdite myšou nad úlohu a stlačením {{playIcon}} spustite sledovanie času"
     },
     "WANT_MORE": {

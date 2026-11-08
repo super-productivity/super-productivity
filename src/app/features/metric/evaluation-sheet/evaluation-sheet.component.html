@@ -30,7 +30,10 @@
     <div class="hint">{{ T.F.METRIC.EVAL_FORM.ENERGY_LEVEL_HINT | translate }}</div>
   </div>
 
-  <reflection-note [dayStr]="day()"></reflection-note>
+  <reflection-note
+    [dayStr]="day()"
+    [isWeek]="isWeek()"
+  ></reflection-note>
 
   <!--      <section class="notes-for-tomorrow">-->
   <!--        <h3 class="section-title">-->

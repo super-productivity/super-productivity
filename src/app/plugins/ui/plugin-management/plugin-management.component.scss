@@ -64,6 +64,16 @@ td {
   gap: var(--s-half);
 }
 
+// Building and listing your own plugin close the tab, centered under the catalog.
+.community-build-own {
+  margin-top: var(--s3);
+  text-align: center;
+
+  p {
+    margin: 0 0 var(--s);
+  }
+}
+
 .community-get-listed {
   margin: var(--s2) 0 var(--s);
   text-align: center;

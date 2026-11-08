@@ -924,6 +924,28 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    but older writers can omit it. Masked dominating replacements written by,
    or subsequently rewritten by, those clients remain a mixed-version gap;
    the older version/lineage/trim checks still apply to files without the marker.
+   A gap that is only a trim (the file's `syncVersion` did not go backwards,
+   its base is seen, and its clock equals or dominates the last-seen one) is a
+   catch-up, not a replacement (`snapshotExtendsLastSeen`, #10972). A client
+   that completed a sync with this target (seq cursor above 0) and has no
+   pending full-state op then hydrates the snapshot and keeps its pending ops
+   (after a target switch the adapter can hold a last-seen baseline staged by
+   a download it never applied, so having synced elsewhere is not enough): they move past the baseline with
+   ids and clocks unchanged, replay on top of it, and upload normally.
+   Receivers resolve any crossing on the no-pending LWW path. A pending op the
+   snapshot clock already covers (uploaded before a crash skipped
+   `markSynced`) is settled, not replayed twice. A kept op the snapshot state
+   cannot take (its project was deleted remotely) is reducer-rejected with the
+   discard snack, as receivers drop it. A full-state op that lands during the
+   download (a backup import) still asks. Known residual: once the
+   other client compacted its crossing op (`COMPACTION_RETENTION_MS`, 7
+   days), the receiver finds no local op to compare and applies the kept edit
+   even when it is older, as on the #9073 path. Second residual: a
+   replacement written before v19.2.0 leaves no snapshot base and resets only
+   `syncVersion`, so one whose later uploads climbed back past the expected
+   version reads as a catch-up; if its `SYNC_IMPORT` then filters the kept op
+   on receivers, they diverge where a dialog used to ask. Any other concurrent
+   snapshot still asks Keep local / Keep remote.
 4. **Commit:** the downloaded `rev`, vector clock, and expected synthetic
    watermark remain staged until the caller confirms that baseline and ops were
    durably applied. Cancelling a data-conflict decision does not advance the
@@ -1344,7 +1366,7 @@ which the repair was based. The authoritative payload and summary types live in
 ### REPAIR Operation Behavior
 
 - **During startup**: A terminal REPAIR can use the safe full-state direct-load shortcut when no row in the replay range has pending reducer work. Otherwise the range is migrated and replayed normally.
-- **During sync**: REPAIR is narrower than an explicit import. Operations concurrent with it are replayed on top of the repaired snapshot (including a concurrent prefix that must move after the full-state boundary). On SuperSync, REPAIR never requests a clean slate; the server locks the user's sequence row and accepts the snapshot only when `repairBaseServerSeq` still equals the current server sequence. A stale repair is retired locally before the concurrent server suffix is downloaded.
+- **During sync**: REPAIR is narrower than an explicit import. Operations concurrent with it are replayed on top of the repaired snapshot (including a concurrent prefix that must move after the full-state boundary). On SuperSync, REPAIR never requests a clean slate; the server locks the user's sequence row and accepts the snapshot only when `repairBaseServerSeq` still equals the current server sequence. A stale repair is retired locally before the concurrent server suffix is downloaded. On file-based providers, a REPAIR is written only conditionally on the remote rev this client last downloaded and applied (#9023), and only when its `repairBaseServerSeq` is still the server seq committed after that download (#11483): a REPAIR that stayed pending across a later download predates that download's ops. Either mismatch answers `REPAIR_STALE`, and the same rebase path rebuilds it from the current state.
 - **Upload ordering**: If a full-state upload fails, later regular operations stay pending. Permanent snapshot failures are classified by the central rejection handler after any remote work has been applied. A rejected local explicit import/restore remains a durable upload barrier across later sync cycles; incremental operations resume only after a newer full-state snapshot succeeds. Rejected remote imports are conflict-resolution history, and stale automatic REPAIR is excluded so its concurrent suffix can download and trigger a fresh repair if still necessary.
 - **User notification**: automatic/in-lock repair is non-blocking; explicitly
   interactive repair may use the acknowledgement dialog.

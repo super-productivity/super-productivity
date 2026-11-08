@@ -1,44 +1,39 @@
 For all current downloads, package links, and platform-specific notes: [check the wiki](https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install).
 
-## 19.3.0
+### Tasks and views
 
-### Tasks and focus
+- Added Smart Lists, multi-tag filtering, and a redesigned view editor with rule chips, pinned views, and improved mobile layouts.
+- Open a project directly from a task’s project chip, and add deadlines from the add-task bar.
+- Duplicating tasks now preserves links, files, and deadlines. Unplanned tasks with missed deadlines appear in Today’s overdue list.
+- Fixed recurring task start dates, placement, and duplicate schedule entries. Planning no longer double-counts subtasks, and overflowing work skips local weekend days.
+- Improved cross-project search and offered a way to clear filters hiding a searched task.
 
-- Restore deleted tasks from Recently deleted, or finish tasks as “won’t do.”
-- Set priorities with `p1`/`p2`/`p3`, use nth-weekday short syntax, and enter `@` dates in your UI language and date order.
-- See completed/total counts on collapsed subtasks and archived projects in the sidebar.
-- Start focus mode with one click and adjust focus sound volume.
-- Productivity and sustainability scores have been removed; Upcoming is now an overview in the Recurring panel.
+### Plugins and integrations
 
-### Scheduling and reminders
+- Added the bundled AI Command plugin, off by default, with multi-select and Add to Today actions.
+- Added guided plugin creation with AI prompts, and information about data plugins send off your device.
+- Moved GitLab into a bundled plugin. Expanded the community catalog with Deadlines, Task Colors, Timesheet, standalone Markdown notes, monday.com, and Ridonculous plugins.
+- Added an option to include Gitea pull requests and support for sending task completion to Azure DevOps work items.
+- Added calendar logging for tracked work sessions. Cancelled or moved-away calendar events are no longer imported.
 
-- View deadlines in Schedule, calendar colors in Planner, and plugin calendars in Schedule filters.
-- Navigate days from the Schedule day panel and open Planner with a keyboard shortcut.
-- Set optional repeat end dates, with clearer controls for completion-based repeats, falling behind, pausing, and rule summaries.
-- Set reminders 1 day, 3 days, or 1 week ahead. Upcoming recurring alarms are now scheduled in advance.
-- Fixed monthly repeats skipping short months, yearly repeats on leap days, and recurring task priority retention.
+### Time tracking and worklog
 
-### Integrations and assistants
+- Added optional web notifications when focus sessions or breaks end, and looping bells for desktop alarm-style reminders.
+- Recording idle time as a break now resets the break timer.
+- Added Friday weekly wrap-ups. Worklog exports now include archived projects, export the displayed week, and keep weeks spanning two months together.
 
-- Sign up for and connect Plainspace inside the app, hand tasks to others, and share tasks by moving them into shared projects.
-- Plainspace now syncs titles and scheduled times both ways and pushes offline edits. Fixed pending edits during handoffs and syncing cleared times across devices.
-- Optionally create and delete corresponding CalDAV tasks when adding or deleting tasks.
-- Connect AI assistants through an opt-in local MCP endpoint or SuperSync’s hosted task capture, including ChatGPT OAuth. Assistant-created tasks can include schedules and repeats.
-- Install and update listed community plugins, including Auto Tag Manager and SuperGile for YouGile.
-- Expanded the local REST API with notes, counters, and daily task-time logging and corrections.
+### Sync and Android
 
-### Mobile and desktop
+- Simplified SuperSync setup and fixed file-sync recovery and preservation of pending edits.
+- Fixed conflicts involving tag deletion, counter restoration, task section moves, and Today ordering.
+- Added Android task creation from the home-screen widget and share saving without opening the app.
+- Added Android background reminders for WebDAV/Nextcloud, fixed stale or missing reminders, and kept widget task order aligned with Today.
+- Mobile sync now sends pending changes when the app enters the background; Android also checks file-based providers while in the foreground.
 
-- Android widgets show the currently tracked task; launcher shortcuts open New task, Today, and Inbox.
-- Long-press to access sidebar menus or choose the second bottom-navigation destination. Improved touch targets, haptic feedback, and phone-sized Schedule layouts.
-- Fixed Android overlay positioning and literal shared titles, plus iOS task-title wrapping and bottom safe-area spacing.
-- Added an opt-in desktop due-task badge and improved Linux window-control spacing.
+### Interface, desktop, and performance
 
-### Fixes and reliability
-
-- Fixed task duplication involving undated subtasks and repeat settings, task ordering within sections, and estimate edits lost on outside taps.
-- Fixed sync conflicts involving section changes, task moves, recurring-task generation, and tracked time during task deletion.
-- Fixed WebDAV retry loops and added confirmation before overwriting remote changes that cannot be decrypted.
-- Preserve the last full mobile backup when data restarts nearly empty; offer recovery of previously unmigrated v12-or-older data on a blank start.
-- Fixed aborted cached PWA loads, focus sessions interrupted during startup, and reopening archived projects.
-- Improved task-list rendering and swipe performance, keyboard focus visibility, and text contrast.
+- Added smoother page transitions that respect reduced-motion settings, faster startup, and performance improvements for long task lists and tracking.
+- Improved keyboard menus, touch interactions, and IME input in notes and the focus task picker.
+- Added desktop launch shortcuts for New task, Today, and Inbox, plus a `--start-minimized` option.
+- Fixed desktop task copying and macOS window dragging. Resuming or unlocking no longer raises the app or requests attention.
+- Exported logs now redact home-folder paths. Updated Russian translations and German tag terminology.

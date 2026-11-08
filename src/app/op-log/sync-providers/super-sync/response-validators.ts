@@ -11,7 +11,7 @@ import {
   SuperSyncRestoreSnapshotResponseSchema,
   SuperSyncSnapshotUploadResponseSchema,
   SuperSyncUploadOpsResponseSchema,
-} from '@sp/shared-schema';
+} from '@sp/shared-schema/supersync-http-contract';
 import type {
   SuperSyncCaptureClaimResult,
   SuperSyncCaptureGrantList,

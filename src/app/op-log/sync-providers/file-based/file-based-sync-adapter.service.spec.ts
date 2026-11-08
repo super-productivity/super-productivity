@@ -1738,6 +1738,67 @@ describe('FileBasedSyncAdapterService', () => {
         expect(result.gapDetected).toBe(true);
       });
 
+      describe('own uploads missing from the remote (#10916)', () => {
+        const BASE = { clientA: 1, clientB: 1 };
+
+        // clientA last saw its own upload (counter 3) in a file based on BASE.
+        const establish = async (): Promise<void> => {
+          const established = createMockSyncData({
+            syncVersion: 3,
+            vectorClock: { clientA: 3, clientB: 1 },
+            snapshotBaseClock: BASE,
+            clientId: 'clientA',
+            recentOps: [],
+            state: { tasks: [{ id: 'task-a' }] },
+          });
+          mockProvider.downloadFile.and.returnValue(
+            Promise.resolve({ dataStr: addPrefix(established), rev: 'rev-1' }),
+          );
+          await adapter.downloadOps(0, 'clientA');
+          await adapter.setLastServerSeq(3);
+        };
+
+        const downloadFromZero = async (
+          remote: FileBasedSyncData,
+        ): Promise<{ gapDetected?: boolean; ownUploadsMissing?: boolean }> => {
+          mockProvider.downloadFile.and.returnValue(
+            Promise.resolve({ dataStr: addPrefix(remote), rev: 'rev-2' }),
+          );
+          expect((await adapter.downloadOps(3, 'clientA')).gapDetected).toBe(true);
+          return adapter.downloadOps(0, 'clientA');
+        };
+
+        it('flags a stale-base write that dropped them', async () => {
+          await establish();
+          const result = await downloadFromZero(
+            createMockSyncData({
+              syncVersion: 3,
+              vectorClock: { clientA: 1, clientB: 2 },
+              snapshotBaseClock: BASE,
+              clientId: 'clientB',
+              recentOps: [],
+              state: { tasks: [{ id: 'task-b' }] },
+            }),
+          );
+          expect(result.ownUploadsMissing).toBe(true);
+        });
+
+        it('does not flag a full-state replacement with a new base', async () => {
+          await establish();
+          const result = await downloadFromZero(
+            createMockSyncData({
+              syncVersion: 1,
+              vectorClock: { clientB: 9 },
+              snapshotBaseClock: { clientB: 9 },
+              clientId: 'clientB',
+              recentOps: [],
+              state: { tasks: [{ id: 'task-b' }] },
+            }),
+          );
+          expect(result.ownUploadsMissing).toBe(false);
+        });
+      });
+
       it('records a clock on the first commit after upgrading from state without lastSeenClocks (#9170)', async () => {
         // State persisted by a pre-#9170 client: cursor and expected version, but
         // no last-seen clock (it was kept in memory only).
@@ -1874,7 +1935,11 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.downloadFile.calls.reset();
     };
 
-    const uploadRepair = (): Promise<{
+    // `base` is the server seq the REPAIR was built at (null: none); seedBaseRev
+    // commits 2.
+    const uploadRepair = (
+      base: number | null = 2,
+    ): Promise<{
       accepted: boolean;
       errorCode?: string;
       serverSeq?: number;
@@ -1889,6 +1954,8 @@ describe('FileBasedSyncAdapterService', () => {
         'repair-op-id',
         false, // isCleanSlate
         'REPAIR', // snapshotOpType — triggers the guard
+        undefined, // syncImportReason
+        base ?? undefined,
       );
 
     // Records every write (path, rev-to-match, force) in call order.
@@ -1984,9 +2051,9 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('writes with a null rev-to-match ("expect absent") when this client has no last-seen rev', async () => {
-      // No seedBaseRev → _lastSeenRevs is empty.
+      // No seedBaseRev → _lastSeenRevs is empty, and no syncVersion is committed.
       const writes = captureWrites();
-      const result = await uploadRepair();
+      const result = await uploadRepair(0);
       expect(result.accepted).toBe(true);
       expect(primaryOf(writes)[0].rev).toBeNull();
       expect(primaryOf(writes)[0].force).toBe(false);
@@ -2023,6 +2090,84 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.errorCode).toBe('REPAIR_STALE');
       // Gated before any write — the concurrent ops survive.
       expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
+    describe('a REPAIR built before the last applied download (#11483)', () => {
+      // A REPAIR stays pending when its upload fails. A later download then
+      // applies a peer's op and promotes `_lastSeenRevs`, so the rev guard above
+      // would let the old payload (built without that op) replace the remote.
+      const seedLaterDownload = async (): Promise<void> => {
+        await seedBaseRev('rev-1'); // the REPAIR is built here, at syncVersion 2
+        (
+          service as unknown as { _syncCycleCache: Map<string, unknown> }
+        )._syncCycleCache.clear();
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({
+            dataStr: addPrefix(createMockSyncData({ syncVersion: 3, recentOps: [] })),
+            rev: 'rev-2',
+          }),
+        );
+        await adapter.downloadOps(2);
+        await adapter.setLastServerSeq(3);
+        mockProvider.downloadFile.calls.reset();
+      };
+
+      it('answers REPAIR_STALE without any write, though the rev matches', async () => {
+        await seedLaterDownload();
+        const writes = captureWrites();
+
+        const result = await uploadRepair(2);
+
+        expect(result.accepted).toBe(false);
+        expect(result.errorCode).toBe('REPAIR_STALE');
+        expect(writes).toEqual([]);
+      });
+
+      it('split format: answers REPAIR_STALE before reading or writing', async () => {
+        await seedLaterDownload();
+        splitSyncEnabled = true;
+        mockProvider.getFileRev.and.returnValue(Promise.resolve({ rev: 'rev-2' }));
+
+        const result = await uploadRepair(2);
+
+        expect(result.errorCode).toBe('REPAIR_STALE');
+        expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+      });
+
+      it('writes the REPAIR rebuilt at the committed syncVersion', async () => {
+        await seedLaterDownload();
+        const writes = captureWrites();
+
+        const result = await uploadRepair(3);
+
+        expect(result.accepted).toBe(true);
+        expect(primaryOf(writes)[0].rev).toBe('rev-2');
+      });
+
+      it('writes a REPAIR built at the committed cursor even when it differs from the syncVersion', async () => {
+        // The rebase path and the rejected-full-state reseed stamp the REPAIR
+        // with getLastServerSeq(). A cursor committed without a staged download
+        // (e.g. a legacy read-only or missing-file download) leaves the expected
+        // syncVersion behind; comparing against that would re-stale every rebase.
+        await seedBaseRev('rev-1');
+        await adapter.setLastServerSeq(7);
+        const writes = captureWrites();
+
+        const result = await uploadRepair(await adapter.getLastServerSeq());
+
+        expect(result.accepted).toBe(true);
+        expect(primaryOf(writes)[0].rev).toBe('rev-1');
+      });
+
+      it('answers REPAIR_STALE for a REPAIR without a base, which cannot prove it is current', async () => {
+        await seedBaseRev('rev-1');
+        const writes = captureWrites();
+
+        const result = await uploadRepair(null);
+
+        expect(result.errorCode).toBe('REPAIR_STALE');
+        expect(writes).toEqual([]);
+      });
     });
   });
 

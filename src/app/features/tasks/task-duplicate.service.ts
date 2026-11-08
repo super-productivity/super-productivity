@@ -22,7 +22,11 @@ export class TaskDuplicateService {
       isDone: false,
       projectId: task.projectId || undefined,
       tagIds: task.tagIds || [],
+      attachments: task.attachments,
       ...(task.notes && { notes: task.notes }),
+      ...(task.deadlineDay && { deadlineDay: task.deadlineDay }),
+      ...(task.deadlineWithTime && { deadlineWithTime: task.deadlineWithTime }),
+      ...(task.deadlineRemindAt && { deadlineRemindAt: task.deadlineRemindAt }),
       ...(task.priority !== undefined && { priority: task.priority }),
     };
     const timeData = {
@@ -52,6 +56,10 @@ export class TaskDuplicateService {
           ...(subTask.dueWithTime && { dueWithTime: subTask.dueWithTime }),
           timeEstimate: subTask.timeEstimate,
           notes: subTask.notes,
+          attachments: subTask.attachments,
+          ...(subTask.deadlineDay && { deadlineDay: subTask.deadlineDay }),
+          ...(subTask.deadlineWithTime && { deadlineWithTime: subTask.deadlineWithTime }),
+          ...(subTask.deadlineRemindAt && { deadlineRemindAt: subTask.deadlineRemindAt }),
           ...(subTask.priority !== undefined && { priority: subTask.priority }),
         },
       });

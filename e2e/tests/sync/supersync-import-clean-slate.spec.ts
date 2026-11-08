@@ -11,6 +11,15 @@ import { ImportPage } from '../../pages/import.page';
 import { SuperSyncPage } from '../../pages/supersync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForAppReady } from '../../utils/waits';
+import {
+  captureAndBlockOpsUploads,
+  DIALOG,
+  getLocalLastServerSeq,
+  getServerOperations,
+  getTasksFromStore,
+  replayOpsUploadWithoutCursor,
+  watchDialogs,
+} from '../../utils/audit-import-encryption-helpers';
 
 /**
  * SuperSync Import Clean Slate E2E Tests
@@ -623,6 +632,19 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       // 2. B receives SYNC_IMPORT
       // 3. B's pending ops are CONCURRENT to SYNC_IMPORT
       // 4. Clean slate semantics: B's pending ops are filtered/dropped
+      //
+      // B's pending op is meaningful, so the incoming import must ask first
+      // (MSG_INCOMING, "1 local changes"). Click sync directly and assert the
+      // dialog and its text, then answer it explicitly (server data drops the
+      // pending task).
+      await clientB.sync.syncBtn.click();
+      const incomingImportDialog = clientB.sync.syncImportConflictDialog;
+      await expect(incomingImportDialog).toBeVisible({ timeout: 30000 });
+      await expect(incomingImportDialog).toContainText(
+        'Your data was fully replaced on another device. You have 1 local changes',
+      );
+      await expect(clientB.sync.firstSyncUseAccountRadio).toHaveCount(0);
+      await clientB.sync.chooseSyncImportUseRemote();
       await clientB.sync.syncAndWait();
       console.log('[Pending Invalidation] Client B synced (received SYNC_IMPORT)');
 
@@ -679,139 +701,180 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
   });
 
   /**
-   * Scenario D.4: Remote ops concurrent with accepted remote import are silently filtered
+   * Scenario D.4: Remote ops concurrent with an accepted remote import are silently filtered
    *
-   * When Client B imports a backup and Client A accepts it (USE_REMOTE),
-   * any remaining old ops from before the import should be silently filtered
-   * on subsequent syncs — no dialog, no errors.
+   * Client A has already accepted Client B's SYNC_IMPORT. Afterwards the server
+   * receives an op that Client C created without knowing the import. A's next
+   * download consists only of that op, which SyncImportFilterService drops as
+   * CONCURRENT with the stored REMOTE import: no dialog (the import was already
+   * accepted), no error, and C's task never reaches A.
+   *
+   * How C's op gets onto the server after the import: C syncs before the
+   * import, creates a task, and its upload is captured and blocked (C's
+   * download ran before the import existed). After A accepted the import, the
+   * captured upload is sent again without its `lastKnownServerSeq` — with the
+   * cursor the server's state-replacement fence would reject it, because it
+   * is below the import. Holding C's request and releasing it later (the
+   * audit's plan) therefore cannot reach this path. A current client always
+   * sends the cursor, so the replay models an uploader without one (a client
+   * or server from before the fence); the client-side filter it exercises is
+   * the same either way.
    *
    * Actions:
-   * 1. Client A creates tasks, syncs
-   * 2. Client B imports backup, syncs (creates SYNC_IMPORT)
-   * 3. Client A syncs, gets SYNC_IMPORT, accepts remote import (USE_REMOTE)
-   * 4. Client A syncs again — old ops should be silently filtered
+   * 1. A creates a task and syncs; C joins and syncs (has A's task)
+   * 2. C creates a task; its upload is captured and blocked
+   * 3. B imports a backup and uploads the SYNC_IMPORT
+   * 4. A syncs and accepts the remote import
+   * 5. C's captured upload lands on the server after the import
+   * 6. A syncs again (watched)
    *
    * Verify:
-   * - No dialog on the second sync after accepting import
-   * - Sync completes successfully (IN_SYNC)
-   * - Only imported data remains
+   * - dialog-sync-import-conflict NEVER appears on A during step 6
+   * - C's task is absent from A's store, the imported task is present
+   * - A shows no sync error
    */
   test('Remote ops concurrent with accepted remote import are silently filtered (D.4)', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
+    test.slow();
     const uniqueId = Date.now();
     const appUrl = baseURL || 'http://localhost:4242';
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
+    let clientC: SimulatedE2EClient | null = null;
 
     try {
       const user = await createTestUser(testRunId);
       const syncConfig = getSuperSyncConfig(user);
 
-      // ============ PHASE 1: Client A creates tasks ============
-      console.log('[D.4] Phase 1: Client A creates tasks');
-
+      // ============ PHASE 1: A creates a task, C joins before the import ============
       clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
-
       const taskAOld = `Task-A-Old-${uniqueId}`;
       await clientA.workView.addTask(taskAOld);
       await clientA.sync.syncAndWait();
-      console.log(`[D.4] Client A created and synced: ${taskAOld}`);
 
-      // ============ PHASE 2: Client B imports backup ============
-      console.log('[D.4] Phase 2: Client B imports backup');
+      clientC = await createSimulatedClient(browser, appUrl, 'C', testRunId);
+      await clientC.sync.setupSuperSync(syncConfig);
+      await clientC.sync.syncAndWait();
+      await waitForTask(clientC.page, taskAOld);
 
+      // ============ PHASE 2: C creates a task; its upload is captured ============
+      const blockedC = await captureAndBlockOpsUploads(clientC.page);
+      const taskCConcurrent = `Task-C-Concurrent-${uniqueId}`;
+      await clientC.workView.addTask(taskCConcurrent);
+      await waitForTask(clientC.page, taskCConcurrent);
+      await clientC.sync.syncBtn.click();
+      const cUpload = await blockedC.firstUpload;
+      console.log(`[D.4] Captured C's upload (${cUpload.body.ops.length} op(s))`);
+
+      // ============ PHASE 3: B imports a backup and uploads the SYNC_IMPORT ============
       clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
 
-      // Perform import on Client B
       const importPage = new ImportPage(clientB.page);
       await importPage.navigateToImportPage();
-      const backupPath = ImportPage.getFixturePath('test-backup.json');
-      await importPage.importBackupFile(backupPath);
-      console.log('[D.4] Client B imported backup');
+      await importPage.importBackupFile(ImportPage.getFixturePath('test-backup.json'));
 
       // Navigate to restart Angular while preserving in-memory IndexedDB backup data.
       await clientB.page.goto('/', { waitUntil: 'commit', timeout: 30000 });
       clientB.workView = new WorkViewPage(clientB.page, `B-${testRunId}`);
       clientB.sync = new SuperSyncPage(clientB.page);
       await waitForAppReady(clientB.page, { ensureRoute: false });
-
-      // Configure sync WITHOUT waiting for initial sync
       await clientB.sync.setupSuperSync({
         ...syncConfig,
         waitForInitialSync: false,
         syncImportChoice: 'local',
       });
-
-      // Wait for sync import conflict dialog or sync completion
-      const syncImportDialog = clientB.sync.syncImportConflictDialog;
       const syncResult = await Promise.race([
-        syncImportDialog
+        clientB.sync.syncImportConflictDialog
           .waitFor({ state: 'visible', timeout: 30000 })
           .then(() => 'dialog' as const),
         clientB.sync.syncCheckIcon
           .waitFor({ state: 'visible', timeout: 30000 })
           .then(() => 'complete' as const),
       ]);
-
       if (syncResult === 'dialog') {
         await clientB.sync.chooseSyncImportUseLocal();
         await clientB.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
       }
-
-      // Client B syncs to upload SYNC_IMPORT
       await clientB.sync.syncAndWait();
-      console.log('[D.4] Client B synced (SYNC_IMPORT uploaded)');
 
-      // ============ PHASE 3: Client A syncs and accepts remote import ============
-      console.log('[D.4] Phase 3: Client A syncs and accepts remote import');
+      const [serverImport] = await getServerOperations(user.userId, {
+        opType: 'SYNC_IMPORT',
+        limit: 1,
+      });
+      expect(serverImport, 'B uploaded a SYNC_IMPORT').toBeDefined();
 
-      // Client A syncs — should get SYNC_IMPORT, may show conflict dialog
-      // Use syncAndWait which handles dialogs automatically (uses remote by default)
+      // ============ PHASE 4: A accepts the remote import ============
+      // A has no pending ops, so the import applies without a dialog.
       await clientA.sync.syncAndWait();
-      console.log('[D.4] Client A accepted remote import');
-
-      // Wait for state to settle
-      await clientA.page.waitForTimeout(1000);
-
-      // ============ PHASE 4: Client A syncs AGAIN — old ops should be silently filtered ============
-      console.log(
-        '[D.4] Phase 4: Client A syncs again (old ops should be silently filtered)',
-      );
-
-      // This is the CRITICAL sync — any remaining old ops from before the import
-      // should be silently filtered by SyncImportFilterService with no dialog
-      await clientA.sync.syncAndWait();
-
-      // Verify no error
-      const hasError = await clientA.sync.hasSyncError();
-      expect(hasError).toBe(false);
-
-      // Verify sync is IN_SYNC
-      await expect(clientA.sync.syncCheckIcon).toBeVisible({ timeout: 5000 });
-
-      // Navigate to INBOX_PROJECT to verify imported tasks
       await clientA.page.goto('/#/project/INBOX_PROJECT/tasks', {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       });
-      await clientA.page.waitForLoadState('networkidle');
-
-      // Verify imported task is present
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
 
-      // Verify old task is gone (clean slate)
-      const oldTaskOnA = clientA.page.locator(`task:has-text("${taskAOld}")`);
-      await expect(oldTaskOnA).not.toBeVisible({ timeout: 5000 });
+      // Watch A before the op exists on the server, so no sync of A can
+      // download it unobserved.
+      const watcherA = await watchDialogs(clientA.page, [DIALOG.syncImportConflict]);
 
-      console.log('[D.4] ✓ Old ops silently filtered after accepting remote import');
+      // ============ PHASE 5: C's concurrent op lands AFTER the import ============
+      const replay = await replayOpsUploadWithoutCursor(cUpload);
+      expect(
+        replay.results.filter((r) => !r.accepted),
+        "the server accepts C's replayed ops",
+      ).toEqual([]);
+      const cOpsAfterImport = (await getServerOperations(user.userId)).filter(
+        (op) =>
+          op.clientId === cUpload.body.clientId && op.serverSeq > serverImport.serverSeq,
+      );
+      expect(
+        cOpsAfterImport.length,
+        "C's concurrent op is on the server after the import",
+      ).toBeGreaterThan(0);
+
+      // ============ PHASE 6: A syncs again — the op is silently filtered ============
+      await clientA.sync.syncAndWait();
+      await watcherA.expectNeverSeen(
+        [DIALOG.syncImportConflict],
+        'A downloading an op concurrent with its accepted remote import',
+      );
+
+      expect(await clientA.sync.hasSyncError()).toBe(false);
+      await expect(clientA.sync.syncCheckIcon).toBeVisible({ timeout: 5000 });
+
+      // Anchor: A's cursor moved past C's op, so A really downloaded it and
+      // the absence below means filtered, not "never arrived".
+      const highestCSeq = Math.max(...cOpsAfterImport.map((op) => op.serverSeq));
+      expect(
+        await getLocalLastServerSeq(clientA.page),
+        "A's server cursor covers C's concurrent op",
+      ).toBeGreaterThanOrEqual(highestCSeq);
+
+      expect(
+        await getTasksFromStore(clientA.page, taskCConcurrent),
+        "C's concurrent task must not reach A",
+      ).toEqual([]);
+      expect(await getTasksFromStore(clientA.page, taskAOld)).toEqual([]);
+      expect(
+        (
+          await getTasksFromStore(
+            clientA.page,
+            'E2E Import Test - Active Task With Subtask',
+          )
+        ).length,
+      ).toBeGreaterThan(0);
+
+      console.log(
+        '[D.4] ✓ Concurrent op silently filtered after accepting remote import',
+      );
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
+      if (clientC) await closeClient(clientC);
     }
   });
 });

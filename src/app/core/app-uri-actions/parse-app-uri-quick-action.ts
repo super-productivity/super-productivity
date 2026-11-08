@@ -33,8 +33,8 @@ const isQuickActionHost = (host: string): host is QuickActionHost =>
   (QUICK_ACTION_HOSTS as readonly string[]).includes(host);
 
 /**
- * Parses the UI-only actions on the `com.super-productivity.app://` custom URL
- * scheme: `add-task` (opens the quick-add-task input bar) and the two
+ * Parses the UI-only actions on the app's custom URL scheme
+ * (`com.super-productivity.app://`, or `superproductivity://` on desktop): `add-task` (opens the quick-add-task input bar) and the two
  * navigation actions `today` / `inbox`. These are what the iOS home
  * screen quick actions and the Android launcher shortcuts (long-press the app
  * icon) resolve to — each `UIApplicationShortcutItem` / `res/xml/shortcuts.xml`
@@ -44,9 +44,10 @@ const isQuickActionHost = (host: string): host is QuickActionHost =>
  *
  * Reached on iOS and Android. Android routes custom-scheme URLs per declared
  * host, so each host here also needs a `<data>` entry in `AndroidManifest.xml`
- * (`tools/verify-android-url-hosts.test.js` checks that). Desktop recognizes
- * `add-task` only, via its own Electron protocol handler. Documented in wiki
- * 3.01 §4.
+ * (`tools/verify-android-url-hosts.test.js` checks that). On desktop the
+ * Electron protocol handler opens `add-task` itself and forwards
+ * `superproductivity://today` / `inbox` here; the macOS dock menu and Windows
+ * jump list use all three. Documented in wiki 3.01 §4.
  *
  * Unlike `create-task`/`complete-task` (see `parse-app-uri-task-action.ts`)
  * these never write anything: they only open UI the user could have reached by

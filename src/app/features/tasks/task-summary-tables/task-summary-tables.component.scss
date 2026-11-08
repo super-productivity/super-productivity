@@ -3,9 +3,21 @@
   margin-bottom: var(--s3);
 }
 
-// Keeps the project colour as an accent next to the collapsible heading.
-collapsible.project-section {
-  border-left: 2px solid var(--extra-border-color);
+// Mirrors the side-nav project icon, so each section is recognisable at a glance.
+.project-icon {
+  flex: none;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+
+  &.project-icon--emoji {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+    font-size: var(--font-size-lg);
+    font-feature-settings: normal;
+    text-transform: none;
+    letter-spacing: normal;
+  }
 }
 
 .project-time {

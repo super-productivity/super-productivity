@@ -319,6 +319,50 @@ export const addTaskToList = (
   return isAddToBottom ? [...taskIds, taskId] : [taskId, ...taskIds];
 };
 
+/**
+ * Like `addTaskToList`, but when the list holds `anchorId` the task goes in at
+ * the anchor's index, right above it.
+ */
+export const addTaskToListAtAnchor = (
+  taskIds: string[],
+  taskId: string,
+  anchorId: string | undefined,
+  isAddToBottom: boolean,
+): string[] => {
+  if (taskIds.includes(taskId)) return taskIds;
+  const anchorIndex = anchorId ? taskIds.indexOf(anchorId) : -1;
+  if (anchorIndex === -1) return addTaskToList(taskIds, taskId, isAddToBottom);
+  return [...taskIds.slice(0, anchorIndex), taskId, ...taskIds.slice(anchorIndex)];
+};
+
+/**
+ * The instance a new repeat instance follows: the most recently created other
+ * main task of the same repeat config that is still in state. The new instance
+ * takes its place in every list that holds it (#10812). Undefined for the first
+ * instance, or when the previous one is already archived.
+ */
+export const getPreviousRepeatInstanceId = (
+  state: RootState,
+  task: Pick<Task, 'id' | 'repeatCfgId' | 'parentId'>,
+): string | undefined => {
+  if (!task.repeatCfgId || task.parentId) return undefined;
+  const taskState = state[TASK_FEATURE_NAME];
+  let previous: Task | undefined;
+  for (const id of taskState.ids as string[]) {
+    const candidate = taskState.entities[id];
+    if (
+      !candidate ||
+      candidate.id === task.id ||
+      candidate.parentId ||
+      candidate.repeatCfgId !== task.repeatCfgId
+    ) {
+      continue;
+    }
+    if (!previous || candidate.created > previous.created) previous = candidate;
+  }
+  return previous?.id;
+};
+
 export const removeTasksFromList = (taskIds: string[], toRemove: string[]): string[] => {
   // Use Set for O(1) lookup instead of O(n) Array.includes
   // This changes overall complexity from O(n*m) to O(n+m)

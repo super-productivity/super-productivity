@@ -22,7 +22,6 @@ import { PlainspaceCommonInterfacesService } from './providers/plainspace/plains
 import { PlainspaceApiService } from './providers/plainspace/plainspace-api.service';
 import { SnackParams } from '../../core/snack/snack.model';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
-import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
@@ -39,6 +38,7 @@ import { TASK_FEATURE_NAME } from '../tasks/store/task.reducer';
 import { selectAllTasksWithReminder } from '../tasks/store/task.selectors';
 import { createCombinedTaskSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/test-helpers';
 import { PendingRemoteIssueDeleteService } from './two-way-sync/pending-remote-issue-delete.service';
+import { DateService } from '../../core/date/date.service';
 import {
   createBaseState,
   createMockTask as createReducerTask,
@@ -189,7 +189,6 @@ describe('IssueService', () => {
         { provide: GlobalProgressBarService, useValue: globalProgressBarServiceSpy },
         { provide: NavigateToTaskService, useValue: navigateToTaskServiceSpy },
         { provide: JiraCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: GitlabCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: CaldavCommonInterfacesService, useValue: mockCommonInterfaceService },
         {
           provide: OpenProjectCommonInterfacesService,
@@ -734,6 +733,22 @@ describe('IssueService', () => {
       const addCall = taskServiceSpy.add.calls.mostRecent();
       const taskData = addCall.args[2] as Partial<Task>;
       expect(taskData.dueDay).toBeDefined();
+    });
+
+    // Past midnight but before the configured start of the next day, Today
+    // is still the previous day; the calendar date would plan it for tomorrow.
+    it('should set dueDay to the logical today', async () => {
+      setupForNewTask();
+      spyOn(TestBed.inject(DateService), 'todayStr').and.returnValue('2026-01-05');
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const taskData = taskServiceSpy.add.calls.mostRecent().args[2] as Partial<Task>;
+      expect(taskData.dueDay).toBe('2026-01-05');
     });
   });
 
@@ -1462,6 +1477,54 @@ describe('IssueService', () => {
       );
 
       expect(addSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // #11223: OpenProject returns numeric work package ids while task.issueId is
+  // stored as a string, so already imported work packages were re-imported
+  // (and moved to the current context) on every poll.
+  describe('checkAndImportNewIssuesToBacklogForProject - numeric OpenProject ids', () => {
+    const PROVIDER_ID = 'op-provider-1';
+
+    const pollWith = async (
+      existingIssueIds: string[] | number[],
+      workPackageId: number,
+    ): Promise<jasmine.Spy> => {
+      const addSpy = spyOn(service, 'addTaskFromIssue').and.resolveTo(undefined);
+      const openProjectService = service.ISSUE_SERVICE_MAP['OPEN_PROJECT'] as unknown as {
+        getNewIssuesToAddToBacklog: jasmine.Spy;
+        getAddTaskData: jasmine.Spy;
+      };
+      openProjectService.getAddTaskData.and.returnValue({ title: 'Work package' });
+      // OpenProject's API returns the work package id as a number
+      openProjectService.getNewIssuesToAddToBacklog = jasmine
+        .createSpy('getNewIssuesToAddToBacklog')
+        .and.resolveTo([{ id: workPackageId, subject: 'Work package' } as unknown]);
+      taskServiceSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo(
+        existingIssueIds as string[],
+      );
+      translateServiceSpy.instant.and.returnValue('work packages');
+      await service.checkAndImportNewIssuesToBacklogForProject(
+        'OPEN_PROJECT',
+        PROVIDER_ID,
+        true,
+      );
+      return addSpy;
+    };
+
+    it('does not re-import a work package stored with a string issueId', async () => {
+      const addSpy = await pollWith(['62'], 62);
+      expect(addSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not re-import a work package stored with a numeric issueId', async () => {
+      const addSpy = await pollWith([62], 62);
+      expect(addSpy).not.toHaveBeenCalled();
+    });
+
+    it('still imports a work package that is not yet imported', async () => {
+      const addSpy = await pollWith(['62'], 63);
+      expect(addSpy).toHaveBeenCalledTimes(1);
     });
   });
 });

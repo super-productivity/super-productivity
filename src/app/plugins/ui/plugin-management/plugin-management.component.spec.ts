@@ -235,6 +235,54 @@ describe('PluginManagementComponent', () => {
     expect(component.isUploading()).toBe(false);
   });
 
+  it('shows the declared data sharing in the confirmation before installing', async () => {
+    const manifest = {
+      id: 'zipped',
+      name: 'Zipped',
+      version: '1.0.0',
+      dataSharing: [{ recipient: 'Example Cloud', data: ['taskTitles'] }],
+    };
+    const input = document.createElement('input');
+    const file = new File(
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      [zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest)) })],
+      'plugin.zip',
+    );
+    Object.defineProperty(input, 'files', { value: [file] });
+    const openSpy = stubConfirmDialog(undefined);
+
+    await component.onFileSelected({ target: input } as unknown as Event);
+
+    const message: string = openSpy.calls.mostRecent().args[1].data.message;
+    expect(message).toContain('<strong>Example Cloud</strong>');
+    expect(message).toContain(T.PLUGINS.DATA_SHARING.TASK_TITLES);
+    expect(message).toContain(T.PLUGINS.DATA_SHARING.DECLARED_BY_AUTHOR);
+    expect(loadPluginFromZipSpy).not.toHaveBeenCalled();
+  });
+
+  it('still asks, calling a malformed declaration undeclared', async () => {
+    const input = document.createElement('input');
+    const file = new File(
+      [
+        zipSync({
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'manifest.json': strToU8(
+            JSON.stringify({ id: 'zipped', dataSharing: [{ recipient: 'X' }, null] }),
+          ),
+        }),
+      ],
+      'plugin.zip',
+    );
+    Object.defineProperty(input, 'files', { value: [file] });
+    const openSpy = stubConfirmDialog(undefined);
+
+    await component.onFileSelected({ target: input } as unknown as Event);
+
+    const message: string = openSpy.calls.mostRecent().args[1].data.message;
+    expect(message).toContain(T.PLUGINS.RISK_DATA_ACCESS);
+    expect(message).toContain(T.PLUGINS.DATA_SHARING.NOT_DECLARED);
+  });
+
   const baseManifest: PluginManifest = {
     id: 'github-issue-provider',
     name: 'GitHub Issues',
@@ -426,6 +474,18 @@ describe('PluginManagementComponent', () => {
 
       expect(headings()).toEqual(['Yüklenen eklentiler', 'Topluluk eklentileri']);
     });
+  });
+
+  it('links the plugin guide and the build dialog at the end of the "Community" tab', () => {
+    const buildSpy = spyOn(component, 'openBuildPluginDialog').and.resolveTo();
+    component.selectedTabIndex.set(PLUGIN_TAB_INDEX.COMMUNITY);
+    fixture.detectChanges();
+    const buildOwn = fixture.nativeElement.querySelector('.community-build-own');
+    const guideLink = buildOwn?.querySelector('a[href$="/docs/plugin-development.md"]');
+
+    expect(guideLink?.textContent?.trim()).toBe('PLUGINS.BUILD_YOUR_OWN_LINK');
+    buildOwn?.querySelector('button')?.click();
+    expect(buildSpy).toHaveBeenCalledTimes(1);
   });
 
   it('navigates to the work view and opens the issue panel', async () => {
@@ -716,6 +776,12 @@ describe('PluginManagementComponent', () => {
 
       describe('with a mocked clock', () => {
         beforeEach(() => {
+          // The install warning reads the ZIP with fflate, whose callback waits on a
+          // real timer; these specs are about the highlight timer only.
+          spyOn(
+            component as unknown as { _confirmInstall: () => Promise<boolean> },
+            '_confirmInstall',
+          ).and.resolveTo(true);
           jasmine.clock().install();
         });
 
@@ -759,7 +825,9 @@ describe('PluginManagementComponent', () => {
     const zipBytes = new Uint8Array(
       zipSync({
         // eslint-disable-next-line @typescript-eslint/naming-convention
-        'manifest.json': strToU8(JSON.stringify({ id: 'listed', version: '1.2.0' })),
+        'manifest.json': strToU8(
+          JSON.stringify({ id: 'listed', name: 'Listed', version: '1.2.0' }),
+        ),
       }),
     );
     let listed: CommunityPlugin;
@@ -859,6 +927,10 @@ describe('PluginManagementComponent', () => {
           okTxt: T.PLUGINS.INSTALL_PLUGIN,
         },
       });
+      // The downloaded manifest declares nothing, which the confirmation says.
+      expect(openSpy.calls.mostRecent().args[1].data.message).toContain(
+        T.PLUGINS.DATA_SHARING.NOT_DECLARED,
+      );
       expect(fetchSpy).toHaveBeenCalledWith(listed.release!.downloadUrl, {
         credentials: 'omit',
       });
@@ -884,13 +956,14 @@ describe('PluginManagementComponent', () => {
       expect(component.highlightedPluginId()).toBe('listed');
     });
 
-    it('downloads nothing when the risk warning is cancelled', async () => {
+    // Downloaded first so the warning can show the plugin's dataSharing declaration.
+    it('installs nothing when the risk warning is cancelled', async () => {
       stubConfirmDialog(undefined);
 
       await component.installCommunityPlugin(listed);
 
-      expect(fetchSpy).not.toHaveBeenCalled();
       expect(loadPluginFromZipSpy).not.toHaveBeenCalled();
+      expect(component.isUploading()).toBe(false);
     });
 
     it('installs nothing and says so when the download does not match the hash', async () => {

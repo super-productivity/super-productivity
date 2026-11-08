@@ -48,7 +48,7 @@ test.describe('Finish Day archives unscheduled completed tasks (#8463)', () => {
     await page.waitForURL(/tag\/TODAY/);
     await workViewPage.waitForTaskList();
 
-    // The Today Done list is the global active-isDone list, so the task being gone
+    // The Today Done list shows every task completed today, so the task being gone
     // from it proves it was archived, not merely hidden.
     await expect(taskPage.getTaskByText(taskName)).toHaveCount(0);
   });
