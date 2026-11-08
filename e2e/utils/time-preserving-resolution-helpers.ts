@@ -354,6 +354,11 @@ export const runIncomingNotesScenario = async (
           value.title.includes(name),
         );
       }, title);
+      // dueDay stays '2099-01-01' although A planned the task for today: the
+      // opaque `planTasksForToday` stays on whole-entity LWW, so B's winning
+      // snapshot keeps its dueDay. This is the documented outcome, not a bug
+      // (docs/sync-and-op-log/lww-field-level-resolution.md, Decision 6;
+      // #10393 queue item 1 and open question 6).
       expect(task).toMatchObject({
         title: `${title}-renamed`,
         notes: 'Downloaded notes from A',

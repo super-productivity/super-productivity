@@ -10,7 +10,7 @@ import { MatRipple } from '@angular/material/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenu, MatMenuContent, MatMenuTrigger } from '@angular/material/menu';
+import { MatMenuTrigger } from '@angular/material/menu';
 import { WorkContextMenuComponent } from '../../work-context-menu/work-context-menu.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
@@ -42,6 +42,7 @@ import {
 import { BoardCfg } from '../../../features/boards/boards.model';
 import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
 import { BoardsService } from '../../../features/boards/boards.service';
+import { LayoutService } from '../../layout/layout.service';
 
 @Component({
   selector: 'page-title',
@@ -52,14 +53,12 @@ import { BoardsService } from '../../../features/boards/boards.service';
     MatTooltip,
     MatIconButton,
     MatIcon,
-    MatMenu,
-    MatMenuContent,
     MatMenuTrigger,
     WorkContextMenuComponent,
+    ViewMenuComponent,
     TaskViewCustomizerPanelComponent,
     TranslatePipe,
     PluginIconComponent,
-    ViewMenuComponent,
   ],
   template: `
     @if (activeWorkContextTypeAndId()) {
@@ -115,7 +114,7 @@ import { BoardsService } from '../../../features/boards/boards.service';
             </button>
           }
           <button
-            [mat-menu-trigger-for]="activeWorkContextMenu"
+            [matMenuTriggerFor]="workContextMenu.menu()"
             [matTooltip]="T.MH.PROJECT_MENU | translate"
             [attr.aria-label]="T.MH.PROJECT_MENU | translate"
             class="project-settings-btn"
@@ -123,6 +122,13 @@ import { BoardsService } from '../../../features/boards/boards.service';
           >
             <mat-icon>more_vert</mat-icon>
           </button>
+          <!-- In its trigger's block, for the same reason as the customizer
+               panel's below. -->
+          <work-context-menu
+            #workContextMenu
+            [contextId]="activeWorkContextTypeAndId()!.activeId"
+            [contextType]="activeWorkContextTypeAndId()!.activeType"
+          ></work-context-menu>
           @if (isWorkViewPage()) {
             <button
               #customizerMenuTrigger
@@ -160,9 +166,10 @@ import { BoardsService } from '../../../features/boards/boards.service';
           <!-- List/Board: first, so it stays under the pointer when the
                list-only filter button comes or goes. These blocks stay
                rendered across the switch (their aliases update), so the
-               button keeps the focus. On phones it is an item of the ⋮ menu
-               instead: three buttons left the view's title a word ("Open …")
-               at 400px, and the title is the view's name there. -->
+               button keeps the focus. Phones show every view as a list and
+               keep the title bar to the view's name and its ⋮ menu: more
+               buttons left the title a word ("Open …") at 360px. The title
+               opens the editor, which also sets the layout. -->
           @if (!isXs() && viewLayoutSwitch(); as layoutSwitch) {
             <button
               class="view-layout-btn"
@@ -174,23 +181,17 @@ import { BoardsService } from '../../../features/boards/boards.service';
               <mat-icon>{{ layoutSwitch.icon }}</mat-icon>
             </button>
           }
-          <!-- The filter/sort menu edits a list-layout view's rules. Boards
-               with several columns keep the editor: their panels differ by
-               design. Same trigger ref as the work view's, so the shortcut
-               opens it; the panel shares this block for the reason given
-               there. -->
-          @if (board.cols <= 1) {
+          <!-- Where a list has its filter/sort button, a list-layout view
+               has one that opens the view editor, like its title: the
+               editor covers every rule. Boards with several columns use
+               their title and column titles; phones the title. -->
+          @if (board.cols <= 1 && !isXs()) {
             <button
-              #customizerMenuTrigger
               class="task-filter-btn"
-              [matMenuTriggerFor]="viewCustomizerPanel.menu"
-              [attr.aria-label]="
-                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
-              "
+              (click)="editView(board)"
+              [attr.aria-label]="T.F.BOARDS.V.EDIT_BOARD | translate"
               mat-icon-button
-              matTooltip="{{
-                T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL | translate
-              }} {{
+              matTooltip="{{ T.F.BOARDS.V.EDIT_BOARD | translate }} {{
                 kb.toggleTaskViewCustomizerPanel
                   ? '[' + kb.toggleTaskViewCustomizerPanel + ']'
                   : ''
@@ -198,39 +199,21 @@ import { BoardsService } from '../../../features/boards/boards.service';
             >
               <mat-icon>filter_list</mat-icon>
             </button>
-            <task-view-customizer-panel
-              #viewCustomizerPanel
-              [view]="board"
-            ></task-view-customizer-panel>
           }
           <button
-            [matMenuTriggerFor]="viewMenu"
+            [matMenuTriggerFor]="viewMenu.menu()"
             [matTooltip]="T.G.MORE_ACTIONS | translate"
             [attr.aria-label]="T.G.MORE_ACTIONS | translate"
             mat-icon-button
           >
             <mat-icon>more_vert</mat-icon>
           </button>
+          <view-menu
+            #viewMenu
+            [board]="board"
+          ></view-menu>
         </div>
       }
-      <mat-menu #viewMenu="matMenu">
-        <ng-template matMenuContent>
-          @if (viewBoard(); as board) {
-            <view-menu
-              [board]="board"
-              [withLayoutSwitch]="isXs()"
-            ></view-menu>
-          }
-        </ng-template>
-      </mat-menu>
-      <mat-menu #activeWorkContextMenu="matMenu">
-        <ng-template matMenuContent>
-          <work-context-menu
-            [contextId]="activeWorkContextTypeAndId()!.activeId"
-            [contextType]="activeWorkContextTypeAndId()!.activeType"
-          ></work-context-menu>
-        </ng-template>
-      </mat-menu>
     }
   `,
   styles: [
@@ -397,11 +380,11 @@ import { BoardsService } from '../../../features/boards/boards.service';
       .task-filter-btn {
         position: relative;
         color: var(--text-color-muted);
-        transition: all 0.2s ease;
+        transition: all var(--transition-duration-m) ease;
         overflow: visible !important;
 
         .mat-icon {
-          transition: transform 0.2s ease;
+          transition: transform var(--transition-duration-m) ease;
           display: block;
         }
 
@@ -453,17 +436,28 @@ export class PageTitleComponent {
 
   readonly T = T;
 
-  // On the work view and on list-layout view pages; absent elsewhere (and on
-  // xxxs screens), where the shortcut then does nothing — matching the button
-  // not being there to click.
+  private _langChange = toSignal(this._translateService.onLangChange, {
+    initialValue: null,
+  });
+
+  // On the work view; absent elsewhere (and on xxxs screens), where the
+  // shortcut then does nothing — matching the button not being there to click.
   private _customizerMenuTrigger = viewChild('customizerMenuTrigger', {
     read: MatMenuTrigger,
   });
 
   constructor() {
+    // On a list-layout view the shortcut does what its filter button does.
     this.taskViewCustomizerService.openMenuRequest$
       .pipe(takeUntilDestroyed())
-      .subscribe(() => this._customizerMenuTrigger()?.openMenu());
+      .subscribe(() => {
+        const board = this.viewBoard();
+        if (board && board.cols <= 1 && !this.isXxxs()) {
+          this.editView(board);
+        } else {
+          this._customizerMenuTrigger()?.openMenu();
+        }
+      });
   }
 
   // Get data directly from services instead of inputs
@@ -561,6 +555,7 @@ export class PageTitleComponent {
     }
     const key = this._routeTitleKey();
     if (key) {
+      this._langChange();
       return this._translateService.instant(key);
     }
     const pluginId = this.pluginId();
@@ -609,14 +604,9 @@ export class PageTitleComponent {
   isXxxs = toSignal(this._isXxxs$.pipe(map((result) => result.matches)), {
     initialValue: false,
   });
-  // Phones (the bottom-nav layout): the view's List/Board switch moves into
-  // its ⋮ menu, so the title keeps room for the view's name.
-  isXs = toSignal(
-    this._breakpointObserver
-      .observe('(max-width: 599px)')
-      .pipe(map((result) => result.matches)),
-    { initialValue: false },
-  );
+  // Phones (the bottom-nav layout), from the real viewport on the first
+  // render: a view's title bar is its name and its ⋮ menu only.
+  readonly isXs = inject(LayoutService).isXs;
 
   /** The List/Board switch of the open view: the other mode. */
   viewLayoutSwitch = computed(() => {
@@ -639,6 +629,11 @@ export class PageTitleComponent {
     }
     // Space would scroll the page.
     ev?.preventDefault();
+    void this._boardsService.editBoard(board);
+  }
+
+  /** A list-layout view's filter button (and its shortcut): the editor. */
+  editView(board: BoardCfg): void {
     void this._boardsService.editBoard(board);
   }
 

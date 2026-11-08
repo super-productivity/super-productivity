@@ -1,7 +1,7 @@
 import { inject, Pipe, PipeTransform } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { DateService } from '../../core/date/date.service';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
@@ -19,6 +19,7 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 export class ScheduledDateGroupPipe implements PipeTransform {
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translateService = inject(TranslateService);
+  private _dateService = inject(DateService);
 
   transform(value: unknown, today?: string): string | null {
     if (value === null || value === undefined) {
@@ -36,7 +37,7 @@ export class ScheduledDateGroupPipe implements PipeTransform {
       return value;
     }
 
-    const todayStr = today ?? getDbDateStr();
+    const todayStr = today ?? this._dateService.todayStr();
     if (value === todayStr) {
       return this._translateService.instant(T.G.TODAY_TAG_TITLE);
     }

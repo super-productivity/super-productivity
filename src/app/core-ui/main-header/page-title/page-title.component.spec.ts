@@ -4,7 +4,9 @@ import {
   NO_ERRORS_SCHEMA,
   Provider,
   WritableSignal,
+  input,
   signal,
+  viewChild,
 } from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -14,6 +16,7 @@ import { NavigationEnd, provideRouter, Router, RouterLink } from '@angular/route
 import { MatTooltip } from '@angular/material/tooltip';
 import { By } from '@angular/platform-browser';
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { LayoutService } from '../../layout/layout.service';
 import { TranslateModule, TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
 import { Store } from '@ngrx/store';
@@ -48,6 +51,35 @@ import { BoardsService } from '../../../features/boards/boards.service';
 })
 class TitleHostComponent {}
 
+// The title bar's ⋮ menus are components that own their `mat-menu`; these
+// stand in for them without their services.
+@Component({
+  selector: 'work-context-menu',
+  standalone: true,
+  imports: [MatMenu],
+  template: `<mat-menu></mat-menu>`,
+  // As the real ones: no box, so no flex gap in the measured row.
+  styles: [':host { display: contents; }'],
+})
+class WorkContextMenuStubComponent {
+  readonly contextId = input<string>();
+  readonly contextType = input<WorkContextType>();
+  readonly menu = viewChild.required(MatMenu);
+}
+
+@Component({
+  selector: 'view-menu',
+  standalone: true,
+  imports: [MatMenu],
+  template: `<mat-menu></mat-menu>`,
+  // As the real ones: no box, so no flex gap in the measured row.
+  styles: [':host { display: contents; }'],
+})
+class ViewMenuStubComponent {
+  readonly board = input<BoardCfg>();
+  readonly menu = viewChild.required(MatMenu);
+}
+
 describe('PageTitleComponent', () => {
   let routerEvents$: Subject<NavigationEnd>;
   let routerStub: { events: Subject<NavigationEnd>; url: string };
@@ -55,7 +87,7 @@ describe('PageTitleComponent', () => {
   let activeWorkContext$: BehaviorSubject<WorkContext>;
   let isShared$: BehaviorSubject<boolean>;
   let isXxxs$: BehaviorSubject<{ matches: boolean }>;
-  let isXs$: BehaviorSubject<{ matches: boolean }>;
+  let isXs: WritableSignal<boolean>;
   let openMenuRequest$: Subject<void>;
   let openSpy: jasmine.Spy;
   let pluginMenuEntries: WritableSignal<PluginMenuEntryCfg[]>;
@@ -63,6 +95,8 @@ describe('PageTitleComponent', () => {
   let pluginStates: Map<string, PluginState>;
   let editBoardSpy: jasmine.Spy;
   let setViewLayoutSpy: jasmine.Spy;
+  let langChange$: Subject<unknown>;
+  let translateInstant: (key: string) => string;
 
   // `color` is a Tag-only field not surfaced on WorkContext's type.
   const wc = (o: Partial<WorkContext> & { color?: string | null }): WorkContext =>
@@ -83,14 +117,10 @@ describe('PageTitleComponent', () => {
       provide: BoardsService,
       useValue: { editBoard: editBoardSpy, setViewLayout: setViewLayoutSpy },
     },
-    {
-      provide: BreakpointObserver,
-      // The phone breakpoint (599px) has its own subject; the smallest one
-      // (350px) drives the rest.
-      useValue: {
-        observe: (query: string) => (query.includes('599px') ? isXs$ : isXxxs$),
-      },
-    },
+    // The phone breakpoint (LayoutService); the smallest one (350px) is the
+    // page title's own.
+    { provide: LayoutService, useValue: { isXs: () => isXs() } },
+    { provide: BreakpointObserver, useValue: { observe: () => isXxxs$ } },
     {
       provide: WorkContextService,
       useValue: {
@@ -130,13 +160,18 @@ describe('PageTitleComponent', () => {
       : [
           {
             provide: TranslateService,
-            useValue: { instant: (key: string) => key },
+            useValue: {
+              instant: (key: string) => translateInstant(key),
+              onLangChange: langChange$,
+            },
           },
         ]),
   ];
 
   beforeEach(async () => {
     routerEvents$ = new Subject<NavigationEnd>();
+    langChange$ = new Subject<unknown>();
+    translateInstant = (key) => key;
     routerStub = { events: routerEvents$, url: '/' };
     typeAndId$ = new BehaviorSubject<{ activeId: string; activeType: WorkContextType }>({
       activeId: 'TODAY',
@@ -156,7 +191,7 @@ describe('PageTitleComponent', () => {
     boards = signal<BoardCfg[]>([]);
     pluginStates = new Map();
     isXxxs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
-    isXs$ = new BehaviorSubject<{ matches: boolean }>({ matches: false });
+    isXs = signal(false);
     openMenuRequest$ = new Subject<void>();
     editBoardSpy = jasmine.createSpy('editBoard').and.returnValue(Promise.resolve());
     setViewLayoutSpy = jasmine.createSpy('setViewLayout');
@@ -228,6 +263,15 @@ describe('PageTitleComponent', () => {
 
       routerEvents$.next(new NavigationEnd(2, '/config', '/config#plugins'));
       expect(c.displayTitle()).toBe(T.PS.GLOBAL_SETTINGS);
+    });
+
+    it('re-translates the section title when the language changes', () => {
+      const c = setupComponent('/config');
+      expect(c.displayTitle()).toBe(T.PS.GLOBAL_SETTINGS);
+
+      translateInstant = (key) => `de:${key}`;
+      langChange$.next({ lang: 'de' });
+      expect(c.displayTitle()).toBe(`de:${T.PS.GLOBAL_SETTINGS}`);
     });
   });
 
@@ -433,12 +477,11 @@ describe('PageTitleComponent', () => {
   });
 
   // Keeps the real template — that is the whole point — but drops the
-  // directives that only decorate it. Four have to stay: `MatMenu`, because
-  // the template resolves `#activeWorkContextMenu="matMenu"` and an
-  // unresolvable `exportAs` is a compile error NO_ERRORS_SCHEMA does not cover,
-  // `MatMenuTrigger`, which the filter-shortcut specs drive, and
-  // `MatIconButton`/`MatIcon`, because the specs below measure the boxes they
-  // draw. `RouterLink` stays out, so no `ActivatedRoute` is needed.
+  // directives that only decorate it. These have to stay: the ⋮ menu stubs,
+  // because the triggers read their `menu()`, `MatMenuTrigger`, which the
+  // filter-shortcut specs drive, and `MatIconButton`/`MatIcon`, because the
+  // specs below measure the boxes they draw. `RouterLink` stays out, so no
+  // `ActivatedRoute` is needed.
   const configureRender = async (): Promise<void> => {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -447,7 +490,14 @@ describe('PageTitleComponent', () => {
     })
       .overrideComponent(PageTitleComponent, {
         set: {
-          imports: [TranslatePipe, MatMenu, MatMenuTrigger, MatIconButton, MatIcon],
+          imports: [
+            TranslatePipe,
+            WorkContextMenuStubComponent,
+            ViewMenuStubComponent,
+            MatMenuTrigger,
+            MatIconButton,
+            MatIcon,
+          ],
           schemas: [NO_ERRORS_SCHEMA],
         },
       })
@@ -489,6 +539,16 @@ describe('PageTitleComponent', () => {
       ]);
       expect(buttons(await renderAt('/boards/list'))).toContain('task-filter-btn');
       expect(buttons(await renderAt('/boards/kanban'))).not.toContain('task-filter-btn');
+    });
+
+    it("opens the editor from a list-layout view's filter button", async () => {
+      const list: BoardCfg = { id: 'list', title: 'List', cols: 1, panels: [] };
+      boards.set([list]);
+      const host = await renderAt('/boards/list');
+      const button = host.querySelector<HTMLButtonElement>('.task-filter-btn')!;
+      expect(button.getAttribute('aria-label')).toBe(T.F.BOARDS.V.EDIT_BOARD);
+      button.click();
+      expect(editBoardSpy).toHaveBeenCalledOnceWith(list);
     });
 
     describe('the List/Board button', () => {
@@ -539,24 +599,22 @@ describe('PageTitleComponent', () => {
         expect(firstButton(await renderAt('/boards/list'))).toBeNull();
       });
 
-      // Three buttons left the view's title a word at 400px.
-      it("moves into the view's menu on phones, keeping the title's room", async () => {
-        isXs$.next({ matches: true });
-        await configureRender();
-        routerStub.url = '/boards/list';
-        const fixture = TestBed.createComponent(PageTitleComponent);
-        fixture.detectChanges();
-        const host = fixture.nativeElement as HTMLElement;
-        const labels = Array.from(
-          host.querySelectorAll('.page-title-actions button'),
-        ).map((b) => b.getAttribute('aria-label'));
-        expect(labels).toEqual([
-          T.GCF.KEYBOARD.TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL,
-          T.G.MORE_ACTIONS,
-        ]);
-        expect(fixture.componentInstance.isXs()).toBeTrue();
-        expect(fixture.componentInstance.viewLayoutSwitch()?.layout).toBe('board');
-      });
+      // More buttons left the view's title a word ("Open …") at 360px.
+      // Phones show every view as a list; the title opens the editor.
+      for (const url of ['/boards/list', '/boards/kanban']) {
+        it(`leaves only the view's menu on phones (${url})`, async () => {
+          isXs.set(true);
+          await configureRender();
+          routerStub.url = url;
+          const fixture = TestBed.createComponent(PageTitleComponent);
+          fixture.detectChanges();
+          const host = fixture.nativeElement as HTMLElement;
+          const labels = Array.from(
+            host.querySelectorAll('.page-title-actions button'),
+          ).map((b) => b.getAttribute('aria-label'));
+          expect(labels).toEqual([T.G.MORE_ACTIONS]);
+        });
+      }
     });
 
     it('adds the Plainspace button for a shared project', async () => {
@@ -589,11 +647,13 @@ describe('PageTitleComponent', () => {
         expect(openMenuSpy).toHaveBeenCalledTimes(1);
       });
 
-      it('opens the view filter menu on a list-layout view', async () => {
-        boards.set([{ id: 'list', title: 'List', cols: 1, panels: [] }]);
+      it('opens the editor on a list-layout view', async () => {
+        const list: BoardCfg = { id: 'list', title: 'List', cols: 1, panels: [] };
+        boards.set([list]);
         await renderAt('/boards/list');
         openMenuRequest$.next();
-        expect(openMenuSpy).toHaveBeenCalledTimes(1);
+        expect(editBoardSpy).toHaveBeenCalledOnceWith(list);
+        expect(openMenuSpy).not.toHaveBeenCalled();
       });
 
       it('does nothing where the filter button is not rendered', async () => {
@@ -621,7 +681,8 @@ describe('PageTitleComponent', () => {
           set: {
             imports: [
               TranslatePipe,
-              MatMenu,
+              WorkContextMenuStubComponent,
+              ViewMenuStubComponent,
               MatMenuTrigger,
               MatIconButton,
               MatIcon,

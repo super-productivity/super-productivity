@@ -4284,6 +4284,31 @@ describe('shortSyntax localized dates', () => {
     expect(due.getHours()).toBe(9);
   });
 
+  it('should read "@09h" followed by punctuation as 09:00', async () => {
+    const r = await parseIn(
+      { language: 'en', isDayFirst: false },
+      'Call @09h, then review',
+    );
+    expect(r?.taskChanges.title).not.toContain('@09h');
+    expect(r?.taskChanges.title).toContain('then review');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(9);
+    expect(due.getMinutes()).toBe(0);
+  });
+
+  // Documented: "@9h" is the clock time, never "in 9 hours" — also when
+  // punctuation other than a comma follows it.
+  ['Standup @9h: notes', 'Call (@9h) now', 'Call @9h; then review'].forEach((input) => {
+    it(`should read "${input}" as 09:00`, async () => {
+      const r = await parseIn({ language: 'en', isDayFirst: false }, input);
+      const due = dueOf(r);
+      expect(formatDateToISO(due)).toBe('2026-10-21');
+      expect(due.getHours()).toBe(9);
+      expect(due.getMinutes()).toBe(0);
+    });
+  });
+
   it('should read "!09h" as a 09:00 deadline', async () => {
     const r = await parseIn(
       { language: 'fr', isDayFirst: true },

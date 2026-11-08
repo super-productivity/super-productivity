@@ -1,5 +1,18 @@
 [
   {
+    "name": "Task Colors",
+    "shortDescription": "Choose colors for tasks and subtasks, or apply them automatically by priority. Includes a configurable palette, bulk application and recovery; requires Super Productivity 19.3.1.",
+    "url": "https://github.com/Zombiehamser/sp-task-color-plugin",
+    "author": "Zombiehamser",
+    "authorUrl": "https://github.com/Zombiehamser",
+    "id": "sp-task-color-plugin",
+    "release": {
+      "version": "0.3.0",
+      "downloadUrl": "https://github.com/Zombiehamser/sp-task-color-plugin/releases/download/v0.3.0/sp-task-color-plugin-0.3.0.zip",
+      "sha256": "1e031b01fbe318d5d72345d7ee8e0f494eb8bb76f64aef1337a96c9cdcb7ed0b"
+    }
+  },
+  {
     "name": "Markdown Notes",
     "shortDescription": "Read-only viewer for Markdown and Obsidian notes from a local folder, grouped by directory and rendered in a side panel.",
     "url": "https://github.com/Zoriot/sp-markdown-notes",
@@ -232,9 +245,9 @@
     "authorUrl": "https://github.com/AshrafByte",
     "id": "sp-timesheet",
     "release": {
-      "version": "2.0.1",
-      "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.0.1/sp-timesheet-v2.0.1.zip",
-      "sha256": "627d56200730436d0cc70586422ad30512d49da80c041e4e6eb1cf405f4471d0"
+      "version": "2.2.0",
+      "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.2.0/sp-timesheet-v2.2.0.zip",
+      "sha256": "6322b69ae3b08bb31d75b1dd630cb96be0076fec677a8810da92d46ac2129306"
     }
   },
   {
@@ -264,16 +277,29 @@
     }
   },
   {
-    "name": "Timesheets",
-    "shortDescription": "Timesheet table of tracked time: tasks grouped by project × days, tag filter, rounding to 15/30/60 min, CSV export.",
-    "url": "https://github.com/No-No-Space/SP-Timesheets",
+    "name": "Deadlines",
+    "shortDescription": "List, Calendar, and Timeline views for deadlines and fixed dates in Super Productivity.",
+    "url": "https://github.com/Jontata/deadlines-plugin",
+    "author": "Jontata",
+    "authorUrl": "https://github.com/Jontata",
+    "id": "deadlines-view",
+    "release": {
+      "version": "0.0.1",
+      "downloadUrl": "https://github.com/Jontata/deadlines-plugin/releases/download/v0.0.1/deadlines-plugin-0.0.1.zip",
+      "sha256": "e7b147b25dbda9b232fff0bdb51b773a11a528d647e93bc34e2bf5e02d2ec6b7"
+    }
+  },
+  {
+    "name": "Hours Grid",
+    "shortDescription": "Task × day grid of tracked hours, grouped by project, with 15/30/60-min rounding, tag filter and copy/CSV export for reporting.",
+    "url": "https://github.com/No-No-Space/SP-Hours-Grid",
     "author": "Aksel Alvarez Jurgueson",
     "authorUrl": "https://github.com/No-No-Space",
-    "id": "sp-timesheets",
+    "id": "hours-grid",
     "release": {
-      "version": "0.2.2",
-      "downloadUrl": "https://github.com/No-No-Space/SP-Timesheets/releases/download/v0.2.2/sp-timesheets-0.2.2.zip",
-      "sha256": "5fe6c69fc7bc99a8f68f2a46444be392018a050523c6dc9bea484527a399802e"
+      "version": "0.4.0",
+      "downloadUrl": "https://github.com/No-No-Space/SP-Hours-Grid/releases/download/v0.4.0/hours-grid-0.4.0.zip",
+      "sha256": "25600cade9bb4817b977210094125fea37c70e3389420c2badb606bd3e5b4cef"
     }
   }
 ]

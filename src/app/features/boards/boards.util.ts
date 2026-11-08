@@ -389,8 +389,8 @@ export const matchPanelTasks = (
 ): TaskCopy[] => tasks.filter((task) => matchesTaskCriteria(task, criteria, ctx));
 
 /**
- * In the list layout, done rows get their own collapsed section, unless the
- * column only shows done tasks anyway.
+ * Done tasks follow a panel's open ones and stay put (cards and rows alike),
+ * unless the column only shows done tasks anyway.
  */
 export const isPanelDoneSplit = (panel: Pick<BoardPanelCfg, 'taskDoneState'>): boolean =>
   panel.taskDoneState !== BoardPanelCfgTaskDoneState.Done;
@@ -399,7 +399,7 @@ export const isPanelDoneSplit = (panel: Pick<BoardPanelCfg, 'taskDoneState'>): b
  * The list layout's top-level rows among a panel's matching tasks: a task,
  * unless its parent matches too (then it shows under the parent). An open
  * subtask of a done parent stays a row of its own among the open rows instead
- * of hiding in the collapsed done section.
+ * of hiding among the done ones.
  */
 export const getPanelRowIds = (
   tasks: readonly TaskCopy[],
@@ -414,24 +414,44 @@ export const getPanelRowIds = (
     .map((task) => task.id);
 };
 
+export interface PanelItems {
+  /** What the panel shows first (the open items; a done column's done ones). */
+  main: TaskCopy[];
+  /** The done ones after them (`isPanelDoneSplit`). */
+  done: TaskCopy[];
+}
+
 /**
- * The number a panel's header shows for its matching tasks: on cards every
- * match, in the list layout the open top-level rows (nested subtasks and the
- * done section not counted).
+ * What a panel shows of its matching tasks, in its order: every task as a
+ * card, or the list layout's top-level rows (`getPanelRowIds`), done ones
+ * apart after them.
+ */
+export const getPanelItems = (
+  tasks: readonly TaskCopy[],
+  panel: Pick<BoardPanelCfg, 'taskDoneState'>,
+  isListLayout: boolean,
+): PanelItems => {
+  const isDoneSplit = isPanelDoneSplit(panel);
+  const rowIds = isListLayout ? new Set(getPanelRowIds(tasks, isDoneSplit)) : undefined;
+  const items: PanelItems = { main: [], done: [] };
+  for (const task of tasks) {
+    if (!rowIds || rowIds.has(task.id)) {
+      (isDoneSplit && task.isDone ? items.done : items.main).push(task);
+    }
+  }
+  return items;
+};
+
+/**
+ * The number a panel's header shows: its main items, cards or rows (nested
+ * subtasks and the done group not counted). Shared with the view editor's
+ * live count.
  */
 export const getPanelHeaderCount = (
   tasks: readonly TaskCopy[],
   panel: Pick<BoardPanelCfg, 'taskDoneState'>,
   isListLayout: boolean,
-): number => {
-  if (!isListLayout) {
-    return tasks.length;
-  }
-  const isDoneSplit = isPanelDoneSplit(panel);
-  const rowIds = new Set(getPanelRowIds(tasks, isDoneSplit));
-  return tasks.filter((task) => rowIds.has(task.id) && !(isDoneSplit && task.isDone))
-    .length;
-};
+): number => getPanelItems(tasks, panel, isListLayout).main.length;
 
 /**
  * Column fields for task criteria: the counterpart of `panelToCriteria` for the

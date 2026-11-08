@@ -1,0 +1,33 @@
+<span class="label">{{ part().label | translate }}{{ hasValue() ? ':' : '' }}</span>
+@if (part().value) {
+  {{ part().value! | translate }}
+} @else if (part().isOther) {
+  <span class="note">
+    <mat-icon aria-hidden="true">info_outline</mat-icon
+    >{{ T.F.BOARDS.EDITOR.OTHER_KEPT | translate }}</span
+  >
+}
+@for (shown of shownItems(); track shown.id) {
+  <tag [tag]="shown.item"></tag>
+}
+@if (part().missingCount) {
+  <span class="note note--warn">
+    <mat-icon aria-hidden="true">warning_amber</mat-icon>
+    @if (part().rule === 'project') {
+      {{
+        part().missingCount === 1
+          ? (T.F.BOARDS.EDITOR.DELETED_PROJECT | translate)
+          : (T.F.BOARDS.EDITOR.DELETED_PROJECTS | translate: { nr: part().missingCount })
+      }}
+    } @else {
+      {{
+        part().missingCount === 1
+          ? (T.F.BOARDS.EDITOR.MISSING_TAG | translate)
+          : (T.F.BOARDS.EDITOR.MISSING_TAGS | translate: { nr: part().missingCount })
+      }}
+    }
+  </span>
+}
+@if (part().match) {
+  <span class="label">· {{ part().match! | translate }}</span>
+}

@@ -414,52 +414,6 @@
         "WRITE_A_COMMENT": "أكتب تعليقا"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "تحتوي المدة المعبأة مسبقاً على بيانات غير مسجلة من الأيام الماضية.",
-        "T_ALREADY_TRACKED": "تم تتبعها بالفعل",
-        "T_TITLE": "العنوان",
-        "T_TO_BE_SUBMITTED": "يتم تقديمه",
-        "TITLE": "إرسال الوقت المنقضي على المشكلات إلى  جيت لاب",
-        "TOTAL_MSG": "ستقوم بإرسال\n<em> {{totalTimeToSubmit}}</em>\n وقت العمل لهذا اليوم إجمالاً إلى\n<em> {{nrOfTasksToSubmit}}</em>\n مشكلات مختلفة."
-      },
-      "FORM": {
-        "FILTER": "فلتر مخصص",
-        "FILTER_DESCRIPTION": "راجع https://docs.gitlab.com/ee/api/issues.html#list-issues. يمكن دمج العديد من خلال &",
-        "FILTER_USER": "اسم المستخدم (مثل تصفية التغييرات بنفسك)",
-        "GITLAB_BASE_URL": "عنوان URL الأساسي المخصص لـ GitLab",
-        "PROJECT": "المسار الكامل أو اسم المستخدم / المشروع",
-        "PROJECT_HINT": "على سبيل المثال، johannesjo/الإنتاجية الفائقة",
-        "SCOPE": "نطاق",
-        "SCOPE_ALL": "الكل",
-        "SCOPE_ASSIGNED": "تعيين لي",
-        "SCOPE_CREATED": "التي أنشأتها بنفسي",
-        "SOURCE": "مصدر",
-        "SOURCE_GLOBAL": "الكل",
-        "SOURCE_GROUP": "مجموعة",
-        "SOURCE_PROJECT": "مشروع",
-        "SUBMIT_TIMELOGS": "إرسال السجلات الزمنية إلى جيت لاب",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "إظهار مربع حوار تتبع الوقت بعد النقر على إنهاء اليوم",
-        "TOKEN": "رمز الوصول"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p> هنا يمكنك تهيئة SuperProductivity لإدراج مشكلات GitLab المفتوحة (إما الإصدار عبر الإنترنت أو مثيل مستضاف ذاتيًا) لمشروع معين في لوحة إنشاء المهام في عرض التخطيط اليومي. سيتم إدراجها كاقتراحات وستوفر رابطًا للمشكلة بالإضافة إلى مزيد من المعلومات حولها. </p> <p> بالإضافة إلى ذلك ، يمكنك إضافة ومزامنة جميع المشكلات المفتوحة تلقائيًا إلى تراكم المهام. </p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "المحال",
-        "AT": "ملخص",
-        "DESCRIPTION": "وصف",
-        "LABELS": "ملصقات",
-        "MARK_AS_CHECKED": "وضع علامة على التحديثات على أنها محددة",
-        "PROJECT": "مشروع",
-        "STATUS": "الحالة",
-        "SUMMARY": "ملخص",
-        "WRITE_A_COMMENT": "أكتب تعليقا"
-      },
-      "S": {
-        "ERR_UNKNOWN": "جيتلاب: خطأ غير معروف {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "من المحتمل ألا يعمل هذا التكامل في متصفحك. يُرجى تنزيل إصدار سطح المكتب أو Android من Super Productivity!",
       "DEFAULT": {

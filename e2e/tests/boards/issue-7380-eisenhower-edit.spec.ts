@@ -4,6 +4,7 @@ import {
   saveViewEditor,
   setViewSort,
   viewEditorSection,
+  viewRuleChip,
 } from '../../utils/view-helpers';
 
 /**
@@ -42,9 +43,12 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
 
     // The first quadrant requires two tags: its rule shows both, matching all.
     const first = viewEditorSection(dialog, 0);
+    await viewRuleChip(first, 'Required Tags').click();
     await expect(
-      first.getByRole('combobox', { name: 'Required tag match', exact: true }),
-    ).toContainText('Match all (AND)');
+      page.getByRole('menuitemradio', { name: 'Match all (AND)', exact: true }),
+    ).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
 
     await setViewSort(page, first, 'Title');
     await saveViewEditor(dialog);
@@ -52,10 +56,7 @@ test.describe('Boards — Eisenhower Matrix edit dialog (#7380)', () => {
     // The sort is stored on that quadrant.
     await firstColumnTitle.click();
     await expect(
-      viewEditorSection(dialog, 0).getByRole('combobox', {
-        name: 'Sort by',
-        exact: true,
-      }),
+      viewEditorSection(dialog, 0).getByRole('button', { name: /^Sort by: / }),
     ).toContainText('Title');
   });
 });

@@ -16,7 +16,6 @@ import { TaskAttachment } from '../tasks/task-attachment/task-attachment.model';
 import { firstValueFrom, forkJoin, from, merge, Observable, of, Subject } from 'rxjs';
 import {
   CALDAV_TYPE,
-  GITLAB_TYPE,
   ICAL_TYPE,
   ISSUE_PROVIDER_HUMANIZED,
   ISSUE_PROVIDER_ICON_MAP,
@@ -37,7 +36,7 @@ import { JiraCommonInterfacesService } from './providers/jira/jira-common-interf
 // Trello is now a plugin — no built-in service needed
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { IssueLog } from '../../core/log';
-import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
+// GitLab is now a plugin — no built-in service needed
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
 // Gitea is now a plugin — no built-in service needed
@@ -63,7 +62,7 @@ import { getCalendarEventIdCandidates } from '../calendar-integration/get-calend
 import { Store } from '@ngrx/store';
 import { selectEnabledIssueProviders } from './store/issue-provider.selectors';
 import { getErrorTxt } from '../../util/get-error-text';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import typia from 'typia';
 import { GlobalProgressBarService } from '../../core-ui/global-progress-bar/global-progress-bar.service';
@@ -94,7 +93,6 @@ export class IssueService {
   private _taskService = inject(TaskService);
   private _pendingRemoteIssueDelete = inject(PendingRemoteIssueDeleteService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
-  private _gitlabCommonInterfacesService = inject(GitlabCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
   private _plainspaceCommonInterfaceService = inject(PlainspaceCommonInterfacesService);
@@ -111,9 +109,9 @@ export class IssueService {
   private _pluginAdapter = inject(PluginIssueProviderAdapterService);
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateService = inject(DateService);
 
   ISSUE_SERVICE_MAP: { [key: string]: IssueServiceInterface } = {
-    [GITLAB_TYPE]: this._gitlabCommonInterfacesService,
     [JIRA_TYPE]: this._jiraCommonInterfacesService,
     [CALDAV_TYPE]: this._caldavCommonInterfaceService,
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
@@ -443,16 +441,7 @@ export class IssueService {
         taskCount: tasksIssueIdsByIssueProviderKey[providerKey].length,
         taskIds: tasksIssueIdsByIssueProviderKey[providerKey].map((t) => t.id),
       });
-      const pollingLabelParams = {
-        issueProviderName: this._getProviderName(providerKey),
-        issuesStr: this._translateService.instant(
-          this._getIssueStrings(providerKey).ISSUES_STR,
-        ),
-      };
-
-      this._globalProgressBarService.countUp('POLL', {
-        labelParams: pollingLabelParams,
-      });
+      this._globalProgressBarService.countUp();
 
       const service = this._getService(providerKey);
       if (!service) {
@@ -649,7 +638,7 @@ export class IssueService {
       // Default plan for today unless a precise time is provided by provider.
       // Skip when going to backlog — a backlog task that's also "due today"
       // shows up in the Today tab, defeating the point of the backlog.
-      ...(isAddToBacklog ? {} : { dueDay: getDbDateStr() }),
+      ...(isAddToBacklog ? {} : { dueDay: this._dateService.todayStr() }),
       ...additionalFromProviderIssueService,
       ...taskDefaults,
       ...additional,

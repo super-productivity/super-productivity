@@ -1,4 +1,5 @@
 import { signal } from '@angular/core';
+import { CdkDragDrop } from '@angular/cdk/drag-drop';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Store } from '@ngrx/store';
@@ -20,8 +21,9 @@ import { TagService } from '../../tag/tag.service';
 import { TaskService } from '../../tasks/task.service';
 import { ViewEditorComponent } from '../view-editor/view-editor.component';
 import { ViewEditorSectionComponent } from '../view-editor/view-editor-section/view-editor-section.component';
+import { ViewRuleChipComponent } from '../view-editor/view-rule-chip/view-rule-chip.component';
 import { By } from '@angular/platform-browser';
-import { T } from '../../../t.const';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 describe('BoardEditComponent with the view editor', () => {
   let fixture: ComponentFixture<BoardEditComponent>;
@@ -29,6 +31,8 @@ describe('BoardEditComponent with the view editor', () => {
   const tasks = signal<TaskCopy[]>([]);
   // The boards in the store; `open` puts the opened one there.
   const boards = signal<BoardCfg[]>([]);
+  // Phones show every view as a list.
+  const isXs = signal(false);
   let opened: BoardCfg;
 
   const task = (fields: Partial<TaskCopy> & { id: string }): TaskCopy =>
@@ -45,6 +49,7 @@ describe('BoardEditComponent with the view editor', () => {
   beforeEach(async () => {
     dispatch = jasmine.createSpy('dispatch');
     tasks.set([]);
+    isXs.set(false);
     await TestBed.configureTestingModule({
       imports: [BoardEditComponent, TranslateModule.forRoot()],
       providers: [
@@ -90,6 +95,7 @@ describe('BoardEditComponent with the view editor', () => {
           },
         },
         { provide: TaskService, useValue: {} },
+        { provide: LayoutService, useValue: { isXs } },
       ],
     }).compileComponents();
   });
@@ -162,8 +168,8 @@ describe('BoardEditComponent with the view editor', () => {
       const kanban = DEFAULT_BOARDS.find((b) => b.id === 'KANBAN_DEFAULT')!;
       await open(kanban);
       const titles = Array.from(
-        fixture.nativeElement.querySelectorAll('input:not([type=number])'),
-      ).map((input) => (input as HTMLInputElement).value);
+        fixture.nativeElement.querySelectorAll('view-editor-title .title-text'),
+      ).map((title) => (title as HTMLElement).textContent!.trim());
       expect(titles).toContain('Kanban-Tafel');
       expect(titles).toContain('Zu erledigen');
       expect(editor().buildBoard()).toEqual(kanban);
@@ -177,12 +183,12 @@ describe('BoardEditComponent with the view editor', () => {
     expect(editor().model().panels.length).toBe(1);
     // The only section of a list has no title field.
     expect(fixture.nativeElement.querySelectorAll('input').length).toBe(1);
-    expect(fixture.nativeElement.querySelector('mat-error')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.title-error')).toBeNull();
 
     cmp.save();
     fixture.detectChanges();
     expect(dispatch).not.toHaveBeenCalled();
-    expect(fixture.nativeElement.querySelector('mat-error')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.title-error')).not.toBeNull();
 
     editor().setTitle('Focus');
     await settle();
@@ -193,6 +199,37 @@ describe('BoardEditComponent with the view editor', () => {
     expect(board.cols).toBe(1);
     // The hidden section title takes the view's.
     expect(board.panels.map((p) => p.title)).toEqual(['Focus']);
+  });
+
+  it('draws a line under the title only while the content is scrolled', async () => {
+    await open(DEFAULT_BOARD_CFG);
+    const heading: HTMLElement =
+      fixture.nativeElement.querySelector('[mat-dialog-title]');
+    const content: HTMLElement =
+      fixture.nativeElement.querySelector('mat-dialog-content');
+    const scrollTo = async (top: number): Promise<void> => {
+      Object.defineProperty(content, 'scrollTop', { value: top, configurable: true });
+      content.dispatchEvent(new Event('scroll'));
+      await settle();
+    };
+    expect(heading.classList).not.toContain('is-scrolled');
+    await scrollTo(40);
+    expect(heading.classList).toContain('is-scrolled');
+    await scrollTo(0);
+    expect(heading.classList).not.toContain('is-scrolled');
+  });
+
+  it('flags an empty title only on save, not when it loses focus', async () => {
+    const cmp = await open(DEFAULT_BOARD_CFG);
+    const title: HTMLInputElement = fixture.nativeElement.querySelector('input');
+    title.dispatchEvent(new Event('focus'));
+    title.dispatchEvent(new Event('blur'));
+    await settle();
+    expect(fixture.nativeElement.querySelector('.title-error')).toBeNull();
+
+    cmp.save();
+    await settle();
+    expect(fixture.nativeElement.querySelector('.title-error')).not.toBeNull();
   });
 
   describe('saving an edited view', () => {
@@ -260,11 +297,12 @@ describe('BoardEditComponent with the view editor', () => {
         { ...DEFAULT_PANEL_CFG, id: 'c', title: 'C' },
       ],
     });
-    expect(fixture.nativeElement.querySelector('input[type=number]')).toBeNull();
+    // The width picker only shows for a board.
+    expect(fixture.nativeElement.querySelector('.cols-toggle')).toBeNull();
     editor().setLayout('board');
     fixture.detectChanges();
     expect(editor().model().cols).toBe(3);
-    expect(fixture.nativeElement.querySelector('input[type=number]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.cols-toggle')).not.toBeNull();
     editor().setLayout('list');
     expect(editor().model().cols).toBe(1);
 
@@ -367,28 +405,53 @@ describe('BoardEditComponent with the view editor', () => {
     ).toEqual(['Own', '']);
   });
 
-  it('refuses a Columns value that is not a whole number of at least 2', async () => {
+  it('offers each width, widest first, drawn with its sections', async () => {
     const cmp = await open({
       id: 'v',
       title: 'V',
-      cols: 3,
-      panels: [{ ...DEFAULT_PANEL_CFG, id: 'a', title: 'A' }],
+      cols: 2,
+      panels: ['a', 'b', 'c', 'd'].map((id) => ({ ...DEFAULT_PANEL_CFG, id, title: id })),
     });
-    const input: HTMLInputElement =
-      fixture.nativeElement.querySelector('input[type=number]');
-    for (const value of ['2.5', '1', '']) {
-      input.value = value;
-      input.dispatchEvent(new Event('input'));
-      await settle();
-      cmp.save();
-      expect(dispatch).not.toHaveBeenCalled();
-      expect(editor().model().cols).toBe(3);
+    const options = (): HTMLButtonElement[] =>
+      Array.from(fixture.nativeElement.querySelectorAll('.cols-toggle button'));
+    expect(options().map((btn) => btn.getAttribute('aria-label'))).toEqual([
+      'F.BOARDS.EDITOR.COLUMNS_NR',
+      'F.BOARDS.EDITOR.COLUMNS_NR',
+      'F.BOARDS.EDITOR.COLUMNS_NR',
+    ]);
+    expect(editor().colsOptions()).toEqual([4, 3, 2]);
+    // Every preview has a box per section.
+    expect(options()[2].querySelectorAll('.cols-box').length).toBe(4);
+    expect(options()[2].getAttribute('aria-checked')).toBe('true');
+    options()[0].click();
+    fixture.detectChanges();
+    expect(editor().model().cols).toBe(4);
+    for (const value of [2.5, 1, 0]) {
+      editor().setCols(value);
+      expect(editor().model().cols).toBe(4);
     }
-    input.value = '4';
-    input.dispatchEvent(new Event('input'));
     await settle();
     cmp.save();
     expect(savedBoard().cols).toBe(4);
+  });
+
+  it('keeps a one-row board in one row as sections come and go', async () => {
+    const panels = ['a', 'b', 'c'].map((id) => ({ ...DEFAULT_PANEL_CFG, id, title: id }));
+    await open({ id: 'v', title: 'V', cols: 3, panels });
+    editor().addPanel();
+    expect(editor().model().cols).toBe(4);
+    editor().duplicatePanel(0);
+    expect(editor().model().cols).toBe(5);
+    editor().removePanel(0);
+    expect(editor().model().cols).toBe(4);
+    editor().setCols(2);
+    // A wrapped board (2×2) keeps its width.
+    editor().addPanel();
+    expect(editor().model().cols).toBe(2);
+    // A list stays a list.
+    await open({ id: 'w', title: 'W', cols: 1, panels });
+    editor().addPanel();
+    expect(editor().model().cols).toBe(1);
   });
 
   it('moves, duplicates and removes sections', async () => {
@@ -418,6 +481,13 @@ describe('BoardEditComponent with the view editor', () => {
         .model()
         .panels.map((p) => p.title),
     ).toEqual(['A', 'A (copy)']);
+    // Dragging a card moves it too.
+    editor().dropPanel({ previousIndex: 1, currentIndex: 0 } as CdkDragDrop<unknown>);
+    expect(
+      editor()
+        .model()
+        .panels.map((p) => p.title),
+    ).toEqual(['A (copy)', 'A']);
   });
 
   it('adds and removes a rule through a section', async () => {
@@ -462,10 +532,12 @@ describe('BoardEditComponent with the view editor', () => {
       cols: 2,
       panels: [{ ...DEFAULT_PANEL_CFG, id: 'a', title: 'A', projectIds: ['gone'] }],
     });
-    const section = sections()[0];
-    expect(section.deletedProjectCount()).toBe(1);
-    section.setProjects({ value: ['p1'] } as never);
-    expect(editor().model().panels[0].projectIds).toEqual(['p1', 'gone']);
+    expect(sections()[0].parts()[0].part.missingCount).toBe(1);
+    const chip: ViewRuleChipComponent = fixture.debugElement.query(
+      By.directive(ViewRuleChipComponent),
+    ).componentInstance;
+    chip.toggleProject('p1');
+    expect(editor().model().panels[0].projectIds).toEqual(['gone', 'p1']);
   });
 
   describe('sections collapse to their title and rule summary', () => {
@@ -493,78 +565,104 @@ describe('BoardEditComponent with the view editor', () => {
     const openCards = (): boolean[] =>
       cards().map((card) => !!card.querySelector('.section-body'));
 
+    const text = (el: Element | null): string =>
+      (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
     it('opens the first card; the others show only their title and summary', async () => {
       await open(three);
       expect(fixture.nativeElement.querySelector('[cdkfocusinitial]')).toBeNull();
       expect(openCards()).toEqual([true, false, false]);
-      const [first, second] = cards();
+      const [first, second, third] = cards();
+      // Every card has its actions and a toggle.
       expect(toggle(first)!.getAttribute('aria-expanded')).toBe('true');
+      expect(first.querySelector('.section-menu-btn')).not.toBeNull();
       expect(toggle(second)!.getAttribute('aria-expanded')).toBe('false');
-      // Only an open card's body exists to be controlled.
-      const body = first.querySelector('.section-body')!;
-      expect(toggle(first)!.getAttribute('aria-controls')).toBe(body.id);
+      expect(second.querySelector('.section-menu-btn')).not.toBeNull();
+      // Only an open card's body exists.
       expect(toggle(second)!.hasAttribute('aria-controls')).toBeFalse();
-      // Open, the toggle heads the rules with the count; no summary repeats
-      // the rules right above them, and no second heading.
-      expect(toggle(first)!.textContent).toContain(
-        T.F.BOARDS.EDITOR.SHOW_TASKS_THAT_MATCH,
-      );
-      expect(toggle(first)!.querySelector('.count')).not.toBeNull();
-      expect(toggle(first)!.textContent).not.toContain('F.BOARDS.EDITOR.EVERY_TASK');
-      expect(first.querySelector('.rules-heading')).toBeNull();
       // No translations loaded: keys stand in for the labels.
-      expect(toggle(second)!.textContent).toContain(
+      expect(text(second.querySelector('.summary'))).toContain(
         'F.BOARDS.EDITOR.RULE_DONE: F.BOARDS.FORM.TASK_DONE_STATE_UNDONE',
       );
-      expect(toggle(cards()[2])!.textContent).toContain('F.BOARDS.EDITOR.EVERY_TASK');
-      // Every title field stays, so save can validate it.
-      expect(cards().map((card) => !!card.querySelector('input'))).toEqual([
+      expect(text(third.querySelector('.summary'))).toContain(
+        'F.BOARDS.EDITOR.EVERY_TASK',
+      );
+      expect(first.querySelector('.summary')).toBeNull();
+      // A collapsed card's title is text (an empty one stays the field, so save
+      // can validate it); the count shows when open.
+      expect(cards().map((card) => !!card.querySelector('view-editor-title'))).toEqual([
         true,
+        false,
+        false,
+      ]);
+      expect(cards().map((card) => !!card.querySelector('.count'))).toEqual([
         true,
-        true,
+        false,
+        false,
       ]);
       expect(second.querySelector('[data-rule]')).toBeNull();
-      expect(second.querySelector('.count')).toBeNull();
+      // Numbered for screen readers.
+      expect(second.querySelector('.card')!.getAttribute('aria-label')).toBe(
+        'F.BOARDS.EDITOR.COLUMN_NR',
+      );
     });
 
     it("opens the card asked for (a column's title), else the first", async () => {
       await open(three, 'c');
       expect(openCards()).toEqual([false, false, true]);
-      // The dialog's first focus goes to that card, not the view's title.
+      // The dialog's first focus goes to that card's title, not the view's.
       expect(
-        cards().map((card) => toggle(card)!.hasAttribute('cdkfocusinitial')),
+        cards().map(
+          (card) => !!card.querySelector('view-editor-title [cdkfocusinitial]'),
+        ),
       ).toEqual([false, false, true]);
       await open(three, 'gone');
       expect(openCards()).toEqual([true, false, false]);
     });
 
-    it('keeps one card open at a time', async () => {
+    it('opens several cards at once; the toggle closes one again', async () => {
       await open(three);
       toggle(cards()[1])!.click();
       fixture.detectChanges();
-      expect(openCards()).toEqual([false, true, false]);
+      expect(openCards()).toEqual([true, true, false]);
       expect(cards()[1].querySelector('[data-rule="done"]')).not.toBeNull();
-      // Clicking the open one closes it.
-      toggle(cards()[1])!.click();
+      // Its summary opens a card too.
+      (cards()[2].querySelector('.summary') as HTMLElement).click();
       fixture.detectChanges();
-      expect(openCards()).toEqual([false, false, false]);
+      expect(openCards()).toEqual([true, true, true]);
+      toggle(cards()[0])!.click();
+      // The closing body leaves after its animation.
+      await settle();
+      expect(openCards()).toEqual([false, true, true]);
     });
 
-    it('opens an added or duplicated card, keeps the open one when moving', async () => {
+    it('opens an added or duplicated card, keeps the open ones when moving', async () => {
       await open(three);
       editor().addPanel();
       fixture.detectChanges();
-      expect(openCards()).toEqual([false, false, false, true]);
+      expect(openCards()).toEqual([true, false, false, true]);
       editor().duplicatePanel(1);
       fixture.detectChanges();
-      expect(openCards()).toEqual([false, false, true, false, false]);
+      expect(openCards()).toEqual([true, false, true, false, true]);
       editor().movePanel(2, -1);
       fixture.detectChanges();
-      expect(openCards()).toEqual([false, true, false, false, false]);
-      // Removing the open one leaves none open.
+      expect(openCards()).toEqual([true, true, false, false, true]);
+      // Removing an open one leaves the others as they were.
       editor().removePanel(1);
       fixture.detectChanges();
-      expect(openCards()).toEqual([false, false, false, false]);
+      expect(openCards()).toEqual([true, false, false, true]);
+    });
+
+    it("keeps a list's only section open when a second one is added", async () => {
+      await open({
+        id: 'v',
+        title: 'V',
+        cols: 1,
+        panels: [{ ...DEFAULT_PANEL_CFG, id: 'a', title: 'A' }],
+      });
+      editor().addPanel();
+      fixture.detectChanges();
+      expect(openCards()).toEqual([true, true]);
     });
 
     it('has no toggle with a single section', async () => {
@@ -583,7 +681,25 @@ describe('BoardEditComponent with the view editor', () => {
       fixture.detectChanges();
       expect(dispatch).not.toHaveBeenCalled();
       expect(openCards()).toEqual([true, false, false]);
-      expect(cards()[2].querySelector('mat-error')).not.toBeNull();
+      expect(cards()[2].querySelector('.title-error')).not.toBeNull();
+    });
+
+    describe('on a phone', () => {
+      beforeEach(() => isXs.set(true));
+
+      it('shows the same cards as on a desktop, several open at once', async () => {
+        await open(three);
+        expect(openCards()).toEqual([true, false, false]);
+        toggle(cards()[1])!.click();
+        fixture.detectChanges();
+        expect(openCards()).toEqual([true, true, false]);
+        expect(fixture.nativeElement.querySelector('.layout-toggle')).not.toBeNull();
+      });
+
+      it('opens the column its title asked for', async () => {
+        await open(three, 'c');
+        expect(openCards()).toEqual([false, false, true]);
+      });
     });
 
     it('keeps an empty added rule of a card that is collapsed and opened again', async () => {
@@ -616,17 +732,53 @@ describe('BoardEditComponent with the view editor', () => {
       cols: 2,
       panels: [undone, { ...DEFAULT_PANEL_CFG, id: 'all', title: 'All' }],
     });
-    // Cards: every match.
-    expect(editor().counts()).toEqual([2, 3]);
+    // Cards: every open match (done ones are in a collapsed group).
+    expect(editor().counts()).toEqual([2, 2]);
     // A cached count follows the tasks.
     tasks.set([...tasks(), task({ id: 'new' })]);
-    expect(editor().counts()).toEqual([3, 4]);
+    expect(editor().counts()).toEqual([3, 3]);
     tasks.set(tasks().filter((t) => t.id !== 'new'));
+    // On a phone the board shows rows.
+    isXs.set(true);
+    expect(editor().counts()).toEqual([1, 1]);
+    isXs.set(false);
     // List: open top-level rows.
     editor().setLayout('list');
     expect(editor().counts()).toEqual([1, 1]);
     fixture.detectChanges();
     // No translations loaded here: the pipe shows the key.
     expect(fixture.nativeElement.textContent).toContain('F.BOARDS.EDITOR.COUNT_ONE');
+  });
+  it('counts a Completed section as done', async () => {
+    tasks.set([task({ id: 'a' }), task({ id: 'x', isDone: true })]);
+    await open({
+      id: 'v',
+      title: 'V',
+      cols: 2,
+      panels: [
+        {
+          ...DEFAULT_PANEL_CFG,
+          id: 'open',
+          title: 'Open',
+          taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+        },
+        {
+          ...DEFAULT_PANEL_CFG,
+          id: 'done',
+          title: 'Done',
+          taskDoneState: BoardPanelCfgTaskDoneState.Done,
+        },
+      ],
+    });
+    expect(editor().counts()).toEqual([1, 1]);
+    const done = fixture.nativeElement.querySelectorAll('view-editor-section')[1];
+    // The count shows under the Rules label of an open card.
+    done.querySelector('.section-toggle').click();
+    fixture.detectChanges();
+    expect(done.querySelector('.form-label .count')!.textContent).toContain(
+      'F.BOARDS.EDITOR.COUNT_DONE',
+    );
+    // No list of the matching tasks: the count says enough.
+    expect(fixture.nativeElement.querySelector('.preview')).toBeNull();
   });
 });

@@ -37,7 +37,7 @@
 
       .mat-mdc-menu-item {
         // Add delay to touch responsiveness
-        transition: background-color 0.15s ease-in-out;
+        transition: background-color var(--transition-duration-s) ease-in-out;
 
         &:first-child {
           // Extra padding on first item to prevent accidental selection
@@ -52,7 +52,7 @@
 .context-menu-highlight {
   box-shadow: inset 0 0 0 2px var(--c-primary);
   z-index: 1;
-  transition: box-shadow 200ms ease-out;
+  transition: box-shadow var(--transition-duration-m) ease-out;
 }
 
 // Animation to re-enable pointer events after delay

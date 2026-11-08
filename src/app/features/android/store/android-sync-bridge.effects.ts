@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
-import { combineLatest, from } from 'rxjs';
+import { combineLatest, from, Observable, of } from 'rxjs';
 import { distinctUntilChanged, filter, map, switchMap, tap } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
@@ -18,6 +18,7 @@ import { FILE_BASED_SYNC_CONSTANTS } from '../../../op-log/sync-providers/file-b
 import { isShallowEqual } from '../../../util/is-shallow-equal';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { CaptureKeyConfig, ReminderConfig } from '../../config/global-config.model';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 
 const isNonNull = <T>(value: T | null): value is T => value !== null;
 
@@ -31,7 +32,7 @@ export type SuperSyncCredentialBridgeCommand =
     }
   | {
       type: 'clear';
-      reason: 'no-token' | 'not-supersync';
+      reason: 'no-token' | 'not-supersync' | 'sync-disabled';
     };
 
 export const getSuperSyncCredentialBridgeCommand = (
@@ -144,15 +145,39 @@ export const getCapturePublicKeyForNative = (
 export class AndroidSyncBridgeEffects {
   private _providerManager = inject(SyncProviderManager);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dataInitStateService = inject(DataInitStateService);
+
+  // Created here, in the injection context: the operator injects on creation
+  private readonly _skipWhileApplyingRemoteOps =
+    skipWhileApplyingRemoteOps<CurrentProviderPrivateCfg | null>();
+
+  /**
+   * Turning sync off only makes the provider manager emit a null cfg, which
+   * also happens transiently mid-switch, so it is read from the sync config:
+   * otherwise the background worker keeps polling with the old login. Gated on
+   * the data load so the pre-hydration default (sync off) never clears it.
+   */
+  private readonly _bridgeCommand$: Observable<BackgroundSyncBridgeCommand | null> =
+    this._dataInitStateService.isAllDataLoadedInitially$.pipe(
+      switchMap(() => this._globalConfigService.sync$),
+      map((syncCfg) => !!syncCfg.isEnabled),
+      distinctUntilChanged(),
+      switchMap((isSyncEnabled) =>
+        isSyncEnabled
+          ? this._providerManager.currentProviderPrivateCfg$.pipe(
+              this._skipWhileApplyingRemoteOps,
+              switchMap((cfg) => from(this._toBridgeCommand(cfg))),
+            )
+          : of<BackgroundSyncBridgeCommand>({ type: 'clear', reason: 'sync-disabled' }),
+      ),
+      distinctUntilChanged(bridgeCommandEqual),
+    );
 
   syncSuperSyncCredentialsToNative$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
-        this._providerManager.currentProviderPrivateCfg$.pipe(
-          skipWhileApplyingRemoteOps(),
-          switchMap((cfg) => from(this._toBridgeCommand(cfg))),
-          distinctUntilChanged(bridgeCommandEqual),
+        this._bridgeCommand$.pipe(
           filter(isNonNull),
           tap((command) => {
             if (command.type === 'set-file') {
@@ -179,11 +204,9 @@ export class AndroidSyncBridgeEffects {
                 command.encryptionPassword,
               );
             } else {
-              DroidLog.log(
-                command.reason === 'no-token'
-                  ? 'AndroidSyncBridgeEffects: No access token, clearing credentials'
-                  : 'AndroidSyncBridgeEffects: No background-readable provider, clearing credentials',
-              );
+              DroidLog.log('AndroidSyncBridgeEffects: Clearing credentials', {
+                reason: command.reason,
+              });
               androidInterface.clearSuperSyncCredentials?.();
               // Also on 'no-token': a previous WebDAV login must not outlive the switch
               androidInterface.clearFileSyncCredentials?.();

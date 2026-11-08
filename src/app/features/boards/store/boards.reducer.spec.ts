@@ -208,6 +208,87 @@ describe('Boards Reducer - sortBoards', () => {
   });
 });
 
+describe('Boards Reducer - updateBoard leaves manual order to reorders (#11388)', () => {
+  const stored = (): BoardsState => ({
+    boardCfgs: [
+      makeBoard({
+        id: 'b1',
+        panels: [
+          makePanel({ id: 'p1', title: 'Main', taskIds: ['t1', 't2', 't3'] }),
+          makePanel({ id: 'p2', title: 'Other', taskIds: ['t4'] }),
+        ],
+      }),
+    ],
+  });
+  // What a device that hasn't seen the reorder saves: its stale order.
+  const edit = BoardsActions.updateBoard({
+    id: 'b1',
+    updates: {
+      title: 'Edited',
+      panels: [
+        makePanel({ id: 'p1', title: 'Main edited', taskIds: ['t1', 't2', 't3'] }),
+        makePanel({ id: 'p2', title: 'Other', taskIds: ['t4'] }),
+      ],
+    },
+  });
+  const reorder = BoardsActions.updatePanelCfgTaskIds({
+    panelId: 'p1',
+    taskIds: ['t3', 't1', 't2'],
+  });
+
+  it('applies the edit but keeps the stored order of a panel it already has', () => {
+    const state = boardsReducer(stored(), reorder);
+
+    const board = boardsReducer(state, edit).boardCfgs[0];
+
+    expect(board.title).toBe('Edited');
+    expect(board.panels[0]).toEqual(
+      jasmine.objectContaining({ title: 'Main edited', taskIds: ['t3', 't1', 't2'] }),
+    );
+    expect(board.panels[1].taskIds).toEqual(['t4']);
+  });
+
+  it('ends in the same state whichever of a reorder and an edit applies first', () => {
+    const reorderFirst = boardsReducer(boardsReducer(stored(), reorder), edit);
+    const editFirst = boardsReducer(boardsReducer(stored(), edit), reorder);
+
+    expect(reorderFirst).toEqual(editFirst);
+  });
+
+  it('takes the order of a panel the edit adds', () => {
+    const result = boardsReducer(
+      stored(),
+      BoardsActions.updateBoard({
+        id: 'b1',
+        updates: {
+          panels: [
+            makePanel({ id: 'p1', taskIds: ['t1', 't2', 't3'] }),
+            makePanel({ id: 'p3', title: 'New', taskIds: ['t5'] }),
+          ],
+        },
+      }),
+    );
+
+    expect(result.boardCfgs[0].panels.map((p) => [p.id, p.taskIds])).toEqual([
+      ['p1', ['t1', 't2', 't3']],
+      ['p3', ['t5']],
+    ]);
+  });
+
+  it('keeps a panel the edit removes removed, also for a later reorder', () => {
+    const removeP1 = BoardsActions.updateBoard({
+      id: 'b1',
+      updates: { panels: [makePanel({ id: 'p2', title: 'Other', taskIds: ['t4'] })] },
+    });
+
+    const removeFirst = boardsReducer(boardsReducer(stored(), removeP1), reorder);
+    const reorderFirst = boardsReducer(boardsReducer(stored(), reorder), removeP1);
+
+    expect(removeFirst.boardCfgs[0].panels.map((p) => p.id)).toEqual(['p2']);
+    expect(reorderFirst).toEqual(removeFirst);
+  });
+});
+
 describe('Boards Reducer - panel cfg sanitization', () => {
   it('migrates legacy sortByDue on loadAllData', () => {
     const stored: BoardsState = {

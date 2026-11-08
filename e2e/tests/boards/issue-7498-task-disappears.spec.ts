@@ -49,8 +49,12 @@ test.describe('Boards #7498', () => {
 
     await taskPage.markTaskAsDone(task);
 
-    // Fixed behavior: the task is still in its original quadrant — Playwright
-    // auto-retries the assertion until the toggle's 200ms animation settles.
-    await expect(task).toBeVisible();
+    // Fixed behavior: the task is still in its original quadrant, after its
+    // open cards and outside the drop list (done cards stay put).
+    await expect(
+      notUrgentNotImportantPanel
+        .locator('.task-items > planner-task')
+        .filter({ hasText: taskName }),
+    ).toBeVisible();
   });
 });

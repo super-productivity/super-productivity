@@ -74,15 +74,32 @@ export class BoardsService {
       });
   }
 
+  // A second click or shortcut press while the dialog's code loads would
+  // open a second editor.
+  private _isOpeningEditor = false;
+
   /** `panelId`: the section or column to show open (a column's title). */
   async editBoard(board: BoardCfg, panelId?: string): Promise<void> {
-    const { DialogBoardEditComponent } =
-      await import('./dialog-board-edit/dialog-board-edit.component');
-    this._matDialog.open(DialogBoardEditComponent, {
-      restoreFocus: true,
-      panelClass: 'fullscreen-xs-dialog',
-      data: panelId ? { board, openPanelId: panelId } : { board },
-    });
+    if (this._isOpeningEditor) {
+      return;
+    }
+    this._isOpeningEditor = true;
+    try {
+      const { DialogBoardEditComponent } =
+        await import('./dialog-board-edit/dialog-board-edit.component');
+      // The dialog itself takes focus: on its first control, the title's
+      // pencil, it showed as pressed. A column's title asks for that column's
+      // card, so there its `cdkFocusInitial` is focused (the default).
+      this._matDialog.open(DialogBoardEditComponent, {
+        restoreFocus: true,
+        panelClass: 'fullscreen-xs-dialog',
+        ...(panelId
+          ? { data: { board, openPanelId: panelId } }
+          : { data: { board }, autoFocus: 'dialog' }),
+      });
+    } finally {
+      this._isOpeningEditor = false;
+    }
   }
 
   duplicateBoard(board: BoardCfg): void {

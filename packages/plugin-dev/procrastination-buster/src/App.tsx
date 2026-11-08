@@ -76,9 +76,9 @@ const App: Component = () => {
   };
 
   return (
-    <div class="app">
+    <div class="page stack">
       <Show when={currentView() !== 'home'}>
-        <header class="header page-fade">
+        <header class="page-header page-fade">
           <button
             class="btn-outline"
             onClick={handleBack}
@@ -88,7 +88,7 @@ const App: Component = () => {
         </header>
       </Show>
 
-      <main class="main">
+      <main class="stack">
         {/* Home View */}
         <Show when={currentView() === 'home'}>
           <div class="intro page-fade">
@@ -102,11 +102,11 @@ const App: Component = () => {
             </button>
           </div>
 
-          <div class="blocker-grid page-fade">
+          <div class="grid page-fade">
             <For each={procrastinationTypes()}>
               {(type) => (
                 <button
-                  class="blocker-card card card-clickable"
+                  class="card card-clickable"
                   onClick={() => handleSelectType(type)}
                 >
                   <h3 class="text-primary">{type.title}</h3>
@@ -126,24 +126,24 @@ const App: Component = () => {
 
         {/* Strategies View */}
         <Show when={currentView() === 'strategies' && selectedType()}>
-          <div class="strategy-container page-fade">
-            <div class="selected-type">
+          <div class="stack page-fade">
+            <div class="intro">
               <h2 class="text-primary">{selectedType()!.title}</h2>
-              <p class="emotion text-muted">{selectedType()!.emotion}</p>
+              <p class="text-muted">{selectedType()!.emotion}</p>
             </div>
 
             <h3>{strategiesTitle()}</h3>
 
-            <div class="strategy-list">
+            <div class="stack">
               <For each={selectedType()!.strategies}>
                 {(strategy) => {
                   const text = typeof strategy === 'string' ? strategy : strategy.text;
                   const hasAction = typeof strategy !== 'string' && strategy.action;
 
                   return (
-                    <div class="strategy-item card">
-                      <div class="strategy-content">
-                        <p class="strategy-text">{text}</p>
+                    <div class="card">
+                      <div class="row">
+                        <p class="grow">{text}</p>
                         <Show when={hasAction}>
                           <button
                             class="btn-primary"

@@ -544,7 +544,7 @@ export class ScheduleComponent {
   // position carried over from week view clamps to the bottom and opens the
   // month with its first row above the viewport (#9463 review). scrollTo is
   // safe here where _scrollAnchorToTop's measured offsets would not be, since
-  // a fixed origin is independent of the warpRoute scale.
+  // a fixed origin is independent of the warpRoute transform.
   private _resetScrollWrapper(): void {
     this._scrollWrapper()?.nativeElement.scrollTo({
       top: 0,
@@ -561,9 +561,9 @@ export class ScheduleComponent {
   //
   // scrollIntoView is used rather than scrollTo with measured offsets because
   // it resolves the target in layout coordinates: the route enter animation
-  // (warpRoute) starts this view at scale(1.2) and the scroll runs on a
-  // setTimeout(0), so anything measured from getBoundingClientRect() while that
-  // is in flight overshoots by the animation's current scale.
+  // (warpRoute) transforms this view and the scroll runs on a setTimeout(0), so
+  // anything measured from getBoundingClientRect() while that is in flight is
+  // off by the animation's current transform.
   //
   // The lookup is scoped to this component's own element: the right panel
   // embeds a second schedule-week that renders its own #current-time. The day

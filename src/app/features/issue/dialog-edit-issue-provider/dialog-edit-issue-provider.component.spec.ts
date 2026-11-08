@@ -11,6 +11,8 @@ import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { RegisteredPluginIssueProvider } from '../../../plugins/issue-provider/plugin-issue-provider.model';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { PluginService } from '../../../plugins/plugin.service';
+import { TranslateService } from '@ngx-translate/core';
 import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { IssueService } from '../issue.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -24,6 +26,7 @@ import {
   saveOAuthTokens,
 } from '../../../plugins/oauth/plugin-oauth-token-store';
 import { GOOGLE_CALENDAR_PLUGIN_ID } from '../../../plugins/oauth/plugin-oauth-token-key.util';
+import { CertTrustService } from '../cert-trust.service';
 
 describe('DialogEditIssueProviderComponent', () => {
   let fixture: ComponentFixture<DialogEditIssueProviderComponent> | undefined;
@@ -31,6 +34,7 @@ describe('DialogEditIssueProviderComponent', () => {
   let beforeClosed$: Subject<void>;
   let pluginBridge: jasmine.SpyObj<PluginBridgeService>;
   let store: jasmine.SpyObj<Store>;
+  let certTrust: jasmine.SpyObj<CertTrustService>;
   let cleanupPending: Promise<void> = Promise.resolve();
 
   const GOOGLE_PROVIDER_KEY = `plugin:${GOOGLE_CALENDAR_PLUGIN_ID}` as IssueProviderKey;
@@ -134,6 +138,10 @@ describe('DialogEditIssueProviderComponent', () => {
     beforeClosed$ = new Subject<void>();
     pluginBridge = bridge as jasmine.SpyObj<PluginBridgeService>;
     store = jasmine.createSpyObj<Store>('Store', ['dispatch', 'select', 'pipe']);
+    certTrust = jasmine.createSpyObj<CertTrustService>('CertTrustService', [
+      'setPendingConfig',
+    ]);
+    certTrust.setPendingConfig.and.resolveTo();
 
     const pluginRegistry = jasmine.createSpyObj<PluginIssueProviderRegistryService>(
       'PluginIssueProviderRegistryService',
@@ -169,6 +177,24 @@ describe('DialogEditIssueProviderComponent', () => {
         { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: PluginIssueProviderRegistryService, useValue: pluginRegistry },
         { provide: PluginBridgeService, useValue: pluginBridge },
+        {
+          provide: PluginService,
+          useValue: {
+            pluginStates: () =>
+              new Map([
+                [
+                  GOOGLE_CALENDAR_PLUGIN_ID,
+                  {
+                    manifest: {
+                      id: GOOGLE_CALENDAR_PLUGIN_ID,
+                      dataSharing: [{ recipient: 'Google Calendar', data: ['ids'] }],
+                    },
+                  },
+                ],
+              ]),
+          },
+        },
+        { provide: TranslateService, useValue: { instant: (key: string) => key } },
         PluginOAuthBridgeService,
         PluginOAuthService,
         { provide: HttpClient, useValue: jasmine.createSpyObj('HttpClient', ['post']) },
@@ -192,6 +218,7 @@ describe('DialogEditIssueProviderComponent', () => {
         },
         { provide: TaskService, useValue: { allTasks$: of([]) } },
         { provide: TagService, useValue: { tagsNoMyDayAndNoList$: of([]) } },
+        { provide: CertTrustService, useValue: certTrust },
       ],
     })
       // Render nothing: we only exercise the component logic, not the
@@ -272,6 +299,30 @@ describe('DialogEditIssueProviderComponent', () => {
         accountId: '2',
         bucketId: '10',
       });
+    });
+  });
+
+  describe('data sharing disclosure', () => {
+    it('shows the plugin declaration when connecting a new account', async () => {
+      await setup({
+        data: { issueProviderKey: GOOGLE_PROVIDER_KEY },
+        pluginProvider: createProvider(GOOGLE_PROVIDER_KEY, GOOGLE_CALENDAR_PLUGIN_ID),
+      });
+      expect(component.dataSharingHtml).toContain('<strong>Google Calendar</strong>');
+    });
+
+    it('shows nothing when editing an existing connection', async () => {
+      await setup({
+        data: {
+          issueProviderKey: GOOGLE_PROVIDER_KEY,
+          issueProvider: createIssueProvider(
+            GOOGLE_PROVIDER_KEY,
+            GOOGLE_CALENDAR_PLUGIN_ID,
+          ),
+        },
+        pluginProvider: createProvider(GOOGLE_PROVIDER_KEY, GOOGLE_CALENDAR_PLUGIN_ID),
+      });
+      expect(component.dataSharingHtml).toBe('');
     });
   });
 
@@ -436,6 +487,32 @@ describe('DialogEditIssueProviderComponent', () => {
       beforeClosed$.next();
       await cleanupPending;
       expect(await loadOAuthTokens('other-provider__oauth')).toBe('connected-credential');
+    });
+  });
+
+  describe('certificate trust for the config under test (#11097)', () => {
+    it('trusts the unsaved config before sending the test request', async () => {
+      const issueService = TestBed.inject(IssueService) as jasmine.SpyObj<IssueService>;
+      let resolveTrust!: () => void;
+      certTrust.setPendingConfig.and.returnValue(
+        new Promise<void>((resolve) => (resolveTrust = resolve)),
+      );
+      issueService.testConnection.and.resolveTo(true);
+
+      const done = component.testConnection();
+      await Promise.resolve();
+
+      expect(certTrust.setPendingConfig).toHaveBeenCalledWith(component, component.model);
+      expect(issueService.testConnection).not.toHaveBeenCalled();
+      resolveTrust();
+      await done;
+      expect(issueService.testConnection).toHaveBeenCalled();
+    });
+
+    it('stops trusting the config when the dialog closes', () => {
+      beforeClosed$.next();
+
+      expect(certTrust.setPendingConfig).toHaveBeenCalledWith(component, null);
     });
   });
 

@@ -303,8 +303,11 @@ export class WorkContextService {
     switchMap(() => timer(50).pipe(mapTo(false), startWith(true))),
     startWith(false),
   );
+  // The work view unmounts its content while this is true. 50 + 25 = 75ms: the
+  // old context's content fades out over that (PAGE_LEAVE_TIMING), and the new
+  // one mounts as it ends, so the two neither overlap nor leave a blank page.
   isContextChangingWithDelay$: Observable<boolean> = this.isContextChanging$.pipe(
-    delayWhen((val) => (val ? of(undefined) : interval(60))),
+    delayWhen((val) => (val ? of(undefined) : interval(25))),
   );
 
   // NOTES LEVEL

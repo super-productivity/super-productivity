@@ -1,10 +1,10 @@
 import { animate, style, transition, trigger } from '@angular/animations';
-import { ANI_ENTER_TIMING } from '../../ui/animations/animation.const';
+import { PAGE_ENTER_FROM, PAGE_SWITCH_TIMING } from '../../ui/animations/warp-route';
 import { BoardCfg } from './boards.model';
 import { getViewLayout } from './boards.util';
 
-/** Where the board starts its enter: the work view's project-change zoom. */
-export const VIEW_SWITCH_FROM = 'scale(1.2)';
+/** Where the board starts its enter: the same rise as a page change. */
+export const VIEW_SWITCH_FROM = PAGE_ENTER_FROM;
 /** A view just created, on a phone: it comes in from the right, forward. */
 export const VIEW_ARRIVAL_FROM_XS = 'translateX(25%)';
 
@@ -31,10 +31,10 @@ export const getViewSwitchState = (board: Pick<BoardCfg, 'id' | 'cols'>): string
  * enters the same way.
  *
  * Between two view ids only, unless a view was just created: on entering the
- * page `warpRoute` already animates it (and its `animateChild()` would replay
- * an `:enter` afterwards), and a leaving board must not animate. A created
- * view does enter from the empty `/boards` page (same page, no `warpRoute`),
- * so it reads as somewhere new. From another page the page itself arrives:
+ * page `warpRoute` already animates it, and a leaving board must not animate.
+ * A created view does enter from the empty `/boards` page: a new page, but `warpRoute`
+ * leaves `boards => view-arrival` unanimated so this enter runs instead, and
+ * it reads as somewhere new. From another page the page itself arrives:
  * `AppComponent.getPage` reports `view-arrival` and `warpRoute` slides the page
  * in from the right; this enter is blocked there (its `.done` still clears the
  * arrival, which `warpRoute` lets settle without animating again). No
@@ -47,7 +47,7 @@ export const viewSwitchAnimation = [
         to !== 'void' && (from !== 'void' || !!params?.isArrival),
       [
         style({ opacity: 0, transform: '{{ from }}' }),
-        animate(ANI_ENTER_TIMING, style({ opacity: 1, transform: 'none' })),
+        animate(PAGE_SWITCH_TIMING, style({ opacity: 1, transform: 'none' })),
       ],
       { params: { from: VIEW_SWITCH_FROM } },
     ),

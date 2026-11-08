@@ -66,7 +66,6 @@ const icon = (name: string): string =>
   `<span class="material-icons inline-icon" aria-hidden="true">${name}</span>`;
 
 export const HINT_ICON_PARAMS: Record<string, string> = {
-  todayIcon: icon('wb_sunny'),
   inboxIcon: icon('inbox'),
   playIcon: icon('play_arrow'),
   pauseIcon: icon('pause'),
@@ -130,9 +129,7 @@ export const HINT_STEP_CONFIGS = new Map<HintStep, HintStepConfig>([
       candidates: ({ firstTaskId }) => firstTaskInboxChip(firstTaskId),
       // On the phone layout the Inbox is behind the menu button.
       message: ({ isPhone }) =>
-        isPhone
-          ? T.ONBOARDING.HINTS.TODAY_AND_INBOX_PHONE
-          : T.ONBOARDING.HINTS.TODAY_AND_INBOX,
+        isPhone ? T.ONBOARDING.HINTS.INBOX_CHIP_PHONE : T.ONBOARDING.HINTS.INBOX_CHIP,
       isEndedWhenMissing: true,
       isPulse: false,
       actions: 'offer',
