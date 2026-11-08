@@ -15,7 +15,8 @@ let trustedHosts: ReadonlySet<string> = new Set();
  * TLS validation. #11097
  */
 export const initCertTrust = (appIN: App): void => {
-  ipcMain.on(IPC.SET_CERT_TRUSTED_HOSTS, (event, payload: unknown) => {
+  // invoke, not send: the renderer awaits this before testing an unsaved config
+  ipcMain.handle(IPC.SET_CERT_TRUSTED_HOSTS, (event, payload: unknown) => {
     // Secondary guard only — the preload API is one-shot (see consumeCertTrustApi).
     if (event.senderFrame !== event.sender.mainFrame) {
       return;
@@ -31,7 +32,8 @@ export const initCertTrust = (appIN: App): void => {
       callback(true);
       return;
     }
-    // Self-signed hosts are only trusted once saved in a provider's settings (#11097)
+    // Self-signed hosts are only trusted once saved in a provider's settings or
+    // while their unsaved config is being tested (#11097)
     warn(`Rejecting certificate error for ${host} (not a configured host): ${err}`);
     callback(false);
   });
