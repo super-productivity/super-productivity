@@ -47,7 +47,7 @@ import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
-import { EdgeSwipeOpenDetector, isInHorizontalScroller } from './edge-swipe-open';
+import { EdgeSwipeOpenDetector } from './edge-swipe-open';
 
 // 56px = 24px icon + 16px (var(--s2)) padding on each side, so the left-aligned
 // nav icons sit centered in the collapsed rail.
@@ -335,18 +335,13 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
   /**
    * Swiping left from the right screen edge opens the mobile drawer, which
-   * slides in from that edge (#4464). Capture listeners so the gesture is
-   * claimed before a task's swipe-block starts panning; passive, so scrolling
-   * is never blocked.
+   * slides in from that edge (#4464). Passive capture listeners: they only
+   * observe, and claim the touchstart before a task's swipe-block sees it.
    */
   private _initEdgeSwipeOpen(): void {
     const detector = new EdgeSwipeOpenDetector({
       getViewportWidth: () => window.innerWidth,
-      canStart: (target) =>
-        this.isMobile() &&
-        !this.showMobileMenuOverlay() &&
-        !(target instanceof Element && target.closest('.cdk-overlay-container')) &&
-        !isInHorizontalScroller(target),
+      isEnabled: () => this.isMobile() && !this.showMobileMenuOverlay(),
       onOpen: () => {
         if (!this.showMobileMenuOverlay()) this.toggleMobileNav();
       },

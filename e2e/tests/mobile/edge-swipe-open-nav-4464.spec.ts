@@ -64,6 +64,8 @@ test.describe('Mobile nav edge swipe #4464', () => {
     const drawer = page.locator('.nav-sidenav.mobile');
     await expect(page.locator('.nav-backdrop-mobile')).toHaveCount(1);
     await expect(drawer.locator('.mobile-menu-close')).toBeVisible();
+    // Asserting an absence: give a late task swipe menu time to appear.
+    await page.waitForTimeout(500);
     await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
     expect(page.url()).toBe(url);
 
@@ -72,6 +74,28 @@ test.describe('Mobile nav edge swipe #4464', () => {
     await expect(page.locator('.nav-backdrop-mobile')).toHaveCount(0);
     await swipe(page, { x: PHONE.width * 0.8, y }, PHONE.width * 0.3);
     await expect(page.locator('.mat-mdc-menu-panel').first()).toBeVisible();
+    await expect(page.locator('.nav-backdrop-mobile')).toHaveCount(0);
+  });
+
+  test('an edge swipe on the schedule day view still pages the day', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await page.goto('/#/schedule');
+    await page.getByRole('button', { name: 'View Day' }).click();
+    await page.setViewportSize(PHONE);
+    const dayCol = page
+      .locator('schedule-week:not([inert] *) .col:not(.end-of-day)[data-day]')
+      .first();
+    await expect(dayCol).toBeVisible();
+    const dayBefore = await dayCol.getAttribute('data-day');
+    // Mid-screen: the day column is taller than the viewport.
+    const y = PHONE.height / 2;
+
+    await swipe(page, { x: PHONE.width - 4, y }, PHONE.width - 240);
+
+    await expect(dayCol).not.toHaveAttribute('data-day', dayBefore ?? '');
     await expect(page.locator('.nav-backdrop-mobile')).toHaveCount(0);
   });
 });
