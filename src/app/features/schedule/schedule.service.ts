@@ -27,6 +27,8 @@ import { TaskService } from '../tasks/task.service';
 import { startWith } from 'rxjs/operators';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 import { anchorContextNow } from './anchor-context-now';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { getLocaleWeekendDays } from '../../util/get-locale-weekend-days';
 
 @Injectable({
   providedIn: 'root',
@@ -37,6 +39,7 @@ export class ScheduleService {
   private _calendarIntegrationService = inject(CalendarIntegrationService);
   private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
   private _taskService = inject(TaskService);
+  private _dateTimeFormatService = inject(DateTimeFormatService);
 
   private _timelineTasks = toSignal(this._store.select(selectTimelineTasks));
   private _taskRepeatCfgs = toSignal(
@@ -51,6 +54,24 @@ export class ScheduleService {
   private _calendarEvents = toSignal(this._calendarIntegrationService.calendarEvents$, {
     initialValue: [],
   });
+  // The color a calendar source reported per provider (e.g. a Google calendar's
+  // color), for per-provider legends. A provider with several calendars shows
+  // the first one found.
+  readonly calendarColorByProviderId = computed(() => {
+    const colors = new Map<string, string>();
+    for (const entry of this._calendarEvents()) {
+      for (const ev of entry.items) {
+        if (ev.calendarColor && !colors.has(ev.calProviderId)) {
+          colors.set(ev.calProviderId, ev.calendarColor);
+        }
+      }
+    }
+    return colors;
+  });
+  // untimed work flows past the locale's weekend instead of onto it (#9418)
+  private _weekendDays = computed(() =>
+    getLocaleWeekendDays(this._dateTimeFormatService.currentLocale()),
+  );
   scheduleRefreshTick = toSignal(interval(2 * 60 * 1000).pipe(startWith(0)), {
     initialValue: 0,
   });
@@ -118,6 +139,7 @@ export class ScheduleService {
       timelineCfg?.isLunchBreakEnabled ? createLunchBreakCfg(timelineCfg) : undefined,
       realNow,
       this._startOfNextDayDiffMs() ?? 0,
+      this._weekendDays(),
     );
   }
 

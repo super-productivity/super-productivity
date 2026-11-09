@@ -352,6 +352,48 @@ describe('toCaptureTask', () => {
   });
 });
 
+describe('toCaptureTask link', () => {
+  const base = { v: 1, title: 'Article', createdAt: 1, client: 'Android share' };
+
+  it('keeps an http(s) link and drops notes that only repeat it', () => {
+    const link = 'https://example.com/a?b=c';
+    expect(toCaptureTask({ ...base, notes: link, link })).toEqual({
+      title: 'Article',
+      createdAt: 1,
+      link,
+    });
+    expect(toCaptureTask({ ...base, notes: 'see this', link })).toEqual({
+      title: 'Article',
+      notes: 'see this',
+      createdAt: 1,
+      link,
+    });
+  });
+
+  it('drops links that are not http(s), malformed or too long', () => {
+    for (const link of [
+      'javascript:alert(1)',
+      'file:///etc/passwd',
+      'data:text/html,x',
+      'https://',
+      'not a url',
+      `https://example.com/${'a'.repeat(2048)}`,
+      42,
+    ]) {
+      expect(toCaptureTask({ ...base, link })).toEqual({
+        title: 'Article',
+        createdAt: 1,
+      });
+    }
+  });
+
+  it('keeps more notes when asked to (a share from this device)', () => {
+    const notes = 'n'.repeat(9000);
+    expect(toCaptureTask({ ...base, notes })?.notes?.length).toBe(8192);
+    expect(toCaptureTask({ ...base, notes }, 100_000)?.notes).toBe(notes);
+  });
+});
+
 describe('neutralizeAutoloadMedia', () => {
   it('turns remote images into links and media tags into text', () => {
     expect(neutralizeAutoloadMedia('see ![x](https://evil.example/p?u=1) ok')).toBe(

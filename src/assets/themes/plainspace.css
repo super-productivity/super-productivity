@@ -14,6 +14,60 @@
 /* ============================================================
  * LIGHT — warm paper
  * ============================================================ */
+/* Light palette on <html>: the base emits Material's light-mode component
+   tokens (form-field outlines, focus labels, …) on `html`, resolved against the
+   work-context palette the app sets inline there — so a body-level palette
+   never reaches them. !important beats that inline style — deliberately, the
+   theme's brand replaces the work-context color, as the body palette always
+   did. The dark palette below still wins on body (own declaration over
+   inherited). */
+html {
+  /* Primary — terracotta (plainspace --color-primary #c87154) */
+  --palette-primary-50: #faf0eb !important;
+  --palette-primary-100: #f1ddd4 !important;
+  --palette-primary-200: #e7c2b4 !important;
+  --palette-primary-300: #dca795 !important;
+  --palette-primary-400: #d28d75 !important;
+  --palette-primary-500: #c87154 !important;
+  --palette-primary-600: #ae5b42 !important;
+  --palette-primary-700: #984a35 !important;
+  --palette-primary-800: #7e3b29 !important;
+  --palette-primary-900: #632c1e !important;
+  /* dark text through 500, warm-white on the deeper terracotta shades */
+  --palette-primary-contrast-50: #1f1c17 !important;
+  --palette-primary-contrast-100: #1f1c17 !important;
+  --palette-primary-contrast-200: #1f1c17 !important;
+  --palette-primary-contrast-300: #1f1c17 !important;
+  --palette-primary-contrast-400: #1f1c17 !important;
+  --palette-primary-contrast-500: #1f1c17 !important;
+  --palette-primary-contrast-600: #fffaf2 !important;
+  --palette-primary-contrast-700: #fffaf2 !important;
+  --palette-primary-contrast-800: #fffaf2 !important;
+  --palette-primary-contrast-900: #fffaf2 !important;
+
+  /* Accent — teal (plainspace --color-accent #3f7473) */
+  --palette-accent-50: #eaf1f1 !important;
+  --palette-accent-100: #cbdedd !important;
+  --palette-accent-200: #a6c4c3 !important;
+  --palette-accent-300: #80aaa9 !important;
+  --palette-accent-400: #5a9190 !important;
+  --palette-accent-500: #3f7473 !important;
+  --palette-accent-600: #356261 !important;
+  --palette-accent-700: #2b4f4e !important;
+  --palette-accent-800: #213d3c !important;
+  --palette-accent-900: #172b2a !important;
+  --palette-accent-contrast-50: #1f1c17 !important;
+  --palette-accent-contrast-100: #1f1c17 !important;
+  --palette-accent-contrast-200: #1f1c17 !important;
+  --palette-accent-contrast-300: #1f1c17 !important;
+  --palette-accent-contrast-400: #1f1c17 !important;
+  --palette-accent-contrast-500: #fffaf2 !important;
+  --palette-accent-contrast-600: #fffaf2 !important;
+  --palette-accent-contrast-700: #fffaf2 !important;
+  --palette-accent-contrast-800: #fffaf2 !important;
+  --palette-accent-contrast-900: #fffaf2 !important;
+}
+
 body {
   /* Surface ladder: page background → cards → raised sheets */
   --surface-0: #e4dcc8; /* deepest: toolbars / --bg-darker */
@@ -37,50 +91,14 @@ body {
   --scrim: rgba(31, 28, 23, 0.28); /* plainspace --color-overlay */
   --bg-overlay: rgba(255, 250, 242, 0.82);
 
-  /* Primary — terracotta (plainspace --color-primary #c87154) */
-  --palette-primary-50: #faf0eb;
-  --palette-primary-100: #f1ddd4;
-  --palette-primary-200: #e7c2b4;
-  --palette-primary-300: #dca795;
-  --palette-primary-400: #d28d75;
-  --palette-primary-500: #c87154;
-  --palette-primary-600: #ae5b42;
-  --palette-primary-700: #984a35;
-  --palette-primary-800: #7e3b29;
-  --palette-primary-900: #632c1e;
-  /* dark text through 500, warm-white on the deeper terracotta shades */
-  --palette-primary-contrast-50: #1f1c17;
-  --palette-primary-contrast-100: #1f1c17;
-  --palette-primary-contrast-200: #1f1c17;
-  --palette-primary-contrast-300: #1f1c17;
-  --palette-primary-contrast-400: #1f1c17;
-  --palette-primary-contrast-500: #1f1c17;
-  --palette-primary-contrast-600: #fffaf2;
-  --palette-primary-contrast-700: #fffaf2;
-  --palette-primary-contrast-800: #fffaf2;
-  --palette-primary-contrast-900: #fffaf2;
-
-  /* Accent — teal (plainspace --color-accent #3f7473) */
-  --palette-accent-50: #eaf1f1;
-  --palette-accent-100: #cbdedd;
-  --palette-accent-200: #a6c4c3;
-  --palette-accent-300: #80aaa9;
-  --palette-accent-400: #5a9190;
-  --palette-accent-500: #3f7473;
-  --palette-accent-600: #356261;
-  --palette-accent-700: #2b4f4e;
-  --palette-accent-800: #213d3c;
-  --palette-accent-900: #172b2a;
-  --palette-accent-contrast-50: #1f1c17;
-  --palette-accent-contrast-100: #1f1c17;
-  --palette-accent-contrast-200: #1f1c17;
-  --palette-accent-contrast-300: #1f1c17;
-  --palette-accent-contrast-400: #1f1c17;
-  --palette-accent-contrast-500: #fffaf2;
-  --palette-accent-contrast-600: #fffaf2;
-  --palette-accent-contrast-700: #fffaf2;
-  --palette-accent-contrast-800: #fffaf2;
-  --palette-accent-contrast-900: #fffaf2;
+  /* The base derives these on :root, so even in dark mode they'd resolve
+     against the light palette on <html> (heatmap, focus ring, calendar hover).
+     Re-declared on body they follow the active mode's palette. */
+  --c-primary: var(--palette-primary-500);
+  --c-accent: var(--palette-accent-500);
+  --c-contrast: var(--palette-primary-contrast-500);
+  --focus-ring-color: var(--focus-ring, var(--palette-primary-500));
+  --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 35%, transparent);
 
   /* Status (plainspace) */
   --color-success: #59795f;
@@ -168,12 +186,9 @@ body.isDarkTheme {
    * The base maps these "Category B" tokens to a cold grey ramp (--dark*) that
    * the surface-ladder override above doesn't reach — so nested subtasks, notes
    * and selected rows render grey against the warm paper. Re-derive them from
-   * the plainspace surface ladder: subtasks lift a step above the task card,
-   * done rows recede toward the page, selected rows sit on surface-3. */
-  --sub-task-c-bg: #352f27;
-  --sub-task-c-bg-in-selected: #443c30;
-  --sub-task-c-bg-done: #28231c;
-  --task-c-bg-done: #221e1a;
+   * the plainspace surface ladder: selected rows sit on surface-3. Subtask and
+   * done rows keep the base's transparent card so, as in light mode, every
+   * task sits directly on the paper (the list has no separators either). */
   --task-c-selected-bg: #3a3329;
   --selected-task-bg-color: #3a3329;
   --standard-note-bg: #352f27;
@@ -196,18 +211,25 @@ body.isDarkTheme {
 body {
   /* Horizontal ruling slightly stronger than vertical — reads as paper, not a
      spreadsheet. Kept visible on purpose (plainspace's own 0.018 is nearly
-     invisible; the grid is a requested feature here). */
-  --paper-grid-line: rgba(31, 28, 23, 0.04);
-  --paper-grid-line-v: rgba(31, 28, 23, 0.03);
+     invisible; the grid is a requested feature here), but faint enough not to
+     compete with the tasks written directly on it. */
+  --paper-grid-line: rgba(31, 28, 23, 0.03);
+  --paper-grid-line-v: rgba(31, 28, 23, 0.02);
   --paper-grid-size: 24px;
 }
 body.isDarkTheme {
-  --paper-grid-line: rgba(243, 238, 226, 0.05);
-  --paper-grid-line-v: rgba(243, 238, 226, 0.04);
+  --paper-grid-line: rgba(243, 238, 226, 0.035);
+  --paper-grid-line-v: rgba(243, 238, 226, 0.025);
 }
 
+/* The grid is the theme's paper texture, not the per-context color tint, so it
+   must survive a context's "disable background tint" (on by default for TODAY,
+   which is why the grid used to vanish when switching views). The
+   .isDisableBackgroundTint selectors match the base's hide rule specificity. */
 body.isLightTheme::before,
-body.isDarkTheme::before {
+body.isDarkTheme::before,
+body.isLightTheme.isDisableBackgroundTint::before,
+body.isDarkTheme.isDisableBackgroundTint::before {
   display: block;
   opacity: 1;
   background-color: transparent;
@@ -288,6 +310,26 @@ body.isDarkTheme {
   opacity: 0.45;
   clip-path: var(--underline-hand-shape);
   pointer-events: none;
+}
+
+/* Serif titles, as on plainspace.org; body text stays sans. Themes can't
+   bundle fonts (no remote resources), so Fraunces only applies when installed
+   and the stack falls back to system serifs. The :not() list mirrors the base
+   heading rule in page.scss — fewer of them and that rule's specificity wins. */
+body
+  :is(h1, h2, h3):not([mat-dialog-title]):not(.mat-mdc-dialog-title):not(
+    .mat-mdc-card-title
+  ),
+body .page-title-text {
+  font-family:
+    'Fraunces', 'Iowan Old Style', Charter, 'Bitstream Charter', Georgia, serif;
+  letter-spacing: 0;
+}
+
+/* Tasks sit on the grid like a written list — ruled separators on top of
+   ruled paper read as a table. */
+body {
+  --task-separator: none;
 }
 
 /* ============================================================

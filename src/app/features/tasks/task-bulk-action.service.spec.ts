@@ -16,6 +16,7 @@ import { DEFAULT_TASK, Task, TaskReminderOptionId } from './task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
 import { PLAINSPACE_TYPE } from '../issue/issue.const';
+import { IssueSyncStateService } from '../issue/two-way-sync/issue-sync-state.service';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { PlannerActions } from '../planner/store/planner.actions';
@@ -316,6 +317,41 @@ describe('TaskBulkActionService', () => {
       }
     });
 
+    it("focuses the board column's header + when every selected card is removed", async () => {
+      isConfirmBeforeDelete = false;
+      select([t('only')]);
+      const root = document.createElement('div');
+      // The other column's "+" must not be reached.
+      root.innerHTML = `
+        <board-panel data-board-selection-scope="first">
+          <header><button data-add-task-btn></button></header>
+        </board-panel>
+        <board-panel data-board-selection-scope="second">
+          <header><button data-add-task-btn></button></header>
+          <planner-task data-task-selectable="true" data-task-id="only" tabindex="0"></planner-task>
+        </board-panel>`;
+      document.body.appendChild(root);
+      try {
+        const panel = root.querySelector<HTMLElement>(
+          '[data-board-selection-scope="second"]',
+        )!;
+        const row = panel.querySelector<HTMLElement>('[data-task-id="only"]')!;
+        const add = panel.querySelector<HTMLElement>('[data-add-task-btn]')!;
+        multiSelect.selectionScope = () => panel;
+        spyOnProperty(document, 'activeElement', 'get').and.returnValue(row);
+        let isDestroyed = false;
+        multiSelect.isDestroyedHost = (el: Element) => isDestroyed && el === row;
+        taskService.remove.and.callFake(() => {
+          isDestroyed = true;
+        });
+        spyOn(add, 'focus');
+        await service.deleteSelected();
+        expect(add.focus).toHaveBeenCalled();
+      } finally {
+        root.remove();
+      }
+    });
+
     it('restores focus in the originating board panel when the bulk menu had focus', async () => {
       isConfirmBeforeDelete = false;
       select([t('selected')]);
@@ -419,6 +455,20 @@ describe('TaskBulkActionService', () => {
         jasmine.objectContaining({
           data: jasmine.objectContaining({
             message: 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG_PLAINSPACE.OTHER',
+          }),
+        }),
+      );
+    });
+
+    it('does not warn for Plainspace tasks Plainspace no longer lists for me', async () => {
+      TestBed.inject(IssueSyncStateService).setMissing(['gone'], ['gone']);
+      select([t('a'), t('gone', { issueType: PLAINSPACE_TYPE })]);
+      await service.deleteSelected();
+      expect(matDialog.open).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({
+          data: jasmine.objectContaining({
+            message: 'F.TASK.MULTI_SELECT.D_CONFIRM_DELETE.MSG.OTHER',
           }),
         }),
       );

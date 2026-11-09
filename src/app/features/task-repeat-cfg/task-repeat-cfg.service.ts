@@ -45,6 +45,8 @@ import {
 } from './get-repeatable-task-id.util';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 import { getTaskPriority } from '../tasks/task-priority.const';
+import { addTaskToSection } from '../section/store/section.actions';
+import { selectSectionFeatureState } from '../section/store/section.selectors';
 
 @Injectable({
   providedIn: 'root',
@@ -181,8 +183,16 @@ export class TaskRepeatCfgService {
       | ReturnType<typeof updateTaskRepeatCfg>
       | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
       | ReturnType<typeof addSubTask>
+      | ReturnType<typeof addTaskToSection>
     )[]
   > {
+    // A paused series creates nothing. The day-change selectors already skip
+    // it, but completing a copy of a paused wait-for-completion config calls
+    // this directly (updateStartDateOnComplete$).
+    if (taskRepeatCfg.isPaused) {
+      return [];
+    }
+
     // NOTE: there might be multiple configs in case something went wrong
     // we want to move all of them to the archive
     const existingTaskInstances: Task[] = await this._taskService
@@ -300,6 +310,7 @@ export class TaskRepeatCfgService {
       | ReturnType<typeof updateTaskRepeatCfg>
       | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
       | ReturnType<typeof addSubTask>
+      | ReturnType<typeof addTaskToSection>
     )[] = [
       TaskSharedActions.addTask({
         task: taskWithTargetDates,
@@ -321,6 +332,13 @@ export class TaskRepeatCfgService {
           taskWithTargetDates.deadlineWithTime,
         ),
       }),
+      // A separate action, not part of addTask: older clients apply addTask
+      // without placing the task in a section, but all of them handle this.
+      ...(await this._getAddToSectionsOfPreviousInstance(
+        taskRepeatCfg,
+        expectedTaskId,
+        existingTaskInstances,
+      )),
       updateTaskRepeatCfg({
         taskRepeatCfg: {
           id: taskRepeatCfg.id,
@@ -382,6 +400,55 @@ export class TaskRepeatCfgService {
     }
 
     return createNewActions;
+  }
+
+  /**
+   * A new repeat instance goes into each project section that holds the
+   * previous instance, right before it (#10812). TODAY sections are left out:
+   * the previous instance is no longer due today, so it has already left
+   * TODAY (`repairTodayTagConsistency$`) when the new one is created.
+   */
+  private async _getAddToSectionsOfPreviousInstance(
+    taskRepeatCfg: TaskRepeatCfg,
+    taskId: string,
+    existingTaskInstances: Task[],
+  ): Promise<ReturnType<typeof addTaskToSection>[]> {
+    const projectId = taskRepeatCfg.projectId;
+    if (!projectId) return [];
+    let previous: Task | undefined;
+    for (const candidate of existingTaskInstances) {
+      if (candidate.id === taskId || candidate.parentId) continue;
+      if (!previous || candidate.created > previous.created) previous = candidate;
+    }
+    if (!previous) return [];
+    const previousId = previous.id;
+
+    const sectionState = await this._store$
+      .select(selectSectionFeatureState)
+      .pipe(take(1))
+      .toPromise();
+    const actions: ReturnType<typeof addTaskToSection>[] = [];
+    for (const id of (sectionState?.ids ?? []) as string[]) {
+      const section = sectionState?.entities[id];
+      const index = section?.taskIds.indexOf(previousId) ?? -1;
+      if (
+        !section ||
+        index === -1 ||
+        section.contextType !== WorkContextType.PROJECT ||
+        section.contextId !== projectId
+      ) {
+        continue;
+      }
+      actions.push(
+        addTaskToSection({
+          sectionId: section.id,
+          taskId,
+          afterTaskId: index > 0 ? section.taskIds[index - 1] : null,
+          sourceSectionId: null,
+        }),
+      );
+    }
+    return actions;
   }
 
   private _getTaskRepeatTemplate(

@@ -55,11 +55,15 @@ const ANIMATION_DONE_EVENTS = [
   'transitioncancel',
 ] as const;
 
-const isVisible = (el: HTMLElement): boolean => {
+export const isVisible = (el: HTMLElement): boolean => {
   const rect = el.getBoundingClientRect();
   return (
     rect.width > 0 &&
     rect.height > 0 &&
+    // Off-screen boxes, e.g. the closed mobile drawer's rows where
+    // checkVisibility is missing (iOS < 17.4).
+    rect.right > 0 &&
+    rect.left < window.innerWidth &&
     (typeof el.checkVisibility !== 'function' ||
       el.checkVisibility({ opacityProperty: true, visibilityProperty: true }))
   );

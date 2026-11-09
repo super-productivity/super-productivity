@@ -67,13 +67,16 @@ jobs:
           echo "head_branch=$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
+      # Aliased by PR number, not head branch: a fork PR from its own `master`
+      # would otherwise overwrite the `master` alias that
+      # master-web-deploy.yml serves on test-app.super-productivity.com.
       - name: Deploy to Cloudflare Pages
         id: cloudflare-deploy
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist/browser --project-name=super-productivity-preview --branch=${{ steps.pr.outputs.head_branch }}
+          command: pages deploy dist/browser --project-name=super-productivity-preview --branch=pr-${{ steps.pr.outputs.number }}
 
       - name: Find existing comment
         uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4.0.0

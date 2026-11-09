@@ -26,7 +26,9 @@
   <string name="webview_override_warning_cancel">Cancel</string>
 
   <!-- Share intent -->
-  <string name="share_received">Content received, creating task\u2026</string>
+  <string name="share_saved">Saved to Super Productivity</string>
+  <string name="share_empty">Nothing to save</string>
+  <string name="share_failed">Could not save the share</string>
 
   <!-- Home screen widget -->
   <string name="widget_title">Today\'s Tasks</string>
@@ -38,4 +40,25 @@
   <string name="widget_description">Shows today\'s tasks with quick done action</string>
   <string name="widget_empty">No tasks for today</string>
   <string name="widget_task_done">Toggle task done</string>
+  <!-- Currently tracked task row; %1$s is the task title -->
+  <string name="widget_tracking_title">Tracking: %1$s</string>
+  <!-- Device currently tracking it, e.g. "on Desktop"; %1$s is the device label -->
+  <string name="widget_tracking_device">on %1$s</string>
+  <string name="widget_add_task">Add task</string>
+
+  <!-- Widget quick add (QuickAddActivity): a dialog over the home screen -->
+  <string name="quick_add_title">New task</string>
+  <string name="quick_add_hint">Task title</string>
+  <string name="quick_add_save">Add</string>
+  <!-- Not "Added to Today": the app adds it on next open, and short syntax
+       may schedule it for another day -->
+  <string name="quick_add_saved">Task saved</string>
+  <string name="quick_add_failed">Could not save the task</string>
+
+  <!-- Launcher shortcuts (long-press the app icon), res/xml/shortcuts.xml.
+       Same set as the iOS Home Screen quick actions, in Android's sentence
+       case; Android recommends at most ~10 characters. -->
+  <string name="shortcut_add_task">New task</string>
+  <string name="shortcut_today">Today</string>
+  <string name="shortcut_inbox">Inbox</string>
 </resources>

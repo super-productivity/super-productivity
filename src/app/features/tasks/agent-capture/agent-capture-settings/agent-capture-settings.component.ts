@@ -92,8 +92,7 @@ export class AgentCaptureSettingsComponent extends FieldType<FormlyFieldConfig> 
 
   turnOff(): Promise<void> {
     return this._run(async () => {
-      const grants = await this._capture.listGrants();
-      const count = grants.reduce((sum, grant) => sum + grant.pendingCount, 0);
+      const count = await this._capture.countPending();
       const msg = count
         ? T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_OFF_CONFIRM
         : T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_OFF_CONFIRM_NONE;

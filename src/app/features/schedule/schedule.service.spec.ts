@@ -18,6 +18,7 @@ import { BehaviorSubject, of } from 'rxjs';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { HiddenCalendarProvidersService } from '../calendar-integration/hidden-calendar-providers.service';
 import { TaskService } from '../tasks/task.service';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { ScheduleCalendarMapEntry, ScheduleEvent } from './schedule.model';
 import { SVEType } from './schedule.const';
 
@@ -52,6 +53,7 @@ describe('ScheduleService', () => {
           provide: TaskService,
           useValue: { currentTaskId: () => null },
         },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-us' } },
       ],
     });
     service = TestBed.inject(ScheduleService);
@@ -903,6 +905,7 @@ describe('ScheduleService – calendar visibility filter', () => {
         }),
         { provide: CalendarIntegrationService, useValue: { calendarEvents$ } },
         { provide: TaskService, useValue: { currentTaskId: () => null } },
+        { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en-us' } },
         {
           provide: HiddenCalendarProvidersService,
           useValue: { hiddenProviderIds },
@@ -925,6 +928,28 @@ describe('ScheduleService – calendar visibility filter', () => {
     return (spy.calls.mostRecent().args[0].calendarEvents ??
       []) as ScheduleCalendarMapEntry[];
   };
+
+  it('should map each provider to the first calendar source color', () => {
+    const withColor = (
+      entry: ScheduleCalendarMapEntry,
+      calendarColor?: string,
+    ): ScheduleCalendarMapEntry['items'][number] => ({
+      ...entry.items[0],
+      calendarColor,
+    });
+    calendarEvents$.next([
+      {
+        items: [
+          withColor(makeEntry('provider-A')),
+          withColor(makeEntry('provider-A'), '#fbe983'),
+          withColor(makeEntry('provider-A'), '#9fc6e7'),
+          withColor(makeEntry('provider-B')),
+        ],
+      },
+    ]);
+
+    expect([...service.calendarColorByProviderId()]).toEqual([['provider-A', '#fbe983']]);
+  });
 
   it('should pass all entries through when no providers are hidden', () => {
     calendarEvents$.next([makeEntry('provider-A'), makeEntry('provider-B')]);

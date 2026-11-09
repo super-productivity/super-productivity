@@ -3,8 +3,12 @@ const API_BASE = '/api';
 // State
 const state = {
   token: null,
-  email: localStorage.getItem('supersync_email') || '',
+  email: '',
 };
+
+// Earlier versions kept the email in localStorage; drop it, because remembering it
+// is a convenience that would need consent under TDDDG §25.
+localStorage.removeItem('supersync_email');
 
 // DOM Elements
 const loginForm = document.getElementById('login-form');
@@ -97,8 +101,6 @@ emailInputs.forEach((input) => {
   input.addEventListener('input', (e) => {
     const newEmail = e.target.value;
     state.email = newEmail;
-    // Save to localStorage for persistence across page reloads
-    localStorage.setItem('supersync_email', newEmail);
     // Sync to other inputs
     emailInputs.forEach((otherInput) => {
       if (otherInput !== e.target) {
@@ -163,6 +165,11 @@ function switchTab(tab) {
 }
 
 function showToken(token) {
+  // Signing in a new device (connect.js): never show the long-lived token.
+  if (CONNECT_REQUEST_ID) {
+    showConnectPanel(token, { showMessage, logout });
+    return;
+  }
   state.token = token;
   tokenArea.value = token;
   authForms.classList.add('hidden');
@@ -522,7 +529,7 @@ async function registerWithPasskey() {
     const verifyRes = await fetch(`${API_BASE}/register/passkey/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, credential }),
+      body: JSON.stringify({ email, credential, r: CONNECT_REQUEST_ID }),
     });
 
     const verifyData = await verifyRes.json();
@@ -584,7 +591,7 @@ async function registerWithMagicLink() {
       headers: { 'Content-Type': 'application/json' },
       // JSON.stringify omits undefined-valued properties, so an instance with no legal
       // pages simply sends { email }.
-      body: JSON.stringify({ email, termsAccepted }),
+      body: JSON.stringify({ email, termsAccepted, r: CONNECT_REQUEST_ID }),
     });
 
     const data = await res.json();
@@ -627,15 +634,6 @@ async function registerWithMagicLink() {
   }
 })();
 
-// Initialize email inputs from saved state
-(function initEmailInputs() {
-  if (state.email) {
-    emailInputs.forEach((input) => {
-      input.value = state.email;
-    });
-  }
-})();
-
 // --- Magic Link Functions ---
 
 async function requestMagicLink() {
@@ -653,7 +651,7 @@ async function requestMagicLink() {
     const res = await fetch(`${API_BASE}/login/magic-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, r: CONNECT_REQUEST_ID }),
     });
 
     const data = await res.json();

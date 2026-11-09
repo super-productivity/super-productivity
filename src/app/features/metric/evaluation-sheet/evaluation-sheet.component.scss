@@ -11,9 +11,6 @@
 }
 
 .radio-group,
-.time-item,
-.score-card,
-.daily-state-card,
 reflection-note {
   padding: 12px;
   border-radius: var(--eval-border-radius);
@@ -29,29 +26,6 @@ reflection-note {
 
   mat-form-field {
     width: 100%;
-  }
-}
-
-.time-summary {
-  display: flex;
-  gap: var(--eval-card-gap);
-
-  .time-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: var(--s-half);
-    font-size: 12px;
-
-    .time-label {
-      letter-spacing: 0.08em;
-      opacity: 0.8;
-    }
-
-    .time-value {
-      font-weight: 600;
-      font-size: 14px;
-    }
   }
 }
 
@@ -75,147 +49,5 @@ reflection-note {
     margin-top: var(--s);
     font-size: 0.75em;
     opacity: 0.6;
-  }
-}
-
-.scores-container {
-  display: grid;
-  //grid-template-columns: 3fr 2fr;
-  grid-template-columns: 2fr 2fr;
-  gap: var(--eval-card-gap);
-}
-
-.score-card {
-  padding: 12px;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s);
-  transition: var(--transition-standard);
-  border: 2px solid var(--card-bg);
-
-  .label {
-    font-size: 0.75em;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    opacity: 0.85;
-    text-align: center;
-    cursor: help;
-    transition: opacity 0.2s ease;
-
-    &:hover {
-      opacity: 1;
-    }
-  }
-
-  .score-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--s2);
-
-    .score {
-      font-size: 36px;
-      font-weight: 700;
-      line-height: 1;
-    }
-  }
-
-  .trend-row {
-    display: flex;
-    justify-content: center;
-    margin-top: var(--s);
-  }
-}
-
-.daily-state-card {
-  padding: var(--s2);
-  background: var(--bg-lightest);
-  border-left: 4px solid var(--c-accent);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s);
-  transition: var(--transition-standard);
-  // to prevent too much jumping
-  min-height: 126px;
-
-  .daily-state-label {
-    font-size: 0.75em;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-color-muted);
-    cursor: help;
-    transition: opacity 0.2s ease;
-
-    &:hover {
-      opacity: 0.8;
-    }
-  }
-
-  .daily-state-title {
-    display: flex;
-    gap: var(--s);
-    font-weight: 600;
-    color: var(--text-color);
-    transition: transform 0.2s ease;
-  }
-
-  .daily-state-icon {
-    font-size: 20px;
-    line-height: 1;
-    transition: transform 0.2s ease;
-  }
-
-  .daily-state-hint {
-    color: var(--text-color-muted);
-    font-size: 0.95em;
-    line-height: 1.4;
-  }
-}
-
-.trend-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: var(--s-half) 10px;
-  border-radius: 999px;
-  border: none;
-  background: rgba(255, 255, 255, 0.2);
-  color: inherit;
-  cursor: pointer;
-  font-size: 0.85em;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  transition: background-color 0.2s ease;
-
-  &:focus-visible {
-    outline: 2px solid var(--c-light-60);
-    outline-offset: 2px;
-  }
-
-  .pill-title {
-    opacity: 0.7;
-  }
-
-  .pill-value {
-    font-weight: 700;
-  }
-
-  .pill-delta {
-    font-weight: 700;
-  }
-
-  &.trend-up {
-    background: rgba(76, 175, 80, 0.35);
-  }
-
-  &.trend-down {
-    background: rgba(244, 67, 54, 0.35);
-  }
-
-  &.trend-stable {
-    background: rgba(255, 255, 255, 0.2);
   }
 }

@@ -27,6 +27,7 @@ import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginConfigService } from './plugin-config.service';
+import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
 import { TaskArchiveService } from '../features/archive/task-archive.service';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
@@ -41,6 +42,7 @@ import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
 import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
+import { showPluginPanel } from '../core-ui/layout/store/layout.actions';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
 import { T } from '../t.const';
 import { INBOX_PROJECT } from '../features/project/project.const';
@@ -57,6 +59,34 @@ describe('PluginBridgeService - Counter Methods', () => {
   let dispatchSpy: jasmine.Spy;
   let dataInitService: jasmine.SpyObj<DataInitService>;
   let taskContextMenuRegistry: jasmine.SpyObj<PluginTaskContextMenuRegistryService>;
+
+  it('lists previously unknown keys after remote state has been applied', async () => {
+    const bound = service.createBoundMethods('plugin-a');
+    const selector = store.overrideSelector(selectPluginUserDataFeatureState, []);
+    expect(await bound.listSyncedDataKeys()).toEqual([]);
+    selector.setResult([
+      { id: 'plugin-a', data: 'legacy' },
+      { id: 'plugin-ab:attachment:чужой', data: '{}' },
+      { id: 'plugin-a:attachment:task:новый-uuid', data: '{}' },
+      { id: 'plugin-a:settings', data: '{}' },
+    ]);
+    store.refreshState();
+    expect(await bound.listSyncedDataKeys('attachment:task:')).toEqual([
+      'attachment:task:новый-uuid',
+    ]);
+    expect(await service.createBoundMethods('plugin-ab').listSyncedDataKeys()).toEqual([
+      'attachment:чужой',
+    ]);
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid prefixes through the public bridge', async () => {
+    store.overrideSelector(selectPluginUserDataFeatureState, []);
+    await expectAsync(
+      service.createBoundMethods('plugin-a').listSyncedDataKeys(4 as unknown as string),
+    ).toBeRejectedWithError(/must be a string/);
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
 
   const mockExistingCounter: SimpleCounter = {
     ...EMPTY_SIMPLE_COUNTER,
@@ -535,6 +565,23 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
       { type },
     );
   });
+
+  it('lets a plugin open its own panel', () => {
+    const bound = service.createBoundMethods('test-plugin');
+
+    bound.dispatchAction({ type: showPluginPanel.type, pluginId: 'test-plugin' });
+
+    expect(store.dispatch).toHaveBeenCalledOnceWith(showPluginPanel('test-plugin'));
+  });
+
+  it("refuses to open another plugin's panel", () => {
+    const bound = service.createBoundMethods('test-plugin');
+
+    expect(() =>
+      bound.dispatchAction({ type: showPluginPanel.type, pluginId: 'other-plugin' }),
+    ).toThrowError('Action type is not allowed');
+    expect(store.dispatch).not.toHaveBeenCalled();
+  });
 });
 
 describe('PluginBridgeService - iframe task selection methods', () => {
@@ -891,11 +938,15 @@ describe('PluginBridgeService - openDialog', () => {
       PluginDialogComponent,
       jasmine.objectContaining({
         data: dialogCfg,
-        autoFocus: true,
         restoreFocus: true,
         disableClose: false,
         closeOnNavigation: false,
       }),
+    );
+    // Plugin dialogs follow the touch-aware default (no keyboard on touch).
+    // An explicit `autoFocus: undefined` would also override the default.
+    expect(Object.keys(matDialog.open.calls.mostRecent().args[1] ?? {})).not.toContain(
+      'autoFocus',
     );
   });
 

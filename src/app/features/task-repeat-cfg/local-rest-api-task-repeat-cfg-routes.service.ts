@@ -26,6 +26,7 @@ import { TaskService } from '../tasks/task.service';
 import { getTaskPriority } from '../tasks/task-priority.const';
 import { getDefaultSkipOverdue } from './dialog-edit-task-repeat-cfg/get-default-skip-overdue';
 import { getQuickSettingUpdates } from './dialog-edit-task-repeat-cfg/get-quick-setting-updates';
+import { getResumeCursorChanges } from './dialog-edit-task-repeat-cfg/get-resume-cursor-changes';
 import { getTaskRepeatCfgChanges } from './dialog-edit-task-repeat-cfg/get-task-repeat-cfg-changes';
 import { TaskRepeatCfgService } from './task-repeat-cfg.service';
 import {
@@ -75,6 +76,15 @@ const WEEKDAYS = [
   'saturday',
   'sunday',
 ] as const;
+const EMPTY_WEEKDAYS = {
+  monday: false,
+  tuesday: false,
+  wednesday: false,
+  thursday: false,
+  friday: false,
+  saturday: false,
+  sunday: false,
+} as const;
 const UPDATE_KEYS: ReadonlySet<string> = new Set([
   'quickSetting',
   'startDate',
@@ -320,7 +330,14 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
 
     // Only the fields that really change: the reschedule effect reacts to
     // every schedule key present in the update (#7373).
-    const changes = getTaskRepeatCfgChanges(cfg, final);
+    const logicalYesterday = new Date(this._dateService.getLogicalTodayDate());
+    logicalYesterday.setDate(logicalYesterday.getDate() - 1);
+    const changes = {
+      ...getTaskRepeatCfgChanges(cfg, final),
+      // Resuming must not add the dates missed while paused (same op), as in
+      // the dialog
+      ...getResumeCursorChanges(cfg, final, getDbDateStr(logicalYesterday)),
+    };
     if (Object.keys(changes).length > 0) {
       // `false`, as the dialog passes for these fields: it only asks to
       // update all instances (in a confirmation dialog) when title, notes,
@@ -399,8 +416,13 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       };
     }
 
+    // Supplied custom weekdays replace the selection; omitting all weekday
+    // fields preserves the existing selection or the defaults on creation.
+    const replaceWeekdays =
+      quickSetting === 'CUSTOM' && WEEKDAYS.some((day) => custom[day] !== undefined);
     let result: Omit<TaskRepeatCfgCopy, 'id'> = {
       ...base,
+      ...(replaceWeekdays ? EMPTY_WEEKDAYS : {}),
       ...custom,
       quickSetting,
       ...(startDate !== undefined ? { startDate } : {}),

@@ -132,6 +132,18 @@ describe('DialogIdleComponent', () => {
         }),
       );
     });
+
+    it('should always reset the break timer, even after an earlier opt-out', () => {
+      const c = setup();
+      c.selectMode('TASK');
+      c.onResetBreakTimerChange(false);
+      c.selectMode('BREAK');
+
+      c.confirm();
+      expect(dialogRefSpy.close).toHaveBeenCalledWith(
+        jasmine.objectContaining({ isResetBreakTimer: true }),
+      );
+    });
   });
 
   describe('TASK mode', () => {

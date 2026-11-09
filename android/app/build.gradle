@@ -20,8 +20,8 @@ android {
         minSdkVersion 24
         targetSdkVersion 36
         compileSdk 36
-        versionCode 19_02_00_9000
-        versionName "19.2.0"
+        versionCode 20_00_00_9000
+        versionName "20.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [
                 hostName       : "app.super-productivity.com",
@@ -191,6 +191,8 @@ dependencies {
     // Real org.json for JVM unit tests (android.jar only ships stubs); used by
     // WidgetDataTest to lock the widget_data blob contract.
     testImplementation "org.json:json:20240303"
+    // Fake WebDAV server for fetchSyncFile (FileSyncReminderFetchTest)
+    testImplementation "com.squareup.okhttp3:mockwebserver:4.12.0"
 
     androidTestImplementation "androidx.test:core:1.6.1"
     androidTestImplementation "androidx.test:rules:1.6.1"

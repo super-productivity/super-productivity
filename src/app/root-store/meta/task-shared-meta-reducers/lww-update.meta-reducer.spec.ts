@@ -21,6 +21,17 @@ import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { SIMPLE_COUNTER_FEATURE_NAME } from '../../../features/simple-counter/store/simple-counter.reducer';
+import { EMPTY_SIMPLE_COUNTER } from '../../../features/simple-counter/simple-counter.const';
+import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfg,
+} from '../../../features/task-repeat-cfg/task-repeat-cfg.model';
+import { createLWWUpdateOp } from '../../../op-log/sync/lww-update-op.util';
+import {
+  localWinningFieldGroups,
+  mergedSnapshotState,
+} from '../../../op-log/sync/conflict-field-patch.util';
 import {
   SimpleCounter,
   SimpleCounterType,
@@ -1087,6 +1098,76 @@ describe('lwwUpdateMetaReducer', () => {
       expect(result.success).toBe(true);
     });
 
+    // Since #11474 the losing delete carries the whole counter. Backfilling it
+    // gave the copy streak fields the original (streaks off) never had (#11496).
+    describe('recreating from a whole counter (#11496)', () => {
+      const wholeCounter = {
+        id: 'cnt_whole',
+        title: 'Stopwatch',
+        isEnabled: true,
+        icon: null,
+        type: SimpleCounterType.StopWatch,
+        countOnDay: {},
+        isOn: false,
+        isTrackStreaks: false,
+      };
+      const recreateOp = (actionPayload: Record<string, unknown>): Operation => ({
+        id: 'op-counter-recreate',
+        actionType: '[SIMPLE_COUNTER] LWW Update' as ActionType,
+        opType: OpType.Update,
+        entityType: 'SIMPLE_COUNTER',
+        entityId: actionPayload['id'] as string,
+        payload: {
+          actionPayload,
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        },
+        clientId: 'clientB',
+        vectorClock: { clientB: 2 },
+        timestamp: 1700000000000,
+        schemaVersion: 1,
+      });
+      const recreate = (
+        actionPayload: Record<string, unknown>,
+      ): { entities: Record<string, unknown> } | undefined => {
+        reducer(makeStateWithCounters(), convertOpToAction(recreateOp(actionPayload)));
+        const updated = mockReducer.calls.mostRecent().args[0] as Record<
+          string,
+          { entities: Record<string, unknown> } | undefined
+        >;
+        return updated[SIMPLE_COUNTER_FEATURE_NAME];
+      };
+
+      it('adds it as it is, without fields the original lacks', () => {
+        const counterState = recreate(wholeCounter);
+        const counter = counterState?.entities['cnt_whole'] as Record<string, unknown>;
+        const withoutModified = { ...counter };
+        delete withoutModified['modified'];
+        expect(withoutModified).toEqual(wholeCounter);
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+
+      it('backfills a counter whose non-nullable whole-entity key is null', () => {
+        const nulled = { ...wholeCounter, id: 'cnt_null', title: null, type: null };
+        const counterState = recreate(nulled);
+        const counter = counterState?.entities['cnt_null'] as SimpleCounter;
+        expect(counter.type).toBe(EMPTY_SIMPLE_COUNTER.type);
+        expect(counter.title).toBe(EMPTY_SIMPLE_COUNTER.title);
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+
+      it('still backfills a counter that lacks a whole-entity key', () => {
+        const partial: Record<string, unknown> = { ...wholeCounter, id: 'cnt_part' };
+        delete partial['isOn'];
+        const counterState = recreate(partial);
+        const counter = counterState?.entities['cnt_part'] as SimpleCounter;
+        expect(counter.isOn).toBe(false);
+        expect(counter.streakMode).toBe(EMPTY_SIMPLE_COUNTER.streakMode);
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+    });
+
     // A local-win conflict resolution ships the whole habit as a 'replace'
     // snapshot. The action envelope's `type` shadows SimpleCounter.type, so a
     // plain setOne on the receiver dropped it; typia then failed and repair
@@ -1282,6 +1363,118 @@ describe('lwwUpdateMetaReducer', () => {
         expect(counter.type).toBe(SimpleCounterType.StopWatch);
         expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
       });
+    });
+  });
+
+  // #10958: a repeat-config crossing re-sends ONE merged replace snapshot. This
+  // reducer path for TASK_REPEAT_CFG is the one v19.1.0 and v19.2.0 run (no
+  // RECREATE_FALLBACK entry there or here), so these are released receivers.
+  describe('[TASK_REPEAT_CFG] merged snapshot on a receiver (#10958)', () => {
+    const base: TaskRepeatCfg = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      id: 'cfg-1',
+      title: 'Daily',
+      skipOverdue: false,
+      lastTaskCreation: 1000,
+      lastTaskCreationDay: '2026-06-15',
+    };
+    const cfgEdit = (
+      id: string,
+      clientId: string,
+      timestamp: number,
+      changes: Partial<TaskRepeatCfg>,
+    ): Operation => ({
+      id,
+      actionType: '[TaskRepeatCfg] Update TaskRepeatCfg' as ActionType,
+      opType: OpType.Update,
+      entityType: 'TASK_REPEAT_CFG',
+      entityId: 'cfg-1',
+      payload: { taskRepeatCfg: { id: 'cfg-1', changes } },
+      clientId,
+      vectorClock: { [clientId]: 2 },
+      timestamp,
+      schemaVersion: 1,
+    });
+    // Device B resolves: its pending generation against A's skipOverdue edit.
+    const sides = {
+      localOps: [
+        cfgEdit('gen', 'B', 2000, {
+          lastTaskCreation: 2000,
+          lastTaskCreationDay: '2026-06-16',
+        }),
+      ],
+      remoteOps: [cfgEdit('skip', 'A', 1000, { skipOverdue: true })],
+      payloadKey: 'taskRepeatCfg',
+      entityId: 'cfg-1',
+    };
+    const groups = localWinningFieldGroups(sides);
+    const resolverState = {
+      ...base,
+      lastTaskCreation: 2000,
+      lastTaskCreationDay: '2026-06-16',
+    };
+    const overTheWire = (op: Operation): Operation => JSON.parse(JSON.stringify(op));
+    const rowOf = (
+      payload: Record<string, unknown>,
+      mode: 'replace' | 'patch',
+    ): Operation =>
+      overTheWire(
+        createLWWUpdateOp(
+          'TASK_REPEAT_CFG',
+          'cfg-1',
+          payload,
+          'B',
+          { A: 2, B: 3 },
+          2000,
+          mode,
+        ),
+      );
+    const applyToReceiver = (
+      op: Operation,
+      entities: Record<string, TaskRepeatCfg>,
+    ): { ids: string[]; entities: Record<string, TaskRepeatCfg> } => {
+      reducer(
+        {
+          [TASK_REPEAT_CFG_FEATURE_NAME]: { ids: Object.keys(entities), entities },
+        } as unknown as Partial<RootState>,
+        convertOpToAction(op),
+      );
+      const updated = mockReducer.calls.mostRecent().args[0] as Record<string, unknown>;
+      return updated[TASK_REPEAT_CFG_FEATURE_NAME] as {
+        ids: string[];
+        entities: Record<string, TaskRepeatCfg>;
+      };
+    };
+    const snapshot = (): Operation =>
+      rowOf(mergedSnapshotState(resolverState, sides, groups)!, 'replace');
+
+    it('replaces a receiver config with both edits', () => {
+      const cfgState = applyToReceiver(snapshot(), {
+        [base.id]: { ...base, skipOverdue: true },
+      });
+      const cfg = cfgState.entities['cfg-1'];
+      expect(cfg.skipOverdue).toBe(true);
+      expect(cfg.lastTaskCreationDay).toBe('2026-06-16');
+      expect(cfg.title).toBe('Daily');
+      expect(appDataValidators.taskRepeatCfg(cfgState as never).success).toBe(true);
+    });
+
+    // A receiver that applied a concurrent `deleteTaskRepeatCfg` (or never
+    // had the config) and loses to the snapshot adds it raw: it is whole.
+    it('recreates a valid config on a receiver without it', () => {
+      const cfgState = applyToReceiver(snapshot(), {});
+      const cfg = cfgState.entities['cfg-1'];
+      expect(cfg.skipOverdue).toBe(true);
+      expect(cfg.lastTaskCreationDay).toBe('2026-06-16');
+      expect(cfg.repeatCycle).toBe(base.repeatCycle);
+      expect(appDataValidators.taskRepeatCfg(cfgState as never).success).toBe(true);
+    });
+
+    // Why not a patch row: the same receiver adds a partial patch raw too.
+    it('would add a partial patch row as an invalid config', () => {
+      const cfgState = applyToReceiver(rowOf(groups[0].changes, 'patch'), {});
+      expect(cfgState.entities['cfg-1'].title).toBeUndefined();
+      expect(appDataValidators.taskRepeatCfg(cfgState as never).success).toBe(false);
     });
   });
 

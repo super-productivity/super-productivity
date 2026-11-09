@@ -31,6 +31,7 @@ import {
   createCaptureConnectCode,
   refreshCaptureAuthorization,
 } from '../src/capture/capture-oauth.store';
+import { parseCaptureReviewAccess } from '../src/capture/capture-review';
 
 const mocked = vi.hoisted(() => {
   process.env.JWT_SECRET = 'oauth-test-secret-longer-than-32-characters';
@@ -44,9 +45,13 @@ const client = DEFAULT_CAPTURE_OAUTH_CLIENTS[0];
 const verifier = 'v'.repeat(43);
 const signingKey = process.env.JWT_SECRET!;
 
+const REVIEW_CODE = 'REVIEW-ABCD-EFGH-JKMN-PQRS';
+
 describe('capture OAuth (real routes and SQL)', () => {
   let db: PGlite;
   let app: FastifyInstance;
+  /** The same routes with an operator-set reviewer code for the test account. */
+  let reviewApp: FastifyInstance;
   let userId: number;
   let syncJwt: string;
   let key: ReturnType<typeof newCaptureKeyPair>;
@@ -87,8 +92,8 @@ describe('capture OAuth (real routes and SQL)', () => {
     expect(res.statusCode).toBe(200);
     return /data-auth-id="([^"]+)"/.exec(res.body)![1];
   };
-  const approve = (id: string, code: string, ip = '127.0.0.1') =>
-    app.inject({
+  const approve = (id: string, code: string, ip = '127.0.0.1', target = app) =>
+    target.inject({
       method: 'POST',
       url: '/oauth/authorize/approve',
       remoteAddress: ip,
@@ -151,9 +156,18 @@ describe('capture OAuth (real routes and SQL)', () => {
       clients: DEFAULT_CAPTURE_OAUTH_CLIENTS,
     });
     await app.ready();
+    reviewApp = Fastify();
+    await reviewApp.register(captureOAuthRoutes, {
+      publicUrl: issuer,
+      signingKey,
+      clients: DEFAULT_CAPTURE_OAUTH_CLIENTS,
+      review: parseCaptureReviewAccess('OAuth@Example.com', REVIEW_CODE),
+    });
+    await reviewApp.ready();
   });
   afterAll(async () => {
     await app.close();
+    await reviewApp.close();
     await db.close();
   });
   beforeEach(async () => {
@@ -503,6 +517,122 @@ describe('capture OAuth (real routes and SQL)', () => {
       );
     }
     expect((await approve(pendingId, connect, '192.0.2.31')).statusCode).toBe(200);
+  });
+
+  describe('reviewer code', () => {
+    const reviewAuthId = async () => {
+      const res = await reviewApp.inject({
+        method: 'GET',
+        url: `/oauth/authorize?${new URLSearchParams({
+          client_id: client.clientId,
+          redirect_uri: client.redirectUris[0],
+          resource,
+          response_type: 'code',
+          code_challenge_method: 'S256',
+          code_challenge: pkceChallenge(verifier),
+          scope: 'tasks:capture offline_access',
+          state: 'review',
+        })}`,
+      });
+      expect(res.statusCode).toBe(200);
+      return /data-auth-id="([^"]+)"/.exec(res.body)![1];
+    };
+
+    it('approves the demo account repeatedly, as typed or normalized', async () => {
+      for (const code of [REVIEW_CODE, REVIEW_CODE.toLowerCase().replace(/-/g, ' ')]) {
+        const response = await approve(
+          await reviewAuthId(),
+          code,
+          '127.0.0.1',
+          reviewApp,
+        );
+        expect(response.statusCode).toBe(200);
+        expect(new URL(response.json().redirect).searchParams.get('code')).toBeTruthy();
+      }
+      const bound = await db.query<{ user_id: number }>(
+        'SELECT user_id FROM capture_auth WHERE code_hash IS NOT NULL',
+      );
+      expect(bound.rows.map((row) => row.user_id)).toEqual([userId, userId]);
+    });
+
+    it('does not consume or replace the account’s connect code', async () => {
+      const connect = await connectCode();
+      expect(
+        (await approve(await reviewAuthId(), REVIEW_CODE, '127.0.0.1', reviewApp))
+          .statusCode,
+      ).toBe(200);
+      expect(
+        (await approve(await reviewAuthId(), connect, '127.0.0.1', reviewApp)).statusCode,
+      ).toBe(200);
+    });
+
+    it('refuses a wrong code and a demo account with capture switched off', async () => {
+      expect(
+        (
+          await approve(
+            await reviewAuthId(),
+            'REVIEW-ABCD-EFGH-JKMN-PQRT',
+            '127.0.0.1',
+            reviewApp,
+          )
+        ).statusCode,
+      ).toBe(400);
+      expect((await api('DELETE', '/key')).statusCode).toBe(200);
+      expect(
+        (await approve(await reviewAuthId(), REVIEW_CODE, '127.0.0.1', reviewApp))
+          .statusCode,
+      ).toBe(400);
+    });
+
+    it('is not accepted where no reviewer code is configured', async () => {
+      expect((await approve(await authId(), REVIEW_CODE)).statusCode).toBe(400);
+    });
+
+    it('binds only the configured account', async () => {
+      const otherApp = Fastify();
+      await otherApp.register(captureOAuthRoutes, {
+        publicUrl: issuer,
+        signingKey,
+        clients: DEFAULT_CAPTURE_OAUTH_CLIENTS,
+        review: parseCaptureReviewAccess('nobody@example.com', REVIEW_CODE),
+      });
+      await otherApp.ready();
+      const res = await otherApp.inject({
+        method: 'GET',
+        url: `/oauth/authorize?${new URLSearchParams({
+          client_id: client.clientId,
+          redirect_uri: client.redirectUris[0],
+          resource,
+          response_type: 'code',
+          code_challenge_method: 'S256',
+          code_challenge: pkceChallenge(verifier),
+        })}`,
+      });
+      const id = /data-auth-id="([^"]+)"/.exec(res.body)![1];
+      expect((await approve(id, REVIEW_CODE, '127.0.0.1', otherApp)).statusCode).toBe(
+        400,
+      );
+      await otherApp.close();
+    });
+
+    it('needs both settings and a long enough code', () => {
+      expect(parseCaptureReviewAccess(undefined, undefined)).toBeUndefined();
+      expect(parseCaptureReviewAccess('  ', '')).toBeUndefined();
+      expect(() => parseCaptureReviewAccess('demo@example.com', undefined)).toThrow(
+        /both/,
+      );
+      expect(() => parseCaptureReviewAccess(undefined, REVIEW_CODE)).toThrow(/both/);
+      expect(() => parseCaptureReviewAccess('demo@example.com', 'SHORT-CODE')).toThrow(
+        /20 to 32/,
+      );
+      // 20 characters, but dashes do not count toward the minimum.
+      expect(() =>
+        parseCaptureReviewAccess('demo@example.com', 'ABCD-EFGH-JKMN-PQRS-'),
+      ).toThrow(/20 to 32/);
+      expect(() => parseCaptureReviewAccess('demo@example.com', 'A'.repeat(33))).toThrow(
+        /20 to 32/,
+      );
+    });
   });
 
   it('rejects insecure allowlist configuration', () => {

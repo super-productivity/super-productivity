@@ -8,6 +8,21 @@
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": ["oauth", "http"],
+  "dataSharing": [
+    {
+      "recipient": "Google Calendar",
+      "hosts": ["www.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"],
+      "data": [
+        "credentials",
+        "taskTitles",
+        "taskNotes",
+        "taskSchedule",
+        "taskStatus",
+        "ids"
+      ],
+      "privacyPolicyUrl": "https://policies.google.com/privacy"
+    }
+  ],
   "hooks": [],
   "issueProvider": {
     "pollIntervalMs": 60000,

@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "Идентификатор проекта или имя \"username/repository\"",
+    "PROJECT_HINT": "Например, super-productivity/super-productivity",
+    "TOKEN": "Токен доступа",
+    "HOW_TO_GET_TOKEN": "Как получить токен?",
+    "SCOPE": "Область",
+    "SCOPE_ALL": "Все",
+    "SCOPE_CREATED": "Создано мной",
+    "SCOPE_ASSIGNED": "Назначено мне",
+    "GITLAB_BASE_URL": "Пользовательский базовый URL GitLab",
+    "FILTER_USER": "Имя пользователя (чтобы отфильтровать изменения самостоятельно)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Пользовательский фильтр",
+    "FILTER_DESCRIPTION": "См. https://docs.gitlab.com/ee/api/issues.html#list-issues. Несколько можно объединить с помощью &",
+    "SUBMIT_TIMELOGS": "Отправляйте временные журналы в Gitlab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Отображение диалогового окна отслеживания времени после нажатия на кнопку завершения дня"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Сводка",
+    "STATE": "Статус",
+    "ASSIGNEE": "Исполнитель",
+    "LABELS": "Метки",
+    "DESCRIPTION": "Описание"
+  },
+  "FORM_HELP": "<p>Здесь вы можете настроить Super Productivity для отображения списка открытых проблем GitLab (будь то онлайн-версия или автономный экземпляр) для конкретного проекта на панели создания задач в представлении ежедневного планирования. Они будут перечислены в качестве предложений и предоставят ссылку на проблему, а также дополнительную информацию о ней.</p><p>Кроме того, вы можете автоматически добавлять и синхронизировать все открытые проблемы со списком задач.</p>"
+}

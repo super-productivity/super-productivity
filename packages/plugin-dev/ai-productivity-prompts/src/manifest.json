@@ -13,6 +13,14 @@
   },
   "hooks": ["currentTaskChange"],
   "permissions": ["showSnack", "openDialog", "addTask", "showIndexHtmlAsView"],
+  "dataSharing": [
+    {
+      "recipient": "ChatGPT (opens in your browser)",
+      "hosts": ["chat.openai.com"],
+      "data": ["taskTitles"],
+      "privacyPolicyUrl": "https://openai.com/policies/privacy-policy"
+    }
+  ],
   "iFrame": true,
   "sidePanel": true,
   "isSkipMenuEntry": false,

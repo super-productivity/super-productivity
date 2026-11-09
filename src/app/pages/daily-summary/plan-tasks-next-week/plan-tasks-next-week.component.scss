@@ -1,0 +1,25 @@
+@use '../../../../styles/_globals.scss' as *;
+
+.add-open-tasks {
+  margin: var(--s2) 0;
+}
+
+.week {
+  display: grid;
+  // narrower columns break task titles mid-word; the row scrolls like the planner instead
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
+  overflow-x: auto;
+  text-align: left;
+
+  // five columns don't fit on a phone; the days stack like the planner's mobile list
+  @include mq(xs, max) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// planner-day is sized for the planner's scroll row; here the grid sizes it
+:host planner-day {
+  width: auto;
+  min-width: 0;
+  padding-bottom: var(--s2);
+}

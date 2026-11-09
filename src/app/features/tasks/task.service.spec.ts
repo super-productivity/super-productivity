@@ -397,6 +397,17 @@ describe('TaskService', () => {
       );
     });
 
+    it('should mark the action to skip short syntax only when asked', () => {
+      service.update('task-1', { title: 'Call Bob #work' }, true);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: 'Call Bob #work' } },
+          isIgnoreShortSyntax: true,
+        }),
+      );
+    });
+
     it('should flush pending time before replacing timeSpentOnDay', () => {
       const flushOneSpy = spyOn(taskTimeSync, 'flushOne');
 
@@ -819,6 +830,25 @@ describe('TaskService', () => {
       expect(task.dueDay).toBeTruthy();
     });
 
+    // With a start-of-next-day offset, 01:00 still belongs to yesterday: the
+    // calendar date would hide the new task from Today until the next day
+    it('should set the logical today, not the calendar day, for TODAY', () => {
+      jasmine.clock().install();
+      // calendar day 2026-01-06; the DateService mock's logical today is 2026-01-05
+      jasmine.clock().mockDate(new Date(2026, 0, 6, 1));
+      try {
+        const task = service.createNewTaskWithDefaults({
+          title: 'Test',
+          workContextType: WorkContextType.TAG,
+          workContextId: TODAY_TAG.id,
+        });
+
+        expect(task.dueDay).toBe('2026-01-05');
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
+
     // The TODAY default is keyed on `'dueDay' in additional`, not on its value,
     // so a caller can opt out by passing the key as undefined. addSubTaskTo and
     // PluginBridgeService.addTask both rely on this to keep a task created
@@ -1166,6 +1196,25 @@ describe('TaskService', () => {
 
   // Note: convertToMainTask requires complex selector mocking that doesn't work well
   // with the current test setup. It's better tested via integration tests.
+
+  describe('focusLastFocusedTask', () => {
+    it('restores the same connected row even when another copy has the same id', () => {
+      const original = document.createElement('task');
+      const duplicate = document.createElement('task');
+      original.id = duplicate.id = 't-focus-lifetime';
+      original.tabIndex = duplicate.tabIndex = 0;
+      document.body.append(original, duplicate);
+      try {
+        original.focus();
+        original.blur();
+        service.focusLastFocusedTask();
+        expect(document.activeElement).toBe(original);
+      } finally {
+        original.remove();
+        duplicate.remove();
+      }
+    });
+  });
 
   describe('focusTaskById', () => {
     let created: HTMLElement[];

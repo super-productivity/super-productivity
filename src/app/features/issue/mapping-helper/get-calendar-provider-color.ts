@@ -25,8 +25,20 @@ const _explicitColor = (p: IssueProvider): unknown =>
       ? (p as IssueProviderPluginType).pluginConfig?.['color']
       : undefined;
 
-export const getCalendarProviderColor = (p: IssueProvider): string => {
+const _isSafeColor = (c: unknown): c is string =>
+  typeof c === 'string' && SAFE_CSS_COLOR.test(c);
+
+/**
+ * The color the user set on the provider, else the color the calendar source
+ * reported for the event's calendar (e.g. a Google calendar's color), else a
+ * stable color derived from the provider id.
+ */
+export const getCalendarProviderColor = (
+  p: IssueProvider,
+  calendarColor?: unknown,
+): string => {
   const c = _explicitColor(p);
-  if (typeof c === 'string' && SAFE_CSS_COLOR.test(c)) return c;
+  if (_isSafeColor(c)) return c;
+  if (_isSafeColor(calendarColor)) return calendarColor;
   return `hsl(${_hueFromId(p.id)}, 60%, 55%)`;
 };

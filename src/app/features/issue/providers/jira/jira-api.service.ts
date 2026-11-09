@@ -711,7 +711,7 @@ export class JiraApiService {
       throw new Error('Jira: No valid interface found');
     }
 
-    this._globalProgressBarService.countUp(url);
+    this._globalProgressBarService.countUp();
     return from(promise).pipe(
       catchError((err) => {
         const errTxt = `Jira: ${getErrorTxt(err)}`;
@@ -739,7 +739,7 @@ export class JiraApiService {
       suppressSnack: suppressErrorSnack,
     });
 
-    this._globalProgressBarService.countUp(url);
+    this._globalProgressBarService.countUp();
 
     return from(
       fetch(url, { ...requestInit, signal: abortController.signal })

@@ -414,52 +414,6 @@
         "WRITE_A_COMMENT": "コメントを書く"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "プレフィルド・デュレーションには、過去数日間のトラッキングされていないデータが含まれている。",
-        "T_ALREADY_TRACKED": "すでに追跡済み",
-        "T_TITLE": "タイトル",
-        "T_TO_BE_SUBMITTED": "提出予定",
-        "TITLE": "Issueに費やした時間をGitLabに提出する",
-        "TOTAL_MSG": "今日は合計で <em>{{totalTimeToSubmit}}</em> の作業時間を <em>{{nrOfTasksToSubmit}}</em> の異なる問題に送信します。"
-      },
-      "FORM": {
-        "FILTER": "カスタムフィルター",
-        "FILTER_DESCRIPTION": "Https://docs.gitlab.com/ee/api/issues.html#list-issues を参照。複数の組み合わせは",
-        "FILTER_USER": "ユーザー名（例：自分で変更を除外するため）",
-        "GITLAB_BASE_URL": "カスタムGitLabベースURL",
-        "PROJECT": "フルパスまたはユーザー名/プロジェクト",
-        "PROJECT_HINT": "例：ヨハネスジョ／超生産性",
-        "SCOPE": "範囲",
-        "SCOPE_ALL": "すべて",
-        "SCOPE_ASSIGNED": "私に割り当てられた",
-        "SCOPE_CREATED": "自分で作成",
-        "SOURCE": "ソース",
-        "SOURCE_GLOBAL": "すべて",
-        "SOURCE_GROUP": "グループ",
-        "SOURCE_PROJECT": "プロジェクト",
-        "SUBMIT_TIMELOGS": "タイムログをGitlabに提出する",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "終了日をクリックした後、タイムトラッキングダイアログを表示する",
-        "TOKEN": "アクセストークン"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>ここでは、SuperProductivityを構成して、特定のプロジェクトの開いているGitLab（オンラインバージョンまたはセルフホストインスタンス）の課題を日次計画ビューのタスク作成パネルに一覧表示できます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報を提供します。</p> <p>さらに、すべての未解決の課題をタスクバックログに自動的に追加して同期できます。</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "担当者",
-        "AT": "で",
-        "DESCRIPTION": "説明",
-        "LABELS": "ラベル",
-        "MARK_AS_CHECKED": "更新をチェック済みとしてマーク",
-        "PROJECT": "プロジェクト",
-        "STATUS": "状態",
-        "SUMMARY": "概要",
-        "WRITE_A_COMMENT": "コメントを書く"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab：不明なエラー {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "この統合は、お使いのブラウザでは動作しない可能性があります。デスクトップ版またはAndroid版のSuper Productivityをダウンロードしてください！",
       "DEFAULT": {
@@ -3114,8 +3068,8 @@
       "PLANNER": "{{plannerIcon}} <b>プランナー</b>で数日先の予定を立てましょう",
       "TASK_MENU_TOUCH": "タスクを左にスワイプするとメニューが開きます: {{playIcon}} <b>タイムトラッキングの開始</b>、{{subtaskIcon}} <b>サブタスクを追加</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "タスクを左にスワイプするとメニューが開きます。例: {{subtaskIcon}} <b>サブタスクを追加</b>",
-      "TIMER_RUNNING": "タイマー作動中です。一時停止するには、もう一度{{playIcon}}または<kbd>{{key}}</kbd>を押します。",
-      "TIMER_RUNNING_TOUCH": "タイマー作動中です。一時停止するには、上部の{{playIcon}}をタップします。",
+      "TIMER_RUNNING": "タイマー作動中です。一時停止するには、もう一度{{pauseIcon}}または<kbd>{{key}}</kbd>を押します。",
+      "TIMER_RUNNING_TOUCH": "タイマー作動中です。一時停止するには、上部の{{pauseIcon}}をタップします。",
       "TRACK_TIME": "タスクにカーソルを合わせて{{playIcon}}を押すと、時間を記録できます"
     },
     "WANT_MORE": {

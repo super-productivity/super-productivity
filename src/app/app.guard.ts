@@ -19,6 +19,8 @@ import { GlobalConfigService } from './features/config/global-config.service';
 import { getStartPageUrlPath } from './features/config/default-start-page.util';
 import { IS_DONATION_UI_RESTRICTED_TOKEN } from './app.constants';
 import { AppFeaturesConfig } from './features/config/global-config.model';
+import { selectAllBoards } from './features/boards/store/boards.selectors';
+import { LS } from './core/persistence/storage-keys.const';
 
 @Injectable({ providedIn: 'root' })
 export class DonatePageGuard {
@@ -111,6 +113,36 @@ export class ValidProjectIdGuard {
         return of(false);
       }),
       map((project) => !!project),
+    );
+  }
+}
+
+/**
+ * `/boards/:boardId` opens a view; `/boards` resolves to the last opened view,
+ * else the first one, else the page's "no views" state. Waits for the initial
+ * data load: until then the store holds the default boards only, so a custom
+ * view id would look unknown and a reload would lose the deep link.
+ */
+@Injectable({ providedIn: 'root' })
+export class BoardRouteGuard {
+  private _store = inject(Store);
+  private _dataInitStateService = inject(DataInitStateService);
+  private _router = inject(Router);
+
+  canActivate(next: ActivatedRouteSnapshot): Observable<true | UrlTree> {
+    const boardId: string | undefined = next.params['boardId'];
+    return this._dataInitStateService.isAllDataLoadedInitially$.pipe(
+      concatMap(() => this._store.select(selectAllBoards).pipe(take(1))),
+      map((boards) => {
+        if (boardId) {
+          return boards.some((board) => board.id === boardId)
+            ? true
+            : this._router.createUrlTree(['/boards']);
+        }
+        const lastId = localStorage.getItem(LS.SELECTED_BOARD);
+        const target = boards.find((board) => board.id === lastId) ?? boards[0];
+        return target ? this._router.createUrlTree(['/boards', target.id]) : true;
+      }),
     );
   }
 }

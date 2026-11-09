@@ -8,6 +8,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
+import { AppFeaturesConfig } from '../config/global-config.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { addProject } from '../project/store/project.actions';
 import { Project } from '../project/project.model';
@@ -43,6 +44,8 @@ describe('getQuickTourSteps', () => {
     isTimeTrackingEnabled: true,
     isPlannerEnabled: true,
     hasTask: true,
+    isTaskMenuLearned: false,
+    isWantMoreShown: true,
   };
 
   it('has five steps on desktop, task steps first', () => {
@@ -58,6 +61,16 @@ describe('getQuickTourSteps', () => {
     ]);
   });
 
+  it('drops the swipe menu step on touch once part 1 taught it', () => {
+    expect(getQuickTourSteps({ ...ctx, isTouch: true, isTaskMenuLearned: true })).toEqual(
+      ['organize', 'planner', 'want-more'],
+    );
+  });
+
+  it('keeps the desktop task steps when the swipe menu was learned', () => {
+    expect(getQuickTourSteps({ ...ctx, isTaskMenuLearned: true })).toEqual(DESKTOP_STEPS);
+  });
+
   it('skips time tracking and Planner when they are switched off', () => {
     expect(
       getQuickTourSteps({
@@ -66,6 +79,15 @@ describe('getQuickTourSteps', () => {
         isPlannerEnabled: false,
       }),
     ).toEqual(['add-subtask', 'organize', 'want-more']);
+  });
+
+  it('leaves out the last card when it has nothing to say', () => {
+    expect(getQuickTourSteps({ ...ctx, isWantMoreShown: false })).toEqual([
+      'track-time',
+      'add-subtask',
+      'organize',
+      'planner',
+    ]);
   });
 
   it('skips the task steps without a task', () => {
@@ -90,10 +112,8 @@ describe('QuickTourService', () => {
   let isShowAddTaskBar: WritableSignal<boolean>;
   let isTaskContextMenuOpen: WritableSignal<boolean>;
   let currentTaskId: WritableSignal<string | null>;
-  let appFeatures: WritableSignal<{
-    isTimeTrackingEnabled: boolean;
-    isPlannerEnabled: boolean;
-  }>;
+  let appFeatures: WritableSignal<Partial<AppFeaturesConfig>>;
+  let sync: WritableSignal<{ isEnabled: boolean }>;
   let savedState: string | null;
 
   const setTasks = (tasks: Task[], todayIds = tasks.map((t) => t.id)): void => {
@@ -126,6 +146,7 @@ describe('QuickTourService', () => {
     isTaskContextMenuOpen = signal(false);
     currentTaskId = signal(null);
     appFeatures = signal({ isTimeTrackingEnabled: true, isPlannerEnabled: true });
+    sync = signal({ isEnabled: false });
 
     TestBed.configureTestingModule({
       providers: [
@@ -136,7 +157,7 @@ describe('QuickTourService', () => {
         { provide: LayoutService, useValue: { isShowAddTaskBar } },
         { provide: TaskService, useValue: { currentTaskId } },
         { provide: TaskFocusService, useValue: { isTaskContextMenuOpen } },
-        { provide: GlobalConfigService, useValue: { appFeatures } },
+        { provide: GlobalConfigService, useValue: { appFeatures, sync } },
         {
           provide: DataInitStateService,
           useValue: { isAllDataLoadedInitially$: new BehaviorSubject(true) },
@@ -256,6 +277,45 @@ describe('QuickTourService', () => {
     expect(service.stepCount()).toBe(3);
   });
 
+  it('ends without the last card when every feature is on and sync is set up', () => {
+    appFeatures.set({
+      isTimeTrackingEnabled: true,
+      isPlannerEnabled: true,
+      isBoardsEnabled: true,
+      isSchedulerEnabled: true,
+      isHabitsEnabled: true,
+      isFocusModeEnabled: true,
+      isFinishDayEnabled: true,
+      isIssuesPanelEnabled: true,
+    });
+    sync.set({ isEnabled: true });
+    const service = createService();
+    service.start('task-1');
+    expect(service.stepCount()).toBe(4);
+    service.next();
+    service.next();
+    service.next();
+    expect(service.currentStep()).toBe('planner');
+    service.next();
+    expect(service.isActive()).toBeFalse();
+  });
+
+  it('keeps the last card for sync while every feature is on', () => {
+    appFeatures.set({
+      isTimeTrackingEnabled: true,
+      isPlannerEnabled: true,
+      isBoardsEnabled: true,
+      isSchedulerEnabled: true,
+      isHabitsEnabled: true,
+      isFocusModeEnabled: true,
+      isFinishDayEnabled: true,
+      isIssuesPanelEnabled: true,
+    });
+    const service = createService();
+    service.start('task-1');
+    expect(service.stepCount()).toBe(5);
+  });
+
   it('hides while the composer or, on task steps, the task menu is open', () => {
     const service = createService();
     service.start('task-1');
@@ -311,6 +371,16 @@ describe('QuickTourService', () => {
       expect(service.currentStep()).toBe('organize');
       expect(service.stepNr()).toBe(3);
       expect(service.tourTaskId()).toBe('task-1');
+    });
+
+    it('saves whether the swipe menu was learned', () => {
+      const service = createService();
+      service.start('task-1', true);
+      expect(JSON.parse(localStorage.getItem(LS.QUICK_TOUR_STATE) ?? '')).toEqual({
+        step: 'track-time',
+        taskId: 'task-1',
+        isTaskMenuLearned: true,
+      });
     });
 
     it('ends when the saved step no longer applies', () => {

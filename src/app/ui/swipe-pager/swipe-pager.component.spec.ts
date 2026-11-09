@@ -53,11 +53,18 @@ interface TouchPoint {
   id?: number;
 }
 
+/**
+ * Event time of touches fired without an explicit `timeStamp`. The pager reads
+ * gesture timing (long-press delay, velocity) from event timestamps, so a
+ * real clock lets a slow runner turn a pan into a long press.
+ */
+let eventTime = 0;
+
 const fireTouch = (
   el: HTMLElement,
   type: 'touchstart' | 'touchmove' | 'touchend',
   points: TouchPoint | TouchPoint[],
-  timeStamp?: number,
+  timeStamp = eventTime,
 ): TouchEvent => {
   const touches = (Array.isArray(points) ? points : [points]).map(
     (p) =>
@@ -74,9 +81,7 @@ const fireTouch = (
     touches: type === 'touchend' ? [] : touches,
     changedTouches: touches,
   });
-  if (timeStamp !== undefined) {
-    Object.defineProperty(ev, 'timeStamp', { value: timeStamp });
-  }
+  Object.defineProperty(ev, 'timeStamp', { value: timeStamp });
   el.dispatchEvent(ev);
   return ev;
 };
@@ -106,11 +111,14 @@ describe('SwipePagerComponent', () => {
     await fixture.whenStable();
     // Past the claim threshold first, so the pan follows from there.
     const claimX = Math.sign(deltaX) * 20;
+    eventTime += 16;
     fireTouch(pagerEl, 'touchmove', { x: 200 + claimX, y: 100 + deltaY });
+    eventTime += 16;
     fireTouch(pagerEl, 'touchmove', { x: 200 + deltaX, y: 100 + deltaY });
   };
 
   beforeEach(async () => {
+    eventTime = 1000;
     isReducedMotion = true;
     // Reduced motion: the pager settles synchronously unless a test opts out.
     spyOn(window, 'matchMedia').and.callFake(
@@ -163,7 +171,7 @@ describe('SwipePagerComponent', () => {
   it('snaps back after a short, slow pan', async () => {
     await pan(-60);
     // Hold still past the velocity window, so the release is not a fling.
-    await wait(150);
+    eventTime += 150;
     fireTouch(pagerEl, 'touchmove', { x: 140 });
     fireTouch(pagerEl, 'touchend', { x: 140 });
     await fixture.whenStable();
@@ -200,10 +208,16 @@ describe('SwipePagerComponent', () => {
     const start = performance.now();
     fireTouch(pagerEl, 'touchstart', { x: 200 }, start);
     await fixture.whenStable();
-    fireTouch(pagerEl, 'touchmove', { x: 50 }, start + MAX_CLAIM_DELAY_MS + 50);
+    const move = fireTouch(
+      pagerEl,
+      'touchmove',
+      { x: 50 },
+      start + MAX_CLAIM_DELAY_MS + 50,
+    );
     fireTouch(pagerEl, 'touchend', { x: 50 }, start + MAX_CLAIM_DELAY_MS + 60);
     await fixture.whenStable();
 
+    expect(move.defaultPrevented).toBeFalse();
     expect(trackTransform()).toBe('');
     expect(host.navigations).toEqual([]);
   });
@@ -309,6 +323,19 @@ describe('SwipePagerComponent', () => {
   });
 
   describe('with animations', () => {
+    /**
+     * Ends the running settle as the browser does. Waiting out the transition
+     * in real time instead made a slow runner hit the 2s spec timeout.
+     */
+    const endTransition = async (): Promise<void> => {
+      pagerEl
+        .querySelector<HTMLElement>('.track')!
+        .dispatchEvent(
+          new TransitionEvent('transitionend', { propertyName: 'transform' }),
+        );
+      await fixture.whenStable();
+    };
+
     beforeEach(async () => {
       isReducedMotion = false;
       host.isWarm.set(true);
@@ -319,6 +346,20 @@ describe('SwipePagerComponent', () => {
       host.pager().go(1);
       expect(trackTransform()).toContain('-400px');
       expect(host.navigations).toEqual([]);
+
+      await endTransition();
+
+      expect(host.navigations).toEqual([6]);
+      expect(trackTransform()).toBe('');
+    });
+
+    it('finishes the settle when transitionend never fires', async () => {
+      // Registered before the pager's own listener: swallows the browser's real
+      // transitionend, so only the fallback timer can finish the settle.
+      pagerEl
+        .querySelector<HTMLElement>('.track')!
+        .addEventListener('transitionend', (ev) => ev.stopImmediatePropagation());
+      host.pager().go(1);
 
       await wait(400);
       await fixture.whenStable();
@@ -333,8 +374,7 @@ describe('SwipePagerComponent', () => {
       host.pager().go(1);
 
       for (let i = 0; i < 3; i++) {
-        await wait(400);
-        await fixture.whenStable();
+        await endTransition();
       }
 
       expect(host.navigations).toEqual([6, 7, 8]);
@@ -344,8 +384,7 @@ describe('SwipePagerComponent', () => {
       host.pager().go(1);
       host.current.set(9);
       await fixture.whenStable();
-      await wait(400);
-      await fixture.whenStable();
+      await endTransition();
 
       expect(host.navigations).toEqual([]);
       expect(currentPage()).toBe('9');
@@ -359,8 +398,7 @@ describe('SwipePagerComponent', () => {
       await pan(-150);
       fireTouch(pagerEl, 'touchend', { x: 50 });
 
-      await wait(400);
-      await fixture.whenStable();
+      await endTransition();
 
       expect(host.navigations).toEqual([6]);
       expect(trackTransform()).toBe('');

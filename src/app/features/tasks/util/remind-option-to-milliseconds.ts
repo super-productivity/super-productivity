@@ -55,8 +55,15 @@ export const millisecondsDiffToRemindOption = (
   }
   const diff: number = due - remindAt;
   const diffInMinutes = diff / (60 * 1000);
+  const diffInDays = diff / DAY_MS;
 
-  if (diffInMinutes >= 45) {
+  if (diffInDays >= 5) {
+    return TaskReminderOptionId.w1;
+  } else if (diffInDays >= 2) {
+    return TaskReminderOptionId.d3;
+  } else if (diffInDays >= 0.5) {
+    return TaskReminderOptionId.d1;
+  } else if (diffInMinutes >= 45) {
     return TaskReminderOptionId.h1;
   } else if (diffInMinutes >= 22.5) {
     return TaskReminderOptionId.m30;
@@ -70,27 +77,4 @@ export const millisecondsDiffToRemindOption = (
     // Also handles diff <= 0
     return TaskReminderOptionId.AtStart;
   }
-};
-
-/**
- * Like `millisecondsDiffToRemindOption`, but also maps to the long-lead options
- * (days/week) only offered for deadlines. Kept separate so due-date reminders
- * stay within their own option list.
- */
-export const millisecondsDiffToDeadlineRemindOption = (
-  deadline: number,
-  remindAt?: number,
-): TaskReminderOptionId => {
-  if (typeof remindAt !== 'number') {
-    return TaskReminderOptionId.DoNotRemind;
-  }
-  const diffInDays = (deadline - remindAt) / DAY_MS;
-  if (diffInDays >= 5) {
-    return TaskReminderOptionId.w1;
-  } else if (diffInDays >= 2) {
-    return TaskReminderOptionId.d3;
-  } else if (diffInDays >= 0.5) {
-    return TaskReminderOptionId.d1;
-  }
-  return millisecondsDiffToRemindOption(deadline, remindAt);
 };

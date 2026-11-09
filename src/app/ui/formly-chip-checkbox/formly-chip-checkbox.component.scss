@@ -1,0 +1,63 @@
+@use '@angular/cdk' as cdk;
+@use '../../../styles/_globals.scss' as *;
+
+@include cdk.a11y-visually-hidden();
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.chip-checkbox {
+  display: block;
+  cursor: pointer;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--s5);
+  padding: 0 var(--s-half);
+  border: 1px solid var(--options-border-color);
+  border-radius: var(--radius-pill);
+  color: var(--text-color);
+  font-weight: var(--font-weight-medium);
+  user-select: none;
+  transition:
+    background var(--transition-duration-m) var(--ani-enter-timing),
+    border-color var(--transition-duration-m) var(--ani-enter-timing),
+    color var(--transition-duration-m) var(--ani-enter-timing);
+
+  // Seven in a row on a 360px phone leave ~37px a chip: "Tue" and "Thu" would
+  // both end as "T…" at the regular size.
+  @include mq(xxs, max) {
+    padding: 0 var(--s-quarter);
+    font-size: var(--font-size-sm);
+  }
+}
+
+// Text that does not fit ends in "…": ellipsis needs a block, not the flex
+// container's anonymous text.
+.chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+input:checked + .chip {
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+  color: var(--c-contrast);
+}
+
+input:focus-visible + .chip {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+input:disabled + .chip {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

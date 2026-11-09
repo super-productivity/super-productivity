@@ -9,6 +9,7 @@ import {
 } from '@sp/sync-providers/errors';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
 import { KNOWN_ACTION_TYPES } from '../action-types.enum';
+import { ConflictReason } from '../../sync-providers/provider.const';
 
 /** Upper bound for the entity count reported in a sync diagnostic. */
 const MAX_REPORTED_ENTITY_COUNT = 9999;
@@ -89,6 +90,7 @@ export class NoSyncProviderSetError extends Error {
  */
 export class LocalDataConflictError extends Error {
   override name = 'LocalDataConflictError';
+  readonly conflictReason: ConflictReason = ConflictReason.NoLastSync;
 
   constructor(
     public readonly unsyncedCount: number,
@@ -110,6 +112,17 @@ export class LocalDataConflictError extends Error {
   }
 }
 
+/**
+ * The remote snapshot lost changes this device already synced (#10916).
+ * Hydrating it would delete them here; skipping it (local clock dominates)
+ * would leave them out of the remote for good. Routed to the same dialog as
+ * LocalDataConflictError; its reason adds an explanation.
+ */
+export class OwnUploadsMissingConflictError extends LocalDataConflictError {
+  override name = 'OwnUploadsMissingConflictError';
+  override readonly conflictReason = ConflictReason.OwnUploadsMissing;
+}
+
 export class SyncAlreadyInProgressError extends Error {
   override name = 'SyncAlreadyInProgressError';
 
@@ -128,6 +141,21 @@ export class LockAcquisitionTimeoutError extends Error {
     super(
       `Timed out waiting ${timeoutMs}ms to acquire lock "${lockName}". ` +
         `A previous lock holder may have crashed or stalled.`,
+    );
+  }
+}
+
+/**
+ * flushThenRunExclusive could not find a moment with no capture in flight:
+ * actions kept arriving between the flush and the lock. Transient — retrying
+ * once dispatch activity settles succeeds.
+ */
+export class OperationWriteCutoffError extends Error {
+  override name = 'OperationWriteCutoffError';
+
+  constructor(attempts: number) {
+    super(
+      `Operation write cutoff not reached after ${attempts} attempts — continuous dispatch activity. Try again.`,
     );
   }
 }

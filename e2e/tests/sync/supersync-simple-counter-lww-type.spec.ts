@@ -20,11 +20,22 @@ import { serveReleasedClientAssets } from '../../utils/released-client-assets';
 
 type HabitTypeLabel = 'Stopwatch' | 'Click counter';
 
+/**
+ * The route transition keeps the leaving page in the route wrapper while the
+ * habit rows slide into place; a click during it can miss the row.
+ */
+const gotoHabits = async (client: SimulatedE2EClient): Promise<void> => {
+  await client.page.goto('/#/habits');
+  const pages = client.page.locator('.route-wrapper > :not(router-outlet)');
+  await expect(pages).toHaveCount(1);
+  await expect(pages.first()).toHaveJSProperty('tagName', 'HABIT-PAGE');
+};
+
 const openHabitSettings = async (
   client: SimulatedE2EClient,
   title: string,
 ): Promise<Locator> => {
-  await client.page.goto('/#/habits');
+  await gotoHabits(client);
   await client.page.locator('.habit-title', { hasText: title }).first().click();
   const dialog = client.page.locator('dialog-simple-counter-edit-settings');
   await expect(dialog).toBeVisible();
@@ -45,7 +56,7 @@ const createHabit = async (
   title: string,
   typeLabel: HabitTypeLabel,
 ): Promise<void> => {
-  await client.page.goto('/#/habits');
+  await gotoHabits(client);
   await client.page.locator('.add-habit-btn').click();
   const dialog = client.page.locator('dialog-simple-counter-edit-settings');
   await dialog.locator('formly-form input').first().fill(title);

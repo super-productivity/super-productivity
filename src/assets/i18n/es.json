@@ -430,52 +430,6 @@
         "WRITE_A_COMMENT": "Escribir un comentario"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "La duración prellenada contiene datos no rastreados de días anteriores.",
-        "T_ALREADY_TRACKED": "Ya rastreado",
-        "T_TITLE": "Título",
-        "T_TO_BE_SUBMITTED": "Por enviar",
-        "TITLE": "Enviar tiempo dedicado a las incidencias a GitLab",
-        "TOTAL_MSG": "Vas a enviar <em>{{totalTimeToSubmit}}</em> de tiempo trabajado en total para hoy a <em>{{nrOfTasksToSubmit}}</em> problemas diferentes."
-      },
-      "FORM": {
-        "FILTER": "Filtro personalizado",
-        "FILTER_DESCRIPTION": "Ver https://docs.gitlab.com/ee/api/issues.html#list-issues. Se pueden combinar varios con &",
-        "FILTER_USER": "Filtrar usuario",
-        "GITLAB_BASE_URL": "URL base de GitLab personalizada (opcional)",
-        "PROJECT": "nombre de usuario/proyecto",
-        "PROJECT_HINT": "p. ej. super-productivity/super-productivity",
-        "SCOPE": "Ámbito",
-        "SCOPE_ALL": "Todo",
-        "SCOPE_ASSIGNED": "Asignado a mí",
-        "SCOPE_CREATED": "Creado por mí",
-        "SOURCE": "Fuente",
-        "SOURCE_GLOBAL": "Todo",
-        "SOURCE_GROUP": "Grupo",
-        "SOURCE_PROJECT": "Proyecto",
-        "SUBMIT_TIMELOGS": "Enviar registros de tiempo a Gitlab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Mostrar diálogo de seguimiento de tiempo después de hacer clic en finalizar día",
-        "TOKEN": "Token de Acceso"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Aquí puedes configurar SuperProductivity para listar incidencias abiertas de GitLab (ya sea su versión online o una instancia autoalojada) para un proyecto específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la incidencia así como más información sobre ella.</p> <p>Además puedes importar automáticamente todas las incidencias abiertas.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Asignado",
-        "AT": "a las",
-        "DESCRIPTION": "Descripción",
-        "LABELS": "Etiquetas",
-        "MARK_AS_CHECKED": "Marcar actualizaciones como revisadas",
-        "PROJECT": "Proyecto",
-        "STATUS": "Estado",
-        "SUMMARY": "Resumen",
-        "WRITE_A_COMMENT": "Escribir un comentario"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Error desconocido {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Es probable que esta integración no funcione en tu navegador. ¡Por favor, descarga la versión de escritorio o Android de Super Productivity!",
       "DEFAULT": {
@@ -3125,8 +3079,8 @@
       "PLANNER": "Planifica los próximos días en {{plannerIcon}} <b>Planificador</b>",
       "TASK_MENU_TOUCH": "Desliza una tarea a la izquierda para ver su menú: {{playIcon}} <b>Iniciar seguimiento de tiempo</b>, {{subtaskIcon}} <b>Añadir subtarea</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Desliza una tarea a la izquierda para ver su menú, p. ej. {{subtaskIcon}} <b>Añadir subtarea</b>",
-      "TIMER_RUNNING": "El temporizador está en marcha. Pulsa {{playIcon}} de nuevo o <kbd>{{key}}</kbd> para pausar.",
-      "TIMER_RUNNING_TOUCH": "El temporizador está en marcha. Toca {{playIcon}} arriba para pausar.",
+      "TIMER_RUNNING": "El temporizador está en marcha. Pulsa {{pauseIcon}} de nuevo o <kbd>{{key}}</kbd> para pausar.",
+      "TIMER_RUNNING_TOUCH": "El temporizador está en marcha. Toca {{pauseIcon}} arriba para pausar.",
       "TRACK_TIME": "Pasa el ratón sobre la tarea y pulsa {{playIcon}} para registrar el tiempo"
     },
     "WANT_MORE": {

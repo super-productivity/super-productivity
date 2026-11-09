@@ -419,52 +419,6 @@
         "WRITE_A_COMMENT": "Scrivi un commento"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "La durata precompilata contiene dati dai giorni precedenti.",
-        "T_ALREADY_TRACKED": "Già tracciato",
-        "T_TITLE": "Titolo",
-        "T_TO_BE_SUBMITTED": "Da inviare",
-        "TITLE": "Salva tempo speso sull'issue di GitLab",
-        "TOTAL_MSG": "Invierai <em>{{totalTimeToSubmit}}</em> di tempo di lavoro totale di oggi su <em>{{nrOfTasksToSubmit}}</em> issue differenti."
-      },
-      "FORM": {
-        "FILTER": "Filtro Personalizzato",
-        "FILTER_DESCRIPTION": "Vedi https://docs.gitlab.com/ee/api/issues.html#list-issues. I filtri multipli possono essere combinati con &",
-        "FILTER_USER": "Nome utente (es. per filtrare le modifiche fatte da te)",
-        "GITLAB_BASE_URL": "URL di base GitLab personalizzato",
-        "PROJECT": "Percorso completo o nome utente / progetto",
-        "PROJECT_HINT": "es. super-productivity/super-productivity",
-        "SCOPE": "Scopo",
-        "SCOPE_ALL": "Tutti",
-        "SCOPE_ASSIGNED": "Assegnato a me",
-        "SCOPE_CREATED": "Creato da me",
-        "SOURCE": "fonte",
-        "SOURCE_GLOBAL": "Tutti",
-        "SOURCE_GROUP": "Gruppo",
-        "SOURCE_PROJECT": "Progetto",
-        "SUBMIT_TIMELOGS": "Invia timelog a GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Mostra la finestra di dialogo del Time Tracking dopo aver cliccato sulla conclusione della giornata",
-        "TOKEN": "Token di accesso"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p> Qui puoi configurare SuperProductivity per elencare i problemi di GitLab aperti (sia la versione online o un'istanza ospitata autonomamente) per un progetto specifico nel pannello di creazione dell'attività nella vista di pianificazione giornaliera. Saranno elencati come suggerimenti e forniranno un collegamento al problema, nonché ulteriori informazioni al riguardo. </p> <p> Inoltre puoi aggiungere e sincronizzare automaticamente tutti i problemi aperti nelle attività arretrate. </p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Assegnatario",
-        "AT": "a",
-        "DESCRIPTION": "Descrizione",
-        "LABELS": "Etichette",
-        "MARK_AS_CHECKED": "Segna gli aggiornamenti come verificati",
-        "PROJECT": "Progetto",
-        "STATUS": "Stato",
-        "SUMMARY": "Riepilogo",
-        "WRITE_A_COMMENT": "Scrivi un commento"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Errore sconosciuto {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Questa integrazione non funzionerà sul tuo browser. Scarica la versione Desktop o Android di Super Productivity!",
       "DEFAULT": {
@@ -3122,8 +3076,8 @@
       "PLANNER": "Pianifica i prossimi giorni in {{plannerIcon}} <b>Pianificatore</b>",
       "TASK_MENU_TOUCH": "Scorri un'attività verso sinistra per il suo menu: {{playIcon}} <b>Inizia a tracciare il tempo</b>, {{subtaskIcon}} <b>Aggiungi sotto-attività</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Scorri un'attività verso sinistra per il suo menu, ad es. {{subtaskIcon}} <b>Aggiungi sotto-attività</b>",
-      "TIMER_RUNNING": "Il timer è in corso. Premi di nuovo {{playIcon}} o <kbd>{{key}}</kbd> per metterlo in pausa.",
-      "TIMER_RUNNING_TOUCH": "Il timer è in corso. Tocca {{playIcon}} in alto per metterlo in pausa.",
+      "TIMER_RUNNING": "Il timer è in corso. Premi di nuovo {{pauseIcon}} o <kbd>{{key}}</kbd> per metterlo in pausa.",
+      "TIMER_RUNNING_TOUCH": "Il timer è in corso. Tocca {{pauseIcon}} in alto per metterlo in pausa.",
       "TRACK_TIME": "Passa il mouse sull'attività e premi {{playIcon}} per tracciare il tempo"
     },
     "WANT_MORE": {

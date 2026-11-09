@@ -18,7 +18,7 @@ test.describe.serial('Plugin Management Feature Check', () => {
       pluginMgmt.getByRole('button', { name: /Choose Plugin File/i }),
     ).toBeVisible();
     await expect(
-      pluginMgmt.getByRole('button', { name: /Clear Plugin Cache/i }),
+      pluginMgmt.getByRole('button', { name: /Remove all uploaded plugins/i }),
     ).toBeVisible();
   });
 

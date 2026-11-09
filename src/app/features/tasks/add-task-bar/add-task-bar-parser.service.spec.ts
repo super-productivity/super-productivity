@@ -25,6 +25,7 @@ describe('AddTaskBarParserService', () => {
       'updateAttachments',
       'updateDeadline',
       'updateDeadlineRemindOption',
+      'updatePriority',
       'updateRepeatSetting',
       'clearRepeatSetting',
       'updateSyntaxHighlight',
@@ -359,6 +360,43 @@ describe('AddTaskBarParserService', () => {
         );
 
         expect(mockStateService.updateDate).toHaveBeenCalledWith(null, null);
+      });
+    });
+
+    describe('Priority Parsing', () => {
+      const parse = (text: string, config: ShortSyntaxConfig): Promise<void> =>
+        service.parseAndUpdateText(
+          text,
+          config,
+          mockProjects,
+          mockTags,
+          mockDefaultProject,
+        );
+
+      it('should set the priority from p1 and strip it from the clean text', async () => {
+        await parse('Fix login bug p1', { ...mockConfig, isEnablePriority: true });
+
+        expect(mockStateService.updatePriority).toHaveBeenCalledWith(3);
+        expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Fix login bug');
+        const highlight =
+          mockStateService.updateSyntaxHighlight.calls.mostRecent().args[0];
+        expect(highlight?.ranges).toEqual([{ type: 'priority', start: 14, end: 16 }]);
+      });
+
+      it('should clear the priority once the token is deleted', async () => {
+        const config = { ...mockConfig, isEnablePriority: true };
+        await parse('Fix login bug p2', config);
+        expect(mockStateService.updatePriority).toHaveBeenCalledWith(2);
+
+        await parse('Fix login bug', config);
+        expect(mockStateService.updatePriority.calls.mostRecent().args).toEqual([null]);
+      });
+
+      it('should leave p1 in the text when the flag is off', async () => {
+        await parse('Fix login bug p1', { ...mockConfig, isEnablePriority: false });
+
+        expect(mockStateService.updatePriority).toHaveBeenCalledWith(null);
+        expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Fix login bug p1');
       });
     });
 
@@ -1225,6 +1263,42 @@ describe('AddTaskBarParserService', () => {
 
       // Date should be passed through without modification
       expect(mockStateService.updateDate).toHaveBeenCalledWith(dateStr, null);
+    });
+
+    it('should parse dates in the given date input locale', async () => {
+      mockStateService.state.and.returnValue({
+        projectId: mockDefaultProject.id,
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+        repeat: null,
+      });
+
+      await service.parseAndUpdateText(
+        'Task @morgen 15 Uhr',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+        undefined,
+        undefined,
+        { language: 'de', isDayFirst: true },
+      );
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      expect(mockStateService.updateDate).toHaveBeenCalledWith(
+        getDbDateStr(tomorrow),
+        '15:00',
+      );
+      expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Task');
     });
 
     it('should handle midnight time correctly', async () => {

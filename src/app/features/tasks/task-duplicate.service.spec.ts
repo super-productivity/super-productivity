@@ -19,6 +19,7 @@ describe('TaskDuplicateService', () => {
     dueDay: '2026-09-02',
     timeEstimate: 3_600_000,
     notes: 'Sub task notes',
+    attachments: [{ id: 'sub-link', type: 'LINK', path: 'https://example.test/sub' }],
   };
   const timedSubTask: Task = {
     ...DEFAULT_TASK,
@@ -34,6 +35,9 @@ describe('TaskDuplicateService', () => {
     projectId: 'project-1',
     tagIds: ['tag-1'],
     notes: 'Parent task notes',
+    attachments: [
+      { id: 'parent-link', type: 'LINK', path: 'https://example.test/parent' },
+    ],
     dueDay: '2026-09-01',
     timeEstimate: 7_200_000,
     subTaskIds: [subTask.id, timedSubTask.id],
@@ -85,6 +89,7 @@ describe('TaskDuplicateService', () => {
         projectId: 'project-1',
         tagIds: ['tag-1'],
         notes: 'Parent task notes',
+        attachments: parentTask.attachments,
         dueDay: '2026-09-01',
         timeEstimate: 7_200_000,
       },
@@ -93,21 +98,25 @@ describe('TaskDuplicateService', () => {
     expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
       title: 'Sub task',
       additional: {
+        parentId: 'new-parent-task',
         isDone: true,
         projectId: 'project-1',
         dueDay: '2026-09-02',
         timeEstimate: 3_600_000,
         notes: 'Sub task notes',
+        attachments: subTask.attachments,
       },
     });
     expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
       title: 'Timed sub task',
       additional: {
+        parentId: 'new-parent-task',
         isDone: false,
         projectId: 'project-1',
         dueWithTime: 1_757_000_000_000,
         timeEstimate: 0,
         notes: undefined,
+        attachments: [],
       },
     });
     expect(store.dispatch).toHaveBeenCalledWith(
@@ -122,6 +131,71 @@ describe('TaskDuplicateService', () => {
         parentId: 'new-parent-task',
       }),
     );
+  });
+
+  it('creates an undated subtask with its copied parent before applying defaults', () => {
+    const undatedSubTask: Task = {
+      ...DEFAULT_TASK,
+      id: 'undated-sub-task',
+      title: 'Undated sub task',
+      parentId: parentTask.id,
+      projectId: 'project-1',
+    };
+    taskService.add.and.returnValue('new-parent-task');
+    const newSubTask: Task = {
+      ...DEFAULT_TASK,
+      id: 'new-undated-sub-task',
+      title: undatedSubTask.title,
+      projectId: undatedSubTask.projectId,
+      parentId: 'new-parent-task',
+    };
+    taskService.createNewTaskWithDefaults.and.returnValue(newSubTask);
+
+    service.duplicate({
+      ...parentTask,
+      subTaskIds: [undatedSubTask.id],
+      subTasks: [undatedSubTask],
+    });
+
+    const additional =
+      taskService.createNewTaskWithDefaults.calls.mostRecent().args[0].additional;
+    expect(additional).toEqual(
+      jasmine.objectContaining({
+        parentId: 'new-parent-task',
+        isDone: false,
+      }),
+    );
+    expect(additional?.dueDay).toBeUndefined();
+    expect(additional?.dueWithTime).toBeUndefined();
+    expect(store.dispatch).toHaveBeenCalledOnceWith(
+      addSubTask({
+        task: newSubTask,
+        parentId: 'new-parent-task',
+      }),
+    );
+  });
+
+  it('keeps timed parent and all-day child deadlines', () => {
+    const deadlineWithTime = 1_907_928_000_000;
+    const deadlineRemindAt = deadlineWithTime - 900_000;
+    taskService.add.and.returnValue('new-parent-task');
+    taskService.createNewTaskWithDefaults.and.returnValue({
+      ...subTask,
+      id: 'copy-child',
+    });
+    service.duplicate({
+      ...parentTask,
+      deadlineWithTime,
+      deadlineRemindAt,
+      subTasks: [{ ...subTask, deadlineDay: '2030-06-17' }],
+      subTaskIds: [subTask.id],
+    });
+    expect(taskService.add.calls.mostRecent().args[2]).toEqual(
+      jasmine.objectContaining({ deadlineWithTime, deadlineRemindAt }),
+    );
+    expect(
+      taskService.createNewTaskWithDefaults.calls.mostRecent().args[0].additional,
+    ).toEqual(jasmine.objectContaining({ deadlineDay: '2030-06-17' }));
   });
 
   it('keeps the priority of the task and of each subtask', () => {

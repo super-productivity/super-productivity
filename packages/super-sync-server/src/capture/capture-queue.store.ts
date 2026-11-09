@@ -1,6 +1,7 @@
 import { uuidv7 } from 'uuidv7';
 import { prisma } from '../db';
 import {
+  CAPTURE_APP_SHARE_GRANT_ID,
   CAPTURE_CLAIM_BATCH_SIZE,
   CAPTURE_LEASE_MS,
   CAPTURE_MAX_PENDING_PER_GRANT,
@@ -110,6 +111,74 @@ export const enqueueCapture = async (
         ${BigInt(payload.createdAt)})`;
     return 'queued';
   });
+
+export type EnqueueSealedResult =
+  | 'queued'
+  | 'switched_off'
+  | 'key_mismatch'
+  | 'id_conflict'
+  | 'queue_full';
+
+/**
+ * Stores an item a device sealed itself (Android share). The client's id is
+ * the item id, so the seal's AAD binds to it and a retry is idempotent; the
+ * task id is always server-issued, never the client id. A re-send after
+ * another device acked (and deleted) the item therefore queues a new task id:
+ * at worst a duplicate task, never one task id created on two devices.
+ */
+export const enqueueSealedCapture = async (
+  userId: number,
+  itemId: string,
+  fingerprint: string,
+  ciphertext: string,
+  now: number = Date.now(),
+): Promise<EnqueueSealedResult> =>
+  prisma.$transaction(async (tx) => {
+    // Same lock order as enqueueCapture: the key row first.
+    const keys = await tx.$queryRaw<Array<{ fingerprint: string }>>`
+      SELECT fingerprint FROM capture_keys
+      WHERE user_id = ${userId} AND disabled_at IS NULL FOR UPDATE`;
+    if (keys.length === 0) return 'switched_off';
+    if (keys[0].fingerprint !== fingerprint) return 'key_mismatch';
+
+    // Before the cap, so a retry of a stored item never reads as full.
+    const existing = await tx.$queryRaw<Array<{ user_id: number }>>`
+      SELECT user_id FROM capture_items WHERE id = ${itemId}`;
+    if (existing.length > 0) {
+      return existing[0].user_id === userId ? 'queued' : 'id_conflict';
+    }
+
+    const counts = await tx.$queryRaw<Array<{ for_grant: bigint; for_user: bigint }>>`
+      SELECT count(*) FILTER (WHERE grant_id = ${CAPTURE_APP_SHARE_GRANT_ID}) AS for_grant,
+        count(*) AS for_user
+      FROM capture_items WHERE user_id = ${userId}`;
+    if (
+      Number(counts[0].for_grant) >= CAPTURE_MAX_PENDING_PER_GRANT ||
+      Number(counts[0].for_user) >= CAPTURE_MAX_PENDING_PER_USER
+    ) {
+      return 'queue_full';
+    }
+
+    // ON CONFLICT: a concurrent retry of the same id inserted first.
+    const inserted = await tx.$executeRaw`
+      INSERT INTO capture_items (id, user_id, grant_id, ciphertext, task_id, created_at)
+      VALUES (${itemId}, ${userId}, ${CAPTURE_APP_SHARE_GRANT_ID}, ${ciphertext},
+        gen_random_uuid()::text, ${BigInt(now)})
+      ON CONFLICT (id) DO NOTHING`;
+    if (inserted === 0) {
+      const raced = await tx.$queryRaw<Array<{ user_id: number }>>`
+        SELECT user_id FROM capture_items WHERE id = ${itemId}`;
+      return raced[0]?.user_id === userId ? 'queued' : 'id_conflict';
+    }
+    return 'queued';
+  });
+
+/** All of the user's pending items, whichever grant (if any) added them. */
+export const countPendingCaptures = async (userId: number): Promise<number> => {
+  const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
+    SELECT count(*) AS count FROM capture_items WHERE user_id = ${userId}`;
+  return Number(rows[0].count);
+};
 
 /**
  * Leases up to one batch: every item already leased to this device first (so

@@ -61,9 +61,14 @@
           ></task-title>
 
           @if (t.tagIds?.length || t.projectId || t.repeatCfgId || t.issueId) {
+            <!-- In a view, chips follow the view (like its cards), not the
+                 stale active context: project shown, required tags hidden. -->
             <tag-list
               [task]="t"
               [isShowProjectTagNever]="isInSubTaskList()"
+              [isTouchSelectionMode]="isTouchSelectionMode()"
+              [isShowProjectTagAlways]="isInView && !isInSubTaskList()"
+              [tagsToHide]="viewTagsToHide()"
             ></tag-list>
           }
         </div>
@@ -87,14 +92,11 @@
             <div class="time">
               @if (t.timeSpent) {
                 <div class="time-val">
-                  <span [innerHTML]="t.timeSpent | msToString"></span>
+                  <span>{{ t.timeSpent | msToString }}</span>
                 </div>
                 <div class="separator">/</div>
               }
-              <div
-                [innerHTML]="t.timeEstimate | msToString"
-                class="time-val"
-              ></div>
+              <div class="time-val">{{ t.timeEstimate | msToString }}</div>
             </div>
           }
           @if (t.subTasks?.length) {
@@ -107,7 +109,7 @@
                     style="margin-top: -6px"
                     >functions
                   </mat-icon>
-                  <span [innerHTML]="subTaskTimeSpent | msToString"></span>
+                  <span>{{ subTaskTimeSpent | msToString }}</span>
                 </div>
                 <div class="separator">/</div>
                 <div class="time-val">

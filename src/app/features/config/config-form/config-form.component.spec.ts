@@ -76,6 +76,57 @@ describe('ConfigFormComponent', () => {
     expect(saved[0]).toEqual({ isA: true, isB: false });
   });
 
+  describe('with a required text field', () => {
+    let input: HTMLInputElement;
+
+    // like InputTimeFormlyComponent, which sets its control on each keystroke
+    const type = async (value: string): Promise<void> => {
+      fixture.componentInstance.form.get('name')!.setValue(value);
+      await settle();
+    };
+
+    beforeEach(async () => {
+      fixture = TestBed.createComponent(ConfigFormComponent);
+      fixture.componentRef.setInput('cfg', { name: 'a' });
+      fixture.componentRef.setInput('formCfg', [
+        { key: 'name', type: 'input', props: { label: 'Name', required: true } },
+      ]);
+      fixture.componentRef.setInput('sectionKey', 'misc');
+      fixture.componentInstance.save.subscribe(({ config }) =>
+        saved.push(config as Record<string, unknown>),
+      );
+      await settle();
+      input = fixture.nativeElement.querySelector('input');
+      input.focus();
+      await type('ab');
+    });
+
+    it('keeps an unsaved invalid entry when the last save comes back late', async () => {
+      // invalid, so not saved: the form now differs from the store
+      await type('');
+
+      fixture.componentRef.setInput('cfg', { ...saved[0] });
+      await settle();
+
+      expect(saved).toEqual([{ name: 'ab' }]);
+      expect(input.isConnected).toBe(true);
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe('');
+    });
+
+    it('shows a change elsewhere back to the last save', async () => {
+      fixture.componentRef.setInput('cfg', { ...saved[0] });
+      await settle();
+      fixture.componentRef.setInput('cfg', { name: 'x' });
+      await settle();
+
+      fixture.componentRef.setInput('cfg', { name: 'ab' });
+      await settle();
+
+      expect(fixture.nativeElement.querySelector('input').value).toBe('ab');
+    });
+  });
+
   it('shows a section that changed elsewhere', async () => {
     getToggles()[0].click();
     await settle();

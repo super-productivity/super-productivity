@@ -20,6 +20,7 @@ import {
       [min]="props.min ?? DATE_PICKER_MIN_DEFAULT"
       [max]="props.max ?? DATE_PICKER_MAX_DEFAULT"
       [errorMessage]="$safeNavigationMigration(props.errorMessages?.required)"
+      [hint]="props.description"
       [isInvalid]="showError"
     />
   `,
