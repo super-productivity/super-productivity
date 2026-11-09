@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   registerWithMagicLink: vi.fn(),
   verifyRegistration: vi.fn(),
   verifyEmail: vi.fn(),
+  getVerificationPreview: vi.fn(),
   sendMail: vi.fn(),
 }));
 
@@ -19,6 +20,7 @@ vi.mock('../src/auth', () => ({
   requestLoginMagicLink: mocks.requestLoginMagicLink,
   registerWithMagicLink: mocks.registerWithMagicLink,
   verifyEmail: mocks.verifyEmail,
+  getVerificationPreview: mocks.getVerificationPreview,
 }));
 vi.mock('../src/passkey', () => ({ verifyRegistration: mocks.verifyRegistration }));
 vi.mock('../src/connect/connect-request.store', async (original) => ({
@@ -43,6 +45,11 @@ describe('sign-in request in login and sign-up links', () => {
     mocks.registerWithMagicLink.mockResolvedValue({ message: 'sent' });
     mocks.verifyRegistration.mockResolvedValue({ message: 'sent' });
     mocks.verifyEmail.mockResolvedValue(true);
+    mocks.getVerificationPreview.mockResolvedValue({
+      kind: 'magic-link',
+      email: 'me@example.com',
+      expiresAt: BigInt(Date.now() + 60_000),
+    });
     mocks.sendMail.mockResolvedValue({ messageId: 'm1' });
     app = Fastify();
     await app.register(apiRoutes, { prefix: '/api', requireTermsConsent: false });

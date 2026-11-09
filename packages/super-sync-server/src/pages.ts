@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { verifyEmail } from './auth';
+import { getVerificationPreview } from './auth';
 import { Logger } from './logger';
 import { CONNECT_REQUEST_ID_PATTERN } from './connect/connect-request.store';
 
@@ -38,6 +38,11 @@ interface MagicLoginQuery {
 }
 
 export async function pageRoutes(fastify: FastifyInstance) {
+  // Email verification (#9032): the GET only renders a confirmation page
+  // disambiguating which pending credential this link authorizes. It must
+  // not consume the token itself: email clients prefetch links, and a
+  // staged passkey must not activate just because the owner opened the
+  // mail. The button POSTs to /api/verify-email (magic-login pattern).
   fastify.get<{ Querystring: VerifyEmailQuery }>(
     '/verify-email',
     {
@@ -55,24 +60,50 @@ export async function pageRoutes(fastify: FastifyInstance) {
           return reply.status(400).send('Token is required');
         }
 
-        await verifyEmail(token);
+        const preview = await getVerificationPreview(token);
+        if (!preview) {
+          return reply
+            .status(400)
+            .send('Verification failed: Invalid verification token');
+        }
+
+        const passkeyDetails =
+          preview.kind === 'passkey'
+            ? `
+              <p>Passkey fingerprint: <code>${escapeHtml(preview.credentialFingerprint ?? '')}</code></p>
+              <p>Passkey created: ${escapeHtml(preview.credentialCreatedAt?.toISOString() ?? '')}</p>
+              <p>Transports: ${escapeHtml(preview.transports ?? 'unspecified')}</p>
+              <p><strong>Only confirm if you created a passkey at that time.</strong>
+              If you did not request this verification, do not confirm — start a new registration instead.</p>`
+            : '<p>This link verifies your email address without a passkey.</p>';
+
         return reply.type('text/html').send(`
         <html>
           <head>
-            <title>Email Verified</title>
+            <title>Verify your SuperSync account</title>
             <style>
               body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #0f172a; color: white; }
-              .container { text-align: center; padding: 2rem; background: rgba(30, 41, 59, 0.7); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1); }
-              h1 { color: #10b981; }
+              .container { text-align: center; padding: 2rem; background: rgba(30, 41, 59, 0.7); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1); max-width: 480px; }
+              h1 { color: #3b82f6; }
+              p { color: #94a3b8; margin-bottom: 1rem; line-height: 1.6; }
+              button { width: 100%; padding: 0.75rem 1.5rem; background: #3b82f6; color: white; border: none; border-radius: 0.5rem; font-size: 1rem; cursor: pointer; margin-top: 1rem; }
+              button:disabled { background: #475569; cursor: not-allowed; }
+              .error { color: #ef4444; margin-top: 1rem; display: none; }
+              .success { color: #10b981; margin-top: 1rem; display: none; }
               a { color: #3b82f6; text-decoration: none; margin-top: 1rem; display: inline-block; }
             </style>
           </head>
-          <body>
+          <body data-token="${escapeHtml(token)}" data-login-page="${loginPageHref(r)}">
             <div class="container">
-              <h1>Email Verified!</h1>
-              <p>Your account has been successfully verified.</p>
+              <h1>Verify your SuperSync account</h1>
+              <p>Account: ${escapeHtml(preview.email)}</p>
+              ${passkeyDetails}
+              <button id="verify-btn">Verify Email</button>
+              <p class="error" id="error"></p>
+              <p class="success" id="success">Email verified! Redirecting...</p>
               <a href="${loginPageHref(r)}">Return to Login</a>
             </div>
+            <script src="/verify-email-confirm.js"></script>
           </body>
         </html>
       `);

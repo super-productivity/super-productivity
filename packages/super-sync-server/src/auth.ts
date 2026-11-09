@@ -2,7 +2,7 @@ import { prisma } from './db';
 import * as jwt from 'jsonwebtoken';
 const { JsonWebTokenError, TokenExpiredError } = jwt;
 import { Logger } from './logger';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { sendLoginMagicLinkEmail, sendVerificationEmail } from './email';
 import { loadConfigFromEnv, isConsentRequired } from './config';
 import { Prisma } from '@prisma/client';
@@ -131,6 +131,68 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
 
   Logger.info(`User verified (ID: ${user.id})`);
   return true;
+};
+
+/**
+ * What a verification link would activate, without activating it (#9032).
+ *
+ * The emailed link must disambiguate which pending credential it
+ * authorizes before the owner confirms: email ownership alone does not
+ * prove ownership of a separately submitted passkey. Returns `null`
+ * for unknown or expired tokens, so the confirmation page can refuse
+ * without revealing anything about the account.
+ */
+export interface VerificationPreview {
+  kind: 'passkey' | 'magic-link';
+  email: string;
+  credentialFingerprint?: string;
+  credentialCreatedAt?: Date;
+  transports?: string | null;
+  expiresAt: bigint;
+}
+
+export const getVerificationPreview = async (
+  token: string,
+): Promise<VerificationPreview | null> => {
+  const pendingPasskey = await prisma.pendingPasskeyRegistration.findUnique({
+    where: { verificationToken: token },
+    include: { user: true },
+  });
+
+  if (pendingPasskey) {
+    if (pendingPasskey.verificationTokenExpiresAt < BigInt(Date.now())) {
+      return null;
+    }
+    return {
+      kind: 'passkey',
+      email: pendingPasskey.user.email,
+      credentialFingerprint: createHash('sha256')
+        .update(pendingPasskey.credentialId)
+        .digest('hex')
+        .slice(0, 16),
+      credentialCreatedAt: pendingPasskey.createdAt,
+      transports: pendingPasskey.transports,
+      expiresAt: pendingPasskey.verificationTokenExpiresAt,
+    };
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { verificationToken: token },
+  });
+
+  if (!user) return null;
+  if (
+    user.verificationTokenExpiresAt &&
+    user.verificationTokenExpiresAt < BigInt(Date.now())
+  ) {
+    return null;
+  }
+
+  return {
+    kind: 'magic-link',
+    email: user.email,
+    expiresAt: user.verificationTokenExpiresAt ?? BigInt(Date.now()),
+  };
 };
 
 /**
