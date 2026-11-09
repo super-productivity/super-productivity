@@ -66,10 +66,10 @@ the open gap against Toggl and Clockify (#7888, #7890), not reports.
 | 1, for one day                           | **Yes.** Finish Day lists each project with its time today ([task-summary-tables.component.html:19-31](../../src/app/features/tasks/task-summary-tables/task-summary-tables.component.html)).                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 2. Share per project                     | **No.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 3. What did I work on that week          | **Yes.** History lists year, month, week and day with tasks and time ([history.component.html](../../src/app/features/history/history.component.html)); the current week is on Finish Day ([worklog-week.component.ts](../../src/app/features/worklog/worklog-week/worklog-week.component.ts)).                                                                                                                                                                                                                                                                                                          |
-| 4. Totals per week and month             | **Yes** for totals and days worked ([worklog.model.ts:22-45](../../src/app/features/worklog/worklog.model.ts)); averages per day are on the Metrics page ([metric.component.html](../../src/app/features/metric/metric.component.html)), which also has an activity heatmap.                                                                                                                                                                                                                                                                                                                             |
+| 4. Totals per week and month             | **Yes** for totals and days worked ([worklog.model.ts:21-43](../../src/app/features/worklog/worklog.model.ts)); averages per day are on the Metrics page ([metric.component.html](../../src/app/features/metric/metric.component.html)), which also has an activity heatmap.                                                                                                                                                                                                                                                                                                                             |
 | 5. Calendar grid, hour timeline          | **No.** Time is stored per task per day (`timeSpentOnDay`), not as entries with a start and end, so an hour timeline has no data to draw.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 6. Planned time per project              | **No.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| 7. All open tasks across projects        | **Yes, since 20.0.0.** A view section with no project rule matches every project: the project check only runs when `projectIds` is set ([task-criteria.ts:151](../../src/app/features/tasks/task-criteria/task-criteria.ts)). A commenter on #7353 built this by selecting every project, which shows the default is not obvious.                                                                                                                                                                                                                                                                        |
+| 7. All open tasks across projects        | **Yes, with saved views (#11349).** A view section with no project rule matches every project: the project check only runs when `projectIds` is set ([task-criteria.ts:151](../../src/app/features/tasks/task-criteria/task-criteria.ts)). A commenter on #7353 built this by selecting every project, which shows the default is not obvious.                                                                                                                                                                                                                                                           |
 
 Two limits of saved views matter for the hypothesis:
 
@@ -85,8 +85,8 @@ Two limits of saved views matter for the hypothesis:
 
 Sources: the [scorecard](../market/scorecard.md) (vendor docs, read 2026-10)
 for the plan and price facts; the report shapes below are from memory of the
-vendors' documentation and were **not re-read this month** — check before
-relying on a detail.
+vendors' documentation and were **not re-read this month**, and the TickTick and "paid" cells have no source
+in the scorecard — check before relying on a detail.
 
 | App         | Time per project for a range                            | Chart           | Saved reports |
 | ----------- | ------------------------------------------------------- | --------------- | ------------- |
@@ -159,19 +159,22 @@ the [contributor sync model](../sync-and-op-log/contributor-sync-model.md)):
    - [worklog-project-totals.util.ts](../../src/app/features/worklog/worklog-export/worklog-project-totals.util.ts):
      `getProjectTotals(tasks, projects)` sums `timeSpentOnDay` per project.
      Parents with subtasks are skipped (their time is the sum of their
-     subtasks, the same rule as the export's date grouping); a subtask without
-     a project uses its parent's; tasks without a project or with a deleted
-     one share a "Without Project" row; sorted by time, then title; each row
-     carries its share.
+     subtasks, the same rule as the export's date grouping); a subtask counts
+     for its parent's project, as in History; tasks without a project share a
+     "Without Project" row; sorted by time, then title; each row carries its
+     share. A task pointing at a deleted project is not handled: the existing
+     row building throws on it first
+     ([worklog-export.util.ts:271-273](../../src/app/features/worklog/worklog-export/worklog-export.util.ts)),
+     which is older than this change and left alone.
    - [worklog-export.component.html](../../src/app/features/worklog/worklog-export/worklog-export.component.html):
      a collapsed **Time per project** section (project, time, share) between
-     the table and Options. It is rendered only when the range holds time for
-     at least two projects, so it never shows inside a single project's
-     export.
+     the table and Options. It is rendered only when there are at least two
+     rows (the "Without Project" row counts), so a single project's export
+     does not show it.
    - One new string (`F.WORKLOG.EXPORT.TIME_PER_PROJECT`, `en.json` only), one
      line in the [Worklog wiki note](../wiki/4.21-Worklog.md).
-   - Tests: `worklog-project-totals.util.spec.ts` (6),
-     `worklog-export.component.spec.ts` (2 new). Not covered: an E2E, and the
+   - Tests: `worklog-project-totals.util.spec.ts` (7),
+     `worklog-export.component.spec.ts` (2 new, one expands the section and checks the rows). Not covered: an E2E, and the
      section was not looked at in a running app.
    - Known limits: totals use raw time and ignore the dialog's rounding
      option; the totals are read or copied from the dialog and are not part of
@@ -191,7 +194,7 @@ the [contributor sync model](../sync-and-op-log/contributor-sync-model.md)):
 - **A separate All Tasks page** (#7353, PR #10440). A rule-less view is the
   same list with the same rows, and a second page means a second App Features
   toggle, route and set of list behaviours to maintain. What the commenters
-  still miss after 20.0.0 is reachability (pin a view high in the menu, find it
+  still miss with views is reachability (pin a view high in the menu, find it
   fast), which is a views question, not a new page.
 - **A calendar grid of the worklog and an hour-by-hour week timeline** (#614).
   The timeline needs start and end times per entry, which is its own tracked
@@ -220,7 +223,7 @@ the [contributor sync model](../sync-and-op-log/contributor-sync-model.md)):
 3. **Does the view editor need to show "all projects" explicitly?** One #7353
    commenter selected every project by hand. I did not check how the editor
    presents an unset project rule; if it shows nothing, that is expected by
-   design ("only the rules that are set") and the how-to in slice 2 is the
+   design (the editor lists only the rules that are set) and the how-to in slice 2 is the
    leaner fix. Recommendation: docs first, no editor change.
 4. **Totals per tag as well?** Not built. Tags overlap, so shares would not add
    up to 100 %, and nobody in the three issues asks for it. Recommendation:

@@ -63,12 +63,12 @@ describe('getProjectTotals', () => {
     expect(result).toEqual([{ projectId: 'a', title: 'Alpha', timeSpent: H, share: 1 }]);
   });
 
-  it('should use the parent project for a subtask without one', () => {
+  it('should use the parent project for a subtask, even if its own differs', () => {
     const result = getProjectTotals(
       [
         task('parent', { projectId: 'b', subTaskIds: ['sub'], timeSpentOnDay: {} }),
         task('sub', {
-          projectId: '',
+          projectId: 'a',
           parentId: 'parent',
           timeSpentOnDay: { [D1]: H },
         }),
@@ -77,6 +77,15 @@ describe('getProjectTotals', () => {
     );
 
     expect(result.map((r) => r.projectId)).toEqual(['b']);
+  });
+
+  it('should use the own project of a subtask whose parent is not in the list', () => {
+    const result = getProjectTotals(
+      [task('sub', { projectId: 'a', parentId: 'gone', timeSpentOnDay: { [D1]: H } })],
+      PROJECTS,
+    );
+
+    expect(result.map((r) => r.projectId)).toEqual(['a']);
   });
 
   it('should put tasks without or with an unknown project into one untitled row', () => {

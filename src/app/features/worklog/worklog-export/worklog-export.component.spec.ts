@@ -126,6 +126,16 @@ describe('WorklogExportComponent', () => {
     // collapsed by default: the header is there, the table is not
     expect(el.querySelectorAll('collapsible').length).toBe(2);
     expect(el.querySelector('.project-totals')).toBeNull();
+
+    el.querySelector<HTMLElement>('collapsible .collapsible-header')!.click();
+    fixture.detectChanges();
+    const cells = Array.from(el.querySelectorAll('.project-totals tr')).map((tr) =>
+      Array.from(tr.children).map((c) => c.textContent!.trim()),
+    );
+    expect(cells).toEqual([
+      ['Other', '3h', '75%'],
+      ['Client Work', '1h', '25%'],
+    ]);
   });
 
   it('should not offer project totals for a single project', async () => {

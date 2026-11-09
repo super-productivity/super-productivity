@@ -151,10 +151,22 @@
   }
 }
 
-.project-totals td:first-child {
-  text-align: start;
+.project-totals {
+  table {
+    width: 100%;
+  }
+
+  th {
+    text-align: start;
+    font-weight: normal;
+  }
+
+  td {
+    text-align: end;
+  }
 }
 
+.totals-collapsible,
 .options-collapsible {
   margin-top: var(--s2);
   text-align: center;

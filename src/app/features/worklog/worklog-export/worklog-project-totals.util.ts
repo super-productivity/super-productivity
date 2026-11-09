@@ -1,7 +1,7 @@
 import { WorklogTask } from '../../tasks/task.model';
 
 export interface WorklogProjectTotal {
-  // null: tasks without a project, or whose project no longer exists
+  // null: tasks without a project (an unknown project id is counted here too)
   projectId: string | null;
   title?: string;
   timeSpent: number;
@@ -13,7 +13,8 @@ export interface WorklogProjectTotal {
  * Sums tracked time per project for a worklog task list. The caller limits
  * `timeSpentOnDay` to the wanted range (`getTaskListForRange$` with
  * `isFilterOutTimeSpentOnOtherDays`). Like the export's date grouping, a parent
- * with subtasks is skipped: its time is the sum of its subtasks.
+ * with subtasks is skipped: its time is the sum of its subtasks. A subtask
+ * counts for its parent's project when the parent is in the list.
  */
 export const getProjectTotals = (
   tasks: WorklogTask[],
@@ -32,13 +33,10 @@ export const getProjectTotals = (
     if (!(timeSpent > 0)) {
       continue;
     }
-    const ownOrParentProjectId =
-      task.projectId ||
-      (task.parentId ? taskById.get(task.parentId)?.projectId : undefined);
-    const projectId =
-      ownOrParentProjectId && titleById.has(ownOrParentProjectId)
-        ? ownOrParentProjectId
-        : null;
+    // History assigns a subtask to its parent's project; do the same here
+    const parent = task.parentId ? taskById.get(task.parentId) : undefined;
+    const rawProjectId = parent ? parent.projectId : task.projectId;
+    const projectId = rawProjectId && titleById.has(rawProjectId) ? rawProjectId : null;
     msByProject.set(projectId, (msByProject.get(projectId) ?? 0) + timeSpent);
     total += timeSpent;
   }
