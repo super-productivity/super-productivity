@@ -48,7 +48,6 @@ import {
   EncryptNoPasswordError,
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
-  PotentialCorsError,
   SyncProviderId,
   SyncStatus,
   toSyncProviderId,
@@ -57,6 +56,7 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { T } from '../../t.const';
 import { getSyncErrorStr } from './get-sync-error-str';
+import { getSyncConnectionHintMsg } from './get-sync-connection-hint';
 import { getErrorTxt } from '../../util/get-error-text';
 import { escapeHtml } from '../../util/escape-html';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
@@ -922,12 +922,12 @@ export class SyncWrapperService {
         this._consecutiveSuperSyncAuthFailures = 0;
       }
 
-      if (error instanceof PotentialCorsError) {
+      const connectionHintMsg = getSyncConnectionHintMsg(error);
+      if (connectionHintMsg) {
         this._snackService.open({
-          msg: T.F.SYNC.S.ERROR_CORS,
+          msg: connectionHintMsg,
           type: 'ERROR',
-          // a bit longer since it is a long message
-          config: { duration: 12000 },
+          config: { duration: 12000 }, // longer: these are long messages
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof IncompleteRemoteOperationsError) {

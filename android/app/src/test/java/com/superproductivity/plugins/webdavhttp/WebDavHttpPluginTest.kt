@@ -9,6 +9,8 @@ import okhttp3.EventListener
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.net.ConnectException
@@ -19,12 +21,43 @@ import java.net.ServerSocket
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.security.cert.CertPathValidatorException
+import java.security.cert.CertificateException
+import java.security.cert.CertificateExpiredException
+import javax.net.ssl.SSLException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class WebDavHttpPluginTest {
+    private fun handshake(cause: Throwable?) =
+        SSLHandshakeException("handshake failed").apply { cause?.let { initCause(it) } }
+
+    @Test
+    fun `untrusted issuer is a certificate trust failure`() {
+        // Shape Android produces for a server whose CA is not installed (#2855).
+        val pathError = CertPathValidatorException("Trust anchor for certification path not found.")
+        val certError = CertificateException(pathError)
+        assertTrue(isCertificateTrustFailure(handshake(certError)))
+    }
+
+    @Test
+    fun `expired certificate and host name mismatch are certificate trust failures`() {
+        assertTrue(isCertificateTrustFailure(handshake(CertificateExpiredException("expired"))))
+        assertTrue(isCertificateTrustFailure(SSLPeerUnverifiedException("Hostname nas.local not verified")))
+    }
+
+    @Test
+    fun `handshake failures without a certificate cause are not trust failures`() {
+        assertFalse(isCertificateTrustFailure(handshake(null)))
+        assertFalse(isCertificateTrustFailure(handshake(SocketException("Connection reset"))))
+        assertFalse(isCertificateTrustFailure(SSLException("Read error")))
+        assertFalse(isCertificateTrustFailure(SocketTimeoutException("timeout")))
+    }
+
     @Test
     fun `timed out PUT is not replayed while the original upload holds a lock`() {
         withStalledRequest { client, url, requests ->
