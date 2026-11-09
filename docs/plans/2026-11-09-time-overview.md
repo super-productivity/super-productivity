@@ -174,8 +174,9 @@ the [contributor sync model](../sync-and-op-log/contributor-sync-model.md)):
    - One new string (`F.WORKLOG.EXPORT.TIME_PER_PROJECT`, `en.json` only), one
      line in the [Worklog wiki note](../wiki/4.21-Worklog.md).
    - Tests: `worklog-project-totals.util.spec.ts` (7),
-     `worklog-export.component.spec.ts` (2 new, one expands the section and checks the rows). Not covered: an E2E, and the
-     section was not looked at in a running app.
+     `worklog-export.component.spec.ts` (2 new, one expands the section and checks the rows). E2E:
+     `e2e/tests/worklog/export-time-per-project.spec.ts`, run against the PR
+     preview build (two projects, keyboard toggle, rows and shares).
    - Known limits: totals use raw time and ignore the dialog's rounding
      option; the totals are read or copied from the dialog and are not part of
      the CSV.
