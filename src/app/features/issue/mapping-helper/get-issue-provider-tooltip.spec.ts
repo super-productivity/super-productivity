@@ -148,4 +148,12 @@ describe('iCal display name', () => {
   it('keeps the google initial when no name is set', () => {
     expect(getIssueProviderInitials(icalProvider())).toBe('G');
   });
+
+  it('ignores a whitespace-only name and trims padding', () => {
+    expect(getIssueProviderTooltip(icalProvider({ name: '  ' }))).toBe(
+      'calendar.google.com',
+    );
+    expect(getIssueProviderInitials(icalProvider({ name: '  ' }))).toBe('G');
+    expect(getIssueProviderInitials(icalProvider({ name: ' Work' }))).toBe('WO');
+  });
 });

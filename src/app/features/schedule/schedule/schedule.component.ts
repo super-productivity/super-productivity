@@ -148,7 +148,8 @@ export class ScheduleComponent {
   // URL (credentials in the path) or an opaque scheme; reuse the iCal sanitizer
   // so neither is rendered verbatim.
   readonly calProviderLabel = (p: IssueProvider): string => {
-    if (p.issueProviderKey === 'ICAL' && p.name) return p.name;
+    const icalName = p.issueProviderKey === 'ICAL' ? p.name?.trim() : undefined;
+    if (icalName) return icalName;
     const raw = getIssueProviderTooltip(p);
     if (!/^[a-z][a-z0-9+.-]*:\S/i.test(raw)) return raw;
     const sanitized = sanitizeIcalUrlForDisplay(raw);
