@@ -95,15 +95,15 @@
   },
   {
     "name": "Dashboard",
-    "shortDescription": "Charts and stats for your tracked time and tasks: totals, completions, overdue and late work, project and tag breakdowns, a year-long heatmap and a completion punchcard, with CSV, text and image export. Requires Super Productivity 20.0.0.",
+    "shortDescription": "Time tracked, completed, overdue and late tasks, broken down by day, project and tag over any date range, plus a heatmap of your activity and habits. Share or print any view. English, Spanish and Simplified Chinese.",
     "url": "https://github.com/ahanel13/sp-dashboard",
     "author": "ahanel13",
     "authorUrl": "https://github.com/ahanel13",
     "id": "sp-dashboard",
     "release": {
-      "version": "1.8.0",
-      "downloadUrl": "https://github.com/ahanel13/sp-dashboard/releases/download/v1.8.0/sp-dashboard.zip",
-      "sha256": "53a888f5e098bee5c365581f6834f34b11dd7962f3d38cd5400dc9a5e06633b4"
+      "version": "1.9.0",
+      "downloadUrl": "https://github.com/ahanel13/sp-dashboard/releases/download/v1.9.0/sp-dashboard.zip",
+      "sha256": "698d057da3235d4d3b549b8f202d3e07388b6670000a35fe9b74d7209ffb142d"
     }
   },
   {
