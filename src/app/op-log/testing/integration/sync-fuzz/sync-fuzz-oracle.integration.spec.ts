@@ -4,7 +4,7 @@ import { OperationLogStoreService } from '../../../persistence/operation-log-sto
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { executeIntent, FuzzStep, fuzzDay } from './sync-fuzz-actions';
 import { SyncFuzzHarness } from './sync-fuzz-harness';
-import { runFuzz } from './sync-fuzz-runner';
+import { FuzzFailure, runFuzz } from './sync-fuzz-runner';
 
 interface Entities {
   ids: string[];
@@ -12,14 +12,16 @@ interface Entities {
 }
 
 /** Corrupt only snapshots read by the oracles, after the real pipeline ran. */
-const corruptOutcome = (corrupt: (state: AppStateSnapshot) => void): void => {
+const corruptOutcome = (
+  corrupt: (state: AppStateSnapshot, device: string) => void,
+): void => {
   const original = SyncFuzzHarness.prototype.syncedState;
   spyOn(SyncFuzzHarness.prototype, 'syncedState').and.callFake(async function (
     this: SyncFuzzHarness,
     device,
   ) {
     const state = structuredClone(await original.call(this, device));
-    corrupt(state);
+    corrupt(state, device.name);
     return state;
   });
 };
@@ -48,6 +50,55 @@ describe('sync fuzz oracle real-path negative controls', () => {
       expect(lost.failures.map((f) => f.signature)).toContain('lost-entity:note');
     }, 60_000);
   }
+
+  it('runs a trace through the file adapter with the same oracles', async () => {
+    const steps: FuzzStep[] = [
+      { d: 'A', a: ['editNote', 'n1', 'content', 'newer'] },
+      { d: 'A', s: 1 },
+      { d: 'B', s: 1 },
+    ];
+    const kept = await runFuzz({ steps, fileTransport: {} });
+    expect(kept.failures).withContext(JSON.stringify(kept.failures)).toEqual([]);
+    corruptOutcome((state) => removeNote(state, 'n1'));
+    const lost = await runFuzz({ steps, fileTransport: {} });
+    expect(lost.failures.map((f) => f.signature)).toContain('lost-entity:note');
+  }, 60_000);
+
+  it('answers the conflict dialog file sync opens over unsynced changes', async () => {
+    const conflict =
+      'sync-error:LocalDataConflictError: Local data conflict: * unsynced changes would be lost';
+    const trace = (k?: 'L' | 'R'): FuzzStep[] => [
+      { d: 'A', a: ['renameTask', 't1', 'A1'], s: 1 },
+      { d: 'B', s: 1 },
+      { d: 'A', a: ['forceUpload'] },
+      { d: 'B', a: ['renameTask', 't2', 'B1'], s: 1, ...(k ? { k } : {}) },
+    ];
+    const signatures = async (k?: 'L' | 'R'): Promise<string[]> =>
+      (await runFuzz({ steps: trace(k), fileTransport: {} })).failures.map(
+        (f) => f.signature,
+      );
+    expect(await signatures()).toContain(conflict);
+    expect(await signatures('R')).toEqual([]);
+    expect(await signatures('L')).toEqual([]);
+    const answered = await runFuzz({ steps: trace('R'), fileTransport: {} });
+    expect(answered.answeredConflicts).toBe(1);
+  }, 60_000);
+
+  it('marks a list difference as order-only until one device differs in members', async () => {
+    const noteIds = async (): Promise<FuzzFailure | undefined> =>
+      (await runFuzz({ steps: [] })).failures.find(
+        (f) => f.signature === 'divergence:.note.ids.*',
+      );
+    let swapsMember = false;
+    corruptOutcome((state, device) => {
+      const ids = (state.note as Entities).ids;
+      if (device === 'A') ids.reverse();
+      if (device === 'B' && swapsMember) ids[0] = 'not-a-note';
+    });
+    expect((await noteIds())?.orderOnly).toBeTrue();
+    swapsMember = true;
+    expect((await noteIds())?.orderOnly).toBeFalse();
+  }, 60_000);
 
   it('checks supplied creation values without treating defaults as user edits', async () => {
     expect((await runFuzz({ steps: [] })).failures).toEqual([]);
