@@ -1,4 +1,5 @@
 import { TaskMultiDragService } from '../task-multi-drag.service';
+import { TaskGroupDragPreviewComponent } from '../task-group-drag-preview/task-group-drag-preview.component';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -117,6 +118,7 @@ export interface DropModelDataForList {
     CdkDragPreview,
     AsyncPipe,
     TranslatePipe,
+    TaskGroupDragPreviewComponent,
     forwardRef(() => TaskComponent),
   ],
 })
@@ -137,7 +139,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private readonly _taskMultiSelectService = inject(TaskMultiSelectService);
   // Set inside a view's column: its lists order the view, not the open context.
   private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
-  // Group drags place a selection in the open project's lists. A view's rows
+  // Group drags place a selection in the open project's or tag's lists. A view's rows
   // move one at a time, whatever context was open before (it's stale there).
   protected readonly isInView = !!this._viewTaskList;
   protected readonly isTouchSelectionMode =
