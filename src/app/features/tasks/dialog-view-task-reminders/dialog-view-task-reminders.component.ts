@@ -23,7 +23,6 @@ import { ReminderService } from '../../reminder/reminder.service';
 import { distinctUntilChanged, first, map, switchMap, takeWhile } from 'rxjs/operators';
 import { T } from '../../../t.const';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
-import { getTomorrow } from '../../../util/get-tomorrow';
 import { ProjectService } from '../../project/project.service';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatIcon } from '@angular/material/icon';
@@ -365,7 +364,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._store.dispatch(
       PlannerActions.planTaskForDay({
         task,
-        day: getDbDateStr(getTomorrow()),
+        day: getDbDateStr(this._dateService.getLogicalTomorrowMs()),
         isShowSnack: true,
       }),
     );
