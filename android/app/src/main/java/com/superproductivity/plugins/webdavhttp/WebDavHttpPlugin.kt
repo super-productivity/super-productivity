@@ -75,6 +75,11 @@ class WebDavHttpPlugin : Plugin() {
                         ) {
                             throw e
                         }
+                        // Certificate problems fail the same way on every
+                        // attempt; retrying only delays the error (#2855).
+                        if (isCertificateTrustFailure(e)) {
+                            throw e
+                        }
                         tryCount++
                         if (tryCount >= maxRetries) {
                             throw e

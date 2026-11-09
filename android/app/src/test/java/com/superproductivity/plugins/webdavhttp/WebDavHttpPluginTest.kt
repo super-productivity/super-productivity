@@ -24,17 +24,17 @@ import java.net.UnknownHostException
 import java.security.cert.CertPathValidatorException
 import java.security.cert.CertificateException
 import java.security.cert.CertificateExpiredException
-import javax.net.ssl.SSLException
-import javax.net.ssl.SSLHandshakeException
-import javax.net.ssl.SSLPeerUnverifiedException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import javax.net.ssl.SSLException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 
 class WebDavHttpPluginTest {
-    private fun handshake(cause: Throwable?) =
-        SSLHandshakeException("handshake failed").apply { cause?.let { initCause(it) } }
+    private fun handshake(rootCause: Throwable?) =
+        SSLHandshakeException("handshake failed").apply { rootCause?.let { initCause(it) } }
 
     @Test
     fun `untrusted issuer is a certificate trust failure`() {

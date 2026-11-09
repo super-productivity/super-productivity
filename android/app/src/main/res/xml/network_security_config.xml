@@ -3,11 +3,9 @@
         tools:ignore="InsecureBaseConfiguration">
         <trust-anchors>
             <!-- Trust user-installed CAs in all builds (base-config, not
-                 debug-overrides), so sync to a server with a private CA or
-                 self-signed certificate works once the user installs it under
-                 Settings > Security > Encryption & credentials >
-                 Install a certificate > CA certificate (#2855). OkHttp, used by
-                 WebDavHttpPlugin and the other native clients, uses the platform
+                 debug-overrides): lets sync reach servers with a private CA
+                 or self-signed certificate once the user installs it as a
+                 CA certificate (#2855). OkHttp uses the platform
                  TrustManager, which applies this config. -->
             <certificates src="user"
                 tools:ignore="AcceptsUserCertificates" />

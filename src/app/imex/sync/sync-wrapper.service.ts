@@ -56,7 +56,7 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { T } from '../../t.const';
 import { getSyncErrorStr } from './get-sync-error-str';
-import { getSyncConnectionHintMsg } from './get-sync-connection-hint';
+import { showSetupHint } from './show-setup-hint';
 import { getErrorTxt } from '../../util/get-error-text';
 import { escapeHtml } from '../../util/escape-html';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
@@ -922,13 +922,9 @@ export class SyncWrapperService {
         this._consecutiveSuperSyncAuthFailures = 0;
       }
 
-      const connectionHintMsg = getSyncConnectionHintMsg(error);
-      if (connectionHintMsg) {
-        this._snackService.open({
-          msg: connectionHintMsg,
-          type: 'ERROR',
-          config: { duration: 12000 }, // longer: these are long messages
-        });
+      if (
+        showSetupHint(error, isUserTriggered, this._snackService, this._providerManager)
+      ) {
         return 'HANDLED_ERROR';
       } else if (error instanceof IncompleteRemoteOperationsError) {
         this._providerManager.setSyncStatus('ERROR');
