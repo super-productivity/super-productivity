@@ -903,9 +903,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!this._markdownPasteService.isMarkdownTaskList(pastedText)) return;
 
     event.preventDefault();
-    this._markdownPasteService.handleMarkdownPaste(pastedText, null).then(() => {
-      this.stateService.updateInputTxt('');
-    });
+    this._markdownPasteService
+      .handleMarkdownPaste(pastedText, null, undefined, undefined, {
+        isAddToBacklog: this.isAddToBacklog(),
+        isAddToBottom: this.isAddToBottom(),
+      })
+      .then(() => {
+        this.stateService.updateInputTxt('');
+      });
   }
 
   @HostListener('document:click', ['$event'])
