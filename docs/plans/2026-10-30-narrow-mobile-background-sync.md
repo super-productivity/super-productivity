@@ -1,12 +1,12 @@
 # Narrow mobile background sync: push on pause and on notification actions
 
-> **Status: Step 0 in progress** (§ 5); steps 1–2 and § 14 are parked for
-> later investigation (§ 16)
+> **Status: Step 0 shipped** in v20.0.0 (`cc275b9634`, #11330); steps 1–2
+> and § 14 are parked until reports after that release are re-checked (§ 16)
 >
 > **Owner / tracking:** Unassigned; no tracking issue yet. Open one before the PR.
 > Each implementation step is a sync PR (AGENTS.md sync rules 15–16).
 >
-> **Last verified against the code:** 2026-10-30 (`ed27bd1e95`)
+> **Last verified against the code:** 2026-11-09 (`3d2cdcf2b3`)
 >
 > **Removal condition:** delete once the steps in § 5 are shipped or declined
 > in an issue; move anything that still matters into
@@ -455,14 +455,26 @@ launch.
 
 ## 16. Investigate later
 
-Parked while step 0 ships. Revisit after one release with step 0:
+Parked while step 0 ships. Revisit after one release with step 0
+(v20.0.0, released 2026-11-06).
+
+State at `3d2cdcf2b3` (2026-11-09): step 0 is as described in § 5. Step 1 is
+untouched: `ReminderActionReceiver` still queues done/snooze with no drain
+broadcast, and `getReminderDoneQueue`/`getReminderSnoozeQueue` still read and
+clear (`webview/JavaScriptInterface.kt:596-603`). Step 1's drain signal
+cannot ship alone: without ack-after-persist it moves R1 into the window where
+the OS kills processes (§ 10). The ack needs native changes that a session
+without the Android SDK cannot build or test, and E2Es 3–4 need SuperSync, so
+build it where both are available.
 
 - [ ] Re-check new reports shaped like #25/#88/#89. Persisting reports
       decide step 1 (§ 5).
 - [ ] Step 1: Android notification actions while the app is alive, with
       ack-after-persist (R1, E2Es 3–5).
 - [ ] Step 2: iOS non-foreground actions, only if a device test shows R2.
-- [ ] R3 (§ 10) was not checked before step 0: file providers push on
+- [ ] R3 (§ 10): the interruption case is now
+      `e2e/tests/sync/webdav-android-pause-push-interrupted.spec.ts` (added in
+      #11330); confirm it in the scheduled WebDAV run. Originally not checked before step 0: file providers push on
       pause too (only with an unsynced op and their interval on, as their
       old pause/hidden triggers did). Run the WebDAV interruption case; if it is not clean, make
       the exit path flush-only for file providers on iOS (Q4). Add the
