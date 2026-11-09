@@ -2,6 +2,7 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/widget_task_list"
     android:previewLayout="@layout/widget_task_list"
+    android:configure="com.superproductivity.superproductivity.widget.WidgetBackgroundConfigActivity"
     android:minWidth="250dp"
     android:minHeight="180dp"
     android:minResizeWidth="180dp"
@@ -9,4 +10,5 @@
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional"
     android:description="@string/widget_description" />

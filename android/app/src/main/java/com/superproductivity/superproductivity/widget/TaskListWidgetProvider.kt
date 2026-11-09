@@ -32,6 +32,10 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         updateAll(context, appWidgetManager, appWidgetIds)
     }
 
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        WidgetBackground.remove(context, appWidgetIds)
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action != ACTION_CLICK) {
@@ -130,7 +134,9 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     )
                 } ?: context.getString(R.string.widget_header_outdated_unknown)
             }
-            return header to WidgetData.parseCurrentTask(json, nowMs)
+            return header to NotificationActionQueue.withoutPendingStop(
+                context, WidgetData.parseCurrentTask(json, nowMs)
+            )
         }
 
         /**
@@ -183,6 +189,15 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             currentTask: WidgetCurrentTask?
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_task_list)
+            val style = WidgetBackground.styleFor(context, appWidgetId)
+            style.applyBackground(views, R.id.widget_task_list_root)
+            style.icon(views, R.id.widget_header_icon, WidgetInk.BRAND)
+            style.icon(views, R.id.widget_add, WidgetInk.INK)
+            style.text(views, R.id.widget_header_title, WidgetInk.INK)
+            style.text(views, R.id.widget_tracking_title, WidgetInk.INK)
+            style.text(views, R.id.widget_tracking_device, WidgetInk.MUTED)
+            style.fill(views, R.id.widget_separator, WidgetInk.SEPARATOR)
+            style.text(views, R.id.widget_empty, WidgetInk.MUTED)
 
             views.setTextViewText(R.id.widget_header_title, header)
 

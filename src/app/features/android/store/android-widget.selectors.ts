@@ -106,11 +106,36 @@ export const resolveRemoteCurrentTask = (
     deviceLabel: view.session.payload.deviceLabel,
     isLocal: false,
     expiresAt: view.session.receivedAt + PRESENCE_STALE_AFTER_MS,
+    sinceTs: view.session.payload.sinceTs,
   };
   if (task.projectId) {
     currentTask.projectId = task.projectId;
   }
+  if (view.session.payload.focusCycle !== undefined) {
+    currentTask.focusCycle = view.session.payload.focusCycle;
+  }
   return currentTask;
+};
+
+/**
+ * Adds the display-only since/focus fields to the local current task. They come
+ * from TrackingPresenceService.localTrackingInfo — a service signal, not store
+ * state — so WidgetDataService applies this after the selector. Null while
+ * presence isn't running (no SuperSync live tracking): the task shows without
+ * them.
+ */
+export const withLocalTrackingInfo = (
+  currentTask: AndroidWidgetCurrentTask,
+  info: { sinceTs: number; focusCycle?: number } | null,
+): AndroidWidgetCurrentTask => {
+  if (!info) {
+    return currentTask;
+  }
+  const withInfo: AndroidWidgetCurrentTask = { ...currentTask, sinceTs: info.sinceTs };
+  if (info.focusCycle !== undefined) {
+    withInfo.focusCycle = info.focusCycle;
+  }
+  return withInfo;
 };
 
 /**

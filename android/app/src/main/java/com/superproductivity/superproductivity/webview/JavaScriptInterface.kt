@@ -36,6 +36,7 @@ import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.TaskListWidgetProvider
+import com.superproductivity.superproductivity.widget.TrackingWidgetProvider
 import com.superproductivity.superproductivity.widget.WidgetDoneQueue
 import com.superproductivity.superproductivity.widget.WidgetTaskQueue
 import org.json.JSONObject
@@ -576,13 +577,15 @@ class JavaScriptInterface(
     }
 
     /**
-     * Re-render the home screen widget from the current `widget_data` KeyValStore
-     * snapshot. Called by Angular after each snapshot push.
+     * Re-render the home screen widgets from the current `widget_data` KeyValStore
+     * snapshot. Called by Angular after each snapshot push. Both widgets read the
+     * same blob, so one push refreshes both.
      */
     @Suppress("unused")
     @JavascriptInterface
     fun updateWidget() {
         TaskListWidgetProvider.refreshAll(activity)
+        TrackingWidgetProvider.refreshAll(activity)
     }
 
     @Suppress("unused")

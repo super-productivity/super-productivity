@@ -91,7 +91,10 @@ class WidgetDataTest {
     fun parsesCurrentTask() {
         val json =
             """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"Write report","deviceLabel":"Desktop","isLocal":false}}"""
-        assertEquals(WidgetCurrentTask("Write report", "Desktop"), WidgetData.parseCurrentTask(json, NOW))
+        assertEquals(
+            WidgetCurrentTask("t1", "Write report", "Desktop", false),
+            WidgetData.parseCurrentTask(json, NOW)
+        )
     }
 
     @Test
@@ -115,7 +118,7 @@ class WidgetDataTest {
     fun remoteCurrentTaskIsShownBeforeItsExpiry() {
         val json =
             """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false,"expiresAt":${NOW + 1}}}"""
-        assertEquals(WidgetCurrentTask("X", "Desktop"), WidgetData.parseCurrentTask(json, NOW))
+        assertEquals(WidgetCurrentTask("t1", "X", "Desktop", false), WidgetData.parseCurrentTask(json, NOW))
     }
 
     @Test
@@ -123,6 +126,37 @@ class WidgetDataTest {
         val json =
             """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false,"expiresAt":$NOW}}"""
         assertNull(WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun parsesLocalCurrentTaskWithSinceAndFocusCycle() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Android","isLocal":true,"sinceTs":1700000000000,"focusCycle":2}}"""
+        assertEquals(
+            WidgetCurrentTask("t1", "X", "Android", true, 1700000000000L, 2),
+            WidgetData.parseCurrentTask(json, NOW)
+        )
+    }
+
+    @Test
+    fun currentTaskSinceTsAndFocusCycleAreOptional() {
+        // Omitted entirely when unavailable — never a fabricated value.
+        val task = WidgetData.parseCurrentTask(
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Android","isLocal":true}}""",
+            NOW
+        )
+        assertNull(task?.sinceTs)
+        assertNull(task?.focusCycle)
+    }
+
+    @Test
+    fun currentTaskNonPositiveSinceTsAndNullFocusCycleAreAbsent() {
+        val task = WidgetData.parseCurrentTask(
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Android","isLocal":true,"sinceTs":0,"focusCycle":null}}""",
+            NOW
+        )
+        assertNull(task?.sinceTs)
+        assertNull(task?.focusCycle)
     }
 
     @Test

@@ -2,6 +2,7 @@ import {
   buildLocalCurrentTask,
   getWidgetValidUntil,
   resolveRemoteCurrentTask,
+  withLocalTrackingInfo,
   selectAndroidWidgetData,
 } from './android-widget.selectors';
 import { getDbDateStr } from '../../../util/get-db-date-str';
@@ -446,6 +447,7 @@ describe('resolveRemoteCurrentTask', () => {
     state?: 'tracking' | 'stopped';
     taskId?: string | null;
     deviceLabel?: string;
+    focusCycle?: number;
   }): RemoteSessionView =>
     ({
       isStale: partial.isStale ?? false,
@@ -455,6 +457,8 @@ describe('resolveRemoteCurrentTask', () => {
           state: partial.state ?? 'tracking',
           taskId: partial.taskId ?? 't1',
           deviceLabel: partial.deviceLabel ?? 'Desktop',
+          sinceTs: 500,
+          ...(partial.focusCycle !== undefined ? { focusCycle: partial.focusCycle } : {}),
         },
       },
     }) as RemoteSessionView;
@@ -489,6 +493,38 @@ describe('resolveRemoteCurrentTask', () => {
       deviceLabel: 'Desktop',
       isLocal: false,
       expiresAt: 1_000 + PRESENCE_STALE_AFTER_MS,
+      sinceTs: 500,
     });
+  });
+
+  it('should carry the remote focus cycle while a focus session runs', () => {
+    const result = resolveRemoteCurrentTask(view({ focusCycle: 3 }), { t1: task('t1') });
+    expect(result?.focusCycle).toBe(3);
+  });
+});
+
+describe('withLocalTrackingInfo', () => {
+  const local = {
+    id: 't1',
+    title: 'Write',
+    deviceLabel: 'Android',
+    isLocal: true,
+  };
+
+  it('should leave the task unchanged without presence info', () => {
+    expect(withLocalTrackingInfo(local, null)).toBe(local);
+  });
+
+  it('should add since and focus cycle', () => {
+    expect(withLocalTrackingInfo(local, { sinceTs: 42, focusCycle: 2 })).toEqual({
+      ...local,
+      sinceTs: 42,
+      focusCycle: 2,
+    });
+  });
+
+  it('should omit the focus cycle key outside a focus session', () => {
+    const result = withLocalTrackingInfo(local, { sinceTs: 42 });
+    expect('focusCycle' in result).toBe(false);
   });
 });

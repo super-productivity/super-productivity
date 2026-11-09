@@ -3,6 +3,7 @@ package com.superproductivity.superproductivity.widget
 import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 
 /**
@@ -71,6 +72,26 @@ object NotificationActionQueue {
         val at = prefs.getLong(KEY_REMOTE_STOP_AT, 0L)
         prefs.edit().remove(KEY_REMOTE_STOP_AT).commit()
         return at.toString()
+    }
+
+    /**
+     * Hides a local [task] whose Pause/Done is queued but not yet applied by
+     * Angular, so the widgets show "not tracking" right after the tap rather
+     * than when the app next runs.
+     */
+    @Synchronized
+    fun withoutPendingStop(context: Context, task: WidgetCurrentTask?): WidgetCurrentTask? {
+        if (task == null || !task.isLocal) return task
+        val raw = getPrefs(context).getString(KEY_TRACKING, null) ?: return task
+        val pending = try {
+            JSONArray(raw)
+        } catch (e: JSONException) {
+            return task
+        }
+        for (i in 0 until pending.length()) {
+            if (pending.optJSONObject(i)?.optString("taskId") == task.id) return null
+        }
+        return task
     }
 
     private fun append(context: Context, key: String, entry: JSONObject) {

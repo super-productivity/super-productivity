@@ -92,13 +92,18 @@ class TrackingForegroundService : Service() {
          * draining the action nor a later restoreIfIdle() can credit the
          * post-tap time a second time. Restores first, so a tap that reaches a
          * new process after a kill still finds the session (#7390).
-         * Returns null when nothing is being tracked.
+         * Returns null when nothing is being tracked, or when [expectedTaskId]
+         * is given and another task is (the session is then left running).
          */
         @Synchronized
-        fun takeForNotificationAction(context: Context): ActionSnapshot? {
+        fun takeForNotificationAction(
+            context: Context,
+            expectedTaskId: String? = null
+        ): ActionSnapshot? {
             restoreIfIdle(context)
             val taskId = currentTaskId
             if (!isTracking || taskId == null) return null
+            if (expectedTaskId != null && taskId != expectedTaskId) return null
             val snapshot = ActionSnapshot(taskId, getElapsedMs(), System.currentTimeMillis())
             clearState(context)
             return snapshot
