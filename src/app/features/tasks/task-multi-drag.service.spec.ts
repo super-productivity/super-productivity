@@ -6,13 +6,15 @@ import { TaskMultiDragService } from './task-multi-drag.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskBulkActionService } from './task-bulk-action.service';
 import { DEFAULT_TASK, Task } from './task.model';
-import { DEFAULT_PROJECT } from '../project/project.const';
 import { Section } from '../section/section.model';
 import { SectionService } from '../section/section.service';
 import { selectAllSections } from '../section/store/section.selectors';
-import { selectProjectFeatureState } from '../project/store/project.selectors';
+import { selectOverdueTasksWithSubTasks } from './store/task.selectors';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
+import { DateService } from '../../core/date/date.service';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { TODAY_TAG } from '../tag/tag.const';
 
 describe('TaskMultiDragService', () => {
   let service: TaskMultiDragService;
@@ -22,7 +24,13 @@ describe('TaskMultiDragService', () => {
   let sectionService: jasmine.SpyObj<SectionService>;
   let bulk: { moveToProject: jasmine.Spy };
   let dispatch: jasmine.Spy;
-  let isProjectContext$: BehaviorSubject<boolean>;
+  let undone$: BehaviorSubject<Task[]>;
+  let overdue: ReturnType<typeof signal<Task[]>>;
+  let context: {
+    activeWorkContextId: string;
+    activeWorkContextType: WorkContextType;
+    undoneTasks$: BehaviorSubject<Task[]>;
+  };
   const task = (id: string, overrides: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
     id,
@@ -47,7 +55,13 @@ describe('TaskMultiDragService', () => {
     ]);
     bulk = { moveToProject: jasmine.createSpy('moveToProject').and.resolveTo() };
     dispatch = jasmine.createSpy('dispatch');
-    isProjectContext$ = new BehaviorSubject(true);
+    undone$ = new BehaviorSubject([task('a'), task('b'), task('c')]);
+    overdue = signal<Task[]>([]);
+    context = {
+      activeWorkContextId: 'p',
+      activeWorkContextType: WorkContextType.PROJECT,
+      undoneTasks$: undone$,
+    };
     TestBed.configureTestingModule({
       providers: [
         TaskMultiDragService,
@@ -59,24 +73,19 @@ describe('TaskMultiDragService', () => {
             selectSignal: (selector: unknown) =>
               selector === selectAllSections
                 ? sections
-                : selector === selectProjectFeatureState
-                  ? signal({
-                      ids: ['p'],
-                      entities: {
-                        p: { ...DEFAULT_PROJECT, id: 'p', taskIds: ['a', 'b', 'c'] },
-                      },
-                    })
+                : selector === selectOverdueTasksWithSubTasks
+                  ? overdue
                   : tasks,
           },
         },
         { provide: SectionService, useValue: sectionService },
         { provide: TaskBulkActionService, useValue: bulk },
+        { provide: WorkContextService, useValue: context },
         {
-          provide: WorkContextService,
+          provide: DateService,
           useValue: {
-            activeWorkContextId: 'p',
-            activeWorkContextType: WorkContextType.PROJECT,
-            isActiveWorkContextProject$: isProjectContext$,
+            todayStr: () => '2026-11-09',
+            getStartOfNextDayDiffMs: () => 0,
           },
         },
       ],
@@ -113,13 +122,25 @@ describe('TaskMultiDragService', () => {
     service.start(task('child', { parentId: 'a' }));
     expect(service.ids()).toEqual([]);
   });
-  it('keeps the group for sidebar drops but not list drops outside project views', () => {
-    isProjectContext$.next(false);
+  it('groups list drags in project and tag views, but not planner drags', () => {
     start();
+    expect(service.isListGroupDrag()).toBeTrue();
+    context.activeWorkContextType = WorkContextType.TAG;
+    service.start(tasks()['a']);
+    expect(service.isListGroupDrag()).toBeTrue();
+    service.start(tasks()['b'], 'PLANNER');
     expect(service.ids()).toEqual(['b', 'a']);
     expect(service.isListGroupDrag()).toBeFalse();
-    isProjectContext$.next(true);
-    expect(service.isListGroupDrag()).toBeTrue();
+    expect(service.canDrop('PARENT', 'UNDONE')).toBeFalse();
+  });
+  it('carries selected subtasks only in a planner group', () => {
+    tasks.update((value) => ({ ...value, child: task('child', { parentId: 'c' }) }));
+    selection.toggle('child');
+    selection.toggle('a');
+    service.start(tasks()['child'], 'PLANNER');
+    expect(service.ids()).toEqual(['a', 'child']);
+    expect(service.plannerPreviewTasks().map((item) => item.id)).toEqual(['a', 'child']);
+    expect(service.previewTasks().map((item) => item.id)).toEqual(['a']);
   });
   it('keeps touch selection on its existing menu path', () => {
     selection.enterTouchSelectionMode('a');
@@ -137,7 +158,8 @@ describe('TaskMultiDragService', () => {
     expect(service.canDrop('PARENT', 'right', 'tag')).toBeFalse();
     // Lists inside the grouped work view pass `null` for non-tag groups.
     expect(service.canDrop('PARENT', 'UNDONE', null)).toBeFalse();
-    tasks.update((value) => ({ ...value, b: task('b', { projectId: 'other' }) }));
+    // Not in the open context's undone list (another project, Later Today, backlog).
+    undone$.next([task('a'), task('c')]);
     expect(service.canDrop('PARENT', 'right')).toBeFalse();
   });
   it('chains anchors across explicit sources when dropping into a section', async () => {
@@ -265,5 +287,78 @@ describe('TaskMultiDragService', () => {
     service.clear();
     await service.moveToProject('other', ids);
     expect(bulk.moveToProject).toHaveBeenCalledWith('other', ['b', 'a']);
+  });
+
+  describe('in Today', () => {
+    beforeEach(() => {
+      context.activeWorkContextId = TODAY_TAG.id;
+      context.activeWorkContextType = WorkContextType.TAG;
+      sections.set([
+        {
+          ...section('focus', ['c']),
+          contextType: WorkContextType.TAG,
+          contextId: TODAY_TAG.id,
+        },
+      ]);
+    });
+
+    it('reorders the group in the Today list after the drop anchor', async () => {
+      start();
+      await service.drop('UNDONE', 'a', ['c', 'a']);
+      expect(dispatch.calls.allArgs().map(([action]) => action)).toEqual([
+        jasmine.objectContaining({
+          taskId: 'b',
+          afterTaskId: 'c',
+          src: 'UNDONE',
+          workContextId: TODAY_TAG.id,
+          workContextType: WorkContextType.TAG,
+        }),
+        jasmine.objectContaining({ taskId: 'a', afterTaskId: 'b' }),
+      ]);
+    });
+
+    it('only accepts Today sections, not another context with the same id', () => {
+      start();
+      expect(service.canDrop('PARENT', 'focus')).toBeTrue();
+      sections.set([section('focus', ['c'])]);
+      expect(service.canDrop('PARENT', 'focus')).toBeFalse();
+    });
+
+    it('plans overdue members for today once, then places every member', async () => {
+      undone$.next([task('a'), task('c')]);
+      overdue.set([task('b')]);
+      start();
+      expect(service.canDrop('PARENT', 'UNDONE')).toBeTrue();
+
+      await service.drop('UNDONE', 'a', ['a', 'c']);
+
+      const actions = dispatch.calls.allArgs().map(([action]) => action);
+      expect(actions[0]).toEqual(
+        TaskSharedActions.planTasksForToday({
+          taskIds: ['b'],
+          today: '2026-11-09',
+          startOfNextDayDiffMs: 0,
+        }),
+      );
+      expect(actions.slice(1)).toEqual([
+        jasmine.objectContaining({ taskId: 'b', afterTaskId: null, src: 'OVERDUE' }),
+        jasmine.objectContaining({ taskId: 'a', afterTaskId: 'b', src: 'UNDONE' }),
+      ]);
+    });
+
+    it('admits overdue members only in Today', () => {
+      undone$.next([task('a'), task('c')]);
+      overdue.set([task('b')]);
+      context.activeWorkContextId = 'some-tag';
+      start();
+      expect(service.canDrop('PARENT', 'UNDONE')).toBeFalse();
+    });
+
+    it('stops watching the undone list when the drag is cleared', () => {
+      start();
+      expect(undone$.observed).toBeTrue();
+      service.clear();
+      expect(undone$.observed).toBeFalse();
+    });
   });
 });

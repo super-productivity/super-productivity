@@ -1,0 +1,30 @@
+// The drag preview of a selected task group (TaskGroupDragPreviewComponent),
+// shared by task lists and planner days. CDK appends it to <body>.
+.multi-task-drag-preview {
+  display: block;
+  width: min(480px, 80vw);
+  padding: var(--s2) var(--s3);
+  background: var(--bg-lighter);
+  color: var(--text-color);
+  border: 1px solid var(--divider-color);
+  border-radius: var(--task-border-radius);
+}
+
+.multi-task-drag-preview-tasks {
+  max-height: min(360px, 50vh);
+  overflow: hidden;
+}
+
+.multi-task-drag-preview-row {
+  padding: var(--s) 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-task-drag-preview-count {
+  padding-bottom: var(--s);
+  border-bottom: 1px solid var(--divider-color);
+  color: var(--c-accent);
+  font-size: var(--font-size-sm);
+}

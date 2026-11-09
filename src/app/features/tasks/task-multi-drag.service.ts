@@ -1,17 +1,27 @@
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
+import { Subscription } from 'rxjs';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskBulkActionService } from './task-bulk-action.service';
-import { selectTaskEntities } from './store/task.selectors';
+import {
+  selectOverdueTasksWithSubTasks,
+  selectTaskEntities,
+} from './store/task.selectors';
 import { selectAllSections } from '../section/store/section.selectors';
-import { selectProjectFeatureState } from '../project/store/project.selectors';
 import { SectionService } from '../section/section.service';
 import { WorkContextService } from '../work-context/work-context.service';
-import { WorkContextType } from '../work-context/work-context.model';
 import { moveTaskInTodayList } from '../work-context/store/work-context-meta.actions';
 import { getAnchorFromDragDrop } from '../work-context/store/work-context-meta.helper';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { DateService } from '../../core/date/date.service';
+import { TODAY_TAG } from '../tag/tag.const';
 import { Task } from './task.model';
+
+/**
+ * Where a group drag started. A planner group may carry subtasks (they are
+ * planned on days of their own) and never drives the task-list visuals.
+ */
+export type TaskGroupDragOrigin = 'LIST' | 'PLANNER';
 
 /** A transient snapshot: drop callbacks must not depend on rows surviving a move. */
 @Injectable({ providedIn: 'root' })
@@ -21,18 +31,24 @@ export class TaskMultiDragService {
   private readonly _bulk = inject(TaskBulkActionService);
   private readonly _sectionService = inject(SectionService);
   private readonly _context = inject(WorkContextService);
+  private readonly _dateService = inject(DateService);
   private readonly _tasks = this._store.selectSignal(selectTaskEntities);
   private readonly _sections = this._store.selectSignal(selectAllSections);
-  private readonly _projects = this._store.selectSignal(selectProjectFeatureState);
-  // Group list drops only target project lists (see canDrop). Elsewhere the
-  // snapshot still serves sidebar project drops, while list drops reorder the
-  // dragged task alone instead of refusing every target.
-  private readonly _isProjectContext = toSignal(
-    this._context.isActiveWorkContextProject$,
-    { initialValue: false },
+  private readonly _overdue = this._store.selectSignal(selectOverdueTasksWithSubTasks);
+  // Read only by Today drops; canDrop runs on every pointer move.
+  private readonly _overdueIds = computed(
+    () => new Set(this._overdue().map((task) => task.id)),
   );
   private readonly _ids = signal<readonly string[]>([]);
+  private readonly _origin = signal<TaskGroupDragOrigin>('LIST');
   private readonly _cancelled = signal(false);
+  /**
+   * The open context's undone list (its UNDONE rows and sections), watched only
+   * while a list group drag runs. Done, Later Today and backlog rows are not in
+   * it, so a selection holding one of them is refused rather than half-moved.
+   */
+  private readonly _undoneIds = signal<ReadonlySet<string>>(new Set());
+  private _undoneSub?: Subscription;
   private _stopListening?: () => void;
   readonly isCancelled = this._cancelled.asReadonly();
   readonly ids = this._ids.asReadonly();
@@ -40,12 +56,6 @@ export class TaskMultiDragService {
   constructor() {
     inject(DestroyRef).onDestroy(() => this.clear());
   }
-  private readonly _regularIds = computed(() => {
-    const task = this._tasks()[this.ids()[0]];
-    return new Set(
-      task ? (this._projects().entities[task.projectId]?.taskIds ?? []) : [],
-    );
-  });
   readonly draggedIds = computed(() => new Set(this.ids()));
   readonly selectedIds = this._selection.selectedIds;
   readonly previewTasks = computed(() => {
@@ -56,6 +66,15 @@ export class TaskMultiDragService {
       return task && !task.parentId ? [task] : [];
     });
   });
+  /** Planner cards include planned subtasks, so their preview does too. */
+  readonly plannerPreviewTasks = computed(() => {
+    const ids = this.ids().length ? this.ids() : [...this.selectedIds()];
+    const entities = this._tasks();
+    return ids.flatMap((id) => {
+      const task = entities[id];
+      return task ? [task] : [];
+    });
+  });
   readonly selectionSize = computed(
     () =>
       [...this.selectedIds()].filter((id) => {
@@ -64,13 +83,17 @@ export class TaskMultiDragService {
       }).length,
   );
   readonly isListGroupDrag = computed(
-    () => this._isProjectContext() && this.ids().length > 1,
+    () =>
+      this._origin() === 'LIST' &&
+      this.ids().length > 1 &&
+      !!this._context.activeWorkContextId,
   );
 
-  start(task: Task): void {
+  start(task: Task, origin: TaskGroupDragOrigin = 'LIST'): void {
     this.clear();
+    const isPlanner = origin === 'PLANNER';
     if (
-      task.parentId ||
+      (!isPlanner && task.parentId) ||
       !this._selection.has(task.id) ||
       this._selection.isTouchSelectionMode()
     )
@@ -78,9 +101,16 @@ export class TaskMultiDragService {
     const entities = this._tasks();
     const ids = this._selection
       .selectedIdsInDomOrder()
-      .filter((id) => entities[id] && !entities[id]!.parentId);
+      .filter((id) => entities[id] && (isPlanner || !entities[id]!.parentId));
     if (ids.length > 1) {
+      this._origin.set(origin);
       this._ids.set(ids);
+      if (!isPlanner) {
+        // Replays synchronously (shared main list, store and minute tick).
+        this._undoneSub = this._context.undoneTasks$.subscribe((tasks) =>
+          this._undoneIds.set(new Set(tasks.map((t) => t.id))),
+        );
+      }
       const cancel = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') this._cancelled.set(true);
       };
@@ -100,33 +130,34 @@ export class TaskMultiDragService {
   clear(): void {
     this._stopListening?.();
     this._stopListening = undefined;
+    this._undoneSub?.unsubscribe();
+    this._undoneSub = undefined;
+    this._undoneIds.set(new Set());
     this._cancelled.set(false);
+    this._origin.set('LIST');
     this._ids.set([]);
   }
 
-  /** Group drops only target regular project lists and their sections. */
+  /**
+   * Group drops target the open context's undone list and its sections: a
+   * project's root list, a tag's (Today's) main list. Overdue tasks may join a
+   * Today drop; they are planned for today as they land.
+   */
   canDrop(listId: string, modelId: string, groupTagId?: string | null): boolean {
-    if (this.isCancelled()) return false;
-    const projectId = this._context.activeWorkContextId;
-    if (
-      listId !== 'PARENT' ||
-      groupTagId !== undefined ||
-      this._context.activeWorkContextType !== WorkContextType.PROJECT ||
-      !projectId
-    )
+    if (this.isCancelled() || this._origin() !== 'LIST') return false;
+    const contextId = this._context.activeWorkContextId;
+    const contextType = this._context.activeWorkContextType;
+    if (listId !== 'PARENT' || groupTagId !== undefined || !contextId || !contextType)
       return false;
-    const project = this._projects().entities[projectId];
+    const undone = this._undoneIds();
+    const overdue: ReadonlySet<string> =
+      contextId === TODAY_TAG.id ? this._overdueIds() : new Set<string>();
     if (
-      !project ||
       !this.ids().length ||
       this.ids().some((id) => {
         const task = this._tasks()[id];
         return (
-          !task ||
-          task.parentId ||
-          task.isDone ||
-          task.projectId !== projectId ||
-          !this._regularIds().has(id)
+          !task || task.parentId || task.isDone || (!undone.has(id) && !overdue.has(id))
         );
       })
     )
@@ -136,8 +167,8 @@ export class TaskMultiDragService {
       this._sections().some(
         (section) =>
           section.id === modelId &&
-          section.contextType === WorkContextType.PROJECT &&
-          section.contextId === projectId,
+          section.contextType === contextType &&
+          section.contextId === contextId,
       )
     );
   }
@@ -160,23 +191,36 @@ export class TaskMultiDragService {
 
   async drop(modelId: string, leaderId: string, orderedIds: string[]): Promise<void> {
     if (!this.canDrop('PARENT', modelId)) return;
-    const projectId = this._context.activeWorkContextId!;
+    const contextId = this._context.activeWorkContextId!;
+    const contextType = this._context.activeWorkContextType!;
     const ids = [...this.ids()];
     const selected = new Set(ids);
     // CDK moves one placeholder; remove the other selected rows from its anchor.
     let afterTaskId = this._getGroupAnchor(leaderId, orderedIds, selected);
     const sections = this._sections().filter(
-      (section) =>
-        section.contextId === projectId &&
-        section.contextType === WorkContextType.PROJECT,
+      (section) => section.contextId === contextId && section.contextType === contextType,
     );
     const sourceByTask = new Map(
       sections.flatMap((section) =>
         section.taskIds.map((id) => [id, section.id] as const),
       ),
     );
+    const undone = this._undoneIds();
+    // Only Today shows an overdue list (canDrop admits none elsewhere).
+    const overdueIds = ids.filter((id) => !undone.has(id));
     this._selection.setBulkFeedbackSuppressed(true);
     try {
+      if (overdueIds.length) {
+        // The same bulk plan the "add all overdue" button dispatches; then each
+        // task is placed like any other member below.
+        this._store.dispatch(
+          TaskSharedActions.planTasksForToday({
+            taskIds: overdueIds,
+            today: this._dateService.todayStr(),
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+          }),
+        );
+      }
       for (const id of ids) {
         const source = sourceByTask.get(id) ?? null;
         if (modelId !== 'UNDONE') {
@@ -185,8 +229,8 @@ export class TaskMultiDragService {
           this._sectionService.removeTaskFromSection(
             source,
             id,
-            projectId,
-            WorkContextType.PROJECT,
+            contextId,
+            contextType,
             afterTaskId,
           );
         } else {
@@ -194,10 +238,10 @@ export class TaskMultiDragService {
             moveTaskInTodayList({
               taskId: id,
               afterTaskId,
-              src: 'UNDONE',
+              src: overdueIds.includes(id) ? 'OVERDUE' : 'UNDONE',
               target: 'UNDONE',
-              workContextId: projectId,
-              workContextType: WorkContextType.PROJECT,
+              workContextId: contextId,
+              workContextType: contextType,
             }),
           );
         }
