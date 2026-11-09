@@ -151,6 +151,10 @@
   }
 }
 
+.project-totals td:first-child {
+  text-align: start;
+}
+
 .options-collapsible {
   margin-top: var(--s2);
   text-align: center;

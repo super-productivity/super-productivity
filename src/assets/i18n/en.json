@@ -2541,7 +2541,8 @@
         "ROUND_TIME_WORKED_TO": "Round time worked to",
         "SAVE_TO_FILE": "Save to file",
         "SEPARATE_TASKS_BY": "Separate tasks by",
-        "SHOW_AS_TEXT": "Show as text"
+        "SHOW_AS_TEXT": "Show as text",
+        "TIME_PER_PROJECT": "Time per project"
       },
       "WEEK": {
         "EXPORT": "Export Week Data",

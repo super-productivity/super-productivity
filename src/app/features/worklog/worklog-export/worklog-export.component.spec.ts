@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -36,17 +36,20 @@ describe('WorklogExportComponent', () => {
     dateStr: day,
   };
 
-  it('should export tasks of archived projects (#11351)', async () => {
+  const createComponent = async (
+    projects: Project[],
+    tasks: WorklogTask[],
+  ): Promise<ComponentFixture<WorklogExportComponent>> => {
     TestBed.configureTestingModule({
       imports: [WorklogExportComponent, TranslateModule.forRoot()],
       providers: [
         provideNoopAnimations(),
         provideMockStore({
-          selectors: [{ selector: selectAllProjects, value: [archivedProject] }],
+          selectors: [{ selector: selectAllProjects, value: projects }],
         }),
         {
           provide: WorklogService,
-          useValue: { getTaskListForRange$: () => of([archivedTask]) },
+          useValue: { getTaskListForRange$: () => of(tasks) },
         },
         {
           provide: WorkContextService,
@@ -84,9 +87,51 @@ describe('WorklogExportComponent', () => {
 
     // work start/end comes from a promise
     await new Promise((resolve) => setTimeout(resolve));
+    return fixture;
+  };
+
+  it('should export tasks of archived projects (#11351)', async () => {
+    const fixture = await createComponent([archivedProject], [archivedTask]);
 
     expect(fixture.componentInstance.txt).toBe(
       'Date;Projects;Titles\n2026-09-15;Client Work;Write report',
     );
+  });
+
+  it('should total the time per project for the range', async () => {
+    const otherProject: Project = { ...DEFAULT_PROJECT, id: 'other', title: 'Other' };
+    const otherTask: WorklogTask = {
+      ...archivedTask,
+      id: 'other-task',
+      projectId: otherProject.id,
+      timeSpentOnDay: { [day]: 10800000 },
+    };
+    const fixture = await createComponent(
+      [archivedProject, otherProject],
+      [archivedTask, otherTask],
+    );
+
+    expect(fixture.componentInstance.projectTotals).toEqual([
+      { projectId: 'other', title: 'Other', timeSpent: 10800000, share: 0.75 },
+      {
+        projectId: 'archived-project',
+        title: 'Client Work',
+        timeSpent: 3600000,
+        share: 0.25,
+      },
+    ]);
+
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    // collapsed by default: the header is there, the table is not
+    expect(el.querySelectorAll('collapsible').length).toBe(2);
+    expect(el.querySelector('.project-totals')).toBeNull();
+  });
+
+  it('should not offer project totals for a single project', async () => {
+    const fixture = await createComponent([archivedProject], [archivedTask]);
+
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('collapsible').length).toBe(1);
   });
 });

@@ -78,6 +78,26 @@
     </div>
   }
 
+  @if (projectTotals.length > 1) {
+    <collapsible
+      [isInline]="true"
+      [title]="T.F.WORKLOG.EXPORT.TIME_PER_PROJECT | translate"
+      class="options-collapsible"
+    >
+      <div class="table-wrapper material-table _no-elevation project-totals">
+        <table>
+          @for (total of projectTotals; track total.projectId) {
+            <tr>
+              <td>{{ total.title ?? (T.G.WITHOUT_PROJECT | translate) }}</td>
+              <td>{{ total.timeSpent | msToString }}</td>
+              <td>{{ total.share | percent }}</td>
+            </tr>
+          }
+        </table>
+      </div>
+    </collapsible>
+  }
+
   <collapsible
     [isInline]="true"
     [title]="T.F.WORKLOG.EXPORT.OPTIONS | translate"
