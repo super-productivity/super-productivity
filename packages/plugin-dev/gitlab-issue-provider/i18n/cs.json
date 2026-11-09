@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "(výchozí) ID projektu nebo jméno uživatele/projektu",
+    "PROJECT_HINT": "např. super-productivity/super-productivity",
+    "TOKEN": "Přístupový token",
+    "HOW_TO_GET_TOKEN": "Jak získat token?",
+    "SCOPE": "Rozsah",
+    "SCOPE_ALL": "Všechno",
+    "SCOPE_CREATED": "Vytvořeno mnou",
+    "SCOPE_ASSIGNED": "Přiřazeno mně",
+    "GITLAB_BASE_URL": "Vlastní základní adresa GitLabu (volitelné)",
+    "FILTER_USER": "Uživatelské jméno (např. pro filtrování změn od vás)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Vlastní filtr",
+    "FILTER_DESCRIPTION": "Viz https://docs.gitlab.com/ee/api/issues.html#list-issues. Lze kombinovat více filtrů pomocí &",
+    "SUBMIT_TIMELOGS": "Odeslat časové záznamy do Gitlabu",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Zobrazit dialog sledování času po kliknutí na dokončení dne"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Souhrn",
+    "STATE": "Stav",
+    "ASSIGNEE": "Přiřazeno",
+    "LABELS": "Štítky",
+    "DESCRIPTION": "Popis"
+  },
+  "FORM_HELP": "<p>Zde můžete konfigurovat SuperProductivity pro zobrazení otevřených úkolů GitLabu (buď online verze nebo self-hosted instance) pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na úkol a další informace o něm.</p> <p>Kromě toho můžete automaticky importovat všechny otevřené úkoly.</p>"
+}

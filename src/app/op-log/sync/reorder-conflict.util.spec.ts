@@ -131,10 +131,10 @@ const apply = (s: State, actions: Action[]): State => actions.reduce(reduce, s);
 
 const provider = (id: string): IssueProvider =>
   ({
-    ...DEFAULT_ISSUE_PROVIDER_CFGS.GITLAB,
+    ...DEFAULT_ISSUE_PROVIDER_CFGS.JIRA,
     ...ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
     id,
-    issueProviderKey: 'GITLAB',
+    issueProviderKey: 'JIRA',
     isEnabled: true,
   }) as IssueProvider;
 

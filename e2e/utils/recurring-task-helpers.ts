@@ -182,9 +182,9 @@ export const saveRecurDialog = async (page: Page): Promise<void> => {
  * hashchange when goto lands mid-bootstrap — leaving the previous view mounted
  * (e.g. the work-view stays on "Today" instead of switching to the Inbox
  * project) and sometimes rewriting the fragment back to the old route. When the
- * expected marker doesn't render, hop through about:blank so the next goto is a
- * cross-document load that bootstraps the app fresh on the target URL and reads
- * the fragment on init.
+ * expected marker doesn't render, or the fragment was rewritten, hop through
+ * about:blank so the next goto is a cross-document load that bootstraps the app
+ * fresh on the target URL and reads the fragment on init.
  */
 export const gotoHashRoute = async (
   page: Page,
@@ -193,14 +193,29 @@ export const gotoHashRoute = async (
 ): Promise<void> => {
   await page.goto(route);
   await page.waitForLoadState('networkidle');
-  const landed = await marker
+  const markerVisible = await marker
     .waitFor({ state: 'visible', timeout: 5000 })
     .then(() => true)
     .catch(() => false);
-  if (!landed) {
+  // A marker that also exists on the old view passes even after the router
+  // rewrote the fragment back to it, so check the URL as well.
+  if (!markerVisible || !page.url().endsWith(route)) {
     await page.goto('about:blank');
     await page.goto(route);
     await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL((url) => url.href.endsWith(route));
     await expect(marker).toBeVisible({ timeout: 15000 });
   }
 };
+
+/**
+ * Navigate to Today and wait for its title. Task and list markers also render
+ * on the project view the router can fall back to, so assertions about what
+ * is "in Today" would silently run against that view.
+ */
+export const gotoToday = (page: Page): Promise<void> =>
+  gotoHashRoute(
+    page,
+    '/#/tag/TODAY/tasks',
+    page.locator('page-title .page-title-text', { hasText: /^\s*Today\s*$/ }),
+  );

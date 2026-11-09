@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "19.3.1",
+  "version": "20.0.0",
   "description": "A to-do list, time tracker and daily planner for focused personal work",
   "keywords": [
     "ToDo",
@@ -116,7 +116,7 @@
     "lint": "npm run lint:ts && npm run lint:scss && npm run lint:css-vars && npm run test:lint-rules && npm run test:tools && npm run test:mac-icon",
     "sync-fuzz:compare": "node tools/sync-fuzz-compare.js",
     "test:lint-rules": "node eslint-local-rules/run-specs.js",
-    "test:tools": "node --test --test-reporter=dot tools/verify-electron-test-exclusion.test.js tools/theme-assets.test.js tools/check-css-vars.test.js tools/verify-linux-wm-class.test.js tools/verify-linux-rpm-exec.test.js tools/verify-windows-artifact-contract.test.js tools/strip-service-worker-assets.test.js tools/verify-ios-quick-actions.test.js tools/verify-android-url-hosts.test.js tools/verify-android-shortcuts.test.js tools/check-file.test.js tools/pre-check.test.js tools/sync-fuzz-compare.test.js tools/ios-testflight-version.test.js tools/test-affected.test.js tools/verify-community-plugins.test.js tools/quiet.test.js",
+    "test:tools": "node --test --test-reporter=dot tools/verify-electron-test-exclusion.test.js tools/theme-assets.test.js tools/check-css-vars.test.js tools/verify-linux-wm-class.test.js tools/verify-linux-rpm-exec.test.js tools/verify-windows-artifact-contract.test.js tools/verify-appx-config.test.js tools/strip-service-worker-assets.test.js tools/verify-ios-quick-actions.test.js tools/verify-android-url-hosts.test.js tools/verify-android-shortcuts.test.js tools/check-file.test.js tools/pre-check.test.js tools/sync-fuzz-compare.test.js tools/ios-testflight-version.test.js tools/test-affected.test.js tools/verify-community-plugins.test.js tools/quiet.test.js tools/test-shards.test.js",
     "test:mac-icon": "node --test --test-reporter=dot tools/verify-mac-icon.test.js",
     "lint:ts": "ng lint",
     "lint:scss": "stylelint \"**/*.scss\" \"src/assets/themes/*.css\" -- --custom-formatter @csstools/stylelint-formatter-github",
@@ -145,12 +145,11 @@
     "sync:ios": "npx cap sync ios",
     "dist:ios:prod": "npm run buildFrontend:prodWeb && npm run sync:ios",
     "stats": "ng build --configuration production --source-map --stats-json && npx esbuild-visualizer --metadata .tmp/angular-dist/stats.json && xdg-open stats.html",
-    "test": "npm run test:berlin && npm run test:tz:la:subset",
-    "test:ci": "npm run test:berlin && npm run test:tz:ci",
+    "test": "npm run packages:test && npm run release-notes:test && node tools/test-shards.js berlin la-subset",
+    "test:ci": "npm run packages:test && npm run release-notes:test && node tools/test-shards.js berlin la",
     "test:berlin": "npm run packages:test && npm run release-notes:test && cross-env TZ='Europe/Berlin' ng test --watch=false",
     "test:once": "cross-env TZ='Europe/Berlin' ng test --watch=false",
     "test:watch": "cross-env TZ='Europe/Berlin' ng test --browsers ChromeHeadless",
-    "test:tz:ci": "npm run test:tz:la",
     "test:tz:la": "cross-env TZ='America/Los_Angeles' ng test --watch=false --include='**/*.spec.ts'",
     "test:tz:la:subset": "cross-env TZ='America/Los_Angeles' ng test --watch=false --include='**/*.tz.spec.ts' --include='**/*timezone*.spec.ts' --include='src/app/util/**/*.spec.ts' --include='src/app/core/date/**/*.spec.ts' --include='src/app/core/date-time-format/**/*.spec.ts' --include='src/app/features/schedule/**/*.spec.ts' --include='src/app/features/planner/**/*.spec.ts' --include='src/app/features/task-repeat-cfg/**/*.spec.ts' --include='src/app/features/worklog/**/*.spec.ts' --include='src/app/features/tasks/**/*.spec.ts' --include='src/app/features/work-context/**/*.spec.ts' --include='src/app/features/time-tracking/**/*.spec.ts' --include='src/app/root-store/meta/**/*.spec.ts' --include='src/app/**/*day*.spec.ts' --include='src/app/features/simple-counter/**/*.spec.ts' --include='src/app/features/add-tasks-for-tomorrow/**/*.spec.ts' --include='src/app/features/task-view-customizer/**/*.spec.ts' --include='src/app/ui/pipes/**/*.spec.ts' --include='src/app/ui/datetime-picker/**/*.spec.ts' --include='src/app/ui/date-picker-input/**/*.spec.ts'",
     "test:tz:tokyo": "cross-env TZ='Asia/Tokyo' ng test --watch=false --include='**/*.spec.ts'",
@@ -175,6 +174,7 @@
     "test:shard:core": "cross-env TZ='Europe/Berlin' ng test --watch=false --include='src/app/core/**/*.spec.ts'",
     "test:shard:util": "cross-env TZ='Europe/Berlin' ng test --watch=false --include='src/app/util/**/*.spec.ts'",
     "checkFile": "node tools/check-file.js",
+    "typecheck": "ngc -p src/tsconfig.app.json --noEmit --rootDir . && tsc -p src/tsconfig.spec.json --noEmit --rootDir . && tsc -p electron/tsconfig.electron.json --noEmit",
     "quiet": "node tools/quiet.js",
     "docs:check-links": "node ./tools/check-doc-links.js docs",
     "release-notes:generate": "node ./tools/release-notes.js generate",
@@ -196,10 +196,6 @@
     "plugins:build": "npm run plugin-api:build && npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
     "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent",
     "plugin-starter:check": "node tools/check-plugin-starter.js"
-  },
-  "resolutions": {
-    "sass": "1.32.6",
-    "@ctrl/tinycolor": "4.1.0"
   },
   "dependencies": {
     "@capacitor/browser": "^8.0.5",

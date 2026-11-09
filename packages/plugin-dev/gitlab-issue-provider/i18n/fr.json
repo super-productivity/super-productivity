@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "Chemin complet ou nom d'utilisateur / projet",
+    "PROJECT_HINT": "par exemple, johannesjo/super-productivité",
+    "TOKEN": "Jeton d'accès",
+    "HOW_TO_GET_TOKEN": "Comment obtenir un jeton ?",
+    "SCOPE": "Portée",
+    "SCOPE_ALL": "Tout",
+    "SCOPE_CREATED": "Créé par moi",
+    "SCOPE_ASSIGNED": "Attribués à moi",
+    "GITLAB_BASE_URL": "URL de base GitLab personnalisée",
+    "FILTER_USER": "Nom d'utilisateur (e.g. pour filtrer vos propres modifications)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Filtre personnalisé",
+    "FILTER_DESCRIPTION": "Voir https://docs.gitlab.com/ee/api/issues.html#list-issues. Plusieurs peuvent être combinés avec le caractère &",
+    "SUBMIT_TIMELOGS": "Soumettre le suivi de temps sur Gitlab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Afficher la boîte de dialogue de suivi du temps après avoir cliqué sur \"terminer la journée\""
+  },
+  "DISPLAY": {
+    "SUMMARY": "Résumé",
+    "STATE": "Statut",
+    "ASSIGNEE": "Responsable",
+    "LABELS": "Étiquettes",
+    "DESCRIPTION": "Description"
+  },
+  "FORM_HELP": "<p> Ici, vous pouvez configurer SuperProductivity pour répertorier les problèmes ouverts de GitLab (que ce soit la version en ligne ou une instance auto-hébergée) pour un projet spécifique dans le panneau de création de tâches dans la vue de planification quotidienne. Ils seront répertoriés sous forme de suggestions et fourniront un lien vers le problème ainsi que plus d'informations à ce sujet. </p> <p> En outre, vous pouvez automatiquement ajouter et synchroniser tous les problèmes ouverts à votre carnet de tâches. </p>"
+}
