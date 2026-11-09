@@ -418,6 +418,21 @@ export class AddTaskBarParserService {
     this._previousParseResult = currentResult;
   }
 
+  /**
+   * The title to create a task with from `inputText`. The cleaned title of the
+   * last parse only belongs to `inputText` once that parse has landed; until
+   * then (the first `@date` waits for the date-parser chunk) it is an earlier
+   * draft's, so the raw input is used and the short-syntax effect cleans it up
+   * after creation, as it does when no parse has landed yet.
+   */
+  getTitleForSubmit(inputText: string): string {
+    return (
+      this._lastParsedRanges?.forText === inputText
+        ? this._previousParseResult?.cleanText || inputText
+        : inputText
+    ).trim();
+  }
+
   resetPreviousResult(): void {
     this._parseRunId++;
     this._previousParseResult = null;

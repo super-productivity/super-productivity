@@ -602,6 +602,15 @@ describe('AddTaskBarComponent', () => {
   });
 
   describe('addTask', () => {
+    it('preserves the visible draft when the cached clean title is older', async () => {
+      component.stateService.updateCleanText('Earlier draft');
+      component.stateService.updateInputTxt('Earlier draft with final words');
+      await component.addTask();
+      expect(mockTaskService.add.calls.mostRecent().args[0]).toBe(
+        'Earlier draft with final words',
+      );
+    });
+
     it('should not add a task when the visible input is empty', async () => {
       component.stateService.updateCleanText('Stale task');
       component.stateService.updateInputTxt('   ');
@@ -643,8 +652,8 @@ describe('AddTaskBarComponent', () => {
       mockTaskService.add.and.returnValue('task-1');
 
       component.stateService.updateInputTxt('Fix login bug p1');
-      component.stateService.updateCleanText('Fix login bug');
-      component.stateService.updatePriority(3);
+      fixture.detectChanges();
+      await fixture.whenStable();
       await component.addTask();
 
       const [title, , taskData] = mockTaskService.add.calls.mostRecent().args as [

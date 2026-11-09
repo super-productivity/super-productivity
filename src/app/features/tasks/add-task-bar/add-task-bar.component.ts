@@ -38,6 +38,7 @@ import { T } from '../../../t.const';
 import {
   distinctUntilChanged,
   filter,
+  finalize,
   first,
   map,
   startWith,
@@ -386,7 +387,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private _focusTimeout?: number;
   private _autocompleteTimeout?: number;
   private _processingAutocompleteSelection = false;
-  private _isAddingTask = false;
+  private _activeSubmission?: { inputText: string; isWaitingForParse: boolean };
+  private _pendingTextParse?: Promise<void>;
   private _defaultTagIds: string[] = [];
 
   ngOnInit(): void {
@@ -485,18 +487,32 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       .pipe(
         switchMap(
           ([title, config, allTags, allProjects, defaultProject, defaultDateInfo]) => {
+            // Retire an obsolete parse-waiting submit as soon as the draft
+            // changes, without waiting for its lazy chunk to finish loading.
+            if (
+              this._activeSubmission?.isWaitingForParse &&
+              this._activeSubmission.inputText !== title
+            ) {
+              this._activeSubmission = undefined;
+            }
             const { date, time } = defaultDateInfo;
-            return from(
-              this._parserService.parseAndUpdateText(
-                title || '',
-                config,
-                allProjects,
-                allTags,
-                defaultProject!,
-                date,
-                time,
-                this._dateTimeFormatService.dateInputLocale(),
-              ),
+            const parse = this._parserService.parseAndUpdateText(
+              title || '',
+              config,
+              allProjects,
+              allTags,
+              defaultProject!,
+              date,
+              time,
+              this._dateTimeFormatService.dateInputLocale(),
+            );
+            this._pendingTextParse = parse;
+            return from(parse).pipe(
+              finalize(() => {
+                if (this._pendingTextParse === parse) {
+                  this._pendingTextParse = undefined;
+                }
+              }),
             );
           },
         ),
@@ -529,7 +545,16 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // Public methods
   async addTask(): Promise<void> {
-    if (this._processingAutocompleteSelection || this._isAddingTask) {
+    const inputText = this.stateService.inputTxt();
+    // Input and Enter can arrive before inputTxt$ delivers the new draft.
+    // Retire its stale waiter synchronously before checking for duplicates.
+    if (
+      this._activeSubmission?.isWaitingForParse &&
+      this._activeSubmission.inputText !== inputText
+    ) {
+      this._activeSubmission = undefined;
+    }
+    if (this._processingAutocompleteSelection || this._activeSubmission) {
       return;
     }
 
@@ -543,16 +568,33 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
-    const currentState = this.stateService.state();
-    const rawInput = this.stateService.inputTxt().trim();
-    if (!rawInput) return;
+    if (!inputText.trim()) return;
 
-    const title = currentState.cleanText || rawInput;
-    if (!title) return;
-
-    this._isAddingTask = true;
+    const submission = { inputText, isWaitingForParse: false };
+    this._activeSubmission = submission;
     try {
-      const state = currentState;
+      // ShortSyntaxEffects cleans up the task only, not its repeat template.
+      // Wait for an in-flight parse before copying its title and scheduling
+      // metadata into that template. Already-parsed submits stay synchronous.
+      if (this.stateService.state().repeat) {
+        submission.isWaitingForParse = true;
+        while (this._pendingTextParse) {
+          await this._pendingTextParse;
+          // Keep a new draft (or a closed bar) from being submitted by the
+          // earlier Enter once the lazy date-parser chunk finally arrives.
+          if (
+            this._activeSubmission !== submission ||
+            this.stateService.inputTxt() !== inputText ||
+            this._destroyRef.destroyed
+          ) {
+            return;
+          }
+        }
+      }
+      submission.isWaitingForParse = false;
+      const title = this._parserService.getTitleForSubmit(inputText);
+      if (!title) return;
+      const state = this.stateService.state();
       let finalTagIds = [...state.tagIds, ...state.tagIdsFromTxt];
 
       if (this.hasNewTags()) {
@@ -751,7 +793,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       });
       this._resetAfterAdd();
     } finally {
-      this._isAddingTask = false;
+      // An obsolete attempt must not unlock a newer pending submission.
+      if (this._activeSubmission === submission) {
+        this._activeSubmission = undefined;
+      }
     }
   }
 

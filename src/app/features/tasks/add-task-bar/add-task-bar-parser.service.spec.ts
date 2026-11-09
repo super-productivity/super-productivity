@@ -112,6 +112,33 @@ describe('AddTaskBarParserService', () => {
       mockStateService.updateDeadlineRemindOption.calls.reset();
     });
 
+    it('submits the latest draft while its parse has not landed', async () => {
+      await service.parseAndUpdateText(
+        'Draft',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+      expect(service.getTitleForSubmit('Draft suffix')).toBe('Draft suffix');
+    });
+
+    it('keeps the cleaned title when its parse matches the submitted draft', async () => {
+      const input = 'Draft #urgent';
+      await service.parseAndUpdateText(
+        input,
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+      expect(service.getTitleForSubmit(input)).toBe('Draft');
+    });
+
+    it('uses raw input when there is no completed parse', () => {
+      expect(service.getTitleForSubmit('  New draft  ')).toBe('New draft');
+    });
+
     it('should handle empty text', async () => {
       await service.parseAndUpdateText('', null, [], [], null as any);
       expect(mockStateService.updateCleanText).not.toHaveBeenCalled();
