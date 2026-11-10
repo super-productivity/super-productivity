@@ -320,7 +320,6 @@
     "marked": "^18.0.5",
     "nanoid": "^5.1.11",
     "new-github-issue-url": "^1.1.0",
-    "ng2-charts": "^11.0.0",
     "ngx-markdown": "^22.1.0",
     "patch-package": "^8.0.0",
     "playwright": "^1.59.1",
