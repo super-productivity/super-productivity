@@ -506,3 +506,45 @@ describe('sync fuzz generator', () => {
     expect(DEFAULT_WEIGHTS.some(([kind]) => REPLACEMENT_INTENTS.has(kind))).toBeFalse();
   });
 });
+
+describe('sync fuzz kill step', () => {
+  afterEach(() => SyncFuzzHarness.dispose());
+
+  it('knows of an upload that landed before the kill', async () => {
+    const outcomes: string[] = [];
+    for (let x = 1; outcomes.at(-1) !== 'not killed'; x++) {
+      const harness = await SyncFuzzHarness.create({});
+      const a = await harness.addDevice('A');
+      await harness.as(a, () => executeIntent(harness, ['addTask', 'x1', 'T']));
+      const isKilled = await harness.syncKilled(a, x);
+      const transport = harness.fileTransport!;
+      const isOnWire = transport.log.rows.some((row) => row.op.entityId === 'x1');
+      outcomes.push(
+        isKilled
+          ? `${transport.hasLanded ? 'landed' : 'not landed'}, ${isOnWire ? 'on wire' : 'not on wire'}`
+          : 'not killed',
+      );
+      SyncFuzzHarness.dispose();
+    }
+
+    // A kill before the upload, one between its landing and the response, and
+    // an `x` past the sync's last write, which fails nothing.
+    expect(new Set(outcomes)).toEqual(
+      new Set(['not landed, not on wire', 'landed, on wire', 'not killed']),
+    );
+  }, 60_000);
+
+  // Kills before the upload, between its landing and the response, and after.
+  it('recovers from a kill at every durable write of a plain upload', async () => {
+    const failures: string[] = [];
+    for (let x = 1; x <= 16; x++) {
+      const result = await runFuzz({
+        steps: [{ d: 'A', a: ['addTask', 'x1', 'T'], s: 1, x }],
+        fileTransport: {},
+      });
+      failures.push(...result.failures.map((f) => `x=${x} ${f.signature}`));
+    }
+    expect(failures).toEqual([]);
+    // 16 runs in one spec.
+  }, 60_000);
+});
