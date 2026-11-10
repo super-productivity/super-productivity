@@ -9,8 +9,10 @@ import {
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import {
+  AuthFailSPError,
   ClientUpdateRequiredSPError,
   EncryptNoPasswordError,
+  MissingCredentialsSPError,
 } from '../core/errors/sync-errors';
 import { ActionType, OpType, OperationLogEntry } from '../core/operation.types';
 import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
@@ -2362,15 +2364,82 @@ describe('OperationLogUploadService', () => {
             expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
           });
 
-          it('still reports a thrown SuperSync refusal as a rejection', async () => {
+          it('still reports a thrown SuperSync refusal with an errorCode as a rejection', async () => {
             mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
             mockApiProvider.uploadSnapshot.and.rejectWith(
-              new Error('HTTP 400 Bad Request'),
+              Object.assign(new Error('HTTP 413 Payload Too Large'), {
+                code: 'PAYLOAD_TOO_LARGE',
+              }),
             );
 
             const result = await service.uploadPendingOps(mockApiProvider);
 
-            expect(result.rejectedOps.map(({ opId }) => opId)).toEqual(['my-import']);
+            expect(result.rejectedOps).toEqual([
+              jasmine.objectContaining({
+                opId: 'my-import',
+                errorCode: 'PAYLOAD_TOO_LARGE',
+              }),
+            ]);
+            expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          });
+
+          // A SuperSync verdict comes as a reply body or a structured errorCode.
+          // None of these carries one, so none of them may reject the snapshot.
+          const superSyncNonVerdictErrors: Array<[string, () => Error]> = [
+            ['a rejected token', () => new AuthFailSPError('Token expired')],
+            ['missing credentials', () => new MissingCredentialsSPError()],
+            ['a 404 from a proxy', () => new Error('HTTP 404 Not Found')],
+            ['a 413 from a proxy', () => new Error('HTTP 413 Payload Too Large')],
+            ['an unlisted gateway status', () => new Error('HTTP 520 ')],
+            ['an HTML 2xx body', () => new SyntaxError('Unexpected token <')],
+            ['a 400 without errorCode', () => new Error('HTTP 400 Bad Request')],
+          ];
+          superSyncNonVerdictErrors.forEach(([name, createError]) => {
+            it(`re-throws ${name} from SuperSync, keeping the snapshot pending`, async () => {
+              mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+              const error = createError();
+              mockApiProvider.uploadSnapshot.and.rejectWith(error);
+
+              await expectAsync(
+                service.uploadPendingOps(mockApiProvider),
+              ).toBeRejectedWith(error);
+
+              expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+              expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+              expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+              expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+            });
+          });
+
+          it('defers a retryable error from SuperSync without rejecting it', async () => {
+            mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+            mockApiProvider.uploadSnapshot.and.rejectWith(
+              new Error('HTTP 503 Service Unavailable'),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(result.rejectedOps).toEqual([]);
+            expect(result.fullStateUploadDeferred).toBe(true);
+            expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          });
+
+          it('reports a thrown SuperSync storage quota error with its errorCode', async () => {
+            mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+            mockApiProvider.uploadSnapshot.and.rejectWith(
+              Object.assign(new Error('HTTP 413 — Storage quota exceeded'), {
+                code: 'STORAGE_QUOTA_EXCEEDED',
+              }),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(result.rejectedOps).toEqual([
+              jasmine.objectContaining({
+                opId: 'my-import',
+                errorCode: 'STORAGE_QUOTA_EXCEEDED',
+              }),
+            ]);
           });
         });
 

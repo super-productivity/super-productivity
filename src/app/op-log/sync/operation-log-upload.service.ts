@@ -957,14 +957,24 @@ export class OperationLogUploadService {
       // retryable patterns miss, a target switch) says nothing about the op.
       // Classifying it as rejected made the snapshot a permanent upload barrier,
       // so re-throw: the op stays pending and the error reaches the user.
-      if (
-        syncProvider.providerMode === 'fileSnapshotOps' &&
-        !isRetryableUploadError(err instanceof Error ? err : message)
-      ) {
+      const isRetryable = isRetryableUploadError(err instanceof Error ? err : message);
+      if (syncProvider.providerMode === 'fileSnapshotOps' && !isRetryable) {
         throw err;
       }
 
       const errorCode = getSyncErrorCode(err) ?? this._getLegacyErrorCode(message);
+
+      // SuperSync judges a snapshot in the reply body (`accepted: false`) or
+      // with a structured errorCode on a non-2xx reply. A thrown error with
+      // neither (rejected token, a proxy's 404/413/52x, an HTML or malformed
+      // body, missing credentials) says nothing about the op, and a rejected
+      // full-state op blocks every later upload for good. Re-throw so the op
+      // stays pending and the error reaches the user. This includes a bare
+      // HTTP 400: rejecting it would not unblock anything either, and unlike
+      // a rejection, a pending op recovers once the cause is fixed.
+      if (errorCode === undefined && !isRetryable) {
+        throw err;
+      }
 
       return { accepted: false, error: message, errorCode };
     }
