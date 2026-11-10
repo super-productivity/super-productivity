@@ -51,17 +51,20 @@ jobs:
       contents: read
     uses: ./.github/workflows/supersync-server-tests.yml
 
-  # The whole sync E2E workflow with its push defaults: SuperSync shards, released
-  # clients, server unit tests and WebDAV (not needed for the image, but the
-  # workflow has no switch for it outside workflow_dispatch). No secrets are
-  # passed; the only ones it reads are the optional Unsplash build keys. A push
-  # that also matches that workflow's own paths runs the suite a second time there.
+  # Only the SuperSync E2E shards of the sync E2E workflow. WebDAV does not test the
+  # image. The released-client job is left out until it is stable on master: it was
+  # red in 6 of 32 master runs from test defects (measured 2026-11), and a gate that
+  # is often red for other reasons gets bypassed. No secrets are passed; the only
+  # ones the workflow reads are the optional Unsplash build keys. A push that also
+  # matches that workflow's own paths runs the full suite there as well.
   sync-e2e:
-    name: Gate (sync E2E)
+    name: Gate (SuperSync E2E)
     if: github.event_name == 'push'
     permissions:
       contents: read
     uses: ./.github/workflows/e2e-scheduled.yml
+    with:
+      supersync_only: true
 
   build-and-push:
     name: Build and Push to GHCR

@@ -63,11 +63,19 @@ on:
       - 'packages/shared-schema/**'
 
   # Called on master image pushes by supersync-docker.yml as a gate for
-  # `supersync:latest`. `inputs` is empty there, so every job uses its defaults.
+  # `supersync:latest`. The dispatch inputs are unset there, so the jobs that run
+  # use their defaults.
   # `github.workflow` is the caller's name there, so the group below becomes
   # `<caller name>-<ref>`: separate from this workflow's own runs and from the
   # caller's group.
   workflow_call:
+    inputs:
+      # Unset (falsy) for every other trigger, so the jobs test `!inputs.supersync_only`.
+      supersync_only:
+        description: 'Run only the build and the SuperSync E2E shards'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -163,9 +171,9 @@ jobs:
     name: E2E Tests (WebDAV ${{ matrix.format }})
     needs: [build]
     # Skip the job outright rather than handing it a no-match grep: Playwright
-    # exits 1 on "No tests found", which reds the whole run. `inputs` is empty
-    # for schedule/push, so gate on the event first.
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_webdav }}
+    # exits 1 on "No tests found", which reds the whole run. The dispatch inputs
+    # are unset for schedule/push, so gate on the event first.
+    if: ${{ !inputs.supersync_only && (github.event_name != 'workflow_dispatch' || inputs.run_webdav) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
@@ -328,6 +336,8 @@ jobs:
   # Job 4: SuperSync Server Unit Tests (runs in parallel with build, no artifact needed)
   supersync-server-tests:
     name: SuperSync Server Unit Tests
+    # The image gate runs supersync-server-tests.yml, which includes these tests.
+    if: ${{ !inputs.supersync_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -352,7 +362,7 @@ jobs:
   e2e-released-clients:
     name: E2E Tests (Released Clients)
     needs: [build]
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_released_clients }}
+    if: ${{ !inputs.supersync_only && (github.event_name != 'workflow_dispatch' || inputs.run_released_clients) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

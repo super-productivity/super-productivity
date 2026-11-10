@@ -158,8 +158,9 @@ Center.
   build to the Play `internal` track, and publishes the branch Snap to `edge`.
 - A `master` push that changes SuperSync server inputs publishes
   `ghcr.io/super-productivity/supersync:latest` and `master-<sha>` once the SuperSync
-  server tests and the sync E2E workflow have passed for that commit in the same
-  run (about an hour; a newer image push cancels the run and starts over). A failed
+  server tests and the SuperSync E2E shards have passed for that commit in the same
+  run (about an hour; a newer image push cancels the run and starts over). The
+  released-client and WebDAV E2E jobs do not gate the image. A failed
   or cancelled suite publishes nothing until the run's failed jobs are re-run and
   pass. Re-run only the newest image run: an older one would move `latest` back to
   its commit. Dispatching `.github/workflows/supersync-docker.yml` from
