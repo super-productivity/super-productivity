@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "19.3.1",
+  "version": "20.0.0",
   "description": "A to-do list, time tracker and daily planner for focused personal work",
   "keywords": [
     "ToDo",
@@ -78,12 +78,13 @@
     "screenshots:capture": "npx playwright test --config e2e/playwright.store-screenshots.config.ts",
     "screenshots:capture:desktop": "npx playwright test --config e2e/playwright.store-screenshots.config.ts --project=desktopMaster",
     "screenshots:capture:mobile": "npx playwright test --config e2e/playwright.store-screenshots.config.ts --project=iphone69 --project=ipad13 --project=androidPhone --project=android7Tablet --project=android10Tablet",
-    "screenshots:build": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' npx ts-node --transpile-only e2e/store-screenshots/build-store-assets.ts",
+    "screenshots:build": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"ignoreDeprecations\":\"6.0\",\"rootDir\":\".\"}' npx ts-node --transpile-only e2e/store-screenshots/build-store-assets.ts",
     "screenshots:build:flathub": "SP_SCREENSHOTS_STORE=flathub npm run screenshots:build",
     "screenshots:capture:electron": "npm run electron:build && SCREENSHOT_MODE=electron npx playwright test --config e2e/playwright.store-screenshots.electron.config.ts",
     "screenshots:capture:flathub": "SP_SCREENSHOT_BG_DISABLE=1 npm run screenshots:capture:electron",
     "screenshots:electron": "npm run screenshots:capture:electron && npm run screenshots:build",
     "screenshots:flathub": "npm run screenshots:capture:flathub && npm run screenshots:build:flathub",
+    "screenshots:flathub:native": "node -e \"require('fs').rmSync('dist/screenshots/_master_electron',{recursive:true,force:true})\" && SP_SCREENSHOT_NATIVE=1 SP_SCREENSHOT_FORCE_THEME=light npm run screenshots:capture:flathub && SP_SCREENSHOT_NATIVE=1 npm run screenshots:build:flathub",
     "video": "npm run video:capture && npm run video:build && npm run video:open",
     "video:capture": "npx playwright test --config e2e/playwright.store-video.config.ts",
     "video:kit-test": "npx playwright test --config e2e/playwright.video-kit.config.ts",
@@ -115,7 +116,7 @@
     "lint": "npm run lint:ts && npm run lint:scss && npm run lint:css-vars && npm run test:lint-rules && npm run test:tools && npm run test:mac-icon",
     "sync-fuzz:compare": "node tools/sync-fuzz-compare.js",
     "test:lint-rules": "node eslint-local-rules/run-specs.js",
-    "test:tools": "node --test --test-reporter=dot tools/verify-electron-test-exclusion.test.js tools/theme-assets.test.js tools/check-css-vars.test.js tools/verify-linux-wm-class.test.js tools/verify-linux-rpm-exec.test.js tools/verify-windows-artifact-contract.test.js tools/strip-service-worker-assets.test.js tools/verify-ios-quick-actions.test.js tools/verify-android-url-hosts.test.js tools/verify-android-shortcuts.test.js tools/check-file.test.js tools/pre-check.test.js tools/sync-fuzz-compare.test.js tools/ios-testflight-version.test.js tools/test-affected.test.js tools/verify-community-plugins.test.js tools/quiet.test.js",
+    "test:tools": "node --test --test-reporter=dot tools/verify-electron-test-exclusion.test.js tools/theme-assets.test.js tools/check-css-vars.test.js tools/verify-linux-wm-class.test.js tools/verify-linux-rpm-exec.test.js tools/verify-windows-artifact-contract.test.js tools/verify-appx-config.test.js tools/strip-service-worker-assets.test.js tools/verify-ios-quick-actions.test.js tools/verify-android-url-hosts.test.js tools/verify-android-shortcuts.test.js tools/check-file.test.js tools/pre-check.test.js tools/sync-fuzz-compare.test.js tools/ios-testflight-version.test.js tools/test-affected.test.js tools/verify-community-plugins.test.js tools/quiet.test.js tools/test-shards.test.js",
     "test:mac-icon": "node --test --test-reporter=dot tools/verify-mac-icon.test.js",
     "lint:ts": "ng lint",
     "lint:scss": "stylelint \"**/*.scss\" \"src/assets/themes/*.css\" -- --custom-formatter @csstools/stylelint-formatter-github",
@@ -144,12 +145,11 @@
     "sync:ios": "npx cap sync ios",
     "dist:ios:prod": "npm run buildFrontend:prodWeb && npm run sync:ios",
     "stats": "ng build --configuration production --source-map --stats-json && npx esbuild-visualizer --metadata .tmp/angular-dist/stats.json && xdg-open stats.html",
-    "test": "npm run test:berlin && npm run test:tz:la:subset",
-    "test:ci": "npm run test:berlin && npm run test:tz:ci",
+    "test": "npm run packages:test && npm run release-notes:test && node tools/test-shards.js berlin la-subset",
+    "test:ci": "npm run packages:test && npm run release-notes:test && node tools/test-shards.js berlin la",
     "test:berlin": "npm run packages:test && npm run release-notes:test && cross-env TZ='Europe/Berlin' ng test --watch=false",
     "test:once": "cross-env TZ='Europe/Berlin' ng test --watch=false",
     "test:watch": "cross-env TZ='Europe/Berlin' ng test --browsers ChromeHeadless",
-    "test:tz:ci": "npm run test:tz:la",
     "test:tz:la": "cross-env TZ='America/Los_Angeles' ng test --watch=false --include='**/*.spec.ts'",
     "test:tz:la:subset": "cross-env TZ='America/Los_Angeles' ng test --watch=false --include='**/*.tz.spec.ts' --include='**/*timezone*.spec.ts' --include='src/app/util/**/*.spec.ts' --include='src/app/core/date/**/*.spec.ts' --include='src/app/core/date-time-format/**/*.spec.ts' --include='src/app/features/schedule/**/*.spec.ts' --include='src/app/features/planner/**/*.spec.ts' --include='src/app/features/task-repeat-cfg/**/*.spec.ts' --include='src/app/features/worklog/**/*.spec.ts' --include='src/app/features/tasks/**/*.spec.ts' --include='src/app/features/work-context/**/*.spec.ts' --include='src/app/features/time-tracking/**/*.spec.ts' --include='src/app/root-store/meta/**/*.spec.ts' --include='src/app/**/*day*.spec.ts' --include='src/app/features/simple-counter/**/*.spec.ts' --include='src/app/features/add-tasks-for-tomorrow/**/*.spec.ts' --include='src/app/features/task-view-customizer/**/*.spec.ts' --include='src/app/ui/pipes/**/*.spec.ts' --include='src/app/ui/datetime-picker/**/*.spec.ts' --include='src/app/ui/date-picker-input/**/*.spec.ts'",
     "test:tz:tokyo": "cross-env TZ='Asia/Tokyo' ng test --watch=false --include='**/*.spec.ts'",
@@ -174,6 +174,7 @@
     "test:shard:core": "cross-env TZ='Europe/Berlin' ng test --watch=false --include='src/app/core/**/*.spec.ts'",
     "test:shard:util": "cross-env TZ='Europe/Berlin' ng test --watch=false --include='src/app/util/**/*.spec.ts'",
     "checkFile": "node tools/check-file.js",
+    "typecheck": "ngc -p src/tsconfig.app.json --noEmit --rootDir . && tsc -p src/tsconfig.spec.json --noEmit --rootDir . && tsc -p electron/tsconfig.electron.json --noEmit",
     "quiet": "node tools/quiet.js",
     "docs:check-links": "node ./tools/check-doc-links.js docs",
     "release-notes:generate": "node ./tools/release-notes.js generate",
@@ -193,11 +194,8 @@
     "plugin-api:build:watch": "cd packages/plugin-api && npm run build:watch",
     "vite-plugin:build": "cd packages/vite-plugin && npm run build",
     "plugins:build": "npm run plugin-api:build && npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
-    "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent"
-  },
-  "resolutions": {
-    "sass": "1.32.6",
-    "@ctrl/tinycolor": "4.1.0"
+    "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent",
+    "plugin-starter:check": "node tools/check-plugin-starter.js"
   },
   "dependencies": {
     "@capacitor/browser": "^8.0.5",
@@ -217,32 +215,32 @@
     "uuidv7": "^1.2.1"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^22.2.2",
+    "@angular-devkit/build-angular": "^22.2.5",
     "@angular-eslint/builder": "^22.6.0",
     "@angular-eslint/eslint-plugin": "^22.6.0",
     "@angular-eslint/eslint-plugin-template": "^22.6.0",
     "@angular-eslint/schematics": "^22.6.0",
     "@angular-eslint/template-parser": "^22.6.0",
-    "@angular/animations": "^22.2.2",
-    "@angular/cdk": "^22.2.2",
-    "@angular/cli": "^22.2.2",
-    "@angular/common": "^22.2.2",
-    "@angular/compiler": "^22.2.2",
-    "@angular/compiler-cli": "^22.2.2",
-    "@angular/core": "^22.2.2",
-    "@angular/forms": "^22.2.2",
-    "@angular/language-service": "^22.2.2",
-    "@angular/material": "^22.2.2",
-    "@angular/platform-browser": "^22.2.2",
-    "@angular/platform-browser-dynamic": "^22.2.2",
-    "@angular/platform-server": "^22.2.2",
-    "@angular/router": "^22.2.2",
-    "@angular/service-worker": "^22.2.2",
+    "@angular/animations": "^22.2.4",
+    "@angular/cdk": "^22.2.5",
+    "@angular/cli": "^22.2.5",
+    "@angular/common": "^22.2.4",
+    "@angular/compiler": "^22.2.4",
+    "@angular/compiler-cli": "^22.2.4",
+    "@angular/core": "^22.2.4",
+    "@angular/forms": "^22.2.4",
+    "@angular/language-service": "^22.2.4",
+    "@angular/material": "^22.2.5",
+    "@angular/platform-browser": "^22.2.4",
+    "@angular/platform-browser-dynamic": "^22.2.4",
+    "@angular/platform-server": "^22.2.4",
+    "@angular/router": "^22.2.4",
+    "@angular/service-worker": "^22.2.4",
     "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
     "@capacitor/cli": "^8.6.0",
     "@capacitor/core": "^8.5.3",
-    "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/filesystem": "^8.1.5",
     "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/share": "^8.0.3",
     "@capawesome/capacitor-android-dark-mode-support": "^8.0.1",
@@ -268,7 +266,7 @@
     "@ngx-translate/core": "^17.0.0",
     "@ngx-translate/http-loader": "^17.0.0",
     "@playwright/test": "^1.59.1",
-    "@schematics/angular": "^22.2.2",
+    "@schematics/angular": "^22.2.5",
     "@types/electron": "^1.6.12",
     "@types/electron-localshortcut": "^3.1.3",
     "@types/file-saver": "^2.0.7",
@@ -277,8 +275,8 @@
     "@types/node": "^22.19.17",
     "@types/node-fetch": "^2.6.13",
     "@types/object-path": "^0.11.4",
-    "@typescript-eslint/types": "^8.71.2",
-    "@typescript-eslint/utils": "^8.71.2",
+    "@typescript-eslint/types": "^8.72.1",
+    "@typescript-eslint/utils": "^8.72.1",
     "angular-eslint": "^22.6.0",
     "angular-material-css-vars": "^11.0.0",
     "baseline-browser-mapping": "^2.10.24",
@@ -300,11 +298,11 @@
     "eslint-plugin-local-rules": "^3.0.2",
     "eslint-plugin-prefer-arrow": "1.2.3",
     "eslint-plugin-prettier": "^5.5.7",
-    "fake-indexeddb": "^6.2.5",
+    "fake-indexeddb": "^6.2.7",
     "fflate": "^0.8.2",
     "file-saver": "^2.0.5",
     "fs-extra": "^11.3.4",
-    "glob": "^13.0.6",
+    "glob": "^14.0.3",
     "http-server": "^14.1.1",
     "husky": "^9.1.7",
     "ical.js": "^2.2.1",
@@ -328,7 +326,7 @@
     "playwright": "^1.59.1",
     "prettier": "^3.8.3",
     "pretty-quick": "^4.2.2",
-    "query-string": "^7.1.3",
+    "query-string": "^10.0.0",
     "rxjs": "^7.8.2",
     "shepherd.js": "^11.2.0",
     "stacktrace-js": "^2.0.2",
@@ -339,7 +337,7 @@
     "ts-patch": "^3.3.0",
     "tslib": "^2.8.1",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.71.2",
+    "typescript-eslint": "^8.72.1",
     "typia": "^12.0.2",
     "zone.js": "^0.16.3"
   },
@@ -354,25 +352,29 @@
       "undici": "7.29.1"
     },
     "node-gyp": {
-      "undici": "6.27.0"
+      "undici": "6.29.1"
     },
     "sockjs": {
       "uuid": "11.1.1"
     },
     "ws": "8.21.0",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "karma": {
+      "qs": "6.16.2"
+    }
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-x64": "^3.5.4",
-    "@lmdb/lmdb-linux-x64": "^3.5.4",
+    "@lmdb/lmdb-linux-x64": "^3.5.9",
     "@lmdb/lmdb-win32-x64": "^3.5.4",
-    "@rollup/rollup-darwin-x64": "4.60.2",
-    "@rollup/rollup-linux-x64-gnu": "4.60.2",
-    "@rollup/rollup-win32-x64-msvc": "4.60.2"
+    "@rollup/rollup-darwin-x64": "4.66.0",
+    "@rollup/rollup-linux-x64-gnu": "4.66.0",
+    "@rollup/rollup-win32-x64-msvc": "4.66.0"
   },
   "workspaces": [
     "packages/*",
-    "!packages/plugin-dev"
+    "!packages/plugin-dev",
+    "!packages/plugin-starter"
   ],
   "publish": [
     {

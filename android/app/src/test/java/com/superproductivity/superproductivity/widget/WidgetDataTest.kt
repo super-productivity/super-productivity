@@ -308,4 +308,40 @@ class WidgetDataTest {
         assertNull(WidgetData.dayStrToMs("2026-02-30"))
         assertNull(WidgetData.dayStrToMs("2026-07-17garbage"))
     }
+
+    // CaptureInbox.pendingJson shape: oldest first.
+    private val captures =
+        """
+        [
+          {"v": 1, "id": "c1", "title": "Older @tomorrow", "source": "widget", "createdAt": 1},
+          {"v": 1, "id": "c2", "title": "Newer", "source": "widget", "createdAt": 2}
+        ]
+        """.trimIndent()
+
+    @Test
+    fun showsQuickAddsNotYetImportedAboveTheSnapshotNewestFirst() {
+        val tasks = WidgetData.withPendingCaptures(WidgetData.parse(blob), captures)
+        assertEquals(listOf("c2", "c1", "t1", "t2", "t3"), tasks.map { it.id })
+        // Raw title: short syntax is only applied when the app imports it.
+        assertEquals(
+            WidgetTask("c1", "Older @tomorrow", isDone = false, projectColor = null, isPending = true),
+            tasks[1]
+        )
+        assertTrue(tasks.drop(2).none { it.isPending })
+    }
+
+    @Test
+    fun aQuickAddAlreadyInTheSnapshotIsShownOnce() {
+        // Imported (capture id = task id) but not yet acknowledged.
+        val imported = WidgetData.parse(blob.replace("\"t1\"", "\"c1\""))
+        val tasks = WidgetData.withPendingCaptures(imported, captures)
+        assertEquals(listOf("c2", "c1", "t2", "t3"), tasks.map { it.id })
+        assertEquals(false, tasks[1].isPending)
+    }
+
+    @Test
+    fun noQuickAddsLeavesTheSnapshotAsIs() {
+        val tasks = WidgetData.parse(blob)
+        assertEquals(tasks, WidgetData.withPendingCaptures(tasks, "[]"))
+    }
 }

@@ -474,6 +474,38 @@ describe('InlineMarkdownComponent', () => {
       });
     });
 
+    for (const eventInit of [
+      { isComposing: true, keyCode: 13 },
+      { isComposing: false, keyCode: 229 },
+    ]) {
+      it(`keeps a list unchanged during IME confirmation (${eventInit.keyCode})`, () => {
+        mockTextareaEl.nativeElement.value = '- 日本';
+        mockTextareaEl.nativeElement.selectionStart = 4;
+        mockTextareaEl.nativeElement.selectionEnd = 4;
+        const event = new KeyboardEvent('keydown', {
+          key: 'Enter',
+          cancelable: true,
+          ...eventInit,
+        });
+        component.keypressHandler(event);
+        expect(mockTextareaEl.nativeElement.value).toBe('- 日本');
+        expect(component.changed.emit).not.toHaveBeenCalled();
+        expect(event.defaultPrevented).toBeFalse();
+      });
+    }
+
+    it('keeps editing when Escape cancels an IME candidate', () => {
+      spyOn(component.keyboardUnToggle, 'emit');
+      component.keypressHandler(
+        new KeyboardEvent('keydown', {
+          key: 'Escape',
+          code: 'Escape',
+          isComposing: true,
+        }),
+      );
+      expect(component.keyboardUnToggle.emit).not.toHaveBeenCalled();
+    });
+
     it('should wrap selected text with ** on Ctrl+B', () => {
       mockTextareaEl.nativeElement.selectionStart = 6;
       mockTextareaEl.nativeElement.selectionEnd = 11;

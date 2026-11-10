@@ -7,6 +7,7 @@ import {
 } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { waitForAppReady } from './waits';
+import { recordSyncAudit } from './sync-audit';
 import type { SyncPage } from '../pages/sync.page';
 import {
   attachPageErrorCollector,
@@ -71,10 +72,12 @@ export const readPrefixedFile = async <T>(
 /**
  * Generates a unique sync folder name for test isolation.
  * @param prefix - Folder name prefix (default: 'e2e-test')
- * @returns Unique folder name with timestamp
+ * @returns Unique folder name with timestamp and random suffix
  */
 export const generateSyncFolderName = (prefix: string = 'e2e-test'): string => {
-  return `${prefix}-${Date.now()}`;
+  // Random suffix: parallel workers can start in the same millisecond (two
+  // parametrized tests shared one WebDAV folder in scheduled run 41564833512).
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 };
 
 /**
@@ -136,12 +139,14 @@ export const createWebDavFolder = async (
  * @param browser - Playwright Browser instance
  * @param baseURL - Base URL for the app
  * @param acceptedConfirms - Exact extra confirmations the test deliberately triggers
+ * @param initScript - Extra init script run before the app boots, e.g. a native bridge stub
  * @returns Object with context and page
  */
 export const setupSyncClient = async (
   browser: Browser,
   baseURL: string | undefined,
   acceptedConfirms: readonly RegExp[] = [],
+  initScript?: () => void,
 ): Promise<{ context: BrowserContext; page: Page }> => {
   // A context created here does not inherit the config's user agent; the app
   // needs PLAYWRIGHT in it to start with every app feature on (as in the
@@ -163,6 +168,9 @@ export const setupSyncClient = async (
     localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
     localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
   });
+  if (initScript) {
+    await page.addInitScript(initScript);
+  }
 
   // Auto-accept only the native confirmation for a genuinely fresh client.
   // This handler lives for the page lifetime, so broad words such as "sync" or
@@ -273,13 +281,17 @@ const readTerminalSyncState = async (
  * by default. Conflict resolution paths may opt into a stable idle state after the
  * witnessed response because those actions do not expose a reliable terminal
  * state. Such callers must assert the exact resulting state.
+ * @param options.expectConflict - The whole-dataset conflict dialog is a
+ * terminal state only for callers that expect it: they get 'conflict' back and
+ * resolve the dialog themselves. For everyone else the dialog fails the wait,
+ * so a spurious conflict cannot pass as a completed sync.
  * @returns 'success' | 'conflict' | void
  */
 export const waitForSyncComplete = async (
   page: Page,
   syncPage: SyncPage,
   timeout: number = 30000,
-  options: { allowResponseOnlyCompletion?: boolean } = {},
+  options: { allowResponseOnlyCompletion?: boolean; expectConflict?: boolean } = {},
 ): Promise<'success' | 'conflict' | void> => {
   const startTime = Date.now();
   const allowResponseOnlyCompletion = options.allowResponseOnlyCompletion ?? false;
@@ -334,7 +346,21 @@ export const waitForSyncComplete = async (
     throw new Error(`Sync failed with error: ${state.message}`);
   }
   if (state.kind === 'conflict') {
+    recordSyncAudit('webdav:conflict-returned');
+    if (!options.expectConflict) {
+      throw new Error(
+        'Sync stopped at the whole-dataset conflict dialog. Pass { expectConflict: true } ' +
+          'if the test expects it; otherwise this is the regression the test should catch.',
+      );
+    }
     return 'conflict';
+  }
+
+  if (allowResponseOnlyCompletion) {
+    const confirmed = await syncPage.syncConfirmedIcon.isVisible().catch(() => false);
+    if (!confirmed) {
+      recordSyncAudit('webdav:response-only-completion');
+    }
   }
 
   return 'success';
@@ -347,6 +373,21 @@ export const waitForSync = async (
   page: Page,
   syncPage: SyncPage,
 ): Promise<'success' | 'conflict' | void> => waitForSyncComplete(page, syncPage);
+
+/**
+ * While sync is off, the sync button opens the browser sign-in dialog instead
+ * of the settings. Continues to the settings from either, so provider setup
+ * helpers work on fresh and on configured clients.
+ */
+export const passSyncSignInDialog = async (page: Page): Promise<void> => {
+  const signIn = page.locator('dialog-sync-setup');
+  const settings = page.locator('dialog-sync-cfg');
+  await expect(signIn.or(settings)).toBeVisible({ timeout: 10000 });
+  if (await signIn.isVisible()) {
+    await signIn.locator('.e2e-other-sync-options').click();
+  }
+  await settings.waitFor({ state: 'visible', timeout: 10000 });
+};
 
 /**
  * Completes the optional overwrite-warning step of the ordinary sync conflict

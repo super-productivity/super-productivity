@@ -14,6 +14,8 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.superproductivity.superproductivity.App
 import com.superproductivity.superproductivity.BuildConfig
+import com.superproductivity.superproductivity.CapacitorMainActivity
+import com.superproductivity.superproductivity.FullscreenActivity
 import com.superproductivity.superproductivity.FullscreenActivity.Companion.WINDOW_INTERFACE_PROPERTY
 import com.superproductivity.superproductivity.app.LaunchDecider
 import com.superproductivity.superproductivity.review.InAppReview
@@ -90,6 +92,25 @@ class JavaScriptInterface(
         val launchDecider = LaunchDecider(activity)
         val launchMode = launchDecider.getLaunchMode()
         return "${versionName}_L$launchMode"
+    }
+
+    /**
+     * Online-mode sunset (#8832): the web bundle calls this once it has written
+     * and verified the native-store backup, which the offline app restores on
+     * its blank first start. Only the legacy online activity may hand over, so a
+     * misdetecting offline caller can never trigger a restart.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun switchToOfflineMode(): Boolean {
+        if (activity !is FullscreenActivity || !LaunchDecider(activity).switchToOfflineMode()) {
+            return false
+        }
+        activity.runOnUiThread {
+            activity.startActivity(Intent(activity, CapacitorMainActivity::class.java))
+            activity.finish()
+        }
+        return true
     }
 
     // Tells the web bundle that snooze/tap events carry the reminder type, so it
@@ -524,12 +545,24 @@ class JavaScriptInterface(
     @Suppress("unused")
     @JavascriptInterface
     fun acknowledgeCapture(id: String): Boolean {
-        return try {
+        val isAcknowledged = try {
             CaptureInbox.forContext(activity).acknowledge(id)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to acknowledge capture", e)
             false
         }
+        // The widget lists unacknowledged quick adds as pending. Its snapshot
+        // push may run before this and is skipped when unchanged (a quick add
+        // short-syntaxed off Today), so redraw here or the pending row lingers.
+        // Separate try: a failed redraw must not report the ack as failed.
+        if (isAcknowledged) {
+            try {
+                TaskListWidgetProvider.refreshAll(activity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to refresh widget after acknowledge", e)
+            }
+        }
+        return isAcknowledged
     }
 
     /**
@@ -613,6 +646,35 @@ class JavaScriptInterface(
             BackgroundSyncCredentialStore.clear(activity)
             CaptureKeyStore.set(activity, "")
             SyncReminderScheduler.cancel(activity)
+        }
+    }
+
+    /**
+     * WebDAV/Nextcloud counterpart of [setSuperSyncCredentials]: the worker
+     * GETs [fileUrl] and reads reminders from it. Drops SuperSync credentials.
+     * The E2EE password comes via [setSuperSyncEncryptionPassword].
+     * NEVER log [authorization].
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setFileSyncCredentials(fileUrl: String, authorization: String, isEncryptionExpected: Boolean) {
+        safeCall("Failed to set file sync credentials") {
+            BackgroundSyncCredentialStore.saveFileSync(
+                activity,
+                BackgroundSyncCredentialStore.FileSyncCredentials(fileUrl, authorization, isEncryptionExpected),
+            )
+            SyncReminderScheduler.ensureScheduled(activity)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun clearFileSyncCredentials() {
+        safeCall("Failed to clear file sync credentials") {
+            BackgroundSyncCredentialStore.clearFileSync(activity)
+            if (!BackgroundSyncCredentialStore.hasAnyCredentials(activity)) {
+                SyncReminderScheduler.cancel(activity)
+            }
         }
     }
 

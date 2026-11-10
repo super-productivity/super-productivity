@@ -24,7 +24,7 @@
         text-decoration: none;
         padding: var(--s);
         border-radius: var(--card-border-radius);
-        transition: background-color 0.2s;
+        transition: background-color var(--transition-duration-m);
 
         &:hover {
           background-color: var(--state-hover);

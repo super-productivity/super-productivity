@@ -91,6 +91,11 @@ const ARCHIVE_ONLY_LEGACY_STATE = {
   archiveOld: EMPTY_ARCHIVE,
 };
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
+import {
+  NEW_INSTALL_FOCUS_MODE_CONFIG,
+  NEW_INSTALL_IDLE_CONFIG,
+  NEW_INSTALL_TAKE_A_BREAK_CONFIG,
+} from '../../features/config/new-install-config.const';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../features/config/local-only-sync-settings.util';
 import { RepairSyncContextService } from '../validation/repair-sync-context.service';
@@ -340,6 +345,7 @@ describe('OperationLogSyncService', () => {
             'getSnapshotVectorClock',
             'getSnapshotEntityKeys',
             'getCurrentVectorClock',
+            'keepOwnCounter',
           ]),
         },
         {
@@ -3814,6 +3820,44 @@ describe('OperationLogSyncService', () => {
           expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
         });
 
+        it('should show the conflict dialog, not skip, when a remote rolled back below the local clock lost this client’s synced changes (#10916)', async () => {
+          // The local clock dominates the rolled-back snapshot, so the #7339 skip
+          // would apply. Skipping would commit the rolled-back cursor and leave
+          // the lost changes out of the remote for good.
+          opLogStoreSpy.getUnsynced.and.resolveTo([]);
+          opLogStoreSpy.getLastSeq.and.resolveTo(3);
+          opLogStoreSpy.getVectorClock.and.resolveTo({ clientA: 2, clientB: 5 });
+          const syncHydrationServiceSpy = TestBed.inject(
+            SyncHydrationService,
+          ) as jasmine.SpyObj<SyncHydrationService>;
+          syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [],
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'fileSnapshotOps',
+            failedFileCount: 0,
+            snapshotState: { tasks: [] },
+            snapshotVectorClock: { clientA: 2, clientB: 4 },
+            latestServerSeq: 1,
+            ownUploadsMissing: true,
+          });
+
+          const setLastServerSeq = jasmine.createSpy('setLastServerSeq').and.resolveTo();
+          const mockProvider = {
+            isReady: () => Promise.resolve(true),
+            supportsOperationSync: true,
+            setLastServerSeq,
+          } as any;
+
+          await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejectedWith(
+            jasmine.any(OwnUploadsMissingConflictError),
+          );
+          expect(syncHydrationServiceSpy.hydrateFromRemoteSync).not.toHaveBeenCalled();
+          expect(setLastServerSeq).not.toHaveBeenCalled();
+        });
+
         it('should throw LocalDataConflictError when only config ops but store has meaningful data (provider switch)', async () => {
           const unsyncedEntry: OperationLogEntry = {
             seq: 1,
@@ -5337,6 +5381,7 @@ describe('OperationLogSyncService', () => {
 
   describe('forceDownloadRemoteState', () => {
     let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
+    let vectorClockServiceSpy: jasmine.SpyObj<VectorClockService>;
 
     const makeRemoteOp = (id: string = 'op1'): Operation => ({
       id,
@@ -5357,6 +5402,55 @@ describe('OperationLogSyncService', () => {
       ) as jasmine.SpyObj<OperationLogDownloadService>;
 
       opLogStoreSpy.runRemoteStateReplacement.calls.reset();
+      vectorClockServiceSpy = TestBed.inject(
+        VectorClockService,
+      ) as jasmine.SpyObj<VectorClockService>;
+      vectorClockServiceSpy.keepOwnCounter.and.callFake(async (clock) => clock);
+    });
+
+    it("keeps this device's own counter in the rebuilt clock (#11564)", async () => {
+      const callOrder: string[] = [];
+      writeFlushServiceSpy.flushThenRunExclusive.and.callFake(
+        async <T>(fn: () => Promise<T>) => {
+          callOrder.push('exclusive');
+          return fn();
+        },
+      );
+      vectorClockServiceSpy.keepOwnCounter.and.callFake(async (clock) => {
+        callOrder.push('keepOwnCounter');
+        return { ...clock, own: 4 };
+      });
+      opLogStoreSpy.runRemoteStateReplacement.and.callFake(async () => {
+        callOrder.push('runRemoteStateReplacement');
+      });
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [makeRemoteOp()],
+        allOpClocks: [{ remote: 1, own: 2 }],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 1,
+      });
+
+      await service.forceDownloadRemoteState({
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any);
+
+      expect(vectorClockServiceSpy.keepOwnCounter).toHaveBeenCalledWith({
+        remote: 1,
+        own: 2,
+      });
+      expect(
+        opLogStoreSpy.runRemoteStateReplacement.calls.mostRecent().args[0].vectorClock,
+      ).toEqual({ remote: 1, own: 4 });
+      // Read under the op-log lock so no own op lands between read and write.
+      expect(callOrder.slice(0, 3)).toEqual([
+        'exclusive',
+        'keepOwnCounter',
+        'runRemoteStateReplacement',
+      ]);
     });
 
     it('should download BEFORE any destructive local mutation', async () => {
@@ -5466,7 +5560,13 @@ describe('OperationLogSyncService', () => {
       // State, not overrideSelector: an override sticks to the shared memoized
       // selector and leaks into later specs that derive from it.
       mockStore.setState({
-        [CONFIG_FEATURE_NAME]: { ...DEFAULT_GLOBAL_CONFIG, appFeatures: liveAppFeatures },
+        [CONFIG_FEATURE_NAME]: {
+          ...DEFAULT_GLOBAL_CONFIG,
+          appFeatures: liveAppFeatures,
+          idle: NEW_INSTALL_IDLE_CONFIG,
+          takeABreak: NEW_INSTALL_TAKE_A_BREAK_CONFIG,
+          focusMode: NEW_INSTALL_FOCUS_MODE_CONFIG,
+        },
       });
       const dispatchSpy = spyOn(mockStore, 'dispatch').and.callThrough();
       downloadServiceSpy.downloadRemoteOps.and.resolveTo({
@@ -5487,6 +5587,11 @@ describe('OperationLogSyncService', () => {
       const baselineState = opLogStoreSpy.runRemoteStateReplacement.calls.mostRecent()
         .args[0].baselineState as { globalConfig: GlobalConfigState };
       expect(baselineState.globalConfig.appFeatures).toEqual(liveAppFeatures);
+      expect(baselineState.globalConfig.idle).toEqual(NEW_INSTALL_IDLE_CONFIG);
+      expect(baselineState.globalConfig.takeABreak).toEqual(
+        NEW_INSTALL_TAKE_A_BREAK_CONFIG,
+      );
+      expect(baselineState.globalConfig.focusMode).toEqual(NEW_INSTALL_FOCUS_MODE_CONFIG);
       // The live reset keeps the device's config, so both sides agree.
       const reset = dispatchSpy.calls
         .allArgs()

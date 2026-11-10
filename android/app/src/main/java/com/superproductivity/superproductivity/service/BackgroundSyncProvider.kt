@@ -19,6 +19,24 @@ data class ReminderToSchedule(
     val isDeadline: Boolean
 )
 
+/** Reminder id as the app keys alarms (mobile-notification.effects.ts). */
+internal fun reminderIdOf(reminder: ReminderToSchedule): String =
+    if (reminder.isDeadline) deadlineReminderIdOf(reminder.taskId) else reminder.taskId
+
+internal fun dueDayReminderIdOf(taskId: String): String = taskId + DUE_DAY_SUFFIX
+
+internal fun deadlineReminderIdOf(taskId: String): String = taskId + DEADLINE_SUFFIX
+
+/** Reminder id of a task's alarm of [reminderType] (TASK, DEADLINE or DUE_DATE). */
+internal fun reminderIdOfType(taskId: String, reminderType: String): String = when (reminderType) {
+    "DEADLINE" -> deadlineReminderIdOf(taskId)
+    "DUE_DATE" -> dueDayReminderIdOf(taskId)
+    else -> taskId
+}
+
+internal fun taskIdOfReminderId(reminderId: String): String =
+    reminderId.removeSuffix(DEADLINE_SUFFIX).removeSuffix(DUE_DAY_SUFFIX)
+
 /**
  * Cancel all reminder variants (standard, due-day, deadline) for a task.
  * Each cancellation is independent — one failure won't block the other.
@@ -47,6 +65,17 @@ fun cancelRemindersForTask(context: Context, taskId: String) {
     }
 }
 
+/** Cancel the single alarm keyed by [reminderId]. No-op on failure — logs and continues. */
+internal fun cancelReminderById(context: Context, reminderId: String) {
+    try {
+        ReminderNotificationHelper.cancelReminder(
+            context, SuperSyncBackgroundProvider.generateNotificationId(reminderId)
+        )
+    } catch (e: Exception) {
+        Log.w(TAG, "Failed to cancel a reminder", e)
+    }
+}
+
 /**
  * Schedule an AlarmManager alarm from a sync-detected reminder.
  * [useAlarmStyle] mirrors the user's setting; like the app
@@ -55,7 +84,7 @@ fun cancelRemindersForTask(context: Context, taskId: String) {
  */
 fun scheduleReminderFromSync(context: Context, reminder: ReminderToSchedule, useAlarmStyle: Boolean) {
     try {
-        val reminderId = if (reminder.isDeadline) reminder.taskId + DEADLINE_SUFFIX else reminder.taskId
+        val reminderId = reminderIdOf(reminder)
         val notificationId = SuperSyncBackgroundProvider.generateNotificationId(reminderId)
         val reminderType = if (reminder.isDeadline) "DEADLINE" else "TASK"
         ReminderNotificationHelper.scheduleReminder(
@@ -70,13 +99,15 @@ fun scheduleReminderFromSync(context: Context, reminder: ReminderToSchedule, use
 /**
  * Result from a background sync provider's reminder change detection.
  *
- * @param taskIdsToCancel Set of task IDs whose reminders should be cancelled
+ * @param taskIdsToCancel Task IDs whose alarms ALL go (deleted, done, archived)
  * @param remindersToSchedule List of reminders to schedule as AlarmManager alarms
  * @param latestSeq The latest server sequence number processed
  * @param hasMore Whether more operations are available (pagination)
  * @param unreadableTaskIds Task IDs touched by encrypted ops whose payload could
  *   not be decrypted (e.g. no cached key for a new desktop session), so their
  *   reminder changes are unknown
+ * @param reminderIdsToCancel Single alarms to cancel (their reminder ids), for
+ *   ops that clear one reminder kind and leave the task's other alarms (#10618)
  */
 data class ReminderChangeResult(
     val taskIdsToCancel: Set<String>,
@@ -84,10 +115,11 @@ data class ReminderChangeResult(
     val latestSeq: Long,
     val hasMore: Boolean,
     val unreadableTaskIds: Set<String> = emptySet(),
+    val reminderIdsToCancel: Set<String> = emptySet(),
 ) {
     /**
-     * Fire-time stale check for one alarm: was it cancelled (deleted/done/
-     * dismissed/unscheduled) or rescheduled to a different time by these ops?
+     * Fire-time stale check for one alarm: was it cancelled (deleted/done, or
+     * its own kind dismissed/unscheduled) or rescheduled to a different time by these ops?
      *
      * A reminder these ops (re)schedule for the alarm's own slot decides first:
      * an op may cancel a task's alarms and set one slot again (an LWW snapshot
@@ -107,7 +139,7 @@ data class ReminderChangeResult(
             }
             if (current != null) return triggerAtMs > 0L && current.remindAt != triggerAtMs
         }
-        return taskId in taskIdsToCancel
+        return taskId in taskIdsToCancel || reminderIdOfType(taskId, reminderType) in reminderIdsToCancel
     }
 }
 
@@ -115,8 +147,8 @@ data class ReminderChangeResult(
  * Interface for background sync providers that can detect reminder-relevant changes.
  *
  * Currently implemented for SuperSync (lightweight operation-based API).
- * Could be extended to Dropbox/WebDAV in the future, though those would require
- * downloading the full sync file which is heavier.
+ * WebDAV/Nextcloud have no op API and read the whole sync file instead, so they
+ * diff reminder state rather than ops ([runFileSyncReminderCheck]).
  */
 interface BackgroundSyncProvider {
     /**

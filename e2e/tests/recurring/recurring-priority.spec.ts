@@ -73,8 +73,14 @@ test('edits an existing series priority and can clear it for future tasks only',
     await taskPage.openTaskDetail(task);
     const dialog = await openRecurDialog(page);
     await dialog.locator('.collapsible-header', { hasText: 'Options' }).click();
-    await dialog.getByRole('combobox', { name: 'Priority', exact: true }).click();
-    await page.getByRole('option', { name: priority, exact: true }).click();
+    // Formly can rebuild the fields right after Options expands, which removes
+    // the select and its open panel, so open it again until the option shows.
+    const option = page.getByRole('option', { name: priority, exact: true });
+    await expect(async () => {
+      await dialog.getByRole('combobox', { name: 'Priority', exact: true }).click();
+      await expect(option).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 10000 });
+    await option.click();
     await dialog.getByRole('button', { name: 'Save', exact: true }).click();
     const confirmation = page.locator('dialog-confirm');
     await confirmation

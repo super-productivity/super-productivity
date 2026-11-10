@@ -37,7 +37,7 @@ test.describe('Sections', () => {
     await trigger.waitFor({ state: 'visible', timeout: 10000 });
     await trigger.click();
     await page
-      .locator('work-context-menu')
+      .locator('.work-context-menu-panel')
       .first()
       .waitFor({ state: 'visible', timeout: 5000 });
   };

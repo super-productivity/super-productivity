@@ -1,18 +1,18 @@
 # Super Productivity Plugin Development Guide
 
-This is a comprehensive documentation of the Super Productivity Plugin System. This guide covers everything you need to know about creating plugins for Super Productivity.
+Plugins add buttons, panels, shortcuts and integrations to Super Productivity.
+A plugin is a ZIP with a `manifest.json` and JavaScript (`plugin.js`) and/or an
+HTML page (`index.html`); no build step is required.
 
-These docs might not always be perfectly up to date. You find the latest typescript interfaces here:
-[types.ts](../packages/plugin-api/src/types.ts)
-
-Personally I think the best way to figure out how to write a plugin is to check out the example plugins:
-
-- [yesterday-tasks-plugin](../packages/plugin-dev/yesterday-tasks-plugin)
-- [procrastination-buster](../packages/plugin-dev/procrastination-buster)
-- [api-test-plugin](../packages/plugin-dev/api-test-plugin)
-
-If you want to build a sophisticated UI there is a boilerplate available for solidjs:
-[boilerplate-solid-js](../packages/plugin-dev/boilerplate-solid-js)
+**Source of truth.** This guide explains concepts and the most used methods.
+The complete API — every `PluginAPI` method with its signature and comments — is
+[`packages/plugin-api/src/types.ts`](../packages/plugin-api/src/types.ts),
+published on npm as
+[`@super-productivity/plugin-api`](https://www.npmjs.com/package/@super-productivity/plugin-api).
+The npm package is versioned like the app: version X.Y.Z describes the API of
+Super Productivity X.Y.Z. Set a plugin's `minSupVersion` to the oldest app
+version that has every method it uses — not simply the newest, since people on
+slower release channels run older versions.
 
 ---
 
@@ -28,14 +28,82 @@ If you want to build a sophisticated UI there is a boilerplate available for sol
 
 ## Quick Start
 
-### 1. Basic Plugin Structure
+Your first plugin in about five minutes. You need a text editor and
+[Node.js](https://nodejs.org) 20.15 or newer (only to pack the ZIP).
+
+### 1. Copy the starter
+
+Copy the [plugin starter](../packages/plugin-starter) folder to a folder or
+repository of your own. It is plain JavaScript with no dependencies: a header
+button and a hook. With git:
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/super-productivity/super-productivity.git sp-source
+git -C sp-source sparse-checkout set packages/plugin-starter
+cp -r sp-source/packages/plugin-starter my-plugin
+rm -rf sp-source
+```
+
+### 2. Make it yours
+
+In `manifest.json`, set a unique `id` (letters, numbers and dashes), `name`,
+`description` and `author`. Then edit `plugin.js`:
+
+```javascript
+PluginAPI.registerHeaderButton({
+  label: 'Say hello',
+  icon: 'waving_hand', // any Material icon name
+  onClick: async () => {
+    const tasks = await PluginAPI.getCurrentContextTasks();
+    PluginAPI.showSnack({ msg: `${tasks.length} tasks here`, type: 'SUCCESS' });
+  },
+});
+```
+
+### 3. Pack and install
+
+```bash
+node scripts/pack.mjs   # writes plugin.zip and prints its SHA-256
+```
+
+In the app: **Settings → Plugins → Choose Plugin File** → `plugin.zip`. Use a
+test instance, not your real data — for example
+[test-app.super-productivity.com](https://test-app.super-productivity.com).
+
+### 4. Iterate
+
+Edit, pack, and upload again: the same `id` replaces the installed plugin. Open
+the developer tools (F12 or Ctrl+Shift+I) for errors and `console.log` output.
+
+### Editor autocomplete
+
+Run `npm install --save-dev @super-productivity/plugin-api` in your plugin
+folder. The starter's `jsconfig.json` points editors such as VS Code at the
+installed types, so they autocomplete every `PluginAPI` method; add
+`// @ts-check` as the first line of `plugin.js` to have mistakes flagged too.
+
+Outside the starter, reference the global types at the top of a file:
+
+```javascript
+/// <reference types="@super-productivity/plugin-api/global" />
+```
+
+In TypeScript you can instead declare the global yourself:
+
+```typescript
+import type { PluginAPI as PluginAPIType } from '@super-productivity/plugin-api';
+declare const PluginAPI: PluginAPIType;
+```
+
+### Plugin structure
 
 ```
 my-plugin/
 ├── manifest.json      # Plugin metadata (required)
 ├── plugin.js          # Host-side plugin code (optional for iframe-only plugins)
 ├── index.html         # UI interface (required when omitting plugin.js; requires iFrame:true in manifest)
-└── icon.svg           # Plugin icon (optional)
+├── icon.svg           # Plugin icon (optional)
+└── i18n/              # Translations (optional), see PLUGIN_I18N.md
 ```
 
 `plugin.js` is required for plugins that need host-side setup at plugin load time,
@@ -43,48 +111,15 @@ shortcuts, header buttons, background behavior, or host-side API handlers. A UI-
 iframe plugin can ship only `manifest.json` and `index.html` when the manifest sets
 `iFrame: true`.
 
-### 2. Minimal Example
+### More examples
 
-**manifest.json:**
-
-```json
-{
-  "id": "hello-world",
-  "name": "Hello World Plugin",
-  "version": "1.0.0",
-  "description": "My first Super Productivity plugin",
-  "manifestVersion": 1,
-  "minSupVersion": "14.0.0",
-  "hooks": [],
-  "permissions": []
-}
-```
-
-**plugin.js:**
-
-```javascript
-console.log('Hello World plugin loaded!');
-
-// Show a notification
-PluginAPI.showSnack({
-  msg: 'Hello from my plugin!',
-  type: 'SUCCESS',
-});
-
-// Demo a simple counter
-await PluginAPI.setCounter('hello-count', 0);
-PluginAPI.registerHeaderButton({
-  label: 'Hello (Count: 0)',
-  icon: 'waving_hand',
-  onClick: async () => {
-    const newCount = await PluginAPI.incrementCounter('hello-count');
-    PluginAPI.showSnack({
-      msg: `Button clicked! Count: ${newCount}`,
-      type: 'INFO',
-    });
-  },
-});
-```
+- [yesterday-tasks-plugin](../packages/plugin-dev/yesterday-tasks-plugin) — plain
+  JavaScript with an iframe side panel
+- [api-test-plugin](../packages/plugin-dev/api-test-plugin) — exercises most API calls
+- [procrastination-buster](../packages/plugin-dev/procrastination-buster) — TypeScript
+- [boilerplate-solid-js](../packages/plugin-dev/boilerplate-solid-js) — SolidJS UI
+  with Vite. It builds inside this repository only; see its README.
+- All bundled plugins: [packages/plugin-dev](../packages/plugin-dev)
 
 ## Plugin Manifest
 
@@ -106,6 +141,38 @@ versions are not blocked by this check.
 Of the declared permissions, the app checks only `nodeExecution`, `http`
 together with `allowedHosts`, and `deleteProject`. The rest are shown in the
 plugin's details but not enforced; see [Security Considerations](#security-considerations).
+
+### Declaring what your plugin sends (dataSharing)
+
+`dataSharing` lists every place your plugin sends data off the device. The app
+shows it when someone connects an issue provider, in the install and update
+confirmation, and in the plugin's details. Use `[]` if the plugin sends
+nothing. Without the field, users see "This plugin doesn't say what data it sends."
+The app shows what you declare and does not verify it.
+
+```json
+"allowedHosts": ["api.example.com"],
+"dataSharing": [
+  {
+    "recipient": "Example",
+    "hosts": ["api.example.com"],
+    "data": ["credentials", "taskTitles"],
+    "optionalData": ["taskNotes"],
+    "privacyPolicyUrl": "https://example.com/privacy"
+  }
+]
+```
+
+- `data` / `optionalData`: `credentials`, `userText`, `taskTitles`,
+  `taskNotes`, `taskSchedule`, `taskStatus`, `timeTracked`,
+  `projectAndTagNames`, `ids`. `optionalData` is sent only after the user
+  turns a setting on. Unknown values install with a warning and show as
+  "other data".
+- `userServer: true` when the user enters the server address (self-hosted
+  instances, webhooks).
+- `privacyPolicyUrl` must use `https://`.
+- If `dataSharing` is present, every `allowedHosts` entry must appear in some
+  destination's `hosts`.
 
 ### Complete Manifest Example
 
@@ -154,7 +221,8 @@ PluginAPI.registerHeaderButton({
   },
 });
 
-PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
+// Hook handlers receive one payload object (see HookPayloadMap in types.ts)
+PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, ({ taskId }) => {
   console.log(`Task ${taskId} completed!`);
 });
 ```
@@ -191,34 +259,25 @@ of the portable plugin contract.
     <meta charset="UTF-8" />
     <title>My Plugin UI</title>
 
-    <!-- CSS must be inlined. Theme variables and UI Kit are injected automatically. -->
-    <style>
-      body {
-        padding: var(--s3);
-      }
-
-      .task-list {
-        background: var(--card-bg);
-        border-radius: var(--card-border-radius);
-        padding: var(--s2);
-        box-shadow: var(--whiteframe-shadow-2dp);
-      }
-
-      .task-item {
-        padding: var(--s);
-        border-bottom: 1px solid var(--divider-color);
-      }
-    </style>
+    <!-- CSS must be inlined. Theme variables and the UI Kit are injected
+         automatically, so most plugins need little or no CSS of their own. -->
   </head>
   <body>
-    <h1>My Plugin</h1>
-    <div id="content">
-      <button id="loadTasks">Load Tasks</button>
-      <div
+    <main class="page">
+      <header class="page-header">
+        <h1>My Plugin</h1>
+        <button
+          id="loadTasks"
+          class="btn-primary"
+        >
+          Load Tasks
+        </button>
+      </header>
+      <ul
         id="taskList"
-        class="task-list"
-      ></div>
-    </div>
+        class="list"
+      ></ul>
+    </main>
 
     <!-- JavaScript must be inlined -->
     <script>
@@ -226,12 +285,11 @@ of the portable plugin contract.
         try {
           const tasks = await PluginAPI.getTasks();
           const taskList = document.getElementById('taskList');
-
-          taskList.innerHTML = '<h3>Your Tasks:</h3>';
+          taskList.replaceChildren();
 
           tasks.forEach((task) => {
-            const taskEl = document.createElement('div');
-            taskEl.className = 'task-item';
+            const taskEl = document.createElement('li');
+            taskEl.className = 'list-item';
             taskEl.textContent = task.title;
             taskList.appendChild(taskEl);
           });
@@ -257,43 +315,124 @@ of the portable plugin contract.
 
 Iframe plugins automatically receive:
 
-1. **CSS variables** — All theme variables (colors, spacing, shadows, transitions) are injected as CSS custom properties on `:root`. Use `var(--c-primary)`, `var(--bg)`, `var(--text-color)`, etc.
+1. **CSS variables**: the host's current theme tokens on `:root` (full list:
+   [`plugin-theme-vars.ts`](../src/app/plugins/util/plugin-theme-vars.ts)).
+   Use them for any custom CSS so your plugin follows all themes and dark mode.
+   Only these variables exist inside the iframe.
+2. **UI Kit**: element defaults and a few classes that match the app's Angular
+   Material look, so plugins look like the app and like each other. The kit lives
+   in a cascade layer (`@layer sp-ui-kit`): **any** CSS of yours wins over it,
+   whatever its specificity. Delete CSS the kit already covers instead of
+   overriding it. Disable the kit with `"uiKit": false` in the manifest.
 
-2. **UI Kit CSS reset** — By default, basic HTML elements (`button`, `input`, `select`, `textarea`, `table`, `a`, `h1`–`h6`, `p`, `code`, `pre`, `hr`, etc.) are styled to match the app's look. This is injected before your plugin's own styles, so your CSS always wins.
+An open plugin view follows dark mode and custom theme switches live; a project
+color change shows after reopening the view. The app's fonts (Open Sans and the
+Material Symbols icon font) are available too: text uses the app font, and
+`<span class="material-icons">edit</span>` renders the same icons as the app
+(any [Material Symbols](https://fonts.google.com/icons) name).
 
-   To disable the UI Kit, add `"uiKit": false` to your manifest.
+**Elements styled by default:** headings, `p`, `a`, lists, `table`, `code`,
+`pre`, `blockquote`, `hr`, `button` (outlined), `input`/`textarea`/`select`
+(filled fields), checkboxes and radios (a `<label>` wrapping one becomes an
+inline control), `progress`, `fieldset`, and `<dialog>` (a dialog surface with
+backdrop). Keyboard focus shows the app's focus ring.
 
-**Button variants:**
+**Buttons:** add a variant class to `<button>`.
 
-- Default `<button>` — Neutral card-background button with border
-- `<button class="btn-primary">` — Filled primary-color button (white text)
-- `<button class="btn-outline">` — Transparent button with primary-color border and text, fills on hover
+| Class                   | Looks like                                       |
+| ----------------------- | ------------------------------------------------ |
+| _(none)_                | Outlined button: secondary or alternative action |
+| `btn-primary`           | Filled primary-color button: the main action     |
+| `btn-outline`           | Outlined in the primary color                    |
+| `btn-text`              | Borderless text button: cancel, dismiss          |
+| `btn-icon`              | Round icon-only button; give it an `aria-label`  |
+| `btn-danger` (modifier) | Destructive: `class="btn-primary btn-danger"`    |
+| `aria-pressed="true"`   | Selected state for toggle buttons                |
 
-**Card component:**
+**Layout:**
 
-- `<div class="card">` — Card with background, shadow, rounded corners, and border
-- `<div class="card card-clickable">` — Adds hover lift effect and primary border highlight
+- `.page`: centered content column (max 800px) with page padding
+- `.page-header`: title row; the heading grows, buttons sit on the right
+- `.stack`: vertical flow with even gaps (child margins removed)
+- `.row`: wrapping horizontal group; `.actions`: right-aligned button row
+- `.grid`: responsive card grid; `.grow`: fills the remaining row space
 
-**Utility classes:**
+**Content:**
 
-- `.text-muted` — Muted text color (`var(--text-color-muted)`)
-- `.text-primary` — Primary theme color (`var(--c-primary)`)
-- `.page-fade` — Fade-in animation (0.3s ease)
+- `.card` and `.card-clickable` (works on `<button class="card">` too)
+- `.list` with `.list-item` rows, like the app's settings rows; `a`/`button`
+  rows get a hover state
+- `.field` wraps a `label`, control and `.field-hint` or `.field-error`; mark
+  invalid controls with `aria-invalid="true"`
+- `.callout` (info), `.callout--success`, `.callout--warning`,
+  `.callout--danger`: tinted message box; an optional leading `<svg>` is tinted
+  too
+- `.chip`, `.empty-state`, `.spinner`
+- `.material-icons`: 24px icon, 18px inside a labelled button; mark it
+  `aria-hidden="true"` and label the button instead
+- Text: `.text-muted`, `.text-primary`, `.text-danger`,
+  `.text-sm`;
+  `.page-fade` fades a view in
+
+```html
+<main class="page stack">
+  <header class="page-header">
+    <h1>Exports</h1>
+    <button class="btn-primary">New export</button>
+  </header>
+  <div class="callout callout--warning"><p>Exports include archived tasks.</p></div>
+  <div class="field">
+    <label for="name">Name</label>
+    <input id="name" />
+    <p class="field-hint">Shown in the file name.</p>
+  </div>
+  <ul class="list">
+    <li class="list-item">
+      <span class="grow">Weekly report</span>
+      <button
+        class="btn-icon btn-danger"
+        aria-label="Delete"
+      >
+        <span
+          class="material-icons"
+          aria-hidden="true"
+          >delete</span
+        >
+      </button>
+    </li>
+  </ul>
+  <div class="actions">
+    <button class="btn-text">Cancel</button>
+    <button class="btn-primary">Save</button>
+  </div>
+</main>
+```
+
+The [API test plugin](../packages/plugin-dev/api-test-plugin/index.html) shows
+every element and class.
 
 **Key CSS variables:**
 
-- `--bg`, `--bg-darker` — Background colors
-- `--text-color`, `--text-color-muted` — Text colors
-- `--c-primary`, `--c-accent`, `--c-warn` — Theme colors
-- `--card-bg`, `--card-shadow`, `--card-border-radius` — Card styling
-- `--divider-color` — Border/divider color
-- `--s`, `--s2`, `--s3`, `--s4`, `--s-half`, `--s-quarter` — Spacing scale
-- `--transition-standard` — Standard transition
-- `--font-primary-stack` — App font stack
-- `--whiteframe-shadow-1dp` through `--whiteframe-shadow-24dp` — Elevation shadows
-- `--is-dark-theme` — `1` if dark theme, `0` if light
+- Surfaces and text: `--bg`, `--card-bg`, `--text-color`, `--text-color-muted`,
+  `--divider-color`
+- Colors: `--c-primary` with `--c-contrast` (text on primary), `--c-warn` with
+  `--c-warn-contrast`, `--color-success`, `--color-warning`, `--color-danger`
+- States: `--state-hover`, `--state-pressed`, `--state-selected`,
+  `--focus-ring-color`
+- Inputs: `--input-bg`, `--input-bg-hover`, `--input-border-color`
+- Spacing: `--s-quarter`, `--s-half`, `--s`, `--s2`, `--s3`, `--s4`
+- Radius: `--radius-xs` … `--radius-xl`, `--radius-pill`,
+  `--card-border-radius`
+- Type: `--font-size-xs` … `--font-size-3xl`, `--font-weight-medium`,
+  `--font-weight-semibold`, `--font-primary-stack`, `--font-mono-stack`
+- Elevation: `--whiteframe-shadow-1dp` … `--whiteframe-shadow-24dp`
+- Motion: `--transition-standard`, `--transition-duration-s`
+- `--is-dark-theme`: `1` in dark mode, `0` in light mode
 
 ## Available API Methods
+
+This section covers the most used methods. The complete list, with signatures,
+is [`types.ts`](../packages/plugin-api/src/types.ts) (`interface PluginAPI`).
 
 ### Data Operations
 
@@ -304,8 +443,15 @@ Iframe plugins automatically receive:
 - `getCurrentContextTasks()` - Get tasks in current context
 - `getSelectedTask()` - Get the task selected in the task detail panel, or `null`
 - `getFocusedTask()` - Get the currently focused task row, or `null`. Task-row focus is cleared when focus moves elsewhere, including into iframe side panels; use `getSelectedTask()` for persistent side-panel task context.
-- `addTask(task)` - Create a new task
-- `updateTask(taskId, updates)` - Update existing task
+- `addTask(task)` - Create a new task. Short syntax in the title (`#tag`, `@date`, `+project`, `30m`) is parsed like typed input; pass `isIgnoreShortSyntax: true` to keep a title from user content or a model verbatim.
+- `updateTask(taskId, updates)` - Update existing task. Setting `dueDay` adds the task to that Planner day (or Today). A scheduled time (`dueWithTime`) and its reminder take precedence over `dueDay`, and `updateTask` cannot clear a reminder yet, so use this for tasks without a time. The task is added at the end of that day. Take day strings from `getDayContext().todayStr` so the user's start of next day is honoured. Pass `{ isIgnoreShortSyntax: true }` as the third argument to keep a new title verbatim.
+- `startTracking(taskId)` / `stopTracking()` - Start or stop time tracking. Rejects for an unknown or done task (unlike the play button, it does not reopen it) and for a parent whose subtasks are all done. For a parent task, tracking starts on its first unfinished subtask. The tracked task arrives with `currentTaskChange`.
+
+#### Day
+
+- `getDayContext()` - `{ todayStr, startOfNextDayDiffMs }`. `todayStr` is the user's logical day (YYYY-MM-DD): before the configured start of the next day it is still the previous calendar day. To find a timestamp's logical day, subtract `startOfNextDayDiffMs` before taking its local date. Re-read it on `DAY_CHANGE`.
+
+Feature-detect `getDayContext`, `startTracking` and `stopTracking` on older hosts.
 
 #### Application State
 
@@ -532,8 +678,25 @@ const hooks = {
   LANGUAGE_CHANGE: 'languageChange',
   PERSISTED_DATA_CHANGED: 'persistedDataChanged',
   ACTION: 'action',
+  DATA_CHANGED: 'dataChanged',
+  DAY_CHANGE: 'dayChange',
 };
 ```
+
+`DATA_CHANGED` fires after tasks, projects or tags change from any source:
+the user, another plugin, planning, archiving, imports and remote sync, and
+when the selected or tracked task changes. It carries no payload; re-read
+what you display (`getSelectedTask()` for the selection). Use it to refresh a
+view only: it fires on every device for a synced change, so writing data in
+response would repeat the write on each one. Bursts (a sync batch, a bulk
+action) are coalesced into one call; while a task is tracked it fires about
+once a second, so compare what you render before redrawing. Prefer it over
+`ANY_TASK_UPDATE` for keeping a view current: that hook sees only local
+actions from a short list.
+
+`DAY_CHANGE` fires with `{ todayStr }` when the user's logical day changes
+while the app runs: at the rollover, or when the start-of-next-day setting
+moves it.
 
 `PERSISTED_DATA_CHANGED` fires whenever this plugin's persisted data
 changes — local writes, remote sync deliveries, and bulk imports —
@@ -546,14 +709,15 @@ plugin init, then subscribe to this hook for subsequent updates.
 
 ```javascript
 // Register hook listener
-PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
+// Hook handlers receive one payload object (see HookPayloadMap in types.ts)
+PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, ({ taskId }) => {
   console.log(`Task ${taskId} completed!`);
 });
 
 // Listen to Redux actions
-PluginAPI.registerHook(PluginAPI.Hooks.ACTION, (action) => {
-  if (action.type === 'ADD_TASK_SUCCESS') {
-    console.log('New task added:', action.payload);
+PluginAPI.registerHook(PluginAPI.Hooks.ACTION, ({ action }) => {
+  if (action.type === '[Task Shared] addTask') {
+    console.log('New task added:', action.task.id);
     // Bonus: Increment a counter on task add
     PluginAPI.incrementCounter('tasks-added-today');
   }
@@ -777,10 +941,12 @@ cold-boot bridge pings are only performed for host-side plugin code.
 
 **Clean up with `plugin.onUnload()`:**
 
-Code-based plugins (`plugin.js`) run directly in the app's renderer, so timers and
-listeners they create are **not** cleaned up automatically when the plugin is disabled,
-reloaded, or uninstalled — a `setInterval` started by your plugin keeps firing until the
-app is fully reloaded. Register a teardown callback to clear them yourself:
+Code-based plugins (`plugin.js`) run directly in the app's renderer. When the plugin is
+disabled, reloaded, or uninstalled, the host stops timers created with the plain
+`setTimeout`/`setInterval` names and turns further Plugin API calls into no-ops (they
+return a promise that never settles). Anything else — `window.setInterval`, event
+listeners, `speechSynthesis`, open connections — keeps running until the app is fully
+reloaded. Register a teardown callback to clear it yourself:
 
 ```javascript
 const intervalId = setInterval(doWork, 60000);
@@ -791,13 +957,13 @@ plugin.onUnload(() => {
 });
 ```
 
-The host invokes the callback at the start of plugin teardown, while the Plugin API is
-still usable for calls like persisting data — but don't register new hooks or listeners
-from inside it (the plugin is going away; re-registering `onUnload` there is ignored).
-The returned promise is **not awaited** — do synchronous cleanup (`clearInterval` etc.)
-before any `await`, since teardown continues immediately. Registering again replaces the
-previous callback, so register once and do all cleanup there. Errors thrown by the
-callback are logged and do not block teardown.
+The host invokes the callback at the start of plugin teardown. Its synchronous part can
+still call the Plugin API (e.g. to persist data) — but don't register new hooks or
+listeners from inside it (the plugin is going away; re-registering `onUnload` there is
+ignored). The returned promise is **not awaited** — do cleanup and API calls before any
+`await`, since teardown continues immediately and API calls made after it are
+ignored. Registering again replaces the previous callback, so register once and do all
+cleanup there. Errors thrown by the callback are logged and do not block teardown.
 
 Plugins distributed independently of the app should feature-detect it
 (`if (plugin.onUnload) { ... }`) — hosts predating the hook don't provide it.
@@ -938,7 +1104,8 @@ async function testAPI() {
 
 ## Resources
 
-- **Plugin API Types**: [@super-productivity/plugin-api](https://www.npmjs.com/package/@super-productivity/plugin-api)
+- **Plugin API Types**: [@super-productivity/plugin-api](https://www.npmjs.com/package/@super-productivity/plugin-api) ([source](../packages/plugin-api/src/types.ts))
+- **Plugin Starter**: [plugin-starter](../packages/plugin-starter)
 - **Plugin Boilerplate**: [boilerplate-solid-js](../packages/plugin-dev/boilerplate-solid-js)
 - **Example Plugins**: [plugin-dev](../packages/plugin-dev)
 - **Community Plugins**: [community-plugins.json](../src/assets/community-plugins.json), also listed in Settings → Plugins
@@ -996,22 +1163,44 @@ Happy plugin development! 🚀
 
 ## Bonus: Vibe Coding your Plugins
 
+The quickest way is in the app: **Help** → **Build your own plugin** writes the
+prompt below for you, installs the AI's answer and hands load errors back to the
+AI. Its prompt is based on the rules below and includes the `types.ts` of your
+version, so the AI needs no web access; when you change a rule, update both
+(`src/app/plugins/ui/dialog-build-plugin/build-plugin.util.ts`).
+
 ### Tips
 
 - Don't test on your real world data! Use a test instance! (you can use https://test-app.super-productivity.com/ if you don't know how get one)
 - Be as specific as possible
 - Outline what APIs your plugin should use
-- Test for errors (`Ctrl+Shift+i` opens the console) and iterate until it works. Don't expect that everything works on your first try.
+- Give the assistant [`types.ts`](../packages/plugin-api/src/types.ts): it is the complete, current API, while this guide only covers the most used parts. If the assistant can't open links, paste the file into the chat
+- Test for errors (`Ctrl+Shift+i` opens the console) and iterate until it works. Don't expect that everything works on your first try. When the plugin uses a `PluginAPI` method that does not exist, the console names the closest real ones: paste that line back to the assistant
 - Read the code! Don't trust it blindly.
 
 ### Example
 
+The rules in the prompt are the mistakes assistants make most often. Keep them
+even for a small plugin.
+
 ```md
-Can you you write me a plugin for Super Productivity that plays a beep sound every time i click on a header button (You need to add a header button via PluginAPI.registerHeaderButton).
+Write me a plugin for Super Productivity that plays a beep sound every time I click on a header button.
 
-Here are the docs: https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md
+The API (the global PluginAPI object): https://raw.githubusercontent.com/super-productivity/super-productivity/master/packages/plugin-api/src/types.ts
+If you can't open that link, ask me to paste the file instead of guessing.
+A working starter: https://github.com/super-productivity/super-productivity/tree/master/packages/plugin-starter
 
-Don't use any PluginAPI methods that are not listed in the guide.
+Rules:
 
-Please give me the output as flat zip file to download.
+- Only use PluginAPI members and hooks defined in types.ts. If something is not possible with them, say so instead of inventing a method.
+- manifest.json needs id (lowercase letters, numbers and dashes), name, version, "manifestVersion": 1, minSupVersion, "hooks": [] (registerHook works without listing hooks there) and "permissions": [].
+- plugin.js is not a module: no import/export, no top-level await. Put async startup code in PluginAPI.onReady(async () => { ... }).
+- Header buttons, menu entries, shortcuts and side panel buttons can only be registered from plugin.js, not from index.html.
+- A UI goes in index.html with "iFrame": true in the manifest. Inline all CSS and JavaScript; other files are not served to it.
+- Hook handlers get one payload object, e.g. registerHook(PluginAPI.Hooks.TASK_COMPLETE, ({ taskId, task }) => { ... }).
+- Most methods return Promises: await them.
+- Store data with PluginAPI.persistDataSynced(string) and loadSyncedData(), not localStorage.
+- PluginAPI.request needs "http" in permissions and the host in "allowedHosts".
+
+Give me the files and a flat ZIP (manifest.json at the top level, not inside a folder).
 ```

@@ -18,8 +18,8 @@
 .restore-point {
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition-duration-s),
+    border-color var(--transition-duration-s);
 
   &:hover {
     // Migrated to state token: was `var(--hover-bg, rgba(0,0,0,0.04))`

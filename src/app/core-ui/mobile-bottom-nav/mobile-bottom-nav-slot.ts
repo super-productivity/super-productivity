@@ -4,14 +4,18 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { T } from '../../t.const';
 import { NAV_SECTION_ICON } from '../magic-side-nav/nav-section-icons.const';
 import { PluginMenuEntryCfg } from '../../plugins/plugin-api.model';
+import { BoardCfg } from '../../features/boards/boards.model';
+import { getViewIcon } from '../../features/boards/boards.util';
 
 export type BottomNavRouteSlotId = 'planner' | 'inbox' | 'boards' | 'schedule' | 'search';
 
 export interface BottomNavRouteSlot {
   kind: 'route';
-  id: BottomNavRouteSlotId;
+  // `view:<boardId>`: one saved view.
+  id: BottomNavRouteSlotId | `${typeof VIEW_SLOT_PREFIX}${string}`;
   route: string;
   icon: string;
+  // A translation key, or a view's own title (the translate pipe passes it through).
   labelKey: string;
   // Unset: always available.
   featureKey?: keyof AppFeaturesConfig;
@@ -33,6 +37,13 @@ export type BottomNavSlotOption = BottomNavRouteSlot | BottomNavPluginSlot;
 export const DEFAULT_BOTTOM_NAV_SLOT: BottomNavRouteSlotId = 'planner';
 
 const PLUGIN_SLOT_PREFIX = 'plugin:';
+const VIEW_SLOT_PREFIX = 'view:';
+
+/** What the slot needs besides the app features: plugin entries and views. */
+export interface BottomNavSlotSources {
+  pluginEntries?: readonly PluginMenuEntryCfg[];
+  views?: readonly Pick<BoardCfg, 'id' | 'title' | 'cols'>[];
+}
 
 export const BOTTOM_NAV_SLOT_OPTIONS: readonly BottomNavRouteSlot[] = [
   {
@@ -85,11 +96,29 @@ const toPluginSlot = (entry: PluginMenuEntryCfg): BottomNavPluginSlot => ({
   onClick: entry.onClick,
 });
 
+const toViewSlot = (
+  view: Pick<BoardCfg, 'id' | 'title' | 'cols'>,
+): BottomNavRouteSlot => ({
+  kind: 'route',
+  id: `${VIEW_SLOT_PREFIX}${view.id}`,
+  route: `/boards/${view.id}`,
+  icon: getViewIcon(view),
+  labelKey: view.title,
+  featureKey: 'isBoardsEnabled',
+});
+
+/**
+ * The options of the slot menu. Each view is an option of its own, in place
+ * of the generic Views entry (which opens the last view); that one is only
+ * offered while there are no views.
+ */
 export const getAvailableBottomNavSlotOptions = (
   features: AppFeaturesConfig,
-  pluginEntries: readonly PluginMenuEntryCfg[] = [],
+  { pluginEntries = [], views = [] }: BottomNavSlotSources = {},
 ): BottomNavSlotOption[] => [
-  ...BOTTOM_NAV_SLOT_OPTIONS.filter((o) => !o.featureKey || features[o.featureKey]),
+  ...BOTTOM_NAV_SLOT_OPTIONS.flatMap((o) =>
+    o.id === 'boards' && views.length ? views.map(toViewSlot) : [o],
+  ).filter((o) => !o.featureKey || features[o.featureKey]),
   ...pluginEntries.map(toPluginSlot),
 ];
 
@@ -99,6 +128,10 @@ export const getAvailableBottomNavSlotOptions = (
  * entry. `null` when Planner is the fallback but disabled: the slot is then
  * hidden, as it was before the slot became configurable.
  *
+ * The generic Views entry (`boards`, stored before views were options of
+ * their own) and a view that is gone resolve to the generic entry: it opens
+ * the last view.
+ *
  * Plugins register their entries after startup, so a stored plugin choice
  * shows Planner until the plugin has loaded. The stored value is never
  * rewritten here, so the choice comes back once the entry appears.
@@ -106,15 +139,20 @@ export const getAvailableBottomNavSlotOptions = (
 export const resolveBottomNavSlot = (
   storedId: string | null,
   features: AppFeaturesConfig,
-  pluginEntries: readonly PluginMenuEntryCfg[] = [],
+  sources: BottomNavSlotSources = {},
 ): BottomNavSlotOption | null => {
-  const available = getAvailableBottomNavSlotOptions(features, pluginEntries);
+  const available = getAvailableBottomNavSlotOptions(features, sources);
   const storedPluginId = storedId?.startsWith(PLUGIN_SLOT_PREFIX)
     ? storedId.slice(PLUGIN_SLOT_PREFIX.length).split(':')[0]
     : undefined;
+  const isViews = storedId === 'boards' || !!storedId?.startsWith(VIEW_SLOT_PREFIX);
+  const viewsFallback = BOTTOM_NAV_SLOT_OPTIONS.find(
+    (o) => isViews && o.id === 'boards' && features.isBoardsEnabled,
+  );
   return (
     available.find((o) => o.id === storedId) ??
     available.find((o) => o.kind === 'plugin' && o.pluginId === storedPluginId) ??
+    viewsFallback ??
     available.find((o) => o.id === DEFAULT_BOTTOM_NAV_SLOT) ??
     null
   );

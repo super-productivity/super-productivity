@@ -38,6 +38,12 @@ export class CollapsibleComponent implements OnInit, OnDestroy {
   private static _idCounter = 0;
   readonly panelId = this.createPanelId();
   readonly title = input<string>();
+  /** Shown after the title, quieter (e.g. the number of tasks in a section). */
+  readonly count = input<number>();
+
+  @HostBinding('class.hasCount') get hasCount(): boolean {
+    return this.count() !== undefined;
+  }
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
   //  and migrating would break narrowing currently.
@@ -78,6 +84,16 @@ export class CollapsibleComponent implements OnInit, OnDestroy {
     if (this.isGroup) {
       CollapsibleComponent._groupCollapsibles.delete(this);
     }
+  }
+
+  onHeaderClick(ev: MouseEvent): void {
+    // A projected header action that handled its click marks it handled
+    // (`preventDefault`) instead of stopping it, so document listeners, such
+    // as an open add-task bar closing on a click outside, still see it.
+    if (ev.defaultPrevented) {
+      return;
+    }
+    this.toggleExpand();
   }
 
   onHeaderKeydown(ev: KeyboardEvent): void {

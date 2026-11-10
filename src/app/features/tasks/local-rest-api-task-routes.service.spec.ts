@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of } from 'rxjs';
 import { LocalRestApiTaskRoutesService } from './local-rest-api-task-routes.service';
@@ -17,6 +18,8 @@ import {
   LocalRestApiResponsePayload,
 } from '../../../../electron/shared-with-frontend/local-rest-api.model';
 import { ArchiveOperationHandler } from '../../op-log/apply/archive-operation-handler.service';
+import { TrackingPresenceService } from '../tracking-presence/tracking-presence.service';
+import { RemoteSessionView } from '../tracking-presence/tracking-presence.model';
 
 describe('LocalRestApiTaskRoutesService', () => {
   let service: LocalRestApiTaskRoutesService;
@@ -28,6 +31,7 @@ describe('LocalRestApiTaskRoutesService', () => {
   let featureBridgeMock: jasmine.SpyObj<LocalRestApiFeatureBridgeService>;
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
+  const remoteSessionView = signal<RemoteSessionView | null>(null);
   let activeProjects: Project[];
 
   const createMockTask = (id: string, overrides: Partial<Task> = {}): Task =>
@@ -93,6 +97,7 @@ describe('LocalRestApiTaskRoutesService', () => {
 
   beforeEach(() => {
     activeProjects = [];
+    remoteSessionView.set(null);
 
     taskServiceMock = jasmine.createSpyObj(
       'TaskService',
@@ -175,6 +180,7 @@ describe('LocalRestApiTaskRoutesService', () => {
         { provide: ProjectService, useValue: projectServiceMock },
         { provide: DateService, useValue: dateServiceMock },
         { provide: LocalRestApiFeatureBridgeService, useValue: featureBridgeMock },
+        { provide: TrackingPresenceService, useValue: { remoteSessionView } },
         provideMockStore(),
       ],
     });
@@ -194,6 +200,64 @@ describe('LocalRestApiTaskRoutesService', () => {
 
       expect(response.body.ok).toBe(true);
       expect(response.status).toBe(200);
+    });
+
+    describe('trackingOnOtherDevice', () => {
+      const setRemote = (
+        state: 'tracking' | 'stopped',
+        opts: { isStale?: boolean } = {},
+      ): void => {
+        remoteSessionView.set({
+          session: {
+            payload: {
+              v: 1,
+              sessionId: 's1',
+              seq: 1,
+              state,
+              taskId: 'remote-task',
+              sinceTs: 1000,
+              deviceLabel: 'Android',
+            },
+            producerConnected: true,
+            receivedAt: 2000,
+          },
+          isStale: opts.isStale ?? false,
+          stateKey: '',
+          timeKey: '',
+          timeTs: 0,
+          showStop: state === 'tracking',
+        });
+      };
+
+      const getStatusBody = async (): Promise<Record<string, unknown>> => {
+        Object.defineProperty(taskServiceMock, 'currentTask$', { get: () => of(null) });
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of([]) });
+        const response = await sendRequestAndWait(createRequest('GET', '/status'));
+        return (response.body as { data: Record<string, unknown> }).data;
+      };
+
+      it('reports the session another device is live-tracking', async () => {
+        setRemote('tracking');
+        expect((await getStatusBody()).trackingOnOtherDevice).toEqual({
+          taskId: 'remote-task',
+          deviceLabel: 'Android',
+          sinceTs: 1000,
+        });
+      });
+
+      it('is null when no other device is tracking', async () => {
+        expect((await getStatusBody()).trackingOnOtherDevice).toBeNull();
+      });
+
+      it('is null when the other device stopped or paused', async () => {
+        setRemote('stopped');
+        expect((await getStatusBody()).trackingOnOtherDevice).toBeNull();
+      });
+
+      it('is null when the other session is stale', async () => {
+        setRemote('tracking', { isStale: true });
+        expect((await getStatusBody()).trackingOnOtherDevice).toBeNull();
+      });
     });
   });
 
@@ -494,6 +558,56 @@ describe('LocalRestApiTaskRoutesService', () => {
           false,
           jasmine.any(Object),
         );
+      });
+
+      it('should map plannedAt to dueWithTime when creating a task', async () => {
+        const plannedAt = new Date('2026-07-12T10:00:00Z').getTime();
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', plannedAt },
+          }),
+        );
+
+        expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          title: 'New Task',
+          dueWithTime: plannedAt,
+        });
+      });
+
+      it('should let dueWithTime override plannedAt when creating a task', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', plannedAt: 1, dueWithTime: 2 },
+          }),
+        );
+
+        expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          title: 'New Task',
+          dueWithTime: 2,
+        });
+      });
+
+      it('should report invalid plannedAt input on create', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', plannedAt: 'not-a-number' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.details).toContain(
+          jasmine.objectContaining({ path: '$input.plannedAt' }),
+        );
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
       });
 
       it('should set a deadline after creating the task and then read the response', async () => {
@@ -1663,6 +1777,80 @@ describe('LocalRestApiTaskRoutesService', () => {
         });
       });
 
+      it('should map plannedAt to dueWithTime when updating a task', async () => {
+        const plannedAt = new Date('2026-07-13T09:30:00Z').getTime();
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', { body: { plannedAt } }),
+        );
+
+        expect(featureBridgeMock.updateTaskWithDueTime).toHaveBeenCalledOnceWith(
+          mockTask,
+          { dueWithTime: plannedAt },
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should let dueWithTime override plannedAt when updating a task', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { plannedAt: 1, dueWithTime: 2 },
+          }),
+        );
+
+        expect(featureBridgeMock.updateTaskWithDueTime).toHaveBeenCalledOnceWith(
+          mockTask,
+          { dueWithTime: 2 },
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should map null plannedAt to clearing dueWithTime when updating a task', async () => {
+        const mockTask = createMockTask('task-1', { dueWithTime: 1 });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', { body: { plannedAt: null } }),
+        );
+
+        expect(featureBridgeMock.updateTaskWithDueTime).toHaveBeenCalledOnceWith(
+          mockTask,
+          { dueWithTime: null },
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should report invalid plannedAt input on PATCH', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { plannedAt: 'not-a-number' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.details).toContain(
+          jasmine.objectContaining({ path: '$input.plannedAt' }),
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
       it('should reject parentId in PATCH body with 400', async () => {
         const mockTask = createMockTask('task-1');
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
@@ -2517,6 +2705,24 @@ describe('LocalRestApiTaskRoutesService', () => {
 
         expect(response.body.ok).toBe(false);
         expect(response.status).toBe(404);
+      });
+
+      // moveToArchive only archives top-level tasks, so a subtask on its own was left in
+      // place while the response said it was archived.
+      it('should reject a subtask with 400 and not archive anything', async () => {
+        const subTask = createMockTask('sub-1', { parentId: 'parent-1' });
+        Object.defineProperty(taskServiceMock, 'getByIdWithSubTaskData$', {
+          get: () => (_id: string) => of(createMockTaskWithSubTasks(subTask)),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks/sub-1/archive'),
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.ok).toBe(false);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.moveToArchive).not.toHaveBeenCalled();
       });
     });
 

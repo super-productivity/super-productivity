@@ -14,6 +14,7 @@ import {
   hideNonTaskSidePanelContent,
   hidePluginPanel,
   showAddTaskBar,
+  showPluginPanel,
   toggleIssuePanel,
   toggleShowNotes,
 } from '../core-ui/layout/store/layout.actions';
@@ -31,6 +32,8 @@ export const ALLOWED_PLUGIN_ACTIONS = [
   hideNonTaskSidePanelContent,
   toggleIssuePanel,
   hidePluginPanel,
+  // Only for the dispatching plugin's own panel, enforced in PluginBridgeService.
+  showPluginPanel,
 
   // Focus Mode
   showFocusOverlay,
@@ -83,8 +86,16 @@ export const ALLOWED_PLUGIN_ACTIONS = [
 // Create a type for the allowed action types
 export type AllowedPluginAction = (typeof ALLOWED_PLUGIN_ACTIONS)[number];
 
-// Helper to check if an action is allowed
-export const isAllowedPluginAction = (action: { type?: string }): boolean => {
+// Helper to check if an action is allowed for the dispatching plugin
+export const isAllowedPluginAction = (
+  action: { type?: string; pluginId?: unknown },
+  pluginId: string,
+): boolean => {
+  // A plugin may open its own panel (e.g. from a shortcut), never another
+  // plugin's: no plugin should surface another plugin's UI to the user.
+  if (action.type === showPluginPanel.type && action.pluginId !== pluginId) {
+    return false;
+  }
   return ALLOWED_PLUGIN_ACTIONS.some(
     (allowedAction) => action.type === allowedAction.type,
   );

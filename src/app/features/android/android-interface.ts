@@ -42,6 +42,10 @@ export interface AndroidInterface {
   // Absent on APKs whose snooze/tap events don't carry the reminder type.
   supportsTypedReminderActions?(): boolean;
 
+  // Legacy online mode only: hands over to the bundled offline app and
+  // restarts into it. Absent on APKs that predate it (#8832).
+  switchToOfflineMode?(): boolean;
+
   // Absent on APKs that predate it; call via util/haptic-feedback.ts.
   performHapticFeedback?(type: 'confirm' | 'threshold' | 'longPress'): void;
 
@@ -164,7 +168,9 @@ export interface AndroidInterface {
   // added here only
   // ReplaySubject so cold-start onResume emissions arriving before the JS
   // subscriber attaches are still delivered (relevant for tracking recovery
-  // after the WebView was killed in the background — issue #7390).
+  // after the WebView was killed in the background — issue #7390). The native
+  // call is dropped if it runs before this bundle assigns the subject, so
+  // startup work must not rely on it; use startWith().
   onResume$: ReplaySubject<void>;
   onPause$: Subject<void>;
   isInBackground$: Observable<boolean>;
@@ -192,8 +198,8 @@ export interface AndroidInterface {
   getReminderSnoozeQueue?(): string | null;
 
   // Contentless "drain now" signal after a widget done-checkbox tap while the app
-  // is alive; the queued IDs are always pulled via getWidgetDoneQueue() (cold
-  // start/resume drains are triggered by onResume$ instead)
+  // is alive; the queued IDs are always pulled via getWidgetDoneQueue() (startup
+  // and resume drains are triggered by the effect itself and onResume$)
   onWidgetDoneDrainRequest$: Subject<void>;
 
   // Contentless "drain now" signal after a tracking/focus/remote-stop notification
@@ -206,6 +212,15 @@ export interface AndroidInterface {
   // Mirrors the E2EE password so the background worker can decrypt op payloads;
   // '' clears it. Optional: older APKs don't have it.
   setSuperSyncEncryptionPassword?(password: string): void;
+  // WebDAV/Nextcloud variant: native GETs the sync file and drops any SuperSync
+  // credentials. The password goes via setSuperSyncEncryptionPassword (one
+  // shared slot). Optional: older APKs don't have it.
+  setFileSyncCredentials?(
+    fileUrl: string,
+    authorization: string,
+    isEncryptionExpected: boolean,
+  ): void;
+  clearFileSyncCredentials?(): void;
   // Mirrors the SuperSync capture public key (base64 SPKI) so shares upload
   // sealed while the app is closed; '' clears it. Optional: older APKs.
   setCapturePublicKey?(publicKeySpki: string): void;

@@ -1,1 +1,13 @@
-npx --no-install pretty-quick --staged && npm run lint
+npx --no-install pretty-quick --staged
+# Lint only staged files: a full `npm run lint` took ~70s per commit (measured
+# 2026-11). CI still runs the full lint.
+staged() { git diff --cached --name-only --diff-filter=ACMR -- "$@"; }
+if staged '*.ts' '*.html' | grep -q .; then
+  git diff --cached --name-only --diff-filter=ACMR -z -- '*.ts' '*.html' |
+    xargs -0 npx --no-install eslint --no-warn-ignored
+fi
+if staged '*.scss' | grep -q .; then
+  git diff --cached --name-only --diff-filter=ACMR -z -- '*.scss' |
+    xargs -0 npx --no-install stylelint
+fi
+npm run lint:css-vars

@@ -1759,8 +1759,8 @@ describe('ScheduleComponent', () => {
       const plainTop = plainWrapper.scrollTop;
 
       plainWrapper.scrollTop = 0;
-      // warpRoute starts the view at scale(1.2); the scroll runs on a
-      // setTimeout(0) while that is still in flight.
+      // warpRoute transforms the view (it once zoomed from scale(1.2)); the
+      // scroll runs on a setTimeout(0) while that is still in flight.
       const scaledHost = renderScrollable('scale(1.2)');
       const scaledWrapper = scaledHost.querySelector('.scroll-wrapper') as HTMLElement;
       component['_scrollAnchorToTop']('current-time');
