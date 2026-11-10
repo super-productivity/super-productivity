@@ -17,13 +17,14 @@ on:
         type: string
         default: '@webdav'
       webdav_format:
-        description: 'Format for generic WebDAV tests (explicit per-case formats are preserved)'
+        description: 'Format for generic WebDAV tests (explicit per-case formats are preserved); scheduled and push runs use both'
         required: false
         type: choice
         default: v2
         options:
           - v2
           - v3
+          - both
       run_webdav:
         description: 'Run the WebDAV job (uncheck to skip it instead of passing a no-match grep)'
         required: false
@@ -148,9 +149,11 @@ jobs:
           path: .tmp/e2e-test-results/**/*.*
           retention-days: 30
 
-  # Job 2: WebDAV E2E tests
+  # Job 2: WebDAV E2E tests, once per file format. Scheduled and push runs
+  # cover both v2 (the current empty-folder default) and v3 (the long-term
+  # format, #10339); a manual run uses the chosen `webdav_format`.
   e2e-webdav:
-    name: E2E Tests (WebDAV ${{ inputs.webdav_format || 'v2' }})
+    name: E2E Tests (WebDAV ${{ matrix.format }})
     needs: [build]
     # Skip the job outright rather than handing it a no-match grep: Playwright
     # exits 1 on "No tests found", which reds the whole run. `inputs` is empty
@@ -158,6 +161,10 @@ jobs:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_webdav }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        format: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.webdav_format == 'both') && '["v2","v3"]' || format('["{0}"]', inputs.webdav_format)) }}
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
@@ -196,7 +203,7 @@ jobs:
       - name: Run WebDAV E2E Tests
         env:
           E2E_REQUIRE_WEBDAV: 'true'
-          E2E_WEBDAV_FORMAT: ${{ inputs.webdav_format || 'v2' }}
+          E2E_WEBDAV_FORMAT: ${{ matrix.format }}
           # via env, not interpolated into the script, so a quote in the filter can't break the shell
           E2E_GREP: ${{ inputs.webdav_grep || '@webdav' }}
         run: npm run e2e:all -- --grep "$E2E_GREP"
@@ -216,7 +223,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-results-webdav-${{ github.run_id }}
+          name: e2e-results-webdav-${{ matrix.format }}-${{ github.run_id }}
           path: .tmp/e2e-test-results/**/*.*
           retention-days: 30
 
