@@ -5,17 +5,16 @@ import { executeIntent, Intent, SETUP_INTENTS, viewOf } from './sync-fuzz-action
 import { FuzzDevice, SyncFuzzHarness } from './sync-fuzz-harness';
 
 /**
- * #11660: the first change a device makes after a force upload is lost on
- * another device of a file-based sync target (WebDAV, Dropbox, local file).
+ * Regression test for #11660: the first change a device made after a force
+ * upload was lost on another device of a file-based sync target (WebDAV,
+ * Dropbox, local file).
  *
- * The force upload's SYNC_IMPORT is appended without advancing the stored
- * vector clock, so the next local op gets the import's clock again. A device
+ * The force upload's SYNC_IMPORT was appended without advancing the stored
+ * vector clock, so the next local op got the import's clock again. A device
  * that took the forced snapshot and compacted (here B, after applying A's
  * edit) uses its snapshot clock, which contains the import's counter, as
- * every entity's frontier: the op is "superseded" and skipped for good, with
- * nothing pending and no error. A fresh device still gets the change.
- *
- * Open bug: this spec fails until #11660 is fixed.
+ * every entity's frontier: the op was "superseded" and skipped for good, with
+ * nothing pending and no error. A fresh device still got the change.
  */
 describe('#11660 first change after a force upload on file sync', () => {
   afterEach(() => SyncFuzzHarness.dispose());
@@ -58,6 +57,12 @@ describe('#11660 first change after a force upload on file sync', () => {
     const nextOpClock = await clockOnC(
       (opType, entityId) => opType === OpType.Update && entityId === 't3',
     );
+
+    // The root cause, at the append every force-upload entry point shares
+    // (settings, "Keep local", "use local" all reach handleServerMigration).
+    expect(nextOpClock)
+      .withContext('next op clock must differ from the SYNC_IMPORT clock')
+      .not.toBe(importClock);
 
     for (let round = 0; round < 3; round++) {
       for (const device of devices) await harness.sync(device);

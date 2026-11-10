@@ -1687,8 +1687,8 @@
   },
   {
     "class": "force-upload-skip",
-    "ref": "force-upload-skip (#11660): the SuperSync shape; on file sync the compaction is automatic, see force-upload-skip.issue-11660.integration.spec.ts",
-    "name": "the first change after a force upload is skipped by a device that compacted after a later remote op",
+    "ref": "fixed for #11660 (regression pin)",
+    "name": "the first change after a force upload reaches a device that compacted after a later remote op",
     "steps": [
       {
         "d": "C",
@@ -1717,8 +1717,7 @@
         "a": ["renameTask", "t3", "X"]
       }
     ],
-    "primary": "divergence:.task.entities.*.title",
-    "signatures": ["divergence:.task.entities.*.title"],
+    "signatures": [],
     "rejections": []
   }
 ]

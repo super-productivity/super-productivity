@@ -15,17 +15,15 @@ import {
 } from '../../utils/sync-helpers';
 
 /**
- * Reproduction for #11660: the first change a device makes after a force
- * upload never reaches another device on file-based sync.
+ * Regression test for #11660: the first change a device made after a force
+ * upload never reached another device on file-based sync.
  *
- * The force upload's SYNC_IMPORT does not advance the device's stored vector
- * clock, so its next change carries the import's clock again. A device that
+ * The force upload's SYNC_IMPORT did not advance the device's stored vector
+ * clock, so its next change carried the import's clock again. A device that
  * took the forced state and then applied any other remote change compacts,
  * after which its snapshot clock (which contains the import's counter) is the
- * frontier of every entity: the change is skipped as superseded, for good,
- * with nothing pending and no error.
- *
- * Open bug: fails at B's last assertion until #11660 is fixed.
+ * frontier of every entity: the change was skipped as superseded, for good,
+ * with nothing pending and no error. Without the fix, B's last assertion fails.
  *
  * Run: npm run quiet -- e2e:webdav:file e2e/tests/sync/webdav-force-upload-skip-11660.spec.ts --retries=0
  */
