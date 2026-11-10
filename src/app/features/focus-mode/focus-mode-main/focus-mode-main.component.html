@@ -13,7 +13,8 @@
   <!-- Mode selector (Preparation) and simple counters (In Progress) are mutually
        exclusive; whichever is active projects into the layout's top slot. That
        slot is positioned out of flow (absolute), so swapping the active control
-       in/out never shifts the centered task/clock/bottom group below. The
+       in/out never shifts the centered task/clock/bottom group below — except
+       the mode selector on short phones, which sits in flow (#10179). The
        selector is removed from the DOM when not in preparation — hiding it via
        visibility would leave its mat-icons painted (the global
        isMaterialSymbolsLoaded rule forces icons visible), so removal is the only

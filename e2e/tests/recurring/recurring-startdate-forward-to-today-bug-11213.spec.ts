@@ -1,6 +1,7 @@
 import { expect, test } from '../../fixtures/test.fixture';
 import {
   gotoHashRoute,
+  gotoToday,
   openRecurDialog,
   saveRecurDialog,
   setRecurQuickSetting,
@@ -66,7 +67,7 @@ test.describe('Recurring Task - Move startDate forward to today (#11213)', () =>
     await page.keyboard.press('Escape');
 
     // 5. An open copy must be in Today without waiting for a day change.
-    await gotoHashRoute(page, '/#/tag/TODAY/tasks', page.locator('task').first());
+    await gotoToday(page);
     await expect(taskPage.getUndoneTasks().filter({ hasText: taskTitle })).toHaveCount(
       1,
       { timeout: 15000 },

@@ -68,9 +68,13 @@ class SyncReminderWorker(
                 return Result.retry()
             }
 
-            // Cancel reminders for each affected task
+            // Cancel every alarm of gone/done tasks, and single cleared ones
             for (taskId in result.taskIdsToCancel) {
                 cancelRemindersForTask(applicationContext, taskId)
+                totalCancelled++
+            }
+            for (reminderId in result.reminderIdsToCancel) {
+                cancelReminderById(applicationContext, reminderId)
                 totalCancelled++
             }
 

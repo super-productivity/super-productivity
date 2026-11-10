@@ -49,7 +49,11 @@ class FullscreenActivity : AppCompatActivity() {
     private lateinit var wvContainer: FrameLayout
     private var isForegroundServiceFailureReceiverRegistered = false
     private var isNotificationActionDrainReceiverRegistered = false
-    private var webViewRequestHandler = WebViewRequestHandler(this, BuildConfig.ONLINE_SERVICE_HOST)
+    private var webViewRequestHandler = WebViewRequestHandler(
+        this,
+        BuildConfig.ONLINE_SERVICE_PROTOCOL,
+        BuildConfig.ONLINE_SERVICE_HOST,
+    )
     val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
     val appUrl =
@@ -85,6 +89,22 @@ class FullscreenActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.v("TW", "FullScreenActivity: onCreate")
         super.onCreate(savedInstanceState)
+
+        // A launcher start into a task that is already running (this activity is
+        // not singleTask): some launchers, or a task first opened via the Play
+        // Store "Open" button, send an intent that does not match the task's base
+        // intent, so Android stacks a new instance instead of bringing the task to
+        // front. Finish it at once, uncovering the running app: no second WebView
+        // in online mode, no extra trampoline hop and flash in offline mode.
+        if (!isTaskRoot &&
+            intent?.action == Intent.ACTION_MAIN &&
+            intent?.hasCategory(Intent.CATEGORY_LAUNCHER) == true
+        ) {
+            finish()
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+            return
+        }
 
         val compatibility = try {
             WebViewCompatibilityChecker.evaluate(this)
