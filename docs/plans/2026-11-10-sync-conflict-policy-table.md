@@ -20,18 +20,20 @@ and safer, and what is the smallest behaviour-neutral way to get there?
 
 **Short answer.**
 
-- **The size budget: yes, as its own small PR.** The per-file cap was met by
-  moving code, and the engine kept growing. One aggregate number in CI is the
-  only form that moving code cannot satisfy.
-- **A policy table: only the per-entity half, and only together with the next
-  fix that needs it.** It is small (18 types, six constants), and it would
-  separate the one coupling that shaped three fixes in the measured period.
-  It adds lines; it does not remove any.
+- **The size budget: possible, but only as a ceiling that a PR raises by
+  hand.** The per-file cap was met by moving code, and the engine kept
+  growing. An aggregate number makes that visible in every diff. It is not a
+  ratchet: every qualifying fix would raise it.
+- **A policy table: no.** Deriving today's constants from one record changes
+  no reader, so it separates no coupling; it restates the same facts in about
+  70 more lines. The one coupling worth separating needs a single extra field
+  on an existing entry, inside the fix that first needs it.
 - **A per-action table, a completeness test, and generic delete-versus-update
   code: no.** In the measured period no action type and no entity type was
-  added, so "a new key silently took a default" has no observed instance. The
-  growth came from new dimensions and from procedural code for tasks, which a
-  table does not hold.
+  added, so "a new key silently took a default" has no observed instance.
+- **What neither idea reaches:** the growth came from new mechanisms and from
+  procedural code for tasks (66 `'TASK'` branches). Neither a table nor a
+  budget makes that part of the next fix cheaper.
 
 Every figure below is marked _measured_ (reproduced on `954256d` in this
 session, commands in [Reproducing the numbers](#reproducing-the-numbers)) or
@@ -86,9 +88,14 @@ Three more facts about that growth, all measured:
   2026-11-04 by #11474), `scope-bulk-archive-payload.util.ts` (54) and
   `collect-deleted-ids.util.ts` (59). With them the engine is 29 files, 12,712
   physical lines, 9,253 non-blank non-comment lines.
-- **No key arrived.** `ActionType` has 147 members at both commits with no
-  member added or removed, and `ENTITY_TYPES` is unchanged. The last entity
-  type, `SECTION`, was added on 2026-09-23, before the period.
+- **No action or entity key arrived.** `ActionType` has 147 members at both
+  commits with no member added or removed, `ENTITY_TYPES` is unchanged, and no
+  persistent action creator was added.
+- **Field keys did arrive.** `Task.wontDoOn` (#10936, 2026-10-19) needed a new
+  engine constant, `OPTIONAL_TASK_FIELDS_AFTER_V19_2`, and was caught at
+  compile time by the `satisfies` list. `TaskRepeatCfg` gained two fields, and
+  three delete payloads gained an optional member (`note`, `simpleCounter`,
+  the tag marker).
 
 ### Inventory of policy constants
 
@@ -100,20 +107,20 @@ a key gets by not being listed.
 
 **Keyed by entity type (6).**
 
-| Constant (file)                                                                                  | Members today                      | Switches                                                                                                       | Read by                                                                                                                                                                     | Absent means                                                 |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `RECREATE_FALLBACK` (`core/recreate-fallback.const.ts:89`)                                       | TASK, PROJECT, TAG, SIMPLE_COUNTER | (1) defaults backfilled when an LWW update recreates a deleted entity; (2) admission to field-patch resolution | `lww-update.meta-reducer.ts:941`; `conflict-local-win-ops.service.ts:114`; `conflict-field-patch.util.ts:523`; `auto-fix-typia-errors.ts` (TASK and SIMPLE_COUNTER by name) | No backfill; whole-entity LWW instead of field patches       |
-| `MERGED_SNAPSHOT_TYPES` (`conflict-field-patch.util.ts:310`)                                     | TASK_REPEAT_CFG                    | Per-field resolution re-sent as one full replace snapshot                                                      | `conflict-local-win-ops.service.ts:112`                                                                                                                                     | Field patch if in `RECREATE_FALLBACK`, else whole-entity LWW |
-| `PATCH_SNAPSHOT_OPTIONAL_FIELDS` (`lww-snapshot-patch-mode.util.ts:26`)                          | SIMPLE_COUNTER                     | A whole-entity snapshot is sent as a patch, because a required field is named like an envelope key             | same file, `asPatchSnapshotIfTypeShadowed`                                                                                                                                  | Snapshot sent as `replace`                                   |
-| `ARRAY_RECREATE_UNSAFE_ENTITY_TYPES` (`lww-update.meta-reducer.ts:548`)                          | REMINDER                           | Recreate-append of an array entity is skipped                                                                  | same file, `applyArrayEntityLwwUpdate`                                                                                                                                      | Array item is recreated                                      |
-| `LIST_ROUTED_FIELDS` (`reorder-conflict.util.ts:68`)                                             | NOTE, SECTION                      | Which entity fields move an entity between ordered lists, so do not commute with a reorder                     | same file (3 sites)                                                                                                                                                         | Every field commutes with every reorder                      |
-| `RECREATE_REPLAY_REDUCERS` (`replay-update-on-recreated-entity.util.ts:36`, outside the pattern) | SIMPLE_COUNTER                     | Winning semantic updates are replayed through the feature reducer onto the recreated entity                    | `conflict-entity-state.service.ts:203`                                                                                                                                      | Update payload is read as fields                             |
+| Constant (file)                                                                                  | Members today                      | Switches                                                                                                       | Read by                                                                                                                                                                     | Absent means                                                            |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `RECREATE_FALLBACK` (`core/recreate-fallback.const.ts:89`)                                       | TASK, PROJECT, TAG, SIMPLE_COUNTER | (1) defaults backfilled when an LWW update recreates a deleted entity; (2) admission to field-patch resolution | `lww-update.meta-reducer.ts:941`; `conflict-local-win-ops.service.ts:114`; `conflict-field-patch.util.ts:523`; `auto-fix-typia-errors.ts` (TASK and SIMPLE_COUNTER by name) | No backfill; whole-entity LWW instead of field patches                  |
+| `MERGED_SNAPSHOT_TYPES` (`conflict-field-patch.util.ts:310`)                                     | TASK_REPEAT_CFG                    | Per-field resolution re-sent as one full replace snapshot                                                      | `conflict-local-win-ops.service.ts:112`                                                                                                                                     | Field patch if in `RECREATE_FALLBACK`, else whole-entity LWW            |
+| `PATCH_SNAPSHOT_OPTIONAL_FIELDS` (`lww-snapshot-patch-mode.util.ts:26`)                          | SIMPLE_COUNTER                     | A whole-entity snapshot is sent as a patch, because a required field is named like an envelope key             | same file, `asPatchSnapshotIfTypeShadowed`                                                                                                                                  | Snapshot sent as `replace`                                              |
+| `ARRAY_RECREATE_UNSAFE_ENTITY_TYPES` (`lww-update.meta-reducer.ts:548`)                          | REMINDER                           | Recreate-append of an array entity is skipped                                                                  | same file, `applyArrayEntityLwwUpdate`                                                                                                                                      | A `replace` recreates the item; a `patch` for an absent item is ignored |
+| `LIST_ROUTED_FIELDS` (`reorder-conflict.util.ts:68`)                                             | NOTE, SECTION                      | Which entity fields move an entity between ordered lists, so do not commute with a reorder                     | same file (3 sites)                                                                                                                                                         | Every field commutes with every reorder; LWW rows count as unrouted     |
+| `RECREATE_REPLAY_REDUCERS` (`replay-update-on-recreated-entity.util.ts:35`, outside the pattern) | SIMPLE_COUNTER                     | Winning semantic updates are replayed through the feature reducer onto the recreated entity                    | same file `:52`, via `conflict-entity-state.service.ts:203`                                                                                                                 | Update payload is read as fields                                        |
 
 **Keyed by action type (9).**
 
 | Constant (file)                                                                       | Members today                                                               | Switches                                                 | Read by                                                                                        | Absent means                             |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `INDEPENDENT_MULTI_DELETE_ACTIONS` (`conflict-resolution.util.ts:342`)                | `deleteTasks`, `deleteTags`, `deleteTaskRepeatCfgs`, `deleteSimpleCounters` | Bulk delete is narrowed to the surviving ids             | `conflict-resolution-planner.service.ts` (4 sites); `conflict-bulk-preservation.service.ts:73` | Fail-closed stop                         |
+| `INDEPENDENT_MULTI_DELETE_ACTIONS` (`conflict-resolution.util.ts:342`)                | `deleteTasks`, `deleteTags`, `deleteTaskRepeatCfgs`, `deleteSimpleCounters` | Bulk delete is narrowed to the surviving ids             | `conflict-resolution-planner.service.ts` (3 sites); `conflict-bulk-preservation.service.ts:73` | Fail-closed stop                         |
 | `DECOMPOSABLE_MULTI_ACTION_FIELDS` (`conflict-resolution.util.ts:274`)                | `roundTimeSpentForDay`                                                      | Per-task deltas of a bulk row are replayed independently | `conflict-resolution-planner.service.ts:265`, `:531`                                           | Fail-closed stop                         |
 | `SCOPED_PLAN_MULTI_ACTIONS` (`preserve-partial-bulk-plan.util.ts:40`)                 | `planTasksForToday`, `planDeadlineTasksForToday`                            | Rejected plan row is replaced by one narrowed copy       | same file; `conflict-bulk-preservation.service.ts:399`; `isResolvableTodayListAction`          | Fail-closed stop                         |
 | `ORDERING_ONLY_MULTI_ACTIONS` (`conflict-resolution.util.ts:374`)                     | `moveTaskInTodayTagList`, `removeTasksFromTodayTag`                         | Row is rejected with no replacement                      | `isResolvableTodayListAction`                                                                  | Fail-closed stop                         |
@@ -169,18 +176,23 @@ cross-entity, not a reminder field and not time.
 ### Couplings
 
 1. **`RECREATE_FALLBACK` means two things** (documented in its header): the
-   backfill on recreate, and admission to field patches. Three fixes in the
-   period were shaped by it, each by adding a mechanism next to the table
-   instead of an entry: #10452 kept NOTE out and put the whole note in the
-   delete payload; #10958 added `MERGED_SNAPSHOT_TYPES` for TASK_REPEAT_CFG
-   "because released receivers lack an entry for it"; #11474 and #11504 added
-   `wholeEntityKeys` and the replay reducers for SIMPLE_COUNTER. The comment at
+   backfill on recreate, and admission to field patches. Two fixes in the
+   period mention it. #10452 kept NOTE out ("No NOTE RECREATE_FALLBACK") and
+   put the whole note in the delete payload; a defaults backfill could not
+   have restored the note's content, so the snapshot was needed either way.
+   #10958 first added a TASK_REPEAT_CFG entry and then replaced it with
+   `MERGED_SNAPSHOT_TYPES`, because released receivers lack the backfill, which
+   separating the two meanings would not change. The comment at
    `lww-update.meta-reducer.ts:544` rejects an entry for REMINDER for the same
-   reason. The coupling is recorded in prose in three files and in no type.
+   reason. The coupling is recorded in prose in three files and in no type,
+   but no fix in the period was blocked or made larger by it.
 2. **The stop is defined by exclusion.** `_assertMultiEntityPlansAreSafe`
-   (`conflict-resolution-planner.service.ts:500–578`) admits what is in four
+   (`conflict-resolution-planner.service.ts:506–578`) admits what is in four
    sets plus two inline checks, with different lists for the remote and the
-   local side. The class of an action is the first set that names it.
+   local side (`DECOMPOSABLE_MULTI_ACTION_FIELDS` gates the local side only).
+   The class of an action is the first set that names it. The same error is
+   also thrown for reorders without causal proof in
+   `superseded-operation-resolver.service.ts:694` and `:1022`.
 3. **`REORDERS`, `PATCHES`, `REISSUED_REORDER_DELETES` and
    `LIST_ROUTED_FIELDS`** only make sense together, and already sit in one file
    with a spec that classifies fields.
@@ -196,11 +208,11 @@ cross-entity, not a reminder field and not time.
   merged-snapshot types, 13 have no reorder action, 16 have no delete-wins
   classifier. Only TASK, NOTE and SIMPLE_COUNTER deletes can carry the entity.
 - **Per multi-entity action:** 26 production action creators can declare more
-  than one entity id (_measured_: `entityIds:` in `*.actions.ts`). 17 have a
+  than one entity id (_measured_: `entityIds:` in `*.actions.ts`). 16 have a
   path for at least some crossings: 4 independent deletes, the bulk archive, 2
-  scoped plans, 2 ordering-only, round time, 5 reorders, the cross-section
-  move and the project move with subtasks. 9 default to the stop:
-  `updateTasks`, which has live callers, and 8 for which
+  scoped plans, 2 ordering-only, round time, 5 reorders and the cross-section
+  move. 10 default to the stop: `updateTasks` and `updateTask` with
+  `projectMoveSubTaskIds`, which both have live callers, and 8 for which
   [the 2026-09-26 audit](2026-09-26-sync-remaining-conflict-actions-audit.md)
   found no dispatch route (not re-verified here).
 - **Per action type in general:** 110 of 147 are named nowhere in the family
@@ -208,12 +220,14 @@ cross-entity, not a reminder field and not time.
 
 ### Where the fixes went
 
-Of the 34 fixes, 7 edited the members of an existing set or map (_measured_
-with `git log -L` on eleven declarations: `REORDERS` three times, `PATCHES`
-twice, and one each for `RECREATE_FALLBACK`, `REISSUED_REORDER_DELETES`,
-`MERGED_SNAPSHOT_TYPES` and `TIMELESS_OPAQUE_TASK_ACTIONS`; some commits edit
-two). The others added procedural code or a new constant. Six constants have
-exactly one member: each is a named special case, not a classification.
+Of the 34 fixes, 2 edited the members of an existing set or map (#10294 and
+#10364, both `REORDERS`/`PATCHES`) and 1 added a property to an existing entry
+(#11504, `wholeEntityKeys`). 4 created a new constant (`reorder-conflict.util.ts`
+itself in #10275, `REISSUED_REORDER_DELETES`, `MERGED_SNAPSHOT_TYPES`,
+`TIMELESS_OPAQUE_TASK_ACTIONS`). _Measured_ with `git log -L` on eleven
+declarations and corrected in review. The others added procedural code. Six
+constants have exactly one member: each is a named special case, not a
+classification.
 
 The delete-versus-update fixes are the task's example of repeated work. They
 used three mechanisms, not one (_measured_ from `git show --numstat`,
@@ -239,8 +253,12 @@ E2E and specs that rule 12 requires for any path.
   TAG, PROJECT, TASK_REPEAT_CFG, REMINDER, SECTION, BOARD and ISSUE_PROVIDER
   are therefore guarded by unit specs, integration specs and E2Es, not by
   traces.
-- **Stops:** `unsupported-multi-entity-conflict.integration.spec.ts` and
-  `reorder-conflict-wedge.integration.spec.ts` pin the stops that remain.
+- **Stops:** `unsupported-multi-entity-conflict.integration.spec.ts` pins the
+  bulk-archive stop and one legacy action (`addTagToTask`);
+  `reorder-conflict-wedge.integration.spec.ts` pins reorder stops. The stops
+  of `updateTasks` and of the project move with subtasks, both with live
+  callers, have no pinning spec (_measured_: the spec's `CASES` list has one
+  entry).
 - **Completeness checks that exist today:** the entity registry spec, the
   `satisfies` field lists, the reorder field classification, and the
   `ActionType` member count (`action-types.enum.spec.ts`).
@@ -296,16 +314,24 @@ REMINDER:        { recreate: null, updateVsUpdate: 'whole', arrayRecreate: 'skip
   deep-equals today's literal. Readers are untouched, so equal data is equal
   behaviour, for every entity type, including those the fuzz traces do not
   reach.
-- **Risk:** low for outcomes. The real risk is in the sketch above:
-  `updateVsUpdate: 'patch'` with `recreate: null` must stay unrepresentable or
-  rejected by a spec, because the field patch relies on the recreate backfill
-  (coupling 1).
-- **What it buys:** coupling 1 becomes two fields. A later, separately
-  justified fix could give NOTE a backfill without admitting it to patches,
-  which today needs a new mechanism each time. It buys nothing for the 66
-  `'TASK'` branches or for the task field lists.
+- **What it does not buy:** it does not separate coupling 1. All three readers
+  test the same expression, `RECREATE_FALLBACK[entityType]`
+  (`lww-update.meta-reducer.ts:941`, `conflict-local-win-ops.service.ts:114`,
+  `conflict-field-patch.util.ts:523`). While the constants are derived and the
+  readers unchanged, `updateVsUpdate: 'patch'` is the same fact as
+  `recreate != null`, written twice. Separating them means editing the two
+  patch readers, and that edit is the non-neutral change a fix would make
+  anyway.
+- **The sketch is also too coarse:** `supersededPatchFields` does not consult
+  `MERGED_SNAPSHOT_TYPES`, so `'merged-snapshot'` describes one of two paths,
+  and `'whole'` leaves out the disjoint merge that applies both sides for any
+  type (`conflict-detection.service.ts:328`).
 - **What it costs:** the engine grows by about 70 lines, and one more file
   must be read before the readers make sense.
+- **The smaller form of the same idea:** one boolean on the existing
+  `RecreateFallback` entry, read at `:114` and `:523`, added by the fix that
+  first needs backfill and patch admission to differ. A few lines, no new
+  file.
 
 ### (c) Generic code paths driven by the table
 
@@ -328,15 +354,15 @@ per-type residue is the hooks listed above.
 
 ### Comparison
 
-| Aspect                       | (a) Completeness test | (b) Entity record                | (b) Action record        | (c) Generic paths                 |
-| ---------------------------- | --------------------- | -------------------------------- | ------------------------ | --------------------------------- |
-| Production lines (estimated) | 0                     | +70 net                          | +90 net                  | −30 for the neutral part          |
-| Spec lines (estimated)       | +120 to +180          | +40                              | +60                      | existing specs must be re-pointed |
-| Behaviour-neutral            | Yes                   | Yes, by equality spec            | Yes, by equality spec    | Only the hook part                |
-| Removes a coupling           | No                    | Coupling 1                       | Makes coupling 2 legible | Coupling 5                        |
-| Observed instance it answers | None in the period    | 3 fixes routed around coupling 1 | None                     | None for the neutral part         |
-| Guarded by the 60 traces     | n/a                   | TASK, NOTE, habit entries only   | Partly                   | Task and note deletes only        |
-| Shrinks the engine           | No                    | No                               | No                       | Marginally                        |
+| Aspect                       | (a) Completeness test | (b) Entity record              | (b) Action record        | (c) Generic paths                 |
+| ---------------------------- | --------------------- | ------------------------------ | ------------------------ | --------------------------------- |
+| Production lines (estimated) | 0                     | +70 net                        | +90 net                  | −30 for the neutral part          |
+| Spec lines (estimated)       | +120 to +180          | +40                            | +60                      | existing specs must be re-pointed |
+| Behaviour-neutral            | Yes                   | Yes, by equality spec          | Yes, by equality spec    | Only the hook part                |
+| Removes a coupling           | No                    | None without reader edits      | Makes coupling 2 legible | Coupling 5                        |
+| Observed instance it answers | None in the period    | None                           | None                     | None for the neutral part         |
+| Guarded by the 60 traces     | n/a                   | TASK, NOTE, habit entries only | Partly                   | Task and note deletes only        |
+| Shrinks the engine           | No                    | No                             | No                       | Marginally                        |
 
 ## An engine-wide size budget
 
@@ -348,8 +374,10 @@ above) would have to raise a cap or open a new file.
 
 **What to count** (recommended):
 
-- **An explicit file list**, not a name pattern: the 26 family files plus the
-  three helpers the pattern misses (29 files).
+- **An explicit file list**, not a name pattern: the 26 family files, the
+  three helpers the pattern misses, and
+  `packages/sync-core/src/entity-frontier.ts` (86 lines, the delete-wins
+  frontier guard): 30 files.
 - **A second, complete assignment** so a new file cannot stay outside: every
   non-spec `.ts` file directly in `src/app/op-log/sync/` is either on the
   engine list or on an "other" list (transport, encryption, import gate), and
@@ -358,51 +386,73 @@ above) would have to raise a cap or open a new file.
 - **Non-blank, non-comment lines.** Physical lines (what `max-lines` counts by
   default) would reward deleting comments, and comments are 22% of the family
   (_measured_: 2,745 of 12,537 lines) and the only place the release
-  constraints are written down. The starting value would be 9,253
+  constraints are written down. The starting value would be about 9,310
   (_measured_ with a line-prefix classifier; a real implementation should
-  state its rule and may differ by a few lines).
+  state its rule and take the number from its own count).
 - **Not counted:** specs, test helpers, E2E.
 
-**How to ratchet it.**
+**How it would run.**
 
 - A small Node script in `tools/` with its own test, run from `npm run lint`
   next to `lint:css-vars`, which CI already runs. No dependency is added.
 - One number in the script's config. The check fails when the count is above
-  it, and also when the count is more than 50 lines below it, so a reduction
-  is locked in by the PR that makes it.
-- **The number may go up, by hand, in the PR that needs it.** This is the one
-  place where the budget cannot copy "may only go down": a fix that qualifies
-  under rule 15 adds lines, and a budget that forbids it would be bypassed. A
-  raise is a one-line diff the reviewer sees, with the reason in the PR body.
-  The number is never regenerated by a script
+  it.
+- **The number may go up, by hand, in the PR that needs it.** A fix that
+  qualifies under rule 15 adds lines, so "may only go down" cannot hold for
+  the whole. The number is never regenerated by a script
   ([automation can launder a defect into recorded debt](../hardening-earns-its-place.md#the-three-failure-modes-worth-remembering)).
-- **Known cost:** two open sync PRs that both grow the engine conflict on that
-  one line. With at most five open sync PRs this is a small, real cost; it
-  also means each of them restates the total after a rebase.
+- **Lowering is by hand, not enforced.** A rule that fails when the count is
+  well below the number would lock reductions in, but two PRs that each remove
+  a little pass alone and can fail once both are merged. The per-file caps do
+  not enforce lowering either.
 
-**What the budget does not do.** It does not say which lines are worth having.
+**Its limits, stated plainly.**
+
+- **It is a ceiling, not a ratchet.** It would not have blocked any of the 34
+  fixes; each would have raised it. hardening-earns-its-place.md calls a check
+  with a designed-in bypass "the tell". The difference claimed here is small:
+  the raise is a number in the diff, not a label, so growth is reviewed once
+  per PR instead of once per architecture review.
+- **Code can still move out.** The assignment rule covers one directory. Of
+  #11505's 182 production lines, 19 went to `tag.actions.ts` and
+  `op-log/apply/`; of #11474's 110, 29 went to feature and plugin files
+  (_measured_ by the reviewer). Those are where the action payloads live and
+  cannot be listed.
+- **Two growing PRs conflict on one line.** With at most five open sync PRs
+  this is a small, real cost.
+
+**The cheaper alternative.** No CI check: the sync PR's "Review" section
+states the engine count before and after, taken from one documented command.
+It costs nothing to build and relies on the review step being followed.
 It makes growth a visible, reviewed number instead of a property nobody
 measures between architecture reviews.
 
 ## Recommendation
 
-1. **Add the engine budget as a tools-only PR**, independent of any fix.
-2. **Do the entity half of (b) together with the next fix that would edit an
-   entity-keyed constant**, not as a standalone refactor. A standalone PR has
-   no trigger under rule 15 and takes one of five PR slots for a change that
-   adds lines.
-3. **Do not build (a), the action half of (b), or (c).** Record them here as
-   considered. If a multi-entity action is added, its PR adds the spec that
-   lists the 26 actions with their class, at that point with an instance to
-   justify it.
-4. **Leave alone:** the reorder constants (cohesive, already
-   self-checking), the task field lists (no instance of a new field
-   misclassified), the 66 `'TASK'` branches, the `sync-core` option interface,
-   and decisions D1 to D11.
+1. **Add the engine ceiling as a tools-only PR**, in the weaker form described
+   above, or adopt the no-CI alternative. This is a judgment call (P1): the
+   evidence shows that an unmeasured whole grew; it does not show that a
+   measured one would have grown less.
+2. **Do not build a policy table now.** When a fix needs a type to have the
+   recreate backfill without field patches (or the reverse), add one field to
+   the existing `RecreateFallback` entry and change the two readers in that
+   fix. That is the smallest change that separates coupling 1, and it needs no
+   new file.
+3. **Do not build (a), the action half of (b), or the non-neutral part of
+   (c).** If a multi-entity action is added, its PR adds the spec that lists
+   the 26 actions with their class, at that point with an instance to justify
+   it.
+4. **Record two gaps as issues instead of guards** (not opened by this
+   session): the stops of `updateTasks` and of the project move with subtasks
+   have live callers and no pinning spec; and the task field lists that
+   default by omission have no check when `Task` gains a field.
+5. **Leave alone:** the reorder constants (cohesive, already self-checking),
+   the 66 `'TASK'` branches, the `sync-core` option interface, and decisions
+   D1 to D11.
 
 ### What a first PR would contain and prove
 
-**PR 1, the budget (now).**
+**PR 1, the ceiling (now, if P1 is yes).**
 
 - Contains: `tools/check-sync-engine-budget.js`, its test in `test:tools`, the
   two file lists, the starting number, one line in the `lint` script, and two
@@ -412,26 +462,21 @@ measures between architecture reviews.
   a fixture and expects both failures) and passes on master.
 - Touches no file under `src/` or `packages/`.
 
-**PR 2, the entity record (with the next qualifying fix).**
-
-- First commit, behaviour-neutral: the record, the six constants derived from
-  it under their current names, and the equality spec. Proven by that spec,
-  the unchanged family specs, the 60 pinned traces and
-  `npm run sync-fuzz:compare` showing no new signature.
-- Second commit: the fix itself, under the usual rules 12 to 16.
-- Raises the budget by the measured amount.
+**Not a PR: the `RecreateFallback` field.** It lands inside the first fix that
+needs it, under rules 12 to 16, and is not behaviour-neutral by itself because
+it exists to give one type a different outcome.
 
 ### Decisions needed from @johannesjo
 
-| #   | Question                                                               | Default if unanswered                                                                                                   |
-| --- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| P1  | Add an engine-wide budget to CI?                                       | Yes, as PR 1                                                                                                            |
-| P2  | What does it count?                                                    | Non-blank, non-comment lines of an explicit 29-file list; a new file in the directory must be assigned                  |
-| P3  | May the number go up?                                                  | Yes, by hand in the PR that needs it, reason in the PR body; it must be lowered after a reduction of more than 50 lines |
-| P4  | Per-entity policy record?                                              | Only with the next fix that edits an entity-keyed constant                                                              |
-| P5  | Completeness test or per-action record?                                | No. Revisit when a multi-entity action or an entity type is added                                                       |
-| P6  | Generic delete-versus-update for the id-only types?                    | No. Each further type needs its own report (rule 15)                                                                    |
-| P7  | Does a behaviour-neutral engine refactor count toward the five-PR cap? | Yes                                                                                                                     |
+| #   | Question                                                           | Default if unanswered                                                                                  |
+| --- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| P1  | Engine-wide number: CI ceiling, a line in the PR body, or neither? | CI ceiling, as PR 1                                                                                    |
+| P2  | What does it count?                                                | Non-blank, non-comment lines of an explicit 30-file list; a new file in the directory must be assigned |
+| P3  | May the number go up?                                              | Yes, by hand in the PR that needs it, with the reason in the PR body. Lowering is by hand too          |
+| P4  | Policy table or record?                                            | No. One field on `RecreateFallback` inside the first fix that needs the two meanings apart             |
+| P5  | Completeness test or per-action record?                            | No. Revisit when a multi-entity action or an entity type is added                                      |
+| P6  | Generic delete-versus-update for the id-only types?                | No. Each further type needs its own report (rule 15)                                                   |
+| P7  | Open issues for the two gaps in recommendation 4?                  | Yes, as issues without a fix, per fix intake                                                           |
 
 ## Reproducing the numbers
 
@@ -458,11 +503,15 @@ git log --format='%h %s' -L'/export const RECREATE_FALLBACK/,/^};/:src/app/op-lo
 ## Missing evidence
 
 - **Whether a table would have shortened any of the 34 fixes.** Only a proxy
-  was measured (7 edited an existing set). Nobody has timed a fix or its
-  review.
-- **A bug caused by coupling 1.** Three fixes were designed around it; none
-  was found that tripped over it. That supports "do it with the next fix", not
-  "do it now".
+  was measured (2 edited the members of an existing set). Nobody has timed a
+  fix or its review.
+- **A bug or a blocked fix caused by coupling 1.** None was found. Two fixes
+  mention the coupling and chose another mechanism for reasons a separation
+  would not have removed.
+- **A task field misclassified by omission.** `wontDoOn` arrived in the period
+  and is absent from `CROSS_ENTITY_TASK_FIELDS`, `REMINDER_FIELDS` and
+  `PLAIN_TASK_FIELDS`. Whether that omission is correct for each list was not
+  checked.
 - **Release inclusion.** The clone has no tags, so which of the period's
   commits are in v20.0.0 was not checked. Nothing above depends on it.
 - **The audit's "no dispatch route" findings** for 8 multi-entity actions are
@@ -477,5 +526,36 @@ git log --format='%h %s' -L'/export const RECREATE_FALLBACK/,/^};/:src/app/op-lo
 
 ## Review record
 
-Filled in after the fresh-context challenge (see the end of this document's
-history in the PR or commit message).
+One fresh-context subagent was asked on 2026-11-10 to refute the draft against
+the code and history. It confirmed the size, commit, enum and lint-rule
+measurements. What changed because of it:
+
+- **Recommendation on the table reversed.** The draft recommended an entity
+  record "with the next fix" on the grounds that it separates coupling 1. The
+  review showed that all three readers test the same expression, so a record
+  with derived constants separates nothing until the readers change. The
+  recommendation is now a one-field extension of `RecreateFallback`, and only
+  when a fix needs it.
+- **"Shaped three fixes" withdrawn.** Only #10958 and #10452 mention the
+  coupling, and neither would have been avoided by separating it.
+- **"7 fixes edited an existing set" corrected to 2**, plus one that added a
+  property. Four of the seven commits created the constant they were counted
+  for.
+- **Multi-entity split corrected from 17/9 to 16/10.** The project move with
+  subtasks has no admission in the gate. The stop is also thrown in the
+  superseded-operation resolver, and the pinning spec covers one legacy action
+  and the archive case, not `updateTasks` or the project move.
+- **"No key arrived" narrowed** to action and entity types. Fields did arrive
+  (`Task.wontDoOn`), and the `SECTION` date was a shallow-clone artefact and
+  is removed.
+- **Budget weakened from a ratchet to a ceiling.** The forced-lowering rule is
+  dropped (two reducing PRs could fail after merging), the bypass objection and
+  the leak into feature files are stated, `entity-frontier.ts` is added to the
+  list, and a no-CI alternative is offered.
+- Three line anchors and three "absent means" cells corrected.
+
+Not taken up: the review's point that the recommendation leaves the procedural
+task code, the largest part of the growth, untouched. That is true and is now
+said in the short answer; reducing it is the subject of
+[protocol-change-options.md](../sync-and-op-log/protocol-change-options.md),
+whose decisions this evaluation does not reopen.
