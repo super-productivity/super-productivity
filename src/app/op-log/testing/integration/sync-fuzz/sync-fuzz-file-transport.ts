@@ -23,6 +23,11 @@ import { StoredOperation } from './fake-super-sync-server';
  */
 export interface FileTransportOptions {
   split?: boolean;
+  /**
+   * Whose rules the adapter applies (default WebDAV). Dropbox and OneDrive add
+   * the cheap rev pre-check that skips the download of an unchanged file.
+   */
+  providerId?: SyncProviderId;
 }
 
 /** What the runner reads from the "server": the ops and snapshots that reached the wire. */
@@ -33,7 +38,7 @@ export interface TransportLog {
 }
 
 export class FileTransport {
-  readonly provider = new MockFileProvider(SyncProviderId.WebDAV);
+  readonly provider: MockFileProvider;
   readonly log: TransportLog;
   private readonly _rows: StoredOperation[] = [];
   private readonly _rejections: TransportLog['rejections'] = [];
@@ -41,6 +46,7 @@ export class FileTransport {
   private _writes = 0;
 
   constructor(private readonly _options: FileTransportOptions = {}) {
+    this.provider = new MockFileProvider(_options.providerId ?? SyncProviderId.WebDAV);
     const writes = (): number => this._writes;
     this.log = {
       rows: this._rows,
