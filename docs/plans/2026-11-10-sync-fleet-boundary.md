@@ -1,6 +1,7 @@
 # Bounding the released fleet: version floor, checkpoints and one file format
 
-> **Status: Proposed.** Evaluation only, no decision. Nothing here is built.
+> **Status: Planned.** The maintainer accepted the recommendation and the
+> defaults F1–F9 on 2026-11-10. Nothing here is built yet.
 >
 > **Owner:** @johannesjo. **Tracking:**
 > [#10397](https://github.com/super-productivity/super-productivity/issues/10397)
@@ -518,9 +519,12 @@ SuperSync, and enforcing it would stop devices for nothing.
 
 ### Decisions needed from @johannesjo
 
-Each has the default this note proposes. None is decided.
+@johannesjo answered the recommendation on 2026-11-10 with "Do as recommend".
+The defaults below are therefore the decisions, and recommendations 1 to 8
+are the plan. Nothing in F1 to F7 is built by that answer: each still waits
+for the evidence its recommendation names.
 
-| #   | Question                                                     | Default                                                                                                                                                                                                            |
+| #   | Question                                                     | Decided                                                                                                                                                                                                            |
 | --- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | F1  | Fleet-wide or per-account floor?                             | Fleet-wide (E1). Per-account only if a generation migration is ever chosen                                                                                                                                         |
 | F2  | Floor value and threshold                                    | No lower than v19.2.0, and the release with the receiver rule if checkpoints are the payoff. Enforce when under 5% of 30-day-active devices are older, from `sync_devices`, cross-checked with the count-only gate |
