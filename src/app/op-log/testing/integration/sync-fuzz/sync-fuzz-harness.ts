@@ -176,7 +176,7 @@ import { OperationSyncCapable } from '../../../sync-providers/provider.interface
  * - state replacements: the force upload and the backup import run the real
  *   services, and a step answers the SYNC_IMPORT conflict dialog and the
  *   whole-dataset conflict dialog after a stop (DialogSyncConflictComponent,
- *   see _answerStopDialog; a stop left unanswered is its cancel). Not run:
+ *   see _answerDataConflict; a stop left unanswered is its cancel). Not run:
  *   cancelling the SYNC_IMPORT dialog as an answer, the
  *   server-migration confirm (closed unanswered), encryption changes and
  *   password changes (they need SyncWrapperService, the provider manager and
