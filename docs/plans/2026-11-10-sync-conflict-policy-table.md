@@ -468,6 +468,13 @@ it exists to give one type a different outcome.
 
 ### Decisions needed from @johannesjo
 
+Answered in the evaluation session on 2026-11-10 ("Do it", in reply to the
+recommendation to build nothing except the cheapest form of the size number):
+P1 is the line in the PR body, not a CI ceiling, now described in
+[contributor-sync-model.md](../sync-and-op-log/contributor-sync-model.md#conflict-resolution--stay-on-generic-paths);
+P2 and P3 follow from it; P4 to P6 as defaulted; P7 yes, opened as #11669 and
+#11670. A CI ceiling comes back only if the stated number keeps climbing.
+
 | #   | Question                                                           | Default if unanswered                                                                                  |
 | --- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | P1  | Engine-wide number: CI ceiling, a line in the PR body, or neither? | CI ceiling, as PR 1                                                                                    |

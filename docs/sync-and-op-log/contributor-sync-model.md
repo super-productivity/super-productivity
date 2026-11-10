@@ -243,7 +243,26 @@ added (measured 2026-09 in
    Admitting an action or removing a safety stop without that proof is not a
    fix (#10264). The `max-lines` cap on
    `conflict-resolution.service.ts` in `eslint.config.js` only goes down, but
-   its `*.util.ts` helpers are uncapped.
+   its `*.util.ts` helpers are uncapped, so the cap was met by moving code. A
+   PR that touches the conflict engine therefore states the engine's
+   non-blank, non-comment line count on its base and on its head in the PR
+   body's "Review" section (9,318 on 2026-11-10, measured with):
+
+   ```bash
+   git ls-files 'src/app/op-log/sync/conflict-*.ts' 'src/app/op-log/sync/lww-*.ts' \
+     'src/app/op-log/sync/superseded-*.ts' 'src/app/op-log/sync/reorder-*.ts' \
+     'src/app/op-log/sync/section-conflict-*.ts' \
+     src/app/op-log/sync/{fold-sync-time-spent,time-preserving-task-snapshot,preserve-partial-bulk-plan,bulk-archive-intent,replay-update-on-recreated-entity,scope-bulk-archive-payload,collect-deleted-ids}.util.ts \
+     src/app/op-log/sync/rejected-ops-handler.service.ts \
+     src/app/op-log/core/recreate-fallback.const.ts \
+     src/app/root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer.ts \
+     packages/sync-core/src/{conflict-resolution,entity-frontier}.ts ':!*.spec.ts' \
+     | xargs cat | grep -cvE '^\s*($|//|/\*|\*)'
+   ```
+
+   A new engine helper whose name matches none of these patterns is added to
+   the command in the same PR.
+
 2. **Don't add denormalized lists or undeclared cross-entity writes.** Store
    the fact on the child (`task.dueDay`, `task.parentId`, `note.projectId`) and
    derive the list, as `TODAY_TAG` does
