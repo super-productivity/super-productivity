@@ -116,8 +116,16 @@ in mind:
   the less that column says.
 - The file transport is sequential like the rest of the harness: it exercises
   the file adapter's snapshot, trimming and revision logic, not two uploads
-  racing each other. A restart keeps the adapter's in-memory revision state,
-  so restart oracles do not cover reloading it.
+  racing each other. A restart (`r`) keeps the adapter's in-memory revision
+  state, so restart oracles do not cover reloading it; only a kill reloads it.
+- A kill (`x` on a step, `killProbability` for generated traces; file
+  transport only) fails the x-th durable write of that step's sync and every
+  later one, then restarts the device with the adapter's persisted state
+  reloaded. Durable writes are read-write database transactions, the adapter's
+  cursor state and remote uploads; an upload counts twice, so a kill can fall
+  between its landing and the response. A sweep with kills is not comparable to one
+  without: a killed sync also changes the order later syncs run in, so replay
+  the shrunk trace without its `x` before blaming the kill.
 
 ## Verification
 

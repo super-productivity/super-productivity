@@ -134,6 +134,7 @@ import {
 import {
   FileTransport,
   FileTransportOptions,
+  FuzzKillError,
   TransportLog,
 } from './sync-fuzz-file-transport';
 import { OperationSyncCapable } from '../../../sync-providers/provider.interface';
@@ -407,7 +408,8 @@ export interface FuzzDevice {
    */
   clientId: string;
   clientIdStale?: boolean;
-  readonly client: OperationSyncCapable;
+  /** Replaced when a killed device restarts with its adapter state reloaded. */
+  client: OperationSyncCapable;
   readonly db: IndexedDbOpLogAdapter;
   state: object;
   fields?: FieldValues;
@@ -887,6 +889,52 @@ export class SyncFuzzHarness {
     await this.as(device, () =>
       TestBed.inject(OperationLogHydratorService).hydrateStore(),
     );
+  }
+
+  /**
+   * Syncs `device` (file transport only) and kills the app before the
+   * `atWrite`-th durable write of that sync: that write and every later one
+   * fails. Durable writes are read-write database transactions, the adapter's
+   * cursor state and remote uploads; an upload counts twice, so a kill can
+   * fall between its landing and the response. A killed device restarts from
+   * what was durable, with the adapter's persisted state reloaded, and the
+   * events of the killed sync are dropped (a dead app shows nothing).
+   * Returns whether the sync got as far as that write.
+   */
+  async syncKilled(device: FuzzDevice, atWrite: number): Promise<boolean> {
+    const transport = this.fileTransport;
+    if (!transport) throw new Error('SyncFuzz: a kill needs the file transport');
+    const eventCount = this.events.length;
+    let writes = 0;
+    const gate = (): void => {
+      if (++writes >= atWrite) throw new FuzzKillError('killed mid-sync');
+    };
+    const openTransaction = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (
+      this: IDBDatabase,
+      ...args: Parameters<IDBDatabase['transaction']>
+    ): IDBTransaction {
+      if (args[1] === 'readwrite') gate();
+      return openTransaction.apply(this, args);
+    };
+    transport.writeGate = gate;
+    transport.hasLanded = false;
+    try {
+      await this.sync(device);
+    } finally {
+      IDBDatabase.prototype.transaction = openTransaction;
+      transport.writeGate = undefined;
+    }
+    const isKilled = writes >= atWrite;
+    if (isKilled) {
+      // A dead process reports no error, but a dialog it answered was answered.
+      const kept = this.events.slice(eventCount).filter((e) => e.kind !== 'sync-error');
+      this.events.length = eventCount;
+      this.events.push(...kept);
+      device.client = transport.reloadClient(device.client);
+      await this.restart(device);
+    }
+    return isKilled;
   }
 
   /** Compacts the device's op log: a state-cache snapshot, then pruning. */

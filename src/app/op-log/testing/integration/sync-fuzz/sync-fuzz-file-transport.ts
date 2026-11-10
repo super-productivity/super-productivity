@@ -30,6 +30,14 @@ export interface FileTransportOptions {
   providerId?: SyncProviderId;
 }
 
+/** Thrown by every durable write of a device the harness has killed mid-sync. */
+export class FuzzKillError extends Error {
+  override name = 'FuzzKillError';
+}
+
+// The one key FileBasedSyncAdapterService persists its cursor state under.
+const ADAPTER_STATE_KEY = 'FILE_SYNC_VERSION_state';
+
 /** What the runner reads from the "server": the ops and snapshots that reached the wire. */
 export interface TransportLog {
   readonly rows: StoredOperation[];
@@ -44,9 +52,40 @@ export class FileTransport {
   private readonly _rejections: TransportLog['rejections'] = [];
   // An accepted upload or snapshot moves the file; a download does not.
   private _writes = 0;
+  /**
+   * Called before every durable write of the syncing device's adapter (remote
+   * upload or removal, cursor state), and again once an upload has landed; a
+   * throw fails the write, or loses the response of a landed upload.
+   */
+  writeGate?: () => void;
+  /**
+   * Whether an upload reached the sync file since this was last reset (by
+   * every adapter upload call, and by the harness before a killed sync).
+   */
+  hasLanded = false;
+  private readonly _clients = new WeakMap<
+    OperationSyncCapable,
+    { injector: EnvironmentInjector; durable: { state: string | null } }
+  >();
 
   constructor(private readonly _options: FileTransportOptions = {}) {
     this.provider = new MockFileProvider(_options.providerId ?? SyncProviderId.WebDAV);
+    const upload = this.provider.uploadFile.bind(this.provider);
+    this.provider.uploadFile = async (...args) => {
+      this.writeGate?.();
+      const response = await upload(...args);
+      // The backup copy is written first and holds no new ops.
+      // shortcut: any other file counts for the whole upload — track files
+      // separately if kills are ever run with `split`.
+      if (!args[0].endsWith('.bak')) this.hasLanded = true;
+      this.writeGate?.();
+      return response;
+    };
+    const remove = this.provider.removeFile.bind(this.provider);
+    this.provider.removeFile = async (...args) => {
+      this.writeGate?.();
+      return remove(...args);
+    };
     const writes = (): number => this._writes;
     this.log = {
       rows: this._rows,
@@ -64,6 +103,23 @@ export class FileTransport {
    * localStorage key; clearing it first stops a new device inheriting another's.
    */
   createClient(injector: EnvironmentInjector): OperationSyncCapable {
+    return this._createClient(injector, null);
+  }
+
+  /**
+   * The adapter of `client`'s device after an app restart: a new adapter
+   * service that loads the cursor state the old one last persisted.
+   */
+  reloadClient(client: OperationSyncCapable): OperationSyncCapable {
+    const known = this._clients.get(client);
+    if (!known) throw new Error('SyncFuzz: not a client of this file transport');
+    return this._createClient(known.injector, known.durable.state);
+  }
+
+  private _createClient(
+    injector: EnvironmentInjector,
+    persistedState: string | null,
+  ): OperationSyncCapable {
     const config = {
       sync: () => ({ isUseSplitSyncFiles: this._options.split === true }),
     } as unknown as GlobalConfigService;
@@ -72,17 +128,29 @@ export class FileTransport {
       parent: injector,
     });
     this._clearPersistedAdapterState();
+    if (persistedState !== null) localStorage.setItem(ADAPTER_STATE_KEY, persistedState);
     const service = runInInjectionContext(
       scoped as EnvironmentInjector,
       () => new FileBasedSyncAdapterService(),
     );
+    // Devices share localStorage, so what each adapter persisted is kept here.
+    const durable = { state: persistedState };
+    const internals = service as unknown as { _persistState: () => void };
+    const persist = internals._persistState.bind(service);
+    internals._persistState = () => {
+      this.writeGate?.();
+      persist();
+      durable.state = localStorage.getItem(ADAPTER_STATE_KEY);
+    };
     const adapter = service.createAdapter(
       this.provider,
       { isEncrypt: false, isCompress: false },
       undefined,
     );
     this._clearPersistedAdapterState();
-    return this._recording(adapter);
+    const client = this._recording(adapter);
+    this._clients.set(client, { injector, durable });
+    return client;
   }
 
   private _clearPersistedAdapterState(): void {
@@ -120,22 +188,28 @@ export class FileTransport {
     return {
       ...adapter,
       uploadOps: async (ops, ...rest) => {
-        const response = await adapter.uploadOps(ops, ...rest);
-        this._recordUpload(ops, response);
-        return response;
+        this.hasLanded = false;
+        try {
+          const response = await adapter.uploadOps(ops, ...rest);
+          this._recordUpload(ops, response);
+          return response;
+        } catch (e) {
+          // Killed between the upload landing and its response: the ops are
+          // in the file although the device never learned it.
+          if (e instanceof FuzzKillError && this.hasLanded) {
+            this._recordUpload(ops, {
+              results: ops.map((op) => ({ opId: op.id, accepted: true })),
+            } as OpUploadResponse);
+          }
+          throw e;
+        }
       },
       uploadSnapshot: async (state, clientId, reason, vectorClock, ...rest) => {
         const [schemaVersion, , opId, , opType] = rest;
-        const response: SnapshotUploadResponse = await adapter.uploadSnapshot!(
-          state,
-          clientId,
-          reason,
-          vectorClock,
-          ...rest,
-        );
-        if (response.accepted) this._writes++;
-        // Only a snapshot with an op type replaces state the oracles must know of.
-        if (response.accepted && opType) {
+        const recordAccepted = (): void => {
+          this._writes++;
+          // Only a snapshot with an op type replaces state the oracles must know of.
+          if (!opType) return;
           this._record({
             id: opId,
             clientId,
@@ -147,8 +221,23 @@ export class FileTransport {
             timestamp: Date.now(),
             schemaVersion,
           } as SyncOperation);
+        };
+        this.hasLanded = false;
+        try {
+          const response: SnapshotUploadResponse = await adapter.uploadSnapshot!(
+            state,
+            clientId,
+            reason,
+            vectorClock,
+            ...rest,
+          );
+          if (response.accepted) recordAccepted();
+          return response;
+        } catch (e) {
+          // As for uploadOps: the snapshot is in the file.
+          if (e instanceof FuzzKillError && this.hasLanded) recordAccepted();
+          throw e;
         }
-        return response;
       },
     } as OperationSyncCapable;
   }

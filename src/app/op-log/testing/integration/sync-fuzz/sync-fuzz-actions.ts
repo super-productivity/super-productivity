@@ -89,6 +89,11 @@ export interface FuzzStep {
   c?: 1;
   r?: 1;
   k?: 'L' | 'R';
+  /**
+   * Kill the app before the x-th durable write of this step's sync, then
+   * restart it (SyncFuzzHarness.syncKilled; file transport only).
+   */
+  x?: number;
 }
 
 /** The intents that replace the whole dataset (full-state ops). */
