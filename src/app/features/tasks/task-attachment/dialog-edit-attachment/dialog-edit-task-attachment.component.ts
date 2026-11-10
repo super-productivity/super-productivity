@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -21,10 +21,18 @@ import { MatOption } from '@angular/material/core';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
+import { Store } from '@ngrx/store';
+import { selectTaskEntities } from '../../store/task.selectors';
 
 interface TaskAttachmentSelectType {
   type: TaskAttachmentType;
   title: string;
+}
+
+export interface DialogEditTaskAttachmentData {
+  attachment?: Partial<TaskAttachment>;
+  /** Task the attachment is added to; lets the dialog hint on repeating tasks. */
+  taskId?: string;
 }
 
 // RFC 3986 scheme: ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) followed by ":".
@@ -53,7 +61,18 @@ const HAS_URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 export class DialogEditTaskAttachmentComponent {
   private _matDialogRef =
     inject<MatDialogRef<DialogEditTaskAttachmentComponent>>(MatDialogRef);
-  data = inject(MAT_DIALOG_DATA);
+  private _store = inject(Store);
+  data = inject<DialogEditTaskAttachmentData>(MAT_DIALOG_DATA);
+  private _taskEntities = this._store.selectSignal(selectTaskEntities);
+
+  // Attachments are not part of the repeat config, so one added to an instance
+  // never reaches the next one (#10706, #8745). Say so while adding, not on edit.
+  readonly isShowRepeatInstanceHint = computed(
+    () =>
+      !this.data.attachment?.id &&
+      !!this.data.taskId &&
+      !!this._taskEntities()[this.data.taskId]?.repeatCfgId,
+  );
 
   types: TaskAttachmentSelectType[];
   attachmentCopy: TaskAttachmentCopy;
