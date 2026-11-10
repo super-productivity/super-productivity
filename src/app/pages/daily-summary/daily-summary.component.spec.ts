@@ -337,6 +337,30 @@ describe('DailySummaryComponent', () => {
 
       expect(moveToArchive).toHaveBeenCalledOnceWith([listed, earlier]);
     });
+
+    it('offers History, where the archived tasks can be found again', async () => {
+      const snackOpen = jasmine.createSpy('open');
+      const navigate = jasmine.createSpy('navigate');
+      const receiver = Object.assign(Object.create(DailySummaryComponent.prototype), {
+        workContextService: {
+          doneTasksToArchive$: of([createTask({ id: 'done', isDone: true })]),
+        },
+        _taskService: { moveToArchive: jasmine.createSpy().and.resolveTo() },
+        _snackService: { open: snackOpen },
+        _router: { navigate },
+        _translateService: { currentLang: 'en' },
+        _translateStore: { getTranslations: () => ({}) },
+      }) as DailySummaryComponent;
+
+      await (
+        receiver as unknown as { _moveDoneToArchive: () => Promise<void> }
+      )._moveDoneToArchive();
+
+      const snack = snackOpen.calls.mostRecent().args[0];
+      expect(snack.actionStr).toBe('MH.HISTORY');
+      snack.actionFn();
+      expect(navigate).toHaveBeenCalledOnceWith(['/active/history']);
+    });
   });
 
   describe('_finishDayForGood()', () => {
