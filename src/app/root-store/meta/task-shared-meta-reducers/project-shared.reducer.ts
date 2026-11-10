@@ -1,7 +1,7 @@
 import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-state';
-import { TaskSharedActions } from '../task-shared.actions';
+import { PROJECT_DELETE_WINS_MARKER, TaskSharedActions } from '../task-shared.actions';
 import { PROJECT_FEATURE_NAME } from '../../../features/project/store/project.reducer';
 import {
   TASK_FEATURE_NAME,
@@ -19,6 +19,12 @@ import {
   removeTasksFromList,
   updateProject,
 } from './task-shared-helpers';
+import {
+  adapter as noteAdapter,
+  NOTE_FEATURE_NAME,
+} from '../../../features/note/store/note.reducer';
+import { INBOX_PROJECT } from '../../../features/project/project.const';
+import { moveNoteToOtherProject } from '../../../features/note/store/note.actions';
 import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TaskRepeatCfgState } from '../../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { adapter as taskRepeatCfgAdapter } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
@@ -133,6 +139,53 @@ const cleanupTaskRepeatCfgsForProject = (
   return taskRepeatCfgAdapter.removeMany(cfgIdsToDelete, taskRepeatCfgState);
 };
 
+/**
+ * Notes this device lists in the project but the delete's payload does not
+ * name were moved in after the delete was captured (#10744). The note reducer
+ * removes only the payload's notes, so these go to the Inbox, where a move
+ * replayed after the delete puts them too.
+ */
+const rehomeNotesUnseenByDelete = (
+  state: ExtendedState,
+  projectId: string,
+  deletedNoteIds: string[],
+): ExtendedState => {
+  const projects = state[PROJECT_FEATURE_NAME].entities;
+  const inbox = projects[INBOX_PROJECT.id];
+  const notes = state[NOTE_FEATURE_NAME];
+  const unseenIds = (projects[projectId]?.noteIds ?? []).filter(
+    (id) => !deletedNoteIds.includes(id) && notes.entities[id],
+  );
+  if (!inbox || projectId === INBOX_PROJECT.id || !unseenIds.length) return state;
+  return {
+    ...updateProject(state, INBOX_PROJECT.id, {
+      noteIds: unique([...inbox.noteIds, ...unseenIds]),
+    }),
+    [NOTE_FEATURE_NAME]: noteAdapter.updateMany(
+      unseenIds.map((id) => ({ id, changes: { projectId: INBOX_PROJECT.id } })),
+      notes,
+    ),
+  };
+};
+
+/**
+ * A note move can replay after another device deleted its target project:
+ * neither op declares the other's entity, so no conflict is detected (#10744).
+ * The note then goes to the Inbox instead of pointing at a missing project.
+ * Derived from state, so every device and every replay agrees.
+ */
+const retargetNoteMoveIntoDeletedProject = (
+  state: ExtendedState,
+  action: Action,
+): Action => {
+  if (action.type !== moveNoteToOtherProject.type) return action;
+  const move = action as ReturnType<typeof moveNoteToOtherProject>;
+  const projects = state[PROJECT_FEATURE_NAME].entities;
+  if (projects[move.targetProjectId] || !projects[INBOX_PROJECT.id]) return action;
+  const retargeted: typeof move = { ...move, targetProjectId: INBOX_PROJECT.id };
+  return retargeted;
+};
+
 const handleDeleteProject = (
   state: ExtendedState,
   projectId: string,
@@ -193,10 +246,18 @@ const createActionHandlers = (
     return handleMoveToOtherProject(state, task, targetProjectId);
   },
   [TaskSharedActions.deleteProject.type]: () => {
-    const { projectId, allTaskIds } = action as ReturnType<
-      typeof TaskSharedActions.deleteProject
-    >;
-    return handleDeleteProject(state, projectId, allTaskIds);
+    const {
+      projectId,
+      allTaskIds,
+      noteIds,
+      [PROJECT_DELETE_WINS_MARKER]: isFinal,
+    } = action as ReturnType<typeof TaskSharedActions.deleteProject>;
+    // A legacy delete without the marker can lose its conflict and have the
+    // project recreated with its notes still listed (#9048): leave those be.
+    const withNotesKept = isFinal
+      ? rehomeNotesUnseenByDelete(state, projectId, noteIds)
+      : state;
+    return handleDeleteProject(withNotesKept, projectId, allTaskIds);
   },
 });
 
@@ -207,7 +268,10 @@ export const projectSharedMetaReducer: MetaReducer = (
     if (!state) return reducer(state, action);
 
     const extendedState = state as ExtendedState;
-    const effectiveAction = enrichDeleteProjectAction(extendedState, action);
+    const effectiveAction = retargetNoteMoveIntoDeletedProject(
+      extendedState,
+      enrichDeleteProjectAction(extendedState, action),
+    );
     const actionHandlers = createActionHandlers(extendedState, effectiveAction);
     const handler = actionHandlers[effectiveAction.type];
     const updatedState = handler ? handler(extendedState) : extendedState;
