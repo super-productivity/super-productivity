@@ -24,7 +24,7 @@ const failuresOf = async (steps: FuzzStep[]): Promise<string> =>
 
 /**
  * #11184, second shape (found by the fuzz kill step, shrunk from seed
- * 20725019 of the `tasks` profile): a sync that is killed while it resolves a
+ * 20725019 of the `tasks` profile, 30 steps, `killProbability: 0.5`): a sync that is killed while it resolves a
  * conflict leaves the completing device with a done no other device ever
  * gets, once a third device edits the same task before the next sync. The
  * syncs after the restart raise no error.

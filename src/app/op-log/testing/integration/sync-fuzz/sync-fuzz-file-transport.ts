@@ -58,11 +58,10 @@ export class FileTransport {
    * throw fails the write, or loses the response of a landed upload.
    */
   writeGate?: () => void;
-  /**
-   * Whether an upload reached the sync file since this was last reset (by
-   * every adapter upload call, and by the harness before a killed sync).
-   */
+  /** Whether an upload reached the sync file since the harness last reset this. */
   hasLanded = false;
+  // Uploads that reached the sync file, to tell whether one adapter call's did.
+  private _landings = 0;
   private readonly _clients = new WeakMap<
     OperationSyncCapable,
     { injector: EnvironmentInjector; durable: { state: string | null } }
@@ -77,7 +76,10 @@ export class FileTransport {
       // The backup copy is written first and holds no new ops.
       // shortcut: any other file counts for the whole upload — track files
       // separately if kills are ever run with `split`.
-      if (!args[0].endsWith('.bak')) this.hasLanded = true;
+      if (!args[0].endsWith('.bak')) {
+        this.hasLanded = true;
+        this._landings++;
+      }
       this.writeGate?.();
       return response;
     };
@@ -188,7 +190,7 @@ export class FileTransport {
     return {
       ...adapter,
       uploadOps: async (ops, ...rest) => {
-        this.hasLanded = false;
+        const landingsBefore = this._landings;
         try {
           const response = await adapter.uploadOps(ops, ...rest);
           this._recordUpload(ops, response);
@@ -196,7 +198,7 @@ export class FileTransport {
         } catch (e) {
           // Killed between the upload landing and its response: the ops are
           // in the file although the device never learned it.
-          if (e instanceof FuzzKillError && this.hasLanded) {
+          if (e instanceof FuzzKillError && this._landings > landingsBefore) {
             this._recordUpload(ops, {
               results: ops.map((op) => ({ opId: op.id, accepted: true })),
             } as OpUploadResponse);
@@ -222,7 +224,7 @@ export class FileTransport {
             schemaVersion,
           } as SyncOperation);
         };
-        this.hasLanded = false;
+        const landingsBefore = this._landings;
         try {
           const response: SnapshotUploadResponse = await adapter.uploadSnapshot!(
             state,
@@ -235,7 +237,9 @@ export class FileTransport {
           return response;
         } catch (e) {
           // As for uploadOps: the snapshot is in the file.
-          if (e instanceof FuzzKillError && this.hasLanded) recordAccepted();
+          if (e instanceof FuzzKillError && this._landings > landingsBefore) {
+            recordAccepted();
+          }
           throw e;
         }
       },
