@@ -2364,6 +2364,17 @@ describe('OperationLogUploadService', () => {
             expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
           });
 
+          it('still reports a thrown SuperSync HTTP 400 as a rejection', async () => {
+            mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+            mockApiProvider.uploadSnapshot.and.rejectWith(
+              new Error('HTTP 400 Bad Request — Validation failed'),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(result.rejectedOps.map(({ opId }) => opId)).toEqual(['my-import']);
+          });
+
           it('still reports a thrown SuperSync refusal with an errorCode as a rejection', async () => {
             mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
             mockApiProvider.uploadSnapshot.and.rejectWith(
@@ -2383,8 +2394,8 @@ describe('OperationLogUploadService', () => {
             expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
           });
 
-          // A SuperSync verdict comes as a reply body or a structured errorCode.
-          // None of these carries one, so none of them may reject the snapshot.
+          // A SuperSync verdict comes as a reply body, a structured errorCode or
+          // a bare HTTP 400. None of these is one, so none may reject the snapshot.
           const superSyncNonVerdictErrors: Array<[string, () => Error]> = [
             ['a rejected token', () => new AuthFailSPError('Token expired')],
             ['missing credentials', () => new MissingCredentialsSPError()],
@@ -2392,7 +2403,6 @@ describe('OperationLogUploadService', () => {
             ['a 413 from a proxy', () => new Error('HTTP 413 Payload Too Large')],
             ['an unlisted gateway status', () => new Error('HTTP 520 ')],
             ['an HTML 2xx body', () => new SyntaxError('Unexpected token <')],
-            ['a 400 without errorCode', () => new Error('HTTP 400 Bad Request')],
           ];
           superSyncNonVerdictErrors.forEach(([name, createError]) => {
             it(`re-throws ${name} from SuperSync, keeping the snapshot pending`, async () => {

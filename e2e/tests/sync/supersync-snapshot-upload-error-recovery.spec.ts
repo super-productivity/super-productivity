@@ -80,9 +80,6 @@ test.describe('@supersync a failed snapshot upload does not stop SuperSync for g
         await clientA.workView.addTask(beforeFault);
         await clientA.sync.syncAndWait();
 
-        // The server loses the account's sync data; A has to seed it again.
-        await wipeUserSyncData(user.token);
-
         let failedSnapshotUploads = 0;
         await clientA.page.route(SUPERSYNC_SNAPSHOT_ROUTE, async (route) => {
           if (route.request().method() !== 'POST') return route.continue();
@@ -94,8 +91,11 @@ test.describe('@supersync a failed snapshot upload does not stop SuperSync for g
           });
         });
 
+        // The server loses the account's sync data; A has to seed it again.
+        await wipeUserSyncData(user.token);
+
         // The failed upload is reported, not hidden.
-        await expect(clientA.sync.syncAndWait()).rejects.toThrow();
+        await expect(clientA.sync.syncAndWait()).rejects.toThrow(/error state/);
         expect(failedSnapshotUploads).toBeGreaterThan(0);
         await expect(clientA.sync.syncErrorIcon).toBeVisible();
 
