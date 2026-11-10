@@ -9,8 +9,6 @@
     "SCOPE_CREATED": "Created by me",
     "SCOPE_ASSIGNED": "Assigned to me",
     "GITLAB_BASE_URL": "Custom GitLab base URL (optional)",
-    "FILTER_USER": "Filter username",
-    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
     "FILTER": "Custom Filter",
     "FILTER_DESCRIPTION": "See https://docs.gitlab.com/ee/api/issues.html#list-issues. Multiple can be combined with &",
     "SUBMIT_TIMELOGS": "Submit timelogs to GitLab",

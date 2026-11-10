@@ -95,17 +95,78 @@ describe('parsePluginAnswer', () => {
     });
   });
 
-  it('keeps the first block of a kind', () => {
+  it('keeps the complete file over a usage example after it', () => {
     const result = parsePluginAnswer(
       answerOf(
         ['json', '{ "id": "a", "name": "A" }'],
-        ['js', 'first();'],
+        ['js', 'PluginAPI.onReady(() => usageExample());'],
         ['js', 'usageExample();'],
       ),
       '19.3.1',
     );
 
-    expect('files' in result && result.files.pluginJs).toBe('first();\n');
+    expect('files' in result && result.files.pluginJs).toBe(
+      'PluginAPI.onReady(() => usageExample());\n',
+    );
+  });
+
+  // a fix answer replaces the installed plugin, so a snippet must not become plugin.js
+  it('keeps the complete files over a fix explained before them', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['js', 'await PluginAPI.getTasks();'],
+        ['json', '{ "permissions": ["http"] }'],
+        ['json', '{ "id": "a", "name": "A", "permissions": ["http"] }'],
+        ['js', 'PluginAPI.onReady(async () => {\n  await PluginAPI.getTasks();\n});'],
+      ),
+      '19.3.1',
+    );
+
+    expect('files' in result && result.files.manifest.name).toBe('A');
+    expect('files' in result && result.files.pluginJs).toBe(
+      'PluginAPI.onReady(async () => {\n  await PluginAPI.getTasks();\n});\n',
+    );
+  });
+
+  it('ignores inline triple backticks in the prose', () => {
+    const answer =
+      `Replace the call with ${FENCE}js await PluginAPI.getTasks()${FENCE}.\n\n` +
+      answerOf(['json', '{ "name": "A" }'], ['js', 'PluginAPI.onReady(() => {});']);
+
+    const result = parsePluginAnswer(answer, '19.3.1');
+
+    expect('files' in result && result.files.manifest.name).toBe('A');
+    expect('files' in result && result.files.pluginJs).toBe(
+      'PluginAPI.onReady(() => {});\n',
+    );
+  });
+
+  it('keeps the manifest over a longer JSON sample, like an API response', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['json', '{ "name": "Weather" }'],
+        ['js', 'PluginAPI.onReady(() => {});'],
+        ['json', '{\n  "temperature": 21,\n  "unit": "celsius",\n  "city": "Berlin"\n}'],
+      ),
+      '19.3.1',
+    );
+
+    expect('files' in result && result.files.manifest.name).toBe('Weather');
+  });
+
+  it('keeps the complete file among untagged blocks', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['', 'await PluginAPI.getTasks();'],
+        ['', '{ "id": "a", "name": "A" }'],
+        ['', 'PluginAPI.onReady(async () => {\n  await PluginAPI.getTasks();\n});'],
+      ),
+      '19.3.1',
+    );
+
+    expect('files' in result && result.files.pluginJs).toBe(
+      'PluginAPI.onReady(async () => {\n  await PluginAPI.getTasks();\n});\n',
+    );
   });
 
   it('keeps backticks inside the code instead of ending the block there', () => {
@@ -120,6 +181,96 @@ describe('parsePluginAnswer', () => {
     expect('files' in result && result.files.pluginJs).toBe(
       `const fence = "${FENCE}";\nexport();\n`,
     );
+  });
+
+  // ChatGPT's copy button drops the language tags of its code blocks
+  it('recognizes code blocks without a language tag by their content', () => {
+    const answer =
+      '### manifest.json\n\n' +
+      `${FENCE}\n\n{\n  "id": "siren",\n  "name": "Siren"\n}\n\n${FENCE}\n\n` +
+      '### plugin.js\n\n' +
+      `${FENCE}\n\nPluginAPI.onReady(async () => {});\n\n${FENCE}\n\n` +
+      '### index.html\n\n' +
+      `${FENCE}\n<!doctype html>\n<p>Hi</p>\n${FENCE}`;
+
+    const result = parsePluginAnswer(answer, '20.0.0');
+
+    expect('files' in result && result.files.manifest.id).toBe('siren');
+    expect('files' in result && result.files.pluginJs).toBe(
+      '\nPluginAPI.onReady(async () => {});\n\n',
+    );
+    expect('files' in result && result.files.indexHtml).toBe(
+      '<!doctype html>\n<p>Hi</p>\n',
+    );
+  });
+
+  it('prefers tagged code blocks over untagged ones, like a file tree', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['', 'siren/\n  plugin.js'],
+        ['json', '{ "name": "Siren" }'],
+        ['js', 'beep();'],
+      ),
+      '20.0.0',
+    );
+
+    expect('files' in result && result.files.pluginJs).toBe('beep();\n');
+  });
+
+  it('ignores untagged blocks that are no plugin code', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['', 'zip -r siren.zip .'],
+        ['json', '{ "name": "Siren" }'],
+        ['html', '<p>Hi</p>'],
+      ),
+      '20.0.0',
+    );
+
+    expect('files' in result && result.files.pluginJs).toBeUndefined();
+  });
+
+  it('reads file names and JSON dialects as language tags', () => {
+    const result = parsePluginAnswer(
+      answerOf(['manifest.json', '{ "name": "Siren" }'], ['plugin.js', 'beep();']),
+      '20.0.0',
+    );
+    const jsonc = parsePluginAnswer(
+      answerOf(['jsonc', '{ "name": "Siren" }'], ['js', 'beep();']),
+      '20.0.0',
+    );
+
+    expect('files' in result && result.files.pluginJs).toBe('beep();\n');
+    expect('files' in jsonc && jsonc.files.manifest.name).toBe('Siren');
+  });
+
+  it('ignores blocks named after other files', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['package.json', '{ "name": "siren-dev" }'],
+        ['example.js', 'demo();'],
+        ['manifest.json', '{ "name": "Siren" }'],
+        ['plugin.js', 'beep();'],
+      ),
+      '20.0.0',
+    );
+
+    expect('files' in result && result.files.manifest.name).toBe('Siren');
+    expect('files' in result && result.files.pluginJs).toBe('beep();\n');
+  });
+
+  it('ignores a file name comment above the manifest', () => {
+    const tagged = parsePluginAnswer(
+      answerOf(['json', '// manifest.json\n{ "name": "Siren" }'], ['js', 'beep();']),
+      '20.0.0',
+    );
+    const untagged = parsePluginAnswer(
+      answerOf(['', '// manifest.json\n{ "name": "Siren" }'], ['js', 'beep();']),
+      '20.0.0',
+    );
+
+    expect('files' in tagged && tagged.files.manifest.name).toBe('Siren');
+    expect('files' in untagged && untagged.files.manifest.name).toBe('Siren');
   });
 
   it('reports what is missing', () => {

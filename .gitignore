@@ -37,11 +37,7 @@ android/.idea
 *.sublime-workspace
 
 # IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+.vscode/
 *.code-workspace
 
 ### VisualStudioCode Patch ###
@@ -103,6 +99,8 @@ electron-builder.win-store.yaml
 /src/environments/environment.js
 /src/environments/environment.js.map
 /.claude/*
+# Shared with all contributors and worktrees
+!/.claude/commands/
 .aider*
 
 

@@ -32,6 +32,7 @@ import {
   formatText,
   getHeadlineCol,
 } from './worklog-export.util';
+import { getProjectTotals, WorklogProjectTotal } from './worklog-project-totals.util';
 import { MatDialogActions, MatDialogContent } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
 import { MatAnchor, MatButton, MatMiniFabButton } from '@angular/material/button';
@@ -40,7 +41,8 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { MatSelect } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
-import { NgClass } from '@angular/common';
+import { NgClass, PercentPipe } from '@angular/common';
+import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { MatFormField } from '@angular/material/form-field';
@@ -66,6 +68,8 @@ import { TimeTrackingService } from '../../time-tracking/time-tracking.service';
     MatSelect,
     MatOption,
     NgClass,
+    PercentPipe,
+    MsToStringPipe,
     CollapsibleComponent,
     MatSlideToggle,
     MatFormField,
@@ -98,6 +102,7 @@ export class WorklogExportComponent implements OnInit, OnDestroy {
   isShowAsText: boolean = false;
   headlineCols: string[] = [];
   formattedRows?: (string | number | undefined)[][];
+  projectTotals: WorklogProjectTotal[] = [];
   options: WorklogExportSettingsCopy = {
     ...WORKLOG_EXPORT_DEFAULTS,
     cols: [...WORKLOG_EXPORT_DEFAULTS.cols],
@@ -205,6 +210,7 @@ export class WorklogExportComponent implements OnInit, OnDestroy {
             this.headlineCols = this.options.cols.map(getHeadlineCol);
 
             this.txt = formatText(this.headlineCols, this.formattedRows);
+            this.projectTotals = getProjectTotals(tasks, projects);
             this._changeDetectorRef.detectChanges();
           }
         }),

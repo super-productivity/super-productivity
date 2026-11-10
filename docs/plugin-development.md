@@ -941,10 +941,12 @@ cold-boot bridge pings are only performed for host-side plugin code.
 
 **Clean up with `plugin.onUnload()`:**
 
-Code-based plugins (`plugin.js`) run directly in the app's renderer, so timers and
-listeners they create are **not** cleaned up automatically when the plugin is disabled,
-reloaded, or uninstalled — a `setInterval` started by your plugin keeps firing until the
-app is fully reloaded. Register a teardown callback to clear them yourself:
+Code-based plugins (`plugin.js`) run directly in the app's renderer. When the plugin is
+disabled, reloaded, or uninstalled, the host stops timers created with the plain
+`setTimeout`/`setInterval` names and turns further Plugin API calls into no-ops (they
+return a promise that never settles). Anything else — `window.setInterval`, event
+listeners, `speechSynthesis`, open connections — keeps running until the app is fully
+reloaded. Register a teardown callback to clear it yourself:
 
 ```javascript
 const intervalId = setInterval(doWork, 60000);
@@ -955,13 +957,13 @@ plugin.onUnload(() => {
 });
 ```
 
-The host invokes the callback at the start of plugin teardown, while the Plugin API is
-still usable for calls like persisting data — but don't register new hooks or listeners
-from inside it (the plugin is going away; re-registering `onUnload` there is ignored).
-The returned promise is **not awaited** — do synchronous cleanup (`clearInterval` etc.)
-before any `await`, since teardown continues immediately. Registering again replaces the
-previous callback, so register once and do all cleanup there. Errors thrown by the
-callback are logged and do not block teardown.
+The host invokes the callback at the start of plugin teardown. Its synchronous part can
+still call the Plugin API (e.g. to persist data) — but don't register new hooks or
+listeners from inside it (the plugin is going away; re-registering `onUnload` there is
+ignored). The returned promise is **not awaited** — do cleanup and API calls before any
+`await`, since teardown continues immediately and API calls made after it are
+ignored. Registering again replaces the previous callback, so register once and do all
+cleanup there. Errors thrown by the callback are logged and do not block teardown.
 
 Plugins distributed independently of the app should feature-detect it
 (`if (plugin.onUnload) { ... }`) — hosts predating the hook don't provide it.
