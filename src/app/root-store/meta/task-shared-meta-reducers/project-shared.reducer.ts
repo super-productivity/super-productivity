@@ -173,13 +173,17 @@ const rehomeNotesUnseenByDelete = (
  * neither op declares the other's entity, so no conflict is detected (#10744).
  * The note then goes to the Inbox instead of pointing at a missing project.
  * Derived from state, so every device and every replay agrees.
+ *
+ * Returns nothing for a note this device no longer has: it went with its
+ * project when that was deleted, and the move would list an id without a note.
  */
 const retargetNoteMoveIntoDeletedProject = (
   state: ExtendedState,
   action: Action,
-): Action => {
+): Action | undefined => {
   if (action.type !== moveNoteToOtherProject.type) return action;
   const move = action as ReturnType<typeof moveNoteToOtherProject>;
+  if (!state[NOTE_FEATURE_NAME].entities[move.note.id]) return undefined;
   const projects = state[PROJECT_FEATURE_NAME].entities;
   if (projects[move.targetProjectId] || !projects[INBOX_PROJECT.id]) return action;
   const retargeted: typeof move = { ...move, targetProjectId: INBOX_PROJECT.id };
@@ -272,6 +276,7 @@ export const projectSharedMetaReducer: MetaReducer = (
       extendedState,
       enrichDeleteProjectAction(extendedState, action),
     );
+    if (!effectiveAction) return state;
     const actionHandlers = createActionHandlers(extendedState, effectiveAction);
     const handler = actionHandlers[effectiveAction.type];
     const updatedState = handler ? handler(extendedState) : extendedState;

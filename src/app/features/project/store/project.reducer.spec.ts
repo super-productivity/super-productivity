@@ -153,7 +153,7 @@ describe('projectReducer', () => {
       expect((r.entities as any).P2.noteIds).toEqual(['C', 'A']);
     });
 
-    it('should not list a note that was deleted along with its project', () => {
+    it('should list an orphaned note in the target', () => {
       const s = fakeEntityStateFromArray([
         { id: 'P2', noteIds: ['C'] },
       ] as Partial<Project>[]);
@@ -165,7 +165,7 @@ describe('projectReducer', () => {
           targetProjectId: 'P2',
         }) as any,
       );
-      expect(r).toBe(s as any);
+      expect((r.entities as any).P2.noteIds).toEqual(['C', 'A']);
     });
 
     it('should leave the lists alone when the target project is gone', () => {

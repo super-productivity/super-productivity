@@ -602,12 +602,6 @@ export const projectReducer = createReducer<ProjectState>(
   on(moveNoteToOtherProject, (state, { note, targetProjectId }) => {
     // A deleted target is re-homed to the Inbox before it gets here (#10744).
     if (!state.entities[targetProjectId]) return state;
-    // A note that names a project but is listed nowhere went with that project
-    // when another device deleted it: listing it again would dangle.
-    const isListed = Object.values(state.entities).some((project) =>
-      project?.noteIds.includes(note.id),
-    );
-    if (note.projectId && !isListed) return state;
     // Taken out of whichever list holds the note, not the payload's source: a
     // re-homed note is no longer where its mover saw it. Appended last even
     // within one project, where a delete replayed after the move puts it too.
