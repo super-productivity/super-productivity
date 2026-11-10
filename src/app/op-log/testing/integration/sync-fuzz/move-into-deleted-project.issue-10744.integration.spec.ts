@@ -101,16 +101,20 @@ describe('item moved into a concurrently deleted project (#10744)', () => {
     );
   };
 
-  const moveTo = async (kind: Kind, targetProjectId: string): Promise<void> => {
+  const moveTo = async (
+    kind: Kind,
+    targetProjectId: string,
+    id = 'moved',
+  ): Promise<void> => {
     const { tasks, note } = await slices();
     await harness.dispatch(
       kind === 'note'
         ? moveNoteToOtherProject({
-            note: note.entities['moved'],
+            note: note.entities[id],
             targetProjectId,
           })
         : TaskSharedActions.moveToOtherProject({
-            task: { ...tasks.entities['moved'], subTasks: [] },
+            task: { ...tasks.entities[id], subTasks: [] },
             targetProjectId,
           }),
     );
@@ -150,6 +154,10 @@ describe('item moved into a concurrently deleted project (#10744)', () => {
     await harness.as(a, deleteDoomed);
     harness.tick();
     await harness.as(b, moverChange);
+    await syncBoth(first);
+  };
+
+  const syncBoth = async (first: 'deleter' | 'mover'): Promise<void> => {
     const order = first === 'deleter' ? [a, b] : [b, a];
     for (let round = 0; round < 3; round++) {
       for (const device of order) {
@@ -171,6 +179,10 @@ describe('item moved into a concurrently deleted project (#10744)', () => {
       await harness.restart(device);
       expect(await view(device, kind)).toEqual(expected);
     }
+    // A device that joins later replays both ops in server order.
+    const c = await harness.addDevice('C');
+    expect(await harness.sync(c)).toBe(true);
+    expect(await view(c, kind)).toEqual(expected);
   };
 
   for (const first of ['deleter', 'mover'] as const) {
@@ -199,6 +211,36 @@ describe('item moved into a concurrently deleted project (#10744)', () => {
         listedIn: [KEPT],
         projectIds: [INBOX, KEPT],
         inbox: ['sibling'],
+      });
+    }, 60_000);
+
+    it(`keeps several moved notes in the Inbox in one order / ${first} syncs first`, async () => {
+      await seed('note', [DOOMED]);
+      await harness.as(a, () => addItem('note', 'moved2'));
+      expect(await harness.sync(a)).toBe(true);
+      expect(await harness.sync(b)).toBe(true);
+      await crossAndSync(first, async () => {
+        await moveTo('note', DOOMED);
+        harness.tick();
+        await moveTo('note', DOOMED, 'moved2');
+      });
+      const lists = (device: FuzzDevice): Promise<unknown> =>
+        harness.as(device, async () => {
+          const { projects, note } = await slices();
+          return {
+            inbox: projects.entities[INBOX].noteIds,
+            owners: ['moved', 'moved2'].map((id) => note.entities[id]?.projectId),
+            projectIds: projects.ids,
+          };
+        });
+      const expected = {
+        inbox: ['sibling', 'moved', 'moved2'],
+        owners: [INBOX, INBOX],
+        projectIds: [INBOX],
+      };
+      expect({ A: await lists(a), B: await lists(b) }).toEqual({
+        A: expected,
+        B: expected,
       });
     }, 60_000);
   }
