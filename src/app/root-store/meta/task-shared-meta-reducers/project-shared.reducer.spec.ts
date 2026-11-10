@@ -485,8 +485,18 @@ describe('projectSharedMetaReducer', () => {
         targetProjectId,
       });
 
-    it('should forward a move into a deleted project as a move to the Inbox (#10744)', () => {
+    const withNote1 = (): RootState => {
       const testState = addInbox(createBaseState());
+      testState[NOTE_FEATURE_NAME] = {
+        ids: ['note1'],
+        entities: { note1: { id: 'note1', projectId: 'project1' } as Note },
+        todayOrder: [],
+      };
+      return testState;
+    };
+
+    it('should forward a move into a deleted project as a move to the Inbox (#10744)', () => {
+      const testState = withNote1();
 
       metaReducer(testState, moveNote('deleted-project'));
 
@@ -494,12 +504,22 @@ describe('projectSharedMetaReducer', () => {
     });
 
     it('should forward a move into an existing project unchanged', () => {
-      const testState = addInbox(createBaseState());
+      const testState = withNote1();
       const action = moveNote('project1');
 
       metaReducer(testState, action);
 
       expect(mockReducer.calls.mostRecent().args[1]).toBe(action);
+    });
+
+    it('should drop a move of a note this device no longer has', () => {
+      const testState = withNote1();
+      testState[NOTE_FEATURE_NAME] = { ids: [], entities: {}, todayOrder: [] };
+
+      const result = metaReducer(testState, moveNote('project1'));
+
+      expect(result).toBe(testState);
+      expect(mockReducer).not.toHaveBeenCalled();
     });
   });
 
