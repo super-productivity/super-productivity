@@ -848,4 +848,101 @@ test.describe('@supersync REPAIR with an offline client', () => {
       if (clientB) await closeClient(clientB);
     }
   });
+
+  /**
+   * The deferral above skips the incoming REPAIR because "this client already
+   * applies every op the repair was built from". That only holds for a device
+   * whose cursor is at the REPAIR's base. Here B is behind it: A uploads a
+   * task after B's last sync and before the REPAIR. The server moves B's
+   * download to the REPAIR, past A's task, so B has to get that task from the
+   * snapshot it defers. See docs/plans/2026-11-10-sync-fleet-boundary.md.
+   */
+  test('gives an offline client with pending work the ops uploaded before the REPAIR', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(300000);
+
+    const appUrl = baseURL || 'http://localhost:4242';
+    const sharedTaskTitle = `A-${testRunId}-RepairPrefixShared`;
+    const prefixTaskTitle = `A-${testRunId}-RepairPrefixBeforeRepair`;
+    const offlineTaskTitle = `B-${testRunId}-RepairPrefixOfflineWork`;
+    const ghostTagId = `ghost-tag-prefix-${testRunId}`;
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+    let clientC: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
+      await clientA.workView.waitForTaskList();
+      await clientA.sync.setupSuperSync(syncConfig);
+
+      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
+      await clientB.workView.waitForTaskList();
+      await clientB.sync.setupSuperSync(syncConfig);
+
+      clientC = await createSimulatedClient(browser, appUrl, 'C', testRunId);
+      await clientC.workView.waitForTaskList();
+      await clientC.sync.setupSuperSync(syncConfig);
+
+      await clientA.workView.addTask(sharedTaskTitle);
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await clientC.sync.syncAndWait();
+      await waitForTask(clientB.page, sharedTaskTitle);
+      await waitForTask(clientC.page, sharedTaskTitle);
+
+      // B stops syncing here and makes offline work.
+      await clientB.workView.addTask(offlineTaskTitle);
+
+      // A uploads an ordinary op that B has not downloaded.
+      await clientA.workView.addTask(prefixTaskTitle);
+      await clientA.sync.syncAndWait();
+      const prefixServerSeq = await getLatestServerSeq(user.userId);
+
+      // C seeds the corruption on top of it.
+      await clientC.sync.syncAndWait();
+      await waitForTask(clientC.page, prefixTaskTitle);
+      await addGhostTagReference(clientC.page, sharedTaskTitle, ghostTagId);
+      await clientC.sync.syncAndWait();
+
+      // A repairs and uploads a causal REPAIR whose base is above A's task.
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await expect
+        .poll(
+          async () =>
+            (await getServerOperations(user.userId)).filter(
+              ({ opType }) => opType === 'REPAIR',
+            ).length,
+          { message: 'client A never uploaded a causal REPAIR', timeout: 60000 },
+        )
+        .toBeGreaterThanOrEqual(1);
+      const repairOperation = (await getServerOperations(user.userId)).find(
+        ({ opType }) => opType === 'REPAIR',
+      );
+      expect(repairOperation?.serverSeq).toBeGreaterThan(prefixServerSeq);
+
+      // B returns with a cursor below A's task and with pending work.
+      await clientB.sync.syncAndWait({ timeout: 60000 });
+      await clientB.sync.syncAndWait({ timeout: 60000 });
+
+      // B keeps its own work and must also have what A uploaded before the REPAIR.
+      await waitForTask(clientB.page, offlineTaskTitle);
+      await waitForTask(clientB.page, prefixTaskTitle);
+
+      // B's work reaches the others.
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await waitForTask(clientA.page, offlineTaskTitle);
+      await waitForTask(clientA.page, prefixTaskTitle);
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+      if (clientC) await closeClient(clientC);
+    }
+  });
 });
