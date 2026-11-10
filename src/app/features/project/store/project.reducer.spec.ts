@@ -120,6 +120,68 @@ describe('projectReducer', () => {
       expect((r.entities as any).P1.noteIds).toEqual(['A', 'B']);
       expect((r.entities as any).P2.noteIds).toEqual(['C', 'NEW']);
     });
+
+    it('should put a note moved to its own project last (#10744)', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', noteIds: ['A', 'B'] },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(
+        s as any,
+        moveNoteToOtherProject({
+          note: { id: 'A', projectId: 'P1' } as any,
+          targetProjectId: 'P1',
+        }) as any,
+      );
+      expect((r.entities as any).P1.noteIds).toEqual(['B', 'A']);
+    });
+
+    it('should take the note out of the list that holds it, whatever the payload says', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', noteIds: ['A', 'B'] },
+        { id: 'P2', noteIds: ['C'] },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(
+        s as any,
+        moveNoteToOtherProject({
+          note: { id: 'A', projectId: 'GONE' } as any,
+          targetProjectId: 'P2',
+        }) as any,
+      );
+      expect((r.entities as any).P1.noteIds).toEqual(['B']);
+      expect((r.entities as any).P2.noteIds).toEqual(['C', 'A']);
+    });
+
+    it('should not list a note that was deleted along with its project', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P2', noteIds: ['C'] },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(
+        s as any,
+        moveNoteToOtherProject({
+          note: { id: 'A', projectId: 'GONE' } as any,
+          targetProjectId: 'P2',
+        }) as any,
+      );
+      expect(r).toBe(s as any);
+    });
+
+    it('should leave the lists alone when the target project is gone', () => {
+      const s = fakeEntityStateFromArray([
+        { id: 'P1', noteIds: ['A', 'B'] },
+      ] as Partial<Project>[]);
+
+      const r = projectReducer(
+        s as any,
+        moveNoteToOtherProject({
+          note: { id: 'A', projectId: 'P1' } as any,
+          targetProjectId: 'GONE',
+        }) as any,
+      );
+      expect(r).toBe(s as any);
+    });
   });
 
   describe('updateNoteOrder (#10377)', () => {
