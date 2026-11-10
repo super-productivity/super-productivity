@@ -5,6 +5,7 @@ artifactName: ${name}-${arch}.${ext}
 files:
   - electron/**/*
   - '!electron/**/*.ts'
+  - '!electron/**/*.test.cjs'
   - '!electron/**/*.js.map'
   - .tmp/angular-dist/**/*
   - 'embedded.provisionprofile'
@@ -85,12 +86,7 @@ portable:
   # portable covers both archs and halves what we submit for signing. The
   # release workflow creates the old architecture-specific names after signing.
   artifactName: ${name}.${ext}
-appx:
-  applicationId: SuperProductivity
-  displayName: Super Productivity
-  publisherDisplayName: johannesjo
-  publisher: CN=___-___
-  identityName: ___johannesjo.SuperProductivity
+# The Microsoft Store build is configured in build/electron-builder.appx.yaml.
 
 linux:
   # Fix for issue #5259: Set executable name without spaces for snap compatibility
@@ -118,7 +114,12 @@ linux:
 
 rpm:
   # Fix for issue #5368: Prevent /usr/lib/.build-id/ collisions with other Electron apps
-  fpm: ['--rpm-rpmbuild-define=_build_id_links none']
+  # Fix for issue #11136: the desktop entry Exec is /usr/bin/superproductivity
+  # (patches/app-builder-lib+*.patch); this re-creates that link after the old
+  # package's %postun removes it on upgrade.
+  fpm:
+    - '--rpm-rpmbuild-define=_build_id_links none'
+    - '--rpm-posttrans=build/linux/rpm-posttrans.sh'
 # leads to Error: Please specify executable name as linux.executableName instead of linux.desktop.Exec
 #  desktop:
 #    Name: Super Productivity
@@ -170,6 +171,11 @@ snap:
     # Fix for issue #6031: Add filesystem access for local file sync
     # https://github.com/super-productivity/super-productivity/issues/6031
     - removable-media # Allows sync to external drives/USB storage
+    # Lets the opt-in local REST API / assistant endpoint listen on 127.0.0.1.
+    # Not in electron-builder's `default` plugs; today listening may only work
+    # through browser-support's seccomp rules, which core24 no longer includes.
+    # Auto-connects, so users see no prompt.
+    - network-bind
     # Override electron-builder's hardcoded gnome-3-28-1804 content snap (core20 era)
     # with gnome-42-2204 (core22 era) for up-to-date Mesa drivers and GSettings schemas.
     # The plug name must match the template key to replace it rather than duplicate it.

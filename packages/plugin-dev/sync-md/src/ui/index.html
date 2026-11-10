@@ -7,165 +7,49 @@
       content="width=device-width, initial-scale=1.0"
     />
     <title>sync.md Configuration</title>
-    <style>
-      /*
-       * sync.md Plugin Styles
-       * UI Kit provides base element styles (body, headings, buttons, inputs, etc.)
-       * Only plugin-specific layout and component rules here.
-       */
-
-      body {
-        padding: var(--s3);
-        background: transparent;
-      }
-
-      .container {
-        max-width: 600px;
-        margin: 0 auto;
-      }
-
-      .subtitle {
-        color: var(--text-color-muted);
-        margin-bottom: var(--s3);
-      }
-
-      .form-group {
-        margin-bottom: var(--s3);
-      }
-
-      label {
-        display: block;
-        font-weight: 500;
-        margin-bottom: var(--s-half);
-        color: var(--text-color-muted);
-      }
-
-      .help-text {
-        font-size: 0.85em;
-        color: var(--text-color-muted);
-        margin-top: var(--s-half);
-      }
-
-      .button-group {
-        display: flex;
-        gap: var(--s);
-        margin-top: var(--s3);
-      }
-
-      .warning {
-        border: 1px solid var(--c-primary);
-        border-radius: var(--card-border-radius);
-        padding: var(--s-half) var(--s);
-        font-weight: bold;
-      }
-
-      /* Status messages */
-      .status {
-        padding: var(--s) var(--s2);
-        border-radius: var(--card-border-radius);
-        margin-top: var(--s3);
-        display: none;
-      }
-
-      .status.show {
-        display: block;
-      }
-
-      .status.info {
-        background: color-mix(in srgb, var(--c-primary) 15%, transparent);
-        color: var(--c-primary);
-        border: 1px solid color-mix(in srgb, var(--c-primary) 30%, transparent);
-      }
-
-      .status.success {
-        background: color-mix(in srgb, var(--color-success) 15%, transparent);
-        color: var(--color-success);
-        border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
-      }
-
-      .status.error {
-        background: color-mix(in srgb, var(--color-danger) 15%, transparent);
-        color: var(--color-danger);
-        border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
-      }
-
-      /* Loading spinner */
-      .spinner {
-        display: inline-block;
-        width: 14px;
-        height: 14px;
-        border: 2px solid var(--divider-color);
-        border-top: 2px solid var(--c-primary);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin-left: var(--s);
-        vertical-align: middle;
-      }
-
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-
-      /* File path test button */
-      .file-path-wrapper {
-        position: relative;
-      }
-
-      .test-file-btn {
-        position: absolute;
-        right: 8px;
-        top: 50%;
-        transform: translateY(-50%);
-        padding: var(--s-quarter) var(--s);
-        font-size: 0.85em;
-      }
-    </style>
   </head>
   <body>
-    <div class="container">
+    <div class="page">
       <h1>sync.md</h1>
-      <p class="subtitle">Sync tasks between Super Productivity and Markdown files</p>
+      <p class="text-muted">Sync tasks between Super Productivity and Markdown files</p>
 
-      <form id="configForm">
-        <div class="form-group">
+      <form
+        id="configForm"
+        class="stack"
+      >
+        <div class="field">
           <label for="filePath">Markdown File Path</label>
-          <div class="file-path-wrapper">
+          <div class="row">
             <input
               type="text"
               id="filePath"
+              class="grow"
               placeholder="/path/to/your/tasks.md"
-              style="padding-right: 70px"
             />
             <button
               type="button"
-              class="test-file-btn"
               onclick="testFilePath()"
             >
               Test
             </button>
           </div>
-          <div class="help-text">Full path to the markdown file to sync with</div>
+          <div class="field-hint">Full path to the markdown file to sync with</div>
         </div>
 
-        <div class="form-group">
+        <div class="field">
           <label for="projectId">Project</label>
           <select id="projectId">
             <option value="">Loading projects...</option>
           </select>
-          <div class="help-text">Select the project to sync tasks with</div>
+          <div class="field-hint">Select the project to sync tasks with</div>
         </div>
 
-        <div class="warning">
+        <div class="callout callout--warning">
           Please be warned that task data of this project might be involuntary changed or
           deleted!
         </div>
 
-        <div class="button-group">
+        <div class="actions">
           <button
             type="submit"
             class="btn-primary"
@@ -174,12 +58,9 @@
             Save & Sync
           </button>
         </div>
-      </form>
 
-      <div
-        id="status"
-        class="status"
-      ></div>
+        <div id="status"></div>
+      </form>
     </div>
 
     <script>
@@ -225,11 +106,13 @@
       function showStatus(message, type = 'info') {
         const status = document.getElementById('status');
         status.textContent = message;
-        status.className = `status ${type} show`;
+        const tone = { success: ' callout--success', error: ' callout--danger' }[type];
+        status.className = `callout${tone || ''}`;
 
         if (type !== 'error') {
           setTimeout(() => {
-            status.classList.remove('show');
+            status.className = '';
+            status.textContent = '';
           }, 5000);
         }
       }

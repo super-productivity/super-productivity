@@ -58,6 +58,7 @@ import { TaskInternalEffects } from '../features/tasks/store/task-internal.effec
 import { TaskRelatedModelEffects } from '../features/tasks/store/task-related-model.effects';
 import { TaskReminderEffects } from '../features/tasks/store/task-reminder.effects';
 import { TaskUiEffects } from '../features/tasks/store/task-ui.effects';
+import { RecentlyDeletedEffects } from '../features/tasks/recently-deleted/recently-deleted.effects';
 import { ShortSyntaxEffects } from '../features/tasks/store/short-syntax.effects';
 import { IS_ELECTRON } from '../app.constants';
 import { TaskElectronEffects } from '../features/tasks/store/task-electron.effects';
@@ -75,13 +76,14 @@ import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from '../util/is-native-platform';
 import { IosBackgroundTrackingEffects } from '../features/ios/store/ios-background-tracking.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
 import { TimeBlockSyncEffects } from '../features/calendar-integration/time-block/time-block-sync.effects';
+import { WorkSessionLogEffects } from '../features/calendar-integration/time-block/work-session-log.effects';
 import { ElectronEffects } from '../core/electron/electron.effects';
 import { DropboxEffects } from '../imex/sync/dropbox/store/dropbox.effects';
 import { FinishDayBeforeCloseEffects } from '../features/finish-day-before-close/finish-day-before-close.effects';
-import { GitlabIssueEffects } from '../features/issue/providers/gitlab/gitlab-issue.effects';
 import { JiraIssueEffects } from '../features/issue/providers/jira/jira-issue.effects';
 import { OpenProjectEffects } from '../features/issue/providers/open-project/open-project.effects';
 import { PluginTimeTrackingEffects } from '../plugins/issue-provider/plugin-time-tracking.effects';
+import { PluginFinishDayWorklogEffects } from '../plugins/issue-provider/plugin-finish-day-worklog.effects';
 import { ReminderCountdownEffects } from '../features/reminder/store/reminder-countdown.effects';
 import { SyncEffects } from '../imex/sync/sync.effects';
 import { boardsFeature } from '../features/boards/store/boards.reducer';
@@ -158,6 +160,7 @@ import { ReducerFailureSnackEffects } from './meta/reducer-failure-snack.effects
       TaskRelatedModelEffects,
       TaskReminderEffects,
       TaskUiEffects,
+      RecentlyDeletedEffects,
       ShortSyntaxEffects,
       TaskDueEffects,
       ...(IS_ELECTRON ? [TaskElectronEffects] : []),
@@ -197,13 +200,14 @@ import { ReducerFailureSnackEffects } from './meta/reducer-failure-snack.effects
     EffectsModule.forFeature([IssueTwoWaySyncEffects]),
     EffectsModule.forFeature([CalendarIntegrationEffects]),
     EffectsModule.forFeature([TimeBlockSyncEffects]),
+    EffectsModule.forFeature([WorkSessionLogEffects]),
     EffectsModule.forFeature([ElectronEffects]),
     EffectsModule.forFeature([DropboxEffects]),
     EffectsModule.forFeature([FinishDayBeforeCloseEffects]),
-    EffectsModule.forFeature([GitlabIssueEffects]),
     EffectsModule.forFeature([JiraIssueEffects]),
     EffectsModule.forFeature([OpenProjectEffects]),
     EffectsModule.forFeature([PluginTimeTrackingEffects]),
+    EffectsModule.forFeature([PluginFinishDayWorklogEffects]),
     EffectsModule.forFeature([ReminderCountdownEffects]),
     EffectsModule.forFeature([SyncEffects]),
     EffectsModule.forFeature([PluginHooksEffects, PluginOAuthLifecycleEffects]),

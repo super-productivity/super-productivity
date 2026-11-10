@@ -1,0 +1,64 @@
+<section
+  #cardEl
+  class="card"
+  [class.is-phone]="isPhone()"
+  aria-labelledby="quick-tour-card-title"
+>
+  <div
+    #contentEl
+    class="content"
+  >
+    <header class="head">
+      <h2
+        id="quick-tour-card-title"
+        class="title"
+      >
+        {{ T.ONBOARDING.WANT_MORE.TITLE | translate }}
+      </h2>
+      <button
+        type="button"
+        class="close-btn"
+        [attr.aria-label]="T.ONBOARDING.HINTS.SKIP_ARIA | translate"
+        (click)="quickTourService.end()"
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </header>
+
+    @if (offFeatures().length) {
+      <p class="intro">{{ T.ONBOARDING.WANT_MORE.INTRO | translate }}</p>
+      <ul class="features">
+        @for (feature of offFeatures(); track feature.key) {
+          <li>
+            <mat-icon aria-hidden="true">{{ feature.icon }}</mat-icon>
+            <span>{{ feature.label | translate }}</span>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (isSyncLineShown()) {
+      <p class="aside">
+        <mat-icon aria-hidden="true">cloud_off</mat-icon>
+        <span>{{ T.ONBOARDING.WANT_MORE.SYNC | translate }}</span>
+      </p>
+    }
+
+    <div class="actions">
+      <button
+        type="button"
+        class="card-action"
+        (click)="quickTourService.openSettings()"
+      >
+        {{ T.ONBOARDING.WANT_MORE.OPEN_SETTINGS | translate }}
+      </button>
+      <button
+        type="button"
+        class="card-action"
+        (click)="quickTourService.end()"
+      >
+        {{ T.ONBOARDING.WANT_MORE.DONE | translate }}
+      </button>
+    </div>
+  </div>
+</section>

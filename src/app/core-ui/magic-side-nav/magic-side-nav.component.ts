@@ -1,15 +1,19 @@
 import { TaskMultiDragService } from '../../features/tasks/task-multi-drag.service';
 /* eslint-disable @typescript-eslint/naming-convention */
 import {
+  afterNextRender,
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
   effect,
+  ElementRef,
   HostListener,
   inject,
+  Injector,
   input,
+  linkedSignal,
   OnDestroy,
   output,
   signal,
@@ -18,6 +22,7 @@ import {
 import { NavigationStart, Router, RouterModule } from '@angular/router';
 import { NavItemComponent } from './nav-item/nav-item.component';
 import { NavListTreeComponent } from './nav-list/nav-list-tree.component';
+import { NavViewGroupComponent } from './nav-view-group/nav-view-group.component';
 import { NavItem } from './magic-side-nav.model';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { MagicNavConfigService } from './magic-nav-config.service';
@@ -42,6 +47,7 @@ import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { EdgeSwipeOpenDetector } from './edge-swipe-open';
 
 // 56px = 24px icon + 16px (var(--s2)) padding on each side, so the left-aligned
 // nav icons sit centered in the collapsed rail.
@@ -56,6 +62,16 @@ const INITIAL_ENTER_ANIMATION_DURATION_MS = 425;
 // the last of the collapse; the two numbers have to move together.
 const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
 
+/**
+ * The element at a point, looking through tooltips: one shown by a button the
+ * drag passed over (e.g. "Show/hide in sidebar") can sit on the nav item a task
+ * is dropped on.
+ */
+const elementUnderTooltips = (point: { x: number; y: number }): Element | null =>
+  document
+    .elementsFromPoint(point.x, point.y)
+    .find((el) => !el.closest('.mat-mdc-tooltip-panel')) ?? null;
+
 @Component({
   selector: 'magic-side-nav',
   standalone: true,
@@ -63,6 +79,7 @@ const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
     RouterModule,
     NavItemComponent,
     NavListTreeComponent,
+    NavViewGroupComponent,
     MatMenuModule,
     NavMatMenuComponent,
     SwipeDirective,
@@ -74,7 +91,6 @@ const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
   host: {
     '[style.width.px]': 'hostWidthSignal()',
     '[class.animate]': 'animateWidth()',
-    '[class.initial-shell-enter]': 'playInitialShellEnter()',
     '[class.initial-enter]': 'playInitialEnter()',
     '[class.initializing]': '!areTransitionsReady()',
     '[class.resizing]': 'isResizing()',
@@ -83,6 +99,8 @@ const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
+  private readonly _elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly _injector = inject(Injector);
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _sideNavConfigService = inject(MagicNavConfigService);
   private readonly _taskService = inject(TaskService);
@@ -93,6 +111,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private _multiDrag = inject(TaskMultiDragService);
   private _externalDragService = inject(ScheduleExternalDragService);
   private _pointerUpSubscription: Subscription | null = null;
+  private _removeEdgeSwipeListeners: (() => void) | null = null;
 
   // Use service's computed signal directly
   readonly config = this._sideNavConfigService.navConfig;
@@ -115,19 +134,28 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
   isFullMode = signal(this._initialState.isFullMode);
   showMobileMenuOverlay = signal(false);
-  // Temporarily disable swipe during menu open animation to prevent
-  // the touch event from the toggle button being captured as a swipe
-  swipeEnabled = signal(true);
+  readonly isMobileNavOpen = computed(
+    () => this.isMobile() && this.showMobileMenuOverlay(),
+  );
+  // Sticky: once opened, the mobile drawer is hidden rather than destroyed, so
+  // later opens skip rebuilding every nav row (#10820). Boot still skips it.
+  readonly isMobileNavRendered = linkedSignal<boolean, boolean>({
+    source: this.isMobileNavOpen,
+    computation: (isOpen, previous) => isOpen || !!previous?.value,
+  });
+  // True during the drawer's enter animation. Swipe is off so the touch from the
+  // toggle button is not captured as a swipe, and taps are ignored so repeated
+  // taps on a slow device do not hit the drawer row that slid under the
+  // finger (#10820: "Create New Tag" opened instead).
+  isOpeningMobileNav = signal(false);
+  private _focusBeforeMobileNavOpen: HTMLElement | null = null;
 
   // Animate only for compactMode/fullMode toggle
   animateWidth = signal(false);
   areTransitionsReady = signal(false);
-  playInitialShellEnter = signal(false);
   playInitialEnter = signal(false);
-  private _hasPlayedInitialShellEnter = false;
   private _hasPlayedInitialEnter = false;
   private _animateTimeoutId: number | null = null;
-  private _initialShellEnterTimeoutId: number | null = null;
   private _initialEnterTimeoutId: number | null = null;
 
   // Resize functionality
@@ -170,6 +198,35 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       if (this.isMobile()) {
         this.mobileVisibleChange.emit(this.showMobileMenuOverlay());
       }
+    });
+
+    // Lets app-level overlays (onboarding tips) step aside while the menu is open.
+    effect(() => {
+      this._layoutService.isMobileSideNavOpen.set(
+        this.isMobile() && this.showMobileMenuOverlay(),
+      );
+    });
+
+    // The drawer is no longer destroyed on close, so the focus trap does not
+    // restore focus by itself; hand it back to where it was before opening.
+    effect(() => {
+      const isOpen = this.isMobileNavOpen();
+      untracked(() => {
+        if (isOpen) {
+          this._focusBeforeMobileNavOpen = document.activeElement as HTMLElement | null;
+          return;
+        }
+        const previous = this._focusBeforeMobileNavOpen;
+        this._focusBeforeMobileNavOpen = null;
+        // Resized to desktop: the drawer became the regular nav, keep focus there.
+        if (!this.isMobile()) return;
+        const active = document.activeElement as HTMLElement | null;
+        if (active && this._elementRef.nativeElement.contains(active)) {
+          // Blur first: with no focusable opener, focus would stay on a hidden row.
+          active.blur();
+          previous?.focus();
+        }
+      });
     });
 
     // Sync history state with mobile menu visibility status
@@ -219,24 +276,6 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
     effect(() => {
       if (
-        this._hasPlayedInitialShellEnter ||
-        !this.areTransitionsReady() ||
-        this.playInitialShellEnter() ||
-        this._initialShellEnterTimeoutId != null
-      ) {
-        return;
-      }
-
-      this._hasPlayedInitialShellEnter = true;
-      this.playInitialShellEnter.set(true);
-      this._initialShellEnterTimeoutId = window.setTimeout(() => {
-        this.playInitialShellEnter.set(false);
-        this._initialShellEnterTimeoutId = null;
-      }, INITIAL_ENTER_ANIMATION_DURATION_MS);
-    });
-
-    effect(() => {
-      if (
         this._hasPlayedInitialEnter ||
         !this.areTransitionsReady() ||
         !this.isDataLoaded() ||
@@ -272,11 +311,6 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       this._animateTimeoutId = null;
     }
 
-    if (this._initialShellEnterTimeoutId != null) {
-      window.clearTimeout(this._initialShellEnterTimeoutId);
-      this._initialShellEnterTimeoutId = null;
-    }
-
     if (this._initialEnterTimeoutId != null) {
       window.clearTimeout(this._initialEnterTimeoutId);
       this._initialEnterTimeoutId = null;
@@ -286,6 +320,9 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       this._pointerUpSubscription.unsubscribe();
       this._pointerUpSubscription = null;
     }
+
+    this._removeEdgeSwipeListeners?.();
+    this._removeEdgeSwipeListeners = null;
   }
 
   ngAfterViewInit(): void {
@@ -293,6 +330,37 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
     this._pointerUpSubscription = this._dragDropRegistry.pointerUp.subscribe((event) => {
       this._handlePointerUp(event);
     });
+    this._initEdgeSwipeOpen();
+  }
+
+  /**
+   * Swiping left from the right screen edge opens the mobile drawer, which
+   * slides in from that edge (#4464). Passive capture listeners: they only
+   * observe, and claim the touchstart before a task's swipe-block sees it.
+   */
+  private _initEdgeSwipeOpen(): void {
+    const detector = new EdgeSwipeOpenDetector({
+      getViewportWidth: () => window.innerWidth,
+      isEnabled: () => this.isMobile() && !this.showMobileMenuOverlay(),
+      onOpen: () => {
+        if (!this.showMobileMenuOverlay()) this.toggleMobileNav();
+      },
+    });
+    const opts: AddEventListenerOptions = { capture: true, passive: true };
+    const listeners: [keyof DocumentEventMap, (e: TouchEvent) => void][] = [
+      ['touchstart', detector.onTouchStart],
+      ['touchmove', detector.onTouchMove],
+      ['touchend', detector.onTouchEnd],
+      ['touchcancel', detector.onTouchCancel],
+    ];
+    for (const [type, fn] of listeners) {
+      document.addEventListener(type, fn as EventListener, opts);
+    }
+    this._removeEdgeSwipeListeners = () => {
+      for (const [type, fn] of listeners) {
+        document.removeEventListener(type, fn as EventListener, opts);
+      }
+    };
   }
 
   onNavKeyDown(event: KeyboardEvent): void {
@@ -326,17 +394,27 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   }
 
   toggleMobileNav(): void {
+    // A second toggle while the drawer slides in is a repeated tap, not a
+    // request to close. Closed by any other path (back, route, item), the
+    // next tap opens it again.
+    // shortcut: an earlier open's timer may end a quick reopen's guard early —
+    // track and clear the timer if that ever shows up as a misfire.
+    if (this.isOpeningMobileNav() && this.showMobileMenuOverlay()) return;
     const isOpening = !this.showMobileMenuOverlay();
     this.showMobileMenuOverlay.update((show) => !show);
 
-    // On mobile, briefly disable swipe gesture to prevent
-    // the touch event from the toggle button from being captured by
-    // the drawer's swipe handler during its enter animation.
     if (isOpening && this.isMobile()) {
-      this.swipeEnabled.set(false);
-      window.setTimeout(() => {
-        this.swipeEnabled.set(true);
-      }, 300); // Match animation duration (225ms) + buffer
+      this.isOpeningMobileNav.set(true);
+      // Count from the render that starts the slide-in: a slow first render
+      // would otherwise use up the window before the drawer moves.
+      afterNextRender(
+        () => {
+          window.setTimeout(() => {
+            this.isOpeningMobileNav.set(false);
+          }, 300); // Match animation duration (225ms) + buffer
+        },
+        { injector: this._injector },
+      );
     }
   }
 
@@ -348,7 +426,10 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
   /** Handle "back" button to hide mobile menu overlay */
   @HostListener('window:popstate') onBack(): void {
-    if (this.isMobile() && this.showMobileMenuOverlay()) this.toggleMobileNav();
+    // Bypasses the opening guard: a swallowed back would lose the history entry.
+    if (this.isMobile() && this.showMobileMenuOverlay()) {
+      this.showMobileMenuOverlay.set(false);
+    }
   }
 
   /** Synchronize window history state with the visibility of the mobile menu overlay */
@@ -384,13 +465,15 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       return this._sideNavConfigService.isProjectsExpanded();
     } else if (item.id === 'tags') {
       return this._sideNavConfigService.isTagsExpanded();
+    } else if (item.id === 'views') {
+      return this._sideNavConfigService.isViewsExpanded();
     }
     // For other groups, default to expanded (or extend service to manage all groups)
     return true;
   }
 
   onItemClick(item: NavItem): void {
-    if (item.type === 'tree') {
+    if (item.type === 'tree' || item.type === 'viewGroup') {
       // All groups now handled consistently through service
       if (item.action) {
         item.action();
@@ -601,7 +684,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       event.stopPropagation();
 
       if (this.isMobile() && this.showMobileMenuOverlay()) {
-        this.toggleMobileNav();
+        this.showMobileMenuOverlay.set(false);
         return;
       }
 
@@ -670,8 +753,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       if (this._multiDrag.isCancelled()) return;
       const position = getPointerPosition(event);
       const projectId = position
-        ? document
-            .elementFromPoint(position.x, position.y)
+        ? elementUnderTooltips(position)
             ?.closest('nav-item[data-project-id]')
             ?.getAttribute('data-project-id')
         : null;
@@ -698,9 +780,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
-    const navItemElement = document
-      .elementFromPoint(pointerPos.x, pointerPos.y)
-      ?.closest('nav-item');
+    const navItemElement = elementUnderTooltips(pointerPos)?.closest('nav-item');
     if (!navItemElement) {
       return;
     }

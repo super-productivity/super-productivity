@@ -80,7 +80,6 @@ export class ExampleTasksService {
         ) {
           return;
         }
-        const taskIds: string[] = [];
         for (const def of EXAMPLE_TASK_DEFS) {
           const task = this._taskService.createNewTaskWithDefaults({
             title: translations[def.titleKey],
@@ -94,9 +93,7 @@ export class ExampleTasksService {
               isExampleTask: true,
             }),
           );
-          taskIds.push(task.id);
         }
-        localStorage.setItem(LS.EXAMPLE_TASK_IDS, JSON.stringify(taskIds));
         localStorage.setItem(LS.EXAMPLE_TASKS_CREATED, 'true');
       });
   }

@@ -188,6 +188,85 @@ describe('TaskShortcutService', () => {
     }
   });
 
+  describe('group header navigation', () => {
+    let group: HTMLElement;
+    let header: HTMLElement;
+    let task: HTMLElement;
+
+    beforeEach(() => {
+      group = document.createElement('collapsible');
+      group.className = 'is-group';
+      header = document.createElement('div');
+      header.className = 'collapsible-header';
+      header.tabIndex = 0;
+      task = document.createElement('task');
+      task.tabIndex = 0;
+      group.append(header, task);
+      document.body.appendChild(group);
+      stubActiveElement(header);
+    });
+
+    afterEach(() => group.remove());
+
+    it('continues to the next task from a group header with J', () => {
+      const focus = spyOn(task, 'focus');
+      const event = createKeyboardEvent('j');
+
+      expect(service.handleTaskShortcuts(event)).toBe(true);
+      expect(focus).toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('returns to the previous task from a group header with K', () => {
+      group.prepend(task);
+      const focus = spyOn(task, 'focus');
+
+      expect(service.handleTaskShortcuts(createKeyboardEvent('k'))).toBe(true);
+      expect(focus).toHaveBeenCalled();
+    });
+
+    it('uses the configured navigation shortcut instead of hardcoded J', () => {
+      mockConfigService.cfg.set({
+        keyboard: { ...defaultKeyboardConfig, selectNextTask: 'Ctrl+N' },
+      });
+      const focus = spyOn(task, 'focus');
+
+      expect(service.handleTaskShortcuts(createKeyboardEvent('j'))).toBe(false);
+      expect(focus).not.toHaveBeenCalled();
+      expect(
+        service.handleTaskShortcuts(createKeyboardEvent('n', 'KeyN', { ctrlKey: true })),
+      ).toBe(true);
+      expect(focus).toHaveBeenCalled();
+    });
+
+    it('keeps focus on the first header when there is no preceding row', () => {
+      const event = createKeyboardEvent('k');
+      const focus = spyOn(task, 'focus');
+
+      expect(service.handleTaskShortcuts(event)).toBe(true);
+      expect(focus).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('keeps focus on the last header when there is no following row', () => {
+      group.prepend(task);
+      const event = createKeyboardEvent('j');
+      const focus = spyOn(task, 'focus');
+
+      expect(service.handleTaskShortcuts(event)).toBe(true);
+      expect(focus).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('does not treat a control within a header as the focused group', () => {
+      const button = document.createElement('button');
+      header.appendChild(button);
+      stubActiveElement(button);
+
+      expect(service.handleTaskShortcuts(createKeyboardEvent('j'))).toBe(false);
+    });
+  });
+
   describe('handleTaskShortcuts - togglePlay (Y key)', () => {
     describe('when focused task exists', () => {
       it('should delegate to focused task component togglePlayPause method', () => {

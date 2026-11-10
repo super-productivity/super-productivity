@@ -8,7 +8,7 @@ import { ADD_TASK_INLINE_BTN_SELECTOR } from './add-task-inline.const';
 /**
  * Contract test for the `data-add-task-btn` marker. Keyboard focus recovery
  * after a bulk action looks the collapsed add button up by
- * `add-task-inline [data-add-task-btn]` (board-panel.component.ts,
+ * `add-task-inline [data-add-task-btn]` (planner-task.component.ts,
  * task-bulk-action.service.ts). Those call sites build their own DOM fixtures,
  * so without this spec dropping the attribute from the real template would
  * leave every test green and only break focus at runtime.

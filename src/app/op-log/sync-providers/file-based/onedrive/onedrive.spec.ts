@@ -18,15 +18,10 @@ describe('OneDrive', () => {
   >;
   const tokenExpiryMs = 5 * 60 * 1000;
 
-  const baseCfg: OneDrivePrivateCfg = {
-    clientId: 'client-id',
-    tenantId: 'common',
-    syncFolderPath: 'Super Productivity',
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-    tokenExpiresAt: Date.now() + tokenExpiryMs,
-    encryptKey: 'enc',
-  };
+  // Built per test: an expiry computed once at load time runs out (minus the
+  // 60 s refresh skew) four minutes into a full suite run, and every later
+  // OneDrive spec then sees an expiring token and gets a refresh request.
+  let baseCfg: OneDrivePrivateCfg;
 
   const noop = (): void => undefined;
   const mockDeps: OneDriveDeps = {
@@ -58,6 +53,15 @@ describe('OneDrive', () => {
   let originalFetch: typeof fetch | undefined;
 
   beforeEach(() => {
+    baseCfg = {
+      clientId: 'client-id',
+      tenantId: 'common',
+      syncFolderPath: 'Super Productivity',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      tokenExpiresAt: Date.now() + tokenExpiryMs,
+      encryptKey: 'enc',
+    };
     cfgStoreSpy = jasmine.createSpyObj('SyncCredentialStore', ['load', 'setComplete']);
     cfgStoreSpy.setComplete.and.resolveTo();
     const deps: OneDriveDeps = {

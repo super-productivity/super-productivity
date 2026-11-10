@@ -17,7 +17,7 @@ input {
   background: transparent;
   color: inherit;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: border-color var(--transition-duration-m) ease;
 
   @include mq(xs, max) {
     padding: 6px var(--s);
@@ -36,7 +36,7 @@ input {
 }
 
 ::ng-deep {
-  .mat-mdc-autocomplete-panel {
+  .mat-mdc-autocomplete-panel.select-task-minimal-panel {
     max-height: 200px;
     border: 1px solid var(--extra-border-color);
     border-radius: var(--card-border-radius);

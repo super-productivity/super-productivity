@@ -1,5 +1,13 @@
 import { Injectable } from '@angular/core';
 import { PluginManifest } from './plugin-api.model';
+import { T } from '../t.const';
+
+/** A declared permission that the plugin API checks, as a translation key for the UI. */
+export interface PluginApiAccess {
+  permission: string;
+  key: string;
+  params?: Record<string, string>;
+}
 
 /**
  * Elements that may appear in the output.
@@ -253,31 +261,34 @@ export class PluginSecurityService {
   }
 
   /**
-   * Get human-readable permission descriptions
+   * The declared permissions the host actually checks, as translation keys:
+   * `nodeExecution` (gated in the Electron main process), `http` with `allowedHosts`
+   * (gates `PluginAPI.request` only) and `deleteProject` (gates that API call only).
+   * Plugins are not sandboxed: their code runs in the app window and can use `fetch`
+   * and the rest of the plugin API regardless. Other permissions are not checked.
+   * `http` without hosts blocks every `request`, so it gets no entry.
    */
-  getPermissionDescriptions(manifest: PluginManifest): string[] {
-    const descriptions: string[] = [];
+  getDeclaredApiAccess(manifest: PluginManifest): PluginApiAccess[] {
+    const permissions = manifest.permissions ?? [];
+    const access: PluginApiAccess[] = [];
 
-    if (manifest.permissions?.includes('nodeExecution')) {
-      descriptions.push('🔴 Can execute system commands and access files');
+    if (permissions.includes('nodeExecution')) {
+      access.push({
+        permission: 'nodeExecution',
+        key: T.PLUGINS.CAN_RUN_SYSTEM_COMMANDS,
+      });
     }
-
-    if (manifest.permissions?.includes('http')) {
-      const hosts = manifest.allowedHosts?.length
-        ? manifest.allowedHosts.join(', ')
-        : '(none declared — network disabled)';
-      descriptions.push('🟡 Can make network requests to: ' + hosts);
+    if (permissions.includes('http') && manifest.allowedHosts?.length) {
+      access.push({
+        permission: 'http',
+        key: T.PLUGINS.CAN_REQUEST_HOSTS,
+        params: { hosts: manifest.allowedHosts.join(', ') },
+      });
     }
-
-    if (manifest.iFrame) {
-      descriptions.push('🟡 Displays custom user interface');
+    if (permissions.includes('deleteProject')) {
+      access.push({ permission: 'deleteProject', key: T.PLUGINS.CAN_DELETE_PROJECTS });
     }
-
-    if (manifest.hooks && manifest.hooks.length > 0) {
-      descriptions.push('🟢 Responds to app events: ' + manifest.hooks.join(', '));
-    }
-
-    return descriptions;
+    return access;
   }
 
   /**

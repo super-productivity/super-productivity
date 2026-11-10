@@ -162,7 +162,16 @@ test('CLI handles deleted global resources and specs', () => {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, content);
   };
-  const git = (...args) => execFileSync('git', args, { cwd: directory });
+  // Hooks (pre-commit/pre-push via lint) export GIT_DIR & co.; inherited from
+  // a linked worktree, `git init` re-initialises the outer repo as bare
+  // instead of creating the fixture.
+  const env = { ...process.env };
+  for (const name of execFileSync('git', ['rev-parse', '--local-env-vars'], {
+    encoding: 'utf8',
+  }).split('\n')) {
+    delete env[name];
+  }
+  const git = (...args) => execFileSync('git', args, { cwd: directory, env });
   try {
     write(
       'tools/test-affected.js',
@@ -216,7 +225,7 @@ test('CLI handles deleted global resources and specs', () => {
           cwd: directory,
           encoding: 'utf8',
           env: {
-            ...process.env,
+            ...env,
             NODE_PATH: path.dirname(
               path.dirname(require.resolve('typescript/package.json')),
             ),

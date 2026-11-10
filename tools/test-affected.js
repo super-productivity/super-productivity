@@ -44,7 +44,7 @@ const git = (...args) =>
 
 const stripJsonComments = (text) => text.replace(/^\s*\/\/.*$/gm, '');
 
-/** Builds a resolver for import specifiers, mirroring tsconfig `baseUrl: ./` + `paths`. */
+/** Builds a resolver for import specifiers, mirroring tsconfig `paths` (incl. `src/*`). */
 const createResolver = (fileSet, tsPaths) => {
   const tryResolve = (base) =>
     [base, `${base}.ts`, `${base}.d.ts`, `${base}/index.ts`].find((c) =>
@@ -55,7 +55,7 @@ const createResolver = (fileSet, tsPaths) => {
       return tryResolve(path.posix.join(path.posix.dirname(from), spec));
     }
     if (tsPaths[spec]) return tryResolve(path.posix.normalize(tsPaths[spec][0]));
-    // baseUrl is the repo root, so `src/app/...` imports resolve from there
+    // the `src/*` path alias maps to the repo root, so `src/app/...` resolves from there
     return tryResolve(spec);
   };
 };

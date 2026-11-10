@@ -66,6 +66,5 @@ proposal needs fresh evidence and review before restoring code or dependencies.
   or rollback policy.
 
 The retained IndexedDB adapter, store, archive, and remote-apply integration
-tests continue to cover current persistence. The S3 consumer audit, validation
-results, and local draft update for #7931 are recorded in
-[the S3 result](../plans/2026-09-26-sync-S3-result.md).
+tests continue to cover current persistence. The removal and its consumer
+audit are recorded in [#10277](https://github.com/super-productivity/super-productivity/pull/10277).

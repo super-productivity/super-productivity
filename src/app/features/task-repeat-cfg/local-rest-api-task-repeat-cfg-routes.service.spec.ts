@@ -174,6 +174,7 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
           provide: DateService,
           useValue: {
             todayStr: (): string => TODAY,
+            getLogicalTodayDate: (): Date => new Date(2026, 9, 4),
             getStartOfNextDayDiffMs: (): number => startOfNextDayDiffMs,
           },
         },
@@ -246,6 +247,12 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
   });
 
   describe('POST /task-repeat-cfgs', () => {
+    it('copies the task priority when making it recurring', async () => {
+      tasks['t1'] = { ...tasks['t1'], priority: 'high' };
+      await handle(request('POST', '/task-repeat-cfgs', { taskId: 't1' }));
+      expect(createdCfg().priority).toBe(3);
+    });
+
     it('makes a task repeat daily by default, like the repeat dialog', async () => {
       const response = await handle(
         request('POST', '/task-repeat-cfgs', { taskId: 't1' }),
@@ -370,6 +377,73 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
           skipOverdue: false,
         }),
       );
+    });
+
+    it('treats a partial custom weekly weekday list as the complete selection', async () => {
+      const response = await handle(
+        request('POST', '/task-repeat-cfgs', {
+          taskId: 't1',
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'WEEKLY',
+          wednesday: true,
+        }),
+      );
+
+      expect(response.status).toBe(201);
+      expect(createdCfg()).toEqual(
+        jasmine.objectContaining({
+          monday: false,
+          tuesday: false,
+          wednesday: true,
+          thursday: false,
+          friday: false,
+          saturday: false,
+          sunday: false,
+        }),
+      );
+    });
+
+    it('preserves default weekdays when a custom weekly create omits weekdays', async () => {
+      for (const schedule of [{ repeatCycle: 'WEEKLY' }, {}] as const) {
+        const response = await handle(
+          request('POST', '/task-repeat-cfgs', {
+            taskId: 't1',
+            quickSetting: 'CUSTOM',
+            repeatEvery: 2,
+            ...schedule,
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(createdCfg()).toEqual(
+          jasmine.objectContaining({
+            repeatCycle: 'WEEKLY',
+            repeatEvery: 2,
+            monday: true,
+            tuesday: true,
+            wednesday: true,
+            thursday: true,
+            friday: true,
+            saturday: false,
+            sunday: false,
+          }),
+        );
+      }
+    });
+
+    it('rejects an explicitly empty custom weekly weekday selection', async () => {
+      const response = await handle(
+        request('POST', '/task-repeat-cfgs', {
+          taskId: 't1',
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'WEEKLY',
+          wednesday: false,
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(errorCode(response)).toBe('INVALID_INPUT');
+      expectNoDispatch();
     });
 
     it('honours explicit isPaused and skipOverdue', async () => {
@@ -527,6 +601,26 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       expect(data<TaskRepeatCfg>(response).isPaused).toBe(true);
     });
 
+    // As in the dialog: the next creation would otherwise add the newest date
+    // missed while paused as an overdue copy
+    it('moves the creation cursor to yesterday when resuming', async () => {
+      cfgs$.next([
+        createCfg('paused', { isPaused: true, lastTaskCreationDay: '2026-09-20' }),
+      ]);
+
+      await handle(request('PATCH', '/task-repeat-cfgs/paused', { isPaused: false }));
+
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'paused',
+        {
+          isPaused: false,
+          lastTaskCreationDay: '2026-10-03',
+          lastTaskCreation: new Date(2026, 9, 3, 12).getTime(),
+        },
+        false,
+      );
+    });
+
     it('sends only the schedule fields that change', async () => {
       await handle(
         request('PATCH', '/task-repeat-cfgs/weekly', {
@@ -539,6 +633,56 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
         'weekly',
         { startDate: '2099-03-12', wednesday: false, thursday: true },
         false,
+      );
+    });
+
+    it('replaces the whole custom weekday selection when a day is provided', async () => {
+      const response = await handle(
+        request('PATCH', '/task-repeat-cfgs/weekly', {
+          quickSetting: 'CUSTOM',
+          friday: true,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(data<TaskRepeatCfg>(response)).toEqual(
+        jasmine.objectContaining({
+          quickSetting: 'CUSTOM',
+          monday: false,
+          tuesday: false,
+          wednesday: false,
+          thursday: false,
+          friday: true,
+          saturday: false,
+          sunday: false,
+        }),
+      );
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'weekly',
+        jasmine.objectContaining({
+          quickSetting: 'CUSTOM',
+          wednesday: false,
+          friday: true,
+        }),
+        false,
+      );
+    });
+
+    it('preserves custom weekdays when PATCH changes only the interval', async () => {
+      const response = await handle(
+        request('PATCH', '/task-repeat-cfgs/weekly', {
+          quickSetting: 'CUSTOM',
+          repeatEvery: 3,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(data<TaskRepeatCfg>(response)).toEqual(
+        jasmine.objectContaining({
+          repeatEvery: 3,
+          wednesday: true,
+          friday: false,
+        }),
       );
     });
 

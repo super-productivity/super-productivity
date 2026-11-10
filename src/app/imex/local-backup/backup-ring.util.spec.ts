@@ -4,6 +4,7 @@ import {
   countAllTasksInBackupStr,
   isUsableBackupStr,
   selectBestBackupStr,
+  shouldKeepPrevBackupSlot,
   summarizeBackupStr,
 } from './backup-ring.util';
 
@@ -182,6 +183,31 @@ describe('backup-ring.util', () => {
 
     it('returns the active+archive sum for a normal backup', () => {
       expect(countAllTasksInBackupStr(MEANINGFUL)).toBe(1);
+    });
+  });
+
+  describe('shouldKeepPrevBackupSlot (#7892)', () => {
+    const withTasks = (n: number): string =>
+      JSON.stringify({ task: { ids: Array.from({ length: n }, (_, i) => `t${i}`) } });
+
+    it('keeps the previous slot while the primary holds less than half its tasks', () => {
+      expect(shouldKeepPrevBackupSlot(withTasks(3), withTasks(50))).toBe(true);
+      expect(shouldKeepPrevBackupSlot(withTasks(24), withTasks(50))).toBe(true);
+    });
+
+    it('rotates once the primary holds at least half the previous tasks', () => {
+      expect(shouldKeepPrevBackupSlot(withTasks(25), withTasks(50))).toBe(false);
+      expect(shouldKeepPrevBackupSlot(withTasks(60), withTasks(50))).toBe(false);
+    });
+
+    it('treats a corrupt primary as empty', () => {
+      expect(shouldKeepPrevBackupSlot('{not json', withTasks(5))).toBe(true);
+    });
+
+    it('rotates when the previous slot is absent, corrupt or task-less', () => {
+      expect(shouldKeepPrevBackupSlot(withTasks(1), null)).toBe(false);
+      expect(shouldKeepPrevBackupSlot(withTasks(1), '{not json')).toBe(false);
+      expect(shouldKeepPrevBackupSlot(withTasks(0), EMPTY_STATE)).toBe(false);
     });
   });
 });

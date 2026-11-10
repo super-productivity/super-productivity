@@ -22,6 +22,7 @@ import {
   countAllTasksInBackupStr,
   isUsableBackupStr,
   selectBestBackupStr,
+  shouldKeepPrevBackupSlot,
   summarizeBackupStr,
 } from './backup-ring.util';
 import { DEFAULT_MAX_BACKUP_FILES } from '../../../../electron/shared-with-frontend/backup-file-cleanup.util';
@@ -126,10 +127,7 @@ export class LocalBackupService {
     // Restore from the newest usable ring slot (#7901). Returns '' when nothing
     // usable exists (degrades to the existing import-error snack rather than
     // throwing on the startup path).
-    const [primary, prev] = await Promise.all([
-      this._loadAndroidDbValueSafe(ANDROID_DB_KEY),
-      this._loadAndroidDbValueSafe(ANDROID_DB_KEY_PREV),
-    ]);
+    const [primary, prev] = await this._readMobileSlots();
     return selectBestBackupStr(primary, prev) ?? '';
   }
 
@@ -168,10 +166,7 @@ export class LocalBackupService {
   }
 
   async loadBackupIOS(): Promise<string> {
-    const [primary, prev] = await Promise.all([
-      this._readIOSFileOrNull(IOS_BACKUP_FILENAME),
-      this._readIOSFileOrNull(IOS_BACKUP_PREV_FILENAME),
-    ]);
+    const [primary, prev] = await this._readMobileSlots();
     // Mirror loadBackupAndroid: return '' rather than throwing when nothing
     // usable exists. askForFileStoreBackupIfAvailable() runs from the
     // fire-and-forget _initBackups() at startup, so a throw here would surface as
@@ -187,17 +182,7 @@ export class LocalBackupService {
     if (!this._isAndroidWebView && !this._platformService.isIOS()) {
       return [];
     }
-    const [latest, previous] = await Promise.all(
-      this._isAndroidWebView
-        ? [
-            this._loadAndroidDbValueSafe(ANDROID_DB_KEY),
-            this._loadAndroidDbValueSafe(ANDROID_DB_KEY_PREV),
-          ]
-        : [
-            this._readIOSFileOrNull(IOS_BACKUP_FILENAME),
-            this._readIOSFileOrNull(IOS_BACKUP_PREV_FILENAME),
-          ],
-    );
+    const [latest, previous] = await this._readMobileSlots();
     // Same gate as the Settings restore: a corrupt slot is never offered.
     const slots: MobileBackupSlot[] = [];
     if (latest && isUsableBackupStr(latest)) {
@@ -212,6 +197,21 @@ export class LocalBackupService {
   /** Imports a raw backup blob (file or mobile slot); false + snack on failure. */
   restoreBackupStr(backupData: string): Promise<boolean> {
     return this._importBackup(backupData);
+  }
+
+  /** Both raw mobile ring slots, latest first; an unreadable slot reads as null. */
+  private _readMobileSlots(): Promise<[string | null, string | null]> {
+    return Promise.all(
+      this._isAndroidWebView
+        ? [
+            this._loadAndroidDbValueSafe(ANDROID_DB_KEY),
+            this._loadAndroidDbValueSafe(ANDROID_DB_KEY_PREV),
+          ]
+        : [
+            this._readIOSFileOrNull(IOS_BACKUP_FILENAME),
+            this._readIOSFileOrNull(IOS_BACKUP_PREV_FILENAME),
+          ],
+    );
   }
 
   /** Newest usable backup blob for the current mobile platform ('' if none). */
@@ -260,12 +260,19 @@ export class LocalBackupService {
     // work — so a synced backup must go through the informed prompt and let the
     // user decide (they may prefer to re-pull from the server). Corrupt /
     // data-less / synced backups all fall through to the prompt below.
-    const backupData = await this._loadBestMobileBackupStr();
+    const [latest, previous] = await this._readMobileSlots();
+    const backupData = selectBestBackupStr(latest, previous);
     if (!backupData) {
       // Nothing usable to restore — stay silent rather than prompt for nothing.
       return;
     }
-    if (isUsableBackupStr(backupData) && !backupStrHasSyncEnabled(backupData)) {
+    // Only the latest slot restores silently: the previous one can be much older,
+    // as the ring keeps a larger generation there after a big shrink (#7892).
+    if (
+      backupData === latest &&
+      isUsableBackupStr(backupData) &&
+      !backupStrHasSyncEnabled(backupData)
+    ) {
       Log.log('mobile backupData auto-restored, length: ' + backupData.length);
       const didImport = await this._importBackup(backupData);
       if (didImport) {
@@ -281,8 +288,8 @@ export class LocalBackupService {
       }
       return;
     }
-    // Corrupt, data-less, or sync-configured backup: don't silently act — surface
-    // the informed prompt so the user decides.
+    // Corrupt, data-less, sync-configured or previous-slot backup: don't silently
+    // act — surface the informed prompt so the user decides.
     if (confirmDialog(this._restoreMobilePromptMsg(backupData))) {
       Log.log('mobile backupData loaded, length: ' + backupData.length);
       await this._importBackup(backupData);
@@ -442,6 +449,22 @@ export class LocalBackupService {
     }
   }
 
+  /**
+   * Writes the Android backup now and confirms the primary slot holds exactly
+   * the current state. The legacy online-mode handover (#8832) relies on it:
+   * the offline app restores this slot on its blank first start, so a skipped
+   * (empty / near-empty guard) or lost write must stop the handover.
+   */
+  async writeVerifiedAndroidBackup(): Promise<boolean> {
+    const data =
+      (await this._stateSnapshotService.getAllSyncModelDataFromStoreAsync()) as AppDataComplete;
+    if (!hasMeaningfulStateData(data) || !(await this._backupAndroid(data))) {
+      return false;
+    }
+    this._recordLastBackupTime();
+    return (await this._loadAndroidDbValueSafe(ANDROID_DB_KEY)) === JSON.stringify(data);
+  }
+
   private _recordLastBackupTime(): void {
     try {
       localStorage.setItem(LS.LAST_LOCAL_BACKUP, Date.now().toString());
@@ -501,6 +524,29 @@ export class LocalBackupService {
     return true;
   }
 
+  // #7892: true when the ring must keep its previous slot (see
+  // shouldKeepPrevBackupSlot) rather than promote `existing` into it. A failed
+  // read keeps it too: skipping only the prev write never stops backups, while
+  // rotating on uncertainty could drop the generation this protects.
+  private async _keepPrevSlot(
+    existing: string,
+    readPrev: () => Promise<string | null>,
+    platform: 'Android' | 'iOS',
+  ): Promise<boolean> {
+    let prev: string | null;
+    try {
+      prev = await readPrev();
+    } catch (e) {
+      Log.err(`LocalBackupService: keeping ${platform} previous backup — unreadable`, e);
+      return true;
+    }
+    if (!shouldKeepPrevBackupSlot(existing, prev)) {
+      return false;
+    }
+    Log.log(`LocalBackupService: keeping larger ${platform} previous backup. #7892`);
+    return true;
+  }
+
   // Returns true when a backup was actually written, false when the A3 guard
   // skipped it (so the caller knows whether to advance the last-backup time).
   private async _backupAndroid(data: AppDataComplete): Promise<boolean> {
@@ -521,7 +567,14 @@ export class LocalBackupService {
     if (this._guardNearEmptyOverwrite(data, existing, 'Android')) {
       return false;
     }
-    if (existing) {
+    if (
+      existing &&
+      !(await this._keepPrevSlot(
+        existing,
+        () => this._nativeDbLoad(ANDROID_DB_KEY_PREV),
+        'Android',
+      ))
+    ) {
       await this._nativeDbSave(ANDROID_DB_KEY_PREV, existing);
     }
     const json = JSON.stringify(data);
@@ -553,7 +606,14 @@ export class LocalBackupService {
       return false;
     }
     try {
-      if (existing) {
+      if (
+        existing &&
+        !(await this._keepPrevSlot(
+          existing,
+          () => this._readIOSExistingSlotOrThrow(IOS_BACKUP_PREV_FILENAME),
+          'iOS',
+        ))
+      ) {
         await this._writeIOSFile(IOS_BACKUP_PREV_FILENAME, existing);
       }
       await this._writeIOSFile(IOS_BACKUP_FILENAME, JSON.stringify(data));
@@ -638,10 +698,11 @@ export class LocalBackupService {
         true,
         false, // isSkipPreImportBackup
         undefined, // requiredImportBackupId
-        // Every caller restores this device's own auto-backup (Electron backup
-        // dir, mobile ring slots): state that was already live here. Refusing
-        // it for errors repair cannot fix would leave the user no way back
-        // after local data loss (#8279). Picked files use FileImexComponent.
+        // Every caller restores state that was already live on this device:
+        // its own auto-backup (Electron backup dir, mobile ring slots) or its
+        // never-migrated v12-or-older `SUP` database (#7345). Refusing it for
+        // errors repair cannot fix would leave the user no way back after local
+        // data loss (#8279). Picked files use FileImexComponent.
         true, // isOwnStateRestore
       );
       // This profile's notes were just replaced wholesale (Electron startup

@@ -17,6 +17,11 @@
     (done)="layoutService.hideAddTaskBar()"
     (afterTaskAdd)="onTaskAdded($event)"
     [isGlobalBarVariant]="true"
+    [additionalFields]="viewAddTarget()?.additionalFields"
+    [viewPrefill]="viewAddTarget()?.prefill"
+    [tagsToRemove]="viewAddTarget()?.tagsToRemove ?? []"
+    [taskIdsToExclude]="viewAddTarget()?.taskIdsToExclude"
+    [isNoDefaults]="!!viewAddTarget()"
     class="global"
   ></add-task-bar>
 }
@@ -48,7 +53,7 @@
     [class.has-mobile-bottom-nav]="isShowMobileButtonNav()"
     [class.is-multi-selecting]="isMultiSelecting()"
     [class.has-vertical-action-bar]="isVerticalActionBar()"
-    [class.app-entrance]="isAppEntrance()"
+    [class.app-entrance]="isAppEntrance() && isDataLoaded()"
     [dir]="isRTL ? 'rtl' : 'ltr'"
   >
     <magic-side-nav
@@ -57,7 +62,10 @@
     >
     </magic-side-nav>
 
-    <main class="main-content">
+    <main
+      #mainContent
+      class="main-content"
+    >
       <right-panel>
         <header
           [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
@@ -66,17 +74,22 @@
           <main-header></main-header>
 
           <banner></banner>
+          <global-progress-bar></global-progress-bar>
         </header>
 
-        <div
-          #routeWrapper
-          [@warpRoute]="getPage(o)"
-          class="route-wrapper"
-        >
-          <router-outlet #o="outlet"></router-outlet>
-        </div>
+        <!-- Pages render only with their data (not every route has a guard that
+             waits for it); the entrance animates the first one in. -->
+        @if (isDataLoaded()) {
+          <div
+            #routeWrapper
+            [@warpRoute]="getPage(o)"
+            [@.disabled]="isAppEntrance()"
+            class="route-wrapper"
+          >
+            <router-outlet #o="outlet"></router-outlet>
+          </div>
+        }
       </right-panel>
-      <global-progress-bar></global-progress-bar>
       <task-multi-select-bar></task-multi-select-bar>
     </main>
 
@@ -91,14 +104,19 @@
 }
 <!-- -->
 
-@if (onboardingHintService.currentStep()) {
+<!-- One host for part 1 and the tour, so the chip can slide from one into the other.
+     Waits for the shell entrance so the chip arrives after, and anchors to, settled content. -->
+@if (
+  !isAppEntrance() &&
+  (onboardingHintService.currentStep() || quickTourService.currentStep())
+) {
   <onboarding-hint></onboarding-hint>
 }
 
 <!-- Background context menu -->
 @if (routeWrapper) {
   <context-menu
-    [contextMenu]="backgroundContextMenu"
+    [menu]="backgroundContextMenu"
     [rightClickTriggerEl]="routeWrapper.nativeElement"
     [isEnabled]="isWorkViewPage()"
     [allowedSelectors]="'
@@ -117,35 +135,37 @@
   ></context-menu>
 }
 
-<ng-template #backgroundContextMenu>
-  <div style="min-width: 200px; max-width: 300px">
-    <button
-      mat-menu-item
-      (click)="openSettings()"
-      class="background-menu-item"
-      style="width: 100%; overflow: hidden"
-    >
-      <mat-icon>settings</mat-icon>
-      <span>{{
-        (workContextService.activeWorkContextType === 'PROJECT'
-          ? T.APP.CONTEXT_MENU.CHANGE_PROJECT_SETTINGS
-          : T.APP.CONTEXT_MENU.CHANGE_TAG_SETTINGS
-        ) | translate
-      }}</span>
-    </button>
-    @if (
-      workContextService.activeWorkContextType === 'PROJECT' ||
-      workContextService.activeWorkContextId === TODAY_TAG_ID
-    ) {
+<mat-menu #backgroundContextMenu="matMenu">
+  <ng-template matMenuContent>
+    <div style="min-width: 200px; max-width: 300px">
       <button
         mat-menu-item
-        (click)="addSection()"
+        (click)="openSettings()"
         class="background-menu-item"
         style="width: 100%; overflow: hidden"
       >
-        <mat-icon>list</mat-icon>
-        <span>{{ T.MH.ADD_SECTION | translate }}</span>
+        <mat-icon>settings</mat-icon>
+        <span>{{
+          (workContextService.activeWorkContextType === 'PROJECT'
+            ? T.APP.CONTEXT_MENU.CHANGE_PROJECT_SETTINGS
+            : T.APP.CONTEXT_MENU.CHANGE_TAG_SETTINGS
+          ) | translate
+        }}</span>
       </button>
-    }
-  </div>
-</ng-template>
+      @if (
+        workContextService.activeWorkContextType === 'PROJECT' ||
+        workContextService.activeWorkContextId === TODAY_TAG_ID
+      ) {
+        <button
+          mat-menu-item
+          (click)="addSection()"
+          class="background-menu-item"
+          style="width: 100%; overflow: hidden"
+        >
+          <mat-icon>list</mat-icon>
+          <span>{{ T.MH.ADD_SECTION | translate }}</span>
+        </button>
+      }
+    </div>
+  </ng-template>
+</mat-menu>

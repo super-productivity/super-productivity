@@ -3,11 +3,9 @@ import {
   hideAddTaskBar,
   hideIssuePanel,
   hideNonTaskSidePanelContent,
-  hideTaskViewCustomizerPanel,
   showAddTaskBar,
   toggleIssuePanel,
   toggleShowNotes,
-  toggleTaskViewCustomizerPanel,
   toggleScheduleDayPanel,
   hideScheduleDayPanel,
 } from './store/layout.actions';
@@ -20,7 +18,6 @@ import {
   selectIsShowIssuePanel,
   selectIsShowNotes,
   selectIsShowPluginPanel,
-  selectIsShowTaskViewCustomizerPanel,
   selectIsShowScheduleDayPanel,
 } from './store/layout.reducer';
 import { map } from 'rxjs/operators';
@@ -72,6 +69,8 @@ export class LayoutService {
 
   readonly selectedTimeView = signal<'week' | 'month' | 'day'>('week');
   readonly isWorkViewScrolled = signal<boolean>(false);
+  /** The side nav is open as the phone layout's overlay menu. */
+  readonly isMobileSideNavOpen = signal<boolean>(false);
   readonly isShowAddTaskBar = toSignal(this.isShowAddTaskBar$, { initialValue: false });
 
   readonly isXs = toSignal(
@@ -101,11 +100,6 @@ export class LayoutService {
   readonly isShowNotes = toSignal(this._store$.pipe(select(selectIsShowNotes)), {
     initialValue: false,
   });
-
-  readonly isShowTaskViewCustomizerPanel = toSignal(
-    this._store$.pipe(select(selectIsShowTaskViewCustomizerPanel)),
-    { initialValue: false },
-  );
 
   readonly isShowIssuePanel = toSignal(this.isShowIssuePanel$, { initialValue: false });
 
@@ -336,14 +330,6 @@ export class LayoutService {
 
   hideAddTaskPanel(): void {
     this._store$.dispatch(hideIssuePanel());
-  }
-
-  toggleTaskViewCustomizerPanel(): void {
-    this._store$.dispatch(toggleTaskViewCustomizerPanel());
-  }
-
-  hideTaskViewCustomizerPanel(): void {
-    this._store$.dispatch(hideTaskViewCustomizerPanel());
   }
 
   focusSideNav(): void {

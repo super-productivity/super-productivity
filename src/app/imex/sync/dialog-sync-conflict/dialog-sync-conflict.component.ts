@@ -9,7 +9,7 @@ import {
 } from '@angular/material/dialog';
 import { T } from 'src/app/t.const';
 import { DialogConflictResolutionResult } from '../sync.model';
-import { ConflictData, VectorClock } from '../../../op-log/sync-exports';
+import { ConflictData, ConflictReason, VectorClock } from '../../../op-log/sync-exports';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -24,6 +24,10 @@ import {
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
+import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
+import { SyncFirstChoiceComponent } from '../sync-first-choice/sync-first-choice.component';
 
 @Component({
   selector: 'dialog-sync-conflict',
@@ -41,6 +45,7 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
     ShortTimePipe,
     MatTooltip,
     CollapsibleComponent,
+    SyncFirstChoiceComponent,
   ],
 })
 export class DialogSyncConflictComponent {
@@ -48,6 +53,7 @@ export class DialogSyncConflictComponent {
   private _matDialog = inject(MatDialog);
   private _translateService = inject(TranslateService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _syncLocalStateService = inject(SyncLocalStateService);
   data = inject<ConflictData>(MAT_DIALOG_DATA);
 
   // Exposed so the template can pass the reactive locale to the now-pure
@@ -58,6 +64,12 @@ export class DialogSyncConflictComponent {
 
   remote = this.data.remote;
   local = this.data.local;
+  isOwnUploadsMissing = this.data.reason === ConflictReason.OwnUploadsMissing;
+  // A device that never synced, joining a SuperSync account that has tasks (2b).
+  isFirstSuperSync =
+    this.data.reason === ConflictReason.NoLastSync &&
+    !this.local.lastSyncedVectorClock &&
+    inject(SyncProviderManager).getActiveProvider()?.id === SyncProviderId.SuperSync;
 
   isHighlightRemote =
     this.remote.lastUpdate !== null && this.remote.lastUpdate > this.local.lastUpdate;
@@ -80,8 +92,17 @@ export class DialogSyncConflictComponent {
     this._matDialogRef.disableClose = true;
   }
 
-  close(res?: DialogConflictResolutionResult): void {
-    if (res && this.shouldConfirmOverwrite(res)) {
+  /** `isWarned`: the choice already showed its warning, so skip the confirm. */
+  close(res?: DialogConflictResolutionResult, isWarned = false): void {
+    // #9256: Keep local force-uploads with a clean slate, which deletes remote
+    // ops this device could not decrypt.
+    if (
+      res === 'USE_LOCAL' &&
+      !this._syncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps()
+    ) {
+      return;
+    }
+    if (res && !isWarned && this.shouldConfirmOverwrite(res)) {
       const confirmMessage = this.getConfirmationMessage(res);
 
       this._matDialog

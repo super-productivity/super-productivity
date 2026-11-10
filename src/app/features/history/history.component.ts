@@ -10,7 +10,6 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { ActivatedRoute, Router } from '@angular/router';
 import { WorklogService } from '../worklog/worklog.service';
 import { getDateRangeForMonth } from '../../util/get-date-range-for-month';
-import { getDateRangeForWeek } from '../../util/get-date-range-for-week';
 import { fadeInSlowAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -20,7 +19,7 @@ import { Store } from '@ngrx/store';
 import { selectAllProjectColorsAndTitles } from '../project/store/project.selectors';
 import { FullPageSpinnerComponent } from '../../ui/full-page-spinner/full-page-spinner.component';
 import { KeyValue, KeyValuePipe } from '@angular/common';
-import { MatMiniFabButton } from '@angular/material/button';
+import { MatButton, MatMiniFabButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
@@ -36,7 +35,14 @@ import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.com
 import { DateService } from '../../core/date/date.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
-import { WorklogDay, WorklogMonth, WorklogYear } from '../worklog/worklog.model';
+import {
+  WorklogDay,
+  WorklogMonth,
+  WorklogWeek,
+  WorklogYear,
+} from '../worklog/worklog.model';
+import { sortWorklogDays } from '../worklog/worklog-week/worklog-week.component';
+import { DialogRecentlyDeletedComponent } from '../tasks/recently-deleted/dialog-recently-deleted/dialog-recently-deleted.component';
 
 @Component({
   selector: 'history',
@@ -46,6 +52,7 @@ import { WorklogDay, WorklogMonth, WorklogYear } from '../worklog/worklog.model'
   animations: [expandFadeAnimation, fadeInSlowAnimation],
   imports: [
     FullPageSpinnerComponent,
+    MatButton,
     MatMiniFabButton,
     MatIcon,
     MatTooltip,
@@ -85,8 +92,8 @@ export class HistoryComponent {
   );
   expanded: { [key: string]: boolean } = {};
   expandedMonths: { [key: string]: boolean } = (() => {
-    const now = new Date();
-    return { [`${now.getFullYear()}-${now.getMonth() + 1}`]: true };
+    const [year, month] = this._dateService.todayStr().split('-');
+    return { [`${+year}-${+month}`]: true };
   })();
 
   constructor() {
@@ -106,13 +113,22 @@ export class HistoryComponent {
     });
   }
 
-  exportData(year: string | number, month: string | number, week?: number): void {
-    const { rangeStart, rangeEnd } =
-      typeof week === 'number'
-        ? getDateRangeForWeek(+year, week, +month)
-        : getDateRangeForMonth(+year, +month);
+  // a week crossing a month boundary is listed in both months (#9950)
+  isOtherMonth(dateStr: string, monthKey: string): boolean {
+    return +dateStr.split('-')[1] !== +monthKey;
+  }
 
+  exportData(year: string | number, month: string | number): void {
+    const { rangeStart, rangeEnd } = getDateRangeForMonth(+year, +month);
     this._openExportDialog(rangeStart, rangeEnd);
+  }
+
+  // the full week, which can reach into the neighbouring month (#9950)
+  exportWeek(week: WorklogWeek): void {
+    this._openExportDialog(
+      parseDbDateStr(week.startDateStr),
+      parseDbDateStr(week.endDateStr),
+    );
   }
 
   exportAllData(): void {
@@ -145,6 +161,10 @@ export class HistoryComponent {
         rangeEnd,
       },
     });
+  }
+
+  openRecentlyDeleted(): void {
+    this._matDialog.open(DialogRecentlyDeletedComponent, { restoreFocus: true });
   }
 
   viewTaskDetails(task: Task): void {
@@ -221,8 +241,8 @@ export class HistoryComponent {
   sortWorklogItems = <T extends KeyValue<string, unknown>>(a: T, b: T): number =>
     +b.key - +a.key;
 
-  sortWorklogItemsReverse = <T extends KeyValue<string, unknown>>(a: T, b: T): number =>
-    -this.sortWorklogItems(a, b);
+  // by date, as a week's day-of-month keys can cross a month boundary (#9950)
+  sortWeekDays = sortWorklogDays;
 
   async updateTimeSpentTodayForTask(
     task: Task,

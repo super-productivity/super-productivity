@@ -128,8 +128,9 @@ export function ConditionDialog(props: ConditionDialogProps) {
           </select>
         ) : (
           <>
-            <div class="input-with-toggle">
+            <div class="row">
               <input
+                class="grow"
                 type="text"
                 value={condition().value}
                 onInput={(e) => setCondition({ ...condition(), value: e.currentTarget.value })}
@@ -148,9 +149,7 @@ export function ConditionDialog(props: ConditionDialogProps) {
               {supportsRegex(condition().type) && (
                 <button
                   type="button"
-                  class={
-                    condition().isRegex ? 'btn-primary regex-toggle' : 'btn-outline regex-toggle'
-                  }
+                  class="btn-outline"
                   aria-pressed={condition().isRegex ? 'true' : 'false'}
                   onClick={() => setCondition({ ...condition(), isRegex: !condition().isRegex })}
                 >

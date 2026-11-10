@@ -17,3 +17,4 @@ services:
       - DATABASE_URL=postgresql://supersync:superpassword@db:5432/supersync_db
       - WEBAUTHN_ORIGIN=http://localhost:1901
       - PUBLIC_URL=http://localhost:1901
+      - CAPTURE_CONNECTOR_ENABLED=true

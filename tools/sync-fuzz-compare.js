@@ -10,8 +10,9 @@
 // explains, so a change that makes a known failure more frequent passes them.
 // This comparison caught two such regressions in #10398. It runs
 // sync-fuzz-signature-report.benchmark.ts in the working tree and in a
-// temporary worktree of the base ref (sharing node_modules), one after the
-// other, since both use Karma's port, and takes 5 to 10 minutes. The base
+// temporary worktree of the base ref (sharing node_modules, or with its own
+// install when package-lock.json differs), one after the other, since both
+// use Karma's port, and takes 5 to 10 minutes. The base
 // run uses the working tree's report benchmark and intent mixes, so both
 // sweep the same seeds; it warns when other harness files differ, since the
 // base then reports what its own harness detects. An interrupted run removes
@@ -198,7 +199,23 @@ const main = () => {
   let runs;
   try {
     git(root, ['worktree', 'add', '--detach', worktree, baseRef]);
-    fs.symlinkSync(path.join(root, 'node_modules'), path.join(worktree, 'node_modules'));
+    // A dependency change can make the base's source uncompilable with the
+    // working tree's packages (a framework or TypeScript major), so the base
+    // then gets its own install; otherwise sharing node_modules saves minutes.
+    if (git(root, ['diff', '--name-only', baseRef, '--', 'package-lock.json'])) {
+      console.log(
+        `package-lock.json differs from ${baseLabel}; installing its dependencies…`,
+      );
+      execFileSync('npm', ['ci', '--no-audit', '--no-fund'], {
+        cwd: worktree,
+        stdio: 'inherit',
+      });
+    } else {
+      fs.symlinkSync(
+        path.join(root, 'node_modules'),
+        path.join(worktree, 'node_modules'),
+      );
+    }
     for (const file of SHARED_FILES) {
       fs.copyFileSync(path.join(root, file), path.join(worktree, file));
     }

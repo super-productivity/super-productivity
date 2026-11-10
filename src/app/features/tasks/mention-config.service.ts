@@ -108,7 +108,8 @@ export class MentionConfigService {
   private readonly _sources$ = combineLatest([
     this._globalConfigService.shortSyntax$,
     this._tagService.tagsNoMyDayAndNoListSorted$,
-    this._projectService.listSortedForUI$,
+    // includes menu-hidden projects: hiding only affects the sidebar (#11190)
+    this._projectService.listSorted$,
   ]);
 
   // Title edits of existing tasks: recurrence phrases are parsed as plain

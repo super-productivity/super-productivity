@@ -181,9 +181,9 @@ export class PlannerCalendarNavComponent {
     // unbounded and render full-size rows rather than guess at a clamp.
     if (!container) return;
     // offsetTop/clientHeight rather than getBoundingClientRect: the route enter
-    // animation (warpRoute) starts this view at scale(1.2), and a rect read
-    // while that is in flight is 20% too generous. Measured 227px of room where
-    // there were 178, which is a whole extra row.
+    // animation (warpRoute) transforms this view while it runs, and a rect read
+    // in flight is off by that transform. When it was a scale(1.2) zoom that
+    // measured 227px of room where there were 178, a whole extra row.
     const topWithinContainer = this._layoutTop(el) - this._layoutTop(container);
     this._availableForRows.set(
       container.clientHeight - topWithinContainer - HANDLE_HEIGHT - MIN_PLAN_VIEW_HEIGHT,

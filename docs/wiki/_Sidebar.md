@@ -16,12 +16,14 @@
 - [[2.05-Manage-Scheduled-Tasks]]
 - [[2.06-Manage-Repeating-Tasks]]
 - [[2.07-Manage-Task-Integrations]]
+- [[2.24-Set-Up-CalDAV]]
 - [[2.08-Choose-Sync-Backend]]
 - [[2.09-Configure-Sync-Backend]]
 - [[2.19-Sync-Proton-Drive-via-rclone]]
 - [[2.20-Import-from-Todoist]]
 - [[2.21-Manage-Plugins]]
 - [[2.22-Import-from-TickTick]]
+- [[2.23-Connect-an-AI-Assistant]]
 - [[2.13-Run-with-Docker]]
 
 ### Contributing to Super-Productivity

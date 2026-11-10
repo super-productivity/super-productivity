@@ -35,6 +35,17 @@ describe('FocusModeTaskTrackingComponent', () => {
     expect(el().querySelector('.time-wrapper')?.textContent).toContain('/');
   });
 
+  it('renders the durations as text without parsing HTML', () => {
+    const parseSpy = spyOn(DOMParser.prototype, 'parseFromString').and.callThrough();
+    fixture.componentRef.setInput('task', mockTask({ timeSpent: 91 * 60 * 1000 }));
+    fixture.detectChanges();
+    expect(parseSpy).not.toHaveBeenCalled();
+    const texts = Array.from(el().querySelectorAll('.time-val')).map(
+      (v) => v.textContent,
+    );
+    expect(texts).toEqual(['1h 31m', '2h']);
+  });
+
   it('omits the separator when no time is spent', () => {
     fixture.componentRef.setInput('task', mockTask({ timeSpent: 0 }));
     fixture.detectChanges();

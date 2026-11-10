@@ -1,11 +1,37 @@
 [
   {
+    "name": "Task Colors",
+    "shortDescription": "Choose colors for tasks and subtasks, or apply them automatically by priority. Includes a configurable palette, bulk application and recovery; requires Super Productivity 19.3.1.",
+    "url": "https://github.com/Zombiehamser/sp-task-color-plugin",
+    "author": "Zombiehamser",
+    "authorUrl": "https://github.com/Zombiehamser",
+    "id": "sp-task-color-plugin",
+    "release": {
+      "version": "0.3.0",
+      "downloadUrl": "https://github.com/Zombiehamser/sp-task-color-plugin/releases/download/v0.3.0/sp-task-color-plugin-0.3.0.zip",
+      "sha256": "1e031b01fbe318d5d72345d7ee8e0f494eb8bb76f64aef1337a96c9cdcb7ed0b"
+    }
+  },
+  {
+    "name": "Markdown Notes",
+    "shortDescription": "Read-only viewer for Markdown and Obsidian notes from a local folder, grouped by directory and rendered in a side panel.",
+    "url": "https://github.com/Zoriot/sp-markdown-notes",
+    "author": "Zoriot",
+    "authorUrl": "https://github.com/Zoriot",
+    "id": "markdown-notes",
+    "release": {
+      "version": "0.1.1",
+      "downloadUrl": "https://github.com/Zoriot/sp-markdown-notes/releases/download/v0.1.1/markdown-notes-0.1.1.zip",
+      "sha256": "ee3d66a1c9db02c3a7440f5e992a94fe46478b536e3f25d9e3c49dec537fa53a"
+    }
+  },
+  {
     "name": "Date Range Reporter Plugin",
     "shortDescription": "Generates reports of completed tasks and tasks with work logs within a specified date range.",
     "url": "https://github.com/dougcooper/sp-reporter",
     "author": "dougcooper",
     "authorUrl": "https://github.com/dougcooper",
-    "stars": 58
+    "id": "date-range-reporter"
   },
   {
     "name": "Archived Tasks Viewer",
@@ -13,31 +39,28 @@
     "url": "https://github.com/baiyina/Archived-Tasks-Viewer",
     "author": "baiyina",
     "authorUrl": "https://github.com/baiyina",
-    "stars": 61
+    "id": "archived-tasks-viewer"
   },
   {
     "name": "QuestArc",
     "shortDescription": "Turn your workflow into an adventure! Gamify your tasks with Atomic Habit quests, epic boss fights, earnable badges, and a customizable hero profile.",
     "url": "https://codeberg.org/Nexumia/QuestArc",
     "author": "Nexumia",
-    "authorUrl": "https://codeberg.org/Nexumia",
-    "stars": 8
+    "authorUrl": "https://codeberg.org/Nexumia"
   },
   {
     "name": "AutoPlan",
     "shortDescription": "Smart non-AI plugin for the automatic scheduling of tasks using priorities assigned automatically based on tags, projects, and time estimation.",
     "url": "https://codeberg.org/00sapo/sp-autoplan",
     "author": "00sapo",
-    "authorUrl": "https://codeberg.org/00sapo",
-    "stars": 13
+    "authorUrl": "https://codeberg.org/00sapo"
   },
   {
     "name": "Asana Integration",
     "shortDescription": "Provides 2-way sync between SP tasks and Asana tasks.",
     "url": "https://codeberg.org/sinenomine/sp-asana",
     "author": "sinenomine",
-    "authorUrl": "https://codeberg.org/sinenomine",
-    "stars": 2
+    "authorUrl": "https://codeberg.org/sinenomine"
   },
   {
     "name": "Auto-Fill Time Spent",
@@ -45,15 +68,14 @@
     "url": "https://github.com/MazenMohamed203/auto-fill-time-spent",
     "author": "MazenMohamed203",
     "authorUrl": "https://github.com/MazenMohamed203",
-    "stars": 6
+    "id": "auto-fill-time-spent"
   },
   {
     "name": "Obsidian Integration",
     "shortDescription": "Provides 2-way sync between SP tasks and Obsidian tasks.",
     "url": "https://codeberg.org/sinenomine/sp-obsidian/",
     "author": "sinenomine",
-    "authorUrl": "https://codeberg.org/sinenomine",
-    "stars": 10
+    "authorUrl": "https://codeberg.org/sinenomine"
   },
   {
     "name": "MCP",
@@ -61,7 +83,7 @@
     "url": "https://github.com/organicmoron/SP-MCP",
     "author": "organicmoron",
     "authorUrl": "https://github.com/organicmoron",
-    "stars": 120
+    "id": "sp-mcp-bridge"
   },
   {
     "name": "Super Productivity MCP",
@@ -69,7 +91,7 @@
     "url": "https://github.com/b0x42/Super-Productivity-MCP",
     "author": "b0x42",
     "authorUrl": "https://github.com/b0x42",
-    "stars": 81
+    "id": "super-productivity-mcp"
   },
   {
     "name": "Dashboard",
@@ -77,7 +99,7 @@
     "url": "https://github.com/ahanel13/sp-dashboard",
     "author": "ahanel13",
     "authorUrl": "https://github.com/ahanel13",
-    "stars": 19
+    "id": "sp-dashboard"
   },
   {
     "name": "Invoicer",
@@ -85,7 +107,7 @@
     "url": "https://github.com/1jamesthompson1/sp-invoicer",
     "author": "1jamesthompson1",
     "authorUrl": "https://github.com/1jamesthompson1",
-    "stars": 24
+    "id": "invoicer"
   },
   {
     "name": "StudyForge Leaderboard",
@@ -93,15 +115,14 @@
     "url": "https://github.com/dhananajay-030/studyforge-plugin",
     "author": "dhananajay-030",
     "authorUrl": "https://github.com/dhananajay-030",
-    "stars": 6
+    "id": "studyforge-leaderboard"
   },
   {
     "name": "Print Tasks",
     "shortDescription": "Want to go offline but take Super Productivity with you? This plugin provides print layouts for Today, All Tasks, All Projects, by Tag etc.",
     "url": "https://codeberg.org/sinenomine/sp-task-print",
     "author": "sinenomine",
-    "authorUrl": "https://codeberg.org/sinenomine/",
-    "stars": 2
+    "authorUrl": "https://codeberg.org/sinenomine/"
   },
   {
     "name": "AI Assistant",
@@ -109,7 +130,7 @@
     "url": "https://github.com/ai-eifying/ai-assistant-plugin",
     "author": "ai-eifying",
     "authorUrl": "https://github.com/ai-eifying",
-    "stars": 33
+    "id": "ai-assistant"
   },
   {
     "name": "Memos Sync",
@@ -117,7 +138,7 @@
     "url": "https://github.com/giba0/memos-sync",
     "author": "giba0",
     "authorUrl": "https://github.com/giba0",
-    "stars": 7
+    "id": "memos-sync"
   },
   {
     "name": "YouTrack Importer for SuperProductivity",
@@ -125,7 +146,7 @@
     "url": "https://github.com/coissay/superProductivity-YoutrackPlugin",
     "author": "coissay",
     "authorUrl": "https://github.com/coissay",
-    "stars": 2
+    "id": "youtrack-csv-importer"
   },
   {
     "name": "Home Assistant Bridge",
@@ -133,7 +154,7 @@
     "url": "https://github.com/jloops412/ha-super-productivity",
     "author": "jloops412",
     "authorUrl": "https://github.com/jloops412",
-    "stars": 14
+    "id": "home-assistant-bridge"
   },
   {
     "name": "Goals Vision Board",
@@ -141,15 +162,14 @@
     "url": "https://github.com/CuriousChipmunk/vision-board-super-productivity",
     "author": "CuriousChipmunk",
     "authorUrl": "https://github.com/CuriousChipmunk",
-    "stars": 33
+    "id": "broader-goals-dashboard"
   },
   {
     "name": "sync.md Multi",
     "shortDescription": "Sync multiple SuperProductivity projects with their own markdown files (bidirectional).",
     "url": "https://codeberg.org/fpindado/sync-md-multi",
     "author": "Fernando Pindado",
-    "authorUrl": "https://codeberg.org/fpindado",
-    "stars": 2
+    "authorUrl": "https://codeberg.org/fpindado"
   },
   {
     "name": "JSON to Tasks",
@@ -157,7 +177,7 @@
     "url": "https://github.com/nekoritsme/superproductivity-fromjson-totasks",
     "author": "nekoritsme",
     "authorUrl": "https://github.com/nekoritsme",
-    "stars": 0
+    "id": "json-to-tasks"
   },
   {
     "name": "Joplin Notes Sync",
@@ -165,7 +185,7 @@
     "url": "https://github.com/BigWebstas/SuperProd-Joplin-Sync",
     "author": "BigWebstas",
     "authorUrl": "https://github.com/BigWebstas",
-    "stars": 3
+    "id": "joplin-notes-sync"
   },
   {
     "name": "Bulk Add Tasks",
@@ -173,7 +193,7 @@
     "url": "https://github.com/InitialCrow/bulk-add-tasks-plugin",
     "author": "InitialCrow",
     "authorUrl": "https://github.com/InitialCrow",
-    "stars": 0
+    "id": "bulk-add-tasks"
   },
   {
     "name": "Caffeine Tracker",
@@ -181,6 +201,92 @@
     "url": "https://github.com/BigWebstas/sp-caffiene-tracker",
     "author": "BigWebstas",
     "authorUrl": "https://github.com/BigWebstas",
-    "stars": 0
+    "id": "caffeine-tracker"
+  },
+  {
+    "name": "Auto Tag Manager",
+    "shortDescription": "Automatically applies tags to tasks based on keywords in the task title.",
+    "url": "https://github.com/owarimono/super-productivity-auto-tag",
+    "author": "owarimono",
+    "authorUrl": "https://github.com/owarimono",
+    "id": "auto-tag-manager"
+  },
+  {
+    "name": "YouGile Integration (SuperGile)",
+    "shortDescription": "Two-way sync of YouGile tasks assigned to you: done state, title, deadline, time estimate and time spent.",
+    "url": "https://github.com/SileboxUnderfined/SuperGile",
+    "author": "SileboxUnderfined",
+    "authorUrl": "https://github.com/SileboxUnderfined",
+    "id": "supergile-yougile-issue-provider",
+    "release": {
+      "version": "0.1.1",
+      "downloadUrl": "https://github.com/SileboxUnderfined/SuperGile/releases/download/v0.1.1/supergile-0.1.1.zip",
+      "sha256": "67ebf31649f745950f38da4f58f6bf43ed73e89fb43d5b1537ff626f78fbca76"
+    }
+  },
+  {
+    "name": "monday.com Issue Provider",
+    "shortDescription": "Search, import, and sync monday.com board items as Super Productivity tasks, including status/done detection and item updates as comments.",
+    "url": "https://github.com/Zoriot/sp-monday",
+    "author": "Zoriot",
+    "authorUrl": "https://github.com/Zoriot",
+    "id": "monday-issue-provider",
+    "release": {
+      "version": "1.0.0",
+      "downloadUrl": "https://github.com/Zoriot/sp-monday/releases/download/v1.0.0/sp-monday-1.0.0.zip",
+      "sha256": "e4ecd2e726e9f7716e6cd526cf755bc9957f6f0ed342fd62b7df4406d331ba5d"
+    }
+  },
+  {
+    "name": "Timesheet",
+    "shortDescription": "Weekly timesheet and charts of your tracked time: days by project, a 12-week trend, daily targets, manual entries, CSV export, and hours kept after a task is deleted.",
+    "url": "https://github.com/AshrafByte/sp-timesheet",
+    "author": "AshrafByte",
+    "authorUrl": "https://github.com/AshrafByte",
+    "id": "sp-timesheet",
+    "release": {
+      "version": "2.2.0",
+      "downloadUrl": "https://github.com/AshrafByte/sp-timesheet/releases/download/v2.2.0/sp-timesheet-v2.2.0.zip",
+      "sha256": "6322b69ae3b08bb31d75b1dd630cb96be0076fec677a8810da92d46ac2129306"
+    }
+  },
+  {
+    "name": "Daily Quest",
+    "shortDescription": "Experimental: an adventure map from a buff to your boss task to a recovery break, with the boss's subtasks as steps along the trail.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/daily-quest",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-daily-quest",
+    "release": {
+      "version": "0.3.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/daily-quest-v0.3.0/ridonculous-daily-quest-0.3.0.zip",
+      "sha256": "22c91f677dd93faed17a7fb78af682da3d13f3c0d8cea293d9cbd9c7c991c9c4"
+    }
+  },
+  {
+    "name": "Stadium Mode",
+    "shortDescription": "Experimental: a roaring crowd and a stadium announcer for every task you start, finish, postpone or delete. An optional neural voice downloads about 110 MB after you confirm.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/stadium-mode",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-stadium-mode",
+    "release": {
+      "version": "0.4.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/stadium-mode-v0.4.0/ridonculous-stadium-mode-0.4.0.zip",
+      "sha256": "bc0b07947d2be371471fc50ac2359683c54deff4ffc0d8deb737d96f0d7d69a8"
+    }
+  },
+  {
+    "name": "Deadlines",
+    "shortDescription": "List, Calendar, and Timeline views for deadlines and fixed dates in Super Productivity.",
+    "url": "https://github.com/Jontata/deadlines-plugin",
+    "author": "Jontata",
+    "authorUrl": "https://github.com/Jontata",
+    "id": "deadlines-view",
+    "release": {
+      "version": "0.0.1",
+      "downloadUrl": "https://github.com/Jontata/deadlines-plugin/releases/download/v0.0.1/deadlines-plugin-0.0.1.zip",
+      "sha256": "e7b147b25dbda9b232fff0bdb51b773a11a528d647e93bc34e2bf5e02d2ec6b7"
+    }
   }
 ]

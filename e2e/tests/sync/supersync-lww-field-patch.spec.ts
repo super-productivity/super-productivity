@@ -48,9 +48,7 @@ const sync = async (client: SimulatedE2EClient): Promise<void> => {
     if (await client.sync.conflictDialog.isVisible()) return 'conflict-dialog';
     if (await client.sync.hasSyncError()) return 'error';
     const spinning = await client.sync.syncSpinner.isVisible();
-    const checked = await client.sync.syncCheckIcon
-      .filter({ hasText: /^done_all$/ })
-      .isVisible();
+    const checked = await client.sync.syncConfirmedIcon.isVisible();
     return !spinning && checked ? 'in-sync' : 'pending';
   };
   let observed = 'pending';

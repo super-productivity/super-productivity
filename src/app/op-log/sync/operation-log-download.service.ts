@@ -28,7 +28,10 @@ import {
   OperationDecryptionError,
   OperationEncryptionService,
 } from './operation-encryption.service';
-import { buildDecryptFailureLogArgs } from './operation-decrypt-failure-log.util';
+import {
+  buildDecryptFailureLogArgs,
+  readPayloadSaltKey,
+} from './operation-decrypt-failure-log.util';
 import { DecryptNoPasswordError } from '../core/errors/sync-errors';
 import { assertOpsEncryptedWhenExpected } from './assert-ops-encryption-expected';
 import { SuperSyncStatusService } from './super-sync-status.service';
@@ -57,6 +60,22 @@ const isOpCoveredByLocalClock = (
     authorCounter <= knownCounter
   );
 };
+
+/**
+ * Remote ops this device downloaded but could not decrypt (#9256). Every
+ * destructive overwrite (Force Overwrite, Change Password, Use Local Data)
+ * runs a clean slate that makes the server delete them, and once a decrypted
+ * prefix was applied the #9931 "holds nothing" refusal no longer fires.
+ */
+export interface UndecryptableRemoteOps {
+  /** Encrypted ops on the failing page: a lower bound on what is at stake. */
+  opCount: number;
+}
+
+interface UndecryptableRemoteOpsMarker extends UndecryptableRemoteOps {
+  /** Active provider when set; a provider switch retires the marker. */
+  providerId: string | undefined;
+}
 
 /**
  * Resume point of the rejected-ops forced seq-0 download, which only collects
@@ -173,6 +192,8 @@ export class OperationLogDownloadService implements OnDestroy {
 
   private forcedDownloadCheckpoint: ForcedDownloadCheckpoint | null = null;
 
+  private _undecryptableRemoteOps: UndecryptableRemoteOpsMarker | null = null;
+
   /**
    * True while a SuperSync backlog is only partly downloaded (#8763). The
    * rejection handler must not resolve conflicts locally meanwhile: judged
@@ -180,6 +201,28 @@ export class OperationLogDownloadService implements OnDestroy {
    */
   hasUnseenRemoteOps(): boolean {
     return this._hasUnseenRemoteOps;
+  }
+
+  /**
+   * Set while the last SuperSync download stopped at ops this device could not
+   * decrypt, until a download reaches the server head, the active provider
+   * changes, or a clean slate replaced the server
+   * ({@link clearUndecryptableRemoteOps}). Deliberately not tied to the sync
+   * epoch: non-destructive guarded operations and overwrites that failed also
+   * bump it, and the ops would still be on the server (#10864). In memory
+   * only: after a restart the next sync attempt re-arms it.
+   */
+  getUndecryptableRemoteOps(): UndecryptableRemoteOps | null {
+    const marker = this._undecryptableRemoteOps;
+    if (!marker || marker.providerId !== this.providerManager.getActiveProvider()?.id) {
+      return null;
+    }
+    return { opCount: marker.opCount };
+  }
+
+  /** A clean slate replaced the server, so the undecryptable ops are gone. */
+  clearUndecryptableRemoteOps(): void {
+    this._undecryptableRemoteOps = null;
   }
 
   ngOnDestroy(): void {
@@ -217,6 +260,30 @@ export class OperationLogDownloadService implements OnDestroy {
     return this._downloadRemoteOpsViaApi(syncProvider, options);
   }
 
+  /**
+   * The provider's stored cursor, or 0 when this op log shows no sign of ever
+   * having synced (#11099). Cursors live in localStorage and survive a lost op
+   * log; reusing one skips everything the remote holds, and a file-based
+   * provider then uploads the near-empty local state over the remote snapshot.
+   * Every real sync leaves a synced op or, after compaction or a snapshot
+   * adoption, a state cache. Without either, download from 0 like a first-time
+   * setup.
+   */
+  private async _getTrustedCursor(syncProvider: OperationSyncCapable): Promise<number> {
+    const storedSeq = await syncProvider.getLastServerSeq();
+    if (
+      storedSeq === 0 ||
+      (await this.opLogStore.hasSyncedOps()) ||
+      (await this.opLogStore.loadStateCache())
+    ) {
+      return storedSeq;
+    }
+    OpLog.warn(
+      `OperationLogDownloadService: Ignoring cursor ${storedSeq}; the op log has never synced. Downloading from seq 0.`,
+    );
+    return 0;
+  }
+
   private async _downloadRemoteOpsViaApi(
     syncProvider: OperationSyncCapable,
     options?: RemoteOpsDownloadOptions,
@@ -238,6 +305,8 @@ export class OperationLogDownloadService implements OnDestroy {
     let snapshotState: unknown | undefined;
     let snapshotAppliedOpIds: string[] | undefined;
     let remoteLastModified: number | undefined;
+    let ownUploadsMissing = false;
+    let snapshotExtendsLastSeen = false;
     // Track encryption state of downloaded operations for detecting encryption config mismatch.
     // When another client disables encryption, all downloaded ops will be unencrypted.
     // We track this BEFORE decryption to detect the server's actual encryption state.
@@ -265,7 +334,9 @@ export class OperationLogDownloadService implements OnDestroy {
       !!(await syncProvider.isEncryptionEnabled?.());
 
     await this.lockService.request(LOCK_NAMES.DOWNLOAD, async () => {
-      const lastServerSeq = forceFromSeq0 ? 0 : await syncProvider.getLastServerSeq();
+      const lastServerSeq = forceFromSeq0
+        ? 0
+        : await this._getTrustedCursor(syncProvider);
       // Raw-rebuild mode: an empty applied set disables the duplicate filter
       // below; a missing clientId makes the server include this client's own ops.
       const appliedOpIds = options?.includeOwnAndAppliedOps
@@ -366,6 +437,9 @@ export class OperationLogDownloadService implements OnDestroy {
       // earlier pages of THIS run prove the key even when nothing in a later
       // failing batch decrypts (e.g. a single corrupt op on the final page).
       let decryptedOpsInEarlierBatches = 0;
+      // Salts of those ops, so the log can say whether a failing op shares a
+      // salt (and so likely the key) with ops that decrypted (#9256).
+      const saltKeysDecryptedEarlier = new Set<string>();
 
       while (hasMore) {
         iterationCount++;
@@ -406,6 +480,11 @@ export class OperationLogDownloadService implements OnDestroy {
             'snapshotAppliedOpIds' in response
               ? response.snapshotAppliedOpIds
               : undefined;
+          ownUploadsMissing =
+            'ownUploadsMissing' in response && response.ownUploadsMissing === true;
+          snapshotExtendsLastSeen =
+            'snapshotExtendsLastSeen' in response &&
+            response.snapshotExtendsLastSeen === true;
           const receivedLastModified =
             'remoteLastModified' in response ? response.remoteLastModified : undefined;
           remoteLastModified =
@@ -448,11 +527,14 @@ export class OperationLogDownloadService implements OnDestroy {
           snapshotState = undefined; // Clear snapshot state to capture fresh one after reset
           snapshotAppliedOpIds = undefined; // Clear snapshot boundary with the stale state
           remoteLastModified = undefined; // Clear timestamp belonging to the stale state
+          ownUploadsMissing = false;
+          snapshotExtendsLastSeen = false;
           sawAnyOps = false; // Reset encryption tracking
           sawEncryptedOp = false;
           // The re-fetched key may differ (password change clean slate), so
           // pre-reset decrypts are no evidence for the key used after it.
           decryptedOpsInEarlierBatches = 0;
+          saltKeysDecryptedEarlier.clear();
 
           // CRITICAL: Re-fetch encryption key after gap detection.
           // Gap usually means server was wiped (e.g., password change clean slate),
@@ -558,18 +640,34 @@ export class OperationLogDownloadService implements OnDestroy {
           }
 
           // Decrypt encrypted operations - let DecryptError propagate to sync-wrapper handler
+          const encryptedPayloadsInPage = syncOps
+            .filter((op) => op.isPayloadEncrypted)
+            .map((op) => op.payload);
           try {
             syncOps = await this.encryptionService.decryptOperations(syncOps, encryptKey);
             decryptedOpsInEarlierBatches += encryptedOpsInPage;
+            for (const payload of encryptedPayloadsInPage) {
+              const saltKey = readPayloadSaltKey(payload);
+              if (saltKey !== undefined) {
+                saltKeysDecryptedEarlier.add(saltKey);
+              }
+            }
           } catch (error) {
+            if (syncProvider.providerMode === 'superSyncOps') {
+              this._undecryptableRemoteOps = {
+                opCount: encryptedOpsInPage,
+                providerId: this.providerManager.getActiveProvider()?.id,
+              };
+            }
             if (error instanceof OperationDecryptionError) {
               OpLog.error(
                 'OperationLogDownloadService: Encrypted operation batch could not be processed.',
-                ...buildDecryptFailureLogArgs(
+                ...(await buildDecryptFailureLogArgs(
                   error.diagnosis,
                   newServerOps.filter((serverOp) => serverOp.op.isPayloadEncrypted),
                   decryptedOpsInEarlierBatches,
-                ),
+                  saltKeysDecryptedEarlier,
+                )),
               );
               if (
                 isDecryptedPrefixKeepable({
@@ -780,6 +878,7 @@ export class OperationLogDownloadService implements OnDestroy {
       // short of the server head, so it must not count as a completed check.
       if (!decryptErrorAfterKeptPrefix) {
         this.superSyncStatusService.markRemoteChecked();
+        this._undecryptableRemoteOps = null;
       }
       this._lastAnnouncedCheckpointSeq = 0;
     } else if (checkpointSeq !== this._lastAnnouncedCheckpointSeq) {
@@ -828,6 +927,8 @@ export class OperationLogDownloadService implements OnDestroy {
         ...(snapshotState ? { snapshotState } : {}),
         ...(snapshotAppliedOpIds ? { snapshotAppliedOpIds } : {}),
         ...(remoteLastModified !== undefined ? { remoteLastModified } : {}),
+        ...(ownUploadsMissing ? { ownUploadsMissing } : {}),
+        ...(snapshotExtendsLastSeen ? { snapshotExtendsLastSeen } : {}),
       };
     }
 

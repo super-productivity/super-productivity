@@ -17,17 +17,33 @@
   margin-bottom: 12px;
 }
 
-.hint {
+.hint,
+.legal {
   margin: 0 0 16px;
   font-size: 12px;
   color: var(--text-color-muted);
 }
 
-.token-field {
+.legal {
+  margin-top: var(--s2);
+}
+
+.full-width {
   width: 100%;
 }
 
+.secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s);
+  margin-top: var(--s);
+}
+
+.callout {
+  margin-bottom: var(--s);
+}
+
 .error {
-  margin: 4px 0 0;
+  margin: var(--s-half) 0 0;
   color: var(--c-warn);
 }

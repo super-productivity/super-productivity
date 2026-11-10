@@ -19,6 +19,7 @@ export enum BannerId {
   SyncConflictContentResolved = 'SyncConflictContentResolved',
   UpdateAvailable = 'UpdateAvailable',
   LocalRecoveryPoint = 'LocalRecoveryPoint',
+  TrackingMovedToOtherDevice = 'TrackingMovedToOtherDevice',
 }
 
 export const BANNER_SORT_PRIO_MAP = {
@@ -40,6 +41,8 @@ export const BANNER_SORT_PRIO_MAP = {
   [BannerId.SyncConflictContentResolved]: 1,
   [BannerId.UpdateAvailable]: 0,
   [BannerId.LocalRecoveryPoint]: 1,
+  // above StartTrackingReminder, which would contradict it while another device tracks
+  [BannerId.TrackingMovedToOtherDevice]: 3,
 } as const;
 
 export interface BannerAction {

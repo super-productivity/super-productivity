@@ -81,6 +81,10 @@
     "TITLE": "Unsplashから背景画像を選択してください"
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "任意: はじめてのヒント",
+      "NOTES": "ここにあるものは必須ではありません。このタスクはいつでも削除できます。\n\n- **今日と受信トレイ**: 今日には今日の予定が表示されます。自分のプロジェクトがないタスクは受信トレイに残ります。1つのタスクが両方のリストに表示されることもあります。\n- **プロジェクト**: サイドバーの**プロジェクト**の横にある**+**で、タスクをトピックごとにまとめられます。\n- **同期**: **設定 → 同期とバックアップ**で、複数のデバイスにデータを保管できます。\n- **TodoistやTickTickから移行しますか？** **設定 → 同期とバックアップ → インポート/エクスポート**でタスクをインポートできます。\n- **ツアー**: サイドバーのメニューにある**ヘルプ → クイックツアー**では、あなた自身のタスクを使って基本を案内します。**ヘルプ → 使い方**では、短縮構文とキーボード操作をステップごとに紹介します。ツアーはいつでも閉じられます。\n- **自分好みに**: テーマやダークモードを選び、ボード、スケジュール、習慣、集中モード、連携などの機能を**設定 → 一般**でオン/オフできます。プラグインでさらに拡張できます。"
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "キーボードショートカットを覚える",
       "NOTES": "Super Productivityはキーボードでの操作を前提に設計されています。ショートカットを覚えて、より速く作業しましょう。\n\n**始め方：**\n1. **サイドバーメニュー**を開く\n2. **ヘルプ**に移動する\n3. **キーボードナビゲーションツアー**をクリックする"
@@ -408,52 +412,6 @@
         "STATUS": "ステータス",
         "SUMMARY": "概要",
         "WRITE_A_COMMENT": "コメントを書く"
-      }
-    },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "プレフィルド・デュレーションには、過去数日間のトラッキングされていないデータが含まれている。",
-        "T_ALREADY_TRACKED": "すでに追跡済み",
-        "T_TITLE": "タイトル",
-        "T_TO_BE_SUBMITTED": "提出予定",
-        "TITLE": "Issueに費やした時間をGitLabに提出する",
-        "TOTAL_MSG": "今日は合計で <em>{{totalTimeToSubmit}}</em> の作業時間を <em>{{nrOfTasksToSubmit}}</em> の異なる問題に送信します。"
-      },
-      "FORM": {
-        "FILTER": "カスタムフィルター",
-        "FILTER_DESCRIPTION": "Https://docs.gitlab.com/ee/api/issues.html#list-issues を参照。複数の組み合わせは",
-        "FILTER_USER": "ユーザー名（例：自分で変更を除外するため）",
-        "GITLAB_BASE_URL": "カスタムGitLabベースURL",
-        "PROJECT": "フルパスまたはユーザー名/プロジェクト",
-        "PROJECT_HINT": "例：ヨハネスジョ／超生産性",
-        "SCOPE": "範囲",
-        "SCOPE_ALL": "すべて",
-        "SCOPE_ASSIGNED": "私に割り当てられた",
-        "SCOPE_CREATED": "自分で作成",
-        "SOURCE": "ソース",
-        "SOURCE_GLOBAL": "すべて",
-        "SOURCE_GROUP": "グループ",
-        "SOURCE_PROJECT": "プロジェクト",
-        "SUBMIT_TIMELOGS": "タイムログをGitlabに提出する",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "終了日をクリックした後、タイムトラッキングダイアログを表示する",
-        "TOKEN": "アクセストークン"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>ここでは、SuperProductivityを構成して、特定のプロジェクトの開いているGitLab（オンラインバージョンまたはセルフホストインスタンス）の課題を日次計画ビューのタスク作成パネルに一覧表示できます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報を提供します。</p> <p>さらに、すべての未解決の課題をタスクバックログに自動的に追加して同期できます。</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "担当者",
-        "AT": "で",
-        "DESCRIPTION": "説明",
-        "LABELS": "ラベル",
-        "MARK_AS_CHECKED": "更新をチェック済みとしてマーク",
-        "PROJECT": "プロジェクト",
-        "STATUS": "状態",
-        "SUMMARY": "概要",
-        "WRITE_A_COMMENT": "コメントを書く"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab：不明なエラー {{statusCode}} {{errorMsg}}"
       }
     },
     "ISSUE": {
@@ -2799,8 +2757,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "休憩リマインダー音",
+      "DING": "ベルの音",
       "DONE_SOUND": "タスク完了音",
       "IS_INCREASE_DONE_PITCH": "実行するすべてのタスクのピッチを上げる",
+      "SMALL_DING": "小さなベルの音",
+      "SOUND_1": "音1",
+      "SOUND_2": "音2",
+      "SOUND_3": "音3",
+      "SOUND_4": "音4",
+      "SOUND_5": "音5",
+      "SOUND_6": "音6",
+      "SOUND_7": "音7",
       "TITLE": "音",
       "TRACK_TIME_SOUND": "時間リマインダー音を追跡",
       "VOLUME": "ボリューム"
@@ -2984,6 +2951,7 @@
       "CONTRIBUTE": "貢献する",
       "GET_HELP_ONLINE": "オンラインヘルプ",
       "KEYBOARD": "ハウツー高度なキーボード",
+      "QUICK_TOUR": "クイックツアー",
       "REDDIT_COMMUNITY": "Reddit コミュニティ",
       "REPORT_A_PROBLEM": "問題を報告する",
       "SEND_FEEDBACK": "フィードバックを送る",
@@ -3076,13 +3044,50 @@
     "HINTS": {
       "CREATE_TASK": "+をクリックして最初のタスクを追加しましょう",
       "CREATE_TASK_TOUCH": "+をタップして最初のタスクを追加しましょう",
+      "DECLINED": "大丈夫です。ヘルプ → クイックツアーからいつでも見られます。",
+      "MORE_FALLBACK": "ほかにも有効になっている機能があります: プロジェクト、時間トラッキング、プランナー…",
+      "NO_THANKS": "結構です",
+      "SHOW_ME_MORE": "もっと見る ›",
       "EXPLORE": "自由にクリックして探索してみてください！サイドバーにヘルプがあります。",
       "EXPLORE_TOUCH": "自由にタップして探索してみてください！メニューにヘルプがあります。",
       "TASK_TAP_TOUCH": "タスクをタップして詳細を開きます。",
       "TASK_SWIPE_LEFT_TOUCH": "タスクを左にスワイプして他の操作を表示",
+      "TODAY_AND_INBOX": "このタスクは今日に予定されているため、{{todayIcon}} <b>今日</b>に表示されます。自分のプロジェクトがないタスクは{{inboxIcon}} <b>受信トレイ</b>に残ります。",
+      "TODAY_AND_INBOX_PHONE": "このタスクは今日に予定されているため、{{todayIcon}} <b>今日</b>に表示されます。自分のプロジェクトがないタスクは{{inboxIcon}} <b>受信トレイ</b>に残ります（☰の中）。",
       "TASK_SWIPE_RIGHT_TOUCH": "タスクを右にスワイプして完了にする",
       "OR_PRESS": "または",
       "SKIP_ARIA": "ヒントを閉じる"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "細かく分けましょう: タスクを右クリックして{{subtaskIcon}} <b>サブタスクを追加</b>を選びます",
+      "COUNTER": "{{nr}} / {{total}}",
+      "NEXT": "次へ ›",
+      "ORGANIZE": "タスクをまとめる自分の<b>プロジェクト</b>や、ラベルを付ける<b>タグ</b>を作りましょう。+で作成できます",
+      "ORGANIZE_COLLAPSED": "タスクをまとめる自分の<b>プロジェクト</b>や、ラベルを付ける<b>タグ</b>を作りましょう。{{expandIcon}}でサイドナビを開くと作成できます",
+      "ORGANIZE_PHONE": "プロジェクトとタグは☰の中にあります。タスクをまとめる自分の<b>プロジェクト</b>や、ラベルを付ける<b>タグ</b>を作りましょう",
+      "PLANNER": "{{plannerIcon}} <b>プランナー</b>で数日先の予定を立てましょう",
+      "TASK_MENU_TOUCH": "タスクを左にスワイプするとメニューが開きます: {{playIcon}} <b>タイムトラッキングの開始</b>、{{subtaskIcon}} <b>サブタスクを追加</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "タスクを左にスワイプするとメニューが開きます。例: {{subtaskIcon}} <b>サブタスクを追加</b>",
+      "TIMER_RUNNING": "タイマー作動中です。一時停止するには、もう一度{{pauseIcon}}または<kbd>{{key}}</kbd>を押します。",
+      "TIMER_RUNNING_TOUCH": "タイマー作動中です。一時停止するには、上部の{{pauseIcon}}をタップします。",
+      "TRACK_TIME": "タスクにカーソルを合わせて{{playIcon}}を押すと、時間を記録できます"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>ボード</b> · タスクをカンバン形式の列で管理",
+      "DONE": "完了",
+      "FINISH_DAY": "<b>一日を終了</b> · 一日を振り返って締めくくる",
+      "FOCUS_MODE": "<b>集中モード</b> · ポモドーロと、邪魔のない作業",
+      "FOOTER": "もう一度見るにはヘルプ → クイックツアーを開いてください。",
+      "HABITS": "<b>習慣</b> · ルーティンを毎日記録",
+      "INTRO": "Super Productivityは静かに始まります。必要になったら、さらに多くの機能があります:",
+      "OPEN_SETTINGS": "設定を開く ›",
+      "PLUGINS": "<b>プラグインと連携</b> · Jira、GitHub、CalDAVなど",
+      "SCHEDULE": "<b>スケジュール</b> · 一日をタイムラインで表示",
+      "SEARCH": "<kbd>{{key}}</kbd>ですべてを検索できます。",
+      "SEARCH_PHONE": "☰からすべてを検索できます。",
+      "SHORT_SYNTAX": "タスクの追加中に <code>#tag</code>、<code>+project</code>、<code>@tomorrow</code> と入力できます。詳しくはヘルプ → 使い方をご覧ください。",
+      "SYNC": "データはこのデバイスに保存されます。同期とバックアップは設定にあります。",
+      "TITLE": "もっと使ってみますか？"
     },
     "SYNC_CTA": "別のデバイスですでに Super Productivity を使用していますか？",
     "SYNC_CTA_LINK": "同期を設定"

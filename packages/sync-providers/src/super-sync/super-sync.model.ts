@@ -82,6 +82,55 @@ export interface SuperSyncReplaceTokenResult {
   token: string;
 }
 
+/** One sealed capture leased to this device by `POST /api/capture/claim`. */
+export interface SuperSyncCaptureItemInfo {
+  itemId: string;
+  /** The task id to create; stable while this device holds the lease. */
+  taskId: string;
+  /** Sealed to the account's capture key; open with sync-core `openCapture`. */
+  ciphertext: string;
+  createdAt: number;
+}
+
+/**
+ * `no_key`: the server has no active key; `key_mismatch`: it holds another
+ * key than the one claimed with; `unsupported`: the server has no capture
+ * routes (client-side, from a 404). Any status this client does not know is
+ * passed through and treated as "nothing to import".
+ */
+export interface SuperSyncCaptureClaimResult {
+  status: string;
+  items?: SuperSyncCaptureItemInfo[];
+}
+
+/** A connected assistant, as listed in settings. */
+export interface SuperSyncCaptureGrantInfo {
+  id: string;
+  clientName: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+  expiresAt: number;
+  /** Captures from this assistant no device has imported yet. */
+  pendingCount: number;
+}
+
+export interface SuperSyncCaptureGrantList {
+  grants: SuperSyncCaptureGrantInfo[];
+  /** Pending captures no listed grant counts (Android shares); absent on older servers. */
+  otherPendingCount?: number;
+}
+
+/**
+ * @invariant `token` is shown to the user once and never stored or logged.
+ */
+export interface SuperSyncCaptureTokenResult {
+  token: string;
+  grant: SuperSyncCaptureGrantInfo;
+}
+
+/** `disabled`: the user switched capture off; only a new key re-enables it. */
+export type SuperSyncCaptureKeyResult = 'registered' | 'unchanged' | 'disabled';
+
 /**
  * Structural typing surface for callers that need WebSocket connection
  * parameters from a SuperSync provider. The bundled `SuperSyncProvider`
@@ -113,3 +162,9 @@ export const isSuperSyncWebSocketAccess = (
     typeof (value as { getWebSocketParams?: unknown }).getWebSocketParams === 'function'
   );
 };
+
+/** Short-lived, single-use code displayed only in settings. Never persisted. */
+export interface SuperSyncCaptureConnectCodeResult {
+  code: string;
+  expiresAt: number;
+}

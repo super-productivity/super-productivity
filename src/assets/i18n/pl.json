@@ -92,6 +92,10 @@
     "INTRO_2": "Jeśli cenisz takie podejście i chcesz, aby projekt był utrzymywany w dobrej kondycji i się rozwijał, dobrowolna darowizna jest bardzo mile widziana."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Opcjonalnie: wskazówki na start",
+      "NOTES": "Nic tutaj nie jest obowiązkowe. Usuń to zadanie, kiedy chcesz.\n\n- **Dzisiaj i Skrzynka odbiorcza**: widok „Dzisiaj” pokazuje to, co zaplanowano na dziś. Zadania bez własnego projektu zostają w widoku „Skrzynka odbiorcza”. Zadanie może pojawić się na obu listach.\n- **Projekty**: grupuj zadania tematycznie za pomocą **+** obok **Projekty** na pasku bocznym.\n- **Synchronizacja**: trzymaj dane na kilku urządzeniach w **Ustawienia → Synchronizacja i kopia zapasowa**.\n- **Przychodzisz z Todoista lub TickTicka?** Zaimportuj swoje zadania w **Ustawienia → Synchronizacja i kopia zapasowa → Import/eksport**.\n- **Przewodniki**: **Pomoc → Krótki przewodnik** w menu paska bocznego przeprowadzi Cię przez podstawy na Twoim własnym zadaniu, a **Pomoc → Poradnik** pokazuje krok po kroku krótką składnię i nawigację klawiaturą. Zamknij przewodnik, kiedy chcesz.\n- **Dopasuj do siebie**: wybierz motyw lub tryb ciemny i włączaj lub wyłączaj funkcje, takie jak tablice, harmonogram, nawyki, tryb skupienia czy integracje, w **Ustawienia → Ogólne**. Wtyczki dodają jeszcze więcej."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Poznaj skróty klawiaturowe",
       "NOTES": "Super Productivity jest zaprojektowane do obsługi za pomocą klawiatury. Poznaj skróty, aby pracować szybciej.\n\n**Jak zacząć:**\n1. Otwórz **menu boczne**\n2. Przejdź do **Pomoc**\n3. Kliknij **Przewodnik po nawigacji klawiaturowej**"
@@ -438,52 +442,6 @@
         "STATUS": "Status",
         "SUMMARY": "Podsumowanie",
         "WRITE_A_COMMENT": "Napisz komentarz"
-      }
-    },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Wstępnie wypełniony czas trwania zawiera nieśledzone dane z poprzednich dni.",
-        "T_ALREADY_TRACKED": "Już śledzone",
-        "T_TITLE": "Tytuł",
-        "T_TO_BE_SUBMITTED": "Do przesłania",
-        "TITLE": "Prześlij czas spędzony na zgłoszeniach do GitLab",
-        "TOTAL_MSG": "Zgłosisz <em>{{totalTimeToSubmit}}</em> czasu pracy w dniu dzisiejszym do <em>{{nrOfTasksToSubmit}}</em> różnych zgłoszeń."
-      },
-      "FORM": {
-        "FILTER": "Filtr niestandardowy",
-        "FILTER_DESCRIPTION": "Zobacz https://docs.gitlab.com/ee/api/issues.html#list-issues. Można łączyć wiele filtrów przez użycie &",
-        "FILTER_USER": "Nazwa użytkownika (np. w celu filtrowania twoich zmian)",
-        "GITLAB_BASE_URL": "Własne URL do GitLab",
-        "PROJECT": "ID projektu lub nazwa użytkownika/projekt",
-        "PROJECT_HINT": "Ścieżka projektu (namespace/project-slug) lub numeryczny identyfikator projektu, a nie wyświetlana nazwa (np. super-productivity/super-productivity lub 12345)",
-        "SCOPE": "Zakres",
-        "SCOPE_ALL": "Wszystkie",
-        "SCOPE_ASSIGNED": "Przypisane do mnie",
-        "SCOPE_CREATED": "Utworzone przeze mnie",
-        "SOURCE": "Źródło",
-        "SOURCE_GLOBAL": "Wszystkie",
-        "SOURCE_GROUP": "Grupa",
-        "SOURCE_PROJECT": "Projekt",
-        "SUBMIT_TIMELOGS": "Przesyłanie dzienników czasowych do GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Wyświetlanie okna dialogowego śledzenia czasu po kliknięciu dnia zakończenia",
-        "TOKEN": "Token dostępu"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Tutaj możesz skonfigurować Super Productivity tak, aby wyświetlał otwarte zgłoszenia GitLab (zarówno wersji online, jak i instancji hostowanej samodzielnie) dla wybranego projektu w panelu tworzenia zadań w widoku planowania dziennego. Będą one pokazywane jako sugestie i będą zawierały link do zgłoszenia oraz dodatkowe informacje.</p><p>Możesz też automatycznie dodawać i synchronizować wszystkie otwarte zgłoszenia do zaległości.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Przypisany",
-        "AT": "o",
-        "DESCRIPTION": "Opis",
-        "LABELS": "Kategorie",
-        "MARK_AS_CHECKED": "Zaznacz zmiany jako sprawdzone",
-        "PROJECT": "Projekt",
-        "STATUS": "Status",
-        "SUMMARY": "Podsumowanie",
-        "WRITE_A_COMMENT": "Napisz komentarz"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: nieznany błąd {{statusCode}} {{errorMsg}}"
       }
     },
     "ISSUE": {
@@ -2793,8 +2751,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Dźwięk przypomnienia o przerwie",
+      "DING": "Dzwonek",
       "DONE_SOUND": "Dźwięk ukończonego zadania",
       "IS_INCREASE_DONE_PITCH": "Zwiększaj tonację po każdym wykonanym zadaniu",
+      "SMALL_DING": "Mały dzwonek",
+      "SOUND_1": "Dźwięk 1",
+      "SOUND_2": "Dźwięk 2",
+      "SOUND_3": "Dźwięk 3",
+      "SOUND_4": "Dźwięk 4",
+      "SOUND_5": "Dźwięk 5",
+      "SOUND_6": "Dźwięk 6",
+      "SOUND_7": "Dźwięk 7",
       "TITLE": "Dźwięk",
       "TRACK_TIME_SOUND": "Dźwięk przypomnienia o mierzeniu czasu",
       "VOLUME": "Głośność"
@@ -2924,6 +2891,7 @@
       "CREATE_TASK": "Poradnik: Utwórz zadanie",
       "GET_HELP_ONLINE": "Uzyskaj pomoc online",
       "KEYBOARD": "Poradnik: Zaawansowana klawiatura",
+      "QUICK_TOUR": "Krótki przewodnik",
       "REDDIT_COMMUNITY": "Społeczność Reddit",
       "REPORT_A_PROBLEM": "Zgłoś problem",
       "SEND_FEEDBACK": "Wyślij opinię",
@@ -2991,13 +2959,50 @@
     "HINTS": {
       "CREATE_TASK": "Kliknij +, aby dodać pierwsze zadanie",
       "CREATE_TASK_TOUCH": "Dotknij +, aby dodać pierwsze zadanie",
+      "DECLINED": "Nie ma problemu. Znajdziesz go w Pomoc → Krótki przewodnik, kiedy zechcesz.",
+      "MORE_FALLBACK": "Więcej jest już włączone: projekty, śledzenie czasu, Planer…",
+      "NO_THANKS": "Nie, dziękuję",
+      "SHOW_ME_MORE": "Pokaż więcej ›",
       "DONE_TITLE": "Wszystko gotowe",
       "EXPLORE_INBOX": "W Twojej skrzynce odbiorczej czekają dodatkowe, opcjonalne wskazówki. Możesz je wypróbować lub usunąć, kiedy tylko zechcesz.",
       "GOT_IT": "Rozumiem",
       "TASK_SWIPE_LEFT_TOUCH": "Przesuń zadanie w lewo, aby zobaczyć więcej akcji",
+      "TODAY_AND_INBOX": "To zadanie jest zaplanowane na dziś, więc widać je w {{todayIcon}} <b>Dzisiaj</b>. Zadania bez własnego projektu zostają w {{inboxIcon}} <b>Skrzynka odbiorcza</b>.",
+      "TODAY_AND_INBOX_PHONE": "To zadanie jest zaplanowane na dziś, więc widać je w {{todayIcon}} <b>Dzisiaj</b>. Zadania bez własnego projektu zostają w {{inboxIcon}} <b>Skrzynka odbiorcza</b>, pod ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Przesuń zadanie w prawo, aby oznaczyć je jako ukończone",
       "OR_PRESS": "lub naciśnij",
       "SKIP_ARIA": "Zamknij wskazówkę"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Rozbij je na części: kliknij zadanie prawym przyciskiem myszy i wybierz {{subtaskIcon}} <b>Dodaj podzadanie</b>",
+      "COUNTER": "{{nr}} z {{total}}",
+      "NEXT": "Dalej ›",
+      "ORGANIZE": "Utwórz własny <b>projekt</b>, aby grupować zadania, albo <b>tag</b>, aby je oznaczać. Utworzysz go przyciskiem +",
+      "ORGANIZE_COLLAPSED": "Utwórz własny <b>projekt</b>, aby grupować zadania, albo <b>tag</b>, aby je oznaczać. Rozwiń pasek boczny przyciskiem {{expandIcon}}, aby go utworzyć",
+      "ORGANIZE_PHONE": "Projekty i tagi znajdziesz pod ☰. Utwórz własny <b>projekt</b>, aby grupować zadania, albo <b>tag</b>, aby je oznaczać",
+      "PLANNER": "Zaplanuj kolejne dni w {{plannerIcon}} <b>Planer</b>",
+      "TASK_MENU_TOUCH": "Przesuń zadanie w lewo, aby zobaczyć jego menu: {{playIcon}} <b>Rozpocznij śledzenie czasu</b>, {{subtaskIcon}} <b>Dodaj podzadanie</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Przesuń zadanie w lewo, aby zobaczyć jego menu, np. {{subtaskIcon}} <b>Dodaj podzadanie</b>",
+      "TIMER_RUNNING": "Stoper działa. Naciśnij ponownie {{pauseIcon}} lub <kbd>{{key}}</kbd>, aby wstrzymać.",
+      "TIMER_RUNNING_TOUCH": "Stoper działa. Stuknij {{pauseIcon}} u góry, aby wstrzymać.",
+      "TRACK_TIME": "Najedź na zadanie i naciśnij {{playIcon}}, aby śledzić czas"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Tablice</b> · kolumny w stylu kanban dla Twoich zadań",
+      "DONE": "Gotowe",
+      "FINISH_DAY": "<b>Zakończ dzień</b> · przejrzyj i podsumuj swój dzień",
+      "FOCUS_MODE": "<b>Tryb skupienia</b> · pomodoro i praca bez rozpraszaczy",
+      "FOOTER": "Znajdziesz to ponownie w Pomoc → Krótki przewodnik.",
+      "HABITS": "<b>Nawyki</b> · śledź rutyny dzień po dniu",
+      "INTRO": "Super Productivity zaczyna spokojnie. Więcej jest pod ręką, gdy tego potrzebujesz:",
+      "OPEN_SETTINGS": "Otwórz ustawienia ›",
+      "PLUGINS": "<b>Wtyczki i integracje</b> · Jira, GitHub, CalDAV i więcej",
+      "SCHEDULE": "<b>Harmonogram</b> · Twój dzień na osi czasu",
+      "SEARCH": "Przeszukuj wszystko za pomocą <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Przeszukuj wszystko z poziomu ☰.",
+      "SHORT_SYNTAX": "Wpisz <code>#tag</code>, <code>+project</code> lub <code>@tomorrow</code> podczas dodawania zadania. Pomoc → Poradnik pokazuje więcej.",
+      "SYNC": "Twoje dane zostają na tym urządzeniu. Synchronizacja i kopie zapasowe są w ustawieniach.",
+      "TITLE": "Chcesz więcej?"
     }
   },
   "PDS": {

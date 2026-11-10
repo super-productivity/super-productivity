@@ -3,12 +3,15 @@ import { TranslateService } from '@ngx-translate/core';
 import { SyncLocalStateService } from './sync-local-state.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { OperationLogDownloadService } from './operation-log-download.service';
 import {
   ActionType,
   EntityType,
   OperationLogEntry,
   OpType,
 } from '../core/operation.types';
+import { OwnUploadsMissingConflictError } from '../core/errors/sync-errors';
+import { VectorClockService } from './vector-clock.service';
 
 type StateCache = NonNullable<
   Awaited<ReturnType<OperationLogStoreService['loadStateCache']>>
@@ -18,6 +21,9 @@ describe('SyncLocalStateService', () => {
   let service: SyncLocalStateService;
   let opLogStoreSpy: jasmine.SpyObj<OperationLogStoreService>;
   let stateSnapshotSpy: jasmine.SpyObj<StateSnapshotService>;
+  let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
+  let translateSpy: jasmine.SpyObj<TranslateService>;
+  let vectorClockSpy: jasmine.SpyObj<VectorClockService>;
 
   const entry = (
     entityType: EntityType,
@@ -77,15 +83,23 @@ describe('SyncLocalStateService', () => {
     opLogStoreSpy.getFirstOpEntry.and.resolveTo(migrationGenesis);
     opLogStoreSpy.getUnsynced.and.resolveTo([]);
 
+    downloadServiceSpy = jasmine.createSpyObj('OperationLogDownloadService', [
+      'getUndecryptableRemoteOps',
+    ]);
+    downloadServiceSpy.getUndecryptableRemoteOps.and.returnValue(null);
+    translateSpy = jasmine.createSpyObj('TranslateService', ['instant']);
+    vectorClockSpy = jasmine.createSpyObj('VectorClockService', [
+      'getSnapshotVectorClock',
+    ]);
+    vectorClockSpy.getSnapshotVectorClock.and.resolveTo({ clientA: 3 });
     TestBed.configureTestingModule({
       providers: [
         SyncLocalStateService,
         { provide: OperationLogStoreService, useValue: opLogStoreSpy },
         { provide: StateSnapshotService, useValue: stateSnapshotSpy },
-        {
-          provide: TranslateService,
-          useValue: jasmine.createSpyObj('TranslateService', ['instant']),
-        },
+        { provide: TranslateService, useValue: translateSpy },
+        { provide: OperationLogDownloadService, useValue: downloadServiceSpy },
+        { provide: VectorClockService, useValue: vectorClockSpy },
       ],
     });
     service = TestBed.inject(SyncLocalStateService);
@@ -360,6 +374,115 @@ describe('SyncLocalStateService', () => {
 
       expect(await service.hasMeaningfulStoreData(new Set(['example-1']))).toBe(false);
       expect(stateSnapshotSpy.getStateSnapshotAsync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('confirmOverwriteOfUndecryptableRemoteOps (#9256)', () => {
+    // The global spy outlives this spec; leave it as src/test.ts set it.
+    afterEach(() => {
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+    });
+
+    it('passes without a prompt when no undecryptable remote ops are pending', () => {
+      // src/test.ts installs window.confirm as a global spy.
+      const confirmSpy = window.confirm as jasmine.Spy;
+      confirmSpy.calls.reset();
+
+      expect(service.confirmOverwriteOfUndecryptableRemoteOps()).toBe(true);
+      expect(confirmSpy).not.toHaveBeenCalled();
+    });
+
+    it('asks, naming the op count, and returns the answer', () => {
+      downloadServiceSpy.getUndecryptableRemoteOps.and.returnValue({ opCount: 458 });
+      translateSpy.instant.and.callFake(
+        (key: string | string[], params?: { count?: number }) =>
+          params?.count !== undefined ? `${key}:${params.count}` : `${key}`,
+      );
+      const confirmSpy = (window.confirm as jasmine.Spy).and.returnValue(false);
+
+      expect(service.confirmOverwriteOfUndecryptableRemoteOps()).toBe(false);
+      expect(confirmSpy).toHaveBeenCalledWith(
+        jasmine.stringContaining('F.SYNC.D_UNDECRYPTABLE_REMOTE.MESSAGE:458'),
+      );
+
+      confirmSpy.and.returnValue(true);
+      expect(service.confirmOverwriteOfUndecryptableRemoteOps()).toBe(true);
+    });
+  });
+
+  describe('confirmSnapshotWithoutPendingOps', () => {
+    const download = {
+      snapshotState: { task: {} },
+      snapshotVectorClock: { remote: 2 },
+      remoteLastModified: 1,
+    };
+
+    it('throws OwnUploadsMissingConflictError for a synced client whose uploads the remote lost (#10916)', async () => {
+      await expectAsync(
+        service.confirmSnapshotWithoutPendingOps(
+          { ...download, ownUploadsMissing: true },
+          { clientA: 3 },
+        ),
+      ).toBeRejectedWith(jasmine.any(OwnUploadsMissingConflictError));
+    });
+
+    it('lets a synced client hydrate when its uploads are not missing', async () => {
+      expect(
+        await service.confirmSnapshotWithoutPendingOps(download, { clientA: 3 }),
+      ).toBe(true);
+    });
+
+    it('returns false when a fresh client without data declines the snapshot', async () => {
+      opLogStoreSpy.loadStateCache.and.resolveTo(null);
+      opLogStoreSpy.getLastSeq.and.resolveTo(0);
+      spyOn(service, 'hasMeaningfulStoreData').and.resolveTo(false);
+      spyOn(service, 'confirmFreshClientSync').and.returnValue(false);
+
+      expect(
+        await service.confirmSnapshotWithoutPendingOps(
+          { ...download, ownUploadsMissing: true },
+          null,
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('confirmSnapshotSkip (#10916)', () => {
+    const download = {
+      snapshotState: { task: {} },
+      snapshotVectorClock: { remote: 2 },
+      remoteLastModified: 1,
+    };
+    const skip = { shouldSkipHydration: true };
+
+    it('skips a covered snapshot when no own uploads are missing', async () => {
+      expect(await service.confirmSnapshotSkip(skip, download)).toBe(true);
+    });
+
+    it('does not skip when the plan hydrates, even with own uploads missing', async () => {
+      expect(
+        await service.confirmSnapshotSkip(
+          { shouldSkipHydration: false },
+          { ...download, ownUploadsMissing: true },
+        ),
+      ).toBe(false);
+    });
+
+    it('throws instead of skipping a remote that lost own uploads, counting pending ops', async () => {
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        entry('TASK', ActionType.TASK_SHARED_ADD, OpType.Create),
+      ]);
+      const error = await service
+        .confirmSnapshotSkip(skip, { ...download, ownUploadsMissing: true })
+        .then(
+          () => undefined,
+          (e: unknown) => e,
+        );
+      expect(error).toEqual(jasmine.any(OwnUploadsMissingConflictError));
+      expect((error as OwnUploadsMissingConflictError).unsyncedCount).toBe(1);
+      expect((error as OwnUploadsMissingConflictError).lastSyncedVectorClock).toEqual({
+        clientA: 3,
+      });
     });
   });
 });

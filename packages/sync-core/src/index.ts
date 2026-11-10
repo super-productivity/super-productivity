@@ -58,6 +58,7 @@ export {
   decryptBatchSettled,
   deriveKeyFromPassword,
   clearSessionKeyCache,
+  DecryptFailedError,
   getSessionKeyCacheStats,
   getArgon2Params,
   isCryptoSubtleAvailable,
@@ -65,6 +66,16 @@ export {
   setLegacyKdfWarningHandler,
 } from './encryption';
 export type { DerivedKey, DecryptSettledItem } from './encryption';
+
+// Agent task capture: open captures the SuperSync server sealed to the
+// user's key. Wire format in encryption/capture-open.ts.
+export {
+  captureKeyFingerprint,
+  CaptureOpenError,
+  generateCaptureKeyPair,
+  openCapture,
+} from './encryption/capture-open';
+export type { CaptureKeyPair, CaptureOpenErrorCode } from './encryption/capture-open';
 
 // Structural ciphertext-transport classifier — used by the SuperSync server's
 // encrypted-only ingress gate (E2EE_REQUIRED). Shape check only, never proof.

@@ -3,7 +3,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router } from '@angular/router';
 import { of } from 'rxjs';
@@ -21,6 +21,7 @@ import { DialogImportFromUrlComponent } from '../dialog-import-from-url/dialog-i
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
 import { ImportEncryptionHandlerService } from '../sync/import-encryption-handler.service';
 import { PluginService } from '../../plugins/plugin.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 describe('FileImexComponent', () => {
   let component: FileImexComponent;
@@ -83,7 +84,7 @@ describe('FileImexComponent', () => {
     await TestBed.configureTestingModule({
       imports: [FileImexComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: Router, useValue: routerSpy },
@@ -316,6 +317,7 @@ describe('FileImexComponent', () => {
       component.openUrlImportDialog();
 
       expect(mockMatDialog.open).toHaveBeenCalledWith(DialogImportFromUrlComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         width: '500px',
       });
       expect(component.importFromUrlHandler).toHaveBeenCalledWith(

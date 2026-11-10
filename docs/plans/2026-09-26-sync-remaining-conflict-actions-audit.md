@@ -234,7 +234,7 @@ It is not evidence that the archive integration reproduces that user's failure.
 [pr-s5]: https://github.com/super-productivity/super-productivity/pull/10287
 [issue-9405]: https://github.com/super-productivity/super-productivity/issues/9405
 [plan]: https://github.com/super-productivity/super-productivity/blob/f84259fcaa66a9bb9512d1c048a299d230740c04/docs/plans/2026-09-26-sync-architecture-review.md#phase-2--close-the-fail-closed-surface-locally-option-e
-[s2-result]: https://github.com/super-productivity/super-productivity/blob/f84259fcaa66a9bb9512d1c048a299d230740c04/docs/plans/2026-09-26-sync-S2-result.md
+[s2-result]: https://github.com/super-productivity/super-productivity/pull/10275
 [severity]: https://github.com/super-productivity/super-productivity/blob/f84259fcaa66a9bb9512d1c048a299d230740c04/docs/sync-and-op-log/sync-severity-triage.md
 [capture]: https://github.com/super-productivity/super-productivity/blob/f84259fcaa66a9bb9512d1c048a299d230740c04/src/app/op-log/capture/operation-log.effects.ts#L297-L339
 [extractor]: https://github.com/super-productivity/super-productivity/blob/f84259fcaa66a9bb9512d1c048a299d230740c04/src/app/op-log/capture/operation-capture.service.ts#L24-L33

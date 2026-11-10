@@ -12,11 +12,16 @@ import { ImportPage } from '../../pages/import.page';
 /**
  * SuperSync Import Conflict Dialog E2E Tests
  *
- * These tests verify the user-facing dialog that appears when ALL remote
- * operations are filtered due to a local SYNC_IMPORT. This happens when:
- * 1. User imports/restores data locally (creates SYNC_IMPORT)
- * 2. Other clients have been creating changes without knowledge of that import
- * 3. On sync, all remote ops are filtered as CONCURRENT with the import
+ * These tests cover the user-facing dialog (`dialog-sync-import-conflict`) for
+ * a SYNC_IMPORT that conflicts with other work. Two paths are covered here:
+ *
+ * - First sync (tests 1-4): a device that imports a backup and then syncs
+ *   with an account that already has data. It gets the first-sync layout
+ *   (`sync-first-choice`: use the account's data or replace it). On SuperSync
+ *   this holds even for a device that synced before: a file import is a new
+ *   sync baseline (new clientId, fresh clock), so the full
+ *   LOCAL_IMPORT_FILTERS_REMOTE message is not shown (#11468).
+ * - Incoming import (last two tests): another device's SYNC_IMPORT arrives.
  *
  * The dialog offers three options:
  * - USE_LOCAL: Push local state to server (forceUploadLocalState)
@@ -32,7 +37,10 @@ import { ImportPage } from '../../pages/import.page';
 
 test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
   /**
-   * Scenario: Dialog appears when all remote ops are filtered by local import
+   * Scenario: first sync of a never-synced device that holds a local import
+   *
+   * B imports before it ever syncs, so its first sync shows the first-sync
+   * layout.
    *
    * Setup: Client A and B with shared SuperSync account
    *
@@ -44,9 +52,9 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    * Verify:
    * - Dialog appears on Client B
    * - Dialog shows correct filtered op count
-   * - Dialog has all three buttons
+   * - Dialog offers both first-sync choices and Cancel (B never synced)
    */
-  test('Dialog appears when all remote ops are filtered by local import', async ({
+  test('First sync with a local import on a never-synced device shows the first-sync choice', async ({
     browser,
     baseURL,
     testRunId,
@@ -109,20 +117,18 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       await expect(dialog).toBeVisible({ timeout: 15000 });
       console.log('[Conflict Dialog] Dialog appeared');
 
-      // Verify dialog title
+      // B has never synced, so the dialog shows its first-sync layout (2b).
       const dialogTitle = dialog.locator('h1');
-      await expect(dialogTitle).toContainText('Sync Conflict');
+      await expect(dialogTitle).toContainText('This device already has data');
       console.log('[Conflict Dialog] ✓ Dialog title is correct');
 
-      // Verify dialog has all three buttons
+      // Verify dialog offers both choices and Cancel
       const cancelButton = dialog.getByRole('button', { name: /cancel/i });
-      const useRemoteButton = dialog.getByRole('button', { name: /server/i });
-      const useLocalButton = dialog.getByRole('button', { name: /my data/i });
-
       await expect(cancelButton).toBeVisible();
-      await expect(useRemoteButton).toBeVisible();
-      await expect(useLocalButton).toBeVisible();
-      console.log('[Conflict Dialog] ✓ All three buttons are visible');
+      await expect(clientB.sync.firstSyncUseAccountRadio).toBeVisible();
+      await expect(clientB.sync.firstSyncReplaceAccountRadio).toBeVisible();
+      await expect(clientB.sync.firstSyncSubmitBtn).toBeVisible();
+      console.log('[Conflict Dialog] ✓ Both choices and Cancel are visible');
 
       // Close dialog by clicking Cancel
       await cancelButton.click();
@@ -137,7 +143,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
   });
 
   /**
-   * Scenario: USE_LOCAL pushes local imported state to server
+   * Scenario: first sync with a local import (never-synced device), keep the import
    *
    * Actions:
    * 1. Client A creates task "Task-A-Remote" and syncs
@@ -149,7 +155,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    * - After USE_LOCAL, Client B keeps imported tasks (no Task-A-Remote)
    * - After sync, Client A receives B's imported state (loses Task-A-Remote)
    */
-  test('USE_LOCAL pushes local imported state to server', async ({
+  test('First sync with a local import: replacing the account pushes the imported state', async ({
     browser,
     baseURL,
     testRunId,
@@ -245,7 +251,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
   });
 
   /**
-   * Scenario: USE_REMOTE discards local import and downloads server state
+   * Scenario: first sync with a local import (never-synced device), use the account
    *
    * Actions:
    * 1. Client A creates task "Task-A-Remote" and syncs
@@ -256,7 +262,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    * - After USE_REMOTE, Client B has A's task (Task-A-Remote)
    * - Client B does NOT have imported tasks
    */
-  test('USE_REMOTE discards local import and downloads server state', async ({
+  test('First sync with a local import: using the account discards the import', async ({
     browser,
     baseURL,
     testRunId,
@@ -347,7 +353,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
   });
 
   /**
-   * Scenario: CANCEL aborts sync without making changes
+   * Scenario: first sync with a local import (never-synced device), Cancel
    *
    * Actions:
    * 1. Client A creates task "Task-A-Remote" and syncs
@@ -358,7 +364,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    * - Client B still has imported tasks (unchanged)
    * - Client A still has original task (server unchanged)
    */
-  test('CANCEL aborts sync without making changes', async ({
+  test('First sync with a local import: Cancel aborts without changes', async ({
     browser,
     baseURL,
     testRunId,

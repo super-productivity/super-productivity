@@ -9,6 +9,7 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
+import { getSyncedLocalRowsOf } from '../../utils/audit-winners-helpers';
 
 /**
  * #10423: one download brings a device several ops of a task it has pending
@@ -16,14 +17,8 @@ import { waitForAppReady } from '../../utils/waits';
  * winners used to be persisted and applied before every nonconflicting op of
  * the batch, so an op that a winner causally dominates, which reached the
  * server first, was applied after it and restored the older value on that
- * device only.
- *
- * Here C only tracked time while A and B renamed the task: A's rename beat
- * B's first one (A's field-patch row) and B's second rename then beat A's
- * row with a whole-task snapshot. C's delta commutes with A's row (no time
- * key), so the row is nonconflicting, but B's snapshot writes time and wins.
- * C must apply A's row before B's snapshot, as the server ordered them, and
- * end on B's last rename like every other device, also after a restart.
+ * device only. C must apply the dominated row first and end on the winner's
+ * value like every other device, also after a restart.
  */
 
 /** Only explicit syncs run, so every crossing happens in the stated order. */
@@ -48,9 +43,7 @@ const sync = async (client: SimulatedE2EClient): Promise<void> => {
     if (await client.sync.conflictDialog.isVisible()) return 'conflict-dialog';
     if (await client.sync.hasSyncError()) return 'error';
     const spinning = await client.sync.syncSpinner.isVisible();
-    const checked = await client.sync.syncCheckIcon
-      .filter({ hasText: /^done_all$/ })
-      .isVisible();
+    const checked = await client.sync.syncConfirmedIcon.isVisible();
     return !spinning && checked ? 'in-sync' : 'pending';
   };
   let observed = 'pending';
@@ -144,13 +137,30 @@ const taskIdOf = async (client: SimulatedE2EClient, name: string): Promise<strin
   }, name);
 
 test.describe('@supersync remote winners in server order (#10423)', () => {
-  test('an incoming row a remote winner dominates applies before it', async ({
+  /**
+   * Rebuilt in the sync E2E audit 2026-11-03 (Verify 2). The earlier shape
+   * (B's second edit a plain rename) stayed green with `orderIncomingPrefix`
+   * disabled: since per-field winners (#10422) B uploads a title-only patch
+   * that commutes with C's delta, so C saw no remote winner at all. Here B's
+   * second edit also writes time
+   * (an absolute edit, as the time editor dispatches), so B's re-sent row
+   * writes time, conflicts with C's pending delta and wins it (newer). That
+   * winner causally dominates A's title row, which reached the server first
+   * and is nonconflicting for C. C must apply A's row before B's winner and
+   * end on B's title; applying the winner first restores A's title on C only.
+   *
+   * C's own delta loses to B's newer time-writing winner: a remote win whose
+   * winner writes time is the documented open gap (lww-field-level-resolution
+   * decision 7), so time is deliberately not asserted here.
+   */
+  test('a time-writing remote winner applies after the incoming row it dominates', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
     test.setTimeout(300000);
-    const name = `ServerOrder-${Date.now()}`;
+    const name = `ServerOrderTime-${Date.now()}`;
+    const day = '2026-07-13';
     const clients: SimulatedE2EClient[] = [];
 
     try {
@@ -177,13 +187,50 @@ test.describe('@supersync remote winners in server order (#10423)', () => {
 
       await onTask(clientB, id, { title: `${name} B first` });
       await sync(clientB);
-      // A's later rename wins the crossing: A uploads a field-patch row.
+      // A's later rename wins the crossing: A uploads a title-only row.
       await onTask(clientA, id, { title: `${name} A` });
       await sync(clientA);
-      await recordTaskTimeDelta(clientC, name, '2026-07-13', 3000);
-      // B's second rename beats A's opaque row: B uploads a whole-task snapshot.
-      await onTask(clientB, id, { title: `${name} B last` });
+      expect(
+        (await getSyncedLocalRowsOf(clientA.page, id)).some(
+          (row) => row.keys.includes('title') && !row.keys.includes('timeSpentOnDay'),
+        ),
+      ).toBe(true);
+      await recordTaskTimeDelta(clientC, name, day, 3000);
+      // B's second edit renames AND writes time; B has not seen A's row yet.
+      await clientB.page.evaluate(
+        ({ taskId, title, date }) => {
+          (
+            window as unknown as {
+              __e2eTestHelpers: { store: { dispatch: (a: unknown) => void } };
+            }
+          ).__e2eTestHelpers.store.dispatch({
+            type: '[Task Shared] updateTask',
+            task: {
+              id: taskId,
+              changes: {
+                title,
+                timeSpent: 20 * 60_000,
+                timeSpentOnDay: { [date]: 20 * 60_000 },
+              },
+            },
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: taskId,
+              opType: 'UPD',
+            },
+          });
+        },
+        { taskId: id, title: `${name} B last`, date: day },
+      );
       await sync(clientB);
+      // Setup proof: B's accepted row for the task writes time, so it is a
+      // remote winner over C's pending delta, not a commuting title patch.
+      expect(
+        (await getSyncedLocalRowsOf(clientB.page, id)).some(
+          (row) => row.keys.includes('title') && row.keys.includes('timeSpentOnDay'),
+        ),
+      ).toBe(true);
       await sync(clientA);
       await onTask(clientA, id, { notes: 'Notes written on A' });
 

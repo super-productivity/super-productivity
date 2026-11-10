@@ -15,6 +15,7 @@ import { Logger } from './logger';
 import { randomBytes } from 'crypto';
 import { sendPasskeyRecoveryEmail, sendVerificationEmail } from './email';
 import { getWsConnectionService } from './sync/services/websocket-connection.service';
+import { revokeAllCaptureGrants } from './capture/capture-grant.store';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv, isConsentRequired } from './config';
 import {
@@ -137,13 +138,19 @@ export const generateRegistrationOptions = async (
   return options;
 };
 
+interface RegistrationExtras {
+  termsAcceptedAt?: number;
+  /** Browser sign-in request to return to after verifying; see connect-request.store.ts. */
+  connectRequestId?: string;
+}
+
 /**
  * Verify passkey registration and create user
  */
 export const verifyRegistration = async (
   email: string,
   credential: RegistrationResponseJSON,
-  termsAcceptedAt?: number,
+  { termsAcceptedAt, connectRequestId }: RegistrationExtras = {},
 ): Promise<{ message: string }> => {
   const { rpID, origin } = getWebAuthnConfig();
 
@@ -266,7 +273,11 @@ export const verifyRegistration = async (
     }
 
     // Normal flow: send verification email
-    const emailSent = await sendVerificationEmail(email, verificationToken);
+    const emailSent = await sendVerificationEmail(
+      email,
+      verificationToken,
+      connectRequestId,
+    );
     if (!emailSent) return { message: REGISTRATION_SUCCESS_MESSAGE };
 
     Logger.info(`Passkey registration initiated`);
@@ -624,6 +635,8 @@ export const completePasskeyRecovery = async (
     }
 
     await tx.passkey.deleteMany({ where: { userId: user.id } });
+    // Recovery signs every session out; capture tokens are sessions too.
+    await revokeAllCaptureGrants(tx, user.id);
 
     await tx.passkey.create({
       data: {

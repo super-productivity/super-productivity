@@ -71,7 +71,7 @@ describe('getRepeatCfgTooltipText', () => {
         'Next',
         'Last',
       );
-      expect(result).toContain('Last 1/8');
+      expect(result).toContain('Last 01/08');
     });
 
     it('renders day-first for de-DE', () => {
@@ -82,7 +82,7 @@ describe('getRepeatCfgTooltipText', () => {
         'Next',
         'Last',
       );
-      expect(result).toContain('Last 1.8');
+      expect(result).toContain('Last 01.08.');
     });
   });
 

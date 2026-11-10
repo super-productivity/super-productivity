@@ -13,6 +13,7 @@
   },
   "hooks": ["currentTaskChange"],
   "permissions": ["showSnack", "openDialog", "addTask", "showIndexHtmlAsView"],
+  "dataSharing": [],
   "iFrame": true,
   "sidePanel": true,
   "isSkipMenuEntry": false,

@@ -10,34 +10,20 @@ import {
 
 const MIGRATION_TEST_TIMEOUT = 180000;
 
+/**
+ * One sync must deliver the migrated data. The sync is deliberately NOT retried:
+ * a retry loop would hide a failing first download (the path under test) behind
+ * a later successful cycle. Only the visibility wait gets a longer budget.
+ */
 const waitForTasksAfterSync = async (
   client: SimulatedE2EClient,
   taskNames: string[],
-  maxAttempts = 3,
 ): Promise<void> => {
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      await client.sync.syncAndWait();
-    } catch (error) {
-      lastError = error;
-    }
-
-    try {
-      await Promise.all(
-        taskNames.map((taskName) => waitForTask(client.page, taskName, 5000)),
-      );
-      expect(await client.sync.hasSyncError()).toBe(false);
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error('Expected synced tasks to become visible');
+  await client.sync.syncAndWait();
+  await Promise.all(
+    taskNames.map((taskName) => waitForTask(client.page, taskName, 15000)),
+  );
+  expect(await client.sync.hasSyncError()).toBe(false);
 };
 
 /**

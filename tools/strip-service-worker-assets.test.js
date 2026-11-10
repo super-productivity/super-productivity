@@ -30,7 +30,7 @@ const runCli = (args) =>
     { encoding: 'utf8' },
   );
 
-test('the file list is exactly what the Angular v21 builder emits', () => {
+test('the file list is exactly what the Angular v22 builder emits, plus sw.js', () => {
   // Hardcoded on purpose. Every other test seeds its fixture FROM this constant,
   // so a name silently dropped from it would shrink the fixture too and every
   // assertion would still hold — a regression this PR exists to prevent.
@@ -39,6 +39,7 @@ test('the file list is exactly what the Angular v21 builder emits', () => {
     'ngsw-worker.js',
     'safety-worker.js',
     'worker-basic.min.js',
+    'sw.js',
   ]);
 });
 

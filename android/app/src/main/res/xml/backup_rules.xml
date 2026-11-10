@@ -30,4 +30,12 @@
   <exclude
     domain="sharedpref"
     path="SuperProductivityTracking.xml" />
+  <!--
+    LaunchUrlReplayGuard's last base URL is stamped against THIS install's
+    update time; restored onto a newer install it would drop the first
+    identical launch URL as a replay (#11153).
+  -->
+  <exclude
+    domain="sharedpref"
+    path="SuperProductivityLaunchUrl.xml" />
 </full-backup-content>

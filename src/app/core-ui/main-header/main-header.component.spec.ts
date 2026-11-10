@@ -9,11 +9,13 @@ import {
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ApplicationRef } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { EMPTY, of } from 'rxjs';
+import { EMPTY, firstValueFrom, of } from 'rxjs';
+import { filter } from 'rxjs/operators';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 
 import { MainHeaderComponent } from './main-header.component';
+import { isOnline$ } from '../../util/is-online';
 import { ProjectService } from '../../features/project/project.service';
 import { LayoutService } from '../layout/layout.service';
 import { TaskService } from '../../features/tasks/task.service';
@@ -31,6 +33,7 @@ import { MetricService } from '../../features/metric/metric.service';
 import { DateService } from '../../core/date/date.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncStatus } from '../../op-log/sync-exports';
+import { T } from '../../t.const';
 import {
   SimpleCounter,
   SimpleCounterType,
@@ -419,6 +422,13 @@ describe('MainHeaderComponent action placement', () => {
   let pluginSidePanelButtons = signal<unknown[]>([]);
   let currentTaskId = signal<string | null>(null);
   let isShowNotes = signal(false);
+  let syncWrapperState = {
+    isEnabledAndReady: false,
+    syncState: 'IN_SYNC',
+    isSyncInProgress: false,
+    hasNoPendingOps: true,
+    isConfirmedInSync: false,
+  };
 
   const configureTestBed = (): void => {
     const cfg = {
@@ -482,11 +492,11 @@ describe('MainHeaderComponent action placement', () => {
           provide: SyncWrapperService,
           useValue: {
             sync: jasmine.createSpy('sync'),
-            isEnabledAndReady$: of(false),
-            syncState$: of('IN_SYNC'),
-            isSyncInProgress$: of(false),
-            hasNoPendingOps$: of(true),
-            superSyncIsConfirmedInSync$: of(false),
+            isEnabledAndReady$: of(syncWrapperState.isEnabledAndReady),
+            syncState$: of(syncWrapperState.syncState),
+            isSyncInProgress$: of(syncWrapperState.isSyncInProgress),
+            hasNoPendingOps$: of(syncWrapperState.hasNoPendingOps),
+            superSyncIsConfirmedInSync$: of(syncWrapperState.isConfirmedInSync),
           },
         },
         {
@@ -558,6 +568,13 @@ describe('MainHeaderComponent action placement', () => {
     pluginSidePanelButtons = signal<unknown[]>([]);
     currentTaskId = signal<string | null>(null);
     isShowNotes = signal(false);
+    syncWrapperState = {
+      isEnabledAndReady: false,
+      syncState: 'IN_SYNC',
+      isSyncInProgress: false,
+      hasNoPendingOps: true,
+      isConfirmedInSync: false,
+    };
   });
 
   afterEach(() => {
@@ -906,6 +923,120 @@ describe('MainHeaderComponent action placement', () => {
     await mountAtWidth(404);
 
     expect(fixture!.componentInstance.isAnyCounterRunning()).toBe(true);
+  });
+
+  describe('sync button state', () => {
+    // isOnline$ starts from navigator.onLine, which is false in a sandbox
+    // without a network interface. Real time, not fakeAsync: the debounce timer
+    // runs in the zone of whichever spec subscribed to the shared stream first.
+    beforeEach(async () => {
+      // Subscribe first: the first subscriber adds the event listeners.
+      const isBackOnline = firstValueFrom(isOnline$.pipe(filter(Boolean)));
+      window.dispatchEvent(new Event('online'));
+      await isBackOnline;
+    });
+
+    const readySync = (patch: Partial<typeof syncWrapperState> = {}): void => {
+      syncWrapperState = {
+        ...syncWrapperState,
+        isEnabledAndReady: true,
+        ...patch,
+      };
+    };
+
+    it('reports a local upload until the remote was checked', () => {
+      readySync({ hasNoPendingOps: true, isConfirmedInSync: false });
+
+      component = createComponent();
+
+      expect(component.syncConfirmation()).toBe('local');
+    });
+
+    it('reports a remote-confirmed upload', () => {
+      readySync({ hasNoPendingOps: true, isConfirmedInSync: true });
+
+      component = createComponent();
+
+      expect(component.syncConfirmation()).toBe('remote');
+    });
+
+    it('reports no upload state while local changes wait for upload', () => {
+      readySync({ hasNoPendingOps: false });
+
+      component = createComponent();
+
+      expect(component.syncConfirmation()).toBeNull();
+    });
+
+    it('reports no upload state while sync is not ready', () => {
+      component = createComponent();
+
+      expect(component.syncConfirmation()).toBeNull();
+    });
+
+    it('names a recent remote check in the tooltip', () => {
+      readySync({ hasNoPendingOps: true, isConfirmedInSync: true });
+
+      component = createComponent();
+
+      expect(component.syncTooltip()).toBe(T.MH.SYNC_STATE.IN_SYNC_CONFIRMED);
+    });
+
+    it('keeps the plain in-sync tooltip until the remote was checked', () => {
+      readySync({ hasNoPendingOps: true, isConfirmedInSync: false });
+
+      component = createComponent();
+
+      expect(component.syncTooltip()).toBe(T.MH.SYNC_STATE.IN_SYNC);
+    });
+
+    it('shows the in-sync state as one icon, with nothing drawn over it (#10427)', async () => {
+      readySync({ hasNoPendingOps: true });
+
+      const host = await mountAtWidth(1200);
+      const icons = host.querySelectorAll<HTMLElement & { svgIcon?: string }>(
+        'button.sync-btn mat-icon',
+      );
+
+      expect(icons.length).toBe(1);
+      // MatIcon is stubbed out here (NO_ERRORS_SCHEMA), so the binding lands
+      // as a plain property on the element.
+      expect(icons[0].svgIcon).toBe('sync_done');
+      expect(icons[0].textContent?.trim()).toBe('');
+    });
+
+    it('shows the plain sync ring while local changes wait for upload', () => {
+      readySync({ hasNoPendingOps: false });
+
+      component = createComponent();
+
+      expect(component.syncIcon()).toBe('sync_ring');
+      expect(component.isSyncIconSpinning()).toBe(false);
+    });
+
+    it('spins the sync glyph while syncing, even with nothing left to upload', () => {
+      readySync({ isSyncInProgress: true, hasNoPendingOps: true });
+
+      component = createComponent();
+
+      expect(component.syncIcon()).toBe('sync_ring');
+      expect(component.isSyncIconSpinning()).toBe(true);
+    });
+
+    it('lets an error win over syncing, and never spins the error glyph', () => {
+      readySync({ syncState: 'ERROR', isSyncInProgress: true });
+
+      component = createComponent();
+
+      expect(component.syncIcon()).toBe('sync_error');
+      expect(component.isSyncIconSpinning()).toBe(false);
+    });
+
+    it('shows the crossed-out sync ring while sync is not ready', () => {
+      component = createComponent();
+
+      expect(component.syncIcon()).toBe('sync_off');
+    });
   });
 
   it('keeps a persistent recovery action instead of showing routine sync success', async () => {

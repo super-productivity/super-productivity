@@ -1,0 +1,25 @@
+@if (isMissing()) {
+  <div class="callout callout--warning">
+    <mat-icon aria-hidden="true">link_off</mat-icon>
+    <p>{{ T.PLAINSPACE.SYNC.NOT_IN_LIST | translate }}</p>
+  </div>
+} @else if (failure()) {
+  <div class="callout callout--danger">
+    <mat-icon aria-hidden="true">sync_problem</mat-icon>
+    <div>
+      <p>
+        {{
+          T.F.ISSUE.SYNC_STATE.COULD_NOT_SYNC
+            | translate
+              : { reason: reasonKey() ? (reasonKey()! | translate) : reasonText() }
+        }}
+      </p>
+      <button
+        mat-stroked-button
+        (click)="retry()"
+      >
+        {{ T.F.ISSUE.SYNC_STATE.RETRY | translate }}
+      </button>
+    </div>
+  </div>
+}

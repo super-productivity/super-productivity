@@ -8,7 +8,12 @@ import {
 } from '@playwright/test';
 import { BasePage } from './base.page';
 import { normalizeDialogMessage, translationRegex } from '../utils/i18n-strings';
-import { confirmSyncConflictOverwriteIfShown } from '../utils/sync-helpers';
+import {
+  confirmSyncConflictOverwriteIfShown,
+  passSyncSignInDialog,
+} from '../utils/sync-helpers';
+import { cssSelectors } from '../constants/selectors';
+import { recordSyncAudit } from '../utils/sync-audit';
 
 export interface SuperSyncConfig {
   baseUrl: string;
@@ -65,14 +70,33 @@ type NativeSyncConfirmIntent = 'fresh' | 'use-local' | 'use-remote' | 'repair';
 export type ConflictDialogChoice = 'local' | 'remote';
 
 /**
+ * Dialogs that `syncAndWait()` answers only when the caller expects them.
+ * Answered silently, each one would hide the regression a test exists for: a
+ * stray import prompt, a lost encryption key, a repair of corrupted state.
+ * Measured 2026-11 on a full SuperSync run: 9 of about 480 tests met one of
+ * them, all deliberately (e2e/sync-e2e-audit-2026-11-03.md).
+ */
+export type SyncHelperDialog =
+  | 'fresh-client'
+  | 'sync-import'
+  | 'enter-password'
+  | 'enable-encryption'
+  | 'decrypt-error'
+  | 'repair-confirm';
+
+/**
  * How the sync helpers answer the dialogs they own. `useLocal` steers the
  * SYNC_IMPORT conflict dialog and the native confirms that go with it.
  * `conflictDialog` is the explicit opt-in for the whole-dataset dialog: left
  * unset, that dialog fails the helper instead of silently picking a side.
+ * `allowedDialogs` set means strict mode (syncAndWait): any other dialog from
+ * SyncHelperDialog fails the helper. Unset keeps the lenient behavior of the
+ * lower-level triggerSync()/waitForSyncToComplete() and of setup.
  */
 type SyncDialogChoices = {
   useLocal: boolean;
   conflictDialog?: ConflictDialogChoice;
+  allowedDialogs?: ReadonlySet<SyncHelperDialog>;
 };
 
 /**
@@ -161,7 +185,7 @@ export class SuperSyncPage extends BasePage {
   readonly syncSpinner: Locator;
   readonly syncCheckIcon: Locator;
   readonly syncErrorIcon: Locator;
-  private readonly _syncRemoteCheckIcon: Locator;
+  readonly syncConfirmedIcon: Locator;
   /** Fresh client confirmation dialog - appears when a new client first syncs */
   readonly freshClientDialog: Locator;
   readonly freshClientConfirmBtn: Locator;
@@ -172,7 +196,9 @@ export class SuperSyncPage extends BasePage {
    * multi-entity conflict preflight refuses to auto-resolve
    * (UnsupportedMultiEntityConflictError, SYNC_MULTI_ENTITY_UNSUPPORTED).
    * "Keep local" force-uploads a SYNC_IMPORT, "Keep remote" replaces local
-   * state with the server's: either way ALL data on one side is lost.
+   * state with the server's: either way ALL data on one side is lost. On
+   * SuperSync a never-synced device sees them as `sync-first-choice` instead
+   * (see firstSyncSubmitBtn); resolveConflictDialog() answers both layouts.
    *
    * syncAndWait() and the other completion helpers therefore FAIL when it
    * appears. A test that intentionally exercises it asserts on it and answers
@@ -181,6 +207,15 @@ export class SuperSyncPage extends BasePage {
   readonly conflictDialog: Locator;
   readonly conflictUseLocalBtn: Locator;
   readonly conflictUseRemoteBtn: Locator;
+  /**
+   * First-sync choice (`sync-first-choice`, 2b): what a never-synced SuperSync
+   * device with tasks sees in place of either conflict dialog's content, most
+   * often the sync-import dialog when it joins an account. "Use my account's
+   * tasks" = remote, "Replace my account…" = local. No native confirm follows.
+   */
+  readonly firstSyncUseAccountRadio: Locator;
+  readonly firstSyncReplaceAccountRadio: Locator;
+  readonly firstSyncSubmitBtn: Locator;
   /** Sync import conflict dialog - appears when SYNC_IMPORT filters remote ops */
   readonly syncImportConflictDialog: Locator;
   readonly syncImportUseLocalBtn: Locator;
@@ -207,19 +242,22 @@ export class SuperSyncPage extends BasePage {
     this.syncBtn = page.locator('button.sync-btn');
     this.providerSelect = page.locator('formly-field-mat-select mat-select');
     this.baseUrlInput = page.locator('.e2e-baseUrl input');
-    this.accessTokenInput = page.locator('.e2e-accessToken textarea');
+    // Current clients render an input (#10784); released clients a textarea.
+    this.accessTokenInput = page.locator(
+      '.e2e-accessToken input, .e2e-accessToken textarea',
+    );
     this.presenceDeviceNameInput = page.locator('.e2e-presenceDeviceName input');
     this.enableEncryptionBtn = page.locator('.e2e-enable-encryption-btn button');
     this.disableEncryptionBtn = page.locator('.e2e-disable-encryption-btn button');
     this.encryptionPasswordInput = page.locator('.e2e-encryptKey input[type="password"]');
     this.saveBtn = page.locator('mat-dialog-actions button[mat-flat-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
-    this.syncCheckIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
-    this._syncRemoteCheckIcon = page.locator(
-      '.sync-btn mat-icon.sync-state-ico:has-text("done_all")',
-    );
-    // Error state shows sync_problem icon (no special class, just the icon name)
-    this.syncErrorIcon = page.locator('.sync-btn mat-icon:has-text("sync_problem")');
+    // Every local change uploaded / the server checked too. Both selectors
+    // also match the badge that released clients render.
+    this.syncCheckIcon = page.locator(cssSelectors.SYNC_UPLOADED);
+    this.syncConfirmedIcon = page.locator(cssSelectors.SYNC_REMOTE_CONFIRMED);
+    // Error state shows the sync error icon (also matches released clients)
+    this.syncErrorIcon = page.locator(cssSelectors.SYNC_ERROR);
     // Legacy Angular fresh-client dialog elements. Keep this locator scoped so a
     // different generic confirmation can never be accepted as a sync prompt.
     this.freshClientDialog = page
@@ -236,6 +274,14 @@ export class SuperSyncPage extends BasePage {
     this.conflictUseRemoteBtn = this.conflictDialog.locator('button', {
       hasText: /Keep remote/i,
     });
+    // The first-sync choice renders inside either conflict dialog.
+    this.firstSyncUseAccountRadio = page.locator(
+      'sync-first-choice .e2e-first-sync-use-account',
+    );
+    this.firstSyncReplaceAccountRadio = page.locator(
+      'sync-first-choice .e2e-first-sync-replace-account',
+    );
+    this.firstSyncSubmitBtn = page.locator('sync-first-choice .e2e-first-sync-submit');
     // Sync import conflict dialog elements
     this.syncImportConflictDialog = page.locator('dialog-sync-import-conflict');
     this.syncImportUseLocalBtn = page.locator(
@@ -339,8 +385,86 @@ export class SuperSyncPage extends BasePage {
     try {
       await this._setupSuperSync(config);
       this._throwIfUnexpectedNativeDialog();
+      if (config.waitForInitialSync !== false) {
+        // Setup's own waits end on the 'uploaded' marker, which ignores the
+        // spinner and the error state, so a joiner could leave setup mid-download
+        // or after a failed first sync. Require a settled, error-free, fully
+        // uploaded state before handing the client to the test (never hit in a
+        // full run, measured 2026-11, so this only fails a real setup failure).
+        await this._expectSettledAfterSetup();
+      }
     } finally {
       this.page.off('dialog', setupDialogHandler);
+    }
+  }
+
+  /**
+   * Fails setup unless the initial sync settled: no error, no spinner, remote
+   * confirmed and nothing pending. Setup's own waits end on the 'uploaded'
+   * marker, which ignores the spinner and the error state. Ops captured right
+   * after the first sync (e.g. TaskDueEffects re-planning TODAY) are flushed
+   * with up to three more cycles, as syncAndWait() does: unless a test opted
+   * into WebSocket sync, setup has blocked auto-sync and immediate upload, so
+   * nothing else would upload them.
+   */
+  private async _expectSettledAfterSetup(timeout = 15000): Promise<void> {
+    const deadline = Date.now() + timeout;
+    const isSettled = (state: SyncCompletionSnapshot): boolean =>
+      !state.errorVisible &&
+      !state.spinnerVisible &&
+      state.checkVisible &&
+      state.unsyncedCount === 0;
+    const fail = (
+      state: SyncCompletionSnapshot,
+      openDialog: boolean,
+      cause?: unknown,
+    ): never => {
+      recordSyncAudit(
+        'setup:initial-sync-unwitnessed',
+        JSON.stringify({ ...state, openDialog }),
+      );
+      throw new Error(
+        `setupSuperSync(): the initial sync did not settle (error, still running, ` +
+          `pending ops or a sync dialog left open). Last state: ` +
+          `${JSON.stringify({ ...state, openDialog })}`,
+        cause === undefined ? undefined : { cause },
+      );
+    };
+    let flushes = 0;
+    let snapshot = await this._getSyncCompletionSnapshot();
+    while (!isSettled(snapshot) && !snapshot.errorVisible && Date.now() < deadline) {
+      if (snapshot.spinnerVisible) {
+        await this.page.waitForTimeout(250);
+      } else {
+        await this._waitForSyncWindowToClose();
+        snapshot = await this._getSyncCompletionSnapshot();
+        if (
+          flushes < 3 &&
+          !isSettled(snapshot) &&
+          !snapshot.errorVisible &&
+          !snapshot.spinnerVisible
+        ) {
+          flushes++;
+          try {
+            await this._triggerSuperSyncCycle(Math.max(1000, deadline - Date.now()));
+          } catch (error) {
+            fail(await this._getSyncCompletionSnapshot(), false, error);
+          }
+        } else if (flushes >= 3) {
+          await this.page.waitForTimeout(250);
+        }
+      }
+      snapshot = await this._getSyncCompletionSnapshot();
+    }
+    const openDialog = await this.page
+      .locator(
+        'dialog-sync-import-conflict, dialog-sync-conflict, dialog-enter-encryption-password, dialog-enable-encryption, dialog-handle-decrypt-error',
+      )
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (!isSettled(snapshot) || openDialog) {
+      fail(snapshot, openDialog);
     }
   }
 
@@ -423,6 +547,7 @@ export class SuperSyncPage extends BasePage {
     // This allows configuring sync even when already set up
     // Use noWaitAfter to prevent blocking on Angular hash navigation
     await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
+    await passSyncSignInDialog(this.page);
 
     // Wait for the provider select (indicates dialog is open)
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
@@ -659,11 +784,7 @@ export class SuperSyncPage extends BasePage {
         console.log(
           `[SuperSyncPage] Sync import conflict dialog - using ${useLocal ? 'local' : 'remote'}`,
         );
-        if (useLocal) {
-          await this.syncImportUseLocalBtn.click();
-        } else {
-          await this.syncImportUseRemoteBtn.click();
-        }
+        await this._clickSyncImportChoice(useLocal ? 'local' : 'remote');
         await this.syncImportConflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
 
         // After handling sync import, check for password dialog
@@ -899,11 +1020,7 @@ export class SuperSyncPage extends BasePage {
             console.log(
               `[SuperSyncPage] Post-encryption sync_import_conflict — using ${useLocal ? 'local' : 'remote'}`,
             );
-            if (useLocal) {
-              await this.syncImportUseLocalBtn.click();
-            } else {
-              await this.syncImportUseRemoteBtn.click();
-            }
+            await this._clickSyncImportChoice(useLocal ? 'local' : 'remote');
             await this.syncImportConflictDialog.waitFor({
               state: 'hidden',
               timeout: 5000,
@@ -1036,11 +1153,9 @@ export class SuperSyncPage extends BasePage {
           .isVisible()
           .catch(() => false);
         if (syncImportDialogVisible) {
-          if (config.syncImportChoice === 'local') {
-            await this.syncImportUseLocalBtn.click();
-          } else {
-            await this.syncImportUseRemoteBtn.click();
-          }
+          await this._clickSyncImportChoice(
+            config.syncImportChoice === 'local' ? 'local' : 'remote',
+          );
           await this.syncImportConflictDialog.waitFor({
             state: 'hidden',
             timeout: 5000,
@@ -1365,6 +1480,15 @@ export class SuperSyncPage extends BasePage {
    *
    * Prerequisites: SuperSync must already be configured without encryption
    */
+  /** Opens the sync settings dialog with the saved SuperSync config loaded. */
+  async openSuperSyncSettings(): Promise<Locator> {
+    await this.clickSyncBtn({ button: 'right', noWaitAfter: true });
+    await passSyncSignInDialog(this.page);
+    await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
+    await this.selectSuperSyncProviderWithRetry();
+    return this.page.locator('dialog-sync-cfg');
+  }
+
   async enableEncryption(password: string): Promise<void> {
     const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
 
@@ -1702,8 +1826,9 @@ export class SuperSyncPage extends BasePage {
 
   /**
    * Trigger a manual sync via the sync button and wait for it to complete.
-   * Waits with syncAndWait()'s default dialog handling, so the whole-dataset
-   * conflict dialog fails it too; it cannot opt in to answering that dialog.
+   * Unlike syncAndWait(), it still answers the fresh-client, sync-import
+   * (remote), password and decrypt-error dialogs on its own. Only the
+   * whole-dataset conflict dialog fails it; it cannot opt in to answering that.
    *
    * @internal Use syncAndWait() instead for most cases
    */
@@ -1714,6 +1839,15 @@ export class SuperSyncPage extends BasePage {
       timeout: remainingTimeout(started, 30000),
       useLocal: false,
     });
+  }
+
+  /**
+   * Starts a sync and waits for a successful ops response, but not for the
+   * in-sync check: work that adds ops as soon as a sync ends (the agent
+   * capture import) keeps the check hidden until the next sync.
+   */
+  async startSync(): Promise<void> {
+    await this._triggerSuperSyncCycle(30000);
   }
 
   /**
@@ -1749,6 +1883,7 @@ export class SuperSyncPage extends BasePage {
     dialog: Dialog,
     context: string,
     expectedChoice: 'local' | 'remote',
+    allowedDialogs?: ReadonlySet<SyncHelperDialog>,
   ): Promise<void> {
     const message = dialog.message();
     const isRuntimeOwnedDialog =
@@ -1761,8 +1896,12 @@ export class SuperSyncPage extends BasePage {
 
     const intent =
       dialog.type() === 'confirm' ? this._getNativeSyncConfirmIntent(message) : undefined;
+    const isAllowedInStrictMode = (helperDialog: SyncHelperDialog): boolean =>
+      !allowedDialogs || allowedDialogs.has(helperDialog);
     const isExpectedConfirm =
-      intent === 'fresh' || intent === 'repair' || intent === `use-${expectedChoice}`;
+      (intent === 'fresh' && isAllowedInStrictMode('fresh-client')) ||
+      (intent === 'repair' && isAllowedInStrictMode('repair-confirm')) ||
+      intent === `use-${expectedChoice}`;
 
     if (isExpectedConfirm) {
       console.log(
@@ -1770,13 +1909,20 @@ export class SuperSyncPage extends BasePage {
       );
       try {
         await dialog.accept();
+        recordSyncAudit('auto-answer:native-confirm', `${context} ${intent}`);
       } catch {
         // Another narrowly-scoped listener already handled this dialog.
       }
       return;
     }
 
-    this._unexpectedNativeDialog = `${dialog.type()}: ${message}`;
+    const strictHint =
+      intent === 'fresh'
+        ? " (pass allowDialogs: ['fresh-client'] if the test expects it)"
+        : intent === 'repair'
+          ? " (pass allowDialogs: ['repair-confirm'] if the test expects it)"
+          : '';
+    this._unexpectedNativeDialog = `${dialog.type()}: ${message}${strictHint}`;
     console.error(
       `[${context}] Unexpected native dialog: ${this._unexpectedNativeDialog}`,
     );
@@ -1823,8 +1969,6 @@ export class SuperSyncPage extends BasePage {
     choice: 'local' | 'remote',
     timeout: number,
   ): Promise<void> {
-    const button =
-      choice === 'local' ? this.syncImportUseLocalBtn : this.syncImportUseRemoteBtn;
     const context =
       choice === 'local' ? 'chooseSyncImportUseLocal' : 'chooseSyncImportUseRemote';
     const dialogHandler = async (dialog: Dialog): Promise<void> => {
@@ -1833,7 +1977,7 @@ export class SuperSyncPage extends BasePage {
 
     this.page.on('dialog', dialogHandler);
     try {
-      await button.click({ timeout });
+      await this._clickSyncImportChoice(choice, timeout);
       // The confirm is answered synchronously inside the click, so the dialog
       // must be gone before the handler is removed — otherwise a late prompt
       // would hang the next action instead of failing here.
@@ -1864,12 +2008,47 @@ export class SuperSyncPage extends BasePage {
    */
   async resolveConflictDialog(choice: ConflictDialogChoice): Promise<void> {
     await expect(this.conflictDialog).toBeVisible({ timeout: 5000 });
-    if (choice === 'local') {
+    if (await this.firstSyncSubmitBtn.isVisible()) {
+      await this._answerFirstSyncChoice(choice);
+    } else if (choice === 'local') {
       await this.conflictUseLocalBtn.click();
     } else {
       await this.conflictUseRemoteBtn.click();
     }
     await confirmSyncConflictOverwriteIfShown(this.page, this.conflictDialog);
+  }
+
+  /**
+   * Answers the sync-import dialog in either layout: the full dialog, or the
+   * first-sync choice a never-synced SuperSync device gets (2b).
+   */
+  private async _clickSyncImportChoice(
+    choice: ConflictDialogChoice,
+    timeout?: number,
+  ): Promise<void> {
+    await expect(this.syncImportConflictDialog).toBeVisible({ timeout });
+    if (await this.firstSyncSubmitBtn.isVisible()) {
+      await this._answerFirstSyncChoice(choice);
+      return;
+    }
+    const button =
+      choice === 'local' ? this.syncImportUseLocalBtn : this.syncImportUseRemoteBtn;
+    await button.click({ timeout });
+  }
+
+  /**
+   * The first-sync layout (`sync-first-choice`): pick a side, then submit. The
+   * radios stay disabled until the device's tasks are counted, and the choice
+   * shows its own warning, so no overwrite confirm follows.
+   */
+  private async _answerFirstSyncChoice(choice: ConflictDialogChoice): Promise<void> {
+    const radio =
+      choice === 'local'
+        ? this.firstSyncReplaceAccountRadio
+        : this.firstSyncUseAccountRadio;
+    await radio.locator('input').check();
+    await expect(this.firstSyncSubmitBtn).toBeEnabled();
+    await this.firstSyncSubmitBtn.click();
   }
 
   /**
@@ -1925,10 +2104,23 @@ export class SuperSyncPage extends BasePage {
   private async _handleSyncDialogs({
     useLocal,
     conflictDialog,
+    allowedDialogs,
   }: SyncDialogChoices): Promise<boolean> {
+    const assertAllowed = (dialog: SyncHelperDialog): void => {
+      if (allowedDialogs && !allowedDialogs.has(dialog)) {
+        throw new Error(
+          `syncAndWait(): unexpected '${dialog}' dialog. If the test expects it, ` +
+            `pass allowDialogs: ['${dialog}'] (or assert on the dialog and answer it ` +
+            `explicitly); otherwise this is the regression the test should catch.`,
+        );
+      }
+    };
+
     // 1. Fresh client confirmation dialog (Angular Material)
     if (await this.freshClientDialog.isVisible().catch(() => false)) {
+      assertAllowed('fresh-client');
       console.log('[syncAndWait] Fresh client dialog detected, confirming...');
+      recordSyncAudit('auto-answer:fresh-client');
       await this.freshClientConfirmBtn.click();
       await this.freshClientDialog.waitFor({ state: 'hidden', timeout: 5000 });
       return true;
@@ -1953,9 +2145,11 @@ export class SuperSyncPage extends BasePage {
     //    triggerSync()/waitForSyncToComplete() reach here with no dialog
     //    handler installed, and a raw click would hang on the unanswered prompt.
     if (await this.syncImportConflictDialog.isVisible().catch(() => false)) {
+      assertAllowed('sync-import');
       console.log(
         `[syncAndWait] Sync import conflict detected, using ${useLocal ? 'local' : 'remote'} data...`,
       );
+      recordSyncAudit('auto-answer:sync-import', useLocal ? 'local' : 'remote');
       await this._chooseSyncImportResolution(useLocal ? 'local' : 'remote', 10000);
       return true;
     }
@@ -1964,7 +2158,9 @@ export class SuperSyncPage extends BasePage {
     //    but no password is configured, e.g., after import or reconnection)
     const enterPasswordDialog = this.page.locator('dialog-enter-encryption-password');
     if (await enterPasswordDialog.isVisible().catch(() => false)) {
+      assertAllowed('enter-password');
       console.log('[syncAndWait] Enter-password dialog detected, entering password');
+      recordSyncAudit('auto-answer:enter-password');
       const passwordInput = enterPasswordDialog.locator('input[type="password"]');
       await passwordInput.fill(this._encryptionPassword);
       const saveAndSyncBtn = enterPasswordDialog.locator(
@@ -1979,7 +2175,9 @@ export class SuperSyncPage extends BasePage {
     //    setup, e.g., after account reset clears server data)
     const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
     if (await enableEncryptionDialog.isVisible().catch(() => false)) {
+      assertAllowed('enable-encryption');
       console.log('[syncAndWait] Enable-encryption dialog detected, setting password');
+      recordSyncAudit('auto-answer:enable-encryption');
       const topDialog = enableEncryptionDialog.last();
       await topDialog
         .locator('input[type="password"]')
@@ -1997,9 +2195,11 @@ export class SuperSyncPage extends BasePage {
     // 6. Decryption failed dialog (appears when server has old encrypted ops)
     const decryptErrorDialog = this.page.locator('dialog-handle-decrypt-error');
     if (await decryptErrorDialog.isVisible().catch(() => false)) {
+      assertAllowed('decrypt-error');
       console.log(
         '[syncAndWait] Decryption Failed dialog detected, entering password to retry',
       );
+      recordSyncAudit('auto-answer:decrypt-error');
       const passwordInput = decryptErrorDialog.locator('input[type="password"]');
       await passwordInput.fill(this._encryptionPassword);
       const retryBtn = decryptErrorDialog.locator(
@@ -2100,7 +2300,7 @@ export class SuperSyncPage extends BasePage {
   private async _getSyncCompletionSnapshot(): Promise<SyncCompletionSnapshot> {
     const [checkVisible, spinnerVisible, errorVisible, unsyncedCount] = await Promise.all(
       [
-        this._syncRemoteCheckIcon.isVisible().catch(() => false),
+        this.syncConfirmedIcon.isVisible().catch(() => false),
         this.syncSpinner.isVisible().catch(() => false),
         this.syncErrorIcon.isVisible().catch(() => false),
         this._getUnsyncedOperationCount(),
@@ -2241,11 +2441,12 @@ export class SuperSyncPage extends BasePage {
    * Trigger a manual sync and wait for it to complete, handling any dialogs that appear.
    * This is the main method to use for syncing in tests.
    *
-   * Automatically handles:
-   * - Native window.confirm dialogs (fresh client sync confirmation)
-   * - Fresh client confirmation dialogs (Angular Material)
-   * - Sync import conflicts (uses remote by default)
-   * - Encryption password, enable-encryption and decryption-failed dialogs
+   * Answers only the dialogs the caller expects. Each of these fails the sync
+   * unless it is listed in `allowDialogs`: the fresh-client dialog and confirm,
+   * the sync-import conflict dialog (also allowed by passing `useLocal`), the
+   * enter-password, enable-encryption and decryption-failed dialogs, and the
+   * data-repair confirm. An allowed one is answered (remote by default for the
+   * import dialog, the setup password for the encryption dialogs).
    *
    * Deliberately NOT handled by default: the whole-dataset conflict dialog
    * (`dialog-sync-conflict`, "Keep local" / "Keep remote"). It is the fail-closed
@@ -2264,18 +2465,32 @@ export class SuperSyncPage extends BasePage {
    *   dialog by keeping 'local' or 'remote' data. Omit it and that dialog fails the sync.
    *   After answering it waits for the forced upload/download to finish and runs one more
    *   normal cycle, as a test would by hand, so the sync ends confirmed.
+   * @param options.allowDialogs - Dialogs this sync is expected to meet (see
+   *   SyncHelperDialog). Any other one fails the sync instead of being answered
+   *   silently. Passing `useLocal` explicitly also allows 'sync-import'.
    * @param options.timeout - Maximum time to wait for sync (default: 30000ms)
    */
   async syncAndWait(
     options: {
       useLocal?: boolean;
       conflictDialog?: ConflictDialogChoice;
+      allowDialogs?: ReadonlyArray<SyncHelperDialog>;
       timeout?: number;
     } = {},
   ): Promise<void> {
     // Increased default timeout from 15s to 30s for multi-client scenarios under load
     const { useLocal = false, conflictDialog, timeout = 30000 } = options;
-    const dialogChoices: SyncDialogChoices = { useLocal, conflictDialog };
+    const allowedDialogs = new Set<SyncHelperDialog>(options.allowDialogs ?? []);
+    if (options.useLocal !== undefined) {
+      allowedDialogs.add('sync-import');
+    }
+    // Choosing remote in either import dialog can raise the data-repair
+    // confirm on the forced download; declining it aborts the sync. Keeping
+    // local never runs that download, so a repair confirm there stays strict.
+    if ((allowedDialogs.has('sync-import') && !useLocal) || conflictDialog === 'remote') {
+      allowedDialogs.add('repair-confirm');
+    }
+    const dialogChoices: SyncDialogChoices = { useLocal, conflictDialog, allowedDialogs };
 
     this._throwIfUnexpectedNativeDialog();
 
@@ -2288,6 +2503,7 @@ export class SuperSyncPage extends BasePage {
         dialog,
         'syncAndWait',
         useLocal ? 'local' : 'remote',
+        allowedDialogs,
       );
     };
     this.page.on('dialog', dialogHandler);
@@ -2565,7 +2781,7 @@ export class SuperSyncPage extends BasePage {
     const isSpinnerVisible = await this.syncSpinner.isVisible().catch(() => false);
     if (isSpinnerVisible) return 'syncing';
 
-    const isCheckVisible = await this._syncRemoteCheckIcon.isVisible().catch(() => false);
+    const isCheckVisible = await this.syncConfirmedIcon.isVisible().catch(() => false);
     if (isCheckVisible) return 'success';
 
     return 'unknown';

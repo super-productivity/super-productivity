@@ -56,10 +56,14 @@ test.describe('Settings', () => {
 
     await expect(page.locator('.page-settings')).toBeVisible();
 
-    // Expand first config section to reveal form elements
+    // Expand first config section to reveal form elements, unless it starts
+    // open (App Features does) — a click there would land on a switch.
     const firstSection = page.locator('config-section').first();
     await expect(firstSection).toBeVisible({ timeout: 5000 });
-    await firstSection.click();
+    const panel = firstSection.locator('.collapsible-panel').first();
+    if (!(await panel.isVisible().catch(() => false))) {
+      await firstSection.locator('collapsible > .collapsible-header').first().click();
+    }
 
     // Look for visible form elements in the section we opened.
     const formElements = firstSection.locator(

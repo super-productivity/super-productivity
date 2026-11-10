@@ -92,6 +92,10 @@
     "INTRO_2": "Wenn du diesen Ansatz schätzt und das Projekt gesund und weiterentwickelt halten möchtest, wird eine freiwillige Spende sehr geschätzt."
   },
   "EXAMPLE_TASKS": {
+    "GETTING_STARTED": {
+      "TITLE": "Optional: Tipps für den Einstieg",
+      "NOTES": "Nichts hier ist Pflicht. Lösche diese Aufgabe, wann du willst.\n\n- **Heute und Eingang**: Heute zeigt, was für heute geplant ist. Aufgaben ohne eigenes Projekt bleiben im Eingang. Eine Aufgabe kann in beiden Listen erscheinen.\n- **Projekte**: Gruppiere Aufgaben nach Thema mit dem **+** neben **Projekte** in der Seitenleiste.\n- **Sync**: Halte deine Daten auf mehreren Geräten aktuell unter **Einstellungen → Sync & Backup**.\n- **Du kommst von Todoist oder TickTick?** Importiere deine Aufgaben unter **Einstellungen → Sync & Backup → Import Export**.\n- **Touren**: **Hilfe → Kurztour** im Seitenleistenmenü führt dich an deiner eigenen Aufgabe durch die Grundlagen, und **Hilfe → Anleitung** zeigt dir Kurzsyntax und Tastaturnavigation Schritt für Schritt. Schließe eine Tour, wann du willst.\n- **Mach es zu deinem**: Wähle ein Theme oder den Dunkelmodus und schalte Funktionen wie Boards, Zeitplan, Gewohnheiten, Fokus-Modus oder Integrationen unter **Einstellungen → Allgemein** ein oder aus. Plugins bringen noch mehr."
+    },
     "LEARN_KEYBOARD_SHORTCUTS": {
       "TITLE": "Tastenkürzel lernen",
       "NOTES": "Super Productivity ist für die Bedienung mit der Tastatur konzipiert. Lerne die Tastenkürzel, um schneller zu arbeiten.\n\n**So fängst du an:**\n1. Öffne das **Seitenleistenmenü**\n2. Gehe zu **Hilfe**\n3. Klicke auf **Tastaturnavigations-Tour**"
@@ -193,7 +197,7 @@
         "ADD_NEW_BOARD": "Neues Board hinzufügen",
         "CONFIRM_DELETE": "Möchtest du dieses Board wirklich löschen?",
         "CREATE_NEW_TAG_BTN": "Tag erstellen",
-        "CREATE_NEW_TAG_MSG": "1 neuer Tag muss erstellt werden, damit dieses Board funktioniert",
+        "CREATE_NEW_TAG_MSG": "1 neues Tag muss erstellt werden, damit dieses Board funktioniert",
         "CREATE_NEW_TAGS_BTN": "Tags erstellen",
         "CREATE_NEW_TAGS_MSG": "{{nr}} neue Tags müssen erstellt werden, damit dieses Board funktioniert",
         "EDIT_BOARD": "Board bearbeiten",
@@ -430,52 +434,6 @@
         "STATUS": "Status",
         "SUMMARY": "Zusammenfassung",
         "WRITE_A_COMMENT": "Schreibe einen Kommentar"
-      }
-    },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Die vorab ausgefüllte Dauer enthält nicht erfasste Daten vergangener Tage.",
-        "T_ALREADY_TRACKED": "Bereits erfasst",
-        "T_TITLE": "Titel",
-        "T_TO_BE_SUBMITTED": "Noch einzureichen",
-        "TITLE": "Zeit für Issues an GitLab senden",
-        "TOTAL_MSG": "Du wirst <em>{{totalTimeToSubmit}}</em> Arbeitszeit für heute insgesamt an <em>{{nrOfTasksToSubmit}}</em> verschiedene Aufgaben übermitteln."
-      },
-      "FORM": {
-        "FILTER": "Benutzerdefinierte Filter",
-        "FILTER_DESCRIPTION": "Siehe https://docs.gitlab.com/ee/api/issues.html#list-issues. Mehrere können durch \"&\" kombiniert werden",
-        "FILTER_USER": "Benutzername (z. B. um Änderungen selbst herauszufiltern)",
-        "GITLAB_BASE_URL": "Benutzerdefinierte GitLab-Basis-URL",
-        "PROJECT": "Vollständiger Pfad oder Benutzername / Projekt",
-        "PROJECT_HINT": "z.B. super-productivity/super-productivity",
-        "SCOPE": "Bereich",
-        "SCOPE_ALL": "Alles",
-        "SCOPE_ASSIGNED": "Mir zugewiesen",
-        "SCOPE_CREATED": "Von mir erstellt",
-        "SOURCE": "Quelle",
-        "SOURCE_GLOBAL": "Alles",
-        "SOURCE_GROUP": "Gruppe",
-        "SOURCE_PROJECT": "Projekt",
-        "SUBMIT_TIMELOGS": "Timelogs an Gitlab senden",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Zeiterfassungsdialog anzeigen, nachdem du auf „Tag beenden” geklickt hast",
-        "TOKEN": "Zugangstoken"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p> Hier kannst du SuperProductivity so konfigurieren, dass offene GitLab-Issues (entweder die Online-Version oder eine selbst gehostete Instanz) für ein bestimmtes Projekt im Bereich zur Aufgabenerstellung in der täglichen Planungsansicht aufgelistet werden. Sie werden als Vorschläge angezeigt und enthalten einen Link zum Issue sowie weitere Informationen dazu. </p> <p> Außerdem kannst du alle offenen Issues automatisch zu deinem Aufgaben-Backlog hinzufügen und synchronisieren. </p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Bearbeiter",
-        "AT": "am",
-        "DESCRIPTION": "Beschreibung",
-        "LABELS": "Labels",
-        "MARK_AS_CHECKED": "Updates als erledigt markieren",
-        "PROJECT": "Projekt",
-        "STATUS": "Status",
-        "SUMMARY": "Zusammenfassung",
-        "WRITE_A_COMMENT": "Schreibe einen Kommentar"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Unbekannter Fehler {{statusCode}} {{errorMsg}}"
       }
     },
     "ISSUE": {
@@ -1725,27 +1683,27 @@
     },
     "TAG": {
       "D_CREATE": {
-        "CREATE": "Stichwort erstellen"
+        "CREATE": "Tag erstellen"
       },
       "D_DELETE": {
-        "CONFIRM_MSG": "Möchtest du das Stichwort \"{{tagName}}\" wirklich löschen? Es wird aus allen Aufgaben entfernt. Das kann nicht rückgängig gemacht werden."
+        "CONFIRM_MSG": "Möchtest du das Tag \"{{tagName}}\" wirklich löschen? Es wird aus allen Aufgaben entfernt. Das kann nicht rückgängig gemacht werden."
       },
       "D_EDIT": {
-        "ADD": "Stichworte für \"{{title}}\" hinzufügen",
-        "EDIT": "Stichworte für \"{{title}}\" bearbeiten",
-        "LABEL": "Stichworte",
-        "PLACEHOLDER": "+ Stichwort hinzufügen"
+        "ADD": "Tags für \"{{title}}\" hinzufügen",
+        "EDIT": "Tags für \"{{title}}\" bearbeiten",
+        "LABEL": "Tags",
+        "PLACEHOLDER": "+ Tag hinzufügen"
       },
       "FORM_BASIC": {
         "D_COLOR": "Wenn nicht gesetzt, wird standardmäßig die Primärfarbe des Themes verwendet.",
         "L_COLOR": "Farbe (wenn undefinierte primäre Themenfarbe verwendet wird)",
         "L_ICON": "Symbol",
-        "L_TITLE": "Stichwortname",
+        "L_TITLE": "Tag-Name",
         "TITLE": "Grundeinstellungen"
       },
       "S": {
-        "ARCHIVE_CLEANUP_FAILED": "Bereinigung archivierter Daten für gelöschten Tag fehlgeschlagen",
-        "UPDATED": "Die Stichwort-Einstellungen wurden aktualisiert"
+        "ARCHIVE_CLEANUP_FAILED": "Bereinigung archivierter Daten für gelöschtes Tag fehlgeschlagen",
+        "UPDATED": "Die Tag-Einstellungen wurden aktualisiert"
       },
       "TTL": {
         "ADD_NEW_TAG": "Neues Tag hinzufügen"
@@ -1774,15 +1732,15 @@
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Vorhandene Aufgabe hinzufügen \"{{taskTitle}}\"",
-        "CREATE_NEW_TAGS": "Neue Stichworte erstellen",
+        "CREATE_NEW_TAGS": "Neue Tags erstellen",
         "DUE_BUTTON": "Planen",
         "ESTIMATE_BUTTON": "Schätzung",
         "NOTE_PLACEHOLDER": "Notiz hinzufügen… (Ctrl+Enter, um Aufgabe hinzuzufügen)",
-        "PLACEHOLDER_CREATE": "Ein Aufgabentitel #Stichwort @16:00",
+        "PLACEHOLDER_CREATE": "Ein Aufgabentitel #Tag @16:00",
         "PLACEHOLDER_SEARCH": "Vorhandene Aufgabe oder Vorgänge hinzufügen...",
         "REPEAT_BUTTON": "Wiederholen",
         "SEARCH_INFO_TEXT": "Suchen und Hinzufügen von Vorgängen und Aufgaben aus dem Archiv und anderen Projekten",
-        "TAGS_BUTTON": "Stichworte",
+        "TAGS_BUTTON": "Tags",
         "TODAY": "Heute",
         "TOGGLE_ADD_TOP_OR_BOTTOM": "Umschalten: Aufgabe oben oder unten in der Liste hinzufügen",
         "TOGGLE_ADD_TO_BACKLOG_TODAY": "Umschalten: Aufgabe zum Backlog / zur heutigen Liste hinzufügen",
@@ -1796,7 +1754,7 @@
         "TOOLTIP_CLEAR_DEADLINE": "Clear deadline",
         "TOOLTIP_CLEAR_ESTIMATE": "Schätzung löschen",
         "TOOLTIP_CLEAR_REPEAT": "Wiederholungseinstellung löschen",
-        "TOOLTIP_CLEAR_TAGS": "Stichworte löschen",
+        "TOOLTIP_CLEAR_TAGS": "Tags löschen",
         "TOOLTIP_DISABLE_SEARCH": "Vorgangssuche deaktivieren (Ctrl+2)",
         "TOOLTIP_ENABLE_SEARCH": "Vorgangssuche aktivieren (Ctrl+2)",
         "TOOLTIP_NOTE": "Notiz (Ctrl+2)"
@@ -2137,7 +2095,7 @@
         "ADVANCED_CFG": "Erweiterte Konfiguration",
         "EDIT": "Bearbeite Einstellung der wiederkehrenden Aufgabe",
         "HEATMAP_LABEL": "Aktivität",
-        "TAG_LABEL": "Stichwörter zum Hinzufügen",
+        "TAG_LABEL": "Tags zum Hinzufügen",
         "TIME_SPENT_THIS_MONTH": "Diesen Monat",
         "TIME_SPENT_THIS_WEEK": "Diese Woche",
         "TIME_SPENT_TOTAL": "Gesamt"
@@ -2378,7 +2336,7 @@
           "PARENT_TASK_TITLES_ONLY": "Nur übergeordnete Aufgabentitel",
           "PROJECTS": "Projektnamen",
           "STARTED_WORKING": "Angefangen zu arbeiten",
-          "TAGS": "Stichworte",
+          "TAGS": "Tags",
           "TASK_SUBTASK": "Aufgabe / Unteraufgabe",
           "TIME_AS_CLOCK": "Aufgewandte Zeit im Uhrzeit Format (z. B. 5:23)",
           "TIME_AS_MILLISECONDS": "Aufgewandte Zeit in Millisekunden",
@@ -2664,7 +2622,7 @@
       "TASK_ADD_SUB_TASK": "Unteraufgabe hinzufügen",
       "TASK_DELETE": "Aufgabe löschen",
       "TASK_DUPLICATE": "Aufgabe duplizieren",
-      "TASK_EDIT_TAGS": "Stichworte bearbeiten",
+      "TASK_EDIT_TAGS": "Tags bearbeiten",
       "TASK_EDIT_TITLE": "Titel bearbeiten",
       "TASK_MOVE_TO_PROJECT": "Öffne die Aufgabe zum Verschieben in das Projektmenü",
       "TASK_OPEN_CONTEXT_MENU": "Öffne das Aufgabenkontextmenü",
@@ -2841,8 +2799,17 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Erinnerungston für die Pause",
+      "DING": "Glocke",
       "DONE_SOUND": "Aufgabe erledigt Ton",
       "IS_INCREASE_DONE_PITCH": "Erhöht die Tonhöhe für jede erledigte Aufgabe",
+      "SMALL_DING": "Kleine Glocke",
+      "SOUND_1": "Ton 1",
+      "SOUND_2": "Ton 2",
+      "SOUND_3": "Ton 3",
+      "SOUND_4": "Ton 4",
+      "SOUND_5": "Ton 5",
+      "SOUND_6": "Ton 6",
+      "SOUND_7": "Ton 7",
       "TITLE": "Sound",
       "TRACK_TIME_SOUND": "Ton der Zeiterinnerung verfolgen",
       "VOLUME": "Volumen"
@@ -2947,11 +2914,11 @@
     "BOARDS": "Boards",
     "COPY_TASK_LIST_MARKDOWN": "In die Zwischenablage kopieren",
     "CREATE_PROJECT": "Projekt erstellen",
-    "CREATE_TAG": "Stichwort erstellen",
+    "CREATE_TAG": "Tag erstellen",
     "ARCHIVE_PROJECT": "Projekt archivieren",
     "COMPLETE_PROJECT": "Projekt abschließen",
     "DELETE_PROJECT": "Projekt löschen",
-    "DELETE_TAG": "Stichwort löschen",
+    "DELETE_TAG": "Tag löschen",
     "DISABLE_FEATURE": "Funktion deaktivieren",
     "DONATE": "Unterstütze uns",
     "DUPLICATE_PROJECT": "Duplikat",
@@ -2969,6 +2936,7 @@
       "CREATE_TASK": "Anleitung: Eine Aufgabe erstellen",
       "GET_HELP_ONLINE": "Online-Hilfe aufrufen",
       "KEYBOARD": "Howto: Erweiterte Tastatursteuerung",
+      "QUICK_TOUR": "Kurztour",
       "REDDIT_COMMUNITY": "Reddit-Gemeinschaft",
       "REPORT_A_PROBLEM": "Ein Problem melden",
       "SEND_FEEDBACK": "Feedback senden",
@@ -3000,7 +2968,7 @@
       "OFFLINE": "Du bist offline – Synchronisierung wird fortgesetzt, wenn wieder online",
       "SYNCING": "Synchronisierung läuft…"
     },
-    "TAGS": "Stichworte",
+    "TAGS": "Tags",
     "TASK_LIST": "Aufgabenliste",
     "TASKS": "Aufgaben",
     "TOGGLE_SHOW_BOOKMARKS": "Lesezeichen ein-/ausblenden",
@@ -3055,13 +3023,50 @@
     "HINTS": {
       "CREATE_TASK": "Klicke auf +, um deine erste Aufgabe hinzuzufügen",
       "CREATE_TASK_TOUCH": "Tippe auf +, um deine erste Aufgabe hinzuzufügen",
+      "DECLINED": "Kein Problem. Du findest sie jederzeit unter Hilfe → Kurztour.",
+      "MORE_FALLBACK": "Mehr ist schon aktiv: Projekte, Zeiterfassung, Planer…",
+      "NO_THANKS": "Nein, danke",
+      "SHOW_ME_MORE": "Zeig mir mehr ›",
       "EXPLORE": "Klick dich ruhig durch und entdecke alles! Hilfe findest du in der Seitenleiste.",
       "EXPLORE_TOUCH": "Tipp dich ruhig durch und entdecke alles! Hilfe findest du im Menü.",
       "TASK_TAP_TOUCH": "Tippe auf eine Aufgabe, um ihre Details zu öffnen.",
       "TASK_SWIPE_LEFT_TOUCH": "Wische die Aufgabe nach links für weitere Aktionen",
+      "TODAY_AND_INBOX": "Diese Aufgabe ist für heute geplant, deshalb erscheint sie in {{todayIcon}} <b>Heute</b>. Aufgaben ohne eigenes Projekt bleiben im {{inboxIcon}} <b>Eingang</b>.",
+      "TODAY_AND_INBOX_PHONE": "Diese Aufgabe ist für heute geplant, deshalb erscheint sie in {{todayIcon}} <b>Heute</b>. Aufgaben ohne eigenes Projekt bleiben im {{inboxIcon}} <b>Eingang</b>, unter ☰.",
       "TASK_SWIPE_RIGHT_TOUCH": "Wische die Aufgabe nach rechts, um sie als erledigt zu markieren",
       "OR_PRESS": "oder drücke",
       "SKIP_ARIA": "Hinweis schließen"
+    },
+    "TOUR": {
+      "ADD_SUBTASK": "Teile sie auf: Rechtsklick auf die Aufgabe und {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b> wählen",
+      "COUNTER": "{{nr}} von {{total}}",
+      "NEXT": "Weiter ›",
+      "ORGANIZE": "Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Tag</b>, um sie zu markieren. Erstelle eines mit +",
+      "ORGANIZE_COLLAPSED": "Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Tag</b>, um sie zu markieren. Klappe die Seitenleiste mit {{expandIcon}} aus, um eines zu erstellen",
+      "ORGANIZE_PHONE": "Projekte und Tags findest du unter ☰. Lege ein eigenes <b>Projekt</b> an, um Aufgaben zu gruppieren, oder ein <b>Tag</b>, um sie zu markieren",
+      "PLANNER": "Plane die nächsten Tage im {{plannerIcon}} <b>Planer</b>",
+      "TASK_MENU_TOUCH": "Wische eine Aufgabe nach links für ihr Menü: {{playIcon}} <b>Starte die Erfassung der Zeit</b>, {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b>",
+      "TASK_MENU_TOUCH_NO_TRACKING": "Wische eine Aufgabe nach links für ihr Menü, z. B. {{subtaskIcon}} <b>Unteraufgabe hinzufügen</b>",
+      "TIMER_RUNNING": "Der Timer läuft. Drücke {{pauseIcon}} erneut oder <kbd>{{key}}</kbd>, um zu pausieren.",
+      "TIMER_RUNNING_TOUCH": "Der Timer läuft. Tippe oben auf {{pauseIcon}}, um zu pausieren.",
+      "TRACK_TIME": "Fahre mit der Maus über die Aufgabe und drücke {{playIcon}}, um die Zeit zu erfassen"
+    },
+    "WANT_MORE": {
+      "BOARDS": "<b>Boards</b> · Kanban-Spalten für deine Aufgaben",
+      "DONE": "Erledigt",
+      "FINISH_DAY": "<b>Tag abschließen</b> · Tag durchgehen und abschließen",
+      "FOCUS_MODE": "<b>Fokus-Modus</b> · Pomodoro und ablenkungsfreies Arbeiten",
+      "FOOTER": "Du findest das wieder unter Hilfe → Kurztour.",
+      "HABITS": "<b>Gewohnheiten</b> · Routinen Tag für Tag verfolgen",
+      "INTRO": "Super Productivity startet ruhig. Mehr ist da, wenn du es brauchst:",
+      "OPEN_SETTINGS": "Einstellungen öffnen ›",
+      "PLUGINS": "<b>Plugins & Integrationen</b> · Jira, GitHub, CalDAV und mehr",
+      "SCHEDULE": "<b>Zeitplan</b> · Dein Tag auf einer Zeitleiste",
+      "SEARCH": "Durchsuche alles mit <kbd>{{key}}</kbd>.",
+      "SEARCH_PHONE": "Durchsuche alles über ☰.",
+      "SHORT_SYNTAX": "Tippe <code>#tag</code>, <code>+project</code> oder <code>@tomorrow</code>, während du eine Aufgabe hinzufügst. Hilfe → Anleitung zeigt mehr.",
+      "SYNC": "Deine Daten bleiben auf diesem Gerät. Sync und Backups findest du unter Einstellungen.",
+      "TITLE": "Mehr gewünscht?"
     }
   },
   "PDS": {
@@ -3231,7 +3236,7 @@
     "SETUP_ISSUE_PROVIDER": "Im Ticket-Anbieter-Panel einrichten",
     "SIDE_PANEL_LABEL_REQUIRED": "Beschriftung der Schaltfläche im Seitenbereich ist erforderlich",
     "SIDE_PANEL_ONCLICK_REQUIRED": "Seitenpanel-Schaltfläche onClick-Handler ist erforderlich",
-    "TAGS_DO_NOT_EXIST": "Ein oder mehrere Stichworte existieren nicht.",
+    "TAGS_DO_NOT_EXIST": "Ein oder mehrere Tags existieren nicht.",
     "TASK_NOT_FOUND": "Aufgabe mit ID '{{taskId}}' nicht gefunden",
     "TASKS_NOT_IN_PROJECT": "Eine oder mehrere Aufgaben sind nicht im Projekt '{{contextId}}'",
     "TASKS_NOT_SUBTASKS": "Eine oder mehrere Aufgaben sind keine Unteraufgaben von '{{contextId}}'",
@@ -3282,7 +3287,7 @@
       "TASKS": "Aufgaben",
       "TIME_TRACKING": "Zeit & Tracking"
     },
-    "TAG_SETTINGS": "Stichwort-spezifische Einstellungen",
+    "TAG_SETTINGS": "Tag-spezifische Einstellungen",
     "TOGGLE_DARK_MODE": "Dunkelmodus umschalten",
     "UPDATE_APP": "App aktualisieren"
   },

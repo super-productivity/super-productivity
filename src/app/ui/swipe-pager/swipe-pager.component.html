@@ -1,0 +1,22 @@
+<!-- Vertical scrolling stays native; horizontal moves are left to the pager. -->
+<div
+  #track
+  class="track"
+  [style.touch-action]="isEnabled() ? 'pan-y' : null"
+>
+  @for (slot of slots(); track slot.key) {
+    <div
+      class="page"
+      [style.translate]="slot.offset ? slot.offset * 100 + '% 0' : null"
+      [inert]="slot.offset !== 0"
+      [attr.aria-hidden]="slot.offset !== 0 || null"
+    >
+      <ng-container
+        *ngTemplateOutlet="
+          pageTpl().templateRef;
+          context: { $implicit: slot.item, isCurrent: slot.offset === 0 }
+        "
+      ></ng-container>
+    </div>
+  }
+</div>

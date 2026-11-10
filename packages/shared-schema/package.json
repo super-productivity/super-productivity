@@ -5,6 +5,13 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "supersync-http-contract": [
+        "./dist/supersync-http-contract.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "import": {
@@ -14,6 +21,16 @@
       "require": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
+      }
+    },
+    "./supersync-http-contract": {
+      "import": {
+        "types": "./dist/supersync-http-contract.d.mts",
+        "default": "./dist/supersync-http-contract.mjs"
+      },
+      "require": {
+        "types": "./dist/supersync-http-contract.d.ts",
+        "default": "./dist/supersync-http-contract.js"
       }
     }
   },
@@ -28,7 +45,7 @@
   },
   "devDependencies": {
     "tsup": "^8.0.0",
-    "typescript": "^5.0.0",
+    "typescript": "^5.0.0 || ^6.0.0",
     "vitest": "^5.0.3"
   }
 }

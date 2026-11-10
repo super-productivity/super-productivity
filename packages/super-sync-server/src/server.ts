@@ -1,3 +1,5 @@
+import { getJwtSecret } from './auth';
+import { captureOAuthRoutes } from './capture/capture-oauth.routes';
 import * as fs from 'fs';
 import Fastify, { FastifyError, FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
@@ -25,11 +27,14 @@ import {
   getSyncService,
 } from './sync';
 import { wsRoutes } from './sync/websocket.routes';
+import { connectRoutes } from './connect/connect.routes';
+import { RETENTION_DAYS } from './sync/sync.types';
 import {
   getWsConnectionService,
   resetWsConnectionService,
 } from './sync/services/websocket-connection.service';
 import { testRoutes } from './test-routes';
+import { captureMcpRoutes, captureRoutes } from './capture';
 
 // HTML escape to prevent XSS in generated HTML
 export const escapeHtml = (unsafe: string): string => {
@@ -200,7 +205,10 @@ const assertFullyRendered = (html: string, source: string): void => {
  * or worse, inherited boilerplate about someone else's hosting provider — is a false
  * legal statement published in the operator's name. A 404 is the honest failure.
  */
-const generatePrivacyHtml = (privacy?: PrivacyConfig): boolean => {
+const generatePrivacyHtml = (
+  privacy: PrivacyConfig | undefined,
+  options: { isCaptureEnabled: boolean },
+): boolean => {
   const publicDir = resolvePublicDir();
   const templatePath = path.join(resolveTemplateDir(), 'privacy.template.html');
   const outputPath = path.join(publicDir, 'privacy.html');
@@ -236,6 +244,8 @@ const generatePrivacyHtml = (privacy?: PrivacyConfig): boolean => {
   const keep = new Set<string>([
     privacy.hostingProvider ? 'HOSTING' : 'NO_HOSTING',
     ...(privacy.supervisoryAuthority ? ['AUTHORITY'] : []),
+    // Describes the AI assistant connector only where it can be used.
+    ...(options.isCaptureEnabled ? ['CAPTURE'] : []),
   ]);
 
   // Only tokens whose block survived are supplied; an unused one would be an unresolved
@@ -254,6 +264,10 @@ const generatePrivacyHtml = (privacy?: PrivacyConfig): boolean => {
         : {}),
       ...(privacy.supervisoryAuthority
         ? { PRIVACY_SUPERVISORY_AUTHORITY: privacy.supervisoryAuthority }
+        : {}),
+      // Unclaimed captures are removed by the same retention as stored ops.
+      ...(options.isCaptureEnabled
+        ? { CAPTURE_RETENTION_DAYS: String(RETENTION_DAYS) }
         : {}),
     },
   );
@@ -360,7 +374,9 @@ export const createServer = (
 
   // Generate the legal pages, then tell the API whether consent can be required at all.
   // Order matters: index.html must reflect the pages that were actually written.
-  const hasPrivacyPolicy = generatePrivacyHtml(fullConfig.privacy);
+  const hasPrivacyPolicy = generatePrivacyHtml(fullConfig.privacy, {
+    isCaptureEnabled: fullConfig.captureConnectorEnabled,
+  });
   const hasOperatorTerms = installOperatorLegalPages(fullConfig.dataDir);
   generateIndexHtml({
     hasPrivacyPolicy,
@@ -499,6 +515,29 @@ export const createServer = (
 
       // WebSocket routes for real-time sync notifications
       await fastifyServer.register(wsRoutes, { prefix: '/api/sync' });
+
+      // Browser sign-in of new devices; the app falls back to token paste without it
+      await fastifyServer.register(connectRoutes, { prefix: '/api/connect' });
+
+      // Agent task capture: public /mcp for assistants, /api/capture for the app
+      if (fullConfig.captureConnectorEnabled) {
+        await fastifyServer.register(captureMcpRoutes, {
+          publicUrl: fullConfig.publicUrl,
+        });
+        await fastifyServer.register(captureOAuthRoutes, {
+          publicUrl: fullConfig.publicUrl,
+          signingKey: getJwtSecret(),
+          clients: fullConfig.captureOAuthClients,
+          review: fullConfig.captureReview,
+        });
+        if (fullConfig.captureReview) {
+          Logger.warn(
+            'CAPTURE_REVIEW_* is set: a reusable reviewer code can connect assistants ' +
+              'to one demo account. Unset it once directory review is done.',
+          );
+        }
+        await fastifyServer.register(captureRoutes, { prefix: '/api/capture' });
+      }
 
       // Test Routes (only in test mode)
       if (fullConfig.testMode?.enabled) {

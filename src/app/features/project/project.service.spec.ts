@@ -303,6 +303,48 @@ describe('ProjectService', () => {
       done();
     });
 
+    it('should keep projects hidden from the menu in the unfiltered tree order list', (done) => {
+      const projects = [
+        createProject({ id: 'project-1', title: 'Project 1' }),
+        createProject({ id: 'project-2', title: 'Project 2' }),
+        createProject({ id: 'project-3', title: 'Project 3', isHiddenFromMenu: true }),
+        createProject({ id: 'project-4', title: 'Project 4' }),
+      ];
+      store.overrideSelector(selectUnarchivedProjects, projects);
+      store.overrideSelector(selectMenuTreeProjectTree, [
+        {
+          id: 'folder-1',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder 1',
+          children: [
+            {
+              id: 'project-2',
+              k: MenuTreeKind.PROJECT,
+            },
+            {
+              id: 'project-3',
+              k: MenuTreeKind.PROJECT,
+            },
+          ],
+        },
+        {
+          id: 'project-1',
+          k: MenuTreeKind.PROJECT,
+        },
+      ]);
+      store.refreshState();
+
+      // isHiddenFromMenu only governs menu presence, so project pickers that assign
+      // a project must still offer project-3.
+      expect(service.listInTreeOrder().map((project) => project.id)).toEqual([
+        'project-2',
+        'project-3',
+        'project-1',
+        'project-4',
+      ]);
+      done();
+    });
+
     it('should expose move candidates in menu tree order while excluding the current project', (done) => {
       const projects = [
         createProject({ id: 'project-1', title: 'Project 1' }),
@@ -393,6 +435,46 @@ describe('ProjectService', () => {
         .allArgs()
         .filter((args: any) => args[0]?.type === '[Task] Add SubTask');
       expect(addSubTaskCalls.length).toBe(1);
+    }));
+
+    it('should not link copied tasks to the original repeat config', fakeAsync(() => {
+      /* eslint-disable @typescript-eslint/naming-convention */
+      store.overrideSelector(selectTaskFeatureState, {
+        ...initialTaskState,
+        entities: {
+          ...initialTaskState.entities,
+          'task-1': {
+            ...initialTaskState.entities['task-1']!,
+            repeatCfgId: 'repeat-cfg-1',
+            timeEstimate: 3600000,
+          },
+          'sub-task-1': {
+            ...initialTaskState.entities['sub-task-1']!,
+            repeatCfgId: 'repeat-cfg-1',
+            timeEstimate: 600000,
+          },
+        },
+      });
+      /* eslint-enable @typescript-eslint/naming-convention */
+      store.refreshState();
+      const project = createProject({
+        id: 'project-1',
+        title: 'Project 1',
+        taskIds: ['task-1'],
+      });
+      spyOn(service, 'getByIdOnce$').and.returnValue(of(project));
+      service.duplicateProject('project-1');
+      tick();
+      const copied = taskService.createNewTaskWithDefaults.calls
+        .allArgs()
+        .map(([args]) => args.additional);
+      expect(copied.map((additional) => additional?.repeatCfgId)).toEqual([
+        undefined,
+        undefined,
+      ]);
+      expect(copied.map((additional) => additional?.timeEstimate)).toEqual([
+        3600000, 600000,
+      ]);
     }));
 
     it('should move backlog tasks to the new project backlog', fakeAsync(() => {

@@ -135,6 +135,8 @@ describe('TaskMultiDragService', () => {
       expect(service.canDrop('PARENT', target)).toBeFalse();
     expect(service.canDrop('SUB', 'right')).toBeFalse();
     expect(service.canDrop('PARENT', 'right', 'tag')).toBeFalse();
+    // Lists inside the grouped work view pass `null` for non-tag groups.
+    expect(service.canDrop('PARENT', 'UNDONE', null)).toBeFalse();
     tasks.update((value) => ({ ...value, b: task('b', { projectId: 'other' }) }));
     expect(service.canDrop('PARENT', 'right')).toBeFalse();
   });

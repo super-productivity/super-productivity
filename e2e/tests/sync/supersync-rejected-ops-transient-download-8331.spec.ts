@@ -9,6 +9,7 @@ import {
   renameTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { getStoreTaskTitlesContaining } from '../../utils/audit-winners-helpers';
 
 // Reads the exact server-rejected op from the op-log. This is the precise,
 // timing-independent discriminator for #8331: the transient blip must leave
@@ -260,15 +261,22 @@ test.describe('@supersync Rejected-ops transient download (#8331)', () => {
       await clientB.sync.triggerSync();
 
       // 8. End-to-end recovery proof: after pulling B's now-uploaded edit, both
-      //    clients converge to the SAME title. With the bug, B's edit was
-      //    dropped on the blip, so it never reaches A and the two diverge.
-      //    (Assert convergence, not a specific winner: the merged op snapshots
-      //    B's local state, so the resolved value is robust to LWW direction.)
+      //    clients converge on B's title. B renamed last, so B's edit is the
+      //    LWW winner; with the bug B's edit was dropped on the blip and A's
+      //    title would win (or the clients diverge).
       await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      const expectedTitles = [`${taskName}-ModifiedByB`];
+      await expect
+        .poll(() => getStoreTaskTitlesContaining(clientA!.page, taskName))
+        .toEqual(expectedTitles);
+      await expect
+        .poll(() => getStoreTaskTitlesContaining(clientB!.page, taskName))
+        .toEqual(expectedTitles);
       const titleSel = 'task:not(.ng-animating) .task-title';
       const titleA = await clientA.page.locator(titleSel).first().textContent();
       const titleB = await clientB.page.locator(titleSel).first().textContent();
-      expect(titleA?.trim()).toBeTruthy();
+      expect(titleA?.trim()).toBe(`${taskName}-ModifiedByB`);
       expect(titleA).toBe(titleB);
     } finally {
       if (clientA) await closeClient(clientA);

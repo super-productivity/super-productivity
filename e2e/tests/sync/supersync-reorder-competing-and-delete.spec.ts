@@ -33,8 +33,9 @@ import { serveReleasedClientAssets } from '../../utils/released-client-assets';
  * Both crossing actions come from the real UI; only the baseline is seeded
  * through the store. The strict sync helper fails on the whole-dataset
  * "Sync: Conflicting Data" dialog and never picks Keep local or Keep remote.
- * Competing orders: either device's order may win, both devices must converge
- * (#10264's decision). A note delete: the note stays deleted everywhere and
+ * Competing orders: the order that reached the server first wins (the remote
+ * order applies over the pending one; timestamps do not decide), and both
+ * devices converge on it (section-conflict-replay.md, #10377). A note delete: the note stays deleted everywhere and
  * the reorder's relative order of the other notes survives. Unrelated work of
  * both devices must survive, and no full-state repair may be needed.
  */
@@ -55,9 +56,7 @@ const syncOutcome = async (client: SimulatedE2EClient): Promise<string> => {
           : (await client.sync.hasSyncError())
             ? 'error'
             : !(await client.sync.syncSpinner.isVisible()) &&
-                (await client.sync.syncCheckIcon
-                  .filter({ hasText: /^done_all$/ })
-                  .isVisible())
+                (await client.sync.syncConfirmedIcon.isVisible())
               ? 'in-sync'
               : 'pending';
         return outcome;
@@ -220,8 +219,11 @@ for (const crossing of crossings) {
           expect(await snapshot(b.page, list, ids)).toEqual(final);
           expect(new Set(final.order).size).toBe(final.order.length);
           if (other === 'order') {
-            // Either device's order, the same everywhere.
-            expect([reordered.order, otherSide.order]).toContainEqual(final.order);
+            // B uploads first, so B's order wins whatever the timestamps say:
+            // the remote order applies over A's pending one and A's reissue
+            // carries it (section-conflict-replay.md, competing orders).
+            expect(otherSide.order).not.toEqual(reordered.order);
+            expect(final.order).toEqual(otherSide.order);
             expect(final.entities).toEqual(before.entities);
           } else if (other === 'Today order') {
             // Both orders survive: each device wrote only its own list.
@@ -413,6 +415,14 @@ test.describe('@supersync released reorder crossing (#10377)', () => {
         for (const client of clients) {
           await expect.poll(async () => pending(await rows(client.page))).toHaveLength(1);
         }
+        // Each side's list before the crossing, to pin the single correct winner.
+        const currentBefore = await snapshot(current.page, list, ids);
+        const releasedBefore = listed(await renderedOrder(released.page, list));
+        const releasedTodayBefore =
+          other === 'Today order'
+            ? listed(await renderedOrder(released.page, 'Today notes'))
+            : [];
+        const kept = (all: string[]): string[] => all.filter((id) => id !== deleted);
 
         await sync(released);
         await sync(current);
@@ -428,6 +438,27 @@ test.describe('@supersync released reorder crossing (#10377)', () => {
         const expectedRendered = (target: ListName, order: string[]): string[] =>
           // The habit view renders only enabled habits (ids[2] is disabled).
           target === 'habits' ? order.filter((id) => id !== ids[2]) : order;
+        if (other === 'order') {
+          // The released order reached the server first, so it wins.
+          expect(releasedBefore).not.toEqual(
+            expectedRendered(list, listed(currentBefore.order)),
+          );
+          expect(expectedRendered(list, final.order)).toEqual(releasedBefore);
+        } else if (other === 'Today order') {
+          // Each side wrote only its own list: current's project order and the
+          // released Today order both survive.
+          expect(final.order).toEqual(currentBefore.order);
+          expect(final.second).toEqual(releasedTodayBefore);
+          expect(final.order).not.toEqual(ids);
+          expect(final.second).not.toEqual(ids);
+        } else if (pendingOrder) {
+          // Released delete first: current's order survives without the note.
+          expect(final.order).toEqual(kept(currentBefore.order));
+        } else {
+          // Current delete pending, released order first: the released order
+          // survives without the deleted note.
+          expect(final.order).toEqual(kept(releasedBefore));
+        }
         for (const reload of [false, true]) {
           if (reload) {
             await released.page.reload();

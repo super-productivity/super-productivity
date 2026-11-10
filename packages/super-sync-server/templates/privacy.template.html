@@ -124,8 +124,8 @@
         <li>Settings</li>
       </ul>
       <p class="note">
-        Note: If End-to-End Encryption (E2EE) is activated, this data exists on our server
-        exclusively in encrypted form.
+        Note: The Service accepts this data only end-to-end encrypted, so we cannot read
+        it. Older unencrypted data is described in Section 6 A.
       </p>
 
       <h3>(3) Meta and Log Data</h3>
@@ -137,6 +137,15 @@
         <li>Operating system</li>
         <li>Error and diagnostic information</li>
       </ul>
+      <!-- OPTIONAL:CAPTURE -->
+
+      <h3>(4) AI Assistant Connection Data</h3>
+      <p>
+        Only if you use AI assistant connections: tasks an assistant sends (title, notes,
+        date, time and repetition), which we encrypt on arrival and store only encrypted,
+        connection records and the public part of your capture key (Section 6 C).
+      </p>
+      <!-- /OPTIONAL:CAPTURE -->
 
       <h2>4. Legal Basis for Processing</h2>
       <p>We process your data based on the following legal bases:</p>
@@ -147,6 +156,12 @@
         <li>Synchronization of your content</li>
         <li>Technical provision of the Service</li>
         <li>Sending security-relevant system emails (e.g., password reset)</li>
+        <!-- OPTIONAL:CAPTURE -->
+        <li>
+          Receiving tasks from AI assistants you connect, and sending them the access
+          credentials for that connection (Section 6 C)
+        </li>
+        <!-- /OPTIONAL:CAPTURE -->
       </ul>
 
       <h3>(2) Legitimate Interest (Art. 6(1)(f) GDPR)</h3>
@@ -154,6 +169,11 @@
         <li>Server and service security</li>
         <li>Detection and defense against misuse (DDoS, brute force attacks)</li>
         <li>Error analysis and stability improvement</li>
+        <!-- OPTIONAL:CAPTURE -->
+        <li>
+          Abuse limits and aggregate counting of AI assistant connections (Section 6 C)
+        </li>
+        <!-- /OPTIONAL:CAPTURE -->
       </ul>
 
       <h3>(3) Legal Obligations (Art. 6(1)(c) GDPR)</h3>
@@ -184,21 +204,20 @@
 
       <h2>6. Data Processing during Synchronization</h2>
 
-      <h3>A) Standard Synchronization (without E2EE)</h3>
+      <h3>A) Transport</h3>
       <ul>
         <li>Your content data is transmitted via TLS/SSL transport encryption.</li>
         <li>
-          It is stored in our database on the server. No end-to-end encryption is used
-          here.
-        </li>
-        <li>
-          Access by the Provider is technically possible but occurs exclusively if
-          required for maintenance, diagnosis, or defense against technical disturbances.
+          Data that older app versions uploaded without end-to-end encryption, before the
+          Service required it, may still be stored unencrypted in our database until it is
+          deleted, at the latest with your account (Section 8 (1)). Access to it by the
+          Provider is technically possible but occurs exclusively if required for
+          maintenance, diagnosis, or defense against technical disturbances.
         </li>
       </ul>
 
-      <h3>B) End-to-End Encryption (E2EE – optional)</h3>
-      <p>If you enable E2EE in the app:</p>
+      <h3>B) End-to-End Encryption (E2EE)</h3>
+      <p>The Service accepts synchronized data only end-to-end encrypted:</p>
       <ul>
         <li>Your data is encrypted locally on your device before transmission.</li>
         <li>The server stores only encrypted data blocks ("Blobs").</li>
@@ -208,6 +227,142 @@
         </li>
         <li>Loss of the key results in permanent data loss.</li>
       </ul>
+      <!-- OPTIONAL:CAPTURE -->
+
+      <h3>C) AI Assistant Connections (optional)</h3>
+      <p>
+        If you let AI assistants add tasks (Settings → Sync → SuperSync → AI assistants)
+        and connect one, for example Claude, ChatGPT or a script using a manual token, the
+        assistant's provider can send new tasks to the Service on your behalf:
+      </p>
+      <ul>
+        <li>
+          <strong>What an assistant sends.</strong> A task's title, notes and, if given,
+          its date, time and repetition. We handle this text only in memory: we encrypt it
+          so that only your own devices can open it, store it only encrypted and never
+          write it to logs. To avoid adding the same task twice when an assistant repeats
+          a request, we keep a scrambled one-way code of it (not the text itself) in
+          memory. It is used for 10 minutes and deleted within a day after that, or when
+          the server restarts.
+        </li>
+        <li>
+          Tasks your own devices send this way (for example from the Android share sheet)
+          are encrypted on the device; we never see their content.
+        </li>
+        <li>
+          <strong>Waiting tasks.</strong> With each encrypted task we store when it
+          arrived, which connection sent it and which of your devices picked it up. It is
+          deleted once a device has imported it, otherwise within a day after
+          <strong>{{ CAPTURE_RETENTION_DAYS }} days</strong>.
+        </li>
+        <li>
+          <strong>Connections.</strong> For each connected assistant we store:
+          <ul>
+            <li>
+              whether it connected by signing in or with a manual token, and its name (for
+              a manual token, the name you enter);
+            </li>
+            <li>the identifier the assistant's app uses to connect;</li>
+            <li>
+              when the connection was created, renewed, last used (updated at most once an
+              hour), when it expires and when it was removed;
+            </li>
+            <li>
+              scrambled one-way forms (hashes) of its access credentials, never the
+              credentials themselves.
+            </li>
+          </ul>
+          A connection lasts until 90 days without renewal (a manual token: up to one
+          year).
+        </li>
+        <li>
+          <strong>Connecting.</strong> Connection codes and pending connections (the
+          assistant's identifier, the address to return it to and technical values that
+          secure the step) expire after at most 10 minutes. They are deleted once used,
+          otherwise within a day after they expire.
+        </li>
+        <li>
+          <strong>Your capture key.</strong> We store its public part, which lets
+          assistants encrypt tasks for you but cannot open them. The private part that
+          opens them is part of your synchronized settings, which the Service accepts only
+          end-to-end encrypted, so we cannot open your tasks.
+        </li>
+        <li>
+          <strong>Abuse limits.</strong> We count connection attempts per IP address (an
+          IPv6 network counts as one) and, per connection, its requests and new tasks, and
+          whether it was used in the last 24 hours. These counts exist only in the
+          server's memory, never in the database or logs. Each covers at most 24 hours and
+          is deleted within a day after that, or when the server restarts.
+        </li>
+        <li>
+          <strong>What the assistant's provider receives.</strong> A connected assistant
+          can only add tasks; it cannot read your data through the Service. We send its
+          provider the access credentials for the connection and, per request, technical
+          protocol data and a short confirmation or error message. These contain no task
+          content; an error message may repeat the name of a field the assistant sent that
+          we do not accept. We send them because you asked us to connect the assistant
+          (Art. 6(1)(b) GDPR). For users in the EU/EEA, the provider is usually its EU
+          company (for example Anthropic Ireland or OpenAI Ireland), so this is a
+          disclosure within the EU. For users outside the EU/EEA, the provider is usually
+          its US company (for example Anthropic PBC), with which you have your own
+          contract. No adequacy decision or standard contractual clauses between us and
+          the provider cover this; we send these data only because you connected that
+          assistant.
+        </li>
+        <li>
+          The provider is a recipient of these data (Art. 4(9) GDPR). It receives what you
+          tell the assistant, including the task text, before it reaches us. You use the
+          assistant under your own agreement with its provider. Depending on that
+          agreement, the provider processes your data as a separate controller under its
+          own privacy policy, or, for a business plan, on behalf of your organisation; we
+          have no influence on it. For that processing, contact the provider or your
+          organisation; for what we send it, contact us.
+        </li>
+        <li>
+          <strong>Removing connections.</strong> Under Settings → Sync → SuperSync → AI
+          assistants → Connected assistants, "Revoke" stops an assistant at once. Tasks it
+          already sent stay until imported or expired, unless you choose to delete them
+          too. Signing out on all devices also removes every connection and keeps waiting
+          tasks. Switching the feature off there removes every connection and deletes all
+          waiting tasks. Records of removed or expired connections are deleted within a
+          day. We keep only your public capture key, marked as switched off, so that an
+          outdated device cannot switch the feature back on without you; it is deleted
+          with your account (Section 8 (1)), as is all other data of this feature.
+        </li>
+        <li>
+          <strong>Counting.</strong> We may count, by a manual database query, connections
+          per kind of assistant (manual tokens without their names) and how many were used
+          in the last 30 days. Only totals that cannot identify anyone are kept; they
+          contain no task content.
+        </li>
+      </ul>
+      <p>Legal bases:</p>
+      <ul>
+        <li>
+          Performance of the contract (Art. 6(1)(b) GDPR), because you request the feature
+          by switching it on and connecting an assistant: receiving and storing waiting
+          tasks, connection records, connection codes and your public capture key, and
+          sending the provider the access credentials and messages described above.
+        </li>
+        <li>
+          Our legitimate interest in protecting the Service and its users against
+          automated misuse and overload (Art. 6(1)(f) GDPR): the abuse limits.
+        </li>
+        <li>
+          Our legitimate interest in knowing which kinds of assistants are used, so that
+          we can size and maintain this feature (Art. 6(1)(f) GDPR): the counting.
+        </li>
+      </ul>
+      <p>
+        <strong>Right to object:</strong> you can object at any time, on grounds relating
+        to your particular situation, to processing based on our legitimate interests
+        (Art. 21 GDPR), by email to
+        <a href="mailto:{{ PRIVACY_CONTACT_EMAIL }}">{{ PRIVACY_CONTACT_EMAIL }}</a
+        >. We then leave your connections out of future counting. The abuse limits we
+        continue only where compelling legitimate grounds override your interests, as they
+        protect all users of the Service.
+      </p>
+      <!-- /OPTIONAL:CAPTURE -->
 
       <h2>7. Email Sending</h2>
       <p>
@@ -250,6 +405,19 @@
         for as long as statutory retention obligations require (in Germany, up to
         <strong>10 years</strong>). If no paid plan is offered, no such data arises.
       </p>
+      <!-- OPTIONAL:CAPTURE -->
+
+      <h3>(5) AI Assistant Connections</h3>
+      <p>
+        Waiting tasks are deleted on import, otherwise within a day after
+        <strong>{{ CAPTURE_RETENTION_DAYS }} days</strong>. Connection records are kept
+        while the connection is active (a manual token for up to one year, an assistant
+        connection until 90 days without renewal) and deleted within a day after removal
+        or expiry. In-memory abuse counts are deleted within a day after their counting
+        period of at most 24 hours. Deleting your account removes all of this data
+        (Section 8 (1)). Details are in Section 6 C.
+      </p>
+      <!-- /OPTIONAL:CAPTURE -->
 
       <h2>9. Transfer to Third Parties</h2>
       <p>Data is generally not transferred to third parties unless:</p>
@@ -260,6 +428,13 @@
           offered, transfer to the payment service provider handling that payment),
         </li>
         <li>It serves the technical provision (see Hosting),</li>
+        <!-- OPTIONAL:CAPTURE -->
+        <li>
+          You connect an AI assistant: its provider receives the access credentials and
+          short confirmation or error messages needed to carry out your request (Section 6
+          C),
+        </li>
+        <!-- /OPTIONAL:CAPTURE -->
         <li>Or we are legally obliged to do so (e.g., to law enforcement agencies).</li>
       </ul>
       <p>We <strong>never</strong> sell your data to third parties or advertisers.</p>
@@ -295,9 +470,10 @@
 
       <h2>12. Cookies and Tracking</h2>
       <p>
-        The SuperSync service uses only technically necessary session cookies for
-        authentication. We do not use tracking cookies, analytics services, or advertising
-        technologies.
+        The SuperSync web pages set no cookies. After you open a sign-in link, they keep a
+        sign-in token briefly in your browser's session storage and remove it once used;
+        this is strictly necessary for the sign-in you request (§ 25(2) no. 2 TDDDG). We
+        do not use tracking cookies, analytics services, or advertising technologies.
       </p>
 
       <h2>13. Automated Decision-Making</h2>

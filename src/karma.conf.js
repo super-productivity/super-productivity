@@ -7,7 +7,12 @@ module.exports = function (config) {
   // NOTE: necessary to fix some of the unit tests with a timezone in them
   // NOTE2: won't work for wallaby, but that's maybe ok for now
   // process.env.TZ = 'Europe/Berlin';
-  const isCodeCoverage = Boolean(config.buildWebpack?.options?.codeCoverage);
+  // `@angular/build:karma` does not expose its options to this file; read the
+  // `ng test --code-coverage` flag so the istanbul reporter replaces the
+  // `karma-coverage` one the builder would otherwise add.
+  const isCodeCoverage = process.argv.some(
+    (arg) => arg === '--code-coverage' || arg === '--code-coverage=true',
+  );
   const reporters = ['spec', 'running-spec'];
 
   if (isCodeCoverage) {
@@ -16,11 +21,10 @@ module.exports = function (config) {
 
   config.set({
     basePath: '',
-    frameworks: ['jasmine', '@angular-devkit/build-angular'],
+    frameworks: ['jasmine'],
     plugins: [
       require('karma-jasmine'),
       require('karma-chrome-launcher'),
-      require('@angular-devkit/build-angular/plugins/karma'),
       require('./test-helpers/karma-running-spec-on-disconnect'),
       require('karma-coverage-istanbul-reporter'),
       require('karma-spec-reporter'),
@@ -72,7 +76,9 @@ module.exports = function (config) {
           '--disable-renderer-backgrounding',
           '--disable-device-discovery-notifications',
           // Without a remote debugging port, Google Chrome exits immediately.
-          '--remote-debugging-port=9222',
+          // Port 0 lets Chrome pick a free one, so parallel shards
+          // (tools/test-shards.js) don't collide on a fixed port.
+          '--remote-debugging-port=0',
           '--disable-web-security',
           // Additional performance optimizations
           '--disable-dev-shm-usage', // Overcome limited resource problems

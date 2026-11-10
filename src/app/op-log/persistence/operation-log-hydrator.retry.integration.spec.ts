@@ -124,6 +124,7 @@ describe('OperationLogHydratorService retryFailedRemoteOps (integration, real st
           provide: ValidateStateService,
           useValue: {
             validateState: () => Promise.resolve({ isValid: true, typiaErrors: [] }),
+            validateStateWhenIdle: () => undefined,
           },
         },
         {

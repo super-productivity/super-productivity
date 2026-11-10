@@ -15,6 +15,7 @@ export class ProjectPage extends BasePage {
   readonly workCtxTitle: Locator;
   readonly projectSettingsBtn: Locator;
   readonly moveToArchiveBtn: Locator;
+  readonly archivedProjectsLink: Locator;
   readonly globalErrorAlert: Locator;
 
   constructor(page: Page, testPrefix: string = '') {
@@ -29,7 +30,7 @@ export class ProjectPage extends BasePage {
       .locator('dialog-create-project input[type="text"]')
       .first();
     this.submitBtn = page.locator('dialog-create-project button[type=submit]');
-    this.workCtxMenu = page.locator('work-context-menu');
+    this.workCtxMenu = page.locator('.work-context-menu-panel');
     // Use more specific selector to avoid matching titles in other areas
     this.workCtxTitle = page
       .locator('main .page-title, .route-wrapper .page-title')
@@ -38,6 +39,8 @@ export class ProjectPage extends BasePage {
       .locator('button[aria-label="Project Settings"]')
       .or(this.workCtxMenu.locator('button').nth(3));
     this.moveToArchiveBtn = page.locator('.e2e-move-done-to-archive');
+    // Last row of the sidebar Projects list, shown while a project is archived.
+    this.archivedProjectsLink = page.locator('magic-side-nav .archived-projects-link a');
     this.globalErrorAlert = page.locator('.global-error-alert');
   }
 
@@ -418,9 +421,12 @@ export class ProjectPage extends BasePage {
   }
 
   async addNote(noteContent: string, projectId?: string): Promise<void> {
-    // Ensure we are on the correct project route if an id is provided
-    if (projectId && !this.page.url().includes(projectId)) {
-      await this.page.goto(`/#/project/${projectId}`);
+    // Ensure we are on the project's task list if an id is provided. A bare
+    // `/project/:id` matches only the componentless parent route: the outlet
+    // stays empty, and `work-view` below is found only while the previous page
+    // is still animating out.
+    if (projectId && !this.page.url().includes(`/project/${projectId}/tasks`)) {
+      await this.page.goto(`/#/project/${projectId}/tasks`);
       await this.page.waitForLoadState('networkidle');
     }
 

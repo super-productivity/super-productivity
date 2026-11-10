@@ -29,6 +29,7 @@ import { LazyChartComponent } from '../lazy-chart/lazy-chart.component';
 import { MatList, MatListItem } from '@angular/material/list';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 
 const CHART_DAYS = 28;
 const CHART_COLOR = '#4bc0c0';
@@ -175,15 +176,18 @@ export class DialogFocusSessionEditComponent {
 
     // Spelled-out weekday/month names follow the UI language under the ISO 8601
     // option (the `sv` sentinel would otherwise leak Swedish). #8987 follow-up.
-    return new Date(date).toLocaleDateString(this._dateTimeFormatService.textLocale(), {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-    });
+    return dateStrToUtcDate(date).toLocaleDateString(
+      this._dateTimeFormatService.textLocale(),
+      {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      },
+    );
   }
 
   private _getChartDates(): string[] {
-    const endDate = new Date(this.selectedDateStr());
+    const endDate = dateStrToUtcDate(this.selectedDateStr());
     const dates: string[] = [];
 
     for (let i = CHART_DAYS - 1; i >= 0; i--) {
@@ -196,7 +200,7 @@ export class DialogFocusSessionEditComponent {
   }
 
   private _formatChartLabel(dateStr: string): string {
-    const date = new Date(dateStr);
+    const date = dateStrToUtcDate(dateStr);
     return date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), {
       month: 'numeric',
       day: 'numeric',

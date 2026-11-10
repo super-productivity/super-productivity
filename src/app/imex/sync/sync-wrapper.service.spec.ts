@@ -63,6 +63,7 @@ import { TestClient } from '../../op-log/testing/integration/helpers/test-client
 import type { SyncProviderBase } from '../../op-log/sync-providers/provider.interface';
 import type { MatDialogRef } from '@angular/material/dialog';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 describe('SyncWrapperService', () => {
   let service: SyncWrapperService;
@@ -445,6 +446,7 @@ describe('SyncWrapperService', () => {
       expect(mockSnackService.open).toHaveBeenCalledTimes(1);
       expect(mockMatDialog.open).toHaveBeenCalledWith(jasmine.any(Function), {
         data: { providerType: 'supersync', initialSetup: false },
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       });
     });
 
@@ -466,6 +468,7 @@ describe('SyncWrapperService', () => {
       // enter-password flow owns recovery for a peer-encrypted remote.
       expect(mockMatDialog.open).not.toHaveBeenCalledWith(jasmine.any(Function), {
         data: { providerType: 'supersync', initialSetup: false },
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       });
       expect(mockMatDialog.open).toHaveBeenCalledWith(
         DialogEnterEncryptionPasswordComponent,
@@ -1485,6 +1488,39 @@ describe('SyncWrapperService', () => {
           type: 'ERROR',
         }),
       );
+    });
+
+    describe('untrusted WebDAV server certificate (#2855)', () => {
+      const certError = (): WebDavNativeRequestError =>
+        new WebDavNativeRequestError(
+          'SSL certificate error: Trust anchor for certification path not found.',
+          'SSL_CERT_ERROR',
+        );
+
+      it('sets ERROR status and shows the certificate hint on a manual sync', async () => {
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(certError()));
+
+        const result = await service.sync(true);
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+        expect(mockSnackService.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            msg: T.F.SYNC.S.ERROR_UNTRUSTED_CERTIFICATE_ANDROID,
+            type: 'ERROR',
+          }),
+        );
+      });
+
+      it('sets ERROR status without a snack on an automatic sync', async () => {
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(certError()));
+
+        const result = await service.sync();
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+        expect(mockSnackService.open).not.toHaveBeenCalled();
+      });
     });
 
     it('should handle OperationIntegrityError with a calm ERROR snack, not the password dialog', async () => {
@@ -2911,6 +2947,32 @@ describe('SyncWrapperService', () => {
       );
       expect(mockSnackService.open).not.toHaveBeenCalled();
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
+    });
+
+    it('should surface uploads rejected cycle after cycle once (#10808)', async () => {
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.reject(new UploadRevToMatchMismatchAPIError('retries exhausted')),
+      );
+      const rejectedNotices = (): number =>
+        mockSnackService.open.calls
+          .allArgs()
+          .filter(
+            ([params]) =>
+              typeof params === 'object' &&
+              params.msg === T.F.SYNC.S.UPLOAD_REJECTED_REPEATEDLY,
+          ).length;
+
+      expect(await service.sync()).toBe('HANDLED_ERROR');
+      expect(await service.sync()).toBe('HANDLED_ERROR');
+      expect(rejectedNotices()).toBe(0);
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
+
+      expect(await service.sync()).toBe('HANDLED_ERROR');
+      expect(await service.sync()).toBe('HANDLED_ERROR');
+      expect(rejectedNotices()).toBe(1);
+      expect(mockProviderManager.setSyncStatus.calls.mostRecent().args).toEqual([
+        'ERROR',
+      ]);
     });
 
     it('should explain a rejected plaintext remote for a user-triggered encrypted sync', async () => {

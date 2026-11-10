@@ -75,8 +75,8 @@ class DeadlineReminderInstrumentedTest {
     @Test
     fun syncCancelClearsEveryAlarmSlotOfTheTask() {
         val at = System.currentTimeMillis() + HOUR_MS
-        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", at, false))
-        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", at, true))
+        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", at, false), useAlarmStyle = false)
+        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", at, true), useAlarmStyle = false)
         ReminderNotificationHelper.scheduleReminder(
             context, dueDayNotificationId, taskId + "_dueday", taskId, "Task", "DUE_DATE", at,
         )
@@ -92,8 +92,8 @@ class DeadlineReminderInstrumentedTest {
     fun syncedDeadlineAlarmUsesItsOwnSlotNextToTheTaskAlarm() {
         val taskAt = System.currentTimeMillis() + HOUR_MS
         val deadlineAt = taskAt + HOUR_MS
-        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", taskAt, false))
-        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", deadlineAt, true))
+        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", taskAt, false), useAlarmStyle = false)
+        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", deadlineAt, true), useAlarmStyle = false)
 
         val task = storedAlarm(taskNotificationId)
         val deadline = storedAlarm(deadlineNotificationId)
@@ -146,7 +146,7 @@ class DeadlineReminderInstrumentedTest {
     @Test
     fun snoozingDeadlineQueuesTypedEventAndMovesOnlyTheDeadlineAlarm() {
         val taskAt = System.currentTimeMillis() + 3 * HOUR_MS
-        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", taskAt, false))
+        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", taskAt, false), useAlarmStyle = false)
 
         val before = System.currentTimeMillis()
         // Called directly: this receiver does no async work, unlike the alarm receiver.

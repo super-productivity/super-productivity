@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Task } from '../task.model';
+import { isWontDoTask } from '../util/is-wont-do-task';
 import { TaskService } from '../task.service';
 import { T } from '../../../t.const';
 import { DateService } from 'src/app/core/date/date.service';
@@ -56,6 +57,7 @@ export class TaskSummaryTableComponent {
   readonly updated = output<void>();
 
   T: typeof T = T;
+  readonly isWontDoTask = isWontDoTask;
 
   updateTimeSpentTodayForTask(task: Task, newVal: number | string): void {
     this._taskService.updateEverywhere(task.id, {

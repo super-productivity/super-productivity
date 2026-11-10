@@ -48,7 +48,6 @@ import {
   EncryptNoPasswordError,
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
-  PotentialCorsError,
   SyncProviderId,
   SyncStatus,
   toSyncProviderId,
@@ -57,6 +56,7 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { T } from '../../t.const';
 import { getSyncErrorStr } from './get-sync-error-str';
+import { showSetupHint } from './show-setup-hint';
 import { getErrorTxt } from '../../util/get-error-text';
 import { escapeHtml } from '../../util/escape-html';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
@@ -67,6 +67,7 @@ import { ReminderService } from '../../features/reminder/reminder.service';
 import { DialogHandleDecryptErrorComponent } from './dialog-handle-decrypt-error/dialog-handle-decrypt-error.component';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
 import { SyncLog } from '../../core/log';
+import { SyncUploadRejectionNoticeService } from './sync-upload-rejection-notice.service';
 import { promiseTimeout } from '../../util/promise-timeout';
 import { devError } from '../../util/dev-error';
 import { alertDialog, confirmDialog } from '../../util/native-dialogs';
@@ -130,6 +131,7 @@ export class SyncWrapperService {
   private _reminderService = inject(ReminderService);
   private _userInputWaitState = inject(UserInputWaitStateService);
   private _incompatibleVersionNotice = inject(SyncIncompatibleVersionNoticeService);
+  private _uploadRejectionNotice = inject(SyncUploadRejectionNoticeService);
   private _superSyncStatusService = inject(SuperSyncStatusService);
   private _superSyncWsService = inject(SuperSyncWebSocketService);
   private _wsDownloadService = inject(WsTriggeredDownloadService);
@@ -920,13 +922,9 @@ export class SyncWrapperService {
         this._consecutiveSuperSyncAuthFailures = 0;
       }
 
-      if (error instanceof PotentialCorsError) {
-        this._snackService.open({
-          msg: T.F.SYNC.S.ERROR_CORS,
-          type: 'ERROR',
-          // a bit longer since it is a long message
-          config: { duration: 12000 },
-        });
+      if (
+        showSetupHint(error, isUserTriggered, this._snackService, this._providerManager)
+      ) {
         return 'HANDLED_ERROR';
       } else if (error instanceof IncompleteRemoteOperationsError) {
         this._providerManager.setSyncStatus('ERROR');
@@ -1249,14 +1247,11 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof UploadRevToMatchMismatchAPIError) {
-        // Another client uploaded between our download and upload — self-healing.
-        // The next sync cycle will download their ops first, then upload successfully.
-        // Do not show an error snackbar; just mark as UNKNOWN_OR_CHANGED so the
-        // next sync cycle triggers and resolves the state.
+        // Usually a concurrent upload the next cycle heals; streaks surface (#10808).
         SyncLog.log(
           'SyncWrapperService: Concurrent upload detected, will retry on next sync cycle',
         );
-        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        this._uploadRejectionNotice.onUploadRejected();
         return 'HANDLED_ERROR';
       } else if (error instanceof FileSyncTargetChangedError) {
         // The file sync target (provider/account/folder) changed while this
@@ -1654,7 +1649,7 @@ export class SyncWrapperService {
 
   /**
    * Offers whole-dataset replacement when automatic merging cannot proceed.
-   * Unknown remote metadata keeps the dialog's overwrite confirmation mandatory.
+   * Unknown remote metadata forces the overwrite confirm, except in the first-sync choice.
    */
   private async _handleDataConflict(
     error: LocalDataConflictError | UnsupportedMultiEntityConflictError,
@@ -1674,9 +1669,7 @@ export class SyncWrapperService {
       const localLastUpdate = vcEntry?.lastUpdate || Date.now();
 
       const conflictData: ConflictData = {
-        reason: snapshotConflict
-          ? ConflictReason.NoLastSync
-          : ConflictReason.BothNewerLastSync,
+        reason: snapshotConflict?.conflictReason ?? ConflictReason.BothNewerLastSync,
         remote: {
           lastUpdate: snapshotConflict?.remoteLastModified ?? null,
           // A user whose first encounter is a manual sync never sees the snack,

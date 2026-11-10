@@ -20,11 +20,15 @@ import {
   OpType,
 } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
+import { TAG_DELETE_WINS_MARKER } from '../../features/tag/store/tag.actions';
 import { OpLog } from '../../core/log';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
+import { toEntityKey } from '../util/entity-key.util';
 import { firstValueFrom } from 'rxjs';
 import { ENTITY_REGISTRY, isSingletonEntityId } from '../core/entity-registry';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
+import { foldSyncTimeSpentDeltas, isSyncTimeSpentOp } from './fold-sync-time-spent.util';
+import { replayUpdateOnRecreatedEntity } from './replay-update-on-recreated-entity.util';
 
 /**
  * Reads current entity state and entity-shaped payloads for conflict resolution.
@@ -83,6 +87,39 @@ export class ConflictEntityStateService {
   }
 
   /**
+   * `_convertToLWWUpdatesIfNeeded` for the remote winners of `resolutions`.
+   * Detection makes one conflict per remote op, so each entity's winners are
+   * converted as one conflict: every converted op must carry all of them, or
+   * the one applied last erases the others (#10380).
+   */
+  _remoteWinnerConverter(
+    resolutions: { winner: 'local' | 'remote'; conflict: EntityConflict }[],
+  ): (conflict: EntityConflict) => Operation[] {
+    const byEntity = new Map<string, EntityConflict>();
+    for (const { winner, conflict } of resolutions) {
+      if (winner !== 'remote') continue;
+      const key = toEntityKey(conflict.entityType, conflict.entityId);
+      const prev = byEntity.get(key);
+      byEntity.set(
+        key,
+        prev
+          ? {
+              ...prev,
+              localOps: [...prev.localOps, ...conflict.localOps],
+              remoteOps: [...prev.remoteOps, ...conflict.remoteOps],
+            }
+          : conflict,
+      );
+    }
+    const converted = new Map(
+      [...byEntity.values()]
+        .flatMap((merged) => this._convertToLWWUpdatesIfNeeded(merged))
+        .map((op) => [op.id, op]),
+    );
+    return (conflict) => conflict.remoteOps.map((op) => converted.get(op.id) ?? op);
+  }
+
+  /**
    * Makes winning remote updates recreate entities deleted locally.
    *
    * Generic updates become LWW snapshots. Archive/restore actions already recreate
@@ -97,10 +134,19 @@ export class ConflictEntityStateService {
       return conflict.remoteOps;
     }
 
-    const convertibleRemoteOps = conflict.remoteOps.filter(
+    // A winning archive or restore applies by its own payload, and a restore
+    // returns the task to state: only the winners before the first of them
+    // apply to the deleted task. Later ones apply to the restored task as they
+    // are; folding them in would overwrite what the restore set.
+    const barrier = conflict.remoteOps.findIndex(
       (op) =>
-        op.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE &&
-        op.actionType !== ActionType.TASK_SHARED_RESTORE &&
+        op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
+        op.actionType === ActionType.TASK_SHARED_RESTORE,
+    );
+    const convertibleRemoteOps = (
+      barrier < 0 ? conflict.remoteOps : conflict.remoteOps.slice(0, barrier)
+    ).filter(
+      (op) =>
         // A multi-entity row must never be rewritten into a single-entity LWW
         // replace: it would drop the row's effect on every other entity, and
         // the converted copy shares the original's op id across several
@@ -133,6 +179,28 @@ export class ConflictEntityStateService {
         toLwwUpdateActionType: (entityType) =>
           toLwwUpdateActionType(entityType as EntityType),
         isSingletonEntityId,
+        // A task delete carries `TaskWithSubTasks`; `subTasks` is no task field.
+        // A tag delete's `{ id, tagDeleteWins }` payload is read as the entity;
+        // the delete-wins marker is no tag field (#11489).
+        toBaseEntity: (entity, entityType) => {
+          if (entityType === 'TAG' && TAG_DELETE_WINS_MARKER in entity) {
+            const tag = { ...entity };
+            delete tag[TAG_DELETE_WINS_MARKER];
+            return tag;
+          }
+          if (entityType !== 'TASK' || !('subTasks' in entity)) return entity;
+          const task = { ...entity };
+          delete task['subTasks'];
+          return task;
+        },
+        // A winning syncTimeSpent delta adds to the recreated task's time, as
+        // its reducer does everywhere else; its arguments are no fields (#10380).
+        // Types with semantic updates (a counter's `setSimpleCounterCounterToday`)
+        // replay them through their own reducer instead (#11465).
+        applyAdditiveUpdate: (entity, op) =>
+          isSyncTimeSpentOp(op)
+            ? foldSyncTimeSpentDeltas(conflict.entityId, entity, [op])
+            : replayUpdateOnRecreatedEntity(entity, op),
         onMissingBaseEntity: ({ localDeletePayloadKeys, remoteOp }) => {
           // Fallback: no full base entity available. Returning the op unchanged
           // is equivalent to rewriting actionType to LWW Update — both no-op at

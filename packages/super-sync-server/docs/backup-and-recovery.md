@@ -105,7 +105,7 @@ then follow the same steps.
 
 **Why this is preferred:**
 
-- Avoids `SYNC_IMPORT_EXISTS` conflicts that occur with partial restores
+- Avoids the `SYNC_IMPORT_EXISTS` rejection and silent data gap of partial restores (see the known limitation below)
 - Clients hold the complete data — they are the authoritative source
 - Produces a clean, consistent server state
 - Verified by e2e tests (`supersync-server-backup-revert.spec.ts`)
@@ -124,14 +124,20 @@ docker exec -i supersync-postgres psql -U supersync supersync \
 gunzip -c backups/supersync_YYYYMMDD_HHMMSS.sql.gz | \
   docker exec -i supersync-postgres psql -U supersync supersync
 
-# 3. Restart the server
+# 3. Empty the capture tables. Restored rows would re-import tasks users
+#    already have and revive revoked assistant connections. Devices register
+#    their key again on the next sync; assistants need a new token.
+docker exec -i supersync-postgres psql -U supersync supersync \
+  -c 'TRUNCATE capture_items, capture_grants, capture_keys, capture_auth, capture_connect_codes'
+
+# 4. Restart the server
 docker compose start supersync
 ```
 
 > **Note:** The database name (`supersync` above) must match your deployment's
 > `POSTGRES_DB` setting. Check your `.env` or `docker-compose.yml` for the actual value.
 
-**Known limitation:** If clients reconnect after a full restore, the server's existing `SYNC_IMPORT` operation can conflict with the client's gap detection mechanism (`SYNC_IMPORT_EXISTS` error). To resolve this, use the "Reset Account" feature in the app to clear server sync data, then re-sync.
+**Known limitation:** After a full restore the server still holds its original `SYNC_IMPORT`. A reconnecting client resets its sync position, re-downloads and tries to re-upload its full state, but the server rejects that with `SYNC_IMPORT_EXISTS`. The rejection is only logged and the app shows no error, so that upload does not restore changes made after the backup was taken. To resolve this, use the "Reset Account" feature in the app to clear server sync data, then re-sync: the client then uploads its full state.
 
 ### Recovery Decision Tree
 

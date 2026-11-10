@@ -7,9 +7,25 @@ import {
   validateDeleteAllDataResponse,
   validateDevicesResponse,
   validateReplaceTokenResponse,
+  validateCaptureClaimResponse,
+  validateCaptureGrantsResponse,
+  validateCaptureTokenResponse,
+  validateCaptureConnectCodeResponse,
 } from './response-validators';
 
 describe('response-validators', () => {
+  it('validates connection codes and rejects malformed responses', () => {
+    expect(
+      validateCaptureConnectCodeResponse({ code: 'ABCDE-FGHJK', expiresAt: 123 }).code,
+    ).toBe('ABCDE-FGHJK');
+    expect(() =>
+      validateCaptureConnectCodeResponse({ code: 'secret', expiresAt: 123 }),
+    ).toThrow();
+    expect(() =>
+      validateCaptureConnectCodeResponse({ code: 'ABCDE-FGHJK', expiresAt: '123' }),
+    ).toThrow();
+  });
+
   describe('validateOpUploadResponse', () => {
     it('should accept valid response', () => {
       const response = {
@@ -406,6 +422,44 @@ describe('response-validators', () => {
 
     it('should throw if success is not a boolean', () => {
       expect(() => validateDeleteAllDataResponse({ success: 1 })).toThrow();
+    });
+  });
+
+  describe('capture responses', () => {
+    const grant = {
+      id: 'g1',
+      kind: 'token',
+      clientName: 'Claude',
+      createdAt: 1,
+      lastUsedAt: null,
+      expiresAt: 2,
+      pendingCount: 0,
+    };
+
+    it('accepts claims with items and keyless statuses, unknown ones too', () => {
+      const item = { itemId: 'i', taskId: 't', ciphertext: 'c', createdAt: 1 };
+      expect(validateCaptureClaimResponse({ status: 'ok', items: [item] }).items).toEqual(
+        [item],
+      );
+      expect(validateCaptureClaimResponse({ status: 'no_key' }).status).toBe('no_key');
+      expect(validateCaptureClaimResponse({ status: 'later' }).status).toBe('later');
+    });
+
+    it('rejects a claim item without ciphertext', () => {
+      expect(() =>
+        validateCaptureClaimResponse({
+          status: 'ok',
+          items: [{ itemId: 'i', taskId: 't', createdAt: 1 }],
+        }),
+      ).toThrow();
+    });
+
+    it('validates grants and new tokens', () => {
+      expect(validateCaptureGrantsResponse({ grants: [grant] }).grants).toEqual([grant]);
+      expect(validateCaptureTokenResponse({ token: 'sp_cap_x', grant }).token).toBe(
+        'sp_cap_x',
+      );
+      expect(() => validateCaptureTokenResponse({ token: '', grant })).toThrow();
     });
   });
 });

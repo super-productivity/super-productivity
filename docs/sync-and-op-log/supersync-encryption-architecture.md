@@ -392,6 +392,26 @@ wrong password from a corrupt or foreign-key op, the Decryption Failed dialog
 offers no server overwrite; replacing the server stays a deliberate Settings
 action (Force Overwrite / Change Password).
 
+Those actions run a clean slate that deletes the server's ops, and a device
+holding a kept prefix counts as synced, so the empty-device refusal no longer
+protects the undecryptable tail. While the last SuperSync download stopped at
+ops this device could not decrypt
+(`OperationLogDownloadService.getUndecryptableRemoteOps`, in memory, retired
+when a download reaches the head, the active provider changes, or a clean
+slate is accepted; not on a mere sync-epoch bump, #10864), Force Overwrite,
+Change Password, "Use Local Data" and USE_LOCAL in the import- and
+data-conflict dialogs first ask for
+an explicit confirmation naming those ops
+(`SyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps`).
+
+The decrypt-failure log entry records, per failing op, the envelope's
+`clientId`, `payloadLength`, a `saltFingerprint` (first 8 hex chars of
+SHA-256 of the 16-byte salt) and `saltDecryptedInRun`. One device session
+encrypts with one salt per password, so a failing op whose salt decrypted
+elsewhere in the run had the same derived key and points at damaged data. An
+unseen salt only says another session wrote it: under a different password, or
+under the same one and damaged since.
+
 ## Snapshot Encryption
 
 Full-state operations (backup import and repair) use the snapshot endpoint but

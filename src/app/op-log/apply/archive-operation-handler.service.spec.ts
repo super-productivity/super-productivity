@@ -18,6 +18,8 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { OpType } from '../core/operation.types';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectAllTagIds } from '../../features/tag/store/tag.reducer';
 
 describe('isArchiveAffectingAction', () => {
   it('should return true for moveToArchive action', () => {
@@ -98,6 +100,7 @@ describe('ArchiveOperationHandler', () => {
   let mockArchiveDbAdapter: jasmine.SpyObj<ArchiveDbAdapter>;
   let mockTimeTrackingService: jasmine.SpyObj<TimeTrackingService>;
   let mockLockService: jasmine.SpyObj<LockService>;
+  let store: MockStore;
 
   const createMockTaskWithSubTasks = (
     id: string,
@@ -196,11 +199,91 @@ describe('ArchiveOperationHandler', () => {
         { provide: ArchiveDbAdapter, useValue: mockArchiveDbAdapter },
         { provide: TimeTrackingService, useValue: mockTimeTrackingService },
         { provide: LockService, useValue: mockLockService },
+        provideMockStore({
+          selectors: [{ selector: selectAllTagIds, value: ['tag-kept'] }],
+        }),
       ],
     });
 
     // Get the service through TestBed to use proper DI
     service = TestBed.inject(ArchiveOperationHandler);
+    store = TestBed.inject(MockStore);
+  });
+
+  describe('local operation queue', () => {
+    const createLocalRestoreAction = (taskId: string): PersistentAction =>
+      ({
+        type: TaskSharedActions.restoreTask.type,
+        task: createMockTask(taskId),
+        subTasks: [],
+        meta: { isPersistent: true },
+      }) as unknown as PersistentAction;
+
+    const createDeferred = (): { promise: Promise<void>; resolve: () => void } => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => (resolve = r));
+      return { promise, resolve };
+    };
+
+    it('should run enqueued operations one at a time, in order', async () => {
+      const first = createDeferred();
+      mockTaskArchiveService.deleteTasks.and.callFake((taskIds: string[]) =>
+        taskIds[0] === 'task-1' ? first.promise : Promise.resolve(),
+      );
+
+      const firstRun = service.enqueueLocalOperation(createLocalRestoreAction('task-1'));
+      const secondRun = service.enqueueLocalOperation(createLocalRestoreAction('task-2'));
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(mockTaskArchiveService.deleteTasks.calls.allArgs()).toEqual([
+        [['task-1'], {}],
+      ]);
+
+      first.resolve();
+      await Promise.all([firstRun, secondRun]);
+
+      expect(mockTaskArchiveService.deleteTasks.calls.allArgs()).toEqual([
+        [['task-1'], {}],
+        [['task-2'], {}],
+      ]);
+    });
+
+    it('should settle only after every operation enqueued so far has finished', async () => {
+      const removal = createDeferred();
+      mockTaskArchiveService.deleteTasks.and.returnValue(removal.promise);
+      let isSettled = false;
+
+      void service.enqueueLocalOperation(createLocalRestoreAction('task-1'));
+      const settled = service.whenLocalOperationsSettled().then(() => {
+        isSettled = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(isSettled).toBe(false);
+
+      removal.resolve();
+      await settled;
+
+      expect(isSettled).toBe(true);
+    });
+
+    it('should reject only the failing operation and keep the queue running', async () => {
+      mockTaskArchiveService.deleteTasks.and.callFake((taskIds: string[]) =>
+        taskIds[0] === 'task-1'
+          ? Promise.reject(new Error('Archive write failed'))
+          : Promise.resolve(),
+      );
+
+      const failingRun = service.enqueueLocalOperation(
+        createLocalRestoreAction('task-1'),
+      );
+      const nextRun = service.enqueueLocalOperation(createLocalRestoreAction('task-2'));
+
+      await expectAsync(failingRun).toBeRejectedWithError('Archive write failed');
+      await expectAsync(nextRun).toBeResolved();
+      await expectAsync(service.whenLocalOperationsSettled()).toBeResolved();
+      expect(mockTaskArchiveService.deleteTasks).toHaveBeenCalledWith(['task-2'], {});
+    });
   });
 
   describe('handleOperation', () => {
@@ -262,6 +345,51 @@ describe('ArchiveOperationHandler', () => {
         expect(mockArchiveService.writeTasksToArchiveForRemoteSync).toHaveBeenCalledTimes(
           1,
         );
+      });
+
+      it('should drop tag ids deleted locally before writing remote archived tasks (#11466)', async () => {
+        const tasks = [
+          {
+            ...createMockTaskWithSubTasks('task-1'),
+            projectId: 'INBOX',
+            tagIds: ['tag-deleted', 'tag-kept'],
+          } as TaskWithSubTasks,
+        ];
+        const action = {
+          type: TaskSharedActions.moveToArchive.type,
+          tasks,
+          meta: { isPersistent: true, isRemote: true },
+        } as unknown as PersistentAction;
+
+        await service.handleOperation(action);
+
+        const written =
+          mockArchiveService.writeTasksToArchiveForRemoteSync.calls.mostRecent().args[0];
+        expect(written.map((t) => t.tagIds)).toEqual([['tag-kept']]);
+        expect(tasks[0].tagIds).toEqual(['tag-deleted', 'tag-kept']);
+      });
+
+      it('should read the tag state at apply time, not at construction', async () => {
+        store.overrideSelector(selectAllTagIds, []);
+        store.refreshState();
+        const tasks = [
+          {
+            ...createMockTaskWithSubTasks('task-1'),
+            projectId: 'INBOX',
+            tagIds: ['tag-kept'],
+          } as TaskWithSubTasks,
+        ];
+        const action = {
+          type: TaskSharedActions.moveToArchive.type,
+          tasks,
+          meta: { isPersistent: true, isRemote: true },
+        } as unknown as PersistentAction;
+
+        await service.handleOperation(action);
+
+        const written =
+          mockArchiveService.writeTasksToArchiveForRemoteSync.calls.mostRecent().args[0];
+        expect(written[0].tagIds).toEqual([]);
       });
 
       it('should handle empty tasks array', async () => {

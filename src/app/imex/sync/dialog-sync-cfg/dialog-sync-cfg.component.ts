@@ -43,6 +43,7 @@ import { isSyncTargetChanged } from '../../../op-log/sync-providers/sync-target-
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { isOnline } from '../../../util/is-online';
 import { SnackService } from '../../../core/snack/snack.service';
+import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
 import { DialogRestorePointComponent } from '../dialog-restore-point/dialog-restore-point.component';
 import { DialogSyncDevicesComponent } from '../dialog-sync-devices/dialog-sync-devices.component';
 import {
@@ -51,10 +52,12 @@ import {
   type WebdavPrivateCfg,
 } from '@sp/sync-providers/webdav';
 import { testWebdavConnection } from '../../../op-log/sync-providers/file-based/webdav/test-webdav-connection';
+import { CertTrustService } from '../../../features/issue/cert-trust.service';
 import { discoverNextcloudUserId } from '../../../op-log/sync-providers/file-based/webdav/discover-nextcloud-user-id';
 import type { OneDrivePrivateCfg } from '../../../op-log/sync-providers/file-based/onedrive/onedrive.model';
 import type { LocalFileSyncPrivateCfg } from '@sp/sync-providers/local-file';
 import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../../util/dialog-auto-focus';
 
 // `testWebdavConnection` reports a 404 (auth ok, wrong DAV path) via this
 // HTTP status; the package-side `WebDavHttpStatus` enum is not exported to
@@ -89,8 +92,10 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
   private _snackService = inject(SnackService);
+  private _syncLocalStateService = inject(SyncLocalStateService);
 
   private _destroyRef = inject(DestroyRef);
+  private _certTrustService = inject(CertTrustService);
 
   T = T;
   isWasEnabled = signal(false);
@@ -299,6 +304,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       });
       return;
     }
+    await this._certTrustService.setPendingConfig(this, cfg);
     this._applyDetectedUserIdResult(await discoverNextcloudUserId(cfg));
   }
 
@@ -365,6 +371,8 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     }
 
     try {
+      // A self-signed host must be testable before the config is saved (#11097)
+      await this._certTrustService.setPendingConfig(this, webDavCfg);
       const result = await testWebdavConnection(webDavCfg);
       this._reportWebdavTestResult(result, notFoundMsg);
     } catch (e) {
@@ -441,6 +449,10 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     // here with the slot still set and discards it. Runs after a save too,
     // where it is a no-op.
     this._destroyRef.onDestroy(() => this._discardPendingLocalFileDir());
+    // Hosts trusted for testing an unsaved config (#11097) end with the dialog.
+    this._destroyRef.onDestroy(
+      () => void this._certTrustService.setPendingConfig(this, null),
+    );
     this.syncConfigService.syncSettingsForm$
       .pipe(first(), takeUntilDestroyed(this._destroyRef))
       .subscribe((v) => {
@@ -842,6 +854,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     const { DialogEnableEncryptionComponent } =
       await import('../dialog-enable-encryption/dialog-enable-encryption.component');
     const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       width: '450px',
       disableClose: true,
       data: {
@@ -895,8 +908,12 @@ export class DialogSyncCfgComponent implements AfterViewInit {
   }
 
   /** Confirmation handled inside `SyncWrapperService.forceUpload` (native
-   *  confirm, shared with snackbar action callers). */
+   *  confirm, shared with snackbar action callers). The clean slate deletes
+   *  remote ops this device could not decrypt, so name those first (#9256). */
   forceOverwrite(): void {
+    if (!this._syncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps()) {
+      return;
+    }
     this.syncWrapperService.forceUpload();
   }
 

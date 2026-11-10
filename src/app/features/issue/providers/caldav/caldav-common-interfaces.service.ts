@@ -12,7 +12,14 @@ import { truncate } from '../../../../util/truncate';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isCaldavEnabled } from './is-caldav-enabled.util';
 import { CALDAV_POLL_INTERVAL } from './caldav.const';
-import { issueValuesEqual } from '../../two-way-sync/compute-push-decisions';
+import { computeFieldPullChanges } from '../../two-way-sync/compute-field-pull';
+import { Store } from '@ngrx/store';
+import { GlobalConfigService } from '../../../config/global-config.service';
+import { selectTaskEntities } from '../../../tasks/store/task.selectors';
+import { caldavUidToTaskId } from './caldav-uid.util';
+import { SnackService } from '../../../../core/snack/snack.service';
+import { T } from '../../../../t.const';
+import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 
 @Injectable({
   providedIn: 'root',
@@ -20,6 +27,9 @@ import { issueValuesEqual } from '../../two-way-sync/compute-push-decisions';
 export class CaldavCommonInterfacesService extends BaseIssueProviderService<CaldavCfg> {
   private readonly _caldavClientService = inject(CaldavClientService);
   private readonly _caldavSyncAdapter = inject(CaldavSyncAdapterService);
+  private readonly _store = inject(Store);
+  private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _snackService = inject(SnackService);
 
   // Short-lived cache so that getNewIssuesToAddToBacklog and all getSubTasks
   // calls within the same poll cycle share a single REPORT request instead of
@@ -121,6 +131,17 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     const issue = await firstValueFrom(
       this._caldavClientService.getById$(task.issueId, cfg),
     );
+    if (!issue) {
+      // Only a refresh the user asked for gets here (the poll is batched and
+      // skips a missing VTODO silently), so say why nothing was refreshed. The
+      // task stays as it is: a remote delete never removes local data (#11583).
+      this._snackService.open({
+        msg: T.F.CALDAV.S.ISSUE_NOT_FOUND,
+        translateParams: { issueId: truncate(task.title) },
+      });
+      // Handled: keeps the generic "no update required" snack from replacing it.
+      throw { [HANDLED_ERROR_PROP_STR]: 'Caldav: issue not found' };
+    }
     const taskChanges = this._getRefreshTaskChanges(task, issue, cfg);
 
     if (taskChanges) {
@@ -191,7 +212,9 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     allExistingIssueIds: number[] | string[],
   ): Promise<CaldavIssueReduced[]> {
     const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
-    const tasks = await this._getOpenTasksCached(issueProviderId, cfg);
+    const tasks = await this._withoutVtodosAwaitingLink(
+      await this._getOpenTasksCached(issueProviderId, cfg),
+    );
 
     if (cfg.isAddSubTasks) {
       const existingIds = new Set(allExistingIssueIds as string[]);
@@ -222,6 +245,23 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     return allTasks.filter((t) => t.related_to === parentId && t.id !== parentId);
   }
 
+  /**
+   * A VTODO SP created (`createOnServer`) is linked by the task that created it
+   * — but only once the create round-trip finishes, and on other devices only
+   * once that link op syncs in. Importing it in between adds a second task for
+   * the same VTODO (#10098). Skip it while that task exists here, and always
+   * when SP sync is on, since sync delivers the task already linked. Without SP
+   * sync a VTODO created on another device is imported like any other.
+   */
+  private async _withoutVtodosAwaitingLink(tasks: CaldavIssue[]): Promise<CaldavIssue[]> {
+    const isSyncEnabled = !!this._globalConfigService.sync()?.isEnabled;
+    const taskEntities = await firstValueFrom(this._store.select(selectTaskEntities));
+    return tasks.filter((t) => {
+      const taskId = caldavUidToTaskId(t.id);
+      return !taskId || (!isSyncEnabled && !taskEntities[taskId]);
+    });
+  }
+
   // Non-async: Map.set runs synchronously so concurrent callers share the
   // same in-flight Promise instead of each firing their own REPORT request.
   private _getOpenTasksCached(
@@ -243,55 +283,19 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     cfg: CaldavCfg,
   ): Partial<Task> | null {
     const wasUpdated = issue.etag_hash !== task.issueLastUpdated;
-    const taskChanges: Record<PropertyKey, unknown> = wasUpdated
-      ? { ...this.getAddTaskData(issue) }
-      : {};
-    const issueValues = issue as unknown as Record<string, unknown>;
-    const lastSyncedValues = task.issueLastSyncedValues ?? {};
-    const syncConfig = this._caldavSyncAdapter.getSyncConfig(cfg);
-    const context = { issueId: issue.id };
-    let hasPullOnlyMismatch = false;
-
-    for (const mapping of this._caldavSyncAdapter.getFieldMappings()) {
-      const direction = syncConfig[mapping.taskField] ?? mapping.defaultDirection;
-      const canPull = direction === 'pullOnly' || direction === 'both';
-
-      if (!canPull) {
-        delete taskChanges[mapping.taskField];
-        continue;
-      }
-
-      const remoteTaskValue = mapping.toTaskValue(
-        issueValues[mapping.issueField],
-        context,
-      );
-      // A VTODO-wide ETag can change for an unrelated field. In "both" mode,
-      // preserve pending local edits unless this specific remote field changed.
-      const shouldPullAfterEtagChange =
-        direction === 'pullOnly' ||
-        !Object.prototype.hasOwnProperty.call(lastSyncedValues, mapping.issueField) ||
-        !issueValuesEqual(
-          issueValues[mapping.issueField],
-          lastSyncedValues[mapping.issueField],
-        );
-      if (wasUpdated) {
-        if (shouldPullAfterEtagChange) {
-          taskChanges[mapping.taskField] = remoteTaskValue;
-        } else {
-          delete taskChanges[mapping.taskField];
-        }
-      } else if (
-        // Older refreshes could advance the ETag without applying mapped values.
-        // Heal provider-owned fields, but preserve possible unpushed edits in "both".
-        direction === 'pullOnly' &&
-        remoteTaskValue !== task[mapping.taskField]
-      ) {
-        taskChanges[mapping.taskField] = remoteTaskValue;
-        hasPullOnlyMismatch = true;
-      }
-    }
-
-    return wasUpdated || hasPullOnlyMismatch ? (taskChanges as Partial<Task>) : null;
+    return computeFieldPullChanges({
+      task,
+      issueValues: issue as unknown as Record<string, unknown>,
+      wasUpdated,
+      addTaskData: wasUpdated ? this.getAddTaskData(issue) : {},
+      fieldMappings: this._caldavSyncAdapter.getFieldMappings(),
+      syncConfig: this._caldavSyncAdapter.getSyncConfig(cfg),
+      ctx: { issueId: issue.id },
+      // A VTODO-wide ETag can change for an unrelated field. "pullOnly" fields
+      // are the server's; in "both" mode pending local edits are preserved
+      // unless that specific remote field changed.
+      isPullOnlyAuthoritative: true,
+    });
   }
 
   protected _apiGetById$(

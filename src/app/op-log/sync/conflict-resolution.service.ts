@@ -230,8 +230,7 @@ export class ConflictResolutionService {
       {
         // Convert remote UPDATE operations to LWW Update format when entity was deleted locally.
         // This ensures lwwUpdateMetaReducer can recreate deleted entities (fixes DELETE vs UPDATE race).
-        processRemoteWinnerOps: (conflict) =>
-          this.entityState._convertToLWWUpdatesIfNeeded(conflict),
+        processRemoteWinnerOps: this.entityState._remoteWinnerConverter(resolutions),
         toEntityKey: (entityType, entityId) =>
           toEntityKey(entityType as EntityType, entityId),
       },
@@ -801,7 +800,7 @@ export class ConflictResolutionService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 3: Add non-conflicting remote ops to the batch
-    // Uses retry to handle race condition (issue #6213)
+    // Duplicates are skipped atomically in the append transaction (issue #6343)
     // ─────────────────────────────────────────────────────────────────────────
     if (nonConflictingOps.length > 0) {
       const result = await this._filterAndAppendOpsWithRetry(

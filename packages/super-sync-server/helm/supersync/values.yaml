@@ -106,6 +106,9 @@ supersync:
   # -- Per-user storage quota in bytes for accounts created from now on.
   # Empty uses the built-in default (104857600 = 100 MB).
   defaultStorageQuotaBytes: ""
+  # -- Agent task capture: the /mcp endpoint and /api/capture. Keep false on a
+  # multi-replica deployment; the retry window and per-grant limit are in-process.
+  captureConnectorEnabled: false
   persistence:
     # -- Enable persistent storage for /app/data
     enabled: true

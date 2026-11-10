@@ -468,6 +468,9 @@ test.describe('Multi-task drag', () => {
     );
     await expect(page.locator('.multi-task-drag-preview')).toContainText('2 selected');
     await drop(page, target);
+    // The move runs once CDK's drop animation ends; opening the project
+    // earlier destroys the dragged row and the move never happens.
+    await expect(page.locator('.cdk-drag-preview')).toBeHidden();
     await projectPage.navigateToProjectByName('Today target');
     await expect(page.locator('task .task-title')).toHaveCount(2);
     for (const name of names.slice(0, 2))

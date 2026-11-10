@@ -28,6 +28,7 @@ import {
   assertNoRuntimeBrowserErrors,
   attachPageErrorCollector,
   installDevErrorDialogHandler,
+  registerPageWithErrorCollector,
   type RuntimeBrowserError,
 } from './runtime-errors';
 
@@ -363,6 +364,11 @@ export const createSimulatedClient = async (
   options: {
     allowExampleTasks?: boolean;
     /**
+     * Keep the first-run hints, as on a real new install (skipped by default).
+     * Needs `isNewInstallAppFeatures` too: the flag it leaves unset also ends hints.
+     */
+    allowOnboardingHints?: boolean;
+    /**
      * Start with the calm new-install app features (`NEW_INSTALL_APP_FEATURES`)
      * instead of the all-features-on set the E2E suite otherwise uses. The tour
      * stays hidden: the app never shows it to a Playwright user agent.
@@ -379,6 +385,7 @@ export const createSimulatedClient = async (
 ): Promise<SimulatedE2EClient> => {
   const {
     allowExampleTasks = false,
+    allowOnboardingHints = false,
     isNewInstallAppFeatures = false,
     seedBeforeBoot,
   } = options;
@@ -406,16 +413,24 @@ export const createSimulatedClient = async (
 
   const page = await context.newPage();
   const runtimeErrors = attachPageErrorCollector(page, `Client ${clientName}`);
+  // Pages a spec opens later in this context (context.newPage() after closing
+  // the first) report page errors and devError() into the same list
+  // closeClient() checks.
+  context.on('page', (contextPage) => {
+    registerPageWithErrorCollector(contextPage, runtimeErrors, `Client ${clientName}`);
+  });
 
   // Skip onboarding, hints, and example tasks before the app boots.
   // This runs before any page JavaScript, so Angular sees the flags immediately.
   // Tests of the example-task sync gate opt back in via { allowExampleTasks: true }
   // so first-run onboarding tasks are actually created.
   await page.addInitScript(
-    ({ allowExamples, isNewInstall }) => {
-      localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
-      localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
-      // getInitialAppFeatures() starts E2E clients with every feature on only
+    ({ allowExamples, allowHints, isNewInstall }) => {
+      if (!allowHints) {
+        localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+        localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+      }
+      // getInitialNewInstallSections() starts E2E clients with every feature on only
       // while this flag is set.
       if (!isNewInstall) {
         localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
@@ -424,7 +439,11 @@ export const createSimulatedClient = async (
         localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
       }
     },
-    { allowExamples: allowExampleTasks, isNewInstall: isNewInstallAppFeatures },
+    {
+      allowExamples: allowExampleTasks,
+      allowHints: allowOnboardingHints,
+      isNewInstall: isNewInstallAppFeatures,
+    },
   );
 
   page.on('console', (msg) => {

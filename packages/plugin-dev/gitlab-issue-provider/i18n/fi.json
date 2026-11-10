@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "käyttäjänimi/projekti",
+    "PROJECT_HINT": "esim. super-productivity/super-productivity",
+    "TOKEN": "Käyttöoikeustunnus",
+    "HOW_TO_GET_TOKEN": "Miten saan tunnuksen?",
+    "SCOPE": "Laajuus",
+    "SCOPE_ALL": "Kaikki",
+    "SCOPE_CREATED": "Minun luomat",
+    "SCOPE_ASSIGNED": "Minulle osoitetut",
+    "GITLAB_BASE_URL": "Mukautettu GitLab-perus-URL (valinnainen)",
+    "FILTER_USER": "Suodata käyttäjänimi",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Mukautettu suodatin",
+    "FILTER_DESCRIPTION": "Katso https://docs.gitlab.com/ee/api/issues.html#list-issues. Useita voidaan yhdistää &-merkillä",
+    "SUBMIT_TIMELOGS": "Lähetä aikataulut GitLabiin",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Näytä ajanseurantaikkuna päivän tallentamisen jälkeen"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Yhteenveto",
+    "STATE": "Tila",
+    "ASSIGNEE": "Vastuuhenkilö",
+    "LABELS": "Tunnisteet",
+    "DESCRIPTION": "Kuvaus"
+  },
+  "FORM_HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan avoimet GitLab-ongelmat (joko verkkoversio tai itse isännöity instanssi) tietystä projektista tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin ongelmaan sekä lisätietoja siitä.</p> <p>Lisäksi voit automaattisesti tuoda kaikki avoimet ongelmat.</p>"
+}

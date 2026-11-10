@@ -41,4 +41,81 @@ describe('SwipeBlockComponent', () => {
       }));
     }
   }
+
+  describe('haptic feedback', () => {
+    const win = window as { SUPAndroid?: unknown };
+    let original: unknown;
+    let haptic: jasmine.Spy;
+
+    beforeEach(() => {
+      original = win.SUPAndroid;
+      haptic = jasmine.createSpy('performHapticFeedback');
+      win.SUPAndroid = { performHapticFeedback: haptic };
+    });
+
+    afterEach(() => {
+      win.SUPAndroid = original;
+    });
+
+    // Host is 200px wide, so the action threshold (scale > 0.5) is |deltaX| > 50.
+    const startPan = (): {
+      touchSpy: jasmine.Spy;
+      pan: (deltaX: number) => void;
+      destroy: () => void;
+    } => {
+      const fixture = TestBed.createComponent(SwipeBlockComponent);
+      const component = fixture.componentInstance;
+      (fixture.nativeElement as HTMLElement).style.width = '200px';
+      const touchSpy = spyOn(component, 'isTouchActive').and.returnValue(true);
+      fixture.detectChanges();
+      const event = (deltaX: number): PanEvent => ({
+        deltaX,
+        deltaY: 0,
+        deltaTime: 50,
+        isFinal: false,
+        eventType: 2,
+        target: fixture.nativeElement,
+        clientX: 100 + deltaX,
+        clientY: 20,
+        preventDefault: () => {},
+      });
+      component.onPanStart({ ...event(10), eventType: 1 });
+      fixture.detectChanges();
+      return {
+        touchSpy,
+        pan: (deltaX) => component.handlePan(event(deltaX)),
+        destroy: () => fixture.destroy(),
+      };
+    };
+
+    for (const dir of [1, -1]) {
+      it(`ticks once per threshold crossing (direction ${dir})`, () => {
+        const { pan, destroy } = startPan();
+
+        pan(dir * 30);
+        expect(haptic).not.toHaveBeenCalled();
+
+        // Holding past the threshold over several frames ticks only once.
+        pan(dir * 60);
+        pan(dir * 80);
+        pan(dir * 120);
+        expect(haptic).toHaveBeenCalledOnceWith('threshold');
+
+        // Backing off and crossing again ticks again.
+        pan(dir * 30);
+        pan(dir * 70);
+        expect(haptic).toHaveBeenCalledTimes(2);
+        destroy();
+      });
+    }
+
+    it('stays silent when the swipe is not a touch gesture', () => {
+      const { touchSpy, pan, destroy } = startPan();
+      touchSpy.and.returnValue(false);
+      pan(120);
+      pan(-120);
+      expect(haptic).not.toHaveBeenCalled();
+      destroy();
+    });
+  });
 });

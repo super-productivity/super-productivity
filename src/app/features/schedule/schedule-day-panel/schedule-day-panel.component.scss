@@ -1,5 +1,10 @@
 :host {
   display: block;
+  --schedule-panel-header-bg: var(--bg);
+
+  :host-context(.bottom-panel-sheet) & {
+    --schedule-panel-header-bg: var(--bottom-panel-bg);
+  }
 
   > * {
     inset: 4px;
@@ -12,15 +17,27 @@
   height: 100%;
 }
 
-.empty-state {
+// Block-level, so the sticky date header is bounded by the whole schedule and
+// not by the viewport-high drop zone (it scrolled away on mobile otherwise).
+schedule-week {
+  display: block;
+}
+
+// Zero-height, so the hint takes no space in the flow: it would otherwise push
+// an empty day's grid down against the neighbouring day while swiping.
+.empty-state-anchor {
   position: sticky;
   top: 50%;
+  height: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.empty-state {
   margin-left: var(--s5);
   margin-right: var(--s);
   transform: translate(0, -50%);
   text-align: center;
-  pointer-events: none;
-  z-index: 100;
   border-radius: var(--card-border-radius);
   border: 1px solid var(--separator-color);
   background: var(--bg-lightest);

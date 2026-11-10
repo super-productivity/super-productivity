@@ -23,7 +23,10 @@ export type DropListModelSource =
   | 'BACKLOG'
   | 'ADD_TASK_PANEL'
   | 'OVERDUE'
-  | 'LATER_TODAY';
+  | 'LATER_TODAY'
+  // A view column's rows, and its collapsed done rows (accepts no drops).
+  | 'VIEW'
+  | 'VIEW_DONE';
 
 // NOTE: do not change these, as they are used inside task repeat model directly
 // (new can be added though)
@@ -35,7 +38,8 @@ export enum TaskReminderOptionId {
   m15 = 'm15',
   m30 = 'm30',
   h1 = 'h1',
-  // deadline-only: long lead times for preparing ahead of a deadline
+  // long lead times; not offered where the option id itself is persisted
+  // (global default, repeat cfgs), see TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD
   d1 = 'd1',
   d3 = 'd3',
   w1 = 'w1',
@@ -152,6 +156,18 @@ export interface TaskCopy
   // Ensure type compatibility for internal fields
   modified?: number;
   doneOn?: number;
+
+  /**
+   * When a task was finished as "won't do" rather than completed: the
+   * `doneOn` of that finish. It only counts while it equals `doneOn` and the
+   * task is done, so read it through `isWontDoTask()`. Reopening clears
+   * `doneOn` and every completion stamps a new one, on clients predating the
+   * field too, so a value left behind does not count again; those clients show
+   * a plain done task. Exception: the plugin batch update writes `isDone`
+   * without touching `doneOn`, so a won't-do task it unchecks and re-checks is
+   * won't do again.
+   */
+  wontDoOn?: number;
   parentId?: string;
   remindAt?: number;
   repeatCfgId?: string;

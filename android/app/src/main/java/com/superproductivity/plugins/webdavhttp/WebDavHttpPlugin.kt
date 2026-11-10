@@ -15,7 +15,32 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import android.util.Log
+import java.security.cert.CertPathValidatorException
+import java.security.cert.CertificateException
 import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
+
+/**
+ * True when TLS failed because the server certificate is not trusted (unknown
+ * issuer, expired, not yet valid) or does not match the host name — a
+ * persistent misconfiguration, not a network blip (#2855). Android wraps
+ * trust failures as SSLHandshakeException -> CertificateException ->
+ * CertPathValidatorException; OkHttp reports host name mismatches as
+ * SSLPeerUnverifiedException. Other handshake failures (e.g. connection reset
+ * mid-handshake) carry no certificate cause and are not matched.
+ */
+internal fun isCertificateTrustFailure(e: Throwable): Boolean {
+    if (e is SSLPeerUnverifiedException) return true
+    if (e !is SSLHandshakeException) return false
+    var cause: Throwable? = e.cause
+    var depth = 0
+    while (cause != null && depth < 10) {
+        if (cause is CertificateException || cause is CertPathValidatorException) return true
+        cause = cause.cause
+        depth++
+    }
+    return false
+}
 
 @CapacitorPlugin(name = "WebDavHttp")
 class WebDavHttpPlugin : Plugin() {
@@ -48,6 +73,11 @@ class WebDavHttpPlugin : Plugin() {
                         if (request.method == "PUT" &&
                             e !is UnknownHostException && e !is ConnectException
                         ) {
+                            throw e
+                        }
+                        // Certificate problems fail the same way on every
+                        // attempt; retrying only delays the error (#2855).
+                        if (isCertificateTrustFailure(e)) {
                             throw e
                         }
                         tryCount++
@@ -197,6 +227,13 @@ class WebDavHttpPlugin : Plugin() {
     }
 
     private fun handleError(call: PluginCall, e: Exception) {
+        // Before the generic SSL/IO branches: SSLPeerUnverifiedException is an
+        // IOException and would otherwise be classified as a transient
+        // NETWORK_ERROR, hiding the problem on automatic syncs.
+        if (isCertificateTrustFailure(e)) {
+            call.reject("SSL certificate error: ${e.message}", "SSL_CERT_ERROR", e)
+            return
+        }
         when (e) {
             is UnknownHostException -> {
                 call.reject("Network error: Unable to resolve host", "NETWORK_ERROR", e)

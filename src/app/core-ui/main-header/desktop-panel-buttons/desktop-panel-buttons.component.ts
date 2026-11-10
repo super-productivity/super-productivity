@@ -67,11 +67,11 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 
       .panel-btn {
         position: relative;
-        transition: all 0.2s ease;
+        transition: all var(--transition-duration-m) ease;
         overflow: visible !important;
 
         .mat-icon {
-          transition: transform 0.2s ease;
+          transition: transform var(--transition-duration-m) ease;
           display: block;
         }
 
@@ -111,7 +111,7 @@ export class DesktopPanelButtonsComponent {
     () => this._configService.appFeatures().isIssuesPanelEnabled,
   );
   readonly isScheduleDayPanelEnabled = computed(
-    () => this._configService.appFeatures().isScheduleDayPanelEnabled,
+    () => this._configService.appFeatures().isSchedulerEnabled,
   );
   readonly isProjectNotesEnabled = computed(
     () => this._configService.appFeatures().isProjectNotesEnabled,

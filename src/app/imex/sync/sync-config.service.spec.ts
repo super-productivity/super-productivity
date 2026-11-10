@@ -907,6 +907,25 @@ describe('SyncConfigService', () => {
       };
       expect(logged.superSync.deviceName).toBe('[REDACTED]');
     });
+
+    it('should redact the agent capture private key when logging form settings', async () => {
+      const logSpy = spyOn(SyncLog, 'log');
+      mockSyncConfig$.next({
+        ...DEFAULT_GLOBAL_CONFIG.sync,
+        isEnabled: true,
+        syncProvider: SyncProviderId.SuperSync,
+        captureKey: { v: 1, privateKeyPkcs8: 'secret-key', publicKeySpki: 'pub' },
+      });
+      mockCurrentProviderPrivateCfg$.next({
+        providerId: SyncProviderId.SuperSync,
+        privateCfg: { accessToken: 'saved-token' },
+      });
+
+      await service.syncSettingsForm$.pipe(first()).toPromise();
+
+      const logged = logSpy.calls.mostRecent().args[1];
+      expect(JSON.stringify(logged)).not.toContain('secret-key');
+    });
   });
 
   describe('LocalFile encryption persistence issue (#4844)', () => {

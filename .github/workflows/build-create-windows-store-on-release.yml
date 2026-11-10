@@ -23,9 +23,6 @@ jobs:
     if: '!github.event.release.prerelease'
 
     steps:
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: 22
       # required because setting via env.TZ does not work on windows
       - name: Set timezone to Europe Standard Time
         uses: szenius/set-timezone@1f9716b0f7120e344f0c62bb7b1ee98819aefd42 # v2.0
@@ -36,6 +33,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version-file: .nvmrc
       # work around for npm installs from git+https://github.com/johannesjo/J2M.git
       - name: Reconfigure git to use HTTP authentication
         run: >
@@ -67,22 +67,18 @@ jobs:
       - name: Build Frontend & Electron
         run: npm run build
 
-      # `npm run build` checks the repository's Linux packaging config during lint.
-      - name: Load Electron Builder Windows Store Config
-        run: echo $WIN_STORE_ELECTRON_BUILDER_YML | base64 --decode > electron-builder.yaml
-        shell: bash
-        env:
-          WIN_STORE_ELECTRON_BUILDER_YML: ${{secrets.WIN_STORE_ELECTRON_BUILDER_YML}}
-
+      # `--publish never`: the shared config publishes win builds to GitHub, and
+      # electron-builder would otherwise publish on a tag build.
       - name: Build/Release Electron app
         uses: johannesjo/action-electron-builder@9ea9e2d991c97668843d57337848e3e2b1ffab3d # v1
         with:
           build_script_name: empty
           release: false
           github_token: ${{ secrets.github_token }}
+          args: --config build/electron-builder.appx.yaml --publish never
 
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: WinStoreRelease
           path: .tmp/app-builds/*.appx
@@ -121,7 +117,7 @@ jobs:
 
       - name: Upload release notes alongside appx
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: WinStoreReleaseNotes
           path: .tmp/RELEASE_NOTES.md

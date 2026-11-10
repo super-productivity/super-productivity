@@ -5,7 +5,8 @@ import org.json.JSONObject
 import java.util.UUID
 
 /**
- * Legacy SharedPreferences queue used by the startup overlay before [CaptureInbox].
+ * Legacy SharedPreferences queue used by the (since removed) startup overlay
+ * before [CaptureInbox].
  * Kept only to move entries left behind by an older app version into the inbox.
  */
 object WidgetTaskQueue {

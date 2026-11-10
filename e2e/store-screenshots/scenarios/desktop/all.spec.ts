@@ -46,7 +46,7 @@ const captureDarkScenes = async (
   await resetView(page);
 
   // 02 — Eisenhower board
-  await gotoAndSettle(page, '/#/boards');
+  await gotoAndSettle(page, '/#/boards/EISENHOWER_MATRIX');
   await page.locator('boards').first().waitFor({ state: 'visible' });
   await page
     .locator('board-panel, .panel, mat-card')
@@ -150,7 +150,7 @@ const captureLightScenes = async (
 
   // 02 — Eisenhower board (light variant). Distinct scenario name from the
   // dark slot so both land in the master tree without overwriting.
-  await gotoAndSettle(page, '/#/boards');
+  await gotoAndSettle(page, '/#/boards/EISENHOWER_MATRIX');
   await page.locator('boards').first().waitFor({ state: 'visible' });
   await page
     .locator('board-panel, .panel, mat-card')

@@ -1,100 +1,35 @@
 import { z } from 'zod';
+import {
+  SUPER_SYNC_CLIENT_ID_REGEX,
+  SUPER_SYNC_MAX_CLIENT_ID_LENGTH,
+  SUPER_SYNC_MAX_OPS_PER_UPLOAD,
+  SUPER_SYNC_MAX_ENTITY_IDS_PER_OP,
+  SUPER_SYNC_OP_TYPES,
+  SUPER_SYNC_IMPORT_REASONS,
+  SUPER_SYNC_SNAPSHOT_REASONS,
+  SUPER_SYNC_SNAPSHOT_OP_TYPES,
+  SUPER_SYNC_ERROR_CODES,
+} from './supersync-http-constants';
 
-export const SUPER_SYNC_CLIENT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
-export const SUPER_SYNC_MAX_CLIENT_ID_LENGTH = 255;
-export const SUPER_SYNC_MAX_OPS_PER_UPLOAD = 100;
-export const SUPER_SYNC_MAX_ENTITY_IDS_PER_OP = 1000;
+// Re-exported so this module stays the complete contract for server and tests.
+export {
+  SUPER_SYNC_CLIENT_ID_REGEX,
+  SUPER_SYNC_MAX_CLIENT_ID_LENGTH,
+  SUPER_SYNC_MAX_OPS_PER_UPLOAD,
+  SUPER_SYNC_MAX_ENTITY_IDS_PER_OP,
+  SUPER_SYNC_OP_TYPES,
+  SUPER_SYNC_IMPORT_REASONS,
+  SUPER_SYNC_SNAPSHOT_REASONS,
+  SUPER_SYNC_SNAPSHOT_OP_TYPES,
+  SUPER_SYNC_ERROR_CODES,
+} from './supersync-http-constants';
+export type { SuperSyncErrorCode } from './supersync-http-constants';
 
 // Upload-only fields must be loose enough to reach per-operation validation,
 // but still bounded so one invalid item cannot amplify logs/responses or make
 // semantic validation walk an arbitrarily large identifier collection.
 const SUPER_SYNC_MAX_INVALID_FIELD_TRANSPORT_LENGTH = 4096;
 const SUPER_SYNC_MAX_INVALID_ENTITY_IDS_TRANSPORT = SUPER_SYNC_MAX_ENTITY_IDS_PER_OP * 2;
-
-export const SUPER_SYNC_OP_TYPES = [
-  'CRT',
-  'UPD',
-  'DEL',
-  'MOV',
-  'BATCH',
-  'SYNC_IMPORT',
-  'BACKUP_IMPORT',
-  'REPAIR',
-] as const;
-
-export const SUPER_SYNC_IMPORT_REASONS = [
-  'PASSWORD_CHANGED',
-  'FILE_IMPORT',
-  'BACKUP_RESTORE',
-  'FORCE_UPLOAD',
-  'SERVER_MIGRATION',
-  'REPAIR',
-] as const;
-
-export const SUPER_SYNC_SNAPSHOT_REASONS = ['initial', 'recovery', 'migration'] as const;
-
-export const SUPER_SYNC_SNAPSHOT_OP_TYPES = [
-  'SYNC_IMPORT',
-  'BACKUP_IMPORT',
-  'REPAIR',
-] as const;
-
-/**
- * Structured error codes the SuperSync server attaches to responses
- * (`errorCode` on non-2xx bodies and per-op upload results).
- *
- * This is the producer/comparison vocabulary shared by server and client —
- * NOT a wire validation set. Response schemas keep `errorCode` as a loose
- * `z.string()` so an older client never rejects an otherwise-valid response
- * just because a newer server introduced a code it does not know yet.
- */
-export const SUPER_SYNC_ERROR_CODES = {
-  // Validation errors (400)
-  VALIDATION_FAILED: 'VALIDATION_FAILED',
-  INVALID_OP_ID: 'INVALID_OP_ID',
-  INVALID_OP_TYPE: 'INVALID_OP_TYPE',
-  INVALID_ENTITY_TYPE: 'INVALID_ENTITY_TYPE',
-  INVALID_ENTITY_ID: 'INVALID_ENTITY_ID',
-  INVALID_PAYLOAD: 'INVALID_PAYLOAD',
-  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
-  INVALID_VECTOR_CLOCK: 'INVALID_VECTOR_CLOCK',
-  INVALID_TIMESTAMP: 'INVALID_TIMESTAMP',
-  MISSING_ENTITY_ID: 'MISSING_ENTITY_ID',
-  INVALID_SCHEMA_VERSION: 'INVALID_SCHEMA_VERSION',
-  INVALID_CLIENT_ID: 'INVALID_CLIENT_ID',
-
-  // Conflict errors (409)
-  CONFLICT_CONCURRENT: 'CONFLICT_CONCURRENT',
-  CONFLICT_SUPERSEDED: 'CONFLICT_SUPERSEDED',
-  REPAIR_STALE: 'REPAIR_STALE',
-  DUPLICATE_OPERATION: 'DUPLICATE_OPERATION',
-  SYNC_IMPORT_EXISTS: 'SYNC_IMPORT_EXISTS',
-
-  // Rate limiting (429)
-  RATE_LIMITED: 'RATE_LIMITED',
-
-  // Storage quota (413)
-  STORAGE_QUOTA_EXCEEDED: 'STORAGE_QUOTA_EXCEEDED',
-
-  // Encryption-related errors (400)
-  ENCRYPTED_OPS_NOT_SUPPORTED: 'ENCRYPTED_OPS_NOT_SUPPORTED',
-  // Encrypted-only ingress gate: upload rejected because a payload is not
-  // flagged encrypted or lacks the ciphertext transport shape.
-  E2EE_REQUIRED: 'E2EE_REQUIRED',
-
-  // Minimum app version (whole request, any non-2xx status). Not sent by any
-  // server yet: clients learn it first so a future floor can show them a
-  // calm "update the app" notice instead of a raw HTTP error. Clients must
-  // keep every pending op pending and never treat it as an auth failure.
-  // See docs/sync-and-op-log/client-version-floor.md.
-  CLIENT_UPDATE_REQUIRED: 'CLIENT_UPDATE_REQUIRED',
-
-  // Server errors (500)
-  INTERNAL_ERROR: 'INTERNAL_ERROR',
-} as const;
-
-export type SuperSyncErrorCode =
-  (typeof SUPER_SYNC_ERROR_CODES)[keyof typeof SUPER_SYNC_ERROR_CODES];
 
 /**
  * Constrains client-generated dedup keys to URL-safe chars so they can be
@@ -352,6 +287,54 @@ export const SuperSyncDeleteAllDataResponseSchema = z
   })
   .passthrough();
 
+/**
+ * Agent task capture (`/api/capture/*`). Only fields the app consumes are
+ * required; the rest pass through (see SuperSyncReplaceTokenResponseSchema).
+ * `status` stays a loose string so a newer server status reads as "nothing
+ * to do" instead of a validation failure.
+ */
+export const SuperSyncCaptureItemSchema = z
+  .object({
+    itemId: z.string().min(1),
+    taskId: z.string().min(1),
+    ciphertext: z.string().min(1),
+    createdAt: z.number(),
+  })
+  .passthrough();
+
+export const SuperSyncCaptureClaimResponseSchema = z
+  .object({
+    status: z.string(),
+    items: z.array(SuperSyncCaptureItemSchema).optional(),
+  })
+  .passthrough();
+
+export const SuperSyncCaptureGrantSchema = z
+  .object({
+    id: z.string().min(1),
+    clientName: z.string(),
+    createdAt: z.number(),
+    lastUsedAt: z.number().nullable(),
+    expiresAt: z.number(),
+    pendingCount: z.number(),
+  })
+  .passthrough();
+
+export const SuperSyncCaptureGrantsResponseSchema = z
+  .object({
+    grants: z.array(SuperSyncCaptureGrantSchema),
+    // Optional: older servers do not send it.
+    otherPendingCount: z.number().optional(),
+  })
+  .passthrough();
+
+export const SuperSyncCaptureTokenResponseSchema = z
+  .object({
+    token: z.string().min(1),
+    grant: SuperSyncCaptureGrantSchema,
+  })
+  .passthrough();
+
 export type SuperSyncOpType = (typeof SUPER_SYNC_OP_TYPES)[number];
 export type SuperSyncImportReason = (typeof SUPER_SYNC_IMPORT_REASONS)[number];
 export type SuperSyncSnapshotReason = (typeof SUPER_SYNC_SNAPSHOT_REASONS)[number];
@@ -388,4 +371,25 @@ export type SuperSyncRestoreSnapshotResponse = z.infer<
 >;
 export type SuperSyncDeleteAllDataResponse = z.infer<
   typeof SuperSyncDeleteAllDataResponseSchema
+>;
+export type SuperSyncCaptureItem = z.infer<typeof SuperSyncCaptureItemSchema>;
+export type SuperSyncCaptureClaimResponse = z.infer<
+  typeof SuperSyncCaptureClaimResponseSchema
+>;
+export type SuperSyncCaptureGrant = z.infer<typeof SuperSyncCaptureGrantSchema>;
+export type SuperSyncCaptureGrantsResponse = z.infer<
+  typeof SuperSyncCaptureGrantsResponseSchema
+>;
+export type SuperSyncCaptureTokenResponse = z.infer<
+  typeof SuperSyncCaptureTokenResponseSchema
+>;
+
+export const SuperSyncCaptureConnectCodeResponseSchema = z
+  .object({
+    code: z.string().regex(/^[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$/),
+    expiresAt: z.number().int().positive(),
+  })
+  .loose();
+export type SuperSyncCaptureConnectCodeResponse = z.infer<
+  typeof SuperSyncCaptureConnectCodeResponseSchema
 >;

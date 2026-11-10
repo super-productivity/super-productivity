@@ -23,6 +23,7 @@ import { openIdleDialog } from '../../idle/store/idle.actions';
 import { selectLastCurrentTask, selectTaskById } from '../../tasks/store/task.selectors';
 import {
   selectFocusModeConfig,
+  selectSoundConfig,
   selectIsFocusModeEnabled,
   selectPomodoroConfig,
 } from '../../config/store/global-config.reducer';
@@ -140,6 +141,7 @@ describe('FocusModeEffects', () => {
             },
             { selector: selectPomodoroConfig, value: { duration: 25 * 60 * 1000 } },
             { selector: selectIsFocusModeEnabled, value: true },
+            { selector: selectSoundConfig, value: { volume: 75 } },
             { selector: selectLastCurrentTask, value: null },
           ],
         }),

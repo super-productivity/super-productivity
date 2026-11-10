@@ -39,8 +39,12 @@ describe('DialogEnterEncryptionPasswordComponent', () => {
     mockSyncLocalStateService = jasmine.createSpyObj('SyncLocalStateService', [
       'hasNothingWorthUploading',
       'warnNothingWorthUploading',
+      'confirmOverwriteOfUndecryptableRemoteOps',
     ]);
     mockSyncLocalStateService.hasNothingWorthUploading.and.resolveTo(false);
+    mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps.and.returnValue(
+      true,
+    );
     mockProviderManager.getActiveProvider.and.returnValue({
       id: SyncProviderId.SuperSync,
     } as any);
@@ -189,6 +193,25 @@ describe('DialogEnterEncryptionPasswordComponent', () => {
       expect(mockMatDialog.open).not.toHaveBeenCalled();
       expect(mockEncryptionPasswordChangeService.changePassword).not.toHaveBeenCalled();
       expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
+
+    it('stops when the user declines deleting undecryptable remote ops', async () => {
+      // A synced device passes the empty-device check, but the clean slate
+      // still deletes the remote ops it could not decrypt.
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of(true),
+      } as MatDialogRef<unknown>);
+      mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps.and.returnValue(
+        false,
+      );
+      component.passwordVal = 'some-password';
+
+      await component.forceOverwrite();
+
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+      expect(mockEncryptionPasswordChangeService.changePassword).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+      expect(component.isLoading()).toBe(false);
     });
   });
 });
