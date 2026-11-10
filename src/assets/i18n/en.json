@@ -134,6 +134,7 @@
           "IMG": "https://example.com/image.png",
           "LINK": "https://example.com"
         },
+        "REPEAT_INSTANCE_HINT": "This is only added to this instance of the recurring task. Links in the recurring task's \"Default notes\" appear on every new instance.",
         "SELECT_TYPE": "Select a type",
         "TYPES": {
           "FILE": "File (opens in default system app)",
