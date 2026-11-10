@@ -265,6 +265,10 @@ for (const deleterSyncsFirst of [true, false]) {
           ...unreachable('Mover', states[1]),
         ]).toEqual([]);
         expect(states[1].note).toEqual(states[0].note);
+        // Decided in #10744: the note is kept and re-homed to the Inbox, and
+        // the project stays deleted. The fresh client is compared to these.
+        expect(states.map((s) => s.note?.projectId)).toEqual([INBOX, INBOX]);
+        expect(states.flatMap((s) => s.projectIds)).not.toContain(projectId);
         return states;
       };
       await check();
