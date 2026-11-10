@@ -62,6 +62,13 @@ on:
       - 'packages/super-sync-server/**'
       - 'packages/shared-schema/**'
 
+  # Called on master image pushes by supersync-docker.yml as a gate for
+  # `supersync:latest`. `inputs` is empty there, so every job uses its defaults.
+  # `github.workflow` is the caller's name there, so the group below becomes
+  # `<caller name>-<ref>`: separate from this workflow's own runs and from the
+  # caller's group.
+  workflow_call:
+
 permissions:
   contents: read
 

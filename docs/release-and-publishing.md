@@ -157,8 +157,15 @@ Center.
 - A plain `master` push builds desktop artifacts, uploads a development Android
   build to the Play `internal` track, and publishes the branch Snap to `edge`.
 - A `master` push that changes SuperSync server inputs publishes
-  `ghcr.io/super-productivity/supersync:latest` and `master-<sha>`. The prune keeps
-  the 15 newest master images and excludes `v*`, so release tags stay available.
+  `ghcr.io/super-productivity/supersync:latest` and `master-<sha>` once the SuperSync
+  server tests and the sync E2E workflow have passed for that commit in the same
+  run (about an hour; a newer image push cancels the run and starts over). A failed
+  or cancelled suite publishes nothing until the run's failed jobs are re-run and
+  pass. Re-run only the newest image run: an older one would move `latest` back to
+  its commit. Dispatching `.github/workflows/supersync-docker.yml` from
+  `master` without a `release_tag` builds the master image without the suites. The
+  prune keeps the 15 newest master images and excludes `v*`, so release tags stay
+  available.
 - Pre-release and manual Apple workflows upload builds without submitting them for
   App Review. Public TestFlight builds come only from the PR label workflow, see
   [Apple release automation](apple-release-automation.md#public-testflight-builds-label-triggered);

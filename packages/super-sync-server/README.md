@@ -97,8 +97,9 @@ nano .env
 > `git checkout <sha>`. The deploy scripts and compose file come from the
 > checkout; migrations run from the image.
 >
-> Right after a push to `master` the image can lag behind it (the build takes
-> from several minutes to about an hour). `deploy.sh` then stops with "image
+> Right after a push to `master` the image lags behind it: `latest` is published
+> only after the server tests and the sync E2E suite pass for that commit (about
+> an hour), and not while they fail. `deploy.sh` then stops with "image
 > revision does not match" before touching the running stack: wait for the
 > [image build](https://github.com/super-productivity/super-productivity/actions/workflows/supersync-docker.yml)
 > to finish and run it again.

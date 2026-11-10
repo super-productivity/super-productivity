@@ -9,7 +9,8 @@ dated where cited — re-measure before relying on them.
 1. **`master` ships to real users. "It's only on master" never downgrades severity.** Every master
    push auto-publishes to the Play **internal track** (`.github/workflows/build-android.yml`,
    `tracks: internal` + `status: completed` → testers' phones auto-update within minutes, on their
-   real data). `ghcr.io/super-productivity/supersync:latest` **is** master (release builds
+   real data). `ghcr.io/super-productivity/supersync:latest` **is** master (published once the server
+   tests and sync E2E pass for the commit, about an hour after the push; release builds
    only add `vX.Y.Z` tags and never move `latest`) — it is the default in `packages/super-sync-server/docker-compose.yml`,
    so self-hosters on `docker compose pull` run master HEAD. Snap `edge` is also published from
    every master push. Only desktop/web/F-Droid/Play-production/Snap-stable are release-gated.
