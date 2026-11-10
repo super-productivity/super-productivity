@@ -243,6 +243,32 @@ describe('Magic Link Registration', () => {
     });
   });
 
+  describe('Verification token expiry', () => {
+    it('should give a new verification token 24 hours', async () => {
+      vi.useFakeTimers({ now: new Date('2026-11-10T12:00:00Z') });
+      try {
+        mockPrisma.user.findUnique.mockResolvedValue(null);
+        mockPrisma.user.create.mockResolvedValue({
+          id: 1,
+          email: testEmail,
+          isVerified: 0,
+        });
+
+        await registerWithMagicLink(testEmail, Date.now());
+
+        expect(mockPrisma.user.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              verificationTokenExpiresAt: BigInt(Date.parse('2026-11-11T12:00:00Z')),
+            }),
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   describe('Existing user handling', () => {
     it('should return the neutral registration response for an existing verified user', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
@@ -384,6 +410,64 @@ describe('Magic Link Registration', () => {
       expect(mockPrisma.pendingPasskeyRegistration.deleteMany).toHaveBeenCalledWith({
         where: { userId: 1 },
       });
+    });
+
+    it('should reject an unknown token without touching any account', async () => {
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(verifyEmail('unknown-token')).rejects.toThrow(
+        'Invalid verification token',
+      );
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should reject an expired magic-link token', async () => {
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 1,
+        verificationToken: 'expired-token',
+        verificationTokenExpiresAt: BigInt(Date.now() - 1),
+      });
+
+      await expect(verifyEmail('expired-token')).rejects.toThrow(
+        'Verification token has expired',
+      );
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should reject an expired pending-passkey token', async () => {
+      mockPrisma.pendingPasskeyRegistration.findUnique.mockResolvedValue({
+        userId: 1,
+        verificationToken: 'expired-pending-token',
+        verificationTokenExpiresAt: BigInt(Date.now() - 1),
+      });
+
+      await expect(verifyEmail('expired-pending-token')).rejects.toThrow(
+        'Verification token has expired',
+      );
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should clear the token on use and refuse it once already claimed', async () => {
+      const token = 'one-time-token';
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 1,
+        verificationToken: token,
+        verificationTokenExpiresAt: BigInt(Date.now() + 60_000),
+      });
+
+      await verifyEmail(token);
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 1, isVerified: 0, verificationToken: token },
+        data: expect.objectContaining({
+          isVerified: 1,
+          verificationToken: null,
+          verificationTokenExpiresAt: null,
+        }),
+      });
+
+      // A concurrent or repeated use finds the token already cleared.
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+      await expect(verifyEmail(token)).rejects.toThrow('Invalid verification token');
     });
   });
 
