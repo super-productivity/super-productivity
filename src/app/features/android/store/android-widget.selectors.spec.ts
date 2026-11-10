@@ -277,30 +277,54 @@ describe('selectAndroidWidgetData', () => {
       ]);
     });
 
-    it('should leave out done tasks', () => {
-      const work = project('work', undefined, ['t1', 't2']);
+    // Native lists a done project task only for five seconds after a checkbox tap
+    // on the widget (WidgetData.PROJECT_DONE_TASK_GRACE_MS). A task just tapped is
+    // among the most recently done, so a few of those keep its row through the
+    // push that applies the tap; the rest would only be filtered out natively.
+    it('should keep the 5 most recently done tasks in their stored place', () => {
+      const doneOn: { [id: string]: number | undefined } = {
+        d1: undefined,
+        d2: 70,
+        d3: 30,
+        d4: 40,
+        d5: 50,
+        d6: 60,
+        d7: 20,
+      };
+      const ids = ['d1', 'o1', 'd2', 'd3', 'd4', 'd5', 'd6', 'o2', 'd7'];
+      const work = project('work', undefined, ids);
       const result = projectsFor(
         [work],
-        [
-          task('t1', { projectId: 'work', isDone: true, doneOn: 1 }),
-          task('t2', { projectId: 'work' }),
-        ],
+        ids.map((id) =>
+          task(id, { projectId: 'work', isDone: id.startsWith('d'), doneOn: doneOn[id] }),
+        ),
       );
-      expect(result[0].tasks.map((t) => t.id)).toEqual(['t2']);
+      // d1 (no doneOn, ranked oldest) and d7 (20) are the two oldest.
+      expect(result[0].tasks.map((t) => [t.id, t.isDone])).toEqual([
+        ['o1', false],
+        ['d2', true],
+        ['d3', true],
+        ['d4', true],
+        ['d5', true],
+        ['d6', true],
+        ['o2', false],
+      ]);
     });
 
     // Done tasks stay in project.taskIds until archived, so a rarely visited
-    // project can lead with many of them; they must not use up the rows.
-    it('should fill 20 rows with open tasks past 20 leading done ones', () => {
+    // project can lead with many of them; they must not use up the open rows.
+    it('should keep 20 open tasks past 20 leading done ones', () => {
       const taskIds = Array.from({ length: 45 }, (_, i) => `t${i + 1}`);
       const large = project('large', undefined, taskIds);
       const result = projectsFor(
         [large],
         taskIds.map((id, i) => task(id, { projectId: 'large', isDone: i < 20 })),
       );
-      expect(result[0].tasks.map((t) => t.id)).toEqual(
+      const listed = result[0].tasks;
+      expect(listed.filter((t) => !t.isDone).map((t) => t.id)).toEqual(
         Array.from({ length: 20 }, (_, i) => `t${i + 21}`),
       );
+      expect(listed.filter((t) => t.isDone).length).toBe(5);
     });
 
     it('should append backlog tasks after regular project tasks', () => {

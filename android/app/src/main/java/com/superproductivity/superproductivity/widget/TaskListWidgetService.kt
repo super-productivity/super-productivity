@@ -46,7 +46,12 @@ private class TaskListRemoteViewsFactory(
             projectIdToOpen = selectedProjectId?.takeIf {
                 WidgetData.projectTitle(json, it) != null
             }
-            WidgetData.parse(json, WidgetDoneQueue.peek(context), projectIdToOpen)
+            WidgetData.parse(
+                json,
+                WidgetDoneQueue.peek(context),
+                projectIdToOpen,
+                WidgetDoneQueue.peekDoneTapTimes(context)
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse widget data", e)
             emptyList()

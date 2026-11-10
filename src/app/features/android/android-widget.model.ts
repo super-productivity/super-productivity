@@ -40,7 +40,11 @@ export interface AndroidWidgetCurrentTask {
 export interface AndroidWidgetProject {
   id: string;
   title: string;
-  /** Up to 20 open tasks: the project list, then its backlog. Never done tasks. */
+  /**
+   * Up to 20 open tasks (the project list, then its backlog) plus the 5 most
+   * recently done, all in stored order. The done ones serve only the native
+   * five-second grace after a widget checkbox tap.
+   */
   tasks: AndroidWidgetTask[];
 }
 

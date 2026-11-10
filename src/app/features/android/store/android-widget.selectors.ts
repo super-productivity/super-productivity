@@ -185,15 +185,24 @@ const orderTodayTasksLikeTodayScreen = (
 const MAX_WIDGET_PROJECT_TASKS = 20;
 
 /**
- * Projects today's tasks, plus the open tasks of every project a widget can be
+ * Done tasks per project kept for the native tap grace (see selectAndroidWidgetData).
+ * Covers several checkbox taps within the five seconds; more would only be
+ * filtered out natively on every push.
+ */
+const MAX_WIDGET_PROJECT_DONE_TASKS = 5;
+
+/**
+ * Projects today's tasks, plus the tasks of every project a widget can be
  * pointed at (#9518), into the exact `widget_data` blob shape, so downstream
  * consumers get referential stability from the selector memoization and cheap
  * change detection via JSON comparison in WidgetDataService.
  *
- * A project widget lists only OPEN tasks, in the project's own order (list, then
- * backlog). Done tasks are left out here rather than filtered natively, so they
- * never take one of the 20 rows. A checkbox tap still shows as checked at once
- * through the native pending-done overlay; the row goes on the next push.
+ * A project list holds up to 20 open tasks in the project's own order (list, then
+ * backlog), plus its few most recently done tasks in their place. Native shows a
+ * done task only for five seconds after the widget's own checkbox tap on it, by
+ * local tap time (WidgetData.PROJECT_DONE_TASK_GRACE_MS). Such a task is among the
+ * newest done, so keeping those lets the row stay checked through the push that
+ * applies the tap. Done tasks never count against the 20 open rows.
  */
 export const selectAndroidWidgetData = createSelector(
   selectTodayTaskIds,
@@ -243,20 +252,35 @@ export const selectAndroidWidgetData = createSelector(
     }
 
     const projects: AndroidWidgetProject[] = visibleProjects.map((project) => {
-      const projectTasks: AndroidWidgetTask[] = [];
+      const listed: Task[] = [];
+      const done: Task[] = [];
+      let openCount = 0;
       for (const taskId of [
         ...(project.taskIds || []),
         ...(project.backlogTaskIds || []),
       ]) {
-        if (projectTasks.length >= MAX_WIDGET_PROJECT_TASKS) {
-          break;
-        }
         const task = taskEntities[taskId];
-        if (task && !task.isDone) {
-          projectTasks.push(toWidgetTask(task));
+        if (!task) {
+          continue;
+        }
+        if (task.isDone) {
+          done.push(task);
+          listed.push(task);
+        } else if (openCount < MAX_WIDGET_PROJECT_TASKS) {
+          openCount++;
+          listed.push(task);
         }
       }
-      return { id: project.id, title: project.title, tasks: projectTasks };
+      const recentlyDone = new Set(
+        sortDoneTasksByDoneDate(done).slice(0, MAX_WIDGET_PROJECT_DONE_TASKS),
+      );
+      return {
+        id: project.id,
+        title: project.title,
+        tasks: listed
+          .filter((task) => !task.isDone || recentlyDone.has(task))
+          .map(toWidgetTask),
+      };
     });
 
     return {

@@ -1,5 +1,6 @@
 package com.superproductivity.superproductivity.widget
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -7,6 +8,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.text.format.DateUtils
 import android.util.Log
 import android.view.View
@@ -18,7 +22,8 @@ import com.superproductivity.superproductivity.R
 
 /**
  * Home screen widget listing Today's tasks, or the open tasks of one project picked
- * per widget instance (#9518), from the `widget_data` KeyValStore snapshot pushed
+ * per widget instance (#9518; a task checked there stays listed for five seconds),
+ * from the `widget_data` KeyValStore snapshot pushed
  * by Angular. Checkbox taps enqueue the task ID in [WidgetDoneQueue]; Angular
  * drains the queue (instantly via the local drain broadcast when alive, otherwise
  * on next resume/cold start).
@@ -44,6 +49,10 @@ class TaskListWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
+        if (intent.action == ACTION_DONE_GRACE_REFRESH) {
+            refreshAll(context)
+            return
+        }
         if (intent.action != ACTION_CLICK) {
             return
         }
@@ -67,6 +76,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 // pulls the IDs from the queue itself (single delivery path).
                 LocalBroadcastManager.getInstance(context)
                     .sendBroadcast(Intent(ACTION_WIDGET_DONE_DRAIN))
+                scheduleDoneGraceRefresh(context, taskId, setDone)
             }
 
             intent.getBooleanExtra(EXTRA_OPEN_APP, false) -> {
@@ -112,6 +122,8 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         const val EXTRA_SET_DONE = "WIDGET_SET_DONE"
         const val EXTRA_OPEN_APP = "WIDGET_OPEN_APP"
         const val EXTRA_OPEN_PROJECT_ID = "WIDGET_OPEN_PROJECT_ID"
+        private const val ACTION_DONE_GRACE_REFRESH =
+            "com.superproductivity.superproductivity.WIDGET_DONE_GRACE_REFRESH"
 
         // Excluded from backup and device transfer (backup_rules.xml,
         // data_extraction_rules.xml): widget ids are not preserved across a restore.
@@ -209,6 +221,84 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         /** Re-renders one widget, e.g. after its project was picked. */
         fun refresh(context: Context, appWidgetId: Int) {
             updateAll(context, AppWidgetManager.getInstance(context), intArrayOf(appWidgetId))
+        }
+
+        /**
+         * Re-renders the widgets once a row checked on a project widget has had its
+         * [WidgetData.PROJECT_DONE_TASK_GRACE_MS], so the row goes even if the app
+         * never pushes again. One alarm per task keeps each tap's own deadline; an
+         * undo cancels it. Nothing is scheduled while no widget shows a project:
+         * Today keeps its done rows, so the refresh would change nothing.
+         *
+         * The non-waking alarm still reaches the provider after process death while
+         * the device is awake. Without exact-alarm access (the default for this app
+         * on Android 14+) it is inexact, so an in-process Handler gives the timely
+         * refresh while the app stays alive. Neither wakes a sleeping device for
+         * this cosmetic update.
+         */
+        private fun scheduleDoneGraceRefresh(context: Context, taskId: String, setDone: Boolean) {
+            val appContext = context.applicationContext
+            val alarmManager = appContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val pendingIntent = doneGraceRefreshPendingIntent(appContext, taskId)
+            if (!setDone) {
+                alarmManager.cancel(pendingIntent)
+                return
+            }
+            val ids = widgetIds(appContext, AppWidgetManager.getInstance(appContext))
+            if (ids.none { selectedProjectId(appContext, it) != null }) {
+                return
+            }
+            val refreshAtMs = WidgetDoneQueue.peekDoneTapTimes(appContext)[taskId]
+                ?.plus(WidgetData.PROJECT_DONE_TASK_GRACE_MS)
+                ?: return
+            val delayMs = (refreshAtMs - System.currentTimeMillis()).coerceAtLeast(0L)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    !alarmManager.canScheduleExactAlarms()
+                ) {
+                    alarmManager.set(AlarmManager.RTC, refreshAtMs, pendingIntent)
+                    postDoneGraceRefresh(appContext, delayMs)
+                } else {
+                    alarmManager.setExact(AlarmManager.RTC, refreshAtMs, pendingIntent)
+                }
+            } catch (e: Exception) {
+                // Exact-alarm access can be revoked between the check and the call.
+                // Try the inexact alarm first, so process death still gets a refresh.
+                Log.e(TAG, "Failed to schedule widget done-grace refresh", e)
+                try {
+                    alarmManager.set(AlarmManager.RTC, refreshAtMs, pendingIntent)
+                } catch (fallback: Exception) {
+                    Log.e(TAG, "Failed to schedule inexact widget done-grace refresh", fallback)
+                }
+                postDoneGraceRefresh(appContext, delayMs)
+            }
+        }
+
+        private fun postDoneGraceRefresh(context: Context, delayMs: Long) {
+            Handler(Looper.getMainLooper()).postDelayed(
+                {
+                    try {
+                        refreshAll(context)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to refresh widget after done grace", e)
+                    }
+                },
+                delayMs
+            )
+        }
+
+        private fun doneGraceRefreshPendingIntent(context: Context, taskId: String): PendingIntent {
+            val intent = Intent(context, TaskListWidgetProvider::class.java).apply {
+                action = ACTION_DONE_GRACE_REFRESH
+                // Only PendingIntent identity, one per task; never logged or shown.
+                data = Uri.parse("widget-done-grace:$taskId")
+            }
+            return PendingIntent.getBroadcast(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
         }
 
         /** Rebuilds each passed widget from one read of the blob. */

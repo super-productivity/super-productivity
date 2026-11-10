@@ -93,18 +93,107 @@ class WidgetDataTest {
         )
     }
 
+    /** Project "p" as Angular pushes it once it has applied a widget tap on t1. */
+    private val projectBlobAfterTapApplied =
+        """{"v":1,"tasks":[],"projects":[{"id":"p","title":"Project","tasks":[{"id":"t1","title":"Tapped","isDone":true},{"id":"t2","title":"Open","isDone":false}]}]}"""
+
     @Test
-    fun overlaysPendingDoneTargetsForSelectedProject() {
-        // The checked row stays until Angular applies the tap and pushes a list
-        // without it: the native side never drops a row on its own.
+    fun checkedProjectRowStaysForFiveSecondsAfterTheTap() {
+        val tappedAt = 1_000L
+        val pending = mapOf("t1" to true)
+        val tapTimes = mapOf("t1" to tappedAt)
+        val checked = listOf(WidgetTask("t1", "Task one", true, "#ff0000"))
+
         assertEquals(
-            listOf(WidgetTask("t1", "Task one", true, "#ff0000")),
+            checked,
+            WidgetData.parse(blob, pending, "p1", tapTimes, nowMs = tappedAt + 1)
+        )
+        assertEquals(
+            checked,
+            WidgetData.parse(blob, pending, "p1", tapTimes, nowMs = tappedAt + 4_999)
+        )
+        assertTrue(
+            WidgetData.parse(blob, pending, "p1", tapTimes, nowMs = tappedAt + 5_000).isEmpty()
+        )
+    }
+
+    @Test
+    fun checkedProjectRowKeepsItsGraceAfterTheAppAppliesTheTap() {
+        // The drain clears the pending target but not the tap time, so the first
+        // push after the tap does not cut the five seconds short.
+        val tapTimes = mapOf("t1" to 1_000L)
+
+        assertEquals(
+            listOf(WidgetTask("t1", "Tapped", true, null), WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(projectBlobAfterTapApplied, emptyMap(), "p", tapTimes, nowMs = 2_000L)
+        )
+        assertEquals(
+            listOf(WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(projectBlobAfterTapApplied, emptyMap(), "p", tapTimes, nowMs = 6_000L)
+        )
+    }
+
+    @Test
+    fun projectTaskCompletedOutsideTheWidgetIsHidden() {
+        // Done in the app or on another device: no local tap time, so no grace.
+        // A synced doneOn is deliberately not used; it is another device's clock.
+        assertEquals(
+            listOf(WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(projectBlobAfterTapApplied, selectedProjectId = "p", nowMs = 2_000L)
+        )
+    }
+
+    @Test
+    fun pendingProjectCompletionWithoutTapTimeIsHidden() {
+        // Only a queue written before tap times existed lacks one. Treating it as
+        // "just now" would never expire.
+        assertTrue(
             WidgetData.parse(
                 blob,
                 pendingDoneTargets = mapOf("t1" to true),
-                selectedProjectId = "p1"
+                selectedProjectId = "p1",
+                nowMs = 2_000L
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun undoingACheckedProjectRowKeepsItListed() {
+        assertEquals(
+            listOf(WidgetTask("t1", "Tapped", false, null), WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(
+                projectBlobAfterTapApplied,
+                pendingDoneTargets = mapOf("t1" to false),
+                selectedProjectId = "p",
+                nowMs = 2_000L
             )
         )
+    }
+
+    @Test
+    fun todayKeepsCompletedTasksWithoutAGracePeriod() {
+        val today = WidgetData.parse(blob, nowMs = Long.MAX_VALUE)
+        assertEquals(listOf("t1", "t2", "t3"), today.map { it.id })
+        assertTrue(today[1].isDone)
+    }
+
+    @Test
+    fun hiddenCompletedTasksDoNotTakeProjectRows() {
+        val done = (1..20).joinToString(",") { """{"id":"done-$it","title":"Done","isDone":true}""" }
+        val open = (1..20).joinToString(",") { """{"id":"open-$it","title":"Open","isDone":false}""" }
+        val json = """{"v":1,"tasks":[],"projects":[{"id":"p","title":"P","tasks":[$done,$open]}]}"""
+
+        val rows = WidgetData.parse(json, selectedProjectId = "p", nowMs = 2_000L).take(20)
+        assertEquals((1..20).map { "open-$it" }, rows.map { it.id })
+    }
+
+    @Test
+    fun doneGraceCoversFiveSecondsFromTheTap() {
+        assertTrue(WidgetData.isInDoneGrace(1_000L, 1_000L))
+        assertTrue(WidgetData.isInDoneGrace(1_000L, 5_999L))
+        assertFalse(WidgetData.isInDoneGrace(1_000L, 6_000L))
+        // A missing or zeroed tap time grants nothing.
+        assertFalse(WidgetData.isInDoneGrace(0L, 1L))
     }
 
     @Test

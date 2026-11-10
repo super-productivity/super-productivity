@@ -25,11 +25,16 @@ project available again restores it.
 Tapping a project widget's header or a row opens that project's task list in
 the app. Today widgets keep opening the app's default view.
 
-Project widgets show open tasks only: the project list followed by the backlog,
-up to the 20-row limit. Angular leaves done tasks out of the project lists, so
-they never use up rows. A checkbox tap shows as checked at once through the
-pending-done overlay; the row disappears with the next snapshot push, after the
-app has applied the tap. Today widgets keep listing completed tasks.
+Project widgets list open tasks: the project list followed by the backlog, up
+to the 20-row limit. A task checked on the widget stays listed, checked, for
+five seconds, so the tap is confirmed and a second tap undoes it; then the row
+goes, whether or not the app is running. The five seconds count from the local
+tap time in `WidgetDoneQueue`, never from a synced `doneOn`, which carries
+another device's clock. Tasks completed elsewhere are not listed. Angular adds
+each project's five most recently done tasks to its list for this, and they do
+not count against the open rows; an alarm (or, without exact-alarm access, an
+in-process timer backed by an inexact alarm) re-renders the widget when the
+five seconds end. Today widgets keep listing completed tasks.
 
 A project tap is handed to Angular through a pending entry in
 `task_list_widget`. It expires after a minute, because Android can block a row
@@ -84,8 +89,8 @@ until the app writes a current snapshot.
 - No undo or per-task deep link. Quick add takes a title only (short syntax
   covers project, tags and dates) and always lands in Today, also from a
   project widget.
-- A project widget lists open tasks only; a task checked there disappears once
-  the app applies the tap. Undo it from the app's done list.
+- A project widget lists open tasks; a task checked there disappears after five
+  seconds. Undo it later from the app's done list.
 - Inbox, archived projects and projects hidden from the menu are not
   selectable.
 - Native widget chrome is English-only and uses fixed styling.

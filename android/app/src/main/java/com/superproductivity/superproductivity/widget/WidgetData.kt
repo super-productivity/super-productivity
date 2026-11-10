@@ -80,34 +80,51 @@ object WidgetData {
     const val PROJECT_OPEN_REQUEST_TTL_MS = 60_000L
 
     /**
+     * How long a project widget keeps a task checked on it before the row goes, so
+     * the tap is visibly confirmed and can be undone with a second tap.
+     */
+    const val PROJECT_DONE_TASK_GRACE_MS = 5_000L
+
+    /**
      * @param pendingDoneTargets per-task done-state targets queued via
      * [WidgetDoneQueue] but not yet applied by Angular — overlaid so a checkbox
      * tap is reflected immediately even while the app process is dead.
      * @param selectedProjectId the project this widget instance shows, or null for
      * Today. An id missing from the snapshot (deleted, archived or hidden project,
      * or a blob written before `projects` existed) falls back to Today.
+     * @param doneTapTimes when this device's widget checkbox last marked each task
+     * done ([WidgetDoneQueue.peekDoneTapTimes]). Local instants only: a synced
+     * `doneOn` comes from whichever device completed the task, with its clock.
      */
     fun parse(
         json: String,
         pendingDoneTargets: Map<String, Boolean> = emptyMap(),
-        selectedProjectId: String? = null
+        selectedProjectId: String? = null,
+        doneTapTimes: Map<String, Long> = emptyMap(),
+        nowMs: Long = System.currentTimeMillis()
     ): List<WidgetTask> {
         val root = JSONObject(json)
         if (root.optInt("v", -1) != SUPPORTED_VERSION) {
             return emptyList()
         }
-        // Project lists hold open tasks only (Angular leaves done ones out), so a
-        // checked row there shows only until the next push applies the tap.
-        val tasksArray = selectedProjectId
+        val projectTasks = selectedProjectId
             ?.let { usableProject(root, it) }
             ?.optJSONArray("tasks")
-            ?: root.optJSONArray("tasks")
-            ?: return emptyList()
+        val tasksArray = projectTasks ?: root.optJSONArray("tasks") ?: return emptyList()
         val projectColors = root.optJSONObject("projectColors")
         val result = mutableListOf<WidgetTask>()
         for (i in 0 until tasksArray.length()) {
             val task = tasksArray.getJSONObject(i)
             val id = task.getString("id")
+            val isDone = pendingDoneTargets[id] ?: task.optBoolean("isDone", false)
+            // Today keeps its done tasks. A project widget shows one only for five
+            // seconds after this widget's own checkbox tap, as confirmation; the
+            // recent done tasks Angular adds to project lists exist just for that.
+            if (projectTasks != null && isDone &&
+                !isInDoneGrace(doneTapTimes[id] ?: 0L, nowMs)
+            ) {
+                continue
+            }
             // isNull guard: optString maps JSON null to the literal string "null"
             val projectId =
                 if (task.isNull("projectId")) null else task.optString("projectId", null)
@@ -118,7 +135,7 @@ object WidgetData {
                 WidgetTask(
                     id = id,
                     title = task.getString("title"),
-                    isDone = pendingDoneTargets[id] ?: task.optBoolean("isDone", false),
+                    isDone = isDone,
                     projectColor = color
                 )
             )
@@ -152,6 +169,10 @@ object WidgetData {
         }
         return usableProject(root, projectId)?.getString("title")
     }
+
+    /** Whether a done tap at [tappedAtMs] (0 = unknown) still keeps its row listed. */
+    fun isInDoneGrace(tappedAtMs: Long, nowMs: Long): Boolean =
+        tappedAtMs > 0L && nowMs < tappedAtMs + PROJECT_DONE_TASK_GRACE_MS
 
     /** Whether a project-open request queued at [queuedAtMs] may still be acted on. */
     fun isProjectOpenRequestFresh(queuedAtMs: Long, nowMs: Long): Boolean =
