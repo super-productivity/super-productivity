@@ -128,6 +128,8 @@ const forceOverwrite = async (
 };
 
 test.describe('@webdav First change after Force Overwrite reaches every device (#11651)', () => {
+  // Three devices reproduce the bug; two were clean before the fix and stay
+  // in as a control for the common case.
   for (const withThirdDevice of [true, false]) {
     test(`rename after force overwrite syncs (${withThirdDevice ? 'three' : 'two'} devices)`, async ({
       browser,
