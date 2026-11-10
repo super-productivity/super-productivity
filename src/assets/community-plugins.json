@@ -191,7 +191,12 @@
     "url": "https://github.com/abhilesh/sp-vikunja",
     "author": "abhilesh",
     "authorUrl": "https://github.com/abhilesh",
-    "id": "vikunja-integration"
+    "id": "vikunja-integration",
+    "release": {
+      "version": "0.2.1",
+      "downloadUrl": "https://github.com/abhilesh/sp-vikunja/releases/download/v0.2.1/vikunja-super-productivity-plugin-0.2.1.zip",
+      "sha256": "28df872f8439954dfd1c78dd9e747eed9d2b3de460fbfc52a86e103849f7eca6"
+    }
   },
   {
     "name": "YouGile Integration (SuperGile)",
