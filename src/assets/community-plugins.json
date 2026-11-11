@@ -288,5 +288,18 @@
       "downloadUrl": "https://github.com/Jontata/deadlines-plugin/releases/download/v0.0.1/deadlines-plugin-0.0.1.zip",
       "sha256": "e7b147b25dbda9b232fff0bdb51b773a11a528d647e93bc34e2bf5e02d2ec6b7"
     }
+  },
+  {
+    "name": "Gamify",
+    "shortDescription": "Earn XP and levels for tasks and habits, keep daily-goal and habit streaks, and lose XP for overdue tasks and missed habits.",
+    "url": "https://github.com/ptrckmgl/sp-gamify",
+    "author": "ptrckmgl",
+    "authorUrl": "https://github.com/ptrckmgl",
+    "id": "sp-gamify",
+    "release": {
+      "version": "1.2.3",
+      "downloadUrl": "https://github.com/ptrckmgl/sp-gamify/releases/download/v1.2.3/sp-gamify.zip",
+      "sha256": "30e2134d2cb99ea58039c7cca4cc5e6a060a9fa9653c3e6570b073254e883272"
+    }
   }
 ]
