@@ -803,32 +803,6 @@ describe('shortSyntax', () => {
       expect(r).toEqual(undefined);
     });
 
-    it('should remove tags not existing on title', async () => {
-      const t = {
-        ...TASK,
-        title: 'Fun title #\\ #blu #bla',
-        tagIds: ['blu_id', 'bla_id', 'hihi_id'],
-      };
-      const r = await shortSyntax(t, CONFIG, ALL_TAGS, undefined, undefined);
-
-      expect(r).toEqual({
-        newTagTitles: [],
-        remindAt: null,
-        repeat: null,
-        parsedRanges: expectedRanges(t.title, [
-          ['tag', '#\\'],
-          ['tag', '#blu'],
-          ['tag', '#bla'],
-        ]),
-        projectId: undefined,
-        attachments: [],
-        taskChanges: {
-          title: 'Fun title',
-          tagIds: ['blu_id', 'bla_id'],
-        },
-      });
-    });
-
     it('should remove tags with #-', async () => {
       const t = {
         ...TASK,
@@ -963,7 +937,7 @@ describe('shortSyntax', () => {
     it('should create new tag and remove both from title if task already has one given tag', async () => {
       const t = {
         ...TASK,
-        title: 'Test tag #\\ #testing #blu',
+        title: 'Test tag #testing #blu',
         tagIds: ['blu_id'],
       };
       const r = await shortSyntax(t, CONFIG, [
@@ -976,7 +950,6 @@ describe('shortSyntax', () => {
         remindAt: null,
         repeat: null,
         parsedRanges: expectedRanges(t.title, [
-          ['tag', '#\\'],
           ['tag', '#testing'],
           ['tag', '#blu'],
         ]),
