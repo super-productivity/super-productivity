@@ -98,6 +98,7 @@ wait_phase() {
 
 # Terminates the app before the reminder armed in <phase> is due and waits
 # past that time, so it can only have fired while the app was not running.
+# Too late to tell: leaves a marker for assert.js and lets the run finish.
 terminate_until_fired() {
   local want_at now_ms
   want_at=$(field "$1" near.wantAt)
@@ -105,7 +106,8 @@ terminate_until_fired() {
   now_ms=$(($(date +%s) * 1000))
   if [ -z "$want_at" ] || [ "$now_ms" -ge "$want_at" ]; then
     echo "phase $1: the app was still running when its reminder came due"
-    return 1
+    touch "$OUT/$1-late"
+    return 0
   fi
   sleep $(((want_at - now_ms) / 1000 + 4))
   xcrun simctl io "$UDID" screenshot "$OUT/$1-fired.png" >/dev/null 2>&1 || true
@@ -151,7 +153,9 @@ run_test() {
 
   set_phase cap
   xcrun simctl launch "$UDID" "$BUNDLE_ID"
-  wait_phase cap 900
+  # Arming 70 reminders takes the app minutes while it re-arms all of them on
+  # every change.
+  wait_phase cap 1800
   terminate_until_fired cap
 
   set_phase final

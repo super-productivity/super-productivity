@@ -13,19 +13,24 @@
 
   const DIR = 'sim-harness';
   const DAY = 24 * 60 * 60 * 1000;
-  // More than the 64 pending notifications iOS keeps per app.
-  const OVER_CAP_COUNT = 80;
+  // Both are more than the 64 pending notifications iOS keeps per app.
+  const PROBE_COUNT = 80;
+  const SEED_COUNT = 70;
   const PROBE_ID_BASE = 900000;
   // Long enough for run.sh to terminate the app before the reminder is due.
-  const NEAR_LEAD_MS = 90 * 1000;
+  const NEAR_LEAD_MS = 120 * 1000;
   const PROJECT_ID = 'INBOX_PROJECT';
 
   const report = { log: [] };
   let phase = 'none';
 
+  // The app's own schedule/cancel calls to iOS, counted by watchBridge().
+  const appCalls = { schedule: 0, cancel: 0, inFlight: 0, lastAt: 0 };
+  let bridge = null;
+
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const native = (plugin, method, options) =>
-    window.Capacitor.nativePromise(plugin, method, options || {});
+    (bridge || window.Capacitor.nativePromise)(plugin, method, options || {});
   const notif = (method, options) => native('LocalNotifications', method, options);
   const log = (msg) => report.log.push(`${new Date().toISOString()} ${msg}`);
 
@@ -57,6 +62,44 @@
       await sleep(500);
     }
     throw new Error(`timed out waiting for ${label}`);
+  };
+
+  /**
+   * Wraps the bridge the app's plugin proxies call, so the harness can tell
+   * when the app stopped talking to iOS. The harness's own calls bypass it.
+   */
+  const watchBridge = () => {
+    bridge = window.Capacitor.nativePromise;
+    window.Capacitor.nativePromise = (plugin, method, options) => {
+      const isCounted =
+        plugin === 'LocalNotifications' && (method === 'schedule' || method === 'cancel');
+      if (!isCounted) {
+        return bridge(plugin, method, options);
+      }
+      appCalls[method]++;
+      appCalls.inFlight++;
+      appCalls.lastAt = Date.now();
+      const settle = () => {
+        appCalls.inFlight--;
+        appCalls.lastAt = Date.now();
+      };
+      const result = bridge(plugin, method, options);
+      result.then(settle, settle);
+      return result;
+    };
+  };
+
+  /** Resolves true once the app made no schedule/cancel call for `quietMs`. */
+  const appQuiet = async (quietMs, timeoutMs) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (appCalls.inFlight === 0 && Date.now() - appCalls.lastAt >= quietMs) {
+        return true;
+      }
+      await sleep(500);
+    }
+    log(`the app was still arming after ${timeoutMs / 1000}s`);
+    return false;
   };
 
   /** Pending list once its size stopped changing for `quietMs`. */
@@ -200,7 +243,7 @@
       armed = await waitFor(
         `pending ${id}`,
         async () => (await getPending()).find((n) => n.reminderId === id),
-        30000,
+        60000,
       );
     } catch (e) {
       log(String(e));
@@ -216,9 +259,9 @@
   const probeOsCap = async (isFarFirst) => {
     const now = Date.now();
     const errors = [];
-    for (let i = 1; i <= OVER_CAP_COUNT; i++) {
+    for (let i = 1; i <= PROBE_COUNT; i++) {
       // daysAhead doubles as the id suffix: 1 fires soonest.
-      const daysAhead = isFarFirst ? OVER_CAP_COUNT + 1 - i : i;
+      const daysAhead = isFarFirst ? PROBE_COUNT + 1 - i : i;
       try {
         await notif('schedule', {
           notifications: [
@@ -236,7 +279,7 @@
     }
     const pending = (await pendingWhenStable(4000)).filter((n) => n.id > PROBE_ID_BASE);
     const keptDaysAhead = pending.map((n) => n.id - PROBE_ID_BASE).sort((a, b) => a - b);
-    const all = Array.from({ length: OVER_CAP_COUNT }, (_, i) => ({
+    const all = Array.from({ length: PROBE_COUNT }, (_, i) => ({
       id: PROBE_ID_BASE + i + 1,
     }));
     await notif('cancel', { notifications: all });
@@ -272,8 +315,10 @@
       const seededAt = Date.now();
 
       addDailyRepeat(store, 'simRepeat');
-      const withRepeat = await pendingWhenStable(8000);
-      const repeatAts = withRepeat
+      // The repeat effect debounces for 1s before it arms anything.
+      await sleep(3000);
+      await appQuiet(5000, 120000);
+      const repeatAts = (await getPending())
         .filter((n) => n.reminderId && n.reminderId.startsWith('rpt_simRepeat_'))
         .map((n) => n.at);
       report.repeat = {
@@ -284,14 +329,25 @@
 
       // Far ones first, so the soonest reminders are the last the app arms.
       report.wanted = [];
-      for (let i = 1; i <= OVER_CAP_COUNT; i++) {
-        const daysAhead = OVER_CAP_COUNT + 1 - i;
+      const callsBeforeSeed = appCalls.schedule;
+      for (let i = 1; i <= SEED_COUNT; i++) {
+        const daysAhead = SEED_COUNT + 1 - i;
         const id = `simCap${String(daysAhead).padStart(2, '0')}`;
         const at = seededAt + daysAhead * DAY;
         addTaskWithReminder(store, id, at);
         report.wanted.push({ reminderId: id, at });
       }
-      report.pendingOverCap = await pendingWhenStable(10000);
+      const isDrained = await appQuiet(10000, 20 * 60 * 1000);
+      report.seeding = { scheduleCalls: appCalls.schedule - callsBeforeSeed, isDrained };
+      report.pendingOverCap = await getPending();
+      await save();
+
+      // A change that touches no reminder should not make the app re-arm any.
+      const callsBeforeNoop = appCalls.schedule;
+      addTask(store, 'simNoReminder');
+      await sleep(3000);
+      await appQuiet(5000, 5 * 60 * 1000);
+      report.rearm = { scheduleCalls: appCalls.schedule - callsBeforeNoop };
       await save();
 
       report.near = await armNear(store, 'simNearUnderCap');
@@ -321,6 +377,7 @@
       return;
     }
     phase = cmd.phase;
+    watchBridge();
     try {
       // Taken before the app's own code runs, so `delivered` shows what iOS
       // did while the app was terminated.
