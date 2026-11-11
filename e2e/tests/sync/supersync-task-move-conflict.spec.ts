@@ -6,6 +6,8 @@ import {
   closeClient,
   createProjectReliably,
   waitForTask,
+  deleteTask,
+  getLocalOpLogSummary,
   recordTaskTimeDelta,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -301,4 +303,135 @@ test.describe('@supersync a task move crossing an edit on another device', () =>
       }
     }
   }
+});
+
+/**
+ * The ids a project lists (task list or backlog) that are no task: the app
+ * reports "Missing task data for project" for one, repairs the dataset and
+ * uploads a full-state REPAIR.
+ */
+const danglingProjectTaskIds = async (client: SimulatedE2EClient): Promise<string[]> =>
+  client.page.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        type Subscription = { unsubscribe: () => void };
+        type Slice = { entities?: Record<string, Record<string, unknown> | undefined> };
+        const store = (
+          window as unknown as {
+            __e2eTestHelpers?: {
+              store?: { subscribe: (next: (state: unknown) => void) => Subscription };
+            };
+          }
+        ).__e2eTestHelpers?.store;
+        if (!store) {
+          reject(new Error('E2E store helper is unavailable'));
+          return;
+        }
+        const ref: { current?: Subscription } = {};
+        ref.current = store.subscribe((state) => {
+          window.setTimeout(() => ref.current?.unsubscribe());
+          const root = state as Record<string, Slice | undefined>;
+          const tasks = (root.tasks ?? root.task)?.entities ?? {};
+          const projects = Object.values((root.projects ?? root.project)?.entities ?? {});
+          resolve(
+            projects.flatMap((project) =>
+              [
+                ...((project?.taskIds as string[] | undefined) ?? []),
+                ...((project?.backlogTaskIds as string[] | undefined) ?? []),
+              ].filter((id) => !tasks[id]),
+            ),
+          );
+        });
+      }),
+  );
+
+test.describe('@supersync a task deleted after its move travelled as a field row', () => {
+  /**
+   * B edits the task's notes, A moves it later and resolves the conflict, so
+   * the move reaches B as a `projectId` row (#11685). B then deletes the task.
+   * A device that replays the row and the delete in one batch (a new device,
+   * or B after a restart) skips the row of the deleted task, and the delete
+   * used to clear only the project its payload named: the dead id stayed in
+   * the project the task had left.
+   */
+  test('leaves no dead task id in a project list on any device', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(300000);
+    const prefix = `MoveThenDelete-${Date.now()}`;
+    const target = `Target-${prefix}`;
+    const clients: SimulatedE2EClient[] = [];
+
+    try {
+      const syncConfig = getSuperSyncConfig(await createTestUser(testRunId));
+      const clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      clients.push(clientA);
+      await clientA.sync.setupSuperSync(syncConfig);
+      await clientA.workView.addTask(prefix);
+      await waitForTask(clientA.page, prefix);
+      await createProjectReliably(clientA.page, target);
+      await clientA.sync.syncAndWait();
+
+      const clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      clients.push(clientB);
+      await clientB.sync.setupSuperSync(syncConfig);
+      await clientB.sync.syncAndWait();
+      await waitForTask(clientB.page, prefix);
+      for (const client of clients) {
+        await blockBackgroundSync(client);
+      }
+
+      await onTask(clientB, prefix, { rename: `${prefix} renamed` });
+      await clientA.page.waitForTimeout(50);
+      await onTask(clientA, prefix, { moveTo: target });
+      await sync(clientB);
+      await sync(clientA);
+      await sync(clientB);
+      await expect
+        .poll(async () => (await onTask(clientB, prefix)).listedIn, { timeout: 30000 })
+        .toEqual([target]);
+
+      // B deletes the task where it now lives, then uploads the delete.
+      await clientB.page.goto('/#/tag/TODAY/work');
+      await waitForTask(clientB.page, prefix);
+      await blockBackgroundSync(clientB);
+      await deleteTask(clientB, prefix);
+      await sync(clientB);
+      await sync(clientA);
+
+      // A new device replays the whole history in one download.
+      const clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
+      clients.push(clientC);
+      await clientC.sync.setupSuperSync(syncConfig);
+      await clientC.sync.syncAndWait();
+
+      // B replays its own log on a restart.
+      await clientB.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+      await waitForAppReady(clientB.page);
+
+      await expect
+        .poll(
+          async () => ({
+            A: await danglingProjectTaskIds(clientA),
+            B: await danglingProjectTaskIds(clientB),
+            C: await danglingProjectTaskIds(clientC),
+          }),
+          { timeout: 30000 },
+        )
+        .toEqual({ A: [], B: [], C: [] });
+      // An auto-repair would have cleaned the lists: no device may hold one.
+      for (const client of clients) {
+        const repairs = (await getLocalOpLogSummary(client.page)).filter(
+          ({ opType }) => opType === 'REPAIR',
+        );
+        expect(repairs, `REPAIR ops on ${client.clientName}`).toEqual([]);
+      }
+    } finally {
+      for (const client of clients) {
+        await closeClient(client);
+      }
+    }
+  });
 });
