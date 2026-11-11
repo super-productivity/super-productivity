@@ -406,6 +406,9 @@ describe('ScheduleComponent', () => {
   });
 
   describe('openDayView', () => {
+    // it saves the view like selectTimeView; later specs must not inherit it
+    afterEach(() => localStorage.removeItem('SELECTED_TIME_VIEW'));
+
     it('opens the day view on a later day', () => {
       component.openDayView('2026-01-22');
 
