@@ -1760,8 +1760,8 @@
   },
   {
     "class": "move-crossing-repair",
-    "ref": "#11686 (harness only, untriaged)",
-    "name": "a move and a delete crossing a time delta end in a dev error and a REPAIR",
+    "ref": "fixed by #11687 for #11686 (regression pin)",
+    "name": "a move and a delete crossing a time delta leave no dead id in a project list",
     "steps": [
       {
         "d": "B",
@@ -1776,17 +1776,13 @@
         "a": ["deleteTask", "t1"]
       }
     ],
-    "primary": "full-state-op:REPAIR",
-    "signatures": [
-      "dev-error:Throw an error for error? ––– Missing task data for project",
-      "full-state-op:REPAIR"
-    ],
+    "signatures": [],
     "rejections": []
   },
   {
     "class": "move-crossing-repair",
-    "ref": "#11686 (harness only, untriaged)",
-    "name": "a REPAIR after two moves crossing deletes loses a task added later",
+    "ref": "fixed by #11687 for #11686 (regression pin)",
+    "name": "two moves crossing deletes need no REPAIR and keep a task added later",
     "steps": [
       {
         "d": "B",
@@ -1822,15 +1818,10 @@
         "s": 1
       }
     ],
-    "primary": "lost-entity:task",
-    "signatures": [
-      "dev-error:Throw an error for error? ––– Missing task data for project",
-      "full-state-op:REPAIR",
-      "lost-entity:task"
-    ],
+    "signatures": [],
     "rejections": [
-      "CONFLICT_CONCURRENT [Task Shared] deleteTask",
-      "CONFLICT_CONCURRENT [Task Shared] moveToOtherProject"
+      "CONFLICT_CONCURRENT [TASK] LWW Update",
+      "CONFLICT_CONCURRENT [Task Shared] deleteTask"
     ]
   },
   {

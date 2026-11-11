@@ -436,6 +436,10 @@ on master `108534af`: the move, the rename or the tracked time is lost, and in
 spec `e2e/tests/sync/supersync-task-move-conflict.spec.ts`). The other five
 rows are tracked, untriaged, in
 [#11686](https://github.com/super-productivity/super-productivity/issues/11686).
+Both `move-crossing-repair` rows pass in the harness since `deleteTask` removes
+the task from every project list instead of the payload's project only (found
+in review of the #11685 fix, whose `projectId` rows reach the same gap; spec
+`task-move-row-then-delete.integration.spec.ts`). Not reproduced in the app.
 
 The table shows harness outcomes on the fake SuperSync server. By M4 they become
 issues after the slice merges, each needing a real-app reproduction and its
