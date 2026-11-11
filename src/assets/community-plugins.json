@@ -297,9 +297,9 @@
     "authorUrl": "https://github.com/ptrckmgl",
     "id": "sp-gamify",
     "release": {
-      "version": "1.2.3",
-      "downloadUrl": "https://github.com/ptrckmgl/sp-gamify/releases/download/v1.2.3/sp-gamify.zip",
-      "sha256": "30e2134d2cb99ea58039c7cca4cc5e6a060a9fa9653c3e6570b073254e883272"
+      "version": "1.2.4",
+      "downloadUrl": "https://github.com/ptrckmgl/sp-gamify/releases/download/v1.2.4/sp-gamify.zip",
+      "sha256": "88d4d1eb6792e370321a2aa47284135d75fba80d500a73316a658af4b1441d9d"
     }
   }
 ]
