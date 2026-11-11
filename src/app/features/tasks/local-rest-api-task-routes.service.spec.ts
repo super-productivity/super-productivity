@@ -596,7 +596,6 @@ describe('LocalRestApiTaskRoutesService', () => {
         // This must not become applyShortSyntax: its full task snapshot breaks
         // field-level conflict planning for concurrent edits.
         expect(actions.map((action) => action.type)).toEqual([
-          TaskSharedActions.updateTask.type,
           TaskSharedActions.setDeadline.type,
           TaskSharedActions.updateTask.type,
         ]);

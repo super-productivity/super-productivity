@@ -855,6 +855,13 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
           delete writableFields[field];
         }
         const changes = mapLegacyPlannedAt(writableFields);
+        const explicitRemindAt = changes.remindAt;
+        // A deadline set may auto-plan Today and clear the reminder. Apply the
+        // explicit value only afterward, avoiding an immediately overwritten
+        // update operation in the op-log.
+        if (deadlineResolution.change?.type === 'set' && explicitRemindAt !== undefined) {
+          delete changes.remindAt;
+        }
 
         let isMoveOnly = false;
         if (hasOwn(changes, 'projectId')) {
@@ -915,7 +922,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
                 isIgnoreShortSyntax: true,
               }),
             );
-          } else if (hasOwn(changes, 'dueWithTime') && !hasOwn(changes, 'remindAt')) {
+          } else if (hasOwn(changes, 'dueWithTime') && explicitRemindAt === undefined) {
             this._featureBridge.updateTaskWithDueTime(task, changes);
           } else {
             this._taskService.update(taskId, changes);
@@ -925,7 +932,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
           this._dispatchDeadlineChange(
             taskId,
             deadlineResolution.change,
-            changes.remindAt,
+            explicitRemindAt,
           );
         }
         return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
