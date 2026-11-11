@@ -14,6 +14,13 @@
 @include meta.load-css('styles/util');
 @include meta.load-css('styles/components/components');
 
+// Astryx (Meta design system) tokens + skin, loaded last so it wins.
+@import '@fontsource/figtree/400.css';
+@import '@fontsource/figtree/500.css';
+@import '@fontsource/figtree/600.css';
+@import 'styles/astryx_tokens.css';
+@import 'styles/astryx-skin';
+
 * {
   //box-shadow: none !important;
   user-select: none;

@@ -1,0 +1,252 @@
+// -----------------------------------------------------------------------------
+// Astryx skin for Super Productivity
+//
+// The app is Angular + Angular Material; Astryx (@astryxdesign/core) is React 19
+// + StyleX, so its components cannot be mounted here. What ports cleanly is the
+// part that defines the look: the Astryx Neutral theme tokens
+// (`src/styles/astryx_tokens.css`, extracted verbatim from
+// `@astryxdesign/theme-neutral@0.7.14`) remapped onto this app's own token layer,
+// plus a thin pass over the chrome the tokens cannot reach.
+//
+// `light-dark()` in the token file resolves against `color-scheme`, and this app
+// switches modes with `body.isDarkTheme`, so the scheme is pinned there instead
+// of following the OS.
+// -----------------------------------------------------------------------------
+
+body {
+  color-scheme: light;
+}
+
+body.isDarkTheme {
+  color-scheme: dark;
+}
+
+body,
+body.isDarkTheme {
+  // Astryx type: Figtree first, then the platform stack.
+  --font-primary-stack: var(--font-family-body);
+
+  // Surfaces: Astryx has a flat body and one raised card tone, so the five-step
+  // SP ramp collapses onto body / muted / card / surface / popover.
+  --surface-0: var(--color-background-body);
+  --surface-1: var(--color-background-body);
+  --surface-2: var(--color-background-card);
+  --surface-3: var(--color-background-surface);
+  --surface-4: var(--color-background-popover);
+
+  --bg-overlay: var(--color-background-muted);
+
+  // Ink
+  --ink-strong: var(--color-text-primary);
+  --ink: var(--color-text-primary);
+  --ink-muted: var(--color-text-secondary);
+
+  // Hairlines: Astryx borders are alpha-black / alpha-white, never solid grey.
+  --separator: var(--color-border);
+  --divider: var(--color-border);
+  --extra-border-color: var(--color-border);
+  --card-border-color: var(--color-border);
+
+  // Accent: the neutral theme's accent is ink, so primary actions read as
+  // black (light) / white (dark) instead of the Material blue.
+  --brand: var(--color-accent);
+  --focus-ring: var(--color-accent);
+  --palette-primary-600: var(--color-accent);
+  --palette-primary-400: var(--color-accent);
+
+  // Radius scale: Astryx element 10px / container 12px / page 28px.
+  --radius-xs: var(--radius-inner);
+  --radius-sm: var(--radius-inner);
+  --radius-md: var(--radius-element);
+  --radius-lg: var(--radius-container);
+  --radius-xl: var(--radius-page);
+  --card-border-radius: var(--radius-container);
+
+  // Elevation: Astryx ships three layers; use them instead of Material's.
+  --shadow-1: var(--shadow-low);
+  --shadow-2: var(--shadow-med);
+  --shadow-3: var(--shadow-high);
+
+  font-family: var(--font-family-body);
+  letter-spacing: 0;
+}
+
+// -----------------------------------------------------------------------------
+// Chrome the tokens cannot reach
+// -----------------------------------------------------------------------------
+
+body {
+  // Side nav: one card surface, hairline edge, no drop shadow.
+  .nav-sidenav {
+    background: var(--color-background-card);
+    border-inline-end: 1px solid var(--color-border);
+    box-shadow: none;
+  }
+
+  .nav-item {
+    border-radius: var(--radius-element);
+    margin-inline: 4px;
+
+    &:hover {
+      background: var(--color-background-gray);
+    }
+
+    &.is-active,
+    &.active {
+      background: var(--color-accent);
+      color: var(--color-text-inverse, var(--color-background-body));
+
+      * {
+        color: inherit;
+      }
+    }
+  }
+
+  .nav-separator {
+    background: var(--color-border);
+  }
+
+  // Task rows: hover/selection come from the Astryx interaction surfaces.
+  task .box {
+    border-radius: var(--radius-element);
+
+    &:hover {
+      background: var(--color-background-muted);
+    }
+  }
+
+  // Planner columns: hairline separators, Astryx heading rhythm.
+  planner-day {
+    border-inline-end: 1px solid var(--color-border);
+
+    header {
+      font-family: var(--font-family-heading);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-primary);
+    }
+  }
+
+  // Material buttons and inputs: Astryx element radius, weight and focus ring.
+  .mat-mdc-unelevated-button,
+  .mat-mdc-raised-button,
+  .mat-mdc-outlined-button,
+  .mat-mdc-button {
+    border-radius: var(--radius-element);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: 0;
+  }
+
+  .mat-mdc-outlined-button {
+    border-color: var(--color-border-emphasized);
+  }
+
+  .mat-mdc-icon-button {
+    border-radius: var(--radius-full);
+  }
+
+  .mat-mdc-text-field-wrapper,
+  .mat-mdc-form-field .mdc-text-field--filled {
+    border-radius: var(--radius-element);
+    background: var(--color-background-surface);
+  }
+
+  .mat-mdc-card,
+  .mat-mdc-dialog-surface,
+  .mat-mdc-menu-panel,
+  .mat-mdc-select-panel {
+    border-radius: var(--radius-container);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-med);
+    background: var(--color-background-popover);
+  }
+
+  .mat-mdc-chip {
+    border-radius: var(--radius-full);
+    background: var(--color-background-gray);
+  }
+
+  // Focus is Astryx's 2px ink ring, offset — never Material's purple halo.
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  // Slim scrollbars in the Astryx border tone.
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-emphasized) transparent;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Palette ladder
+//
+// The blue that survived the token remap comes from the `angular-material-css-vars`
+// ladder (`--palette-primary-*`, `--c-primary`, `--mdc-theme-primary`), which every
+// Material button, chip and tooltip reads directly. Astryx Neutral has no product
+// hue at all: the accent is ink, and emphasis comes from tone and elevation. So the
+// whole ladder is flattened onto the neutral ramp and contrast stays black/white.
+// -----------------------------------------------------------------------------
+
+body,
+body.isDarkTheme {
+  --palette-primary-50: var(--color-background-muted);
+  --palette-primary-100: var(--color-background-gray);
+  --palette-primary-200: var(--color-border-emphasized);
+  --palette-primary-300: var(--color-border-emphasized);
+  --palette-primary-400: var(--color-text-secondary);
+  --palette-primary-500: var(--color-accent);
+  --palette-primary-600: var(--color-accent);
+  --palette-primary-700: var(--color-accent);
+  --palette-primary-800: var(--color-accent);
+  --palette-primary-900: var(--color-accent);
+
+  --palette-primary-contrast-50: var(--color-text-primary);
+  --palette-primary-contrast-100: var(--color-text-primary);
+  --palette-primary-contrast-200: var(--color-text-primary);
+  --palette-primary-contrast-300: var(--color-text-primary);
+  --palette-primary-contrast-400: var(--color-background-body);
+  --palette-primary-contrast-500: var(--color-background-body);
+  --palette-primary-contrast-600: var(--color-background-body);
+  --palette-primary-contrast-700: var(--color-background-body);
+  --palette-primary-contrast-800: var(--color-background-body);
+  --palette-primary-contrast-900: var(--color-background-body);
+
+  --c-primary: var(--color-accent);
+  --c-primary-500: var(--color-accent);
+  --c-primary-600: var(--color-accent);
+  --c-accent: var(--color-accent);
+
+  --mdc-theme-primary: var(--color-accent);
+  --mdc-theme-on-primary: var(--color-background-body);
+  --mat-sys-primary: var(--color-accent);
+  --mat-sys-on-primary: var(--color-background-body);
+  --mat-sys-primary-container: var(--color-background-gray);
+  --mat-sys-on-primary-container: var(--color-text-primary);
+}
+
+// Material's slide toggle paints its own MDC layer, so the ladder override above
+// does not reach it. Astryx switches are ink-on-grey with no hue.
+body,
+body.isDarkTheme {
+  .mat-mdc-slide-toggle {
+    .mdc-switch__track::before,
+    .mdc-switch__track::after {
+      border-color: var(--color-border-emphasized);
+    }
+
+    .mdc-switch--selected .mdc-switch__track::before,
+    .mdc-switch--selected .mdc-switch__track::after {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+    }
+
+    .mdc-switch--selected .mdc-switch__handle::after {
+      background: var(--color-background-body);
+    }
+
+    .mdc-switch--unselected .mdc-switch__handle::after {
+      background: var(--color-icon-secondary);
+    }
+  }
+}
