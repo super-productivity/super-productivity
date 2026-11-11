@@ -27,6 +27,11 @@ import {
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
   PluginDayContext,
+  PluginSectionContext,
+  PluginSectionSnapshot,
+  PluginCreateSection,
+  PluginSectionUpdate,
+  PluginSectionTaskMove,
   Project,
   SnackCfg,
   Tag,
@@ -200,6 +205,30 @@ export class PluginAPI implements PluginAPIInterface {
 
   async getDayContext(): Promise<PluginDayContext> {
     return this.#boundMethods.getDayContext();
+  }
+
+  getSectionContext(context: PluginSectionContext): Promise<PluginSectionSnapshot> {
+    return this.#boundMethods.getSectionContext(context);
+  }
+
+  addSection(data: PluginCreateSection): Promise<string> {
+    return this.#boundMethods.addSection(data);
+  }
+
+  updateSection(id: string, changes: PluginSectionUpdate): Promise<void> {
+    return this.#boundMethods.updateSection(id, changes);
+  }
+
+  deleteSection(id: string): Promise<void> {
+    return this.#boundMethods.deleteSection(id);
+  }
+
+  moveSection(id: string, afterSectionId: string | null): Promise<void> {
+    return this.#boundMethods.moveSection(id, afterSectionId);
+  }
+
+  moveTaskToSection(move: PluginSectionTaskMove): Promise<void> {
+    return this.#boundMethods.moveTaskToSection(move);
   }
 
   async startTracking(taskId: string): Promise<void> {

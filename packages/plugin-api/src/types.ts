@@ -51,7 +51,7 @@ export enum PluginHooks {
   PROJECT_LIST_UPDATE = 'projectListUpdate',
   WORK_CONTEXT_CHANGE = 'workContextChange',
   /**
-   * Tasks, projects or tags changed from any source (remote sync included), or
+   * Tasks, projects, tags or sections changed from any source (remote sync included), or
    * the selected or tracked task changed. Coalesced; no payload. Refresh views
    * only: it fires on every device for a synced change, so do not write data
    * in response.
@@ -362,6 +362,49 @@ export interface DayChangePayload {
 export interface PluginDayContext {
   todayStr: string;
   startOfNextDayDiffMs: number;
+}
+
+/** Sections exist in projects and the personal Today context, never ordinary tags. */
+export type PluginSectionContext = { type: 'PROJECT'; id: string } | { type: 'TODAY' };
+
+export interface PluginSection {
+  id: string;
+  title: string;
+  isExpanded: boolean;
+  /** Stored membership/order; intersect with the snapshot's taskIds for display. */
+  taskIds: string[];
+}
+
+export interface PluginSectionSnapshot {
+  context: PluginSectionContext;
+  /** In display order, including empty sections. */
+  sections: PluginSection[];
+  /** Eligible top-level tasks in the main list; excludes the project backlog. */
+  taskIds: string[];
+  noSectionTaskIds: string[];
+  /** Present for Today; uses SP's logical day, not calendar midnight. */
+  day?: PluginDayContext;
+}
+
+export interface PluginCreateSection {
+  context: PluginSectionContext;
+  title: string;
+  /** Optional stable ID for retry-safe creation (1–128 letters, digits, _ or -). */
+  id?: string;
+}
+
+export interface PluginSectionUpdate {
+  title?: string;
+  isExpanded?: boolean;
+}
+
+export interface PluginSectionTaskMove {
+  context: PluginSectionContext;
+  taskId: string;
+  /** null means the no-section bucket. */
+  sectionId: string | null;
+  /** null means the start; otherwise an eligible task in the target bucket. */
+  afterTaskId: string | null;
 }
 
 // Map hook types to their payload types
@@ -799,6 +842,19 @@ export interface PluginAPI {
   deleteTask(taskId: string): Promise<void>;
 
   batchUpdateForProject(request: BatchUpdateRequest): Promise<BatchUpdateResult>;
+
+  // sections
+  /** Waits up to 10 seconds for hydration; never returns a misleading empty snapshot. */
+  getSectionContext(context: PluginSectionContext): Promise<PluginSectionSnapshot>;
+  /** Existing IDs in the same context are returned without changing their contents. */
+  addSection(data: PluginCreateSection): Promise<string>;
+  updateSection(id: string, changes: PluginSectionUpdate): Promise<void>;
+  /** Idempotent; removes the section, not its tasks. */
+  deleteSection(id: string): Promise<void>;
+  /** Move after a section in the same context, or to the start with null. */
+  moveSection(id: string, afterSectionId: string | null): Promise<void>;
+  /** Atomic placement/order change. Does not schedule tasks or change their project. */
+  moveTaskToSection(move: PluginSectionTaskMove): Promise<void>;
 
   // projects
   getAllProjects(): Promise<Project[]>;
