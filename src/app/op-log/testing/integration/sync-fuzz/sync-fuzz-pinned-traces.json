@@ -1840,8 +1840,8 @@
       "lost-entity:task"
     ],
     "rejections": [
-      "CONFLICT_CONCURRENT [Task Shared] deleteTask",
-      "CONFLICT_CONCURRENT [Task Shared] moveToOtherProject"
+      "CONFLICT_CONCURRENT [TASK] LWW Update",
+      "CONFLICT_CONCURRENT [Task Shared] deleteTask"
     ]
   },
   {
