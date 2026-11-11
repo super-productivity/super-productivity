@@ -14,7 +14,10 @@
 // install when package-lock.json differs), one after the other, since both
 // use Karma's port, and takes 5 to 10 minutes. The base
 // run uses the working tree's report benchmark and intent mixes, so both
-// sweep the same seeds; it warns when other harness files differ, since the
+// sweep the same seeds. A mix the base does not have is the exception: its
+// intents would not compile there, so the base keeps its own mixes, the new
+// mix is reported but not compared, and the PR that adds it states its
+// signatures itself. The tool warns when other harness files differ, since the
 // base then reports what its own harness detects. An interrupted run removes
 // its worktree too; after a crash, `git worktree prune` cleans up.
 //
@@ -29,7 +32,8 @@ const { execFileSync, spawnSync } = require('node:child_process');
 
 const FUZZ_DIR = 'src/app/op-log/testing/integration/sync-fuzz';
 const REPORT_SPEC = `${FUZZ_DIR}/sync-fuzz-signature-report.benchmark.ts`;
-const SHARED_FILES = [REPORT_SPEC, `${FUZZ_DIR}/sync-fuzz-profiles.ts`];
+const PROFILES_FILE = `${FUZZ_DIR}/sync-fuzz-profiles.ts`;
+const SHARED_FILES = [REPORT_SPEC, PROFILES_FILE];
 const JUDGE_HINT =
   'Judge each newly failing seed on the original seed first: the lines under ' +
   'it say whether both revisions executed the same steps and which final ' +
@@ -78,6 +82,41 @@ const describeRun = (base, head) => {
   }
   return lines;
 };
+
+/** The mix names of a sync-fuzz-profiles.ts source: the keys of FUZZ_PROFILES. */
+const profileNames = (source) => {
+  const body = /FUZZ_PROFILES[^=]*=\s*\{([\s\S]*?)\n\};/.exec(source)?.[1] ?? '';
+  return [...body.matchAll(/^ {2}(\w+):/gm)].map((match) => match[1]);
+};
+
+/** The report without the seeds of `mixes` (a seed is named `<mix>:<seed>`). */
+const withoutMixes = (report, mixes) => {
+  const isKept = (seed) => !mixes.includes(seed.split(':')[0]);
+  const signatures = {};
+  for (const [signature, seeds] of Object.entries(report.signatures)) {
+    const kept = seeds.filter(isKept);
+    if (kept.length > 0) signatures[signature] = kept;
+  }
+  const runs = Object.fromEntries(
+    Object.entries(report.runs).filter(([seed]) => isKept(seed)),
+  );
+  return { signatures, runs };
+};
+
+/** One line per mix the base lacks: how many of its seeds show a signature. */
+const describeNewMixes = (report, mixes) =>
+  mixes.map((mix) => {
+    const seeds = Object.keys(report.runs).filter((seed) => seed.startsWith(`${mix}:`));
+    const failing = new Set(
+      Object.values(report.signatures)
+        .flat()
+        .filter((seed) => seed.startsWith(`${mix}:`)),
+    );
+    return (
+      `New mix "${mix}" is not compared (the base has no such mix): ` +
+      `${failing.size} of ${seeds.length} seeds show a signature`
+    );
+  });
 
 /** Seeds that newly show a signature, and seeds that no longer do. */
 const compareReports = (base, head) => {
@@ -197,6 +236,8 @@ const main = () => {
   });
   let comparison;
   let runs;
+  let newMixes = [];
+  let newMixLines = [];
   try {
     git(root, ['worktree', 'add', '--detach', worktree, baseRef]);
     // A dependency change can make the base's source uncompilable with the
@@ -216,10 +257,22 @@ const main = () => {
         path.join(worktree, 'node_modules'),
       );
     }
-    for (const file of SHARED_FILES) {
+    // A mix the base lacks names intents the base cannot compile: the base
+    // then keeps its own mixes, and the new mix is left out of the comparison.
+    newMixes = profileNames(
+      fs.readFileSync(path.join(root, PROFILES_FILE), 'utf8'),
+    ).filter(
+      (mix) =>
+        !profileNames(
+          fs.readFileSync(path.join(worktree, PROFILES_FILE), 'utf8'),
+        ).includes(mix),
+    );
+    for (const file of newMixes.length > 0 ? [REPORT_SPEC] : SHARED_FILES) {
       fs.copyFileSync(path.join(root, file), path.join(worktree, file));
     }
-    const head = runReport(root, 'the working tree');
+    const fullHead = runReport(root, 'the working tree');
+    newMixLines = describeNewMixes(fullHead, newMixes);
+    const head = withoutMixes(fullHead, newMixes);
     const base = runReport(worktree, baseLabel);
     comparison = compareReports(base.signatures, head.signatures);
     runs = { base: base.runs, head: head.runs };
@@ -233,6 +286,7 @@ const main = () => {
     git(root, ['worktree', 'remove', '--force', worktree]);
   }
   console.log(formatComparison(comparison, `working tree vs ${baseLabel}`, runs));
+  for (const line of newMixLines) console.log(line);
   if (comparison.newFailures.length > 0) console.log(`\n${JUDGE_HINT}`);
   process.exitCode = comparison.newFailures.length > 0 ? 1 : 0;
 };
@@ -243,8 +297,11 @@ if (require.main === module) {
 
 module.exports = {
   compareReports,
+  describeNewMixes,
   describeRun,
   formatComparison,
   harnessDifferences,
   parseReport,
+  profileNames,
+  withoutMixes,
 };

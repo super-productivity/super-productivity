@@ -3,11 +3,57 @@ const assert = require('node:assert/strict');
 
 const {
   compareReports,
+  describeNewMixes,
   describeRun,
   formatComparison,
   harnessDifferences,
   parseReport,
+  profileNames,
+  withoutMixes,
 } = require('./sync-fuzz-compare');
+const fs = require('node:fs');
+const path = require('node:path');
+
+test('reads the mix names of the real profiles file', () => {
+  const source = fs.readFileSync(
+    path.join(
+      __dirname,
+      '../src/app/op-log/testing/integration/sync-fuzz/sync-fuzz-profiles.ts',
+    ),
+    'utf8',
+  );
+  assert.deepEqual(profileNames(source), [
+    'all',
+    'noReorder',
+    'tasks',
+    'replace',
+    'move',
+  ]);
+  assert.deepEqual(profileNames('export const OTHER = 1;'), []);
+});
+
+test('leaves a mix the base lacks out of the comparison, and reports it', () => {
+  const head = {
+    signatures: {
+      'time-loss:task': ['all:1', 'move:1', 'move:2'],
+      'membership:unlisted-in-own-project': ['move:2'],
+    },
+    runs: {
+      'all:1': { steps: '3:ab', values: {} },
+      'move:1': { steps: '3:cd', values: {} },
+      'move:2': { steps: '3:ef', values: {} },
+      'move:3': { steps: '3:01', values: {} },
+    },
+  };
+  assert.deepEqual(withoutMixes(head, ['move']), {
+    signatures: { 'time-loss:task': ['all:1'] },
+    runs: { 'all:1': { steps: '3:ab', values: {} } },
+  });
+  assert.deepEqual(withoutMixes(head, []), head);
+  assert.deepEqual(describeNewMixes(head, ['move']), [
+    'New mix "move" is not compared (the base has no such mix): 2 of 3 seeds show a signature',
+  ]);
+});
 
 test('parses the report between its markers in Karma output', () => {
   const output =

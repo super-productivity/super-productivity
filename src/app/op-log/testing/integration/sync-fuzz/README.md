@@ -41,6 +41,30 @@ tasks count as present. Import and USE_REMOTE filtering still run before these
 checks, so intentional replacement can discard old/concurrent work, while
 retained post-import creations/edits remain checked.
 
+## Mixes, setup and project membership
+
+A new intent goes into a mix of its own (`sync-fuzz-profiles.ts`), never into
+an existing one, and `generateIntent` draws its extra targets inside its own
+`case`: the draws before the `switch` are shared by every mix, so one more
+there changes every existing trace. Entities only that mix needs are created
+by a setup of its own (`MOVE_SETUP`), which a replayed trace gets when its
+steps contain the intent. The other mixes' traces, pins and the fixed 120-seed
+baseline then stay as they were. `npm run sync-fuzz:compare` does not compare a
+mix the base lacks; the PR that adds one states its signatures.
+
+The `move` mix adds two projects and `moveTask` (`moveToOtherProject`, as
+`TaskService.moveToProject` dispatches it). The ledger records the target as
+`task.projectId`. A move carries the flat pre-move task, so a crossing with one
+is whole-entity (`WHOLE_ENTITY_INTENTS`): either side's snapshot may explain
+the converged project, as for a restore.
+
+`checkProjectMembership` runs only in a run that moves tasks: every top-level
+task is in exactly one of its own project's `taskIds`/`backlogTaskIds`, in no
+other project's, and every listed id is a live top-level task
+(`membership:*`). It needs no ledger. Not modelled: backlog moves, subtasks
+(their parent's move carries them), and a move concurrent with a project
+delete.
+
 ## Boundaries and classifications
 
 Missing entities after multi-device or multiple-round delete conflicts remain

@@ -1,7 +1,8 @@
 # Sync model-based testing: what to add to the fuzz harness, and whether to gate on it
 
-> **Status: Proposed.** Evaluation only. No production code, workflow or
-> harness file changes with this note.
+> **Status: In progress.** M1–M5 were decided on 2026-11-10 (see
+> [Decisions](#decisions)). Phase 1, the task-move slice, is implemented on the
+> branch that carries this note; phases 2–5 are open.
 >
 > **Owner:** @johannesjo. **Tracking:** sync tracker
 > [#10393](https://github.com/super-productivity/super-productivity/issues/10393).
@@ -396,16 +397,54 @@ editable by the author, which rule 16 excludes); (G2) required with no override.
 - Not in the slice: any fix, task reorder (V1b), subtasks, backlog moves, a
   move concurrent with a project delete.
 
+### First slice: result (measured, 2026-11-10)
+
+Implemented as described above. The 150-seed report on the slice:
+
+| Measure                                                                               | Result         |
+| ------------------------------------------------------------------------------------- | -------------- |
+| Baseline seeds identical to master (steps hash, signatures, final values)             | **120 of 120** |
+| `move` seeds with any signature                                                       | 30 of 30       |
+| `move` seeds with a move-specific signature                                           | 21             |
+| – of these, from oracles that need no ledger (divergence, membership, REPAIR, errors) | 11             |
+| Focused suite (`sync-fuzz/*.spec.ts`)                                                 | 151 of 151     |
+
+The ledger now treats a move as a whole-entity side, because
+`moveToOtherProject` carries the flat pre-move task (`isChangesShapedOp` in
+`conflict-field-patch.util.ts`). That removed 12 of the spike's 21
+`older-write-won` seeds in the mix as model gaps; 9 remain.
+
+Every class shrank to a trace that fails 3 of 3 replays, and each is pinned as
+current behaviour (class names as in `sync-fuzz-pinned-traces.json`):
+
+| Class                  | Minimal trace (devices A, B, C; settle syncs all)                        | Outcome                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `move-loses-to-edit`   | C moves `t2` to `p2`; A renames `t2`                                     | The move is undone on every device but C, which keeps `p2`: `projectId` and project lists diverge |
+| `move-loses-to-edit`   | B moves `t1` to `p1`; C tracks `t1`                                      | The move is undone everywhere (converged)                                                         |
+| `move-drops-time`      | C tracks 1 s on `t2`; B moves `t2`                                       | The time is 0 on every device but C, which keeps it: `timeSpent` diverges                         |
+| `move-crossing-repair` | B moves `t1`; A tracks `t1`; B deletes `t1`                              | Dev error "Missing task data for project" and an automatic REPAIR                                 |
+| `move-crossing-repair` | 8 steps: two moves of `t2` crossing two deletes and a track, then an add | REPAIR, and task `t11`, added afterwards and never deleted, is gone                               |
+| `concurrent-moves`     | C moves `t3` to `p2`; B moves `t3` to `p1`; A edits its notes            | The task stays in INBOX: neither move survives                                                    |
+| `concurrent-moves`     | 5 steps: two moves of `t1` beside time deltas and a notes edit           | The older move wins, the newer mover keeps its own project, and 1 s of time is lost               |
+| `unlisted-task`        | 8 steps: a delete-versus-delta crossing on `t1`, a move of `t2`, an add  | On the adding device the new task is in no project list. It may not need the move (see below)     |
+
+These are harness outcomes on the fake SuperSync server. By M4 they become
+issues after the slice merges, each needing a real-app reproduction and its
+rule 15 category before any fix. Read from the traces, not verified further:
+the first three rows are a whole-entity winner whose snapshot predates the
+move or the time; `unlisted-task` resembles the tracked delete-versus-delta
+recreate (#10380/#10381), and only the new oracle makes it visible.
+
 ### Phases
 
-| Phase | Content                                             | Effort (estimated) | Exit                                                                       |
-| ----- | --------------------------------------------------- | ------------------ | -------------------------------------------------------------------------- |
-| 1     | V1, the first slice                                 | 2.5–3.5 d          | `move` baseline recorded; issues filed for its content classes             |
-| 2     | V1b and V3                                          | 2–4 d              | Two more baselines; the task-reorder number posted to the order-merge note |
-| 3     | V2 and V4                                           | 2.5–3 d            | Baseline split into order-only and content; producer split posted          |
-| 4     | G1, if M3 says so                                   | 1 d                | Required gate job with a label override, after ten judged new entries      |
-| 5     | V5, V6, V7 on demand                                | 2–5 d each         | One mix and one baseline per addition                                      |
-| 6     | File port with both step events, only if M2 changes | 9–14 d             | A v2 and a v3 baseline; the sampled rows above replayed                    |
+| Phase                   | Content                                             | Effort (estimated) | Exit                                                                       |
+| ----------------------- | --------------------------------------------------- | ------------------ | -------------------------------------------------------------------------- |
+| 1 (done on this branch) | V1, the first slice                                 | 2.5–3.5 d          | `move` baseline recorded; issues filed for its content classes             |
+| 2                       | V1b and V3                                          | 2–4 d              | Two more baselines; the task-reorder number posted to the order-merge note |
+| 3                       | V2 and V4                                           | 2.5–3 d            | Baseline split into order-only and content; producer split posted          |
+| 4                       | G1, if M3 says so                                   | 1 d                | Required gate job with a label override, after ten judged new entries      |
+| 5                       | V5, V6, V7 on demand                                | 2–5 d each         | One mix and one baseline per addition                                      |
+| 6                       | File port with both step events, only if M2 changes | 9–14 d             | A v2 and a v3 baseline; the sampled rows above replayed                    |
 
 ### What not to model
 
@@ -426,9 +465,11 @@ editable by the author, which rule 16 excludes); (G2) required with no override.
 - A conflict-policy table or version checkpoints: sibling sessions evaluate
   those.
 
-## Decisions needed from @johannesjo
+## Decisions
 
-Each has the default this note proposes. None is decided.
+@johannesjo answered the recommendation on 2026-11-10 in the evaluation
+session: "Do as recommend". Each row below is therefore decided as its
+default.
 
 | #   | Question                                                  | Default                                                                                                                                                           |
 | --- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -473,12 +514,13 @@ took them as given.
 
 ## Missing evidence
 
-- Whether any spike signature is a bug: no trace was shrunk, replayed three
-  times or reproduced in the app, and released clients were not checked.
-- Whether a move resolves through the field patch or a whole-entity path. The
-  three `projectId` preservation rows depend on it.
-- Why `time-loss` appears in 26 of 30 `move` seeds. One seed's detail was
-  read; the mechanism was not.
+- Whether the pinned `move` classes occur in the app: each trace fails 3 of 3
+  replays in the harness, but none was reproduced with an E2E, on a file
+  provider, or against a released client.
+- Whether `unlisted-task` needs a move at all. The membership oracle runs only
+  in runs that move tasks, and the shrink kept a move for that reason.
+- The mechanism behind each class was read from its trace, not from an op-log
+  dump.
 - The false-positive rate of the compare job: no CI run in the window
   reported a new entry, and history before 2026-11-03 was not examined.
 - Why ten commits had the compare job skipped in one run and executed in
