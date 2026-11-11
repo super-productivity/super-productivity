@@ -183,7 +183,7 @@ operations with stale vector clocks that immediately conflict.
   captured op's write attempt has completed (do not call it while holding the
   operation-log lock).
 
-⚠️ `local-rules/no-multi-entity-effect` (`warn`) flags this heuristically — it
+⚠️ `local-rules/no-multi-entity-effect` (`error`) flags this heuristically — it
 catches the array-literal fan-out shape (`map(() => [a(), b()])`), not every
 multi-entity dispatch (e.g. a `of(a(), b())` varargs fan-out slips past). The
 blessed pattern is a `task-shared-meta-reducers/` reducer.
@@ -381,16 +381,18 @@ survives the wire, so a pull clears it with `null` (CalDAV, Plainspace).
 
 ## Decision table — "I'm writing an effect"
 
-| Question                                                        | Answer                                                                                                    | Linter                                           |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Does it inject the actions stream?                              | Use `LOCAL_ACTIONS` (not `Actions`)                                                                       | ✅ `no-actions-in-effects` (error)               |
-| Can a selector emission be safely retried by the next emission? | Drop it with `skipDuringSyncWindow()`                                                                     | ✅ `require-hydration-guard` (error)             |
-| Is the selector emission a sparse/unrecoverable edge?           | Enter through the required initial-sync gate, capture its state, then defer it with `waitForSyncWindow()` | ✅ window guard only; initial gate is convention |
-| Does one replay-atomic transition change **>1 entity**?         | Make it a meta-reducer, not an effect                                                                     | ⚠️ `no-multi-entity-effect` (warn)               |
-| Does it dispatch in a **loop of 50+**?                          | Yield once afterward for capture ordering; it is not batching                                             | — (convention)                                   |
+| Question                                                        | Answer                                                                                                                                            | Linter                                              |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Does it inject the actions stream?                              | Use `LOCAL_ACTIONS` (not `Actions`)                                                                                                               | ✅ `no-actions-in-effects` (error)                  |
+| Can a selector emission be safely retried by the next emission? | Drop it with `skipDuringSyncWindow()`                                                                                                             | ✅ `require-hydration-guard` (error)                |
+| Is the selector emission a sparse/unrecoverable edge?           | Enter through the required initial-sync gate, capture its state, then defer it with `waitForSyncWindow()`                                         | ✅ window guard only; initial gate is convention    |
+| Does one replay-atomic transition change **>1 entity**?         | Make it a meta-reducer, not an effect                                                                                                             | ✅ `no-multi-entity-effect` (error; one shape only) |
+| Does it dispatch in a **loop**?                                 | Prefer one meta-reducer action; a loop needs no yield. If a follow-up depends on its ops, await `OperationWriteFlushService.flushPendingWrites()` | — (convention)                                      |
 
-Two of the three are mechanically enforced — you do not need to memorize them,
-only understand _why_ (the invariant at the top).
+The first, second and fourth rows are lint errors (the fourth catches only the
+array-literal fan-out shape); the third enforces only the window guard, and the
+loop row is convention. You do not need to memorize the enforced ones, only
+understand _why_ (the invariant at the top).
 
 ---
 
