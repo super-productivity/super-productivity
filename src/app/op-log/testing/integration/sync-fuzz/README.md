@@ -56,9 +56,9 @@ primary does not hide that signature in the other mixes.
 
 The `move` mix adds two projects and `moveTask` (`moveToOtherProject`, as
 `TaskService.moveToProject` dispatches it). The ledger records the target as
-`task.projectId`. A move carries the flat pre-move task, so a crossing with one
-is whole-entity (`WHOLE_ENTITY_INTENTS`): either side's snapshot may explain
-the converged project, as for a restore.
+`task.projectId`. A move carries the flat pre-move task, but conflict
+resolution reads it as the `projectId` it writes (#11685), so a crossing with
+one is checked per field like an edit, not as whole-entity.
 
 `checkProjectMembership` runs only in a run that moves tasks: every top-level
 task is in exactly one of its own project's `taskIds`/`backlogTaskIds`, in no
