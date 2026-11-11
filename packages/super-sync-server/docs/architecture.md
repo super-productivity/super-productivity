@@ -111,9 +111,11 @@ This serialization mechanism is a load-bearing decision; see
 - Normal sync bootstraps from operation rows. `GET /ops` can fast-forward to the
   latest causal full-state operation; clients do not download the server's
   cached snapshot blob. A device that synced before is not fast-forwarded past
-  a causal `REPAIR` while the operations between its cursor and that `REPAIR`
-  are retained and hold no import: a client with unsynced edits drops an
-  incoming causal `REPAIR` and relies on having applied those operations.
+  a causal `REPAIR` that is at most 10,000 operations ahead, while the
+  operations between its cursor and that `REPAIR` are retained and hold no
+  other full-state operation (an import or any `REPAIR`): a client with
+  unsynced edits drops an incoming causal `REPAIR` and relies on having
+  applied those operations.
 - The snapshot cache is an optional server-replay optimization for plaintext
   data. Encrypted full-state uploads remain operations but cannot become a
   server-readable state cache.

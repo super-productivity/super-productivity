@@ -769,6 +769,10 @@ describe('OperationDownloadService', () => {
       }): Promise<{ startedAfter: number; clock: unknown; gap: boolean }> => {
         let startedAfter = -1;
         const repairSeq = opts.repairSeq ?? 50;
+        const queryRaw = mockTxQueryRaw(
+          { serverSeq: repairSeq, opType: opts.opType },
+          opts.fullStateOpBetween ? [{ server_seq: 20 }] : [],
+        );
         vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) =>
           fn({
             operation: {
@@ -782,14 +786,16 @@ describe('OperationDownloadService', () => {
               findUnique: vi.fn().mockResolvedValue({ lastSeq: repairSeq + 10 }),
             },
             // Every other raw read here is the full-state-op-in-between probe.
-            $queryRaw: mockTxQueryRaw(
-              { serverSeq: repairSeq, opType: opts.opType },
-              opts.fullStateOpBetween ? [{ server_seq: 20 }] : [],
-            ),
+            $queryRaw: queryRaw,
           }),
         );
         const result = await service.getOpsSinceWithSeq(1, opts.sinceSeq);
         expect(result.latestSnapshotSeq).toBe(repairSeq);
+        // The probe, when issued, asks strictly between the cursor and the REPAIR.
+        const probe = queryRaw.mock.calls
+          .map(([q]: unknown[]) => q as { sql?: string; values?: unknown[] })
+          .find((q) => !(q.sql ?? '').includes(FULL_STATE_SQL_MARKER));
+        if (probe) expect(probe.values).toEqual([1, opts.sinceSeq, repairSeq]);
         return {
           startedAfter,
           clock: result.snapshotVectorClock,
