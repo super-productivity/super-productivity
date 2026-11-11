@@ -30,6 +30,7 @@ import { getRepeatDueWithTime } from './store/get-repeat-due-with-time.util';
 import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
 import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.util';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { getFirstOccurrenceStartDate } from './store/get-first-repeat-occurrence.util';
 import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import {
@@ -94,6 +95,11 @@ export class TaskRepeatCfgService {
       addTaskRepeatCfgToTask({
         taskRepeatCfg: {
           ...taskRepeatCfg,
+          // A WEEKLY mask can exclude its own startDate (Workdays picked on a
+          // Saturday), and the repeat dialog derives every later quick-setting
+          // change from the stored date — anchor it to the first day the
+          // schedule actually lands on (#9488).
+          startDate: getFirstOccurrenceStartDate(taskRepeatCfg),
           projectId,
           id: repeatCfgId,
         },

@@ -2119,6 +2119,85 @@ describe('TaskRepeatCfgService', () => {
     });
   });
 
+  describe('startDate anchoring on creation (#9488)', () => {
+    // 2026-03-27 is a Friday, 03-28 the Saturday, 03-30 the Monday and
+    // 2026-04-01 the Wednesday after it
+    const workdaysOnSaturday = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      title: 'Workdays',
+      quickSetting: 'MONDAY_TO_FRIDAY' as const,
+      repeatCycle: 'WEEKLY' as const,
+      repeatEvery: 1,
+      startDate: '2026-03-28',
+      monday: true,
+      tuesday: true,
+      wednesday: true,
+      thursday: true,
+      friday: true,
+      saturday: false,
+      sunday: false,
+    };
+
+    const lastDispatchedCfg = (): { startDate?: string } =>
+      dispatchSpy.calls.mostRecent().args[0].taskRepeatCfg;
+
+    it('should anchor a weekly config whose weekday mask excludes its startDate to the first enabled day', () => {
+      service.addTaskRepeatCfgToTask('task-1', null, workdaysOnSaturday);
+      expect(lastDispatchedCfg().startDate).toBe('2026-03-30');
+    });
+
+    it('should anchor a custom weekly mask off its startDate the same way', () => {
+      // Wednesday-only mask anchored on the Monday
+      service.addTaskRepeatCfgToTask('task-1', null, {
+        ...workdaysOnSaturday,
+        quickSetting: 'CUSTOM' as const,
+        startDate: '2026-03-30',
+        monday: false,
+        tuesday: false,
+        thursday: false,
+        friday: false,
+      });
+      expect(lastDispatchedCfg().startDate).toBe('2026-04-01');
+    });
+
+    it('should leave a weekly config whose startDate is an enabled weekday unchanged', () => {
+      service.addTaskRepeatCfgToTask('task-1', null, {
+        ...workdaysOnSaturday,
+        startDate: '2026-03-27',
+      });
+      expect(lastDispatchedCfg().startDate).toBe('2026-03-27');
+    });
+
+    it('should leave a non-weekly config on a weekend startDate unchanged', () => {
+      service.addTaskRepeatCfgToTask('task-1', null, {
+        ...workdaysOnSaturday,
+        quickSetting: 'DAILY' as const,
+        repeatCycle: 'DAILY' as const,
+      });
+      expect(lastDispatchedCfg().startDate).toBe('2026-03-28');
+    });
+
+    it('should leave a weekly config without any enabled weekday unchanged', () => {
+      service.addTaskRepeatCfgToTask('task-1', null, {
+        ...workdaysOnSaturday,
+        monday: false,
+        tuesday: false,
+        wednesday: false,
+        thursday: false,
+        friday: false,
+      });
+      expect(lastDispatchedCfg().startDate).toBe('2026-03-28');
+    });
+
+    it('should leave a weekly config without a startDate unchanged', () => {
+      service.addTaskRepeatCfgToTask('task-1', null, {
+        ...workdaysOnSaturday,
+        startDate: undefined,
+      });
+      expect(lastDispatchedCfg().startDate).toBeUndefined();
+    });
+  });
+
   describe('Regression #7923 — taskAlreadyExists still advances lastTaskCreationDay', () => {
     it('should dispatch updateTaskRepeatCfg to advance lastTaskCreationDay even when task already exists', async () => {
       const today = new Date();

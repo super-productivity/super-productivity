@@ -81,6 +81,17 @@ describe('toCaptureRepeatCfg', () => {
     );
   });
 
+  it('anchors a weekly series whose weekdays exclude the start day to the first enabled day (#9488)', () => {
+    // 2026-10-17 is a Saturday, 2026-10-19 the Monday after it
+    const cfg = toCaptureRepeatCfg(
+      { cycle: 'WEEKLY', every: 1, weekdays: [1, 2, 3, 4, 5] },
+      { ...opts, startDay: '2026-10-17' },
+    );
+    expect(cfg.startDate).toBe('2026-10-19');
+    expect(cfg.monday).toBe(true);
+    expect(cfg.saturday).toBe(false);
+  });
+
   it('skips pile-up only for an everyday series, like the add-task bar', () => {
     expect(toCaptureRepeatCfg({ cycle: 'DAILY', every: 1 }, opts).skipOverdue).toBe(true);
     expect(toCaptureRepeatCfg({ cycle: 'DAILY', every: 2 }, opts).skipOverdue).toBe(
