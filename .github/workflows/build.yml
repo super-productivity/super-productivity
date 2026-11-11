@@ -78,7 +78,130 @@ jobs:
           prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
           body_path: /tmp/release-body.md
 
+  # The checks gating the Linux release run as parallel jobs, split the same way
+  # as ci.yml, so the critical path is the slowest shard rather than the sum of
+  # lint + unit + E2E in one serial job (~50 min of the ~80 min run).
+  lint:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
+      - run: npm run lint
+
+  # Same coverage as `npm run test:ci`: Angular specs in both time zones plus
+  # the package and release-notes tests.
+  unit-tests:
+    name: unit-tests (${{ matrix.suite }} ${{ matrix.shard }})
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [berlin, la]
+        shard: ['1/2', '2/2']
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
+      - run: npm run env # Generate env.generated.ts
+      - name: Run Angular specs
+        env:
+          SUITE: ${{ matrix.suite }}
+          SHARD: ${{ matrix.shard }}
+        run: node tools/test-shards.js "$SUITE" --shard "$SHARD"
+
+  unit-tests-tooling:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
+      - run: npm run packages:test
+      - run: npm run release-notes:test
+
+  e2e-build:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
+      - name: Build Frontend for E2E
+        run: npm run buildFrontend:e2e
+      - name: Verify Build Output
+        run: |
+          test -f .tmp/angular-dist/browser/index.html || (echo "Build output missing" && exit 1)
+          test -f .tmp/angular-dist/browser/assets/bundled-plugins/api-test-plugin/manifest.json || (echo "Plugin assets missing from build" && exit 1)
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-e2e-build-${{ github.run_id }}
+          path: .tmp/angular-dist
+          # Long enough to re-run a failed shard the next day.
+          retention-days: 3
+          overwrite: true # so a re-run of this job does not fail on the existing artifact
+
+  e2e:
+    name: e2e (${{ matrix.shard }}/4)
+    needs: e2e-build
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup E2E Environment
+        uses: ./.github/actions/setup-e2e
+      - name: Download Build Artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v4
+        with:
+          name: build-e2e-build-${{ github.run_id }}
+          path: .tmp/angular-dist
+      - name: Test E2E
+        # `e2e`, not `e2e:ci`: that alias calls `npm run e2e` without `--`, so
+        # npm would swallow the --shard flag and every shard would run everything.
+        run: npm run e2e -- --project=chromium --shard=${{ matrix.shard }}/4
+      - name: 'Upload E2E results on failure'
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2eResults-${{ matrix.shard }}
+          path: .tmp/e2e-test-results/**/*.*
+          retention-days: 14
+          overwrite: true # so a re-run of this job does not fail on the existing artifact
+
   linux-bin-and-snap-release:
+    needs: [lint, unit-tests, unit-tests-tooling, e2e]
     runs-on: ubuntu-latest
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
@@ -105,39 +228,6 @@ jobs:
           # Electron 42 `npm i` no longer downloads the Electron binary;
           # electron-builder fetches its own copy when packaging.)
           command: npm i
-
-      - name: Install Playwright Browsers
-        run: |
-          npx playwright install --with-deps chromium
-          npx playwright install-deps chromium
-
-      - run: npm run env # Generate env.generated.ts
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test Unit
-        run: npm run test:ci
-
-      - name: Build Frontend for E2E
-        run: npm run buildFrontend:e2e
-
-      - name: Verify Build Output
-        run: |
-          test -f .tmp/angular-dist/browser/index.html || (echo "Build output missing" && exit 1)
-          test -f .tmp/angular-dist/browser/assets/bundled-plugins/api-test-plugin/manifest.json || (echo "Plugin assets missing from build" && exit 1)
-
-      - name: Test E2E
-        run: npm run e2e:ci
-
-      - name: 'Upload E2E results on failure'
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: e2eResults
-          path: .tmp/e2e-test-results/**/*.*
-          retention-days: 14
-          overwrite: true # so a re-run of this job does not fail on the existing artifact
 
       - name: Build Frontend & Electron
         run: npm run build

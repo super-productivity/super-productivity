@@ -126,8 +126,8 @@ jobs:
           retention-days: 1
 
   # Job 1: Regular E2E tests (excludes WebDAV and SuperSync)
-  # Skipped on push: PR CI already ran this suite, and build.yml runs the same
-  # `npm run e2e:ci` on master and release/* pushes.
+  # Skipped on push: PR CI already ran this suite, and build.yml runs
+  # the same chromium suite (sharded) on master and release/* pushes.
   e2e-regular:
     name: E2E Tests (Regular)
     needs: [build]
