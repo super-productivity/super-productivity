@@ -571,8 +571,7 @@ SuperSync shard 2 of 6). The server log of that run shows the mechanism:
 client B downloads with `sinceSeq=2`, the server skips to the `REPAIR` at
 sequence 5 ("Optimized download: skipping from sinceSeq=2 to 4"), B receives
 that one op, and B's pending op is then accepted at sequence 6. Sequence 3,
-the other device's task, never reaches B. Read from the job result and the
-server log; the Playwright assertion text itself was not read. The "suspected"
+the other device's task, never reaches B. The failed assertion is the wait for that task (`RepairPrefixBeforeRepair`), read from the run's error context. The existing test in the same suite did not fail. The "suspected"
 notes above therefore describe a reproduced divergence on master, which goes
 through fix intake on its own and is not fixed here.
 
