@@ -124,7 +124,7 @@ describe('sync fuzz random seeds', () => {
       const { signature, seed, steps, count } = found;
       const isSame = (result: FuzzResult): boolean =>
         result.failures.some((f) => f.signature === signature);
-      const minimal = await shrinkTrace(steps, isSame, SHRINK_RUNS);
+      const minimal = await shrinkTrace(steps, isSame, { maxRuns: SHRINK_RUNS });
       const replays: string[] = [];
       for (let replay = 0; replay < 3; replay++) {
         replays.push(isSame(await runFuzz({ steps: minimal })) ? 'fail' : 'pass');
