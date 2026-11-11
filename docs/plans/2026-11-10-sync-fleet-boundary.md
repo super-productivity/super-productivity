@@ -597,10 +597,11 @@ through fix intake on its own and is not fixed here.
     two tests failed, both in `webdav-late-snapshot.spec.ts`. That spec is
     about a v2 file but takes its format from the harness, so under v3 its
     seed client has Surgical sync explicitly on and writes v3 (`Expected: 2,
-Received: 3`). By code reading this does not involve the default path
-    this branch changes. A control run of the same spec on master code with
-    harness format v3 was dispatched to confirm; its result is not recorded
-    here yet.
+Received: 3`). A control run of only that spec on master code with harness
+    format v3
+    ([run 42936099102](https://github.com/super-productivity/super-productivity/actions/runs/42936099102))
+    fails in the same WebDAV job, so the failures predate this branch. Which
+    of the spec's tests failed in the control run was not read.
 
 **Recommendation 1 (the two production queries)** needs access to the hosted
 database and is not done.
