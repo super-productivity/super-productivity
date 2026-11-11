@@ -46,7 +46,8 @@ export const WEBDAV_CONFIG_TEMPLATE = {
 };
 
 // Test-only default. Individual migration/regression cases can override it via
-// setupWebdavSync({ isUseSplitSyncFiles: ... }). Scheduled runs remain v2.
+// setupWebdavSync({ isUseSplitSyncFiles: ... }). The scheduled workflow runs the
+// WebDAV job once per format (E2E_WEBDAV_FORMAT=v2 and v3).
 export const WEBDAV_SYNC_FORMAT = process.env.E2E_WEBDAV_FORMAT ?? 'v2';
 export const WEBDAV_SYNC_FILE =
   WEBDAV_SYNC_FORMAT === 'v3' ? 'sync-ops.json' : 'sync-data.json';
