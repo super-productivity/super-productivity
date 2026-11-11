@@ -234,7 +234,21 @@ jobs:
       - name: Test E2E
         # `e2e`, not `e2e:ci`: that alias calls `npm run e2e` without `--`, so
         # npm would swallow the --shard flag and every shard would run everything.
-        run: npm run e2e -- --project=chromium --shard=${{ matrix.shard }}/4
+        # The later --reporter overrides the script's `--reporter=line`, so the
+        # junit report (per-test timings) is written.
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: .tmp/e2e-test-results/junit-e2e-${{ matrix.shard }}.xml
+        run: npm run e2e -- --reporter=line,junit --project=chromium --shard=${{ matrix.shard }}/4
+      # Per-file durations for spotting slow specs. Uploaded on failures too:
+      # a red run still timed every test that finished.
+      - name: Upload JUnit Timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-junit-${{ matrix.shard }}-${{ github.run_id }}
+          path: .tmp/e2e-test-results/junit-e2e-${{ matrix.shard }}.xml
+          if-no-files-found: ignore
+          retention-days: 14
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
