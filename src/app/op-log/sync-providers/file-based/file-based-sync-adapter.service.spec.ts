@@ -292,6 +292,19 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockProvider.uploadFile).not.toHaveBeenCalled();
     });
 
+    it('starts v3 in an empty folder after a switch away from a v2 folder', async () => {
+      files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
+      await adapter.downloadOps(0);
+      service.invalidateAllTargets();
+      files.clear();
+      // The remembered v2 format belongs to the old target.
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!)).toEqual(
+        jasmine.objectContaining({ version: 3, format: 'split' }),
+      );
+      expect(files.has(C.OPS_FILE)).toBeTrue();
+    });
+
     it('retains v2 and its snapshot when the setting is absent', async () => {
       files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
       const result = await adapter.downloadOps(0);

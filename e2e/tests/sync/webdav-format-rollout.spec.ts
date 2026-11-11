@@ -199,6 +199,24 @@ test.describe('@webdav automatic file format rollout', () => {
       });
       expect(await preserved.text()).toBe(legacy);
       expect(await remoteStatus(request, `${nextRemote}sync-ops.json`)).toBe(404);
+
+      // The next sync loads the v2 data first and asks before anything is
+      // replaced. Cancel keeps both sides, and nothing was written.
+      await a.page.unroute(`**/${nextFolder}/DEV/**`);
+      await sync.triggerSync();
+      const ask = a.page.locator('dialog-sync-conflict');
+      await expect(ask).toBeVisible({ timeout: 30000 });
+      await ask.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(ask).toBeHidden();
+      await expect(sync.syncSpinner).toBeHidden();
+      const stillThere = await request.get(`${nextRemote}sync-data.json`, {
+        headers: { Authorization: authorization },
+      });
+      expect(await stillThere.text()).toBe(legacy);
+      expect(await remoteStatus(request, `${nextRemote}sync-ops.json`)).toBe(404);
+      await expect(
+        a.page.locator('task').filter({ hasText: `Seed race task ${folder}` }),
+      ).toBeVisible();
     } finally {
       await closeContextsSafely(v2Device.context, a.context);
     }
@@ -244,22 +262,19 @@ test.describe('@webdav automatic file format rollout', () => {
       await workB.addTask(`Joining task ${folder}`);
       await waitForStatePersistence(b.page);
       await syncB.setupWebdavSync(config, { useProductFormatDefault: true });
-      await expect(syncB.syncSpinner).toBeHidden();
+      expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
 
       // Not an empty folder: the default client must not start v3 here and lock
-      // the v2 device out with a tombstone.
+      // the v2 device out with a tombstone. It re-creates the v2 file from its
+      // own state; the backup's content is not recovered, as before this change.
       expect(await remoteStatus(request, `${remote}sync-ops.json`)).toBe(404);
-      const primary = await request.get(`${remote}sync-data.json`, {
-        headers: { Authorization: authorization },
-      });
-      if (primary.ok()) {
-        const file = await readPrefixedFile<{ version: number; format?: string }>(
-          request,
-          `${remote}sync-data.json`,
-          authorization,
-        );
-        expect(file.version).toBe(2);
-      }
+      const file = await readPrefixedFile<{ version: number; state: unknown }>(
+        request,
+        `${remote}sync-data.json`,
+        authorization,
+      );
+      expect(file.version).toBe(2);
+      expect(JSON.stringify(file.state)).toContain(`Joining task ${folder}`);
     } finally {
       await closeContextsSafely(a.context, b?.context);
     }

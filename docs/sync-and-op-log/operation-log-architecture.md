@@ -810,7 +810,13 @@ bridge deletes a file before it re-creates it, so an interrupted write leaves
 exactly that. A client that creates v3 in an empty folder first claims the v2
 name with a create-only tombstone, on the ops path and on the snapshot path (a
 synced device moving to the folder). A v2 file created in between wins that
-write, and the next cycle joins it as v2. Discovery ignores v16
+write, and the next cycle joins it as v2 and asks before replacing anything.
+Two limits remain. The backup rule keeps the folder's format, not its data:
+the v2 reader treats a missing primary as a fresh start and never reads the
+backup. And the claim cannot stop a forced writer: a v2 snapshot upload
+(force overwrite, "Use Local") writes its backup and primary regardless, so
+one landing during a v3 seed can still leave a v2 primary next to split
+files, which v2 clients then report as an upgraded folder. Discovery ignores v16
 `__meta_` files; the v2/v3 readers still stop normal syncs with
 `LegacySyncFormatDetectedError`, and a confirmed force overwrite writes the
 empty-folder format. Saved `isUseSplitSyncFiles: false` keeps v2 behavior;
