@@ -630,6 +630,23 @@ follow-ups:
   which still needs the client rule described under "Devices unseen for 45
   days", and two causal `REPAIR`s ahead of a device with unsynced edits.
 
+**2026-11-11, merged.** The maintainer asked for a review of both drafts and
+a merge where it made sense ("do as you see fit (merge)").
+
+- [#11688](https://github.com/super-productivity/super-productivity/pull/11688)
+  is merged to master as `c50893d`. Two further independent reviews changed
+  it first: any other full-state op between the cursor and the `REPAIR`
+  keeps the skip (not only an import), and the kept stretch is capped at
+  10,000 ops. The last review found no blocking issue; the PR checks and the
+  scheduled SuperSync and released-clients E2E run
+  ([43012381171](https://github.com/super-productivity/super-productivity/actions/runs/43012381171))
+  were green. A revert is a complete rollback: read path only, no migration.
+- [#11684](https://github.com/super-productivity/super-productivity/pull/11684)
+  stays a draft. An independent review found no product-code defect but the
+  gate is not met: no green WebDAV run exercises v3 with the setting absent
+  across the suite, the nightly WebDAV job on that branch still tests v2
+  only, and two other wiki pages still call v2 the default.
+
 **Recommendation 1 (the two production queries)** needs access to the hosted
 database and is not done.
 
