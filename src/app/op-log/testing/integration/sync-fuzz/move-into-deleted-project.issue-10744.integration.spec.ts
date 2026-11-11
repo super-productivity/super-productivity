@@ -6,89 +6,67 @@ import { Note } from '../../../../features/note/note.model';
 import { DEFAULT_PROJECT } from '../../../../features/project/project.const';
 import { Project } from '../../../../features/project/project.model';
 import { addProject } from '../../../../features/project/store/project.actions';
-import { DEFAULT_TASK, Task } from '../../../../features/tasks/task.model';
-import { WorkContextType } from '../../../../features/work-context/work-context.model';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { FuzzDevice, SyncFuzzHarness } from './sync-fuzz-harness';
 
 /**
  * #10744: device A deletes a project while device B, before either syncs,
- * moves a note or a task into it. Neither op declares the other's entity, so
- * no conflict is detected and each device applies the other's op on its own.
- * The moved item must survive in the Inbox, identically on both devices, in
- * both sync orders and after a restart.
+ * moves a note into it. Neither op declares the other's entity, so no conflict
+ * is detected and each device applies the other's op on its own. The moved
+ * note must survive in the Inbox, identically on both devices, in both sync
+ * orders and after a restart. Tasks are out of scope: they still go with the
+ * project (#8997).
  */
 const INBOX = 'INBOX_PROJECT';
 const DOOMED = 'doomed';
 const KEPT = 'kept';
-type Kind = 'note' | 'task';
-const KINDS: Kind[] = ['note'];
 
-interface ItemView {
+interface NoteView {
   item?: { projectId?: string | null; content: string };
   listedIn: string[];
   projectIds: string[];
   inbox: string[];
 }
 
-describe('item moved into a concurrently deleted project (#10744)', () => {
+describe('note moved into a concurrently deleted project (#10744)', () => {
   let harness: SyncFuzzHarness;
   let a: FuzzDevice;
   let b: FuzzDevice;
 
   const slices = async (): Promise<{
     projects: { ids: string[]; entities: Record<string, Project> };
-    tasks: { entities: Record<string, Task> };
     note: { entities: Record<string, Note> };
   }> => (await harness.state()) as never;
 
-  const view = (device: FuzzDevice, kind: Kind): Promise<ItemView> =>
+  const view = (device: FuzzDevice): Promise<NoteView> =>
     harness.as(device, async () => {
-      const { projects, tasks, note } = await slices();
-      const list = (p: Project): string[] => (kind === 'note' ? p.noteIds : p.taskIds);
-      const moved = kind === 'note' ? note.entities['moved'] : tasks.entities['moved'];
+      const { projects, note } = await slices();
+      const moved = note.entities['moved'];
       return {
-        item: moved && {
-          projectId: moved.projectId,
-          content: kind === 'note' ? (moved as Note).content : (moved as Task).title,
-        },
+        item: moved && { projectId: moved.projectId, content: moved.content },
         listedIn: projects.ids.filter((id) =>
-          list(projects.entities[id]).includes('moved'),
+          projects.entities[id].noteIds.includes('moved'),
         ),
         projectIds: projects.ids,
-        inbox: list(projects.entities[INBOX]),
+        inbox: projects.entities[INBOX].noteIds,
       };
     });
 
-  const addItem = (kind: Kind, id: string): Promise<void> =>
+  const addInboxNote = (id: string): Promise<void> =>
     harness.dispatch(
-      kind === 'note'
-        ? addNote({
-            note: {
-              id,
-              projectId: INBOX,
-              isPinnedToToday: false,
-              content: `content of ${id}`,
-              created: Date.now(),
-              modified: Date.now(),
-            },
-          })
-        : TaskSharedActions.addTask({
-            task: {
-              ...DEFAULT_TASK,
-              id,
-              title: `content of ${id}`,
-              projectId: INBOX,
-              created: Date.now(),
-            },
-            workContextId: INBOX,
-            workContextType: WorkContextType.PROJECT,
-            isAddToBacklog: false,
-            isAddToBottom: true,
-          }),
+      addNote({
+        note: {
+          id,
+          projectId: INBOX,
+          isPinnedToToday: false,
+          content: `content of ${id}`,
+          created: Date.now(),
+          modified: Date.now(),
+        },
+      }),
     );
 
-  // The payloads ProjectService.remove and the move menus build from live state.
+  // The payloads ProjectService.remove and the move menu build from live state.
   const deleteDoomed = async (): Promise<void> => {
     const { projects } = await slices();
     const project = projects.entities[DOOMED];
@@ -101,22 +79,10 @@ describe('item moved into a concurrently deleted project (#10744)', () => {
     );
   };
 
-  const moveTo = async (
-    kind: Kind,
-    targetProjectId: string,
-    id = 'moved',
-  ): Promise<void> => {
-    const { tasks, note } = await slices();
+  const moveTo = async (targetProjectId: string, id = 'moved'): Promise<void> => {
+    const { note } = await slices();
     await harness.dispatch(
-      kind === 'note'
-        ? moveNoteToOtherProject({
-            note: note.entities[id],
-            targetProjectId,
-          })
-        : TaskSharedActions.moveToOtherProject({
-            task: { ...tasks.entities[id], subTasks: [] },
-            targetProjectId,
-          }),
+      moveNoteToOtherProject({ note: note.entities[id], targetProjectId }),
     );
   };
 
@@ -128,17 +94,17 @@ describe('item moved into a concurrently deleted project (#10744)', () => {
 
   afterEach(() => SyncFuzzHarness.dispose());
 
-  const seed = async (kind: Kind, projectIds: string[]): Promise<void> => {
+  const seed = async (projectIds: string[]): Promise<void> => {
     await harness.as(a, async () => {
       for (const id of projectIds) {
         await harness.dispatch(
           addProject({ project: { ...DEFAULT_PROJECT, id, title: id } }),
         );
       }
-      // Notes are prepended, tasks appended: either way the Inbox lists the
-      // moved item first, so a re-homed one visibly changes place.
-      for (const id of kind === 'note' ? ['sibling', 'moved'] : ['moved', 'sibling']) {
-        await addItem(kind, id);
+      // Notes are prepended, so the Inbox lists the moved note first and a
+      // re-homed one visibly changes place.
+      for (const id of ['sibling', 'moved']) {
+        await addInboxNote(id);
       }
     });
     expect(await harness.sync(a)).toBe(true);
@@ -167,46 +133,41 @@ describe('item moved into a concurrently deleted project (#10744)', () => {
     expect(harness.events).toEqual([]);
   };
 
-  const expectOnBothAndAfterRestart = async (
-    kind: Kind,
-    expected: ItemView,
-  ): Promise<void> => {
-    expect({ A: await view(a, kind), B: await view(b, kind) }).toEqual({
+  const expectOnBothAndAfterRestart = async (expected: NoteView): Promise<void> => {
+    expect({ A: await view(a), B: await view(b) }).toEqual({
       A: expected,
       B: expected,
     });
     for (const device of [a, b]) {
       await harness.restart(device);
-      expect(await view(device, kind)).toEqual(expected);
+      expect(await view(device)).toEqual(expected);
     }
     // A device that joins later replays both ops in server order.
     const c = await harness.addDevice('C');
     expect(await harness.sync(c)).toBe(true);
-    expect(await view(c, kind)).toEqual(expected);
+    expect(await view(c)).toEqual(expected);
   };
 
   for (const first of ['deleter', 'mover'] as const) {
-    for (const kind of KINDS) {
-      it(`keeps a moved ${kind} in the Inbox on both devices / ${first} syncs first`, async () => {
-        await seed(kind, [DOOMED]);
-        await crossAndSync(first, () => moveTo(kind, DOOMED));
-        await expectOnBothAndAfterRestart(kind, {
-          item: { projectId: INBOX, content: 'content of moved' },
-          listedIn: [INBOX],
-          projectIds: [INBOX],
-          inbox: ['sibling', 'moved'],
-        });
-      }, 60_000);
-    }
+    it(`keeps a moved note in the Inbox on both devices / ${first} syncs first`, async () => {
+      await seed([DOOMED]);
+      await crossAndSync(first, () => moveTo(DOOMED));
+      await expectOnBothAndAfterRestart({
+        item: { projectId: INBOX, content: 'content of moved' },
+        listedIn: [INBOX],
+        projectIds: [INBOX],
+        inbox: ['sibling', 'moved'],
+      });
+    }, 60_000);
 
     it(`follows a note moved on from the deleted project / ${first} syncs first`, async () => {
-      await seed('note', [DOOMED, KEPT]);
+      await seed([DOOMED, KEPT]);
       await crossAndSync(first, async () => {
-        await moveTo('note', DOOMED);
+        await moveTo(DOOMED);
         harness.tick();
-        await moveTo('note', KEPT);
+        await moveTo(KEPT);
       });
-      await expectOnBothAndAfterRestart('note', {
+      await expectOnBothAndAfterRestart({
         item: { projectId: KEPT, content: 'content of moved' },
         listedIn: [KEPT],
         projectIds: [INBOX, KEPT],
@@ -215,14 +176,14 @@ describe('item moved into a concurrently deleted project (#10744)', () => {
     }, 60_000);
 
     it(`keeps several moved notes in the Inbox in one order / ${first} syncs first`, async () => {
-      await seed('note', [DOOMED]);
-      await harness.as(a, () => addItem('note', 'moved2'));
+      await seed([DOOMED]);
+      await harness.as(a, () => addInboxNote('moved2'));
       expect(await harness.sync(a)).toBe(true);
       expect(await harness.sync(b)).toBe(true);
       await crossAndSync(first, async () => {
-        await moveTo('note', DOOMED);
+        await moveTo(DOOMED);
         harness.tick();
-        await moveTo('note', DOOMED, 'moved2');
+        await moveTo(DOOMED, 'moved2');
       });
       const lists = (device: FuzzDevice): Promise<unknown> =>
         harness.as(device, async () => {
