@@ -588,8 +588,19 @@ through fix intake on its own and is not fixed here.
   constant flipped and pass with the fixes. The rollout spec (12 tests) and
   the late-snapshot spec pass against a local Apache `mod_dav` server built
   from `e2e/webdav-server/httpd.conf`; 1,352 file-sync and sync-wrapper unit
-  tests pass. The full WebDAV suite was dispatched in CI for both harness
-  formats; its result is not recorded here yet.
+  tests pass. CI, full WebDAV suite on that branch:
+  - harness format v2
+    ([run 42928501333](https://github.com/super-productivity/super-productivity/actions/runs/42928501333)):
+    no failed job, including the regular E2E suite;
+  - harness format v3
+    ([run 42928497047](https://github.com/super-productivity/super-productivity/actions/runs/42928497047)):
+    two tests failed, both in `webdav-late-snapshot.spec.ts`. That spec is
+    about a v2 file but takes its format from the harness, so under v3 its
+    seed client has Surgical sync explicitly on and writes v3 (`Expected: 2,
+Received: 3`). By code reading this does not involve the default path
+    this branch changes. A control run of the same spec on master code with
+    harness format v3 was dispatched to confirm; its result is not recorded
+    here yet.
 
 **Recommendation 1 (the two production queries)** needs access to the hosted
 database and is not done.
