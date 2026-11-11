@@ -10,7 +10,7 @@
 
 "Boring" means three things: users rarely see sync fail, the files are small enough to review, and a change is cheap to verify. This plan measures where each stands today, lists what is left by evidence, and gives a queue of one-session, one-PR items.
 
-**Sections:** [1 Current state](#1-current-state) · [2 Definition of boring](#2-definition-of-boring) · [3 Failure classes](#3-remaining-user-visible-failure-classes) · [4 Structural track](#4-structural-track) · [5 Work queue](#5-work-queue) · [6 Decisions](#6-decisions) · [7 How this was measured](#7-how-this-was-measured) · [8 Double check](#8-double-check-2026-11-11)
+**Sections:** [1 Current state](#1-current-state) · [2 Definition of boring](#2-definition-of-boring) · [3 Failure classes](#3-remaining-user-visible-failure-classes) · [4 Structural track](#4-structural-track) · [5 Work queue](#5-work-queue) · [6 Decisions](#6-decisions) · [7 How this was measured](#7-how-this-was-measured) · [8 Double check](#8-double-check-2026-11-11) · [9 Progress](#9-progress)
 
 ## The short version
 
@@ -284,3 +284,12 @@ Re-reading the code and the issue threads behind the first version of this plan 
 6. **Master moved.** Five more sync fixes landed between 2026-11-09 and 2026-11-11 (#11653, #11658, #11673, #11681, #11688), and the sync-wrapper cap is now 2073. B2 counted 15 open user reports; § 3 lists 14.
 
 **#10219, first reading for U2.** The second reporter's log shows the native request to `/api/sync/ops` failing after 195 ms with `errorName: "Error"` and `isNetworkError: false`, while the self-hosted server logs no request but sees packets. That pattern fits a failure below HTTP, such as a TLS handshake the device rejects. It is a lead from one log, not a diagnosis.
+
+## 9. Progress
+
+**2026-11-11.**
+
+- **Tracker:** the body of #10393 now carries the § 5 queue, the open sync PRs, the measures and the decisions (decision 7).
+- **W2:** draft [#11708](https://github.com/super-productivity/super-productivity/pull/11708). `sync-wrapper.service.ts` goes from 2073 to 1892 lines and its cap is lowered. The existing spec passes unchanged (188 tests), `test:affected` passes (3,540 and 175), and the fresh-context review is in the PR body. No E2E was run: the session had no Docker daemon. It is a draft because the cap is reached.
+- **U2:** not started beyond the first reading in § 8. The SuperSync native request path replaces any foreign native error with its name only ([super-sync.ts](../../packages/sync-providers/src/super-sync/super-sync.ts), `_handleNativeRequestError`), which is why the user sees "native request failed: Error". Android WebDAV got an actionable certificate message in #11641; SuperSync has none.
+- **Decision 6** (#7330) is not due until 2026-11-17. **Decision 9:** no routine was created.
