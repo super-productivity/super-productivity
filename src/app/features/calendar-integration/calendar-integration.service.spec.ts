@@ -1381,6 +1381,88 @@ END:VCALENDAR`;
       expect(snackArg.translateParams?.errTxt).not.toContain('SECRET_TOKEN');
       expect(JSON.stringify(snackArg)).not.toContain('SECRET_TOKEN');
     }));
+
+    describe('repeated failures', () => {
+      const failOnce = (provider: IssueProviderCalendar): void => {
+        subscriptions.push(service.requestEvents$(provider).subscribe());
+        httpMock
+          .expectOne(provider.icalUrl)
+          .flush('nope', { status: 500, statusText: 'Server Error' });
+        flush();
+      };
+      const succeedOnce = (provider: IssueProviderCalendar): void => {
+        subscriptions.push(service.requestEvents$(provider).subscribe());
+        httpMock.expectOne(provider.icalUrl).flush(MOCK_ICAL_DATA);
+        flush();
+      };
+
+      it('should show the error snack only once while a provider keeps failing', fakeAsync(() => {
+        const mockProvider = createMockProvider();
+        mockSnackService.open.calls.reset();
+
+        failOnce(mockProvider);
+        failOnce(mockProvider);
+        failOnce(mockProvider);
+
+        expect(mockSnackService.open).toHaveBeenCalledTimes(1);
+      }));
+
+      it('should stay quiet for a provider that was already failing before the app started', fakeAsync(() => {
+        const mockProvider = createMockProvider({ id: 'failing-since-last-run' });
+        localStorage.setItem(
+          'SUP_CAL_PROVIDER_FAILING_IDS',
+          JSON.stringify(['failing-since-last-run']),
+        );
+        mockSnackService.open.calls.reset();
+
+        failOnce(mockProvider);
+
+        expect(mockSnackService.open).not.toHaveBeenCalled();
+      }));
+
+      it('should show the not-iCal snack only once while a provider keeps returning HTML', fakeAsync(() => {
+        const mockProvider = createMockProvider();
+        mockSnackService.open.calls.reset();
+
+        for (let i = 0; i < 2; i++) {
+          subscriptions.push(service.requestEvents$(mockProvider).subscribe());
+          httpMock.expectOne(mockProvider.icalUrl).flush('<html>not ical</html>');
+          flush();
+        }
+
+        expect(mockSnackService.open).toHaveBeenCalledTimes(1);
+      }));
+
+      it('should show the error snack again after the provider recovered', fakeAsync(() => {
+        const mockProvider = createMockProvider();
+        mockSnackService.open.calls.reset();
+
+        failOnce(mockProvider);
+        succeedOnce(mockProvider);
+        failOnce(mockProvider);
+
+        expect(mockSnackService.open).toHaveBeenCalledTimes(2);
+      }));
+
+      it('should report each failing provider once', fakeAsync(() => {
+        const providerA = createMockProvider({
+          id: 'cal-a',
+          icalUrl: 'https://example.com/a.ics',
+        });
+        const providerB = createMockProvider({
+          id: 'cal-b',
+          icalUrl: 'https://example.com/b.ics',
+        });
+        mockSnackService.open.calls.reset();
+
+        failOnce(providerA);
+        failOnce(providerB);
+        failOnce(providerA);
+        failOnce(providerB);
+
+        expect(mockSnackService.open).toHaveBeenCalledTimes(2);
+      }));
+    });
   });
 
   describe('_getCombinedRefreshInterval', () => {

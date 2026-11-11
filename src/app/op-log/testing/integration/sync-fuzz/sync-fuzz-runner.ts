@@ -1,3 +1,4 @@
+import { FileTransportOptions } from './sync-fuzz-file-transport';
 import { TestBed } from '@angular/core/testing';
 import { ArchiveDbAdapter } from '../../../../core/persistence/archive-db-adapter.service';
 import { Note } from '../../../../features/note/note.model';
@@ -25,6 +26,7 @@ import {
   isUiPossible,
   REPLACEMENT_INTENTS,
   SETUP_INTENTS,
+  MOVE_SETUP,
   viewOf,
 } from './sync-fuzz-actions';
 import {
@@ -44,6 +46,13 @@ import {
 export interface FuzzFailure {
   signature: string;
   detail: string;
+  /**
+   * Set by the list-comparing oracles (convergence, restart): true when every
+   * difference with this signature is inside a list both sides hold the same
+   * members of. The signature cannot say it (a path names no members), and it
+   * separates the known order gap from a membership difference in triage.
+   */
+  orderOnly?: boolean;
 }
 
 export interface FuzzResult {
@@ -51,6 +60,11 @@ export interface FuzzResult {
   failures: FuzzFailure[];
   /** Distinct server rejections, as `<errorCode> <actionType>`. */
   rejections: string[];
+  /**
+   * Local data conflicts whose dialog the run answered. Not failures, but each
+   * answer drops one side, so a transport with many is judged on less.
+   */
+  answeredConflicts: number;
   ms: number;
   /** With `debug`: server rows, rejections and every device's op log. */
   dump?: string[];
@@ -68,6 +82,8 @@ export interface FuzzOptions {
    */
   weights?: IntentWeights;
   debug?: boolean;
+  /** Sync through the real file-based adapter instead of the fake SuperSync server. */
+  fileTransport?: FileTransportOptions;
 }
 
 const DEVICES = ['A', 'B', 'C'];
@@ -166,6 +182,9 @@ interface LedgerWrite {
  *   remote one is read per field but writes every field at its own time, as
  *   a snapshot does; the side rule here differs only where the other side
  *   has a later intent than the restore (kept as before, not seen in fuzz).
+ * - `moveTask`: `moveToOtherProject` carries the flat PRE-move task, not
+ *   `{ id, changes }`, so a local one refuses (`isChangesShapedOp`) and the
+ *   field patch never takes a remote one's values.
  * A `track` is whole-entity when it plans the task for today (`opaque`,
  * decision 6). A plain delta is not: detection drops a remote one that is
  * disjoint from the local side before it reaches a conflict
@@ -174,6 +193,7 @@ interface LedgerWrite {
  * and a local one stays pending beside the patch (`keptLocalTimeDeltas`).
  */
 const WHOLE_ENTITY_INTENTS: ReadonlySet<Intent[0]> = new Set([
+  'moveTask',
   'countHabit',
   'deleteTask',
   'archiveTask',
@@ -194,6 +214,7 @@ const latestOf = (side: readonly LedgerEntry[]): LedgerEntry =>
 
 const entityOfIntent = (intent: Intent): string => {
   const [kind, id] = intent;
+  if (kind === 'addProject') return `project:${id}`;
   const type = /Task|^track$/.test(kind) ? 'task' : /Note$/.test(kind) ? 'note' : 'habit';
   return `${type}:${id}`;
 };
@@ -421,13 +442,13 @@ export interface Replacement {
 
 /** The fields the intents write (FuzzWrite), per entity type. */
 const WRITTEN_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  task: ['title', 'notes', 'isDone', 'dueDay', 'dueWithTime'],
+  task: ['title', 'notes', 'isDone', 'dueDay', 'dueWithTime', 'projectId'],
   note: ['content', 'isPinnedToToday', 'isLock'],
   habit: ['title', 'isEnabled'],
 };
 
 const lastReplacement = (harness: SyncFuzzHarness): Replacement | undefined => {
-  const row = [...harness.server.rows]
+  const row = [...harness.wire.rows]
     .reverse()
     .find((r) => r.op.opType === 'SYNC_IMPORT' || r.op.opType === 'BACKUP_IMPORT');
   if (!row) return undefined;
@@ -485,11 +506,25 @@ const valueAt = (source: unknown, path: string[]): unknown =>
     source,
   );
 
+/** Whether the difference at `path` is one list holding the same members in another order. */
+export const isOrderOnlyDiff = (a: unknown, b: unknown, path: string[]): boolean => {
+  const members = (source: unknown): string[] | undefined => {
+    const list = valueAt(source, path.slice(0, -1));
+    return Array.isArray(list)
+      ? list.map((item) => JSON.stringify(item)).sort()
+      : undefined;
+  };
+  const [left, right] = [members(a), members(b)];
+  return !!left && !!right && JSON.stringify(left) === JSON.stringify(right);
+};
+
+const DIFF_LIMIT = 20;
+
 /** The differing leaf paths of two JSON-like values, at most `limit`. */
 export const diffPaths = (
   a: unknown,
   b: unknown,
-  limit = 20,
+  limit = DIFF_LIMIT,
   path = '',
   found: string[] = [],
 ): string[] => {
@@ -515,6 +550,23 @@ export const diffPaths = (
   }
   found.push(path || '.');
   return found;
+};
+
+/**
+ * The differences of two comparable states, each with its order verdict. A
+ * list cut off at the limit may have left a membership difference out, so
+ * none of a truncated list counts as order only.
+ */
+const diffsWithOrder = (
+  a: unknown,
+  b: unknown,
+): { diff: string; path: string[]; orderOnly: boolean }[] => {
+  const diffs = diffPaths(a, b);
+  return diffs.map((diff) => {
+    const path = diff.slice(1).split('.');
+    const orderOnly = diffs.length < DIFF_LIMIT && isOrderOnlyDiff(a, b, path);
+    return { diff, path, orderOnly };
+  });
 };
 
 /**
@@ -547,7 +599,8 @@ const shortJson = (value: unknown): string => JSON.stringify(value)?.slice(0, 16
 
 /**
  * Classifies a sync event without ids. A multi-entity stop keeps its side and
- * action type but not its entity count, which only follows list lengths.
+ * action type but not its entity count, which only follows list lengths; nor
+ * does a local data conflict keep its count of unsynced changes.
  */
 const eventSignature = (event: FuzzEvent): string => {
   const stop =
@@ -559,7 +612,10 @@ const eventSignature = (event: FuzzEvent): string => {
   return stop
     ? `stop:${stop[1]}`
     : `${event.kind}:${event.detail
-        .replace(/\b[tnhb]\d+\b|fuzzDev\w|\b[BEAI]_[A-Za-z0-9]{6}\b|[0-9a-f-]{36}/g, '*')
+        .replace(
+          /\b[tnhbp]\d+\b|fuzzDev\w|\b[BEAI]_[A-Za-z0-9]{6}\b|[0-9a-f-]{36}|\d+(?= unsynced changes)/g,
+          '*',
+        )
         .slice(0, 120)}`;
 };
 
@@ -570,7 +626,7 @@ const pathSignature = (path: string): string =>
     .slice(0, 6)
     .map((part, i, parts) =>
       parts[i - 1] === 'entities' ||
-      /^\d+$|^[tnh]\d+$|^fuzzDev|^[BEAI]_[A-Za-z0-9]{6}$|^\d{4}-\d{2}-\d{2}$/.test(part)
+      /^\d+$|^[tnhp]\d+$|^fuzzDev|^[BEAI]_[A-Za-z0-9]{6}$|^\d{4}-\d{2}-\d{2}$/.test(part)
         ? '*'
         : part,
     )
@@ -578,18 +634,23 @@ const pathSignature = (path: string): string =>
 
 export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
   const started = performance.now();
-  const harness = await SyncFuzzHarness.create();
+  const harness = await SyncFuzzHarness.create(options.fileTransport);
   const failures: FuzzFailure[] = [];
-  const fail = (signature: string, detail: string): void => {
-    if (!failures.some((f) => f.signature === signature)) {
-      // Wall-clock times and days depend on when the run started; keep them out.
-      failures.push({
-        signature,
-        detail: detail
-          .replace(/\b1[5-9]\d{11}\b/g, '<time>')
-          .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '<day>'),
-      });
+  const fail = (signature: string, detail: string, orderOnly?: boolean): void => {
+    const known = failures.find((f) => f.signature === signature);
+    if (known) {
+      // One membership difference makes the whole signature more than order.
+      if (orderOnly === false) known.orderOnly = false;
+      return;
     }
+    // Wall-clock times and days depend on when the run started; keep them out.
+    failures.push({
+      signature,
+      detail: detail
+        .replace(/\b1[5-9]\d{11}\b/g, '<time>')
+        .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '<day>'),
+      ...(orderOnly === undefined ? {} : { orderOnly }),
+    });
   };
   const entries: LedgerEntry[] = [];
   const ownClock = async (): Promise<VectorClock> =>
@@ -695,6 +756,16 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
       await executeAndNote(intent);
     }
   });
+  // A replayed trace carries no mix, so the second-project setup follows
+  // from its steps, as `replaces` does below.
+  const movesTasks = options.steps
+    ? options.steps.some((s) => s.a?.[0] === 'moveTask')
+    : (options.weights ?? []).some(([kind]) => kind === 'moveTask');
+  if (movesTasks) {
+    await harness.as(deviceOf('A'), async () => {
+      for (const intent of MOVE_SETUP) await executeAndNote(intent);
+    });
+  }
   for (const name of DEVICES) await sync(deviceOf(name));
 
   // Only a run that can replace state answers the SYNC_IMPORT conflict
@@ -722,7 +793,12 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
   // answer with `k`, and settle with the remote data. A trace without either
   // keeps its stops unanswered, as every trace did before the dialog was
   // modeled. The stop stays a failure either way (#10377); what the answer
-  // drops is judged in addition.
+  // drops is judged in addition. The same dialog opens for a local data
+  // conflict (LocalDataConflictError: a remote snapshot over unsynced changes
+  // in file sync, or first remote ops on a never-synced device with data) and
+  // takes the same answers; answered, that conflict is counted
+  // (`answeredConflicts`) but not a failure, and unanswered it stays a
+  // `sync-error`.
   const modelsStopDialog = !options.steps || replaces || options.steps.some((s) => s.k);
 
   const executed: FuzzStep[] = [];
@@ -810,13 +886,13 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
   const settle = (device: FuzzDevice): Promise<void> =>
     sync(device, answersImports() ? 'USE_REMOTE' : undefined, settleStopAnswer);
   for (let round = 0; round < SETTLE_ROUNDS; round++) {
-    const seqBefore = harness.server.latestSeq;
+    const seqBefore = harness.wire.latestSeq;
     let pending = 0;
     for (const name of DEVICES) {
       await settle(deviceOf(name));
       pending += await harness.pendingOpCount(deviceOf(name));
     }
-    if (harness.server.latestSeq === seqBefore && pending === 0) break;
+    if (harness.wire.latestSeq === seqBefore && pending === 0) break;
   }
   const observer = await harness.addDevice('F');
   await settle(observer);
@@ -862,16 +938,27 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
   }
   checkTodayNotes('fresh', reference, fail);
 
+  // Oracle: each project lists exactly its own top-level tasks, in a run
+  // that moves tasks (elsewhere it would add signatures to the other mixes'
+  // seeds, whose single project the divergence oracle already covers).
+  if (movesTasks) {
+    for (const name of DEVICES) {
+      checkProjectMembership(name, await harness.syncedState(deviceOf(name)), fail);
+    }
+    checkProjectMembership('fresh', reference, fail);
+  }
+
   // Oracle: convergence of every device with a fresh one.
   for (const name of DEVICES) {
     const state = await harness.syncedState(deviceOf(name));
-    for (const diff of diffPaths(comparable(state), comparable(reference))) {
-      const path = diff.slice(1).split('.');
+    const diffs = diffsWithOrder(comparable(state), comparable(reference));
+    for (const { diff, path, orderOnly } of diffs) {
       fail(
         `divergence:${pathSignature(diff)}`,
         `${name} vs fresh at ${diff}: ${shortJson(valueAt(state, path))} vs ${shortJson(
           valueAt(reference, path),
         )}`,
+        orderOnly,
       );
     }
   }
@@ -893,13 +980,13 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     const before = comparable(await harness.syncedState(deviceOf(name)));
     await harness.restart(deviceOf(name));
     const after = await harness.syncedState(deviceOf(name));
-    for (const diff of diffPaths(comparable(after), before)) {
-      const path = diff.slice(1).split('.');
+    for (const { diff, path, orderOnly } of diffsWithOrder(comparable(after), before)) {
       fail(
         `restart-changed:${pathSignature(diff)}`,
         `${name} after vs before restart at ${diff}: ${shortJson(
           valueAt(after, path),
         )} vs ${shortJson(valueAt(before, path))}`,
+        orderOnly,
       );
     }
   }
@@ -924,8 +1011,9 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     steps: executed,
     failures,
     rejections: [
-      ...new Set(harness.server.rejections.map((r) => `${r.errorCode} ${r.actionType}`)),
+      ...new Set(harness.wire.rejections.map((r) => `${r.errorCode} ${r.actionType}`)),
     ].sort(),
+    answeredConflicts: harness.events.filter((e) => e.kind === 'data-conflict').length,
     ms: Math.round(performance.now() - started),
     ...(options.debug ? { dump } : {}),
   };
@@ -948,13 +1036,13 @@ const dumpRun = async (
   harness: SyncFuzzHarness,
   devices: FuzzDevice[],
 ): Promise<string[]> => {
-  const lines = harness.server.rows.map(
+  const lines = harness.wire.rows.map(
     ({ serverSeq, op }) =>
       `srv ${serverSeq} ${op.clientId} ${op.actionType} ${entityOfOp(op)} ` +
       `${op.opType}${op.syncImportReason ? ` ${op.syncImportReason}` : ''} ` +
       `${JSON.stringify(op.vectorClock)} ts+${op.timestamp % 1_000_000}`,
   );
-  lines.push(...harness.server.rejections.map((r) => `rej ${JSON.stringify(r)}`));
+  lines.push(...harness.wire.rejections.map((r) => `rej ${JSON.stringify(r)}`));
   lines.push(...harness.events.map((e) => `evt ${JSON.stringify(e)}`));
   for (const device of devices) {
     const validation = await harness.as(device, () =>
@@ -1006,6 +1094,42 @@ interface CheckedState {
   simpleCounter: EntityMap<SimpleCounter>;
   archiveYoung: { task: EntityMap<Task> };
 }
+
+/**
+ * A project's lists are stored membership (`project.taskIds`,
+ * `backlogTaskIds`), written by the task's op without declaring PROJECT. A
+ * top-level task belongs in exactly one of its own project's two lists and in
+ * no other project's; a listed id is a live top-level task.
+ */
+export const checkProjectMembership = (
+  who: string,
+  snapshot: AppStateSnapshot,
+  fail: (signature: string, detail: string) => void,
+): void => {
+  const state = snapshot as unknown as CheckedState;
+  const listedIn = new Map<string, string[]>();
+  for (const [projectId, project] of Object.entries(state.project.entities)) {
+    for (const id of [...(project?.taskIds ?? []), ...(project?.backlogTaskIds ?? [])]) {
+      listedIn.set(id, [...(listedIn.get(id) ?? []), projectId]);
+    }
+  }
+  for (const task of Object.values(state.task.entities)) {
+    if (!task || task.parentId) continue;
+    const where = listedIn.get(task.id) ?? [];
+    listedIn.delete(task.id);
+    const detail = `${who}: ${task.id} projectId=${task.projectId} listed in [${where}]`;
+    if (!where.includes(task.projectId ?? '')) {
+      fail('membership:unlisted-in-own-project', detail);
+    }
+    if (where.some((projectId) => projectId !== task.projectId)) {
+      fail('membership:listed-in-other-project', detail);
+    }
+    if (new Set(where).size !== where.length) fail('membership:listed-twice', detail);
+  }
+  for (const [id, where] of listedIn) {
+    fail('membership:lists-missing-task', `${who}: ${id} listed in [${where}]`);
+  }
+};
 
 /**
  * The Today notes panel renders `note.todayOrder` unfiltered, and the pin
@@ -1073,11 +1197,13 @@ export const checkPreservation = (
   const entityOf = (entity: string): Record<string, unknown> | undefined => {
     const [type, id] = entity.split(':');
     const found =
-      type === 'task'
-        ? (tasks[id] ?? archived[id])
-        : type === 'note'
-          ? state.note.entities[id]
-          : state.simpleCounter.entities[id];
+      type === 'project'
+        ? (state.project.entities as Record<string, unknown>)[id]
+        : type === 'task'
+          ? (tasks[id] ?? archived[id])
+          : type === 'note'
+            ? state.note.entities[id]
+            : state.simpleCounter.entities[id];
     return found as Record<string, unknown> | undefined;
   };
 
@@ -1193,8 +1319,10 @@ export const checkPreservation = (
 
   const lists: [string, unknown][] = [
     ['note.todayOrder', state.note.todayOrder],
-    ['project.noteIds', state.project.entities['INBOX_PROJECT']?.noteIds],
-    ['project.taskIds', state.project.entities['INBOX_PROJECT']?.taskIds],
+    ...Object.values(state.project.entities).flatMap((project): [string, unknown][] => [
+      ['project.noteIds', project?.noteIds],
+      ['project.taskIds', project?.taskIds],
+    ]),
     ['simpleCounter.ids', state.simpleCounter.ids],
   ];
   for (const [name, list] of lists) {

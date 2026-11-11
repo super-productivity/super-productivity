@@ -41,6 +41,32 @@ tasks count as present. Import and USE_REMOTE filtering still run before these
 checks, so intentional replacement can discard old/concurrent work, while
 retained post-import creations/edits remain checked.
 
+## Mixes, setup and project membership
+
+A new intent goes into a mix of its own (`sync-fuzz-profiles.ts`), never into
+an existing one, and `generateIntent` draws its extra targets inside its own
+`case`: the draws before the `switch` are shared by every mix, so one more
+there changes every existing trace. Entities only that mix needs are created
+by a setup of its own (`MOVE_SETUP`), which a replayed trace gets when its
+steps contain the intent. The other mixes' traces, pins and the fixed 120-seed
+baseline then stay as they were. `npm run sync-fuzz:compare` does not compare a
+mix the base lacks; the PR that adds one states its signatures. In the random
+sweep, a pin that moves a task explains only a run that moves one, so its
+primary does not hide that signature in the other mixes.
+
+The `move` mix adds two projects and `moveTask` (`moveToOtherProject`, as
+`TaskService.moveToProject` dispatches it). The ledger records the target as
+`task.projectId`. A move carries the flat pre-move task, so a crossing with one
+is whole-entity (`WHOLE_ENTITY_INTENTS`): either side's snapshot may explain
+the converged project, as for a restore.
+
+`checkProjectMembership` runs only in a run that moves tasks: every top-level
+task is in exactly one of its own project's `taskIds`/`backlogTaskIds`, in no
+other project's, and every listed id is a live top-level task
+(`membership:*`). It needs no ledger. Not modelled: backlog moves, subtasks
+(their parent's move carries them), and a move concurrent with a project
+delete.
+
 ## Boundaries and classifications
 
 Missing entities after multi-device or multiple-round delete conflicts remain
@@ -72,6 +98,52 @@ values, lost implicit scheduling, lost retained post-import creations/edits,
 and a missing causal recreation. Unit controls cover legitimate delete absence,
 archive precedence, original-time comparison and ambiguous delete crossings.
 The baseline-carry controls also reject values no intent supplied.
+
+## Triage: is a finding a bug?
+
+Most seeds show some signature; few are new bugs. These checks narrow a
+finding down. None of them clears one: only the last two decide.
+
+| Check              | How                                                                                                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Order-only?        | `FuzzFailure.orderOnly`: both sides hold the same list members in another order. Read last: an order bug is still a bug.                                         |
+| Settled?           | Every run syncs for up to `SETTLE_ROUNDS` edit-free rounds and compares with a fresh device before the oracles look. A state that needs more rounds still shows. |
+| Minimal trace      | `shrinkTrace`, keeping a list signature more than order; a signature that shows in fewer replays than ran is a harness bug first.                                |
+| Seen before?       | `pinHints`: pins in `sync-fuzz-pinned-traces.json` with the same action kinds. Replay those first; a clean pin among them is not proof of a regression.          |
+| Core or transport? | Replay the shrunk trace on SuperSync and on the file transport (`sync-fuzz-file-transport.ts`).                                                                  |
+| Reachable?         | By hand: can the UI produce the shrunk steps, and does the real server or provider answer as the fake does?                                                      |
+| Real?              | An E2E reproduction with real clients, which a fix needs anyway (AGENTS.md, "Reproduce first").                                                                  |
+
+`sync-fuzz-triage.benchmark.ts` runs the first five checks over a fixed seed
+sweep on both transports. It prints one line per signature (`CANDIDATE` if
+some run shows it as more than order, with `more-than-order=n/m` when not all
+do; else `ORDER-ONLY`) with seed counts per transport, then one `SHRUNK` line
+per distinct shrunk trace: the candidate signatures that shrank to it, every
+signature three replays showed on each transport (`(order)` where it was
+order-only), and its pin hints. Whether
+a finding is new since a release is a separate run:
+`npm run sync-fuzz:compare -- <release tag>`. Read the output with its limits
+in mind:
+
+- A pin hint compares action kinds only (plus the field of a note or habit
+  edit), not devices, order or sync points. It says which pins to replay
+  first: most traces beside a clean pin are another trace, not that fix
+  regressing. A trace without a hint is not new for that: a shrink can stop at
+  a larger trace than the pin.
+- Traces are distinct by their exact steps. Two shrunk traces can still be
+  one bug, and one shape can hold several.
+- `no failure` on a transport is three clean replays there; a signature
+  missing from a transport that shows others is not a clean run.
+- An answered conflict dialog is not a failure. Generated runs answer the one
+  the app opens for a local data conflict (a remote snapshot over unsynced
+  changes in file sync; first remote ops on a never-synced device with data
+  on either transport), and only what the answer drops is judged. The table
+  ends with the runs per transport that answered one: the more there are,
+  the less that column says.
+- The file transport is sequential like the rest of the harness: it exercises
+  the file adapter's snapshot, trimming and revision logic, not two uploads
+  racing each other. A restart keeps the adapter's in-memory revision state,
+  so restart oracles do not cover reloading it.
 
 ## Verification
 

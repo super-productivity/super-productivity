@@ -56,6 +56,7 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatFormField, MatLabel, MatSuffix } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
 import { Log } from '../../../core/log';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
@@ -193,6 +194,7 @@ interface RuleSummary {
     MatSuffix,
     MatInput,
     MatIcon,
+    MatTooltip,
     RepeatTaskHeatmapComponent,
     CollapsibleComponent,
   ],
@@ -528,20 +530,27 @@ export class DialogEditTaskRepeatCfgComponent {
       return this._translateService.instant(T.F.TASK_REPEAT.F.SKIP_INSTANCE);
     }
 
-    // Format date using same logic as ShortDate2Pipe
-    const date = isDBDateStr(this._data.targetDate)
-      ? dateStrToUtcDate(this._data.targetDate)
-      : new Date(this._data.targetDate);
-
-    const formattedDate = formatMonthDay(
-      date,
-      this._dateTimeFormatService.currentLocale(),
-    );
-
     return this._translateService.instant(T.F.TASK_REPEAT.F.SKIP_FOR_DATE, {
-      date: formattedDate,
+      date: this._formatMonthDay(this._data.targetDate),
     });
   });
+  /**
+   * Offered for a future occurrence of a saved series (#11694). Not for
+   * "repeat from completion date": its future dates are forecasts that move
+   * with every completion, so the series would land next to the detached task.
+   */
+  canDetachInstance = computed(
+    () =>
+      this.canRemoveInstance() &&
+      isDBDateStr(this._data.targetDate ?? '') &&
+      !!this._data.repeatCfg &&
+      !this._data.repeatCfg.repeatFromCompletionDate,
+  );
+  detachInstanceButtonText = computed(() =>
+    this._translateService.instant(T.F.TASK_REPEAT.F.DETACH_FOR_DATE, {
+      date: this._formatMonthDay(this._data.targetDate ?? ''),
+    }),
+  );
 
   constructor() {
     // Initialize form config
@@ -1042,6 +1051,18 @@ export class DialogEditTaskRepeatCfgComponent {
       });
   }
 
+  detachInstance(): void {
+    const targetDate = this._data.targetDate;
+    const repeatCfgId = this._data.repeatCfg?.id;
+    if (!targetDate || !repeatCfgId || !this.canDetachInstance()) {
+      return;
+    }
+    // By id: the saved series is detached, not this form's unsaved edits,
+    // which are discarded on close.
+    void this._taskRepeatCfgService.detachTaskRepeatCfgInstance(repeatCfgId, targetDate);
+    this.close();
+  }
+
   close(createdRepeatCfgId?: string): void {
     this._matDialogRef.close(createdRepeatCfgId);
   }
@@ -1102,6 +1123,14 @@ export class DialogEditTaskRepeatCfgComponent {
       }
     }
     return cfg;
+  }
+
+  /** Same format as ShortDate2Pipe. */
+  private _formatMonthDay(targetDate: string): string {
+    const date = isDBDateStr(targetDate)
+      ? dateStrToUtcDate(targetDate)
+      : new Date(targetDate);
+    return formatMonthDay(date, this._dateTimeFormatService.currentLocale());
   }
 
   private _checkCanRemoveInstance(): void {
