@@ -220,23 +220,90 @@ describe('conflict-field-patch.util', () => {
       expect(isFieldPatchEligible(sides([opaque], remote))).toBeFalse();
     });
 
-    it("refuses an overlap with a flat-snapshot op such as moveToOtherProject's", () => {
-      // Its payload is the full PRE-move task: read as fields it would write
-      // the old projectId back.
-      const move = (projectId: string): Operation =>
+    describe('a project move (#11685)', () => {
+      // Its payload is the full PRE-move task plus the target project.
+      const move = (target: string, over: Partial<Operation> = {}): Operation =>
         op({
-          actionType: '[Task Shared] moveToOtherProject' as ActionType,
+          actionType: ActionType.TASK_SHARED_MOVE_TO_PROJECT,
           payload: {
             actionPayload: {
-              task: { id: 'task-1', projectId, title: 't', subTasks: [] },
+              task: { id: 'task-1', projectId: 'P-old', title: 'old', subTasks: [] },
+              targetProjectId: target,
+            },
+            entityChanges: [],
+          },
+          ...over,
+        });
+
+      it('is read as a write of projectId only, never as its pre-move task', () => {
+        const local = [move('P-new', { id: 'move', timestamp: 2000 })];
+        const rename = edit({ title: 'renamed' }, { id: 'rename', timestamp: 3000 });
+        expect(isFieldPatchEligible(sides(local, [rename]))).toBeTrue();
+        // The later rename does not undo the move: the move is re-sent, and
+        // neither the old title nor the old project travels with it.
+        expect(localWinningFieldGroups(sides(local, [rename]))).toEqual([
+          { timestamp: 2000, changes: { projectId: 'P-new' } },
+        ]);
+        // The device holding the rename re-sends only its title.
+        expect(localWinningFieldGroups(sides([rename], local))).toEqual([
+          { timestamp: 3000, changes: { title: 'renamed' } },
+        ]);
+      });
+
+      it('gives two concurrent moves to the newer one, keeping the other side`s fields', () => {
+        const older = [
+          edit({ notes: 'kept' }, { id: 'notes', timestamp: 1000 }),
+          move('P-a', { id: 'a', timestamp: 2000 }),
+        ];
+        const newer = [move('P-b', { id: 'b', clientId: 'B', timestamp: 3000 })];
+        expect(isFieldPatchEligible(sides(older, newer))).toBeTrue();
+        expect(localWinningFieldGroups(sides(older, newer))).toEqual([
+          { timestamp: 1000, changes: { notes: 'kept' } },
+        ]);
+        expect(localWinningFieldGroups(sides(newer, older))).toEqual([
+          { timestamp: 3000, changes: { projectId: 'P-b' } },
+        ]);
+      });
+
+      it('re-emits a server-rejected move as its projectId field', () => {
+        expect(
+          supersededPatchFields([move('P-new')], 'TASK' as EntityType, 'task', 'task-1'),
+        ).toEqual(['projectId']);
+      });
+
+      it('stays opaque for another task, without a target, or as a multi-entity op', () => {
+        const rename = [edit({ title: 'renamed' })];
+        const noTarget = move('');
+        const otherTask = move('P-new', {
+          payload: {
+            actionPayload: {
+              task: { id: 'task-2', projectId: 'P-old' },
               targetProjectId: 'P-new',
             },
             entityChanges: [],
           },
         });
-      expect(isFieldPatchEligible(sides([move('P1')], [move('P1')]))).toBeFalse();
+        const multi = move('P-new', { entityIds: ['task-1', 'task-2'] });
+        for (const unreadable of [noTarget, otherTask, multi]) {
+          expect(isFieldPatchEligible(sides([unreadable], rename))).toBeFalse();
+        }
+      });
+    });
+
+    it('refuses an overlap with a flat-snapshot op, read as fields it would write old values back', () => {
+      const restore = op({
+        actionType: '[Task Shared] restoreTask' as ActionType,
+        payload: {
+          actionPayload: {
+            task: { id: 'task-1', projectId: 'P1', title: 't' },
+            subTasks: [],
+          },
+          entityChanges: [],
+        },
+      });
+      expect(isFieldPatchEligible(sides([restore], [edit({ title: 'b' })]))).toBeFalse();
       expect(
-        supersededPatchFields([move('P1')], 'TASK' as EntityType, 'task', 'task-1'),
+        supersededPatchFields([restore], 'TASK' as EntityType, 'task', 'task-1'),
       ).toBeUndefined();
     });
 

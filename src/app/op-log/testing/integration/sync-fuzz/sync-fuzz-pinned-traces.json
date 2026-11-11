@@ -1708,9 +1708,9 @@
     "rejections": []
   },
   {
-    "class": "move-loses-to-edit",
-    "ref": "#11685 (reproduced in the app: e2e/tests/sync/supersync-task-move-conflict.spec.ts)",
-    "name": "a later rename undoes a concurrent move everywhere but on the mover",
+    "class": "move-crossing-edit",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "a move and a later rename on another device both survive",
     "steps": [
       {
         "d": "C",
@@ -1721,18 +1721,13 @@
         "a": ["renameTask", "t2", "A14"]
       }
     ],
-    "primary": "divergence:.task.entities.*.projectId",
-    "signatures": [
-      "divergence:.project.entities.*.taskIds.*",
-      "divergence:.task.entities.*.projectId",
-      "field-reverted:task.projectId"
-    ],
+    "signatures": [],
     "rejections": []
   },
   {
-    "class": "move-loses-to-edit",
-    "ref": "#11685 (reproduced in the app: e2e/tests/sync/supersync-task-move-conflict.spec.ts)",
-    "name": "a later time delta undoes a concurrent move",
+    "class": "move-crossing-edit",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "a move and a later time delta on another device both survive",
     "steps": [
       {
         "d": "B",
@@ -1743,14 +1738,13 @@
         "a": ["track", "t1", 2000]
       }
     ],
-    "primary": "field-reverted:task.projectId",
-    "signatures": ["field-reverted:task.projectId"],
-    "rejections": []
+    "signatures": [],
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
   },
   {
-    "class": "move-drops-time",
-    "ref": "#11685 (reproduced in the app: e2e/tests/sync/supersync-task-move-conflict.spec.ts)",
-    "name": "a later move drops concurrently tracked time everywhere but on the tracker",
+    "class": "move-crossing-edit",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "tracked time and a later move on another device both survive",
     "steps": [
       {
         "d": "C",
@@ -1761,13 +1755,8 @@
         "a": ["moveTask", "t2", "p2"]
       }
     ],
-    "primary": "time-loss:task",
-    "signatures": [
-      "divergence:.task.entities.*.timeSpent",
-      "divergence:.task.entities.*.timeSpentOnDay",
-      "time-loss:task"
-    ],
-    "rejections": []
+    "signatures": [],
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
   },
   {
     "class": "move-crossing-repair",
@@ -1846,8 +1835,8 @@
   },
   {
     "class": "concurrent-moves",
-    "ref": "#11686 (harness only, untriaged)",
-    "name": "two concurrent moves and a later notes edit leave the task in its old project",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "the newer of two concurrent moves wins beside a third device notes edit",
     "steps": [
       {
         "d": "C",
@@ -1862,17 +1851,13 @@
         "a": ["editTaskNotes", "t3", "A26"]
       }
     ],
-    "primary": "field-unwritten:task.projectId",
-    "signatures": [
-      "divergence:.project.entities.*.taskIds.*",
-      "field-unwritten:task.projectId"
-    ],
+    "signatures": [],
     "rejections": []
   },
   {
     "class": "concurrent-moves",
-    "ref": "#11686 (harness only, untriaged)",
-    "name": "the older of two concurrent moves wins beside time deltas, and the newer mover keeps its own",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "the newer of two concurrent moves wins beside time deltas and a notes edit",
     "steps": [
       {
         "d": "B",
@@ -1895,13 +1880,7 @@
         "a": ["track", "t1", 3000]
       }
     ],
-    "primary": "older-write-won:task.projectId",
-    "signatures": [
-      "divergence:.project.entities.*.taskIds.*",
-      "divergence:.task.entities.*.projectId",
-      "older-write-won:task.projectId",
-      "time-loss:task"
-    ],
+    "signatures": [],
     "rejections": []
   },
   {

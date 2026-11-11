@@ -32,6 +32,7 @@ import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
 import {
   isAdditiveTimeOp,
   isDisjointMergeEligible,
+  projectMoveTarget,
   isOpaqueChangeOp,
   mergeChangedFields,
   NOISE_FIELDS,
@@ -75,12 +76,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * `subTasks`) back. Today's disjoint merge never overlaps with such a
  * snapshot, but a patch of overlapping fields or of a rejected edit must not
  * take its values.
+ *
+ * A single-task `moveToOtherProject` counts as changes-shaped: it is read as
+ * the one field it writes, `{ projectId: target }` (`projectMoveTarget`), never
+ * as its pre-move task (#11685).
  */
 const isChangesShapedOp = (
   op: Operation,
   payloadKey: string,
   entityId: string,
 ): boolean => {
+  if (projectMoveTarget(op, entityId) !== undefined) return true;
   const entity = extractActionPayload(op.payload)?.[payloadKey];
   return isRecord(entity) && entity['id'] === entityId && isRecord(entity['changes']);
 };
