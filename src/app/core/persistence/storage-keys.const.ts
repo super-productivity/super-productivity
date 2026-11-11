@@ -74,6 +74,9 @@ export enum LS {
   CALENDER_EVENTS_LAST_SKIP_DAY = 'SUP_CALENDER_EVENTS_LAST_SKIP_DAY',
   HIDDEN_CALENDAR_EVENT_IDS = 'SUP_HIDDEN_CALENDAR_EVENT_IDS',
   HIDDEN_CALENDAR_PROVIDER_IDS = 'SUP_HIDDEN_CALENDAR_PROVIDER_IDS',
+  // Ids of calendar providers whose last fetch failed, kept across restarts so a
+  // broken calendar is reported once and not on every app start. Device-local.
+  CAL_PROVIDER_FAILING_IDS = 'SUP_CAL_PROVIDER_FAILING_IDS',
 
   ISSUE_SEARCH_CACHE = 'SUP_ISSUE_SEARCH_CACHE',
 
@@ -124,6 +127,10 @@ export enum LS {
   // Colors and bars of the last rendered frame, painted by the launch screen in
   // index.html before any JS runs (see launch-frame.ts). Device-local.
   LAUNCH_FRAME = 'SUP_LAUNCH_FRAME',
+  // How long the last start took until the boot splash faded (ms since
+  // navigation start). The launch screen skips its tip after a quick one.
+  // Device-local.
+  LAST_BOOT_MS = 'SUP_LAST_BOOT_MS',
 
   // Destination of the phone bottom nav's second slot. Device-local, never
   // synced: the bar only exists on narrow screens.

@@ -433,52 +433,6 @@
         "WRITE_A_COMMENT": "写评论"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "预填充的持续时间包含前几天的未跟踪数据。",
-        "T_ALREADY_TRACKED": "已跟踪",
-        "T_TITLE": "标题",
-        "T_TO_BE_SUBMITTED": "待提交",
-        "TITLE": "向 GitLab 提交问题花费的时间",
-        "TOTAL_MSG": "您今天将向 <em>{{nrOfTasksToSubmit}}</em> 个不同的事项提交总计 <em>{{totalTimeToSubmit}}</em> 的工作时间。"
-      },
-      "FORM": {
-        "FILTER": "自定义筛选",
-        "FILTER_DESCRIPTION": "参见 https://docs.gitlab.com/ee/api/issues.html#list-issues。可以通过 & 组合多个",
-        "FILTER_USER": "筛选用户名",
-        "GITLAB_BASE_URL": "自定义 GitLab 基本 URL（可选）",
-        "PROJECT": "用户名/项目",
-        "PROJECT_HINT": "例如 super-productivity/super-productivity",
-        "SCOPE": "范围",
-        "SCOPE_ALL": "全部",
-        "SCOPE_ASSIGNED": "分配给我",
-        "SCOPE_CREATED": "由我创建",
-        "SOURCE": "来源",
-        "SOURCE_GLOBAL": "全部",
-        "SOURCE_GROUP": "组",
-        "SOURCE_PROJECT": "项目",
-        "SUBMIT_TIMELOGS": "向 Gitlab 提交时间日志",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "单击完成一天后显示时间跟踪对话框",
-        "TOKEN": "访问令牌"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定项目的未结 GitLab（无论是在线版本还是自托管实例）问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动导入所有未结问题。</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "负责人",
-        "AT": "在",
-        "DESCRIPTION": "描述",
-        "LABELS": "标签",
-        "MARK_AS_CHECKED": "将更新标记为已检查",
-        "PROJECT": "项目",
-        "STATUS": "状态",
-        "SUMMARY": "摘要",
-        "WRITE_A_COMMENT": "写评论"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: 未知错误 {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "此集成很可能无法在您的浏览器中工作。请下载超级生产力的桌面版或安卓版！",
       "DEFAULT": {

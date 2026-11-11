@@ -37,9 +37,9 @@ const getBackupDir = (): string => path.join(app.getPath('userData'), `backups`)
  * pointed at them. Display-oriented but not inert: `BACKUP_LOAD_DATA` below
  * also accepts it as an allow-listed read root.
  *
- * shortcut: the package family name is hardcoded and nothing in CI would notice
- * it drifting (the appx config lives in the WIN_STORE_ELECTRON_BUILDER_YML
- * secret); drift just fails the probe and we show getBackupDir(). Verified against
+ * shortcut: the package family name is hardcoded and nothing in CI ties it to
+ * `appx.identityName` in build/electron-builder.appx.yaml; drift just fails the
+ * probe and we show getBackupDir(). Verified against
  * the shipped v18.15.1 appx on 2026-07-21 — it is `<Identity Name>_<PublisherId>`,
  * PublisherId being base32(SHA-256(UTF-16LE Publisher)[0..8]), so any release
  * artifact re-checks it without a Windows machine.

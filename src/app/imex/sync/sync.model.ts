@@ -6,7 +6,6 @@ import { TaskRepeatCfgState } from '../../features/task-repeat-cfg/task-repeat-c
 import { TagState } from '../../features/tag/tag.model';
 import { SimpleCounterState } from '../../features/simple-counter/simple-counter.model';
 import { ProjectArchive } from '../../features/project/project-archive.model';
-import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { ProjectState } from '../../features/project/project.model';
 import { NoteState } from '../../features/note/note.model';
 import { PlannerState } from '../../features/planner/store/planner.reducer';
@@ -34,15 +33,6 @@ export interface AppBaseWithoutLastSyncModelChange {
   section: SectionState;
 }
 
-export interface AppMainFileNoRevsData extends AppBaseWithoutLastSyncModelChange {
-  lastLocalSyncModelChange: number | null;
-}
-
-export interface AppMainFileData extends AppMainFileNoRevsData {
-  archiveRev: string;
-  archiveLastUpdate: number;
-}
-
 export interface AppArchiveFileData {
   taskArchive: TaskArchive;
   archivedProjects: ProjectArchive;
@@ -50,23 +40,6 @@ export interface AppArchiveFileData {
 
 export interface AppBaseData
   extends AppBaseWithoutLastSyncModelChange, AppArchiveFileData {}
-
-export interface LocalSyncMetaForProvider {
-  lastSync: number;
-  rev: string | null;
-  revTaskArchive: string | null;
-  // currently dropbox only
-  accessToken?: string;
-  refreshToken?: string;
-  _tokenExpiresAt?: number;
-}
-
-export interface LocalSyncMetaModel {
-  [SyncProviderId.WebDAV]: LocalSyncMetaForProvider;
-  [SyncProviderId.Dropbox]: LocalSyncMetaForProvider;
-  [SyncProviderId.OneDrive]: LocalSyncMetaForProvider;
-  [SyncProviderId.LocalFile]: LocalSyncMetaForProvider;
-}
 
 export type AppBaseDataEntityLikeStates =
   | ProjectState
@@ -81,15 +54,3 @@ export interface AppDataCompleteLegacy extends AppBaseData {
 }
 
 export type DialogConflictResolutionResult = 'USE_LOCAL' | 'USE_REMOTE' | false;
-
-export type DialogPermissionResolutionResult = 'DISABLED_SYNC' | 'GRANTED_PERMISSION';
-
-export type SyncGetRevResult = 'NO_REMOTE_DATA' | 'HANDLED_ERROR' | Error;
-
-export type SyncResultLegacy =
-  | 'SUCCESS'
-  | 'NO_UPDATE_REQUIRED'
-  | 'USER_ABORT'
-  | 'ERROR'
-  | 'SPECIAL'
-  | 'CONFLICT_DIALOG';

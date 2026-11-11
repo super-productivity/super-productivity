@@ -12,10 +12,13 @@ import { setIsLocked } from './shared-state';
  * from the app the user was in (#10726, #10700). The OS restores the previous
  * foreground window itself; the electron#20464 workaround targets the
  * post-reboot case and lives in showOrFocus()/ready-to-show.
+ *
+ * Takes a getter: start-app registers these on `ready` before createMainWin()
+ * has assigned the window, and a captured `undefined` crashed the app (#11430).
  */
 export const initPowerMonitorHandlers = (
   powerMonitor: Pick<PowerMonitor, 'on'>,
-  mainWin: BrowserWindow,
+  getMainWin: () => BrowserWindow | undefined,
   sendIdleMsgIfOverMin: (idleTime: number) => unknown,
 ): void => {
   let suspendStart: number;
@@ -24,7 +27,7 @@ export const initPowerMonitorHandlers = (
     log(`powerMonitor: ${reason} detected`);
     setIsLocked(true);
     suspendStart = Date.now();
-    mainWin.webContents.send(IPC.SUSPEND);
+    getMainWin()?.webContents.send(IPC.SUSPEND);
   };
 
   const onWake = (reason: string): void => {
@@ -32,7 +35,7 @@ export const initPowerMonitorHandlers = (
     log(`powerMonitor: ${reason} detected. Idle time: ${idleTime}ms`);
     setIsLocked(false);
     sendIdleMsgIfOverMin(idleTime);
-    mainWin.webContents.send(IPC.RESUME);
+    getMainWin()?.webContents.send(IPC.RESUME);
   };
 
   powerMonitor.on('suspend', () => onSleep('System suspend'));

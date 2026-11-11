@@ -25,6 +25,7 @@ import {
   isUiPossible,
   REPLACEMENT_INTENTS,
   SETUP_INTENTS,
+  MOVE_SETUP,
   viewOf,
 } from './sync-fuzz-actions';
 import {
@@ -166,6 +167,9 @@ interface LedgerWrite {
  *   remote one is read per field but writes every field at its own time, as
  *   a snapshot does; the side rule here differs only where the other side
  *   has a later intent than the restore (kept as before, not seen in fuzz).
+ * - `moveTask`: `moveToOtherProject` carries the flat PRE-move task, not
+ *   `{ id, changes }`, so a local one refuses (`isChangesShapedOp`) and the
+ *   field patch never takes a remote one's values.
  * A `track` is whole-entity when it plans the task for today (`opaque`,
  * decision 6). A plain delta is not: detection drops a remote one that is
  * disjoint from the local side before it reaches a conflict
@@ -174,6 +178,7 @@ interface LedgerWrite {
  * and a local one stays pending beside the patch (`keptLocalTimeDeltas`).
  */
 const WHOLE_ENTITY_INTENTS: ReadonlySet<Intent[0]> = new Set([
+  'moveTask',
   'countHabit',
   'deleteTask',
   'archiveTask',
@@ -194,6 +199,7 @@ const latestOf = (side: readonly LedgerEntry[]): LedgerEntry =>
 
 const entityOfIntent = (intent: Intent): string => {
   const [kind, id] = intent;
+  if (kind === 'addProject') return `project:${id}`;
   const type = /Task|^track$/.test(kind) ? 'task' : /Note$/.test(kind) ? 'note' : 'habit';
   return `${type}:${id}`;
 };
@@ -421,7 +427,7 @@ export interface Replacement {
 
 /** The fields the intents write (FuzzWrite), per entity type. */
 const WRITTEN_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  task: ['title', 'notes', 'isDone', 'dueDay', 'dueWithTime'],
+  task: ['title', 'notes', 'isDone', 'dueDay', 'dueWithTime', 'projectId'],
   note: ['content', 'isPinnedToToday', 'isLock'],
   habit: ['title', 'isEnabled'],
 };
@@ -559,7 +565,7 @@ const eventSignature = (event: FuzzEvent): string => {
   return stop
     ? `stop:${stop[1]}`
     : `${event.kind}:${event.detail
-        .replace(/\b[tnhb]\d+\b|fuzzDev\w|\b[BEAI]_[A-Za-z0-9]{6}\b|[0-9a-f-]{36}/g, '*')
+        .replace(/\b[tnhbp]\d+\b|fuzzDev\w|\b[BEAI]_[A-Za-z0-9]{6}\b|[0-9a-f-]{36}/g, '*')
         .slice(0, 120)}`;
 };
 
@@ -570,7 +576,7 @@ const pathSignature = (path: string): string =>
     .slice(0, 6)
     .map((part, i, parts) =>
       parts[i - 1] === 'entities' ||
-      /^\d+$|^[tnh]\d+$|^fuzzDev|^[BEAI]_[A-Za-z0-9]{6}$|^\d{4}-\d{2}-\d{2}$/.test(part)
+      /^\d+$|^[tnhp]\d+$|^fuzzDev|^[BEAI]_[A-Za-z0-9]{6}$|^\d{4}-\d{2}-\d{2}$/.test(part)
         ? '*'
         : part,
     )
@@ -695,6 +701,16 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
       await executeAndNote(intent);
     }
   });
+  // A replayed trace carries no mix, so the second-project setup follows
+  // from its steps, as `replaces` does below.
+  const movesTasks = options.steps
+    ? options.steps.some((s) => s.a?.[0] === 'moveTask')
+    : (options.weights ?? []).some(([kind]) => kind === 'moveTask');
+  if (movesTasks) {
+    await harness.as(deviceOf('A'), async () => {
+      for (const intent of MOVE_SETUP) await executeAndNote(intent);
+    });
+  }
   for (const name of DEVICES) await sync(deviceOf(name));
 
   // Only a run that can replace state answers the SYNC_IMPORT conflict
@@ -862,6 +878,16 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
   }
   checkTodayNotes('fresh', reference, fail);
 
+  // Oracle: each project lists exactly its own top-level tasks, in a run
+  // that moves tasks (elsewhere it would add signatures to the other mixes'
+  // seeds, whose single project the divergence oracle already covers).
+  if (movesTasks) {
+    for (const name of DEVICES) {
+      checkProjectMembership(name, await harness.syncedState(deviceOf(name)), fail);
+    }
+    checkProjectMembership('fresh', reference, fail);
+  }
+
   // Oracle: convergence of every device with a fresh one.
   for (const name of DEVICES) {
     const state = await harness.syncedState(deviceOf(name));
@@ -1008,6 +1034,42 @@ interface CheckedState {
 }
 
 /**
+ * A project's lists are stored membership (`project.taskIds`,
+ * `backlogTaskIds`), written by the task's op without declaring PROJECT. A
+ * top-level task belongs in exactly one of its own project's two lists and in
+ * no other project's; a listed id is a live top-level task.
+ */
+export const checkProjectMembership = (
+  who: string,
+  snapshot: AppStateSnapshot,
+  fail: (signature: string, detail: string) => void,
+): void => {
+  const state = snapshot as unknown as CheckedState;
+  const listedIn = new Map<string, string[]>();
+  for (const [projectId, project] of Object.entries(state.project.entities)) {
+    for (const id of [...(project?.taskIds ?? []), ...(project?.backlogTaskIds ?? [])]) {
+      listedIn.set(id, [...(listedIn.get(id) ?? []), projectId]);
+    }
+  }
+  for (const task of Object.values(state.task.entities)) {
+    if (!task || task.parentId) continue;
+    const where = listedIn.get(task.id) ?? [];
+    listedIn.delete(task.id);
+    const detail = `${who}: ${task.id} projectId=${task.projectId} listed in [${where}]`;
+    if (!where.includes(task.projectId ?? '')) {
+      fail('membership:unlisted-in-own-project', detail);
+    }
+    if (where.some((projectId) => projectId !== task.projectId)) {
+      fail('membership:listed-in-other-project', detail);
+    }
+    if (new Set(where).size !== where.length) fail('membership:listed-twice', detail);
+  }
+  for (const [id, where] of listedIn) {
+    fail('membership:lists-missing-task', `${who}: ${id} listed in [${where}]`);
+  }
+};
+
+/**
  * The Today notes panel renders `note.todayOrder` unfiltered, and the pin
  * toggle reads `isPinnedToToday`, so they must agree on every device. The
  * convergence oracle misses a gap that all devices share.
@@ -1073,11 +1135,13 @@ export const checkPreservation = (
   const entityOf = (entity: string): Record<string, unknown> | undefined => {
     const [type, id] = entity.split(':');
     const found =
-      type === 'task'
-        ? (tasks[id] ?? archived[id])
-        : type === 'note'
-          ? state.note.entities[id]
-          : state.simpleCounter.entities[id];
+      type === 'project'
+        ? (state.project.entities as Record<string, unknown>)[id]
+        : type === 'task'
+          ? (tasks[id] ?? archived[id])
+          : type === 'note'
+            ? state.note.entities[id]
+            : state.simpleCounter.entities[id];
     return found as Record<string, unknown> | undefined;
   };
 
@@ -1193,8 +1257,10 @@ export const checkPreservation = (
 
   const lists: [string, unknown][] = [
     ['note.todayOrder', state.note.todayOrder],
-    ['project.noteIds', state.project.entities['INBOX_PROJECT']?.noteIds],
-    ['project.taskIds', state.project.entities['INBOX_PROJECT']?.taskIds],
+    ...Object.values(state.project.entities).flatMap((project): [string, unknown][] => [
+      ['project.noteIds', project?.noteIds],
+      ['project.taskIds', project?.taskIds],
+    ]),
     ['simpleCounter.ids', state.simpleCounter.ids],
   ];
   for (const [name, list] of lists) {

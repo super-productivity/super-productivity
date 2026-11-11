@@ -37,6 +37,7 @@ import { GlobalTrackingIntervalService } from '../../core/global-tracking-interv
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { BatchedTimeSyncAccumulator } from '../../core/util/batched-time-sync-accumulator';
 import { Log } from '../../core/log';
+import { toDeletedSimpleCounterSnapshot } from './to-deleted-simple-counter-snapshot.util';
 
 @Injectable({
   providedIn: 'root',
@@ -322,12 +323,19 @@ export class SimpleCounterService implements OnDestroy {
   }
 
   deleteSimpleCounter(id: string): void {
+    const counter = this._counterEntities()[id];
+    const pendingTime = this._stopwatchAccumulator.getPendingEntries();
     // Clean up accumulators to prevent memory leak
     this._stopwatchAccumulator.clearOne(id);
     this.clearCountdownRemaining(id);
-    const simpleCounter = this._counterEntities()[id];
+    // Carry the deleted counter so a concurrent remote update that wins can
+    // restore it intact (#11465), as the other devices know it (#11495).
     this._store$.dispatch(
-      deleteSimpleCounter(simpleCounter ? { id, simpleCounter } : { id }),
+      deleteSimpleCounter(
+        counter
+          ? { id, simpleCounter: toDeletedSimpleCounterSnapshot(counter, pendingTime) }
+          : { id },
+      ),
     );
   }
 
