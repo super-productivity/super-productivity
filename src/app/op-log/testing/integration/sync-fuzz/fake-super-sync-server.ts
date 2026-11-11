@@ -882,8 +882,15 @@ export class FakeSuperSyncServer {
     const keepsRepairPrefix =
       snapshotRow?.op.opType === 'REPAIR' &&
       sinceSeq > 0 &&
+      sinceSeq < snapshotRow.serverSeq &&
       firstSeq !== null &&
-      firstSeq <= sinceSeq + 1;
+      firstSeq <= sinceSeq + 1 &&
+      !this.rows.some(
+        (row) =>
+          row.serverSeq > sinceSeq &&
+          row.serverSeq < snapshotRow.serverSeq &&
+          (row.op.opType === 'SYNC_IMPORT' || row.op.opType === 'BACKUP_IMPORT'),
+      );
     if (snapshotRow && sinceSeq < snapshotRow.serverSeq && !keepsRepairPrefix) {
       effectiveSinceSeq = snapshotRow.serverSeq - 1;
       if (includeSnapshotMetadata) {

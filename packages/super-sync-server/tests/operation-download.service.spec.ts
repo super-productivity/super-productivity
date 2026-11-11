@@ -762,7 +762,9 @@ describe('OperationDownloadService', () => {
         opType: string;
         sinceSeq: number;
         minSeq: number;
-      }): Promise<{ startedAfter: number; clock: unknown }> => {
+        importBetween?: boolean;
+        firstReturnedSeq?: number;
+      }): Promise<{ startedAfter: number; clock: unknown; gap: boolean }> => {
         let startedAfter = -1;
         vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) =>
           fn({
@@ -770,23 +772,30 @@ describe('OperationDownloadService', () => {
               findFirst: mockOpFindFirst(null, opts.minSeq),
               findMany: vi.fn().mockImplementation(async (args: any) => {
                 startedAfter = args.where.serverSeq.gt;
-                return [createMockOpRow(startedAfter + 1)];
+                return [createMockOpRow(opts.firstReturnedSeq ?? startedAfter + 1)];
               }),
             },
             userSyncState: {
               findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
             },
-            $queryRaw: mockTxQueryRaw({ serverSeq: 50, opType: opts.opType }),
+            // Every other raw read here is the import-in-between probe.
+            $queryRaw: mockTxQueryRaw(
+              { serverSeq: 50, opType: opts.opType },
+              opts.importBetween ? [{ server_seq: 20 }] : [],
+            ),
           }),
         );
         const result = await service.getOpsSinceWithSeq(1, opts.sinceSeq);
         expect(result.latestSnapshotSeq).toBe(50);
-        expect(result.gapDetected).toBe(false);
-        return { startedAfter, clock: result.snapshotVectorClock };
+        return {
+          startedAfter,
+          clock: result.snapshotVectorClock,
+          gap: result.gapDetected,
+        };
       };
 
       it('sends them to a device that synced before, while they are retained', async () => {
-        const { startedAfter, clock } = await download({
+        const { startedAfter, clock, gap } = await download({
           opType: 'REPAIR',
           sinceSeq: 10,
           minSeq: 1,
@@ -794,6 +803,7 @@ describe('OperationDownloadService', () => {
         expect(startedAfter).toBe(10);
         // Nothing was skipped, so there is no skipped-ops clock to aggregate.
         expect(clock).toBeUndefined();
+        expect(gap).toBe(false);
         expect(prisma.$queryRaw).not.toHaveBeenCalled();
       });
 
@@ -807,6 +817,39 @@ describe('OperationDownloadService', () => {
         expect(
           (await download({ opType: 'REPAIR', sinceSeq: 10, minSeq: 12 })).startedAfter,
         ).toBe(49);
+      });
+
+      it('skips to the REPAIR when an import lies in between', async () => {
+        expect(
+          (
+            await download({
+              opType: 'REPAIR',
+              sinceSeq: 10,
+              minSeq: 1,
+              importBetween: true,
+            })
+          ).startedAfter,
+        ).toBe(49);
+      });
+
+      it('reports a hole in the retained ops as a gap', async () => {
+        const result = await download({
+          opType: 'REPAIR',
+          sinceSeq: 10,
+          minSeq: 1,
+          firstReturnedSeq: 13,
+        });
+        expect(result.startedAfter).toBe(10);
+        // The client then restarts from 0 and is moved to the REPAIR, as before.
+        expect(result.gap).toBe(true);
+      });
+
+      it('keeps sending them page by page until the REPAIR', async () => {
+        for (const sinceSeq of [10, 30, 48]) {
+          expect(
+            (await download({ opType: 'REPAIR', sinceSeq, minSeq: 1 })).startedAfter,
+          ).toBe(sinceSeq);
+        }
       });
 
       it('skips to the REPAIR for a new device', async () => {

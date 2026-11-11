@@ -854,8 +854,8 @@ test.describe('@supersync REPAIR with an offline client', () => {
    * applies every op the repair was built from". That only holds for a device
    * whose cursor is at the REPAIR's base. Here B is behind it: A uploads a
    * task after B's last sync and before the REPAIR. The server moves B's
-   * download to the REPAIR, past A's task, so B has to get that task from the
-   * snapshot it defers. See docs/plans/2026-11-10-sync-fleet-boundary.md.
+   * download to the REPAIR, past A's task, and B dropped the snapshot it would
+   * have got that task from. The server now keeps sending the retained ops.
    */
   test('gives an offline client with pending work the ops uploaded before the REPAIR', async ({
     browser,
