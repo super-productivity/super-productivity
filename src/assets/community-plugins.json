@@ -198,10 +198,15 @@
   {
     "name": "Caffeine Tracker",
     "shortDescription": "Track caffeine intake and correlate it with task completions, focus, and habits in Super Productivity.",
-    "url": "https://github.com/BigWebstas/sp-caffiene-tracker",
+    "url": "https://github.com/BigWebstas/sp-caffeine-tracker",
     "author": "BigWebstas",
     "authorUrl": "https://github.com/BigWebstas",
-    "id": "caffeine-tracker"
+    "id": "caffeine-tracker",
+    "release": {
+      "version": "1.56.0",
+      "downloadUrl": "https://github.com/BigWebstas/sp-caffeine-tracker/releases/download/1.56.0/caffeine-tracker-v1.56.0.zip",
+      "sha256": "6af28a3af0ecb2c567c85f9fd3a2e55a7bc56c832cf5f14eba0d9d1712dd0a4e"
+    }
   },
   {
     "name": "Auto Tag Manager",
