@@ -192,4 +192,139 @@ test.describe('@webdav a late v3 seed survives a fresh client first write', () =
       await closeContextsSafely(joining.context);
     }
   });
+
+  // Severity probe for the gap above, with live devices instead of a copied
+  // seed: device S (one task) seeds an empty v3 folder while the first write of
+  // a fresh device J (one pending task) is held. Both then sync again and a
+  // third, empty device C joins. A conflict dialog is the app asking, not a
+  // silent loss; the invariants are that no device drops its own task without
+  // being asked, and that a new device can still get S's data.
+  test('two live devices seeding one empty v3 folder: no silent task loss', async ({
+    browser,
+    baseURL,
+    request,
+  }) => {
+    const folder = generateSyncFolderName('v3-race');
+    const remote = `${root}${folder}/DEV/`;
+    const sTitle = `Seeder task ${folder}`;
+    const jTitle = `Joiner task ${folder}`;
+    await createSyncFolder(request, folder);
+    await createSyncFolder(request, `${folder}/DEV`);
+
+    const s = await setupSyncClient(browser, baseURL);
+    const j = await setupSyncClient(browser, baseURL);
+    let c: Awaited<ReturnType<typeof setupSyncClient>> | undefined;
+    let jSetupError: string | undefined;
+    const asked: Record<string, number> = { s: 0, j: 0, c: 0 };
+    const settle = async (key: string, page: Page, sync: SyncPage): Promise<void> => {
+      const dialog = page.locator('dialog-sync-conflict');
+      if (await dialog.isVisible().catch(() => false)) asked[key]++;
+      await cancelConflictIfAsked(page, sync);
+    };
+    const syncOnce = async (key: string, page: Page, sync: SyncPage): Promise<void> => {
+      await sync.triggerSync();
+      await waitForSyncComplete(page, sync, 30000, { expectConflict: true }).catch(
+        () => undefined,
+      );
+      await settle(key, page, sync);
+    };
+    const titles = (page: Page): Promise<string[]> =>
+      page.locator('task').allTextContents();
+
+    try {
+      const sSync = new SyncPage(s.page);
+      const jSync = new SyncPage(j.page);
+      for (const [client, title] of [
+        [s, sTitle],
+        [j, jTitle],
+      ] as const) {
+        const work = new WorkViewPage(client.page);
+        await work.waitForTaskList();
+        await work.addTask(title);
+        await waitForStatePersistence(client.page);
+        await keepSyncManual(client.page);
+      }
+
+      // Hold J's first write until S has seeded the folder.
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      let markHeld!: () => void;
+      const held = new Promise<void>((resolve) => (markHeld = resolve));
+      let isHeld = false;
+      await j.page.route(`**/${folder}/DEV/**`, async (route) => {
+        if (!isHeld && WRITE_METHODS.has(route.request().method())) {
+          isHeld = true;
+          markHeld();
+          await released;
+        }
+        await route.continue();
+      });
+      const jSetup = jSync
+        .setupWebdavSync({
+          ...V3_CONFIG,
+          syncFolderPath: `/${folder}`,
+        })
+        .catch((e: unknown) => {
+          // A helper that rejects an unexpected dialog must not hide the outcome.
+          jSetupError = String(e).slice(0, 300);
+        });
+      await held;
+
+      await sSync.setupWebdavSync({ ...V3_CONFIG, syncFolderPath: `/${folder}` });
+      await expect(sSync.syncSpinner).toBeHidden({ timeout: 30000 });
+      await settle('s', s.page, sSync);
+      const afterSeed = await remoteState(request, remote);
+      expect(afterSeed, 'S seeded the folder').toContain(sTitle);
+
+      release();
+      await jSetup;
+      await expect(jSync.syncSpinner).toBeHidden({ timeout: 30000 });
+      await settle('j', j.page, jSync);
+      const afterJoin = await remoteState(request, remote).catch((e) => String(e));
+
+      // A second round on both devices, S first.
+      await syncOnce('s', s.page, sSync);
+      await syncOnce('j', j.page, jSync);
+      await syncOnce('s', s.page, sSync);
+
+      // A third, empty device joins.
+      c = await setupSyncClient(browser, baseURL);
+      const cSync = new SyncPage(c.page);
+      await new WorkViewPage(c.page).waitForTaskList();
+      await keepSyncManual(c.page);
+      await cSync.setupWebdavSync({ ...V3_CONFIG, syncFolderPath: `/${folder}` });
+      await expect(cSync.syncSpinner).toBeHidden({ timeout: 30000 });
+      await settle('c', c.page, cSync);
+      const final = await remoteState(request, remote).catch((e) => String(e));
+
+      const has = (text: string, title: string): boolean => text.includes(title);
+      const summary = {
+        asked,
+        jSetupError,
+        serverAfterJoin: { s: has(afterJoin, sTitle), j: has(afterJoin, jTitle) },
+        serverFinal: { s: has(final, sTitle), j: has(final, jTitle) },
+        s: await titles(s.page).then((t) => ({
+          s: t.some((x) => has(x, sTitle)),
+          j: t.some((x) => has(x, jTitle)),
+        })),
+        j: await titles(j.page).then((t) => ({
+          s: t.some((x) => has(x, sTitle)),
+          j: t.some((x) => has(x, jTitle)),
+        })),
+        c: await titles(c.page).then((t) => ({
+          s: t.some((x) => has(x, sTitle)),
+          j: t.some((x) => has(x, jTitle)),
+        })),
+      };
+      console.log(`V3_RACE_SUMMARY ${JSON.stringify(summary)}`);
+
+      // No device drops its own task without being asked.
+      if (asked.s === 0) expect.soft(summary.s.s, 'S kept its task').toBe(true);
+      if (asked.j === 0) expect.soft(summary.j.j, 'J kept its task').toBe(true);
+      // A new device can still get S's data, which S believes is synced.
+      expect.soft(summary.c.s, "a new device gets S's task").toBe(true);
+    } finally {
+      await closeContextsSafely(s.context, j.context, ...(c ? [c.context] : []));
+    }
+  });
 });
