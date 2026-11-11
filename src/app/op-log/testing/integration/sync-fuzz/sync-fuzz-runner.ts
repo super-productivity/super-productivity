@@ -182,9 +182,9 @@ interface LedgerWrite {
  *   remote one is read per field but writes every field at its own time, as
  *   a snapshot does; the side rule here differs only where the other side
  *   has a later intent than the restore (kept as before, not seen in fuzz).
- * - `moveTask`: `moveToOtherProject` carries the flat PRE-move task, not
- *   `{ id, changes }`, so a local one refuses (`isChangesShapedOp`) and the
- *   field patch never takes a remote one's values.
+ * `moveTask` is not one of them: `moveToOtherProject` carries the flat PRE-move
+ * task, but conflict resolution reads it as the `projectId` it writes
+ * (`projectMoveTarget`, #11685), so a crossing with it resolves per field.
  * A `track` is whole-entity when it plans the task for today (`opaque`,
  * decision 6). A plain delta is not: detection drops a remote one that is
  * disjoint from the local side before it reaches a conflict
@@ -193,7 +193,6 @@ interface LedgerWrite {
  * and a local one stays pending beside the patch (`keptLocalTimeDeltas`).
  */
 const WHOLE_ENTITY_INTENTS: ReadonlySet<Intent[0]> = new Set([
-  'moveTask',
   'countHabit',
   'deleteTask',
   'archiveTask',
