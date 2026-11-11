@@ -17,11 +17,15 @@ import {
   mapListRow,
   mapSearchHit,
   mapWorkItem,
+  parseWorkspaceUrl,
   PlaneConfig,
   PlaneProject,
   PlaneSearchHit,
+  PlaneUserConfig,
   PlaneWorkItem,
   projectRoot,
+  toProjectOptions,
+  workspaceRoot,
 } from './plane-helpers';
 
 declare const PluginAPI: {
@@ -33,11 +37,13 @@ interface PlaneSearchResponse {
   issues?: PlaneSearchHit[];
 }
 
-interface PlaneListResponse {
-  results?: PlaneWorkItem[];
+interface PlanePage<T> {
+  results?: T[];
   next_cursor?: string;
   next_page_results?: boolean;
 }
+
+type PlaneListResponse = PlanePage<PlaneWorkItem>;
 
 const t = (key: string, fallback: string): string => {
   try {
@@ -49,8 +55,46 @@ const t = (key: string, fallback: string): string => {
   }
 };
 
-const asConfig = (config: Record<string, unknown>): PlaneConfig =>
-  config as unknown as PlaneConfig;
+const asConfig = (config: Record<string, unknown>): PlaneConfig => {
+  const raw = config as PlaneUserConfig;
+  return {
+    apiKey: raw.apiKey,
+    projectId: raw.projectId,
+    ...parseWorkspaceUrl(raw.workspaceUrl),
+  };
+};
+
+/**
+ * Every project the key can see in the workspace, for the project picker. Ordered by
+ * `created_at` because Plane pages by offset and its default `sort_order` ties, which
+ * can drop or repeat rows across pages.
+ */
+const loadProjectOptions = async (
+  config: Record<string, unknown>,
+  http: PluginHttp,
+): Promise<{ label: string; value: string }[]> => {
+  const raw = config as PlaneUserConfig;
+  const root = workspaceRoot(parseWorkspaceUrl(raw.workspaceUrl));
+  const projects: PlaneProject[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < LIST_MAX_PAGES; page++) {
+    const params: Record<string, string> = {
+      per_page: String(LIST_PAGE_SIZE),
+      order_by: 'created_at',
+      fields: 'id,name,identifier,archived_at',
+    };
+    if (cursor) {
+      params['cursor'] = cursor;
+    }
+    const res = await http.get<PlanePage<PlaneProject>>(`${root}/projects/`, { params });
+    projects.push(...(res?.results || []));
+    if (!res?.next_page_results || !res.next_cursor) {
+      break;
+    }
+    cursor = res.next_cursor;
+  }
+  return toProjectOptions(projects);
+};
 
 const fetchProjectIdentifier = async (
   cfg: PlaneConfig,
@@ -119,45 +163,35 @@ PluginAPI.registerIssueProvider({
       url: 'https://developers.plane.so/api-reference/introduction',
     },
     {
-      key: 'workspaceSlug',
+      // One pasted address carries the instance and the workspace, so Plane Cloud and
+      // self-hosted take the same step.
+      key: 'workspaceUrl',
       type: 'input',
-      label: t('CFG.WORKSPACE_SLUG', 'Workspace slug'),
+      label: t('CFG.WORKSPACE_URL', 'Workspace URL'),
       required: true,
       description: t(
-        'CFG.WORKSPACE_SLUG_HELP',
-        'From the URL: app.plane.so/<workspace-slug>/...',
+        'CFG.WORKSPACE_URL_HELP',
+        'Open your workspace in Plane and copy the address from your browser, e.g. ' +
+          'https://app.plane.so/<workspace>/ or https://plane.example.com/<workspace>/',
       ),
     },
     {
+      // Picked from a list, not typed: Plane's own "Project ID" setting is the short
+      // identifier (e.g. `ACME`), not the UUID the API needs.
       key: 'projectId',
-      type: 'input',
-      // Plane labels the short identifier (e.g. `ACME`) "Project ID" in its own
-      // settings, so reusing that name here sends people to the wrong value.
-      label: t('CFG.PROJECT_ID', 'Project UUID'),
+      type: 'select',
+      label: t('CFG.PROJECT', 'Project'),
       required: true,
-      description: t(
-        'CFG.PROJECT_ID_HELP',
-        'The long id after /projects/ in the project URL: ' +
-          'app.plane.so/<workspace-slug>/projects/<project-uuid>/',
-      ),
-    },
-    {
-      key: 'host',
-      type: 'input',
-      label: t('CFG.HOST', 'Host (self-hosted only; leave empty for Plane Cloud)'),
-      description: t(
-        'CFG.HOST_HELP',
-        'Full origin including https://, e.g. https://plane.example.com',
-      ),
-      advanced: true,
+      loadOptions: loadProjectOptions,
     },
   ],
 
+  // Reads only the key, so a not-yet-valid workspace URL cannot break request headers.
   getHeaders(config: Record<string, unknown>): Record<string, string> {
-    const cfg = asConfig(config);
+    const { apiKey } = config as PlaneUserConfig;
     return {
       // eslint-disable-next-line @typescript-eslint/naming-convention
-      'X-API-Key': cfg.apiKey || '',
+      'X-API-Key': apiKey || '',
       Accept: 'application/json',
     };
   },
@@ -203,14 +237,14 @@ PluginAPI.registerIssueProvider({
     return '';
   },
 
-  // Probing the project validates all three fields; `/users/me/` would pass with a
-  // wrong slug or project and then import nothing.
+  // Probing the project validates the key and every part of the URL; `/users/me/`
+  // would pass with a wrong slug or project and then import nothing.
   async testConnection(
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<boolean> {
-    const cfg = asConfig(config);
     try {
+      const cfg = asConfig(config);
       const project = await http.get<PlaneProject>(`${projectRoot(cfg)}/`);
       return !!project?.id;
     } catch {

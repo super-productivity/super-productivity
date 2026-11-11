@@ -23,6 +23,8 @@ import {
   LIST_EXPAND,
   LIST_MAX_PAGES,
   normalizeHost,
+  parseWorkspaceUrl,
+  toProjectOptions,
   projectRoot,
   stateGroupOf,
   type PlaneWorkItem,
@@ -40,7 +42,11 @@ beforeAll(async () => {
   await import('./plugin');
 });
 
-const BACKLOG_CFG = { apiKey: 'k', workspaceSlug: 'acme', projectId: 'proj-1' };
+const BACKLOG_CFG = {
+  apiKey: 'k',
+  workspaceUrl: 'https://app.plane.so/acme/',
+  projectId: 'proj-1',
+};
 
 interface WorkItemRequest {
   url: string;
@@ -261,7 +267,7 @@ describe('Plane plugin definition', () => {
 
     const results = await definition.searchIssues(
       'login',
-      { workspaceSlug: 'acme', projectId: 'proj-1', apiKey: 'k' },
+      { workspaceUrl: 'https://app.plane.so/acme/', projectId: 'proj-1', apiKey: 'k' },
       http,
     );
 
@@ -317,7 +323,7 @@ describe('Plane plugin definition', () => {
 
     await expect(
       definition.testConnection!(
-        { apiKey: 'k', workspaceSlug: 'acme', projectId: 'proj-1' },
+        { apiKey: 'k', workspaceUrl: 'https://app.plane.so/acme/', projectId: 'proj-1' },
         http,
       ),
     ).resolves.toBe(true);
@@ -335,10 +341,46 @@ describe('Plane plugin definition', () => {
 
     await expect(
       definition.testConnection!(
-        { apiKey: 'k', workspaceSlug: 'does-not-exist', projectId: 'nope' },
+        {
+          apiKey: 'k',
+          workspaceUrl: 'https://app.plane.so/does-not-exist/',
+          projectId: 'nope',
+        },
         http,
       ),
     ).resolves.toBe(false);
+  });
+
+  it('testConnection probes a self-hosted project at its own origin', async () => {
+    const http = {
+      get: vi.fn(async () => ({ id: 'proj-1', identifier: 'ENG' })),
+    } as unknown as PluginHttp;
+
+    await expect(
+      definition.testConnection!(
+        {
+          apiKey: 'k',
+          workspaceUrl: 'https://plane.example.com/acme/',
+          projectId: 'proj-1',
+        },
+        http,
+      ),
+    ).resolves.toBe(true);
+    expect(http.get).toHaveBeenCalledWith(
+      'https://plane.example.com/api/v1/workspaces/acme/projects/proj-1/',
+    );
+  });
+
+  it('testConnection fails without a request when the URL names no workspace', async () => {
+    const http = { get: vi.fn() } as unknown as PluginHttp;
+
+    await expect(
+      definition.testConnection!(
+        { apiKey: 'k', workspaceUrl: 'https://app.plane.so/', projectId: 'proj-1' },
+        http,
+      ),
+    ).resolves.toBe(false);
+    expect(http.get).not.toHaveBeenCalled();
   });
 
   it('testConnection fails on a response without a project id', async () => {
@@ -346,7 +388,7 @@ describe('Plane plugin definition', () => {
 
     await expect(
       definition.testConnection!(
-        { apiKey: 'k', workspaceSlug: 'acme', projectId: 'proj-1' },
+        { apiKey: 'k', workspaceUrl: 'https://app.plane.so/acme/', projectId: 'proj-1' },
         http,
       ),
     ).resolves.toBe(false);
@@ -639,8 +681,154 @@ describe('htmlToText()', () => {
   });
 });
 
+describe('parseWorkspaceUrl()', () => {
+  it('maps a Plane Cloud workspace to the cloud API', () => {
+    for (const url of [
+      'https://app.plane.so/acme/',
+      'https://app.plane.so/acme',
+      '  https://app.plane.so/acme/?x=1#y  ',
+    ]) {
+      expect(parseWorkspaceUrl(url)).toEqual({ host: '', workspaceSlug: 'acme' });
+    }
+  });
+
+  it('keeps the origin of a self-hosted instance', () => {
+    expect(parseWorkspaceUrl('https://plane.psyclopedia.com/psyclopedia/')).toEqual({
+      host: 'https://plane.psyclopedia.com',
+      workspaceSlug: 'psyclopedia',
+    });
+    expect(parseWorkspaceUrl('http://plane.local:8080/acme')).toEqual({
+      host: 'http://plane.local:8080',
+      workspaceSlug: 'acme',
+    });
+  });
+
+  // Reverse-proxied instances live under a sub-path; it belongs to the host.
+  it('keeps a reverse-proxy sub-path as part of the host', () => {
+    expect(parseWorkspaceUrl('https://example.com/tools/plane/acme/')).toEqual({
+      host: 'https://example.com/tools/plane',
+      workspaceSlug: 'acme',
+    });
+  });
+
+  // People copy whatever page they are on; anything inside the workspace works.
+  it('cuts a URL from inside the workspace back to the workspace', () => {
+    for (const url of [
+      'https://plane.example.com/acme/projects/1f2e3d4c/issues/',
+      'https://plane.example.com/acme/browse/ENG-12/',
+      'https://plane.example.com/acme/settings/projects/1f2e3d4c/members/',
+    ]) {
+      expect(parseWorkspaceUrl(url)).toEqual({
+        host: 'https://plane.example.com',
+        workspaceSlug: 'acme',
+      });
+    }
+  });
+
+  it('decodes an escaped workspace slug once', () => {
+    expect(parseWorkspaceUrl('https://app.plane.so/my%20team/').workspaceSlug).toBe(
+      'my team',
+    );
+  });
+
+  it('rejects anything that does not name a workspace', () => {
+    for (const url of [
+      undefined,
+      '',
+      '   ',
+      'acme',
+      'app.plane.so/acme/',
+      'https://app.plane.so/',
+      'https://app.plane.so/projects/1f2e3d4c/',
+      'ftp://plane.example.com/acme/',
+      'https://app.plane.so/%E0%A4%A/',
+    ]) {
+      expect(() => parseWorkspaceUrl(url), String(url)).toThrowError(
+        /Plane workspace URL/,
+      );
+    }
+  });
+});
+
+describe('toProjectOptions()', () => {
+  it('labels by name and key, drops archived and repeated rows, sorts by name', () => {
+    expect(
+      toProjectOptions([
+        { id: 'p2', name: 'Website', identifier: 'WEB' },
+        { id: 'p1', name: 'App', identifier: 'APP' },
+        { id: 'p3', name: 'Old', identifier: 'OLD', archived_at: '2026-01-01T00:00:00Z' },
+        { id: 'p1', name: 'App', identifier: 'APP' },
+        { name: 'No id' },
+      ]),
+    ).toEqual([
+      { label: 'App (APP)', value: 'p1' },
+      { label: 'Website (WEB)', value: 'p2' },
+    ]);
+  });
+});
+
+describe('project picker', () => {
+  type LoadOptions = (
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ) => Promise<{ label: string; value: string }[]>;
+
+  const loadProjects = (): LoadOptions => {
+    const field = definition.configFields.find((f) => f.key === 'projectId');
+    expect(field?.type).toBe('select');
+    return field!.loadOptions as LoadOptions;
+  };
+
+  it('lists the projects of a self-hosted workspace, page by page', async () => {
+    const get = vi.fn(async (_url: string, opts?: { params?: Record<string, string> }) =>
+      opts?.params?.['cursor']
+        ? { results: [{ id: 'p2', name: 'Web', identifier: 'WEB' }] }
+        : {
+            results: [{ id: 'p1', name: 'App', identifier: 'APP' }],
+            next_cursor: '100:1:0',
+            next_page_results: true,
+          },
+    );
+
+    const options = await loadProjects()(
+      { apiKey: 'k', workspaceUrl: 'https://plane.psyclopedia.com/psyclopedia/' },
+      { get } as unknown as PluginHttp,
+    );
+
+    expect(options).toEqual([
+      { label: 'App (APP)', value: 'p1' },
+      { label: 'Web (WEB)', value: 'p2' },
+    ]);
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get.mock.calls[0][0]).toBe(
+      'https://plane.psyclopedia.com/api/v1/workspaces/psyclopedia/projects/',
+    );
+    // A unique-enough order keeps offset pages from overlapping.
+    expect(get.mock.calls[0][1]?.params?.['order_by']).toBe('created_at');
+    expect(get.mock.calls[1][1]?.params?.['cursor']).toBe('100:1:0');
+  });
+
+  it('works before a project is chosen', async () => {
+    const get = vi.fn(async () => ({ results: [] }));
+
+    await expect(
+      loadProjects()({ apiKey: 'k', workspaceUrl: 'https://app.plane.so/acme/' }, {
+        get,
+      } as unknown as PluginHttp),
+    ).resolves.toEqual([]);
+    expect(get).toHaveBeenCalledWith(
+      'https://api.plane.so/api/v1/workspaces/acme/projects/',
+      expect.anything(),
+    );
+  });
+});
+
 describe('getById()', () => {
-  const ISSUE_CFG = { apiKey: 'k', workspaceSlug: 'acme', projectId: 'proj-1' };
+  const ISSUE_CFG = {
+    apiKey: 'k',
+    workspaceUrl: 'https://app.plane.so/acme/',
+    projectId: 'proj-1',
+  };
 
   const fakeIssue = (
     overrides: Record<string, unknown>,
@@ -995,7 +1183,7 @@ describe('provider contract', () => {
       .filter((f) => (f as { required?: boolean }).required)
       .map((f) => f.key);
     expect(required).toEqual(
-      expect.arrayContaining(['apiKey', 'workspaceSlug', 'projectId']),
+      expect.arrayContaining(['apiKey', 'workspaceUrl', 'projectId']),
     );
   });
 

@@ -28,6 +28,7 @@ export interface PlaneProject {
   id?: string;
   identifier?: string;
   name?: string;
+  archived_at?: string | null;
 }
 
 export interface PlaneSearchHit {
@@ -112,6 +113,98 @@ export const normalizeHost = (rawHost: string | undefined): string => {
     throw new Error('Plane host must not contain a query string or fragment.');
   }
   return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '');
+};
+
+/** What the user enters: an API key, the workspace address, and a project picked from it. */
+export interface PlaneUserConfig {
+  apiKey?: string;
+  workspaceUrl?: string;
+  projectId?: string;
+}
+
+/** Plane Cloud's web app. Its API lives on CLOUD_API_BASE, not here. */
+const CLOUD_UI_HOSTNAME = 'app.plane.so';
+
+const WORKSPACE_URL_EXAMPLE = 'https://app.plane.so/<workspace>/';
+
+/**
+ * Plane web-app routes that sit right after the workspace slug. A URL copied from
+ * inside a workspace (a project, a work item, settings) is cut at the first one, so it
+ * works as well as the bare workspace address.
+ */
+const WORKSPACE_SUB_ROUTES = new Set(['projects', 'browse', 'settings']);
+
+/**
+ * Splits a workspace URL copied from the browser into host and workspace slug. Plane's
+ * web app serves a workspace at `<base>/<slug>/`, where `<base>` is the instance origin
+ * plus any reverse-proxy sub-path. Plane Cloud maps to `host: ''` because its API sits
+ * on a different origin than the page the user copied.
+ */
+export const parseWorkspaceUrl = (
+  raw: string | undefined,
+): Required<Pick<PlaneConfig, 'host' | 'workspaceSlug'>> => {
+  const text = (raw || '').trim();
+  if (!text) {
+    throw new Error('Plane workspace URL is not configured.');
+  }
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    throw new Error(
+      `Plane workspace URL must be a full URL, e.g. ${WORKSPACE_URL_EXAMPLE}`,
+    );
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error(`Plane workspace URL must use http or https, not ${url.protocol}`);
+  }
+
+  const segments = url.pathname.split('/').filter(Boolean);
+  const subRouteIdx = segments.findIndex((s) => WORKSPACE_SUB_ROUTES.has(s));
+  const slugIdx = (subRouteIdx === -1 ? segments.length : subRouteIdx) - 1;
+  if (slugIdx < 0) {
+    throw new Error(
+      `Plane workspace URL must include the workspace, e.g. ${WORKSPACE_URL_EXAMPLE}`,
+    );
+  }
+
+  let workspaceSlug: string;
+  try {
+    workspaceSlug = decodeURIComponent(segments[slugIdx]);
+  } catch {
+    throw new Error(
+      `Plane workspace URL contains an invalid escape: ${segments[slugIdx]}`,
+    );
+  }
+  const basePath = segments.slice(0, slugIdx).join('/');
+  return {
+    host:
+      url.hostname === CLOUD_UI_HOSTNAME && !basePath
+        ? ''
+        : normalizeHost(`${url.origin}/${basePath}`),
+    workspaceSlug,
+  };
+};
+
+/**
+ * Choices for the project picker: archived projects dropped, each project once (the
+ * list endpoint joins memberships, so a row can repeat), sorted by name.
+ */
+export const toProjectOptions = (
+  projects: PlaneProject[],
+): { label: string; value: string }[] => {
+  const byId = new Map<string, { label: string; value: string }>();
+  for (const p of projects) {
+    if (!p.id || p.archived_at || byId.has(p.id)) {
+      continue;
+    }
+    const name = p.name || p.identifier || p.id;
+    byId.set(p.id, {
+      label: p.identifier && p.name ? `${p.name} (${p.identifier})` : name,
+      value: p.id,
+    });
+  }
+  return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label));
 };
 
 /** API origin: configured host, or Plane Cloud. */
@@ -348,15 +441,21 @@ export const mapListRow = (
   };
 };
 
-export const apiRoot = (cfg: PlaneConfig): string => {
+/** Workspace-scoped API root; needs no project, so the project picker can use it. */
+export const workspaceRoot = (cfg: PlaneConfig): string => {
   const slug = (cfg.workspaceSlug || '').trim();
   if (!slug) {
     throw new Error('Plane workspace slug is not configured.');
   }
+  return `${getApiBase(cfg)}/api/v1/workspaces/${encodeURIComponent(slug)}`;
+};
+
+export const apiRoot = (cfg: PlaneConfig): string => {
+  const root = workspaceRoot(cfg);
   if (!(cfg.projectId || '').trim()) {
     throw new Error('Plane project ID is not configured.');
   }
-  return `${getApiBase(cfg)}/api/v1/workspaces/${encodeURIComponent(slug)}`;
+  return root;
 };
 
 /**

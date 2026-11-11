@@ -2,12 +2,9 @@
   "CFG": {
     "API_KEY": "API Key",
     "HOW_TO_GET_TOKEN": "How to get an API key",
-    "HOST": "Host (self-hosted only; leave empty for Plane Cloud)",
-    "HOST_HELP": "Full origin including https://, e.g. https://plane.example.com",
-    "WORKSPACE_SLUG": "Workspace slug",
-    "WORKSPACE_SLUG_HELP": "From the URL: app.plane.so/<workspace-slug>/...",
-    "PROJECT_ID": "Project UUID",
-    "PROJECT_ID_HELP": "The long id after /projects/ in the project URL: app.plane.so/<workspace-slug>/projects/<project-uuid>/"
+    "WORKSPACE_URL": "Workspace URL",
+    "WORKSPACE_URL_HELP": "Open your workspace in Plane and copy the address from your browser, e.g. https://app.plane.so/<workspace>/ or https://plane.example.com/<workspace>/",
+    "PROJECT": "Project"
   },
   "DISPLAY": {
     "SUMMARY": "Summary",
