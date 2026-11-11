@@ -16,7 +16,8 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-WORK="${SIM_WORK_DIR:-${TMPDIR:-/tmp}/ios-sim-reminders}"
+# RUNNER_TEMP is set by GitHub Actions; the workflow uploads $WORK/out from there.
+WORK="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/ios-sim-reminders"
 OUT="$WORK/out"
 BUNDLE_ID=com.super-productivity.app
 UDID=""
