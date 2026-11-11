@@ -2335,6 +2335,8 @@
         "QUICK_SETTING": "Repeats",
         "REMIND_AT": "Remind at",
         "REMIND_AT_PLACEHOLDER": "Select when to remind",
+        "DETACH_FOR_DATE": "Separate task for {{date}}",
+        "DETACH_FOR_DATE_TOOLTIP": "Skips this day in the series and adds a normal task for it that you can move and edit. Later changes to the recurring task don't apply to it.",
         "SKIP_FOR_DATE": "Skip for {{date}}",
         "SKIP_INSTANCE": "Skip for today",
         "REPEAT_CYCLE": "Unit",
@@ -2486,6 +2488,9 @@
         "STOPPED_ON": "Stopped on {{device}}",
         "TRACKING_ON": "Tracking on {{device}}",
         "WAS_TRACKING_ON": "Was tracking on {{device}}"
+      },
+      "PLAY_BTN": {
+        "TOOLTIP": "Tracking on {{device}} – start here to take over"
       },
       "B": {
         "MOVED_TO": "Tracking moved to {{device}} – stopped “{{title}}” here"

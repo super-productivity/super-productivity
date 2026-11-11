@@ -74,6 +74,8 @@
       (openDay)="openDay.emit($event)"
     ></schedule-tray>
   }
+  <!-- Below the date row, sticky with it. -->
+  <ng-content select="[weekHeaderBelow]"></ng-content>
 </header>
 
 <div

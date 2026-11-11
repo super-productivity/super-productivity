@@ -13,12 +13,14 @@
  * Cost:
  * - The percentage summary reads `users` only (one row per account, no
  *   `operations` access), so it covers every account exactly.
- * - Growth reads `operations`, but only for accounts with a device heartbeat in
+ * - Growth reads `operations` only for accounts with a device heartbeat in
  *   the window (an upload bumps `last_seen_at`, so an account without one has
  *   uploaded nothing), capped at `MONITOR_SCOPE_USERS` and taking the highest
- *   quota use first. Each account is one range scan of the
- *   `(user_id, received_at, server_seq)` index over the window, so the work is
- *   the window's upload volume of the scoped accounts, not the table size.
+ *   quota use first. Per account it costs one index descent (the first
+ *   operation in the window) plus the newest OPS_PER_USER operations for the
+ *   average size, so the work is `users x tail`, as for the other reports. The
+ *   uploaded bytes are therefore an estimate: window operations times their
+ *   average size.
  *
  * The projection uses gross uploaded bytes and assumes nothing is pruned, which
  * is the routine case above; cleanup or a full-state boundary can only make the
@@ -26,7 +28,7 @@
  */
 
 import { prisma } from './monitoring-db';
-import { OPERATION_BYTES, scopeUserLimit } from './monitoring-scope';
+import { OPERATION_BYTES, OPS_PER_USER, scopeUserLimit } from './monitoring-scope';
 
 export const QUOTA_GROWTH_WINDOW_DAYS = 30;
 export const QUOTA_PERCENT_THRESHOLDS = [50, 75, 90] as const;
@@ -137,10 +139,25 @@ interface ScopeRow {
   matched: bigint;
 }
 
-interface GrowthRow {
+export interface GrowthRow {
   user_id: number;
-  uploaded_bytes: bigint;
+  last_seq: number | bigint;
+  first_seq: number | bigint | null;
+  avg_window_bytes: number | null;
+  avg_bytes: number | null;
 }
+
+/**
+ * Estimated bytes uploaded in the window: the window's operation count (from
+ * sequence numbers) times their average size (from the newest operations,
+ * those inside the window when there are any).
+ */
+export const estimateWindowBytes = (row: GrowthRow): number => {
+  if (row.first_seq === null) return 0;
+  const count = Number(row.last_seq) - Number(row.first_seq) + 1;
+  const avg = row.avg_window_bytes ?? row.avg_bytes ?? 0;
+  return count > 0 ? Math.round(count * avg) : 0;
+};
 
 /**
  * Fleet percentages over every account. Integer arithmetic, so a threshold is
@@ -191,20 +208,47 @@ export const queryGrowingAccounts = async (
   if (scope.length === 0) return { accounts: [], matched: 0 };
 
   const userIds = scope.map((row) => row.id);
-  // LATERAL keeps this one index range scan per scoped account; the aggregate
-  // returns a row (0) for an account with no operation in the window.
+  // Bounded per account, like the other operations reports: one index descent
+  // on (user_id, received_at, server_seq) finds the first operation in the
+  // window, `last_seq` gives the newest, and their difference counts the
+  // window's operations (the server prunes only behind a full-state boundary,
+  // so a window is contiguous). The size comes from the newest
+  // OPS_PER_USER operations, preferring those inside the window. Summing every
+  // operation in the window instead hit statement_timeout on the hosted
+  // instance with 1,000 accounts (2026-11-11).
   const growth = await prisma.$queryRaw<GrowthRow[]>`
-    SELECT scope_users.user_id, window_ops.uploaded_bytes
+    SELECT
+      scope_users.user_id,
+      COALESCE(state.last_seq, 0) AS last_seq,
+      first_in_window.server_seq AS first_seq,
+      tail.avg_window_bytes,
+      tail.avg_bytes
     FROM unnest(${userIds}::int[]) AS scope_users(user_id)
-    CROSS JOIN LATERAL (
-      SELECT COALESCE(SUM(${OPERATION_BYTES}), 0)::bigint AS uploaded_bytes
+    LEFT JOIN user_sync_state state ON state.user_id = scope_users.user_id
+    LEFT JOIN LATERAL (
+      SELECT operations.server_seq
       FROM operations
       WHERE operations.user_id = scope_users.user_id
         AND operations.received_at > ${since}
-    ) AS window_ops
+      ORDER BY operations.received_at, operations.server_seq
+      LIMIT 1
+    ) AS first_in_window ON true
+    LEFT JOIN LATERAL (
+      SELECT
+        AVG(newest.bytes) FILTER (WHERE newest.received_at > ${since})::float8
+          AS avg_window_bytes,
+        AVG(newest.bytes)::float8 AS avg_bytes
+      FROM (
+        SELECT ${OPERATION_BYTES} AS bytes, operations.received_at
+        FROM operations
+        WHERE operations.user_id = scope_users.user_id
+        ORDER BY operations.server_seq DESC
+        LIMIT ${OPS_PER_USER}
+      ) AS newest
+    ) AS tail ON true
   `;
   const uploadedById = new Map(
-    growth.map((row) => [row.user_id, Number(row.uploaded_bytes)]),
+    growth.map((row) => [row.user_id, estimateWindowBytes(row)]),
   );
 
   return {

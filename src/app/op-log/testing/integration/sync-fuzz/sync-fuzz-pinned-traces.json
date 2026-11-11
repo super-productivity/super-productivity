@@ -894,6 +894,43 @@
     "rejections": []
   },
   {
+    "class": "note-order-stop",
+    "ref": "#11661: a pending note order meets the whole-note row of a conflict the device lost",
+    "name": "a note order made after losing a note conflict stops the reordering device",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["editNote", "n2", "isLock", true]
+      },
+      {
+        "d": "B",
+        "s": 1,
+        "k": "L"
+      },
+      {
+        "d": "C",
+        "a": ["editNote", "n2", "content", "C15"],
+        "r": 1
+      },
+      {
+        "d": "C",
+        "s": 1,
+        "c": 1,
+        "k": "L"
+      },
+      {
+        "d": "B",
+        "a": ["reorderNotes", "P", 2, 7]
+      }
+    ],
+    "primary": "stop:SYNC_MULTI_ENTITY_UNSUPPORTED side=local actionType=[Note] Update Note Order",
+    "signatures": [
+      "field-reverted:note.isLock",
+      "stop:SYNC_MULTI_ENTITY_UNSUPPORTED side=local actionType=[Note] Update Note Order"
+    ],
+    "rejections": []
+  },
+  {
     "class": "note-recreate-appended",
     "ref": "kept by design: #10380's recreate appends the note to its project and Today lists, order only (decided on #10393); its #10420 stop is fixed",
     "name": "a note pinned beside a pending note order after a remote delete comes back in Today, appended on the other devices",
@@ -1956,5 +1993,40 @@
       "CONFLICT_CONCURRENT [Task Shared] deleteTask",
       "CONFLICT_CONCURRENT [TimeTracking] Sync time spent"
     ]
+  },
+  {
+    "class": "force-upload-skip",
+    "ref": "fixed by #11681 (regression pin)",
+    "name": "the first change after a force upload reaches a device that compacted after a later remote op",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["forceUpload"]
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t2", "Y"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "s": 1,
+        "c": 1
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t3", "X"]
+      }
+    ],
+    "signatures": [],
+    "rejections": []
   }
 ]

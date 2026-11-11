@@ -12,11 +12,11 @@ import {
   Signal,
   signal,
   untracked,
-  ViewChild,
   viewChildren,
 } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { ScheduleWeekComponent } from '../schedule-week/schedule-week.component';
+import { ScheduleDayOverdueComponent } from '../schedule-day-overdue/schedule-day-overdue.component';
 import { DateService } from '../../../core/date/date.service';
 import { getPointerPosition } from '../../../util/get-pointer-position';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -28,6 +28,7 @@ import { DragDropRegistry } from '@angular/cdk/drag-drop';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { selectUndoneDeadlineTasksByDay } from '../../planner/store/planner.selectors';
 import { TaskReminderOptionId, TaskWithSubTasks } from '../../tasks/task.model';
+import { selectUndoneOverdue } from '../../tasks/store/task.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Log } from '../../../core/log';
 import { Subscription } from 'rxjs';
@@ -78,6 +79,7 @@ interface DropTimeCalculation {
   standalone: true,
   imports: [
     ScheduleWeekComponent,
+    ScheduleDayOverdueComponent,
     TranslatePipe,
     MatIconButton,
     MatIcon,
@@ -92,16 +94,21 @@ interface DropTimeCalculation {
 export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   T: typeof T = T;
 
-  @ViewChild('dropZone', { read: ElementRef }) dropZoneRef!: ElementRef<HTMLElement>;
-
   // The pager also renders the neighbouring days while swiping; drops, the
   // drag preview and scrolling all target the day that is shown.
   private _scheduleWeekEls = viewChildren(ScheduleWeekComponent, { read: ElementRef });
   private _scheduleWeeks = viewChildren(ScheduleWeekComponent);
+  private _overdueEls = viewChildren(ScheduleDayOverdueComponent, { read: ElementRef });
 
   get scheduleWeekRef(): ElementRef<HTMLElement> | undefined {
     const i = this._currentScheduleWeekIndex();
     return i === -1 ? undefined : this._scheduleWeekEls()[i];
+  }
+
+  // One per rendered day, in the same order as the schedule weeks.
+  private get _overdueEl(): HTMLElement | undefined {
+    const i = this._currentScheduleWeekIndex();
+    return i === -1 ? undefined : this._overdueEls()[i]?.nativeElement;
   }
 
   get scheduleWeekComponent(): ScheduleWeekComponent | undefined {
@@ -189,6 +196,13 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     initialValue: {},
   });
 
+  // Same list as the Planner's "From previous days" column.
+  overdueTasks = toSignal(this._store.select(selectUndoneOverdue), {
+    initialValue: [],
+  });
+  // Kept here, so the list stays open while paging to the day to place a task on.
+  isOverdueExpanded = signal(false);
+
   workStartEnd = computed(() => {
     const v = this._workStartEndHours();
     return (
@@ -220,6 +234,12 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     effect(() => {
       const isExternalDragActive = !!this._externalDragService.activeTask();
       untracked(() => this._toggleExternalDragTracking(isExternalDragActive));
+    });
+    // One collapsed line again the next time tasks become overdue.
+    effect(() => {
+      if (!this.overdueTasks().length) {
+        this.isOverdueExpanded.set(false);
+      }
     });
   }
 
@@ -435,21 +455,32 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     return horizontalOverlap && topY >= dropZoneRect.top && topY <= dropZoneRect.bottom;
   }
 
-  // The part of the drop zone that is on screen. The drop zone spans the whole
-  // scrollable schedule (or, in the bottom sheet, one viewport height that
-  // scrolls away), so its own rect also covers what is scrolled out of view.
+  // The part of the shown day's schedule that is on screen. The schedule is as
+  // tall as the whole day, so its own rect also covers what is scrolled out of
+  // view. Its wrapper cannot be measured instead: in the bottom sheet that is
+  // one viewport high and scrolls away with the morning, which left no drop
+  // zone at all once the panel had scrolled to the current time.
   private _getVisibleDropZoneRect(): DOMRect | null {
-    const dropZoneEl = this.dropZoneRef?.nativeElement;
-    if (!dropZoneEl) {
+    const scheduleEl = this.scheduleWeekRef?.nativeElement;
+    if (!scheduleEl) {
       return null;
     }
-    const dz = dropZoneEl.getBoundingClientRect();
+    const dz = scheduleEl.getBoundingClientRect();
     const sc = this._findScrollContainer()?.getBoundingClientRect();
     if (!sc) {
       return dz;
     }
     const left = Math.max(dz.left, sc.left);
-    const top = Math.max(dz.top, sc.top);
+    // The overdue list and the tray stick to the top of the panel and cover
+    // the grid there. A card released over them, e.g. right where its drag
+    // started, must not be placed at the hidden time underneath.
+    const overdueBottom = this._overdueEl?.getBoundingClientRect().bottom ?? sc.top;
+    const trayEl = scheduleEl.querySelector<HTMLElement>('schedule-tray');
+    // an empty tray renders nothing and covers nothing
+    const trayBottom = trayEl?.offsetHeight
+      ? trayEl.getBoundingClientRect().bottom
+      : sc.top;
+    const top = Math.max(dz.top, sc.top, overdueBottom, trayBottom);
     const right = Math.min(dz.right, sc.right);
     const bottom = Math.min(dz.bottom, sc.bottom);
     return new DOMRect(left, top, Math.max(0, right - left), Math.max(0, bottom - top));
@@ -572,11 +603,17 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     const containerRect = scrollContainer.getBoundingClientRect();
     const elementRect = currentTimeElement.getBoundingClientRect();
     const relativePosition = elementRect.top - containerRect.top;
-    // the tray sits in the sticky header, on top of the first rows
+    // The tray and the overdue list make the sticky header taller; without
+    // their height the current time would land underneath them.
     const trayHeight =
       scheduleWeekEl.querySelector<HTMLElement>('schedule-tray')?.offsetHeight ?? 0;
+    const overdueHeight = this._overdueEl?.offsetHeight ?? 0;
     const targetScrollTop =
-      scrollContainer.scrollTop + relativePosition - SCROLL_TOP_OFFSET_PX - trayHeight;
+      scrollContainer.scrollTop +
+      relativePosition -
+      SCROLL_TOP_OFFSET_PX -
+      trayHeight -
+      overdueHeight;
 
     Log.log('[ScheduleDayPanel] Scrolling to position:', Math.max(0, targetScrollTop));
 
