@@ -1,12 +1,12 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  assertCoverage,
   assignShards,
   countTestsPerFile,
   mergeDurations,
   parseArgs,
   parseJunitDurations,
+  selectFiles,
   weighFiles,
 } = require('./e2e-shard');
 
@@ -28,6 +28,7 @@ test('parseArgs reads shard options and the --only list', () => {
       shards: 8,
       shard: 3,
       out: 'x.txt',
+      countOut: null,
       only: ['sync/a.spec.ts', 'sync/b.spec.ts'],
     },
   );
@@ -161,21 +162,43 @@ test('assignShards leaves surplus shards empty', () => {
   );
 });
 
-test('assertCoverage passes an exact split and rejects gaps or duplicates', () => {
-  const files = ['a', 'b', 'c'];
-  assert.doesNotThrow(() =>
-    assertCoverage(
-      assignShards(
-        files.map((file) => ({ file, sec: 1 })),
-        2,
-      ),
-      files,
-    ),
-  );
-  assert.throws(() => assertCoverage([{ files: ['a', 'b'] }], files), /cover/);
+test('selectFiles refuses an empty full suite', () => {
+  // Playwright passes a --test-list run that found no tests, so an empty
+  // listing would turn every shard green without running anything.
   assert.throws(
-    () => assertCoverage([{ files: ['a', 'b'] }, { files: ['b', 'c'] }], files),
-    /cover/,
+    () => selectFiles(new Map(), null, '@supersync'),
+    /no tests match @supersync/,
+  );
+});
+
+test('selectFiles narrows to --only and allows an empty result', () => {
+  const counts = new Map([
+    ['sync/a.spec.ts', 2],
+    ['sync/b.spec.ts', 1],
+  ]);
+  assert.deepEqual(
+    [...selectFiles(counts, ['sync/b.spec.ts', 'sync/x.spec.ts'], 't')],
+    [['sync/b.spec.ts', 1]],
+  );
+  // A spec-only PR's changed spec may not carry this suite's tag.
+  assert.equal(selectFiles(counts, ['sync/x.spec.ts'], 't').size, 0);
+});
+
+test('parseArgs reads --count-out', () => {
+  assert.equal(
+    parseArgs([
+      '--grep',
+      'x',
+      '--shards',
+      '1',
+      '--shard',
+      '1',
+      '--out',
+      'o',
+      '--count-out',
+      'c',
+    ]).countOut,
+    'c',
   );
 });
 

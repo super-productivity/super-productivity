@@ -45,6 +45,8 @@ jobs:
       fuzz: ${{ steps.detect.outputs.fuzz }}
       supersync_shards: ${{ steps.detect.outputs.supersync_shards }}
       webdav_shards: ${{ steps.detect.outputs.webdav_shards }}
+      supersync_total: ${{ steps.detect.outputs.supersync_total }}
+      webdav_total: ${{ steps.detect.outputs.webdav_total }}
       sync_specs: ${{ steps.detect.outputs.sync_specs }}
     steps:
       - name: Check out Git repository
@@ -66,19 +68,24 @@ jobs:
           supersync=false
           webdav=false
           fuzz=false
-          # Full-suite shard matrices; a spec-only PR narrows both to one job.
-          supersync_shards='[1,2,3,4,5,6,7,8]'
-          webdav_shards='[1,2]'
+          # Shard counts and their matrices; a small spec-only PR narrows both to
+          # one job. The shard jobs take the count from here, not from
+          # strategy.job-total, which a second matrix dimension would inflate.
+          shards() { echo "[$(seq -s, 1 "$1")]"; }
+          supersync_total=8
+          webdav_total=2
           # Spec files (relative to e2e/tests) a spec-only PR runs; empty = all.
           sync_specs=''
           emit() {
-            echo "→ supersync=${supersync} webdav=${webdav} fuzz=${fuzz} supersync_shards=${supersync_shards} webdav_shards=${webdav_shards} sync_specs=${sync_specs:-<all>}"
+            echo "→ supersync=${supersync} webdav=${webdav} fuzz=${fuzz} supersync_total=${supersync_total} webdav_total=${webdav_total} sync_specs=${sync_specs:-<all>}"
             {
               echo "supersync=${supersync}"
               echo "webdav=${webdav}"
               echo "fuzz=${fuzz}"
-              echo "supersync_shards=${supersync_shards}"
-              echo "webdav_shards=${webdav_shards}"
+              echo "supersync_total=${supersync_total}"
+              echo "webdav_total=${webdav_total}"
+              echo "supersync_shards=$(shards "${supersync_total}")"
+              echo "webdav_shards=$(shards "${webdav_total}")"
               echo "sync_specs=${sync_specs}"
             } >> "$GITHUB_OUTPUT"
           }
@@ -134,7 +141,8 @@ jobs:
 
           # Spec-only PR: every changed file is a top-level sync spec (or docs).
           # The app, the harness and all other specs are unchanged, so only the
-          # changed specs can change outcome; run just those, in one job each.
+          # changed specs can change outcome; run just those. Up to 5 specs fit
+          # one job per suite; more (a mechanical sweep) keep the full matrix.
           SPEC_RE='^e2e/tests/sync/[^/]+\.spec\.ts$'
           if grep -Eq "${SPEC_RE}" <<< "${CHANGED_FILES}" &&
             ! grep -Evq "${SPEC_RE}|^docs/|\.md$" <<< "${CHANGED_FILES}"; then
@@ -148,8 +156,10 @@ jobs:
               webdav=false
             else
               echo "Spec-only PR — running only the changed specs."
-              supersync_shards='[1]'
-              webdav_shards='[1]'
+              if [ "$(wc -w <<< "${sync_specs}")" -le 5 ]; then
+                supersync_total=1
+                webdav_total=1
+              fi
             fi
           fi
 
@@ -234,10 +244,10 @@ jobs:
         id: shard
         env:
           SHARD: ${{ matrix.shard }}
-          SHARDS: ${{ strategy.job-total }}
+          SHARDS: ${{ needs.detect.outputs.supersync_total }}
           ONLY: ${{ needs.detect.outputs.sync_specs }}
         run: |
-          node tools/e2e-shard.js --grep @supersync --shards "$SHARDS" --shard "$SHARD" --only "$ONLY" --out .tmp/e2e-shard.txt
+          node tools/e2e-shard.js --grep @supersync --shards "$SHARDS" --shard "$SHARD" --only "$ONLY" --out .tmp/e2e-shard.txt --count-out .tmp/e2e-shard.count
           if [ -s .tmp/e2e-shard.txt ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
@@ -290,6 +300,21 @@ jobs:
           E2E_REQUIRE_WEBDAV: 'true'
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: .tmp/e2e-test-results/junit-supersync-${{ matrix.shard }}.xml
         run: npx playwright test --config e2e/playwright.config.ts --reporter=line,junit --grep "@supersync" --test-list .tmp/e2e-shard.txt
+
+      # Playwright passes a --test-list run that found no tests, so compare
+      # the report with the count the shard tool listed.
+      - name: Check every listed test ran
+        if: steps.shard.outputs.run == 'true'
+        env:
+          JUNIT: .tmp/e2e-test-results/junit-supersync-${{ matrix.shard }}.xml
+        run: |
+          expected="$(cat .tmp/e2e-shard.count)"
+          actual="$(grep -oE '<testsuites [^>]*' "$JUNIT" | grep -oE ' tests="[0-9]+"' | grep -oE '[0-9]+' || true)"
+          if [ "${actual}" != "${expected}" ]; then
+            echo "::error::SuperSync shard reported ${actual:-no} tests; the shard list holds ${expected}."
+            exit 1
+          fi
+          echo "✓ ${actual} tests ran, as listed."
 
       # Per-file durations for refreshing e2e/test-durations.json (see
       # tools/e2e-shard.js). Uploaded on failures too: a red run still timed
@@ -359,10 +384,10 @@ jobs:
         id: shard
         env:
           SHARD: ${{ matrix.shard }}
-          SHARDS: ${{ strategy.job-total }}
+          SHARDS: ${{ needs.detect.outputs.webdav_total }}
           ONLY: ${{ needs.detect.outputs.sync_specs }}
         run: |
-          node tools/e2e-shard.js --grep @webdav --shards "$SHARDS" --shard "$SHARD" --only "$ONLY" --out .tmp/e2e-shard.txt
+          node tools/e2e-shard.js --grep @webdav --shards "$SHARDS" --shard "$SHARD" --only "$ONLY" --out .tmp/e2e-shard.txt --count-out .tmp/e2e-shard.count
           if [ -s .tmp/e2e-shard.txt ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
@@ -408,6 +433,21 @@ jobs:
           E2E_REQUIRE_WEBDAV: 'true'
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: .tmp/e2e-test-results/junit-webdav-${{ matrix.shard }}.xml
         run: npx playwright test --config e2e/playwright.config.ts --reporter=line,junit --grep "@webdav" --test-list .tmp/e2e-shard.txt
+
+      # Playwright passes a --test-list run that found no tests, so compare
+      # the report with the count the shard tool listed.
+      - name: Check every listed test ran
+        if: steps.shard.outputs.run == 'true'
+        env:
+          JUNIT: .tmp/e2e-test-results/junit-webdav-${{ matrix.shard }}.xml
+        run: |
+          expected="$(cat .tmp/e2e-shard.count)"
+          actual="$(grep -oE '<testsuites [^>]*' "$JUNIT" | grep -oE ' tests="[0-9]+"' | grep -oE '[0-9]+' || true)"
+          if [ "${actual}" != "${expected}" ]; then
+            echo "::error::WebDAV shard reported ${actual:-no} tests; the shard list holds ${expected}."
+            exit 1
+          fi
+          echo "✓ ${actual} tests ran, as listed."
 
       - name: Upload JUnit Timings
         if: ${{ !cancelled() && steps.shard.outputs.run == 'true' }}

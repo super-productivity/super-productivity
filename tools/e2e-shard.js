@@ -9,17 +9,20 @@
  *
  * Usage:
  *   node tools/e2e-shard.js --grep @supersync --shards 8 --shard 3 --out <file>
- *       [--only sync/a.spec.ts,sync/b.spec.ts]
+ *       [--count-out <file>] [--only sync/a.spec.ts,sync/b.spec.ts]
  *   node tools/e2e-shard.js --update-durations <junit.xml...>
  *
  * The test list comes from `playwright test --list`, so the shards always cover
  * exactly the tests the tag selects. Durations only steer the split: a file
  * missing from e2e/test-durations.json is estimated from its test count, and a
- * stale entry makes the shards uneven again, never skips a test.
+ * stale entry makes the shards uneven again, never skips a test. `--count-out`
+ * writes the shard's expected test count, which CI compares with the junit
+ * report: Playwright passes a `--test-list` run that found no tests.
  *
- * Refresh the durations from the junit artifacts CI uploads
- * (`e2e-sync-pr-junit-*`): download them, then run `--update-durations` on the
- * XML files and commit the result.
+ * Refresh the durations from the junit artifacts (`e2e-sync-pr-junit-*`) of
+ * ONE green full run: download them, run `--update-durations` on those XML
+ * files and commit the result. Reports are summed per file, so mixing runs
+ * double-counts, and a red run under-counts the tests it never reached.
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -38,7 +41,14 @@ const parseArgs = (argv) => {
     return { updateDurations: argv.slice(1) };
   }
   const args = {};
-  const known = new Set(['--grep', '--shards', '--shard', '--out', '--only']);
+  const known = new Set([
+    '--grep',
+    '--shards',
+    '--shard',
+    '--out',
+    '--count-out',
+    '--only',
+  ]);
   for (let i = 0; i < argv.length; i++) {
     const [flag, inline] = argv[i].split(/=(.*)/s);
     if (!known.has(flag)) throw new Error(`unknown argument ${argv[i]}`);
@@ -61,7 +71,14 @@ const parseArgs = (argv) => {
         .map((f) => f.trim())
         .filter(Boolean)
     : null;
-  return { grep: args.grep, shards, shard, out: args.out, only };
+  return {
+    grep: args.grep,
+    shards,
+    shard,
+    out: args.out,
+    countOut: args['count-out'] || null,
+    only,
+  };
 };
 
 /** Maps each spec file (relative to the test dir) to its number of tests. */
@@ -122,15 +139,19 @@ const assignShards = (weighted, shardCount) => {
   return shards;
 };
 
-/** Throws unless the shards together hold every file exactly once. */
-const assertCoverage = (shards, files) => {
-  const assigned = shards.flatMap((s) => s.files).sort();
-  const expected = [...files].sort();
-  if (assigned.length !== expected.length || assigned.some((f, i) => f !== expected[i])) {
-    throw new Error(
-      `shard split does not cover the suite exactly (${assigned.length} assigned, ${expected.length} listed)`,
-    );
+/**
+ * Narrows the listing to `only` (a spec-only PR's changed specs; files without
+ * the tag drop out). The full suite must never come back empty: Playwright
+ * passes a `--test-list` run that found no tests, so a renamed tag would turn
+ * every shard green without running anything.
+ */
+const selectFiles = (testCounts, only, grep) => {
+  if (!only) {
+    if (!testCounts.size) throw new Error(`no tests match ${grep}`);
+    return testCounts;
   }
+  const wanted = new Set(only);
+  return new Map([...testCounts].filter(([file]) => wanted.has(file)));
 };
 
 const decodeXml = (s) =>
@@ -215,14 +236,9 @@ const main = () => {
     return 0;
   }
 
-  let testCounts = listTests(args.grep);
-  if (args.only) {
-    const only = new Set(args.only);
-    testCounts = new Map([...testCounts].filter(([file]) => only.has(file)));
-  }
+  const testCounts = selectFiles(listTests(args.grep), args.only, args.grep);
   const weighted = weighFiles(testCounts, readDurations());
   const shards = assignShards(weighted, args.shards);
-  assertCoverage(shards, testCounts.keys());
 
   const estimated = weighted.filter((w) => w.estimated).map((w) => w.file);
   const mine = shards[args.shard - 1];
@@ -235,13 +251,17 @@ const main = () => {
       `No measured duration (estimated from test count): ${estimated.join(', ')}`,
     );
   }
-  console.log(`Shard ${args.shard}: ${mine.files.length} files`);
+  const expectedTests = mine.files.reduce((sum, f) => sum + testCounts.get(f), 0);
+  console.log(`Shard ${args.shard}: ${mine.files.length} files, ${expectedTests} tests`);
   mine.files.forEach((f) => console.log(`  ${f}`));
   fs.mkdirSync(path.dirname(path.resolve(repoRoot, args.out)), { recursive: true });
   fs.writeFileSync(
     path.resolve(repoRoot, args.out),
     mine.files.length ? `${mine.files.join('\n')}\n` : '',
   );
+  if (args.countOut) {
+    fs.writeFileSync(path.resolve(repoRoot, args.countOut), `${expectedTests}\n`);
+  }
   return 0;
 };
 
@@ -255,11 +275,11 @@ if (require.main === module) {
 }
 
 module.exports = {
-  assertCoverage,
   assignShards,
   countTestsPerFile,
   mergeDurations,
   parseArgs,
   parseJunitDurations,
+  selectFiles,
   weighFiles,
 };

@@ -71,7 +71,7 @@ jobs:
       # Verify package-lock.json only uses the official npm registry.
       # Prevents contributors using mirror registries from rewriting all resolved URLs.
       - name: Reject non-standard registry URLs
-        if: github.event_name == 'pull_request'
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         run: |
           # The plugin-dev workspace has its own lockfile, installed by release builds.
           for LOCKFILE in package-lock.json packages/plugin-dev/package-lock.json; do
@@ -210,6 +210,9 @@ jobs:
   e2e:
     name: E2E ${{ matrix.shard }}/4
     needs: e2e-build
+    # Explicit: the implicit success() also checks `changes`, whose dependency
+    # checks may fail without blocking the E2E run.
+    if: ${{ !cancelled() && needs.e2e-build.result == 'success' }}
     runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 40
     strategy:
@@ -244,6 +247,9 @@ jobs:
   e2e-webkit-smoke:
     name: E2E WebKit Smoke
     needs: e2e-build
+    # Explicit: the implicit success() also checks `changes`, whose dependency
+    # checks may fail without blocking the E2E run.
+    if: ${{ !cancelled() && needs.e2e-build.result == 'success' }}
     runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
@@ -343,7 +349,7 @@ jobs:
 
   # Single stable check to mark required in branch protection, so the split
   # and sharded jobs above can change without editing the protection rules.
-  # Skipped jobs (PR-only checks on release runs, code jobs on docs-only PRs)
+  # Skipped jobs (code jobs on docs-only PRs)
   # count as passing.
   # always(), not !cancelled(): a skipped required check would count as passing.
   ci-gate:
