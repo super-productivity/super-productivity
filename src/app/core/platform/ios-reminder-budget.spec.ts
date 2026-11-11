@@ -179,6 +179,21 @@ describe('createIosReminderBudget', () => {
     expect(scheduledIds()).toEqual([4]);
   }));
 
+  it('does not arm a reminder late that iOS refused before it came due', fakeAsync(() => {
+    setup(2);
+    deps.schedule.and.resolveTo(false);
+    budget.want(reminder(1, fromNow(1, MINUTE)));
+    tick(SETTLE_MS);
+    deps.schedule.and.resolveTo(true);
+    deps.schedule.calls.reset();
+
+    tick(2 * MINUTE);
+    budget.want(reminder(2, fromNow(1)));
+    tick(SETTLE_MS);
+
+    expect(scheduledIds()).toEqual([2]);
+  }));
+
   it('still arms a reminder whose time comes before its pass runs', fakeAsync(() => {
     setup(2);
     budget.want(reminder(1, fromNow(100, 1)));
