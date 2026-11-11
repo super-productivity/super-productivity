@@ -20,14 +20,21 @@
  *   operation in the window), the newest OPS_PER_USER operations for the
  *   average size and at most OPS_PER_USER full-state operations through their
  *   partial index, so the work is `users x tail`, as for the other reports.
- *   The uploaded bytes are therefore an estimate: full-state operations in the
- *   window are summed exactly (one is up to five orders of magnitude larger
- *   than a delta, so averaging it in or out put the result off by 10x and
- *   more), and the remaining operations count times their average size.
+ *   The uploaded bytes are therefore an estimate: the newest OPS_PER_USER
+ *   full-state operations in the window are summed exactly (one is up to five
+ *   orders of magnitude larger than a delta, so averaging it in or out put the
+ *   result off by 10x and more), and the remaining operations count times
+ *   their average size. An account with more full-state operations than that
+ *   in the window is underestimated.
+ * - The full-state lookup is only bounded with the partial index
+ *   `operations_user_id_full_state_server_seq_idx` (migration 20260512000000).
+ *   Without it (a `prisma db push` database, or an INVALID index after an
+ *   interrupted build) it reads every operation in the window.
  *
  * The projection uses gross uploaded bytes and assumes nothing is pruned, which
  * is the routine case above; cleanup or a full-state boundary makes the real
- * time to quota longer. The delta estimate can be off in either direction.
+ * time to quota longer. A one-off import counts as if it recurred every window,
+ * and the delta estimate can be off in either direction.
  */
 
 import { prisma } from './monitoring-db';
@@ -146,7 +153,7 @@ export interface GrowthRow {
   user_id: number;
   last_seq: number | bigint;
   first_seq: number | bigint | null;
-  /** Full-state operations in the window, counted and summed exactly. */
+  /** The newest OPS_PER_USER full-state operations in the window: count, bytes. */
   full_state_count: number | bigint | null;
   full_state_bytes: number | null;
   /** Average size of the newest delta operations, inside the window / overall. */
@@ -229,9 +236,9 @@ export const queryGrowingAccounts = async (
   // operation in the window instead hit statement_timeout on the hosted
   // instance with 1,000 accounts (2026-11-11). Full-state operations are the
   // exception: there are few, each can outweigh every delta in the window, and
-  // the partial index on them makes an exact, LIMITed sum cheap. Their op_type
-  // values must stay literals, or a generic plan cannot use that index (see
-  // latestCausalFullStateSql).
+  // the partial index on them makes a LIMITed sum of the newest ones cheap.
+  // Their op_type values stay literals so that the query implies that index's
+  // predicate under any plan (see latestCausalFullStateSql).
   const growth = await prisma.$queryRaw<GrowthRow[]>`
     SELECT
       scope_users.user_id,

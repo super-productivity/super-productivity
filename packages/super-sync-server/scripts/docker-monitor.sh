@@ -36,10 +36,10 @@ echo -e "${GREEN}→ Running on container: ${CONTAINER_NAME}${NC}\n"
 
 # Forward the report settings into the container: the reports read them from
 # their own environment, which `docker exec` does not inherit.
-SCOPE_ENV=()
+REPORT_ENV=()
 for name in MONITOR_SCOPE_USERS MONITOR_STATEMENT_TIMEOUT_MS; do
   if [ -n "${!name:-}" ]; then
-    SCOPE_ENV+=(-e "$name=${!name}")
+    REPORT_ENV+=(-e "$name=${!name}")
   fi
 done
 
@@ -51,7 +51,7 @@ case "$COMMAND" in
   # Basic monitoring commands (compiled scripts)
   stats|usage|usage-history|quota|active-users|active-users-quick|logs|ops)
     echo -e "${YELLOW}Running: monitor.js $COMMAND $@${NC}"
-    docker exec -it "${SCOPE_ENV[@]}" "$CONTAINER_NAME" node dist/scripts/monitor.js "$COMMAND" "$@"
+    docker exec -it "${REPORT_ENV[@]}" "$CONTAINER_NAME" node dist/scripts/monitor.js "$COMMAND" "$@"
     ;;
 
   # Analysis commands (compiled scripts)
@@ -60,13 +60,13 @@ case "$COMMAND" in
     shift || true
 
     echo -e "${YELLOW}Running: analyze-storage.js $SUBCOMMAND $@${NC}"
-    docker exec -it "${SCOPE_ENV[@]}" "$CONTAINER_NAME" node dist/scripts/analyze-storage.js "$SUBCOMMAND" "$@"
+    docker exec -it "${REPORT_ENV[@]}" "$CONTAINER_NAME" node dist/scripts/analyze-storage.js "$SUBCOMMAND" "$@"
     ;;
 
   # Full monitoring suite (compiled scripts)
   monitor-all|all)
     echo -e "${YELLOW}Running: Full monitoring suite${NC}"
-    docker exec -it "${SCOPE_ENV[@]}" "$CONTAINER_NAME" node dist/scripts/run-all-monitoring.js "$@"
+    docker exec -it "${REPORT_ENV[@]}" "$CONTAINER_NAME" node dist/scripts/run-all-monitoring.js "$@"
     ;;
 
   # Interactive shell
@@ -132,6 +132,7 @@ Utilities:
 Environment Variables:
   SUPERSYNC_CONTAINER          Container name (default: supersync-server)
   MONITOR_SCOPE_USERS          Accounts the sampled reports and quota growth read (default 200)
+  MONITOR_STATEMENT_TIMEOUT_MS Statement timeout of the reports in ms (default 300000)
 
 Examples:
   ./scripts/docker-monitor.sh usage

@@ -222,22 +222,41 @@ describe('quota growth estimate', () => {
         avg_delta_bytes: null,
       }),
     ).toBe(7000);
+    // More full-state rows than the window's sequence span cannot push the
+    // remaining count below zero.
+    expect(
+      estimateWindowBytes({
+        ...row,
+        first_seq: 50,
+        full_state_count: 3,
+        full_state_bytes: 900,
+        avg_window_delta_bytes: 100,
+      }),
+    ).toBe(900);
   });
 });
 
 /**
  * One full-state operation is orders of magnitude larger than a delta. Averaged
- * into the newest operations it inflated the window ~40x; outside them it was
- * dropped from the window entirely. Both shapes must come out near the truth.
+ * into the newest operations it inflated the window several times over; older
+ * than them it was dropped, leaving a fraction of the true bytes. Every shape
+ * below must come out exactly, and only the window's operations may count.
  */
 describe('monitor quota growth with a full-state operation (PGlite)', () => {
   let db: PGlite;
   const DELTA_BYTES = 300;
-  const DELTA_OPS = 500;
   const IMPORT_BYTES = 5 * MB;
 
-  /** `importAt`: 1-based position of the single SYNC_IMPORT among the ops. */
-  const seedAccount = async (id: number, importAt: number): Promise<void> => {
+  interface SeedOp {
+    type: 'UPD' | 'SYNC_IMPORT';
+    daysAgo: number;
+  }
+  const deltas = (count: number, daysAgo: number): SeedOp[] =>
+    Array.from({ length: count }, () => ({ type: 'UPD', daysAgo }));
+  const anImport = (daysAgo: number): SeedOp => ({ type: 'SYNC_IMPORT', daysAgo });
+
+  /** Operations in upload order; server_seq and received_at grow together. */
+  const seedAccount = async (id: number, ops: SeedOp[]): Promise<void> => {
     await db.query(
       `INSERT INTO users (id, email, storage_used_bytes) VALUES ($1, $2, $3)`,
       [id, `user${id}@example.com`, 60 * MB],
@@ -247,23 +266,24 @@ describe('monitor quota growth with a full-state operation (PGlite)', () => {
        VALUES ($1, $2, $3, $3)`,
       [`client-${id}`, id, NOW],
     );
-    const total = DELTA_OPS + 1;
+    const rows = ops.map((op, index) => ({
+      seq: index + 1,
+      type: op.type,
+      bytes: op.type === 'UPD' ? DELTA_BYTES : IMPORT_BYTES,
+      // One second apart inside a day, so the order within it is strict.
+      at: NOW - op.daysAgo * ONE_DAY + index * 1000,
+    }));
     await db.query(
       `INSERT INTO operations
          (id, user_id, server_seq, op_type, payload, payload_bytes, vector_clock, received_at)
-       SELECT
-         'op-' || $1::int || '-' || seq, $1::int, seq,
-         CASE WHEN seq = $2::int THEN 'SYNC_IMPORT' ELSE 'UPD' END,
-         '{}',
-         CASE WHEN seq = $2::int THEN $3::bigint ELSE $4::bigint END,
-         '{}',
-         $5::bigint - ($6::int - seq) * 60000
-       FROM generate_series(1, $6::int) AS seq`,
-      [id, importAt, IMPORT_BYTES, DELTA_BYTES, NOW - ONE_DAY, total],
+       SELECT 'op-' || $1::int || '-' || r.seq, $1::int, r.seq, r.type, '{}', r.bytes, '{}', r.at
+       FROM json_to_recordset($2::json)
+         AS r(seq integer, type text, bytes bigint, at bigint)`,
+      [id, JSON.stringify(rows)],
     );
     await db.query(`INSERT INTO user_sync_state (user_id, last_seq) VALUES ($1, $2)`, [
       id,
-      total,
+      rows.length,
     ]);
   };
 
@@ -271,9 +291,15 @@ describe('monitor quota growth with a full-state operation (PGlite)', () => {
     db = new PGlite();
     await db.exec(SCHEMA + SYNC_DEVICES_DDL);
     // 1: the import is among the newest 100 operations.
-    await seedAccount(1, DELTA_OPS + 1 - 10);
+    await seedAccount(1, [...deltas(490, 2), anImport(2), ...deltas(10, 2)]);
     // 2: the import is in the window but older than the newest 100.
-    await seedAccount(2, 5);
+    await seedAccount(2, [...deltas(4, 2), anImport(2), ...deltas(496, 2)]);
+    // 3: the import is older than the window.
+    await seedAccount(3, [anImport(40), ...deltas(200, 2)]);
+    // 4: the import opens the window, as after a clean-slate upload.
+    await seedAccount(4, [...deltas(5, 40), anImport(2), ...deltas(50, 2)]);
+    // 5: nothing in the window, an import before it.
+    await seedAccount(5, [anImport(40), ...deltas(20, 40)]);
   });
 
   afterAll(async () => {
@@ -288,10 +314,12 @@ describe('monitor quota growth with a full-state operation (PGlite)', () => {
   it('reports the true window bytes wherever the import sits', async () => {
     const { queryGrowingAccounts } = await import('../scripts/quota-headroom');
     const { accounts } = await queryGrowingAccounts(BigInt(NOW - 30 * ONE_DAY), 200);
-    const expected = IMPORT_BYTES + DELTA_OPS * DELTA_BYTES;
     expect(accounts.map((a) => [a.id, a.uploadedBytes])).toEqual([
-      [1, expected],
-      [2, expected],
+      [1, IMPORT_BYTES + 500 * DELTA_BYTES],
+      [2, IMPORT_BYTES + 500 * DELTA_BYTES],
+      [3, 200 * DELTA_BYTES],
+      [4, IMPORT_BYTES + 50 * DELTA_BYTES],
+      [5, 0],
     ]);
   });
 });

@@ -63,11 +63,15 @@ numbers (one `(user_id, received_at, server_seq)` index descent for the first
 operation in the window, `last_seq` for the newest) times their average size
 from the newest 100 operations. Full-state operations (an import or a repair)
 are the exception: one can outweigh every other operation in the window, so
-those in the window are summed exactly through their partial index (at most
-100 per account) and only the remaining operations are averaged. It then
-projects the time to quota at that rate. The projection assumes no pruning,
-the routine case because incremental sync creates no full-state boundary;
-pruning makes real times longer, while the averaged part can be off in either
+the newest 100 of them in the window are summed exactly and only the remaining
+operations are averaged; an account with more than 100 in the window is
+underestimated. That lookup is bounded only through the partial index
+`operations_user_id_full_state_server_seq_idx` (migration `20260512000000`): on
+a database without it, such as one created with `prisma db push`, it reads the
+whole window. It then projects the time to quota at that rate. The projection
+assumes no pruning, the routine case because incremental sync creates no
+full-state boundary; pruning makes real times longer, a one-off import counts
+as if it recurred every 30 days, and the averaged part can be off in either
 direction. Its `operations` work is `users x tail`, like the reports below;
 summing every operation in the window instead hit `statement_timeout` on the
 hosted instance with 1,000 accounts (2026-11-11).
