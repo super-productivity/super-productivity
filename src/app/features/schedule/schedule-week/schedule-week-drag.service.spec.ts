@@ -282,6 +282,54 @@ describe('ScheduleWeekDragService', () => {
       expect(dispatchSpy).not.toHaveBeenCalled();
     });
 
+    describe('released over content below the date row', () => {
+      // e.g. the day panel's overdue list: sticky like the tray, and the grid
+      // goes on underneath it
+      let below: HTMLElement;
+
+      beforeEach(() => {
+        below = document.createElement('div');
+        below.setAttribute('weekHeaderBelow', '');
+      });
+
+      it('leaves a chip in its tray', () => {
+        const release = dragTo(createTrayChipEvent({}), [below, col], { x: 50, y: 126 });
+
+        expect(service.dragPreviewStyle()).toBeNull();
+
+        release();
+
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('leaves a timed task at its time', () => {
+        const dueWithTime = new Date(2026, 0, 5, 14, 0).getTime();
+
+        dragTo(createTaskEvent({ id: 'timed', dueWithTime }), [below, col], {
+          x: 50,
+          y: 126,
+        })();
+
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('leaves a timed task at its time while the grid is not scrolled under it', () => {
+        const dueWithTime = new Date(2026, 0, 5, 14, 0).getTime();
+
+        // scrolled to the top, the header is above the grid: outside of it
+        const release = dragTo(createTaskEvent({ id: 'timed', dueWithTime }), [below], {
+          x: 500,
+          y: 500,
+        });
+
+        expect(service.dragPreviewContext()).toBeNull();
+
+        release();
+
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+    });
+
     it('schedules a chip at the time it is dropped on', () => {
       // 1h chip centred on the pointer: its top edge is 6 rows above y=126, at 10:00
       dragTo(createTrayChipEvent({}), [col], { x: 50, y: 126 })();

@@ -43,6 +43,8 @@ interface CalendarDropParams {
 const DRAG_CLONE_CLASS = 'drag-clone';
 const DRAG_OVER_CLASS = 'drag-over';
 const TRAY_DAY_ATTR = 'data-tray-day';
+// the week header's slot below the date row (the day panel's overdue list)
+const HEADER_BELOW_ATTR = 'weekHeaderBelow';
 const HOUR_IN_MS = 60 * 60 * 1000;
 
 @Injectable()
@@ -85,6 +87,9 @@ export class ScheduleWeekDragService {
   private _prevDragOverEl: HTMLElement | null = null;
   private _dragCloneEl: HTMLElement | null = null;
   private _lastDropCol: HTMLElement | null = null;
+  // The pointer is over the sticky header's tray or the content below it: the
+  // grid goes on underneath, but what is on top is what the user sees.
+  private _isGridCovered = false;
   private _lastDropScheduleEvent: HTMLElement | null = null;
   private _lastPointerPosition: PointerPosition | null = null;
   private _lastCalculatedTimestamp: number | null = null;
@@ -303,9 +308,15 @@ export class ScheduleWeekDragService {
     } else if (canMoveBefore) {
       // 4. No column but hovering over another task → reorder
       dispatchMoveBefore();
-    } else if (dropPoint && this._isOutsideGrid(dropPoint) && !sourceEvent.isInTray) {
+    } else if (
+      dropPoint &&
+      this._isOutsideGrid(dropPoint) &&
+      !sourceEvent.isInTray &&
+      !this._isGridCovered
+    ) {
       // 5. Dropped outside grid → unschedule and remove from today.
-      // A tray chip starts outside the grid, so for it this is a cancelled drag.
+      // A tray chip starts outside the grid, so for it this is a cancelled drag,
+      // and so is a release on the header's content, which shows no label for it.
       this._handleUnschedule(task, sourceEvent);
     }
 
@@ -390,12 +401,10 @@ export class ScheduleWeekDragService {
     }
   }
 
-  // Over a tray there is no time to preview, and a tray chip outside the grid
-  // is simply on its way back: no "unschedule" label for it.
+  // Over the sticky header there is no time to preview, and a tray chip outside
+  // the grid is simply on its way back: no "unschedule" label for it.
   private _isWithoutPreview(isWithinGrid: boolean): boolean {
-    return (
-      !!this._dragOverTrayDay() || (!isWithinGrid && !!this._currentDragEvent()?.isInTray)
-    );
+    return this._isGridCovered || (!isWithinGrid && !!this._currentDragEvent()?.isInTray);
   }
 
   private _clearPreview(): void {
@@ -445,6 +454,7 @@ export class ScheduleWeekDragService {
     this._prevDragOverEl = null;
     this._dragCloneEl = null;
     this._dragOverTrayDay.set(null);
+    this._isGridCovered = false;
   }
 
   // Prevent treating drag preview elements as valid drop targets,
@@ -482,14 +492,19 @@ export class ScheduleWeekDragService {
         .find((el) => el.hasAttribute(TRAY_DAY_ATTR))
         ?.getAttribute(TRAY_DAY_ATTR) ?? null;
     this._dragOverTrayDay.set(trayDay);
+    // Content below the date row is no target at all: released there, a task
+    // stays where it was instead of getting the hidden time underneath.
+    const isGridCovered =
+      !!trayDay || interactiveElements.some((el) => el.hasAttribute(HEADER_BELOW_ATTR));
+    this._isGridCovered = isGridCovered;
 
     if (interactiveElements.length) {
       // The sticky header overlaps the scrolled grid, so a column and its events
-      // are under the pointer as well. The tray on top is what the user sees.
-      this._lastDropCol = trayDay
+      // are under the pointer as well.
+      this._lastDropCol = isGridCovered
         ? null
         : interactiveElements.find((el) => el.classList.contains('col')) || null;
-      const scheduleEventCandidate = trayDay
+      const scheduleEventCandidate = isGridCovered
         ? null
         : interactiveElements.find(
             (el) => el.tagName.toLowerCase() === 'schedule-event',
@@ -694,8 +709,8 @@ export class ScheduleWeekDragService {
     columnTarget: HTMLElement | null;
     scheduleEventTarget: HTMLElement | null;
   } {
-    if (this._dragOverTrayDay()) {
-      // nothing below the tray is a target (see _updatePointerCaches)
+    if (this._isGridCovered) {
+      // nothing below the sticky header is a target (see _updatePointerCaches)
       return { columnTarget: null, scheduleEventTarget: null };
     }
     let columnTarget = this._lastDropCol;

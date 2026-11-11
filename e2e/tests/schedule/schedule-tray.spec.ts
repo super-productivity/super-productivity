@@ -154,5 +154,16 @@ test.describe('Schedule tray mode', () => {
       );
       expect(nowBox.y).toBeGreaterThanOrEqual(overdueBox.y + overdueBox.height);
     }).toPass();
+
+    // On its way to the grid a chip crosses the overdue list. The grid goes on
+    // underneath, so a release there must not give it a time that is hidden.
+    const chip = tray.locator('.chip').filter({ hasText: TITLE });
+    await drag(page, chip, await centerOf(overdue));
+    await page.mouse.up();
+    await expect(page.locator('.cdk-drag-preview')).toHaveCount(0);
+    await expect(chip).toBeVisible();
+    await expect(
+      dayPage.locator('schedule-event').filter({ hasText: TITLE }),
+    ).toHaveCount(0);
   });
 });
