@@ -1,5 +1,6 @@
 import { fieldPatchGroups } from '../../op-log/sync/conflict-field-patch.util';
-import { ActionType, OpType, Operation } from '../../op-log/core/operation.types';
+import { OperationCaptureService } from '../../op-log/capture/operation-capture.service';
+import { ActionType, Operation } from '../../op-log/core/operation.types';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Action } from '@ngrx/store';
@@ -44,7 +45,7 @@ import { TaskTimeSyncService } from './task-time-sync.service';
 import { MatDialog } from '@angular/material/dialog';
 
 describe('REST reminder creation integration', () => {
-  it('does not drop a deadline when resolving a concurrent notes edit', () => {
+  it('uses legacy LWW fallback for opaque deadlines, not a partial field patch', () => {
     const task: Task = {
       ...DEFAULT_TASK,
       id: 'task-1',
@@ -61,6 +62,7 @@ describe('REST reminder creation integration', () => {
     const notes = TaskSharedActions.updateTask({
       task: { id: task.id, changes: { notes: 'Concurrent note' } },
     });
+    const capture = new OperationCaptureService();
     const toOp = (
       action: typeof update | typeof deadline,
       id: string,
@@ -74,36 +76,31 @@ describe('REST reminder creation integration', () => {
         opType: meta.opType,
         entityType: 'TASK',
         entityId: task.id,
-        payload: {
-          actionPayload,
-          entityChanges:
-            action.type === TaskSharedActions.setDeadline.type
-              ? [
-                  {
-                    entityType: 'TASK',
-                    entityId: task.id,
-                    opType: OpType.Update,
-                    changes: { deadlineDay: '2099-11-05' },
-                  },
-                ]
-              : [],
-        },
+        payload: { actionPayload, entityChanges: capture.extractEntityChanges(action) },
         clientId,
         timestamp,
         vectorClock: { [clientId]: timestamp },
         schemaVersion: 1,
       };
     };
-    const groups = fieldPatchGroups({
-      localOps: [toOp(deadline, 'a1', 'A', 1), toOp(update, 'a2', 'A', 2)],
-      remoteOps: [toOp(notes, 'b1', 'B', 3)],
+    const localOps = [toOp(deadline, 'a1', 'A', 1), toOp(update, 'a2', 'A', 2)];
+    const remoteOps = [toOp(notes, 'b1', 'B', 3)];
+    // The real op-log does not capture synthetic field changes for setDeadline.
+    // It is intentionally opaque to fieldPatchGroups, so conflict planning
+    // must not construct an incomplete patch that silently omits deadlineDay.
+    expect(capture.extractEntityChanges(deadline)).toEqual([]);
+    expect(
+      fieldPatchGroups({ localOps, remoteOps, payloadKey: 'task', entityId: task.id }),
+    ).toBeUndefined();
+    // The separately dispatched reminder update remains adapter-shaped, so
+    // it can participate in a normal disjoint field merge with a notes edit.
+    const reminderOnly = fieldPatchGroups({
+      localOps: [localOps[1]],
+      remoteOps,
       payloadKey: 'task',
       entityId: task.id,
     });
-    expect(groups).toBeDefined();
-    expect(
-      groups?.some((group) => group.changes['deadlineDay'] === '2099-11-05'),
-    ).toBeTrue();
+    expect(reminderOnly?.some((group) => group.changes['remindAt'] === 123)).toBeTrue();
   });
 
   it('matches deadline planning followed by an explicit reminder, including serialized replay', () => {

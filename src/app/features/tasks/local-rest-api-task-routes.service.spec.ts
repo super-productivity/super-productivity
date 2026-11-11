@@ -593,6 +593,13 @@ describe('LocalRestApiTaskRoutesService', () => {
           }),
         );
         expect(response.status).toBe(200);
+        // This must not become applyShortSyntax: its full task snapshot breaks
+        // field-level conflict planning for concurrent edits.
+        expect(actions.map((action) => action.type)).toEqual([
+          TaskSharedActions.updateTask.type,
+          TaskSharedActions.setDeadline.type,
+          TaskSharedActions.updateTask.type,
+        ]);
         expect(state[TASK_FEATURE_NAME].entities['task-1']?.remindAt).toBe(123);
         expect(state[TASK_FEATURE_NAME].entities['task-1']?.dueWithTime).toBeUndefined();
         const replayed = actions.reduce(
