@@ -609,7 +609,9 @@ follow-ups:
 - The v3-default branch is draft pull request
   [#11684](https://github.com/super-productivity/super-productivity/pull/11684),
   with the fresh-context review recorded in its body. It is a draft because
-  more than five sync pull requests are open.
+  more than five sync pull requests are open. The WebDAV suite (harness
+  format v2) on its second commit succeeded
+  ([run 42978177417](https://github.com/super-productivity/super-productivity/actions/runs/42978177417)).
 - A server-side fix for the reproduced divergence is on branch
   `claude/repair-fast-forward-keeps-prefix`: the download no longer skips to
   a causal `REPAIR` for a device that synced before while the ops between its
@@ -622,7 +624,9 @@ follow-ups:
   full SuperSync suite plus released clients) finished with no failed job,
   so the reproduction is green there. After review the skip is also kept
   when an import lies between the cursor and the `REPAIR`; the run on that
-  second commit is not recorded here yet. Not covered: the pruned case,
+  second commit
+  ([42983661834](https://github.com/super-productivity/super-productivity/actions/runs/42983661834))
+  also succeeded. Not covered: the pruned case,
   which still needs the client rule described under "Devices unseen for 45
   days", and two causal `REPAIR`s ahead of a device with unsynced edits.
 
