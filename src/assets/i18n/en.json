@@ -2481,6 +2481,9 @@
         "TRACKING_ON": "Tracking on {{device}}",
         "WAS_TRACKING_ON": "Was tracking on {{device}}"
       },
+      "PLAY_BTN": {
+        "TOOLTIP": "Tracking on {{device}} – start here to take over"
+      },
       "B": {
         "MOVED_TO": "Tracking moved to {{device}} – stopped “{{title}}” here"
       },
