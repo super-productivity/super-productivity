@@ -18,7 +18,12 @@ import { TaskCopy, TaskWithSubTasks } from '../../tasks/task.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 class PlannerTaskStubComponent {
+  static created = 0;
   readonly task = input.required<TaskCopy>();
+
+  constructor() {
+    PlannerTaskStubComponent.created++;
+  }
 }
 
 describe('ScheduleDayOverdueComponent', () => {
@@ -36,16 +41,14 @@ describe('ScheduleDayOverdueComponent', () => {
   const cardTitles = (): string[] =>
     Array.from(el.querySelectorAll('planner-task')).map((c) => c.textContent!.trim());
 
-  // The cards are loaded on first opening, hence async.
-  const expand = async (): Promise<DebugElement> => {
+  const expand = (): DebugElement => {
     el.querySelector<HTMLElement>('.collapsible-header')!.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
     fixture.detectChanges();
     return fixture.debugElement;
   };
 
   beforeEach(() => {
+    PlannerTaskStubComponent.created = 0;
     TestBed.configureTestingModule({
       imports: [
         ScheduleDayOverdueComponent,
@@ -82,18 +85,20 @@ describe('ScheduleDayOverdueComponent', () => {
     );
     expect(el.querySelector('.collapsible-count')!.textContent!.trim()).toBe('2');
     expect(cardTitles()).toEqual([]);
+    // Projected content is created even while its slot is not rendered.
+    expect(PlannerTaskStubComponent.created).toBe(0);
   });
 
-  it('lists the tasks once its header is clicked', async () => {
-    await expand();
+  it('lists the tasks once its header is clicked', () => {
+    expand();
 
     expect(component.isExpanded()).toBe(true);
     expect(cardTitles()).toEqual(['Call Anna', 'Write report']);
   });
 
-  it('hands a dragged card to the schedule panel, with its subtasks', async () => {
+  it('hands a dragged card to the schedule panel, with its subtasks', () => {
     const dragRef = {} as DragRef;
-    const firstCard = (await expand()).query(By.css('planner-task'));
+    const firstCard = expand().query(By.css('planner-task'));
 
     firstCard.triggerEventHandler('cdkDragStarted', {
       source: { _dragRef: dragRef },
@@ -107,10 +112,10 @@ describe('ScheduleDayOverdueComponent', () => {
     expect(externalDragService.activeTask()).toBeNull();
   });
 
-  it('clears the cancel-next-drop flag the panel sets when it places a card', async () => {
+  it('clears the cancel-next-drop flag the panel sets when it places a card', () => {
     externalDragService.setCancelNextDrop(true);
 
-    (await expand()).query(By.css('.tasks')).triggerEventHandler('cdkDropListDropped');
+    expand().query(By.css('.tasks')).triggerEventHandler('cdkDropListDropped');
 
     expect(externalDragService.isCancelNextDrop()).toBe(false);
   });

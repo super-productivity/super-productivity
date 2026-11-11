@@ -5,9 +5,9 @@
   [isIconBefore]="true"
   [(isExpanded)]="isExpanded"
 >
-  <!-- Loaded on first opening: the cards would otherwise be part of the app's
-       startup bundle, and be created for every task while still collapsed. -->
-  @defer (when isExpanded()) {
+  <!-- The collapsible only hides its content: without this, a card would be
+       created for every task while the list is still collapsed. -->
+  @if (isExpanded()) {
     <div
       class="tasks"
       cdkDropList
