@@ -859,7 +859,8 @@ export class FakeSuperSyncServer {
 
   /**
    * services/operation-download.service.ts getOpsSinceWithSeq: a cursor before
-   * the latest causal full-state op starts at that op (the snapshot skip).
+   * the latest causal full-state op starts at that op (the snapshot skip). A
+   * device that synced before still gets the retained ops before a REPAIR.
    */
   getOpsSinceWithSeq(
     sinceSeq: number,
@@ -877,7 +878,13 @@ export class FakeSuperSyncServer {
     const snapshotRow = this._latestCausalFullState(latestSeq);
     let effectiveSinceSeq = sinceSeq;
     let snapshotVectorClock: VectorClock | undefined;
-    if (snapshotRow && sinceSeq < snapshotRow.serverSeq) {
+    const firstSeq = this.rows.length ? this.rows[0].serverSeq : null;
+    const keepsRepairPrefix =
+      snapshotRow?.op.opType === 'REPAIR' &&
+      sinceSeq > 0 &&
+      firstSeq !== null &&
+      firstSeq <= sinceSeq + 1;
+    if (snapshotRow && sinceSeq < snapshotRow.serverSeq && !keepsRepairPrefix) {
       effectiveSinceSeq = snapshotRow.serverSeq - 1;
       if (includeSnapshotMetadata) {
         const preserve = [

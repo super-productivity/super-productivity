@@ -67,7 +67,7 @@ export const latestCausalFullStateSql = (
   userId: number,
   maxServerSeq?: number,
 ): Prisma.Sql => Prisma.sql`
-  SELECT server_seq, client_id
+  SELECT server_seq, client_id, op_type
   FROM operations
   WHERE user_id = ${userId}
     ${
@@ -84,7 +84,11 @@ export const latestCausalFullStateSql = (
 `;
 
 /** Row shape of {@link latestCausalFullStateSql}. */
-export type LatestCausalFullStateRow = { server_seq: number; client_id: string };
+export type LatestCausalFullStateRow = {
+  server_seq: number;
+  client_id: string;
+  op_type: string;
+};
 
 /**
  * Fall back from a recent checkpoint to one whose entire prefix has aged out.
