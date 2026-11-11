@@ -475,11 +475,9 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     // the grid there. A card released over them, e.g. right where its drag
     // started, must not be placed at the hidden time underneath.
     const overdueBottom = this._overdueEl?.getBoundingClientRect().bottom ?? sc.top;
-    const trayEl = scheduleEl.querySelector<HTMLElement>('schedule-tray');
-    // an empty tray renders nothing and covers nothing
-    const trayBottom = trayEl?.offsetHeight
-      ? trayEl.getBoundingClientRect().bottom
-      : sc.top;
+    const trayBottom =
+      this.scheduleWeekComponent?.getVisibleTrayEl()?.getBoundingClientRect().bottom ??
+      sc.top;
     const top = Math.max(dz.top, sc.top, overdueBottom, trayBottom);
     const right = Math.min(dz.right, sc.right);
     const bottom = Math.min(dz.bottom, sc.bottom);
@@ -605,8 +603,7 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     const relativePosition = elementRect.top - containerRect.top;
     // The tray and the overdue list make the sticky header taller; without
     // their height the current time would land underneath them.
-    const trayHeight =
-      scheduleWeekEl.querySelector<HTMLElement>('schedule-tray')?.offsetHeight ?? 0;
+    const trayHeight = this.scheduleWeekComponent?.getVisibleTrayEl()?.offsetHeight ?? 0;
     const overdueHeight = this._overdueEl?.offsetHeight ?? 0;
     const targetScrollTop =
       scrollContainer.scrollTop +
