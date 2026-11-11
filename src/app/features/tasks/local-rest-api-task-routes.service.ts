@@ -441,6 +441,9 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       currentTask,
       currentTaskId: currentTask?.id ?? null,
       taskCount: allTasks.length,
+      // The logical day (start-of-next-day setting), so clients writing
+      // `dueDay` mean the same day as Today.
+      todayStr: this._dateService.todayStr(),
       trackingOnOtherDevice: this._getTrackingOnOtherDevice(),
     });
   }
