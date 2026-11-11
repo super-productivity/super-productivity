@@ -732,15 +732,19 @@ test.describe('@supersync released provider reorder compatibility', () => {
   test.afterAll(async () => assets?.close());
 
   // Released clients predate the GitLab plugin: they show a synced GitLab-plugin
-  // provider as "plugin not installed" (disabled, no editor), so this suite seeds
-  // built-in Jira providers only.
-  for (const { oldReorders, oldResolvesFirst } of [
-    { oldReorders: false, oldResolvesFirst: false },
-    { oldReorders: true, oldResolvesFirst: false },
-    { oldReorders: false, oldResolvesFirst: true },
-    { oldReorders: true, oldResolvesFirst: true },
+  // provider as "plugin not installed" (disabled, no editor), so they can only
+  // edit and drag built-in tabs. ALL_JIRA cases seed built-in Jira only; JIRA
+  // cases keep GitLab-plugin siblings the released client must round-trip intact.
+  for (const { oldReorders, oldResolvesFirst, providerKey } of [
+    { oldReorders: false, oldResolvesFirst: false, providerKey: 'ALL_JIRA' as const },
+    { oldReorders: true, oldResolvesFirst: false, providerKey: 'ALL_JIRA' as const },
+    { oldReorders: false, oldResolvesFirst: true, providerKey: 'ALL_JIRA' as const },
+    { oldReorders: true, oldResolvesFirst: true, providerKey: 'ALL_JIRA' as const },
+    { oldReorders: false, oldResolvesFirst: false, providerKey: 'JIRA' as const },
+    { oldReorders: true, oldResolvesFirst: false, providerKey: 'JIRA' as const },
   ]) {
-    test(`${oldResolvesFirst ? 'old resolves first and retains pending work' : 'old uploads first, new resolves, old receives'} / old ${oldReorders ? 'order' : 'update'}`, async ({
+    const mixed = providerKey === 'JIRA';
+    test(`${oldResolvesFirst ? 'old resolves first and retains pending work' : 'old uploads first, new resolves, old receives'} / old ${oldReorders ? 'order' : 'update'}${mixed ? ' / GitLab-plugin siblings' : ''}`, async ({
       browser,
       baseURL,
       testRunId,
@@ -762,7 +766,13 @@ test.describe('@supersync released provider reorder compatibility', () => {
           (id) => id + '-' + testRunId,
         );
         const reordered = [ids[1], ids[0], ids[2]];
-        await seedProviders(current.page, ids, 'ALL_JIRA');
+        await seedProviders(current.page, ids, providerKey);
+        // The siblings (GitLab-plugin in mixed cases) exactly as seeded; no side
+        // edits them, so every round trip must keep pluginId/pluginConfig intact.
+        const siblings = Object.fromEntries(
+          ids.slice(1).map((id, i) => [id, provider(id, i + 1, providerKey)]),
+        );
+        const initials = ['P1', mixed ? 'JI' : 'P0', 'P2'];
         await current.workView.addTask('baseline witness');
         await sync(current);
         const released = await createSimulatedClient(
@@ -780,6 +790,16 @@ test.describe('@supersync released provider reorder compatibility', () => {
         await sync(released);
         await sync(current);
         const before = await snapshot(current.page);
+        // Pins the baseline after the released client's first sync, so a field it
+        // dropped early cannot hide inside `before`.
+        expect(before.issueProvider.entities).toMatchObject(siblings);
+        if (mixed) {
+          expect(before.issueProvider.entities[ids[1]]).toMatchObject({
+            issueProviderKey: 'GITLAB',
+            pluginId: 'gitlab-issue-provider',
+            pluginConfig: { project: 'synthetic/provider-1' },
+          });
+        }
         const expectedProvider = {
           ...before.issueProvider.entities[ids[0]],
           isEnabled: false,
@@ -883,7 +903,7 @@ test.describe('@supersync released provider reorder compatibility', () => {
           ).toBeVisible();
           await openPanel(released.page);
           const tabs = released.page.locator('issue-panel .tab-header-item.cdk-drag');
-          await expect(tabs.locator('.initials')).toHaveText(['P1', 'P0', 'P2']);
+          await expect(tabs.locator('.initials')).toHaveText(initials);
           await expect(tabs.nth(0)).not.toHaveClass(/disabled/);
           if (oldReorders) await expect(tabs.nth(1)).not.toHaveClass(/disabled/);
           else await expect(tabs.nth(1)).toHaveClass(/disabled/);
@@ -902,6 +922,8 @@ test.describe('@supersync released provider reorder compatibility', () => {
         await sync(released);
         await sync(current);
         const final = await snapshot(current.page);
+        // Released clients compare against `final` below, so this also pins them.
+        expect(final.issueProvider.entities).toMatchObject(siblings);
         expect(final.issueProvider).toEqual({
           ...before.issueProvider,
           ids: reordered,
@@ -959,8 +981,22 @@ test.describe('@supersync released provider reorder compatibility', () => {
             await expect.poll(() => releasedSnapshot(client.page)).toEqual(final);
             await openPanel(client.page);
             const tabs = client.page.locator('issue-panel .tab-header-item.cdk-drag');
-            await expect(tabs.locator('.initials')).toHaveText(['P1', 'P0', 'P2']);
-            await expect(tabs.nth(0)).not.toHaveClass(/disabled/);
+            await expect(tabs.locator('.initials')).toHaveText(initials);
+            if (mixed) {
+              // Enabled in state, but the released client cannot load the plugin:
+              // it must show it as not installed rather than drop or rewrite it.
+              await expect(tabs.nth(0)).toHaveClass(/disabled/);
+              await client.page.locator('issue-panel [role="tab"]').nth(0).click();
+              // `:visible` can match inactive tab bodies while the tab animation
+              // runs; scope to the one panel Material marks as active.
+              const activePanel = client.page.locator(
+                'issue-panel [role="tabpanel"][aria-hidden="false"]',
+              );
+              await expect(activePanel).toContainText(
+                'Required plugin "gitlab-issue-provider" is not installed.',
+              );
+              await expect(activePanel.locator('issue-provider-tab')).toHaveCount(0);
+            } else await expect(tabs.nth(0)).not.toHaveClass(/disabled/);
             await expect(tabs.nth(1)).toHaveClass(/disabled/);
             await expect(tabs.nth(2)).toHaveClass(/disabled/);
           }

@@ -24,7 +24,7 @@ import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.comp
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   animationFrameScheduler,
   firstValueFrom,
@@ -168,6 +168,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   customizerService = inject(TaskViewCustomizerService);
   workContextService = inject(WorkContextService);
   private _activatedRoute = inject(ActivatedRoute);
+  private _router = inject(Router);
   private _projectService = inject(ProjectService);
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
@@ -612,6 +613,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       translateParams: {
         nr: doneTasks.length,
       },
+      // archived tasks leave every list; History is where they can be viewed and restored
+      actionStr: T.MH.HISTORY,
+      actionFn: () => this._router.navigate(['/active/history']),
     });
   }
 

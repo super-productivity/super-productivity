@@ -30,12 +30,6 @@ export const DUPLICATE_OPERATION_ERROR_MSG =
 export const OPERATION_LOG_STORE_NOT_INITIALIZED =
   'OperationLogStore not initialized. Ensure init() is called.';
 
-/**
- * Error thrown when attempting to use ArchiveStoreService before initialization.
- */
-export const ARCHIVE_STORE_NOT_INITIALIZED =
-  'ArchiveStoreService not initialized. Ensure _ensureInit() is called.';
-
 // ============================================================================
 // IndexedDB Open Errors (Issue #6255)
 // ============================================================================

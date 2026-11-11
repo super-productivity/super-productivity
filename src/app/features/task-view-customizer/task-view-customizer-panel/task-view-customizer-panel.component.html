@@ -273,13 +273,18 @@
     (click)="$event.stopPropagation()"
     (keydown)="$event.stopPropagation()"
   >
-    <chip-list-input
-      [label]="T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG | translate"
-      [suggestions]="allTags()"
-      [model]="tagFilterIds()"
-      (addItem)="addTagFilter($event)"
-      (removeItem)="removeTagFilter($event)"
-    ></chip-list-input>
+    <!-- deferred: this panel is created with the page title on every start;
+         loading the chip input (Material chips + autocomplete) on idle keeps
+         it out of the initial bundle -->
+    @defer (on idle) {
+      <chip-list-input
+        [label]="T.F.TASK_VIEW.CUSTOMIZER.FILTER_TAG | translate"
+        [suggestions]="allTags()"
+        [model]="tagFilterIds()"
+        (addItem)="addTagFilter($event)"
+        (removeItem)="removeTagFilter($event)"
+      ></chip-list-input>
+    }
 
     @if (tagFilterIds().length >= 2) {
       <div class="tag-filter-mode-toggle">

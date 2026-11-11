@@ -153,22 +153,32 @@ describe('TimeBlockSyncEffects', () => {
     sub?.unsubscribe();
   });
 
-  it('offers Connect for missing provider credentials and opens that provider settings', fakeAsync(() => {
-    oauthTokensSpy.and.resolveTo(false);
-    upsertEventSpy.and.rejectWith(new Error('Not authenticated'));
-    actions$.next(
-      TaskSharedActions.updateTask({ task: { id: 'task-1', changes: { title: 'New' } } }),
-    );
-    tick(COALESCE_MS);
+  it('offers Connect for missing provider credentials and opens that provider settings', async () => {
+    let actionFn: () => Promise<void> = async () => undefined;
+    // The dialog is imported lazily, and a dynamic import() does not resolve
+    // under fakeAsync, so only the debounced part runs in the fake zone.
+    fakeAsync(() => {
+      oauthTokensSpy.and.resolveTo(false);
+      upsertEventSpy.and.rejectWith(new Error('Not authenticated'));
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: 'New' } },
+        }),
+      );
+      tick(COALESCE_MS);
 
-    const snack = (TestBed.inject(SnackService).open as jasmine.Spy).calls.mostRecent()
-      .args[0];
-    expect(snack.actionStr).toEqual(jasmine.any(String));
-    expect(oauthTokensSpy).toHaveBeenCalledOnceWith(
-      'google-calendar-provider',
-      provider.id,
-    );
-    snack.actionFn();
+      const snack = (TestBed.inject(SnackService).open as jasmine.Spy).calls.mostRecent()
+        .args[0];
+      expect(snack.actionStr).toEqual(jasmine.any(String));
+      expect(oauthTokensSpy).toHaveBeenCalledOnceWith(
+        'google-calendar-provider',
+        provider.id,
+      );
+      actionFn = snack.actionFn;
+      flush();
+    })();
+
+    await actionFn();
     expect(TestBed.inject(MatDialog).open).toHaveBeenCalledOnceWith(
       DialogEditIssueProviderComponent,
       {
@@ -176,8 +186,7 @@ describe('TimeBlockSyncEffects', () => {
         data: { issueProvider: provider },
       },
     );
-    flush();
-  }));
+  });
 
   for (const hasOAuth of [true, false]) {
     it(`keeps the plain error for ${hasOAuth ? 'an authenticated' : 'a non-OAuth'} provider`, fakeAsync(() => {

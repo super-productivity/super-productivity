@@ -283,6 +283,22 @@ describe('TaskDetailPanelComponent', () => {
     });
   });
 
+  describe('addAttachment()', () => {
+    // the dialog needs the task id to hint on repeating instances
+    it('opens the attachment dialog with the id of the panel task', () => {
+      const matDialog = TestBed.inject(MatDialog) as jasmine.SpyObj<MatDialog>;
+      matDialog.open.and.returnValue({
+        afterClosed: () => of(undefined),
+      } as ReturnType<MatDialog['open']>);
+
+      component.addAttachment();
+
+      expect(matDialog.open).toHaveBeenCalledOnceWith(jasmine.anything(), {
+        data: { taskId: 'test-task-id' },
+      });
+    });
+  });
+
   // A won't-do task is one whose `wontDoOn` matches its `doneOn`.
   describe('editCompleted()', () => {
     const editCompletedTo = (task: TaskWithSubTasks, doneOn: number): void => {
