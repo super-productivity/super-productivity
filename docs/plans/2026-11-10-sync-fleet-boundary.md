@@ -538,8 +538,8 @@ for the evidence its recommendation names.
 
 ## Missing evidence
 
-- **Version spread** on the hosted server at four and eight weeks after
-  v19.2.0, by platform. Not run for this note.
+- **Version spread** on the hosted server at eight weeks after v19.2.0
+  (around 2026-12-06). The four-week reading is in the Progress section.
 - **Quota headroom:** accounts above 50% and 80% of 100 MB, and how many have
   ever received `STORAGE_QUOTA_EXCEEDED`. The sibling query covers the first.
 - **State size and prunable bytes per account,** to size the trigger and the
@@ -655,8 +655,38 @@ v19.1 or earlier would need the manual toggle to join a new folder. The
 reproduction branch `claude/repair-deferral-behind-base-repro` is redundant
 and can be deleted; its test is on master through #11688.
 
-**Recommendation 1 (the two production queries)** needs access to the hosted
-database and is not done.
+**2026-11-11, recommendation 1 (the two production readings).** Run by the
+maintainer on the hosted server; the figures below are as reported from that
+session, not re-run here.
+
+| Reading                                               | Result                         | Threshold             |
+| ----------------------------------------------------- | ------------------------------ | --------------------- |
+| Devices active in 30 days that are older than v19.2.0 | 3,408 of 18,588 (18.3%)        | under 5% (F2)         |
+| The same without devices that report no version       | 1,677 (9.0%), 1,437 on v19.1.0 | –                     |
+| Accounts with at least one older device               | 2,888, about a third           | –                     |
+| Accounts above 50% / 75% / 90% of quota, at quota     | 8 / 6 / 5 / 0 of 16,136        | "no meaningful group" |
+
+Older share by platform: browser 26.9% (1,262 of 4,698), Electron 22.6%
+(1,448 of 6,403), Android 10.5% (579 of 5,527), iOS 4.7% (90 of 1,931).
+
+What follows:
+
+- **No floor now.** The older share is more than three times the threshold,
+  and enforcing would stop a device in about a third of accounts. The gate
+  is not built either (F4: only when the share is near the threshold).
+- **No checkpoints for quota reasons.** Almost no account is near its quota,
+  so the plan's "doing nothing on the server" condition holds on that count.
+  The quota reading does not answer the other half of that condition, the
+  size and growth of the database, which is a hosting-cost question.
+- **The five accounts above 90%** are a support matter, not a fleet one. The
+  growth projection needs the deployed image to include #11675
+  (`npm run monitor -- quota`); the running image did not.
+- **Open question:** a browser share of 26.9% is unexpected, since a reload
+  updates the web app. Stale service-worker caches or self-hosted web builds
+  are guesses, not findings.
+- **Next reading:** the version spread again around 2026-12-06 (eight weeks
+  after v19.2.0). The table keeps only each device's latest version, so this
+  reading cannot be reconstructed later.
 
 ## Review
 
