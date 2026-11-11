@@ -7,6 +7,7 @@ const {
   describeRun,
   formatComparison,
   harnessDifferences,
+  mixesMissingInBase,
   parseReport,
   profileNames,
   withoutMixes,
@@ -30,6 +31,24 @@ test('reads the mix names of the real profiles file', () => {
     'move',
   ]);
   assert.deepEqual(profileNames('export const OTHER = 1;'), []);
+});
+
+test('finds the mixes the base lacks, and refuses a base without readable mixes', () => {
+  const profiles = (...names) =>
+    `export const FUZZ_PROFILES: Record<string, IntentWeights> = {\n` +
+    names.map((name) => `  ${name}: [\n    ['track', 1],\n  ],\n`).join('') +
+    `};\n`;
+  assert.deepEqual(
+    mixesMissingInBase(profiles('all', 'move'), profiles('all', 'tasks')),
+    ['move'],
+  );
+  assert.deepEqual(mixesMissingInBase(profiles('all'), profiles('all')), []);
+  // An unreadable head falls back to comparing everything.
+  assert.deepEqual(mixesMissingInBase('', profiles('all')), []);
+  assert.throws(
+    () => mixesMissingInBase(profiles('all'), 'export const OTHER = 1;'),
+    /No mixes found in the base/,
+  );
 });
 
 test('leaves a mix the base lacks out of the comparison, and reports it', () => {

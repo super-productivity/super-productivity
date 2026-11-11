@@ -11,9 +11,9 @@ import {
  * concentrates on task edits crossing tracked time; `replace` adds the state
  * replacements the UI offers (force upload, backup export and import) and
  * answers the SYNC_IMPORT conflict dialog; `move` crosses task edits with
- * moves between three projects (its run alone creates the other two). Every mix answers the
- * whole-dataset dialog after a stop, with a `k` stream of its own outside
- * `replace`. A new mix leaves the other mixes' traces unchanged.
+ * moves between three projects (its run alone creates the other two). Every
+ * mix answers the whole-dataset dialog after a stop, with a `k` stream of its
+ * own outside `replace`. A new mix leaves the other mixes' traces unchanged.
  */
 export const FUZZ_PROFILES: Record<string, IntentWeights> = {
   all: DEFAULT_WEIGHTS,

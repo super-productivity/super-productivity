@@ -89,6 +89,19 @@ const profileNames = (source) => {
   return [...body.matchAll(/^ {2}(\w+):/gm)].map((match) => match[1]);
 };
 
+/**
+ * The mixes of the head's profiles source that the base's lacks. Throws when
+ * the base's mixes cannot be read: every mix would then count as new, and the
+ * comparison would pass without comparing a seed.
+ */
+const mixesMissingInBase = (headSource, baseSource) => {
+  const baseMixes = profileNames(baseSource);
+  if (baseMixes.length === 0) {
+    throw new Error(`No mixes found in the base's ${PROFILES_FILE}`);
+  }
+  return profileNames(headSource).filter((mix) => !baseMixes.includes(mix));
+};
+
 /** The report without the seeds of `mixes` (a seed is named `<mix>:<seed>`). */
 const withoutMixes = (report, mixes) => {
   const isKept = (seed) => !mixes.includes(seed.split(':')[0]);
@@ -259,13 +272,9 @@ const main = () => {
     }
     // A mix the base lacks names intents the base cannot compile: the base
     // then keeps its own mixes, and the new mix is left out of the comparison.
-    newMixes = profileNames(
+    newMixes = mixesMissingInBase(
       fs.readFileSync(path.join(root, PROFILES_FILE), 'utf8'),
-    ).filter(
-      (mix) =>
-        !profileNames(
-          fs.readFileSync(path.join(worktree, PROFILES_FILE), 'utf8'),
-        ).includes(mix),
+      fs.readFileSync(path.join(worktree, PROFILES_FILE), 'utf8'),
     );
     for (const file of newMixes.length > 0 ? [REPORT_SPEC] : SHARED_FILES) {
       fs.copyFileSync(path.join(root, file), path.join(worktree, file));
@@ -301,6 +310,7 @@ module.exports = {
   describeRun,
   formatComparison,
   harnessDifferences,
+  mixesMissingInBase,
   parseReport,
   profileNames,
   withoutMixes,

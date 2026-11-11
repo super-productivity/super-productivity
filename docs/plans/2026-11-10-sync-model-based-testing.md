@@ -407,7 +407,7 @@ Implemented as described above. The 150-seed report on the slice:
 | `move` seeds with any signature                                                       | 30 of 30       |
 | `move` seeds with a move-specific signature                                           | 21             |
 | – of these, from oracles that need no ledger (divergence, membership, REPAIR, errors) | 11             |
-| Focused suite (`sync-fuzz/*.spec.ts`)                                                 | 151 of 151     |
+| Focused suite (`sync-fuzz/*.spec.ts`)                                                 | 160 of 160     |
 
 The ledger now treats a move as a whole-entity side, because
 `moveToOtherProject` carries the flat pre-move task (`isChangesShapedOp` in

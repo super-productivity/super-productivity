@@ -50,7 +50,9 @@ there changes every existing trace. Entities only that mix needs are created
 by a setup of its own (`MOVE_SETUP`), which a replayed trace gets when its
 steps contain the intent. The other mixes' traces, pins and the fixed 120-seed
 baseline then stay as they were. `npm run sync-fuzz:compare` does not compare a
-mix the base lacks; the PR that adds one states its signatures.
+mix the base lacks; the PR that adds one states its signatures. In the random
+sweep, a pin that moves a task explains only a run that moves one, so its
+primary does not hide that signature in the other mixes.
 
 The `move` mix adds two projects and `moveTask` (`moveToOtherProject`, as
 `TaskService.moveToProject` dispatches it). The ledger records the target as

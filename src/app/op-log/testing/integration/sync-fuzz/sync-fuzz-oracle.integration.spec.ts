@@ -49,7 +49,7 @@ describe('sync fuzz oracle real-path negative controls', () => {
     }, 60_000);
   }
 
-  it('reports a moved task that its project does not list, or that two projects list', async () => {
+  it('reports a moved task that its project does not list, lists twice, or that two projects list', async () => {
     const steps: FuzzStep[] = [
       { d: 'A', a: ['moveTask', 't3', 'p1'], s: 1 },
       { d: 'B', s: 1 },
@@ -72,6 +72,7 @@ describe('sync fuzz oracle real-path negative controls', () => {
 
     corrupt = (state) => {
       projects(state)['p2']['taskIds'] = ['t3'];
+      projects(state)['p1']['backlogTaskIds'] = ['t3'];
       projects(state)['INBOX_PROJECT']['taskIds'] = [
         ...(projects(state)['INBOX_PROJECT']['taskIds'] as string[]),
         'gone',
@@ -81,6 +82,7 @@ describe('sync fuzz oracle real-path negative controls', () => {
     expect(stale.failures.map((f) => f.signature)).toEqual(
       jasmine.arrayContaining([
         'membership:listed-in-other-project',
+        'membership:listed-twice',
         'membership:lists-missing-task',
       ]),
     );
@@ -96,15 +98,29 @@ describe('sync fuzz oracle real-path negative controls', () => {
     expect(failures.map((f) => f.signature)).toContain('field-reverted:task.projectId');
   }, 60_000);
 
-  it('creates the other projects only in a run that moves tasks', async () => {
+  it('creates the other projects and checks membership only in a run that moves tasks', async () => {
     let projectIds: string[] = [];
     corruptOutcome((state) => {
-      projectIds = (state.project as Entities).ids;
+      const projects = state.project as Entities;
+      projectIds = projects.ids;
+      const inbox = projects.entities['INBOX_PROJECT'];
+      inbox['taskIds'] = (inbox['taskIds'] as string[]).filter((id) => id !== 't1');
     });
-    await runFuzz({ steps: [{ d: 'A', a: ['renameTask', 't3', 'x'], s: 1 }] });
+    const membership = (failures: { signature: string }[]): string[] => [
+      ...new Set(
+        failures.map((f) => f.signature).filter((s) => s.startsWith('membership:')),
+      ),
+    ];
+    const plain = await runFuzz({
+      steps: [{ d: 'A', a: ['renameTask', 't3', 'x'], s: 1 }],
+    });
     expect(projectIds).toEqual(['INBOX_PROJECT']);
-    await runFuzz({ steps: [{ d: 'A', a: ['moveTask', 't3', 'p2'], s: 1 }] });
+    expect(membership(plain.failures)).toEqual([]);
+    const moved = await runFuzz({
+      steps: [{ d: 'A', a: ['moveTask', 't3', 'p2'], s: 1 }],
+    });
     expect(projectIds).toEqual(['INBOX_PROJECT', 'p1', 'p2']);
+    expect(membership(moved.failures)).toEqual(['membership:unlisted-in-own-project']);
   }, 60_000);
 
   it('checks supplied creation values without treating defaults as user edits', async () => {

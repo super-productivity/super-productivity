@@ -1034,11 +1034,6 @@ interface CheckedState {
 }
 
 /**
- * The Today notes panel renders `note.todayOrder` unfiltered, and the pin
- * toggle reads `isPinnedToToday`, so they must agree on every device. The
- * convergence oracle misses a gap that all devices share.
- */
-/**
  * A project's lists are stored membership (`project.taskIds`,
  * `backlogTaskIds`), written by the task's op without declaring PROJECT. A
  * top-level task belongs in exactly one of its own project's two lists and in
@@ -1074,6 +1069,11 @@ export const checkProjectMembership = (
   }
 };
 
+/**
+ * The Today notes panel renders `note.todayOrder` unfiltered, and the pin
+ * toggle reads `isPinnedToToday`, so they must agree on every device. The
+ * convergence oracle misses a gap that all devices share.
+ */
 const checkTodayNotes = (
   device: string,
   snapshot: AppStateSnapshot,
