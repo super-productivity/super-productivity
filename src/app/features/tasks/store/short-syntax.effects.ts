@@ -17,7 +17,7 @@ import {
 import { GlobalConfigService } from '../../config/global-config.service';
 import { unique } from '../../../util/unique';
 import { TaskService } from '../task.service';
-import { EMPTY, firstValueFrom, from, of } from 'rxjs';
+import { EMPTY, from, of } from 'rxjs';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { shortSyntaxForNewWords } from '../util/short-syntax-for-new-words';
@@ -282,29 +282,39 @@ export class ShortSyntaxEffects {
                 return actions;
               };
 
-              // Only REST creates with an explicit reminder need a fresh read.
-              if (
-                originalAction.type !== TaskSharedActions.updateTask.type &&
-                originalAction.isPreserveExplicitReminder &&
-                typeof originalAction.task.remindAt === 'number'
-              ) {
-                return firstValueFrom(this._taskService.getByIdOnce$(task.id)).then(
-                  (latestTask) => {
-                    if (typeof latestTask?.remindAt === 'number') {
-                      finalTaskChanges.remindAt = latestTask.remindAt;
-                    } else {
-                      delete finalTaskChanges.remindAt;
-                    }
-                    if (schedulingInfo?.dueWithTime) {
-                      schedulingInfo.remindAt = latestTask?.remindAt;
-                    }
-                    return createActions();
-                  },
-                );
-              }
               return createActions();
             }),
-        ).pipe(mergeMap((actions) => actions));
+        ).pipe(
+          mergeMap((actions) => actions),
+          mergeMap((action) => {
+            if (
+              originalAction.type === TaskSharedActions.updateTask.type ||
+              !originalAction.isPreserveExplicitReminder ||
+              action.type !== TaskSharedActions.applyShortSyntax.type
+            ) {
+              return of(action);
+            }
+            const syntaxAction = action as ReturnType<
+              typeof TaskSharedActions.applyShortSyntax
+            >;
+            // Store selectors and effect dispatch are synchronous: no promise may
+            // separate the last read from applying the parsed action.
+            return this._taskService.getByIdOnce$(task.id).pipe(
+              map((latestTask) => {
+                const taskChanges = { ...syntaxAction.taskChanges };
+                if (typeof latestTask?.remindAt === 'number') {
+                  taskChanges.remindAt = latestTask.remindAt;
+                } else {
+                  delete taskChanges.remindAt;
+                }
+                const schedulingInfo = syntaxAction.schedulingInfo?.dueWithTime
+                  ? { ...syntaxAction.schedulingInfo, remindAt: latestTask?.remindAt }
+                  : syntaxAction.schedulingInfo;
+                return { ...syntaxAction, taskChanges, schedulingInfo };
+              }),
+            );
+          }),
+        );
       }),
     ),
   );

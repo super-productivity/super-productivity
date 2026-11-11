@@ -368,7 +368,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
   private _dispatchDeadlineChange(
     taskId: string,
     change: DeadlineChange,
-    explicitReminder?: { task: Task; remindAt: number },
+    explicitRemindAt?: number,
   ): void {
     if (change.type === 'clearReminder') {
       this._store.dispatch(TaskSharedActions.clearDeadlineReminder({ taskId }));
@@ -382,22 +382,6 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       return;
     }
 
-    if (explicitReminder) {
-      // The compound action applies deadline auto-planning before taskChanges,
-      // so the explicit reminder survives in the same replayable operation.
-      this._store.dispatch(
-        TaskSharedActions.applyShortSyntax({
-          task: explicitReminder.task,
-          taskChanges: { ...change.fields, remindAt: explicitReminder.remindAt },
-          ...getDeadlineAutoPlanFields(
-            this._dateService,
-            change.fields.deadlineDay,
-            change.fields.deadlineWithTime,
-          ),
-        }),
-      );
-      return;
-    }
     this._store.dispatch(
       TaskSharedActions.setDeadline({
         taskId,
@@ -410,6 +394,11 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
         isSkipSnack: true,
       }),
     );
+    if (explicitRemindAt !== undefined) {
+      // Preserve the explicit reminder after deadline auto-planning, using an
+      // ordinary field update rather than a pre-change task snapshot.
+      this._taskService.update(taskId, { remindAt: explicitRemindAt });
+    }
   }
 
   async handle(
@@ -701,16 +690,10 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
             )
           : this._taskService.addSubTaskTo(body.parentId, { title, ...additionalFields });
       if (deadlineResolution.change?.type === 'set') {
-        const task =
-          typeof additionalFields.remindAt === 'number'
-            ? await this._getTaskById(subTaskId)
-            : undefined;
         this._dispatchDeadlineChange(
           subTaskId,
           deadlineResolution.change,
-          task && typeof additionalFields.remindAt === 'number'
-            ? { task, remindAt: additionalFields.remindAt }
-            : undefined,
+          additionalFields.remindAt,
         );
       }
       const createdSubTask = await this._getTaskById(subTaskId);
@@ -723,16 +706,10 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
         ? this._taskService.add(title, false, additionalFields, false, false, true)
         : this._taskService.add(title, false, additionalFields);
     if (deadlineResolution.change?.type === 'set') {
-      const task =
-        typeof additionalFields.remindAt === 'number'
-          ? await this._getTaskById(taskId)
-          : undefined;
       this._dispatchDeadlineChange(
         taskId,
         deadlineResolution.change,
-        task && typeof additionalFields.remindAt === 'number'
-          ? { task, remindAt: additionalFields.remindAt }
-          : undefined,
+        additionalFields.remindAt,
       );
     }
     const createdTask = await this._getTaskById(taskId);
@@ -925,9 +902,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
           this._dispatchDeadlineChange(
             taskId,
             deadlineResolution.change,
-            typeof changes.remindAt === 'number'
-              ? { task, remindAt: changes.remindAt }
-              : undefined,
+            changes.remindAt,
           );
         }
         return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));

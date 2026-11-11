@@ -1,3 +1,4 @@
+import { createCombinedTaskSharedMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/test-helpers';
 import { shortSyntaxSharedMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/short-syntax-shared.reducer';
 import { taskSharedDeadlineMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/task-shared-deadline.reducer';
 import { createStateWithExistingTasks } from '../../../root-store/meta/task-shared-meta-reducers/test-utils';
@@ -10,7 +11,7 @@ import {
 } from '../../../core/date-time-format/date-input-locale';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore } from '@ngrx/store/testing';
-import { BehaviorSubject, firstValueFrom, of, Subject } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, Observable, of, Subject, tap } from 'rxjs';
 import { ShortSyntaxEffects } from './short-syntax.effects';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { addNewTagsFromShortSyntax, addSubTask } from './task.actions';
@@ -263,6 +264,72 @@ describe('ShortSyntaxEffects', () => {
       expect(action.taskChanges.remindAt).toBe(456);
       expect(action.schedulingInfo?.remindAt).toBe(456);
     });
+
+    for (const newReminder of [456, undefined]) {
+      it(`preserves a later ${newReminder === undefined ? 'dismissal' : 'update'} after the final read`, async () => {
+        dateInputLocale = { language: 'de', isDayFirst: true };
+        const task = createTask('task-1', {
+          title: 'Call @morgen 15 Uhr',
+          remindAt: 123,
+        });
+        let state = createStateWithExistingTasks(['task-1'], [], [], []);
+        state[TASK_FEATURE_NAME].entities['task-1'] = task;
+        const reduce = createCombinedTaskSharedMetaReducer(
+          shortSyntaxSharedMetaReducer((value) => value),
+        );
+        let resolveMutation!: () => void;
+        const mutationDone = new Promise<void>((resolve) => {
+          resolveMutation = resolve;
+        });
+        const order: string[] = [];
+        let reads = 0;
+        taskServiceMock.getByIdOnce$.and.callFake(() => {
+          reads++;
+          if (reads === 1) return of(task);
+          const snapshot = state[TASK_FEATURE_NAME].entities['task-1'];
+          return new Observable<Task>((subscriber) => {
+            order.push('read');
+            subscriber.next(snapshot!);
+            subscriber.complete();
+            queueMicrotask(() =>
+              queueMicrotask(() => {
+                const action =
+                  newReminder === undefined
+                    ? TaskSharedActions.dismissReminderOnly({ id: 'task-1' })
+                    : TaskSharedActions.updateTask({
+                        task: { id: 'task-1', changes: { remindAt: newReminder } },
+                      });
+                order.push('later change');
+                state = reduce(state, action);
+                resolveMutation();
+              }),
+            );
+          });
+        });
+        const emitted = firstValueFrom(
+          effects.shortSyntax$.pipe(
+            tap((action) => {
+              order.push('syntax');
+              state = reduce(state, action);
+            }),
+          ),
+        );
+        actions$.next(
+          TaskSharedActions.addTask({
+            task,
+            workContextId: 'project-1',
+            workContextType: WorkContextType.PROJECT,
+            isAddToBacklog: false,
+            isAddToBottom: false,
+            isPreserveExplicitReminder: true,
+          }),
+        );
+        await emitted;
+        await mutationDone;
+        expect(order).toEqual(['read', 'syntax', 'later change']);
+        expect(state[TASK_FEATURE_NAME].entities['task-1']?.remindAt).toBe(newReminder);
+      });
+    }
 
     it('should parse dates in the date input locale', async () => {
       dateInputLocale = { language: 'de', isDayFirst: true };

@@ -557,6 +557,9 @@ describe('LocalRestApiTaskRoutesService', () => {
           actions.push(action);
           state = reduce(state, action);
         });
+        taskServiceMock.update.and.callFake((id, changes) => {
+          dispatchSpy(TaskSharedActions.updateTask({ task: { id, changes } }));
+        });
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
           get: () => (id: string) => of(state[TASK_FEATURE_NAME].entities[id]),
         });
@@ -566,7 +569,10 @@ describe('LocalRestApiTaskRoutesService', () => {
           }),
         );
         expect(response.status).toBe(201);
-        expect(actions.length).toBe(1);
+        expect(actions.map((action) => action.type)).toEqual([
+          TaskSharedActions.setDeadline.type,
+          TaskSharedActions.updateTask.type,
+        ]);
         expect(state[TASK_FEATURE_NAME].entities['new-task-id']?.remindAt).toBe(123);
         const replayed = actions.reduce(
           (current, action) => reduce(current, JSON.parse(JSON.stringify(action))),
