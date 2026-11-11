@@ -244,7 +244,7 @@ describe('Magic Link Registration', () => {
   });
 
   describe('Verification token expiry', () => {
-    it('should give a new verification token 24 hours', async () => {
+    it('should give a new verification token a 24-hour lifetime', async () => {
       vi.useFakeTimers({ now: new Date('2026-11-10T12:00:00Z') });
       try {
         mockPrisma.user.findUnique.mockResolvedValue(null);
@@ -447,7 +447,7 @@ describe('Magic Link Registration', () => {
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('should clear the token on use and refuse it once already claimed', async () => {
+    it('should clear the token with a compare-and-set update and reject when it matches nothing', async () => {
       const token = 'one-time-token';
       mockPrisma.user.findFirst.mockResolvedValue({
         id: 1,
