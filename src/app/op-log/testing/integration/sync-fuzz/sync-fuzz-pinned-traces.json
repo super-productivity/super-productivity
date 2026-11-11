@@ -1993,5 +1993,40 @@
       "CONFLICT_CONCURRENT [Task Shared] deleteTask",
       "CONFLICT_CONCURRENT [TimeTracking] Sync time spent"
     ]
+  },
+  {
+    "class": "force-upload-skip",
+    "ref": "fixed by #11681 (regression pin)",
+    "name": "the first change after a force upload reaches a device that compacted after a later remote op",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["forceUpload"]
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t2", "Y"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "s": 1,
+        "c": 1
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t3", "X"]
+      }
+    ],
+    "signatures": [],
+    "rejections": []
   }
 ]
