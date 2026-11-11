@@ -327,11 +327,11 @@
       };
       await save();
 
-      // Far ones first, so the soonest reminders are the last the app arms.
+      // Near ones first, so the farthest are the last the app arms: past its
+      // cap iOS keeps the last added, which would then be the wrong ones.
       report.wanted = [];
       const callsBeforeSeed = appCalls.schedule;
-      for (let i = 1; i <= SEED_COUNT; i++) {
-        const daysAhead = SEED_COUNT + 1 - i;
+      for (let daysAhead = 1; daysAhead <= SEED_COUNT; daysAhead++) {
         const id = `simCap${String(daysAhead).padStart(2, '0')}`;
         const at = seededAt + daysAhead * DAY;
         addTaskWithReminder(store, id, at);

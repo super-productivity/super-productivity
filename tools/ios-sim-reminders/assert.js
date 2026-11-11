@@ -53,7 +53,7 @@ const buildChecks = ({ baseline, cap, final, isLate }) => {
   const dropped = wanted.filter((w) => !hasReminder(pending, w.reminderId));
   const latestPending = Math.max(0, ...pending.map((n) => n.at));
   const soonestDropped = Math.min(...dropped.map((w) => w.at));
-  const seededAt = wanted.length ? wanted[wanted.length - 1].at - DAY : 0;
+  const seededAt = wanted.length ? Math.min(...wanted.map((w) => w.at)) - DAY : 0;
 
   return [
     {
