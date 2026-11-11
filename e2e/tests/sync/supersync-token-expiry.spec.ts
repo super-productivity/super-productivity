@@ -13,7 +13,7 @@ import {
   SNACK_SELECTOR,
 } from '../../utils/audit-error-paths-helpers';
 
-const AUTH_TOKEN_REJECTED_SNACK = 'Sync token was rejected by the server';
+const AUTH_TOKEN_REJECTED_SNACK = "The sync server rejected this device's sign-in";
 
 /**
  * One 401 must surface as an error (icon plus the "token rejected" snack) while

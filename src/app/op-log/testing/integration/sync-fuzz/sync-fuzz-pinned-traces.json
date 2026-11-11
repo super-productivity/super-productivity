@@ -1721,5 +1721,277 @@
     ],
     "signatures": [],
     "rejections": []
+  },
+  {
+    "class": "coverage",
+    "ref": "coverage trace: a task move with no concurrent edit converges, and each project lists its own tasks",
+    "name": "an uncontested move to a second project converges",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["moveTask", "t3", "p1"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "move-loses-to-edit",
+    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "name": "a later rename undoes a concurrent move everywhere but on the mover",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["moveTask", "t2", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t2", "A14"]
+      }
+    ],
+    "primary": "divergence:.task.entities.*.projectId",
+    "signatures": [
+      "divergence:.project.entities.*.taskIds.*",
+      "divergence:.task.entities.*.projectId",
+      "field-reverted:task.projectId"
+    ],
+    "rejections": []
+  },
+  {
+    "class": "move-loses-to-edit",
+    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "name": "a later time delta undoes a concurrent move",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["moveTask", "t1", "p1"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      }
+    ],
+    "primary": "field-reverted:task.projectId",
+    "signatures": ["field-reverted:task.projectId"],
+    "rejections": []
+  },
+  {
+    "class": "move-drops-time",
+    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "name": "a later move drops concurrently tracked time everywhere but on the tracker",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["track", "t2", 1000]
+      },
+      {
+        "d": "B",
+        "a": ["moveTask", "t2", "p2"]
+      }
+    ],
+    "primary": "time-loss:task",
+    "signatures": [
+      "divergence:.task.entities.*.timeSpent",
+      "divergence:.task.entities.*.timeSpentOnDay",
+      "time-loss:task"
+    ],
+    "rejections": []
+  },
+  {
+    "class": "move-crossing-repair",
+    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "name": "a move and a delete crossing a time delta end in a dev error and a REPAIR",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["moveTask", "t1", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t1", 3000]
+      },
+      {
+        "d": "B",
+        "a": ["deleteTask", "t1"]
+      }
+    ],
+    "primary": "full-state-op:REPAIR",
+    "signatures": [
+      "dev-error:Throw an error for error? ––– Missing task data for project",
+      "full-state-op:REPAIR"
+    ],
+    "rejections": []
+  },
+  {
+    "class": "move-crossing-repair",
+    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "name": "a REPAIR after two moves crossing deletes loses a task added later",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["moveTask", "t2", "p1"]
+      },
+      {
+        "d": "C",
+        "a": ["deleteTask", "t2"]
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t2", "p1"]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t2", 3000],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["addTask", "t11", "P"]
+      },
+      {
+        "d": "C",
+        "a": ["deleteTask", "t2"]
+      },
+      {
+        "d": "B",
+        "s": 1
+      }
+    ],
+    "primary": "lost-entity:task",
+    "signatures": [
+      "dev-error:Throw an error for error? ––– Missing task data for project",
+      "full-state-op:REPAIR",
+      "lost-entity:task"
+    ],
+    "rejections": [
+      "CONFLICT_CONCURRENT [TASK] LWW Update",
+      "CONFLICT_CONCURRENT [Task Shared] deleteTask"
+    ]
+  },
+  {
+    "class": "concurrent-moves",
+    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "name": "two concurrent moves and a later notes edit leave the task in its old project",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["moveTask", "t3", "p2"]
+      },
+      {
+        "d": "B",
+        "a": ["moveTask", "t3", "p1"]
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t3", "A26"]
+      }
+    ],
+    "primary": "field-unwritten:task.projectId",
+    "signatures": [
+      "divergence:.project.entities.*.taskIds.*",
+      "field-unwritten:task.projectId"
+    ],
+    "rejections": []
+  },
+  {
+    "class": "concurrent-moves",
+    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "name": "the older of two concurrent moves wins beside time deltas, and the newer mover keeps its own",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["moveTask", "t1", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t1", 1000]
+      },
+      {
+        "d": "B",
+        "a": ["editTaskNotes", "t1", "B11"]
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t1", "p1"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t1", 3000]
+      }
+    ],
+    "primary": "older-write-won:task.projectId",
+    "signatures": [
+      "divergence:.project.entities.*.taskIds.*",
+      "divergence:.task.entities.*.projectId",
+      "older-write-won:task.projectId",
+      "time-loss:task"
+    ],
+    "rejections": []
+  },
+  {
+    "class": "unlisted-task",
+    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "name": "a task added beside a delete-versus-delta crossing is in no project list on its own device",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B1"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 5000],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t2", "p1"]
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A23"]
+      },
+      {
+        "d": "C",
+        "a": ["addTask", "t13", "P"]
+      }
+    ],
+    "primary": "membership:unlisted-in-own-project",
+    "signatures": [
+      "divergence:.project.entities.*.taskIds.*",
+      "divergence:.task.ids.*",
+      "membership:unlisted-in-own-project",
+      "restart-changed:.task.ids.*"
+    ],
+    "rejections": [
+      "CONFLICT_CONCURRENT [TASK] LWW Update",
+      "CONFLICT_CONCURRENT [Task Shared] deleteTask",
+      "CONFLICT_CONCURRENT [TimeTracking] Sync time spent"
+    ]
   }
 ]

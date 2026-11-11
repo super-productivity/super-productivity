@@ -182,7 +182,7 @@
       } @else {
         <div class="add-issue-info-text">
           <mat-icon>playlist_add</mat-icon>
-          {{ T.F.TASK.ADD_TASK_BAR.SEARCH_INFO_TEXT | translate }}
+          {{ T.F.TASK.ADD_TASK_BAR.SEARCH_INFO | translate }}
         </div>
       }
     </div>
@@ -253,8 +253,6 @@
     <mat-option [value]="item">
       @if (item.issueType) {
         <mat-icon [svgIcon]="item.issueType | issueIcon"></mat-icon>
-      } @else if (item.taskId && item.isArchivedTask) {
-        <mat-icon>archive</mat-icon>
       } @else if (item.taskId) {
         <!--        <mat-icon>task</mat-icon>-->
       } @else if (!item.ctx) {

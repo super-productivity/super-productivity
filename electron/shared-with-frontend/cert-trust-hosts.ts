@@ -6,12 +6,25 @@ const MAX_HOSTS = 200;
 // URL.host output: lowercase hostname / IPv6 literal, optional :port
 const HOST_PATTERN = /^[a-z0-9._\-[\]:]{1,260}$/;
 
-const getHttpHost = (value: unknown): string | null => {
-  if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) {
+// Fields whose value may be a bare host ("gitlab.corp.lan"): providers like
+// GitLab prepend https:// themselves. Other fields (e.g. `project: "group/repo"`)
+// only count when they carry an explicit http(s) scheme.
+const URL_KEY_PATTERN = /(url|host)$/i;
+
+const getHttpHost = (key: string, value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  const hasHttpScheme = /^https?:\/\//i.test(trimmed);
+  if (
+    !hasHttpScheme &&
+    (!URL_KEY_PATTERN.test(key) || /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed))
+  ) {
     return null;
   }
   try {
-    return new URL(value).host || null;
+    return new URL(hasHttpScheme ? trimmed : `https://${trimmed}`).host || null;
   } catch {
     // not a URL — just some other config string
     return null;
@@ -24,12 +37,13 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 /**
  * Collects `URL.host` (hostname + non-default port) of every http(s) URL in the
  * given provider configs, checking string fields one nesting level deep so
- * plugin providers' `pluginConfig` is covered.
+ * plugin providers' `pluginConfig` is covered. Values are trimmed; scheme-less
+ * values count only in URL/host fields (see URL_KEY_PATTERN).
  */
 export const getConfiguredHosts = (configs: readonly unknown[]): string[] => {
   const hosts = new Set<string>();
-  const add = (value: unknown): void => {
-    const host = getHttpHost(value);
+  const add = (key: string, value: unknown): void => {
+    const host = getHttpHost(key, value);
     if (host) {
       hosts.add(host);
     }
@@ -38,10 +52,10 @@ export const getConfiguredHosts = (configs: readonly unknown[]): string[] => {
     if (!isObject(cfg)) {
       continue;
     }
-    for (const value of Object.values(cfg)) {
-      add(value);
+    for (const [key, value] of Object.entries(cfg)) {
+      add(key, value);
       if (isObject(value)) {
-        Object.values(value).forEach(add);
+        Object.entries(value).forEach(([k, v]) => add(k, v));
       }
     }
   }
@@ -81,5 +95,6 @@ export const isCertErrorTrusted = (
 
 /** One-shot preload API; claimed by trusted startup code before plugins load. */
 export interface CertTrustElectronApi {
-  setTrustedHosts(hosts: string[]): void;
+  /** Resolves once the main process applied the list. */
+  setTrustedHosts(hosts: string[]): Promise<void>;
 }

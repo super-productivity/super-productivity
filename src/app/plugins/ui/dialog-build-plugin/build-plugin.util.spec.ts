@@ -95,17 +95,78 @@ describe('parsePluginAnswer', () => {
     });
   });
 
-  it('keeps the first block of a kind', () => {
+  it('keeps the complete file over a usage example after it', () => {
     const result = parsePluginAnswer(
       answerOf(
         ['json', '{ "id": "a", "name": "A" }'],
-        ['js', 'first();'],
+        ['js', 'PluginAPI.onReady(() => usageExample());'],
         ['js', 'usageExample();'],
       ),
       '19.3.1',
     );
 
-    expect('files' in result && result.files.pluginJs).toBe('first();\n');
+    expect('files' in result && result.files.pluginJs).toBe(
+      'PluginAPI.onReady(() => usageExample());\n',
+    );
+  });
+
+  // a fix answer replaces the installed plugin, so a snippet must not become plugin.js
+  it('keeps the complete files over a fix explained before them', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['js', 'await PluginAPI.getTasks();'],
+        ['json', '{ "permissions": ["http"] }'],
+        ['json', '{ "id": "a", "name": "A", "permissions": ["http"] }'],
+        ['js', 'PluginAPI.onReady(async () => {\n  await PluginAPI.getTasks();\n});'],
+      ),
+      '19.3.1',
+    );
+
+    expect('files' in result && result.files.manifest.name).toBe('A');
+    expect('files' in result && result.files.pluginJs).toBe(
+      'PluginAPI.onReady(async () => {\n  await PluginAPI.getTasks();\n});\n',
+    );
+  });
+
+  it('ignores inline triple backticks in the prose', () => {
+    const answer =
+      `Replace the call with ${FENCE}js await PluginAPI.getTasks()${FENCE}.\n\n` +
+      answerOf(['json', '{ "name": "A" }'], ['js', 'PluginAPI.onReady(() => {});']);
+
+    const result = parsePluginAnswer(answer, '19.3.1');
+
+    expect('files' in result && result.files.manifest.name).toBe('A');
+    expect('files' in result && result.files.pluginJs).toBe(
+      'PluginAPI.onReady(() => {});\n',
+    );
+  });
+
+  it('keeps the manifest over a longer JSON sample, like an API response', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['json', '{ "name": "Weather" }'],
+        ['js', 'PluginAPI.onReady(() => {});'],
+        ['json', '{\n  "temperature": 21,\n  "unit": "celsius",\n  "city": "Berlin"\n}'],
+      ),
+      '19.3.1',
+    );
+
+    expect('files' in result && result.files.manifest.name).toBe('Weather');
+  });
+
+  it('keeps the complete file among untagged blocks', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['', 'await PluginAPI.getTasks();'],
+        ['', '{ "id": "a", "name": "A" }'],
+        ['', 'PluginAPI.onReady(async () => {\n  await PluginAPI.getTasks();\n});'],
+      ),
+      '19.3.1',
+    );
+
+    expect('files' in result && result.files.pluginJs).toBe(
+      'PluginAPI.onReady(async () => {\n  await PluginAPI.getTasks();\n});\n',
+    );
   });
 
   it('keeps backticks inside the code instead of ending the block there', () => {
@@ -181,6 +242,21 @@ describe('parsePluginAnswer', () => {
 
     expect('files' in result && result.files.pluginJs).toBe('beep();\n');
     expect('files' in jsonc && jsonc.files.manifest.name).toBe('Siren');
+  });
+
+  it('ignores blocks named after other files', () => {
+    const result = parsePluginAnswer(
+      answerOf(
+        ['package.json', '{ "name": "siren-dev" }'],
+        ['example.js', 'demo();'],
+        ['manifest.json', '{ "name": "Siren" }'],
+        ['plugin.js', 'beep();'],
+      ),
+      '20.0.0',
+    );
+
+    expect('files' in result && result.files.manifest.name).toBe('Siren');
+    expect('files' in result && result.files.pluginJs).toBe('beep();\n');
   });
 
   it('ignores a file name comment above the manifest', () => {

@@ -12,6 +12,9 @@ import { IS_REPAIR_SIGNATURE, runFuzz } from './sync-fuzz-runner';
  * - A pin with failures reproduces a known bug on master. `ref` names its
  *   issue, or the decision that keeps it; `primary` is the signature that
  *   defines the bug, which sync-fuzz-seeds.benchmark.ts does not report again.
+ *   A `ref` starting with "untriaged" marks a harness outcome that has no
+ *   issue yet and names where its triage is decided: current behaviour, not
+ *   a confirmed bug.
  * - A pin without failures is a regression test for a fixed bug (`ref` names
  *   the fixing PR), or a coverage trace for paths no other pin takes.
  *

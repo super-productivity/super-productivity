@@ -100,6 +100,80 @@ describe('sync fuzz oracle real-path negative controls', () => {
     expect((await noteIds())?.orderOnly).toBeFalse();
   }, 60_000);
 
+  it('reports a moved task that its project does not list, lists twice, or that two projects list', async () => {
+    const steps: FuzzStep[] = [
+      { d: 'A', a: ['moveTask', 't3', 'p1'], s: 1 },
+      { d: 'B', s: 1 },
+      { d: 'C', s: 1 },
+    ];
+    const kept = await runFuzz({ steps });
+    expect(kept.steps).toEqual(steps);
+    expect(kept.failures).withContext(JSON.stringify(kept.failures)).toEqual([]);
+
+    const projects = (state: AppStateSnapshot): Entities['entities'] =>
+      (state.project as Entities).entities;
+    let corrupt = (state: AppStateSnapshot): void => {
+      projects(state)['p1']['taskIds'] = [];
+    };
+    corruptOutcome((state) => corrupt(state));
+    const unlisted = await runFuzz({ steps });
+    expect(unlisted.failures.map((f) => f.signature)).toContain(
+      'membership:unlisted-in-own-project',
+    );
+
+    corrupt = (state) => {
+      projects(state)['p2']['taskIds'] = ['t3'];
+      projects(state)['p1']['backlogTaskIds'] = ['t3'];
+      projects(state)['INBOX_PROJECT']['taskIds'] = [
+        ...(projects(state)['INBOX_PROJECT']['taskIds'] as string[]),
+        'gone',
+      ];
+    };
+    const stale = await runFuzz({ steps });
+    expect(stale.failures.map((f) => f.signature)).toEqual(
+      jasmine.arrayContaining([
+        'membership:listed-in-other-project',
+        'membership:listed-twice',
+        'membership:lists-missing-task',
+      ]),
+    );
+  }, 60_000);
+
+  it('detects a move that reverted', async () => {
+    corruptOutcome((state) => {
+      (state.task as Entities).entities['t3']['projectId'] = 'INBOX_PROJECT';
+    });
+    const { failures } = await runFuzz({
+      steps: [{ d: 'A', a: ['moveTask', 't3', 'p1'], s: 1 }],
+    });
+    expect(failures.map((f) => f.signature)).toContain('field-reverted:task.projectId');
+  }, 60_000);
+
+  it('creates the other projects and checks membership only in a run that moves tasks', async () => {
+    let projectIds: string[] = [];
+    corruptOutcome((state) => {
+      const projects = state.project as Entities;
+      projectIds = projects.ids;
+      const inbox = projects.entities['INBOX_PROJECT'];
+      inbox['taskIds'] = (inbox['taskIds'] as string[]).filter((id) => id !== 't1');
+    });
+    const membership = (failures: { signature: string }[]): string[] => [
+      ...new Set(
+        failures.map((f) => f.signature).filter((s) => s.startsWith('membership:')),
+      ),
+    ];
+    const plain = await runFuzz({
+      steps: [{ d: 'A', a: ['renameTask', 't3', 'x'], s: 1 }],
+    });
+    expect(projectIds).toEqual(['INBOX_PROJECT']);
+    expect(membership(plain.failures)).toEqual([]);
+    const moved = await runFuzz({
+      steps: [{ d: 'A', a: ['moveTask', 't3', 'p2'], s: 1 }],
+    });
+    expect(projectIds).toEqual(['INBOX_PROJECT', 'p1', 'p2']);
+    expect(membership(moved.failures)).toEqual(['membership:unlisted-in-own-project']);
+  }, 60_000);
+
   it('checks supplied creation values without treating defaults as user edits', async () => {
     expect((await runFuzz({ steps: [] })).failures).toEqual([]);
     corruptOutcome((state) => {
