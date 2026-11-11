@@ -5,22 +5,26 @@
   [isIconBefore]="true"
   [(isExpanded)]="isExpanded"
 >
-  <div
-    class="tasks"
-    cdkDropList
-    [cdkDropListSortingDisabled]="true"
-    [cdkDropListEnterPredicate]="rejectDrop"
-    (cdkDropListDropped)="onDropped()"
-  >
-    @for (task of tasks(); track task.id) {
-      <planner-task
-        cdkDrag
-        [cdkDragData]="task"
-        [cdkDragStartDelay]="dragDelayForTouch()"
-        (cdkDragStarted)="onDragStarted(task, $event)"
-        (cdkDragEnded)="onDragEnded()"
-        [task]="task"
-      ></planner-task>
-    }
-  </div>
+  <!-- Loaded on first opening: the cards would otherwise be part of the app's
+       startup bundle, and be created for every task while still collapsed. -->
+  @defer (when isExpanded()) {
+    <div
+      class="tasks"
+      cdkDropList
+      [cdkDropListSortingDisabled]="true"
+      [cdkDropListEnterPredicate]="rejectDrop"
+      (cdkDropListDropped)="onDropped()"
+    >
+      @for (task of tasks(); track task.id) {
+        <planner-task
+          cdkDrag
+          [cdkDragData]="task"
+          [cdkDragStartDelay]="dragDelayForTouch()"
+          (cdkDragStarted)="onDragStarted(task, $event)"
+          (cdkDragEnded)="onDragEnded()"
+          [task]="task"
+        ></planner-task>
+      }
+    </div>
+  }
 </collapsible>
