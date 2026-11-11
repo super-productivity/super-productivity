@@ -246,6 +246,14 @@ export const verifyRegistration = async (
         userId = createdUser.id;
       }
 
+      // #9032: only one pending passkey registration is activatable at a
+      // time, like the magic-link verification token (a single column).
+      // A new registration rotates the token and invalidates every
+      // previously emailed link, including one staged by someone else
+      // for this address. Clicking an older link then fails instead of
+      // promoting a credential the account owner never created.
+      await tx.pendingPasskeyRegistration.deleteMany({ where: { userId } });
+
       await tx.pendingPasskeyRegistration.create({
         data: {
           userId,

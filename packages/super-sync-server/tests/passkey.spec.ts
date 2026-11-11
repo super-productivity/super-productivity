@@ -395,6 +395,45 @@ describe('Passkey Authentication', () => {
       expect(sendVerificationEmail).toHaveBeenCalledOnce();
     });
 
+    it('should invalidate previous pending registrations on re-registration (#9032)', async () => {
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: new Uint8Array([9, 10, 11, 12]),
+            publicKey: new Uint8Array([13, 14, 15, 16]),
+            counter: 0,
+          },
+        },
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        isVerified: 0,
+        verificationResendCount: 1,
+      });
+      await generateRegistrationOptions(testEmail);
+
+      await verifyRegistration(testEmail, {
+        id: 'owner-credential-id',
+        rawId: 'raw-id',
+        type: 'public-key',
+        response: {
+          clientDataJSON: 'client-data',
+          attestationObject: 'attestation',
+        },
+        clientExtensionResults: {},
+      } as RegistrationResponseJSON);
+
+      // Only the newest pending registration is activatable: a link
+      // staged earlier (e.g. by someone else for this address) must
+      // fail instead of promoting its credential.
+      expect(mockPrisma.pendingPasskeyRegistration.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 1 },
+      });
+      expect(mockPrisma.pendingPasskeyRegistration.create).toHaveBeenCalledOnce();
+    });
+
     it('should keep a failed-delivery credential pending and inactive', async () => {
       mockVerifyRegistration.mockResolvedValue({
         verified: true,
