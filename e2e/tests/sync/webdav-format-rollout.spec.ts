@@ -20,12 +20,27 @@ const authorization = `Basic ${Buffer.from('admin:admin').toString('base64')}`;
 const remoteStatus = async (request: APIRequestContext, url: string): Promise<number> =>
   (await request.get(url, { headers: { Authorization: authorization } })).status();
 
+/** The folder is v3: split files exist and the v2 name holds the tombstone. */
+const expectSplitFolder = async (
+  request: APIRequestContext,
+  remote: string,
+): Promise<void> => {
+  // The ops file is the commit point and is written after the tombstone claim.
+  await expect.poll(() => remoteStatus(request, `${remote}sync-ops.json`)).toBe(200);
+  const tombstone = await readPrefixedFile<{ version: number; format?: string }>(
+    request,
+    `${remote}sync-data.json`,
+    authorization,
+  );
+  expect(tombstone).toEqual(expect.objectContaining({ version: 3, format: 'split' }));
+};
+
 test.describe('@webdav automatic file format rollout', () => {
   test.beforeEach(async ({ webdavServerUp }) => {
     void webdavServerUp;
   });
 
-  test('creates an empty folder as v2 and hydrates a second default client', async ({
+  test('creates an empty folder as v3 and hydrates a second default client', async ({
     browser,
     baseURL,
     request,
@@ -40,24 +55,14 @@ test.describe('@webdav automatic file format rollout', () => {
       const work = new WorkViewPage(a.page);
       const sync = new SyncPage(a.page);
       await work.waitForTaskList();
-      const title = `Default v2 task ${folder}`;
+      const title = `Default v3 task ${folder}`;
       await work.addTask(title);
       await waitForStatePersistence(a.page);
       await sync.setupWebdavSync(config, { useProductFormatDefault: true });
       expect(await waitForSyncComplete(a.page, sync)).toBe('success');
 
       // Assert the real commit point before checking reload or another client.
-      // Released clients join v2 without an opt-in, so a new folder stays v2.
-      const monolith = await readPrefixedFile<{ version: number; state: unknown }>(
-        request,
-        `${remote}sync-data.json`,
-        authorization,
-      );
-      expect(monolith.version).toBe(2);
-      expect(JSON.stringify(monolith.state)).toContain(title);
-      for (const file of ['sync-ops.json', 'sync-state.json']) {
-        expect(await remoteStatus(request, `${remote}${file}`)).toBe(404);
-      }
+      await expectSplitFolder(request, remote);
 
       await a.page.reload();
       await waitForAppReady(a.page);
@@ -70,13 +75,13 @@ test.describe('@webdav automatic file format rollout', () => {
       await syncB.setupWebdavSync(config, { useProductFormatDefault: true });
       expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
       await expect(b.page.locator('task').filter({ hasText: title })).toBeVisible();
-      expect(await remoteStatus(request, `${remote}sync-ops.json`)).toBe(404);
+      await expectSplitFolder(request, remote);
     } finally {
       await closeContextsSafely(a.context, b?.context);
     }
   });
 
-  test('seeds an empty folder as v2 when a synced client moves to it', async ({
+  test('seeds an empty folder as v3 when a synced client moves to it', async ({
     browser,
     baseURL,
     request,
@@ -107,24 +112,160 @@ test.describe('@webdav automatic file format rollout', () => {
         { isReconfigure: true, useProductFormatDefault: true },
       );
       expect(await waitForSyncComplete(a.page, sync)).toBe('success');
-      const monolith = await readPrefixedFile<{
-        version: number;
-        state: unknown;
-        snapshotBaseClock?: unknown;
-      }>(request, `${nextRemote}sync-data.json`, authorization);
-      expect(monolith.version).toBe(2);
+      await expectSplitFolder(request, nextRemote);
+      const ops = await readPrefixedFile<{ snapshotBaseClock?: unknown }>(
+        request,
+        `${nextRemote}sync-ops.json`,
+        authorization,
+      );
       // Only a snapshot upload records a base clock when it creates the file.
-      expect(monolith.snapshotBaseClock).toBeDefined();
-      expect(JSON.stringify(monolith.state)).toContain(title);
-      for (const file of ['sync-ops.json', 'sync-state.json']) {
-        expect(await remoteStatus(request, `${nextRemote}${file}`)).toBe(404);
-      }
+      expect(ops.snapshotBaseClock).toBeDefined();
     } finally {
       await closeContextsSafely(a.context);
     }
   });
 
-  test('replaces a legacy v16 folder with v2 after a confirmed force overwrite', async ({
+  test('does not tombstone v2 that appears while a moved client seeds the folder', async ({
+    browser,
+    baseURL,
+    request,
+  }) => {
+    const folder = generateSyncFolderName('rollout-seed-race');
+    const v2Folder = `${folder}-v2`;
+    const nextFolder = `${folder}-next`;
+    const nextRemote = `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${nextFolder}/DEV/`;
+    await createSyncFolder(request, folder);
+    await createSyncFolder(request, v2Folder);
+    await createSyncFolder(request, nextFolder);
+    await createSyncFolder(request, `${nextFolder}/DEV`);
+    const v2Device = await setupSyncClient(browser, baseURL);
+    const a = await setupSyncClient(browser, baseURL);
+    try {
+      // A real v2 file, as a device with Surgical sync off writes it.
+      const v2Work = new WorkViewPage(v2Device.page);
+      const v2Sync = new SyncPage(v2Device.page);
+      await v2Work.waitForTaskList();
+      await v2Work.addTask(`Concurrent v2 task ${folder}`);
+      await waitForStatePersistence(v2Device.page);
+      await v2Sync.setupWebdavSync({
+        ...WEBDAV_CONFIG_TEMPLATE,
+        syncFolderPath: `/${v2Folder}`,
+        isUseSplitSyncFiles: false,
+      });
+      expect(await waitForSyncComplete(v2Device.page, v2Sync)).toBe('success');
+      const legacyResponse = await request.get(
+        `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${v2Folder}/DEV/sync-data.json`,
+        { headers: { Authorization: authorization } },
+      );
+      expect(legacyResponse.ok()).toBe(true);
+      const legacy = await legacyResponse.text();
+
+      const work = new WorkViewPage(a.page);
+      const sync = new SyncPage(a.page);
+      await work.waitForTaskList();
+      await work.addTask(`Seed race task ${folder}`);
+      await waitForStatePersistence(a.page);
+      await sync.setupWebdavSync(
+        { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` },
+        { useProductFormatDefault: true },
+      );
+      expect(await waitForSyncComplete(a.page, sync)).toBe('success');
+
+      // A v2 device creates its file after the moving client saw an empty
+      // folder and before that client's first write lands.
+      let v2Created = false;
+      await a.page.route(`**/${nextFolder}/DEV/**`, async (route) => {
+        if (route.request().method() === 'PUT' && !v2Created) {
+          v2Created = true;
+          const created = await request.put(`${nextRemote}sync-data.json`, {
+            headers: { Authorization: authorization },
+            data: legacy,
+          });
+          expect(created.ok()).toBe(true);
+        }
+        await route.continue();
+      });
+      await sync.syncBtn.click({ button: 'right' });
+      await sync.syncFolderInput.fill(`/${nextFolder}`);
+      await sync.saveBtn.click();
+      await expect(a.page.locator('mat-dialog-container')).toBeHidden();
+      await expect.poll(() => v2Created, { timeout: 30000 }).toBe(true);
+      await expect(sync.syncSpinner).toBeHidden();
+
+      // The v2 device's upload is still there, and no split folder was published
+      // beside it.
+      const preserved = await request.get(`${nextRemote}sync-data.json`, {
+        headers: { Authorization: authorization },
+      });
+      expect(await preserved.text()).toBe(legacy);
+      expect(await remoteStatus(request, `${nextRemote}sync-ops.json`)).toBe(404);
+    } finally {
+      await closeContextsSafely(v2Device.context, a.context);
+    }
+  });
+
+  test('keeps a folder v2 when an interrupted write left only its backup', async ({
+    browser,
+    baseURL,
+    request,
+  }) => {
+    const folder = generateSyncFolderName('rollout-bak-only');
+    const remote = `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${folder}/DEV/`;
+    const config = { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` };
+    await createSyncFolder(request, folder);
+    const a = await setupSyncClient(browser, baseURL);
+    let b: Awaited<ReturnType<typeof setupSyncClient>> | undefined;
+    try {
+      const work = new WorkViewPage(a.page);
+      const sync = new SyncPage(a.page);
+      await work.waitForTaskList();
+      await work.addTask(`First v2 task ${folder}`);
+      await waitForStatePersistence(a.page);
+      await sync.setupWebdavSync({ ...config, isUseSplitSyncFiles: false });
+      expect(await waitForSyncComplete(a.page, sync)).toBe('success');
+      // A second op-bearing upload writes the backup of the first file.
+      await work.addTask(`Second v2 task ${folder}`);
+      await waitForStatePersistence(a.page);
+      await sync.triggerSync();
+      expect(await waitForSyncComplete(a.page, sync)).toBe('success');
+      expect(await remoteStatus(request, `${remote}sync-data.json.bak`)).toBe(200);
+
+      // The Android folder bridge deletes a file before it re-creates it, so an
+      // interrupted write leaves the folder without its primary file.
+      const removed = await request.delete(`${remote}sync-data.json`, {
+        headers: { Authorization: authorization },
+      });
+      expect(removed.ok()).toBe(true);
+
+      b = await setupSyncClient(browser, baseURL);
+      const workB = new WorkViewPage(b.page);
+      const syncB = new SyncPage(b.page);
+      await workB.waitForTaskList();
+      await workB.addTask(`Joining task ${folder}`);
+      await waitForStatePersistence(b.page);
+      await syncB.setupWebdavSync(config, { useProductFormatDefault: true });
+      await expect(syncB.syncSpinner).toBeHidden();
+
+      // Not an empty folder: the default client must not start v3 here and lock
+      // the v2 device out with a tombstone.
+      expect(await remoteStatus(request, `${remote}sync-ops.json`)).toBe(404);
+      const primary = await request.get(`${remote}sync-data.json`, {
+        headers: { Authorization: authorization },
+      });
+      if (primary.ok()) {
+        const file = await readPrefixedFile<{ version: number; format?: string }>(
+          request,
+          `${remote}sync-data.json`,
+          authorization,
+        );
+        expect(file.version).toBe(2);
+      }
+    } finally {
+      await closeContextsSafely(a.context, b?.context);
+    }
+  });
+
+  test('replaces a legacy v16 folder with v3 after a confirmed force overwrite', async ({
     browser,
     baseURL,
     request,
@@ -177,15 +318,8 @@ test.describe('@webdav automatic file format rollout', () => {
       await expect.poll(forceOutcome).not.toBe('sync-data.json 404');
       expect(await forceOutcome()).toBe('sync-data.json 200');
 
-      // As in v19.1, the replacement is a v2 folder that every released client reads.
-      const monolith = await readPrefixedFile<{ version: number; state: unknown }>(
-        request,
-        `${remote}sync-data.json`,
-        authorization,
-      );
-      expect(monolith.version).toBe(2);
-      expect(JSON.stringify(monolith.state)).toContain(title);
-      expect(await remoteStatus(request, `${remote}sync-ops.json`)).toBe(404);
+      // The replacement gets the format of a new folder.
+      await expectSplitFolder(request, remote);
       await sync.triggerSync();
       expect(await waitForSyncComplete(a.page, sync)).toBe('success');
       await expect(a.page.locator('task').filter({ hasText: title })).toBeVisible();
@@ -505,15 +639,7 @@ test.describe('@webdav automatic file format rollout', () => {
           if (switchTarget) {
             await sync.triggerSync();
             expect(await waitForSyncComplete(joining.page, sync)).toBe('success');
-            const nextRemote = `${root}${nextFolder}/DEV/`;
-            const monolith = await readPrefixedFile<{ version: number; state: unknown }>(
-              request,
-              `${nextRemote}sync-data.json`,
-              authorization,
-            );
-            expect(monolith.version).toBe(2);
-            expect(JSON.stringify(monolith.state)).toContain(localTitle);
-            expect(await remoteStatus(request, `${nextRemote}sync-ops.json`)).toBe(404);
+            await expectSplitFolder(request, `${root}${nextFolder}/DEV/`);
           }
           await expect(
             joining.page.locator('task').filter({ hasText: localTitle }),
@@ -582,13 +708,7 @@ test.describe('@webdav automatic file format rollout', () => {
       await a.page.unroute(routePattern);
       await sync.triggerSync();
       expect(await waitForSyncComplete(a.page, sync)).toBe('success');
-      const monolith = await readPrefixedFile<{ version: number }>(
-        request,
-        `${remote}sync-data.json`,
-        authorization,
-      );
-      expect(monolith.version).toBe(2);
-      expect(await remoteStatus(request, `${remote}sync-ops.json`)).toBe(404);
+      await expectSplitFolder(request, remote);
       await expect(a.page.locator('task').filter({ hasText: title })).toBeVisible();
     } finally {
       await closeContextsSafely(a.context);

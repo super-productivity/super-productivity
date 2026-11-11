@@ -2785,10 +2785,8 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
-   * Split-format snapshot upload (force-upload / "Use Local" / recovery). Writes
-   * `sync-state.json` FIRST, then a fresh `sync-ops.json` (empty recentOps,
-   * snapshotRef pointing at the just-written snapshot), then a tombstone over
-   * `sync-data.json` so OFF clients don't diverge.
+   * Split snapshot upload (force-upload / "Use Local" / recovery): state file, a
+   * fresh ops file pointing at it, then a forced v2 tombstone (a seed: see below).
    */
   private async _uploadSnapshotSplit(
     provider: GuardedFileSyncProvider,
@@ -2829,6 +2827,11 @@ export class FileBasedSyncAdapterService {
       }
     }
 
+    // Folder discovered empty: a v2 file created since wins this create-only write.
+    const isSeed = !this._isSplitSyncEnabled() && !this._remoteFormats.has(providerKey);
+    if (isSeed) {
+      await this._writeTombstoneAndNeutralizeBak(provider, cfg, encryptKey, null);
+    }
     const stateData = await this._buildStateFileData(
       clientId,
       newSyncVersion,
@@ -2870,7 +2873,7 @@ export class FileBasedSyncAdapterService {
       FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
       opsEncoded,
     );
-    await this._writeTombstoneAndNeutralizeBak(provider, cfg, encryptKey);
+    if (!isSeed) await this._writeTombstoneAndNeutralizeBak(provider, cfg, encryptKey);
 
     this._expectedSyncVersions.set(providerKey, newSyncVersion);
     this._localSeqCounters.set(providerKey, newSyncVersion);
