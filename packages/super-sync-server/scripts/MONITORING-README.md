@@ -57,13 +57,23 @@ counts every account above 50, 75 and 90 percent of its own quota (and at or
 over it), from the `users` counters alone. The projection tables cover the
 accounts with a device heartbeat in the last 30 days (an upload bumps it, so no
 other account grew), highest quota use first, capped at `MONITOR_SCOPE_USERS`
-(default 200; the header says when the cap bound). For those it reads the bytes
-uploaded over the 30 days, one `(user_id, received_at, server_seq)` index range
-per account, and projects the time to quota at that rate. The projection
-assumes no pruning, the routine case because incremental sync creates no
-full-state boundary, so real times can only be longer. Its `operations` work is
-the scoped accounts' 30-day upload volume rather than a fixed per-user tail,
-which is why it is not part of `run-all-monitoring`.
+(default 200; the header says when the cap bound). For those it estimates the
+bytes uploaded over the 30 days: the window's operation count from sequence
+numbers (one `(user_id, received_at, server_seq)` index descent for the first
+operation in the window, `last_seq` for the newest) times their average size
+from the newest 100 operations. It then projects the time to quota at that
+rate. The projection assumes no pruning, the routine case because incremental
+sync creates no full-state boundary, so real times can only be longer. Its
+`operations` work is `users x tail`, like the reports below; summing every
+operation in the window instead hit `statement_timeout` on the hosted instance
+with 1,000 accounts (2026-11-11).
+
+In production, run it through the container wrapper, which forwards
+`MONITOR_SCOPE_USERS` into the container:
+
+```bash
+MONITOR_SCOPE_USERS=1000 ./scripts/docker-monitor.sh quota --limit 50
+```
 
 ### 2. Storage Analysis (`analyze-storage.ts`)
 
