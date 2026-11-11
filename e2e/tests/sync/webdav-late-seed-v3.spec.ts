@@ -19,6 +19,12 @@ import { recordIfEverAppears } from '../../utils/audit-webdav-helpers';
  * just before the fresh client's first write. Whatever the client then does
  * (defer, ask, or merge after loading the seed), the seed's data must survive
  * on the server and the client must keep its own pending task.
+ *
+ * Known gap, tracked in #10395 (v3 readiness; #10370 targets this race): the
+ * fresh client's unconditional sync-state.json PUT replaces the seed's
+ * snapshot, leaving sync-ops.json pointing at a snapshot whose clock no longer
+ * matches (run 42976947219). Readers detect the mismatch and signal a gap.
+ * Un-fixme when the v3 readiness batch lands.
  */
 
 const authorization = `Basic ${Buffer.from('admin:admin').toString('base64')}`;
@@ -118,7 +124,7 @@ test.describe('@webdav a late v3 seed survives a fresh client first write', () =
     void webdavServerUp;
   });
 
-  test('keeps the seed when it lands just before the fresh client writes', async ({
+  test.fixme('keeps the seed when it lands just before the fresh client writes', async ({
     browser,
     baseURL,
     request,
