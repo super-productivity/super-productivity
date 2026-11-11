@@ -101,11 +101,12 @@ export const createIosReminderBudget = (
   };
 
   const cancelDisplaced = async (admittedIds: Set<number>): Promise<void> => {
-    // Nothing to cancel for a reminder iOS never held.
-    [...unwanted].filter((id) => !armed.has(id)).forEach((id) => unwanted.delete(id));
-    const cancelIds = [...armed.keys()].filter(
-      (id) => unwanted.has(id) || (wanted.has(id) && !admittedIds.has(id)),
-    );
+    // Unwanted ones are cancelled whether or not they are known as armed: the
+    // pending list is empty when reading it failed, and iOS ignores unknown ids.
+    const cancelIds = [
+      ...unwanted,
+      ...[...armed.keys()].filter((id) => wanted.has(id) && !admittedIds.has(id)),
+    ];
     // Not confirmed by iOS: kept as they are, so the next pass asks again.
     if (!cancelIds.length || !(await deps.cancel(cancelIds))) {
       return;

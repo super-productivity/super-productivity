@@ -191,12 +191,16 @@ describe('createIosReminderBudget', () => {
     }));
   });
 
-  it('does not ask iOS to cancel a reminder it never armed', fakeAsync(() => {
+  // The pending list comes back empty when reading it failed, so a cancel
+  // must not depend on it: iOS may still hold the reminder from an earlier run.
+  it('cancels an unwanted reminder the pending list did not show, once', fakeAsync(() => {
     setup(2);
     budget.unwant(5);
     tick(SETTLE_MS);
+    budget.want(reminder(1, fromNow(1)));
+    tick(SETTLE_MS);
 
-    expect(deps.cancel).not.toHaveBeenCalled();
+    expect(cancelledIds()).toEqual([5]);
   }));
 
   it('tries again on the next pass when iOS refused a reminder', fakeAsync(() => {

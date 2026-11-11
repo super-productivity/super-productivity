@@ -15,6 +15,7 @@ on:
       - 'tools/ios-sim-reminders/**'
       - 'src/app/features/mobile/**'
       - 'src/app/core/platform/capacitor-reminder.service.ts'
+      - 'src/app/core/platform/ios-reminder-budget.ts'
 
 permissions:
   contents: read
