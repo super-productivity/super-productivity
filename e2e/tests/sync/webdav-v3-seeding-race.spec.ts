@@ -82,8 +82,8 @@ test.describe('@webdav two devices seeding one empty v3 folder', () => {
   // Device S (one task) seeds an empty v3 folder while the first write of a
   // fresh device J (one pending task) is held. Both then sync again and a
   // third, empty device C joins. A conflict dialog is the app asking, not a
-  // silent loss: no device may drop its own task without being asked, and a
-  // new device must still get S's data.
+  // silent loss, and every dialog is cancelled: no device may drop its own
+  // task or end a sync in an error, and a new device must still get S's data.
   for (const seedBy of ['first upload', 'folder move'] as const) {
     test(`a seed by ${seedBy} racing a fresh device loses no task silently`, async ({
       browser,

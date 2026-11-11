@@ -3,9 +3,9 @@
  * gap-free `server_seq` values.
  *
  * Each upload increments `user_sync_state.last_seq` under `SELECT ... FOR
- * UPDATE` inside a RepeatableRead transaction (`SyncService.uploadOps`). The
- * row lock is only taken for an upload that sends `lastKnownServerSeq`, as
- * every released client does, so the uploads here send it too. Under
+ * UPDATE` inside a RepeatableRead transaction (`SyncService.uploadOps`). For
+ * an ordinary upload the row lock is only taken when it sends
+ * `lastKnownServerSeq`, as the client does, so the uploads here send it. Under
  * contention a loser fails with a serialization error and the whole batch is
  * rejected as retryable (`INTERNAL_ERROR`, "Concurrent transaction conflict").
  * The invariant this pins: an accepted op's sequence is unique, the stored
