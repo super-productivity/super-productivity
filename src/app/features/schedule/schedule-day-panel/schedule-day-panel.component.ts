@@ -572,8 +572,11 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     const containerRect = scrollContainer.getBoundingClientRect();
     const elementRect = currentTimeElement.getBoundingClientRect();
     const relativePosition = elementRect.top - containerRect.top;
+    // the tray sits in the sticky header, on top of the first rows
+    const trayHeight =
+      scheduleWeekEl.querySelector<HTMLElement>('schedule-tray')?.offsetHeight ?? 0;
     const targetScrollTop =
-      scrollContainer.scrollTop + relativePosition - SCROLL_TOP_OFFSET_PX;
+      scrollContainer.scrollTop + relativePosition - SCROLL_TOP_OFFSET_PX - trayHeight;
 
     Log.log('[ScheduleDayPanel] Scrolling to position:', Math.max(0, targetScrollTop));
 

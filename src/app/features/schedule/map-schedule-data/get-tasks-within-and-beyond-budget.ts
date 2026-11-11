@@ -1,7 +1,7 @@
-import { TaskWithoutReminder } from '../../tasks/task.model';
+import { Task } from '../../tasks/task.model';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 
-export const getTasksWithinAndBeyondBudget = <T extends TaskWithoutReminder>(
+export const getTasksWithinAndBeyondBudget = <T extends Task>(
   tasks: T[],
   budget: number,
 ): {

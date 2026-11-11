@@ -6,7 +6,12 @@
   <div class="week-header-dates">
     <div class="filler"><!--for time --></div>
     @for (day of daysToShow(); track $index) {
-      <div class="day">
+      <!-- in tray mode the day header takes drops too: "this day, no time" -->
+      <div
+        class="day"
+        [class.drag-over]="dragOverTrayDay() === day"
+        [attr.data-tray-day]="trays() ? day : null"
+      >
         @if (day === todayDateStr()) {
           <mat-icon>wb_sunny</mat-icon>
         }
@@ -60,6 +65,15 @@
     }
   </div>
   <ng-content select="[weekHeaderEnd]"></ng-content>
+  @if (trays(); as trays) {
+    <schedule-tray
+      [class.isInPanel]="isInPanel()"
+      [days]="daysToShow()"
+      [trays]="trays"
+      [isHorizontalScroll]="isHorizontalScrollMode()"
+      (openDay)="openDay.emit($event)"
+    ></schedule-tray>
+  }
 </header>
 
 <div

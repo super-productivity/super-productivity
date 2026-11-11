@@ -1147,7 +1147,13 @@
       "SHIFT_KEY_INFO": "Hold Shift to toggle day planning mode",
       "START": "Work Start",
       "TOGGLE_DAY_PLANNING_HINT": "Ctrl+1 to toggle day planning",
-      "TOGGLE_TIME_SCHEDULING_HINT": "Ctrl+1 to toggle time scheduling"
+      "TOGGLE_TIME_SCHEDULING_HINT": "Ctrl+1 to toggle time scheduling",
+      "TRAY_FREE": "{{time}} free",
+      "TRAY_MORE": "+{{count}} more",
+      "TRAY_OVER": "{{time}} over",
+      "TRAY_PLANNED": "{{time}} planned",
+      "TRAY_SET_TIME": "Set a time",
+      "TRAY_SHOW_LESS": "Show less"
     },
     "SEARCH_BAR": {
       "DELETED": "Deleted",
@@ -3009,11 +3015,14 @@
       "L_IS_WORK_START_END_ENABLED": "Limit unscheduled task flow to specific work times",
       "L_LUNCH_BREAK_END": "Lunch break end",
       "L_LUNCH_BREAK_START": "Lunch break start",
+      "L_UNTIMED_TASK_PLACEMENT": "Tasks without a time",
       "L_WORK_END": "Work Day End",
       "L_WORK_START": "Work Day Start",
       "LUNCH_BREAK_START_END_DESCRIPTION": "e.g. 13:00",
       "MONTH": "Month",
       "TITLE": "Schedule",
+      "UNTIMED_TASK_PLACEMENT_AUTO": "Placed automatically",
+      "UNTIMED_TASK_PLACEMENT_TRAY": "Kept in a tray",
       "WORK_END_DESCRIPTION": "e.g. 17:00",
       "WORK_START_DESCRIPTION": "e.g. 9:00"
     },

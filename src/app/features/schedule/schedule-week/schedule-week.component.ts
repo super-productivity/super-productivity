@@ -10,10 +10,16 @@ import {
   input,
   OnDestroy,
   OnInit,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
-import { isScheduleCalendarEvent, ScheduleEvent } from '../schedule.model';
+import {
+  isScheduleCalendarEvent,
+  ScheduleDayTray,
+  ScheduleEvent,
+} from '../schedule.model';
+import { ScheduleTrayComponent } from '../schedule-tray/schedule-tray.component';
 import { CdkDragMove, CdkDragRelease, CdkDragStart } from '@angular/cdk/drag-drop';
 import { FH, SVEType } from '../schedule.const';
 import { isDraggableSE } from '../map-schedule-data/is-schedule-types-type';
@@ -55,6 +61,7 @@ interface ScheduleTaskDataLike {
   selector: 'schedule-week',
   imports: [
     ScheduleEventComponent,
+    ScheduleTrayComponent,
     CreateTaskPlaceholderComponent,
     MatIcon,
     TranslatePipe,
@@ -87,6 +94,9 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   isHScrolled = input<boolean>(false);
   events = input<ScheduleEvent[] | null>([]);
   beyondBudget = input<ScheduleEvent[][] | null>([]);
+  // set in tray mode only: tasks without a time, by day
+  trays = input<Record<string, ScheduleDayTray> | null>(null);
+  openDay = output<string>();
   daysToShow = input<string[]>([]);
   workStartEnd = input<{ workStartRow: number; workEndRow: number } | null>(null);
   currentTimeRow = input<number | null>(null);
@@ -259,6 +269,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   } | null>(null);
 
   isDragging = this._service.isDragging;
+  dragOverTrayDay = this._service.dragOverTrayDay;
   isAnyEventResizing = signal(false);
   isCreateTaskActive = signal(false);
   currentDragEvent = this._service.currentDragEvent;
