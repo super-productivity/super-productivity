@@ -168,6 +168,49 @@ describe('conflict-field-patch.util', () => {
       });
     });
 
+    // #11694: the detach writes the skipped dates as a field update.
+    describe('a skipped date (#11694)', () => {
+      const withSkip = { ...base, deletedInstanceDates: ['2026-06-16'] };
+      const ruleFields = {
+        quickSetting: 'MONDAY_TO_FRIDAY',
+        repeatCycle: 'WEEKLY',
+        saturday: false,
+      };
+
+      for (const [name, remoteChanges] of [
+        ['a rule edit', ruleFields],
+        ['the creation cursor', { lastTaskCreationDay: '2026-06-16' }],
+      ] as const) {
+        for (const skipTime of [1000, 3000]) {
+          it(`keeps both beside ${name}, skip written at ${skipTime} (either device resolving)`, () => {
+            const skipOp = cfgEdit(
+              { deletedInstanceDates: ['2026-06-16'] },
+              'A',
+              skipTime,
+            );
+            const other = cfgEdit(remoteChanges, 'B', 2000);
+            const expected = { ...withSkip, ...remoteChanges };
+            expect(resolve(withSkip, [skipOp], [other])).toEqual(expected);
+            expect(resolve({ ...base, ...remoteChanges }, [other], [skipOp])).toEqual(
+              expected,
+            );
+          });
+        }
+      }
+
+      it('keeps only the later list when two devices skip different dates', () => {
+        const a = cfgEdit({ deletedInstanceDates: ['2026-06-16'] }, 'A', 1000);
+        const b = cfgEdit({ deletedInstanceDates: ['2026-06-17'] }, 'B', 2000);
+        // Accepted residual: the list travels whole, so the earlier skip is lost.
+        // The remote write is newer: no local field wins, whole-entity LWW applies it.
+        expect(resolve(withSkip, [a], [b])).toBeUndefined();
+        // The local write is newer: its list replaces the remote one.
+        expect(resolve(withSkip, [b], [a])?.['deletedInstanceDates']).toEqual([
+          '2026-06-17',
+        ]);
+      });
+    });
+
     it('refuses a remote LWW row, whose values it may not read (decision 5)', () => {
       const row = op({
         id: 'row',

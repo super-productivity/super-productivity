@@ -1,3 +1,4 @@
+import { Provider } from '@angular/core';
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { BehaviorSubject, Observable, of, Subject, Subscription } from 'rxjs';
@@ -13,6 +14,7 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { TakeABreakService } from '../../take-a-break/take-a-break.service';
 import { NotifyService } from '../../../core/notify/notify.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
+import { CapacitorPlatformService } from '../../../core/platform/capacitor-platform.service';
 import { BannerId } from '../../../core/banner/banner.model';
 import { T } from '../../../t.const';
 import * as actions from './focus-mode.actions';
@@ -1201,86 +1203,115 @@ describe('FocusModeEffects', () => {
     });
   });
 
-  // Self-contained module: Android needs IS_ANDROID_WEB_VIEW_TOKEN === true, which
-  // must be set before FocusModeEffects is constructed, so it can't reuse the
-  // shared beforeEach instance (built with the token false).
-  describe('surfaceSessionDoneOnCompletion$ on Android', () => {
-    let androidEffects: FocusModeEffects;
-    let androidNotify: jasmine.Spy;
-    let androidBannerOpen: jasmine.Spy;
+  // Self-contained module: the platform (IS_ANDROID_WEB_VIEW_TOKEN === true, or
+  // CapacitorPlatformService.isIOS()) is read when FocusModeEffects is
+  // constructed, so it can't reuse the shared beforeEach instance (built as web).
+  const NATIVE_COMPLETION_PLATFORMS: {
+    name: string;
+    reason: string;
+    providers: Provider[];
+  }[] = [
+    {
+      name: 'Android',
+      reason: 'native posts the completion notification',
+      providers: [{ provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true }],
+    },
+    {
+      name: 'iOS',
+      reason: 'the completion notification is scheduled up front',
+      providers: [
+        { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: false },
+        { provide: CapacitorPlatformService, useValue: { isIOS: () => true } },
+      ],
+    },
+  ];
+  NATIVE_COMPLETION_PLATFORMS.forEach(
+    ({ name, reason, providers: platformProviders }) => {
+      describe(`surfaceSessionDoneOnCompletion$ on ${name}`, () => {
+        let nativeEffects: FocusModeEffects;
+        let nativeNotify: jasmine.Spy;
+        let nativeBannerOpen: jasmine.Spy;
 
-    beforeEach(() => {
-      TestBed.resetTestingModule();
-      androidNotify = jasmine.createSpy('notify').and.resolveTo(undefined);
-      androidBannerOpen = jasmine.createSpy('open');
-      TestBed.configureTestingModule({
-        providers: [
-          FocusModeEffects,
-          provideMockActions(() => actions$),
-          provideMockStore({
-            selectors: [
-              { selector: selectors.selectMode, value: FocusModeMode.Countdown },
+        beforeEach(() => {
+          TestBed.resetTestingModule();
+          nativeNotify = jasmine.createSpy('notify').and.resolveTo(undefined);
+          nativeBannerOpen = jasmine.createSpy('open');
+          TestBed.configureTestingModule({
+            providers: [
+              FocusModeEffects,
+              provideMockActions(() => actions$),
+              provideMockStore({
+                selectors: [
+                  { selector: selectors.selectMode, value: FocusModeMode.Countdown },
+                  {
+                    selector: selectors.selectLastSessionDuration,
+                    value: 25 * 60 * 1000,
+                  },
+                  { selector: selectors.selectIsOverlayShown, value: false },
+                ],
+              }),
               {
-                selector: selectors.selectLastSessionDuration,
-                value: 25 * 60 * 1000,
+                provide: FocusModeStrategyFactory,
+                useValue: { getStrategy: () => ({}) },
               },
-              { selector: selectors.selectIsOverlayShown, value: false },
+              {
+                provide: GlobalConfigService,
+                useValue: { sound: () => ({ volume: 0 }) },
+              },
+              {
+                provide: TaskService,
+                useValue: { currentTaskId$: new BehaviorSubject<string | null>(null) },
+              },
+              {
+                provide: BannerService,
+                useValue: { open: nativeBannerOpen, dismiss: () => {} },
+              },
+              { provide: MetricService, useValue: { logFocusSession: () => {} } },
+              { provide: FocusModeStorageService, useValue: {} },
+              {
+                provide: HydrationStateService,
+                useValue: { isApplyingRemoteOps: () => false },
+              },
+              {
+                provide: TakeABreakService,
+                useValue: {
+                  otherNoBreakTIme$: new BehaviorSubject<number>(0),
+                  resetTimer: jasmine.createSpy('resetTimer'),
+                },
+              },
+              { provide: NotifyService, useValue: { notify: nativeNotify } },
+              {
+                provide: GlobalTrackingIntervalService,
+                useValue: { todayStr$: new BehaviorSubject<string>('2024-01-19') },
+              },
+              ...platformProviders,
             ],
-          }),
-          { provide: FocusModeStrategyFactory, useValue: { getStrategy: () => ({}) } },
-          { provide: GlobalConfigService, useValue: { sound: () => ({ volume: 0 }) } },
-          {
-            provide: TaskService,
-            useValue: { currentTaskId$: new BehaviorSubject<string | null>(null) },
-          },
-          {
-            provide: BannerService,
-            useValue: { open: androidBannerOpen, dismiss: () => {} },
-          },
-          { provide: MetricService, useValue: { logFocusSession: () => {} } },
-          { provide: FocusModeStorageService, useValue: {} },
-          {
-            provide: HydrationStateService,
-            useValue: { isApplyingRemoteOps: () => false },
-          },
-          {
-            provide: TakeABreakService,
-            useValue: {
-              otherNoBreakTIme$: new BehaviorSubject<number>(0),
-              resetTimer: jasmine.createSpy('resetTimer'),
+          });
+          nativeEffects = TestBed.inject(FocusModeEffects);
+        });
+
+        // This describe builds its OWN MockStore, so the outer `afterEach` (which
+        // resets the shared instance) does not clear the overrides above and they
+        // would leak into later spec files.
+        afterEach(() => {
+          TestBed.inject(MockStore).resetSelectors();
+        });
+
+        it(`should banner but NOT notify on ${name} (${reason})`, (done) => {
+          spyOn(document, 'hasFocus').and.returnValue(false);
+          actions$ = of(actions.completeFocusSession({ isManual: false }));
+
+          nativeEffects.surfaceSessionDoneOnCompletion$.subscribe({
+            complete: () => {
+              expect(nativeNotify).not.toHaveBeenCalled();
+              expect(nativeBannerOpen).toHaveBeenCalledTimes(1);
+              done();
             },
-          },
-          { provide: NotifyService, useValue: { notify: androidNotify } },
-          {
-            provide: GlobalTrackingIntervalService,
-            useValue: { todayStr$: new BehaviorSubject<string>('2024-01-19') },
-          },
-          { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
-        ],
+          });
+        });
       });
-      androidEffects = TestBed.inject(FocusModeEffects);
-    });
-
-    // This describe builds its OWN MockStore, so the outer `afterEach` (which
-    // resets the shared instance) does not clear the overrides above and they
-    // would leak into later spec files.
-    afterEach(() => {
-      TestBed.inject(MockStore).resetSelectors();
-    });
-
-    it('should banner but NOT notify on Android (native posts the completion notification)', (done) => {
-      spyOn(document, 'hasFocus').and.returnValue(false);
-      actions$ = of(actions.completeFocusSession({ isManual: false }));
-
-      androidEffects.surfaceSessionDoneOnCompletion$.subscribe({
-        complete: () => {
-          expect(androidNotify).not.toHaveBeenCalled();
-          expect(androidBannerOpen).toHaveBeenCalledTimes(1);
-          done();
-        },
-      });
-    });
-  });
+    },
+  );
 
   describe('syncTrackingStartToSession$', () => {
     it('should dispatch startFocusSession when autoStartFocusOnPlay is on and task is selected on Main screen (overlay hidden)', (done) => {
