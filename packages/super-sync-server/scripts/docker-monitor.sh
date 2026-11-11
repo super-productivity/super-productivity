@@ -34,12 +34,14 @@ fi
 
 echo -e "${GREEN}→ Running on container: ${CONTAINER_NAME}${NC}\n"
 
-# Forward MONITOR_SCOPE_USERS into the container: the reports read it from
+# Forward the report settings into the container: the reports read them from
 # their own environment, which `docker exec` does not inherit.
 SCOPE_ENV=()
-if [ -n "${MONITOR_SCOPE_USERS:-}" ]; then
-  SCOPE_ENV=(-e "MONITOR_SCOPE_USERS=$MONITOR_SCOPE_USERS")
-fi
+for name in MONITOR_SCOPE_USERS MONITOR_STATEMENT_TIMEOUT_MS; do
+  if [ -n "${!name:-}" ]; then
+    SCOPE_ENV+=(-e "$name=${!name}")
+  fi
+done
 
 # Parse command
 COMMAND=$1

@@ -57,6 +57,7 @@ const SCHEMA = `
     id text PRIMARY KEY,
     user_id integer NOT NULL,
     server_seq integer NOT NULL,
+    op_type text NOT NULL DEFAULT 'UPD',
     payload jsonb NOT NULL,
     payload_bytes bigint NOT NULL DEFAULT 0,
     vector_clock jsonb NOT NULL,
@@ -65,6 +66,9 @@ const SCHEMA = `
   CREATE UNIQUE INDEX operations_user_seq ON operations (user_id, server_seq);
   CREATE INDEX operations_user_id_received_at_server_seq_idx
     ON operations (user_id, received_at, server_seq);
+  CREATE INDEX operations_user_id_full_state_server_seq_idx
+    ON operations (user_id, server_seq)
+    WHERE op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR');
   CREATE TABLE user_sync_state (
     user_id integer PRIMARY KEY,
     last_seq integer NOT NULL DEFAULT 0
@@ -162,29 +166,133 @@ describe('quota headroom projection', () => {
 });
 
 describe('quota growth estimate', () => {
+  const row = {
+    user_id: 1,
+    last_seq: 50,
+    full_state_count: 0,
+    full_state_bytes: 0,
+    avg_delta_bytes: 999,
+  };
+
   it('multiplies the window operation count by the window average size', async () => {
     const { estimateWindowBytes } = await import('../scripts/quota-headroom');
-    const row = { user_id: 1, last_seq: 50, avg_bytes: 999 };
-    expect(estimateWindowBytes({ ...row, first_seq: 41, avg_window_bytes: 100 })).toBe(
-      1000,
-    );
+    expect(
+      estimateWindowBytes({ ...row, first_seq: 41, avg_window_delta_bytes: 100 }),
+    ).toBe(1000);
     // No in-window size known: fall back to the tail average.
-    expect(estimateWindowBytes({ ...row, first_seq: 50, avg_window_bytes: null })).toBe(
-      999,
-    );
+    expect(
+      estimateWindowBytes({ ...row, first_seq: 50, avg_window_delta_bytes: null }),
+    ).toBe(999);
     // Nothing in the window.
-    expect(estimateWindowBytes({ ...row, first_seq: null, avg_window_bytes: null })).toBe(
-      0,
-    );
+    expect(
+      estimateWindowBytes({ ...row, first_seq: null, avg_window_delta_bytes: null }),
+    ).toBe(0);
     // bigint columns from Postgres.
     expect(
       estimateWindowBytes({
         ...row,
         last_seq: BigInt(10),
         first_seq: BigInt(9),
-        avg_window_bytes: 5,
+        full_state_count: BigInt(0),
+        avg_window_delta_bytes: 5,
       }),
     ).toBe(10);
+  });
+
+  it('adds full-state operations exactly and averages only the rest', async () => {
+    const { estimateWindowBytes } = await import('../scripts/quota-headroom');
+    // 10 operations in the window, 2 of them full-state: 8 x 100 + 5000.
+    expect(
+      estimateWindowBytes({
+        ...row,
+        first_seq: 41,
+        full_state_count: 2,
+        full_state_bytes: 5000,
+        avg_window_delta_bytes: 100,
+      }),
+    ).toBe(5800);
+    // Only full-state operations in the window: no delta average needed.
+    expect(
+      estimateWindowBytes({
+        ...row,
+        first_seq: 50,
+        full_state_count: BigInt(1),
+        full_state_bytes: 7000,
+        avg_window_delta_bytes: null,
+        avg_delta_bytes: null,
+      }),
+    ).toBe(7000);
+  });
+});
+
+/**
+ * One full-state operation is orders of magnitude larger than a delta. Averaged
+ * into the newest operations it inflated the window ~40x; outside them it was
+ * dropped from the window entirely. Both shapes must come out near the truth.
+ */
+describe('monitor quota growth with a full-state operation (PGlite)', () => {
+  let db: PGlite;
+  const DELTA_BYTES = 300;
+  const DELTA_OPS = 500;
+  const IMPORT_BYTES = 5 * MB;
+
+  /** `importAt`: 1-based position of the single SYNC_IMPORT among the ops. */
+  const seedAccount = async (id: number, importAt: number): Promise<void> => {
+    await db.query(
+      `INSERT INTO users (id, email, storage_used_bytes) VALUES ($1, $2, $3)`,
+      [id, `user${id}@example.com`, 60 * MB],
+    );
+    await db.query(
+      `INSERT INTO sync_devices (client_id, user_id, last_seen_at, created_at)
+       VALUES ($1, $2, $3, $3)`,
+      [`client-${id}`, id, NOW],
+    );
+    const total = DELTA_OPS + 1;
+    await db.query(
+      `INSERT INTO operations
+         (id, user_id, server_seq, op_type, payload, payload_bytes, vector_clock, received_at)
+       SELECT
+         'op-' || $1::int || '-' || seq, $1::int, seq,
+         CASE WHEN seq = $2::int THEN 'SYNC_IMPORT' ELSE 'UPD' END,
+         '{}',
+         CASE WHEN seq = $2::int THEN $3::bigint ELSE $4::bigint END,
+         '{}',
+         $5::bigint - ($6::int - seq) * 60000
+       FROM generate_series(1, $6::int) AS seq`,
+      [id, importAt, IMPORT_BYTES, DELTA_BYTES, NOW - ONE_DAY, total],
+    );
+    await db.query(`INSERT INTO user_sync_state (user_id, last_seq) VALUES ($1, $2)`, [
+      id,
+      total,
+    ]);
+  };
+
+  beforeAll(async () => {
+    db = new PGlite();
+    await db.exec(SCHEMA + SYNC_DEVICES_DDL);
+    // 1: the import is among the newest 100 operations.
+    await seedAccount(1, DELTA_OPS + 1 - 10);
+    // 2: the import is in the window but older than the newest 100.
+    await seedAccount(2, 5);
+  });
+
+  afterAll(async () => {
+    await db.close();
+  });
+
+  beforeEach(() => {
+    vi.resetModules();
+    mocks.state.db = db;
+  });
+
+  it('reports the true window bytes wherever the import sits', async () => {
+    const { queryGrowingAccounts } = await import('../scripts/quota-headroom');
+    const { accounts } = await queryGrowingAccounts(BigInt(NOW - 30 * ONE_DAY), 200);
+    const expected = IMPORT_BYTES + DELTA_OPS * DELTA_BYTES;
+    expect(accounts.map((a) => [a.id, a.uploadedBytes])).toEqual([
+      [1, expected],
+      [2, expected],
+    ]);
   });
 });
 
@@ -336,15 +444,21 @@ describe('monitor quota SQL (PGlite)', () => {
     expect(opsQueries).toHaveLength(1);
     const [query] = opsQueries;
     expect(query).toContain('unnest(');
-    // Both per-account lookups are LIMITed index reads...
-    expect(query.match(/LATERAL/g)).toHaveLength(2);
-    expect(query.match(/LIMIT (\?|1)(?!\d)/g)).toHaveLength(2);
+    // All three per-account lookups are LIMITed index reads...
+    expect(query.match(/LATERAL/g)).toHaveLength(3);
+    expect(query.match(/LIMIT (\?|1)(?!\d)/g)).toHaveLength(3);
     expect(query).toMatch(
       /ORDER BY operations\.received_at, operations\.server_seq\s+LIMIT/,
     );
-    expect(query).toMatch(/ORDER BY operations\.server_seq DESC\s+LIMIT/);
-    // ...and nothing sums the window, which timed out on the hosted instance.
-    expect(query).not.toMatch(/SUM\(/);
+    expect(query.match(/ORDER BY operations\.server_seq DESC\s+LIMIT/g)).toHaveLength(2);
+    // ...and the only sum is over the LIMITed full-state subquery. Summing the
+    // window itself timed out on the hosted instance.
+    expect(query.match(/SUM\(/g)).toHaveLength(1);
+    expect(query).toContain('SUM(newest_full_state.bytes)');
+    // Literal op types, so a generic plan can still use the partial index.
+    expect(query.match(/IN \('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'\)/g)).toHaveLength(
+      2,
+    );
   });
 
   it('runs through the monitor CLI', async () => {

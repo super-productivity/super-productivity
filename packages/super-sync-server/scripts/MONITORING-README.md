@@ -61,15 +61,19 @@ other account grew), highest quota use first, capped at `MONITOR_SCOPE_USERS`
 bytes uploaded over the 30 days: the window's operation count from sequence
 numbers (one `(user_id, received_at, server_seq)` index descent for the first
 operation in the window, `last_seq` for the newest) times their average size
-from the newest 100 operations. It then projects the time to quota at that
-rate. The projection assumes no pruning, the routine case because incremental
-sync creates no full-state boundary, so real times can only be longer. Its
-`operations` work is `users x tail`, like the reports below; summing every
-operation in the window instead hit `statement_timeout` on the hosted instance
-with 1,000 accounts (2026-11-11).
+from the newest 100 operations. Full-state operations (an import or a repair)
+are the exception: one can outweigh every other operation in the window, so
+those in the window are summed exactly through their partial index (at most
+100 per account) and only the remaining operations are averaged. It then
+projects the time to quota at that rate. The projection assumes no pruning,
+the routine case because incremental sync creates no full-state boundary;
+pruning makes real times longer, while the averaged part can be off in either
+direction. Its `operations` work is `users x tail`, like the reports below;
+summing every operation in the window instead hit `statement_timeout` on the
+hosted instance with 1,000 accounts (2026-11-11).
 
 In production, run it through the container wrapper, which forwards
-`MONITOR_SCOPE_USERS` into the container:
+`MONITOR_SCOPE_USERS` and `MONITOR_STATEMENT_TIMEOUT_MS` into the container:
 
 ```bash
 MONITOR_SCOPE_USERS=1000 ./scripts/docker-monitor.sh quota --limit 50
