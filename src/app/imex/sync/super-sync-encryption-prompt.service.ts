@@ -9,7 +9,7 @@ import { SyncLog } from '../../core/log';
  * still open (typically the sync-config dialog still playing its close animation
  * right after first-time setup), defer rather than drop the prompt: poll until
  * dialogs clear, up to this bound, then re-check state.
- * See `_promptSuperSyncEncryptionIfNeeded` (#8670 regression).
+ * See `SuperSyncEncryptionPromptService.promptIfNeeded` (#8670 regression).
  */
 const ENCRYPTION_PROMPT_DIALOG_WAIT_MS = 8000;
 const ENCRYPTION_PROMPT_DIALOG_POLL_MS = 100;
@@ -23,7 +23,7 @@ export interface SuperSyncEncryptionPromptContext {
 
 /**
  * The post-sync "set up encryption" modal for a fresh SuperSync setup.
- * Moved unchanged out of SyncWrapperService, which still decides when it runs.
+ * SyncWrapperService decides when it runs and arms it through its delegates.
  */
 @Injectable({
   providedIn: 'root',
@@ -40,7 +40,7 @@ export class SuperSyncEncryptionPromptService {
   private _encryptionRequiredDialog?: MatDialogRef<any, Record<string, unknown>>;
 
   /**
-   * Synchronous guard to prevent TOCTOU race in _promptSuperSyncEncryptionIfNeeded.
+   * Synchronous guard to prevent TOCTOU race in promptIfNeeded.
    * The async import() between checking _encryptionRequiredDialog and opening the dialog
    * creates a window where concurrent calls can both pass the guard.
    */
@@ -52,8 +52,8 @@ export class SuperSyncEncryptionPromptService {
    * Established/returning unencrypted accounts are nudged by the calm, dismissible
    * SuperSyncEncryptionMigrationBannerService instead, so the per-sync modal must
    * NOT fire for them — otherwise both would prompt at startup. Set by the config
-   * dialog via markPromptEncryptionAfterSetupSync(); consumed on the first
-   * post-sync prompt evaluation for SuperSync (see _promptSuperSyncEncryptionIfNeeded).
+   * dialog via SyncWrapperService.markPromptEncryptionAfterSetupSync(); consumed on
+   * the first post-sync prompt evaluation for SuperSync (see promptIfNeeded).
    */
   private _shouldPromptEncryptionAfterSetupSync = false;
 
