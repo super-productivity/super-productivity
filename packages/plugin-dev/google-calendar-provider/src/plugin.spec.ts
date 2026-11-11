@@ -681,6 +681,18 @@ describe('Google Calendar Plugin', () => {
       expect(body.end.dateTime).toBeDefined();
     });
 
+    it('prefixes the title of a done task with [DONE]', async () => {
+      await definition.timeBlock!.upsertEvent(
+        'task-1',
+        { ...eventData, title: 'Focus time', isDone: true },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      const [, body] = mockHttp.patch.mock.calls[0];
+      expect(body.summary).toBe('[DONE] Focus time');
+    });
+
     it('falls back to insert with the full body when the event does not exist (patch 404)', async () => {
       mockHttp.patch.mockRejectedValueOnce({ status: 404 });
 

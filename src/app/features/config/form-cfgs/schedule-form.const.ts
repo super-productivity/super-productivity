@@ -81,5 +81,13 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
         },
       },
     },
+    {
+      key: 'timeBlockTitle',
+      type: 'input',
+      templateOptions: {
+        label: T.GCF.SCHEDULE.L_TIME_BLOCK_TITLE,
+        description: T.GCF.SCHEDULE.TIME_BLOCK_TITLE_DESCRIPTION,
+      },
+    },
   ],
 };
