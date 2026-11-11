@@ -647,6 +647,14 @@ a merge where it made sense ("do as you see fit (merge)").
   across the suite, the nightly WebDAV job on that branch still tests v2
   only, and two other wiki pages still call v2 the default.
 
+**2026-11-11, parked.** #11684 is parked as a draft until the nightly WebDAV
+job covers v3
+([#11677](https://github.com/super-productivity/super-productivity/pull/11677)):
+nobody has asked for the default, it is one-way, and devices installed on
+v19.1 or earlier would need the manual toggle to join a new folder. The
+reproduction branch `claude/repair-deferral-behind-base-repro` is deleted;
+its test is on master through #11688.
+
 **Recommendation 1 (the two production queries)** needs access to the hosted
 database and is not done.
 
