@@ -240,6 +240,10 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     lunchBreakEnd: '14:00',
   },
 
+  planner: {
+    isHideWeekends: false,
+  },
+
   sync: {
     isEnabled: false,
     // TODO maybe enable later if it works well

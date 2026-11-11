@@ -17,12 +17,37 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { signal, WritableSignal } from '@angular/core';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { selectPlannerState } from './store/planner.selectors';
-import { selectTimelineConfig } from '../config/store/global-config.reducer';
+import {
+  selectLocalizationConfig,
+  selectPlannerConfig,
+  selectTimelineConfig,
+} from '../config/store/global-config.reducer';
 import { selectStartOfNextDayDiffMs } from '../../root-store/app-state/app-state.selectors';
 import { findSpringForwardSunday } from '../tasks/dst.test-helper';
 
 describe('PlannerService', () => {
+  describe('includedWeekDays$', () => {
+    it('should offer every day of the week by default', (done) => {
+      service.includedWeekDays$.pipe(first()).subscribe((days) => {
+        expect(days).toEqual([0, 1, 2, 3, 4, 5, 6]);
+        done();
+      });
+    });
+
+    it('should drop the locale weekend days when they are hidden', (done) => {
+      mockStore.overrideSelector(selectPlannerConfig, { isHideWeekends: true });
+      mockStore.refreshState();
+      service.includedWeekDays$
+        .pipe(first((days: number[]) => days.length < 7))
+        .subscribe((days) => {
+          expect(days).toEqual([1, 2, 3, 4, 5]);
+          done();
+        });
+    });
+  });
+
   let service: PlannerService;
+  let mockStore: MockStore;
   let dateService: DateService;
   let todayDateStrSubject: BehaviorSubject<string>;
   let mockDaysSubject: ReplaySubject<PlannerDay[]>;
@@ -70,6 +95,8 @@ describe('PlannerService', () => {
               },
             },
             { selector: selectStartOfNextDayDiffMs, value: 0 },
+            { selector: selectLocalizationConfig, value: { lng: 'en' } },
+            { selector: selectPlannerConfig, value: { isHideWeekends: false } },
           ],
         }),
         {
@@ -123,6 +150,7 @@ describe('PlannerService', () => {
 
     dateService = TestBed.inject(DateService);
     service = TestBed.inject(PlannerService);
+    mockStore = TestBed.inject(MockStore);
   });
 
   afterEach(() => {

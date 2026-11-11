@@ -279,6 +279,11 @@ export type SyncConfig = Readonly<{
   oneDrive?: OneDriveConfig;
 }>;
 
+export type PlannerConfig = Readonly<{
+  /** Hide weekend columns in the Planner, keeping any weekend day that has work. */
+  isHideWeekends: boolean;
+}>;
+
 export type ScheduleConfig = Readonly<{
   isWorkStartEndEnabled: boolean;
   workStart: string;
@@ -403,6 +408,8 @@ export type GlobalConfigState = Readonly<{
   timeTracking: TimeTrackingConfig;
   reminder: ReminderConfig;
   schedule: ScheduleConfig;
+  // Optional: added after the first release, so older synced configs omit it.
+  planner?: PlannerConfig;
   dominaMode: DominaModeConfig;
   focusMode: FocusModeConfig;
   // NOTE: taskWidget is intentionally NOT part of GlobalConfigState — it is a

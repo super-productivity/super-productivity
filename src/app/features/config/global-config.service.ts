@@ -6,6 +6,7 @@ import { Observable } from 'rxjs';
 import { DEFAULT_GLOBAL_CONFIG } from './default-global-config.const';
 import {
   AppFeaturesConfig,
+  PlannerConfig,
   ClipboardImagesConfig,
   EvaluationConfig,
   FlowtimeConfig,
@@ -31,6 +32,7 @@ import {
   selectIdleConfig,
   selectLocalizationConfig,
   selectMiscConfig,
+  selectPlannerConfig,
   selectPomodoroConfig,
   selectShortSyntaxConfig,
   selectSoundConfig,
@@ -123,6 +125,11 @@ export class GlobalConfigService {
     shareReplay(1),
   );
 
+  planner$: Observable<PlannerConfig | undefined> = this._store.pipe(
+    select(selectPlannerConfig),
+    shareReplay(1),
+  );
+
   // Signal versions of the properties
   readonly cfg: Signal<GlobalConfigState | undefined> = toSignal(this.cfg$, {
     initialValue: undefined,
@@ -174,6 +181,9 @@ export class GlobalConfigService {
   );
   readonly timelineCfg: Signal<ScheduleConfig | undefined> = toSignal(this.timelineCfg$, {
     initialValue: undefined,
+  });
+  readonly planner: Signal<PlannerConfig | undefined> = toSignal(this.planner$, {
+    initialValue: DEFAULT_GLOBAL_CONFIG.planner,
   });
   readonly appFeatures: Signal<AppFeaturesConfig> = toSignal(this.appFeatures$, {
     initialValue: DEFAULT_GLOBAL_CONFIG.appFeatures,
