@@ -3,7 +3,6 @@ import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { ScheduleDay, ScheduleDayTray } from '../schedule.model';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 import { getTaskRepeatCfgsForExactDayCached } from '../../task-repeat-cfg/store/get-task-repeat-cfgs-for-exact-day-cached.util';
-import { getTasksWithinAndBeyondBudget } from './get-tasks-within-and-beyond-budget';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 
 export interface ScheduleTrayCfg {
@@ -44,10 +43,11 @@ export const withScheduleDayTray = (
   if (!params.isCapacityLimited) {
     return { ...day, tray: { tasks, repeatCfgs, plannedMs } };
   }
+  // The tray line ("… over") is the only overload signal: the day header's
+  // "does not fit" badge stays empty, as it would count projections and
+  // unestimated tasks differently and could disagree with the line.
   return {
     ...day,
-    // feeds the existing "does not fit" badge in the day header
-    beyondBudgetTasks: getTasksWithinAndBeyondBudget(tasks, params.budgetMs).beyond,
     tray: { tasks, repeatCfgs, plannedMs, freeMs: params.budgetMs - plannedMs },
   };
 };

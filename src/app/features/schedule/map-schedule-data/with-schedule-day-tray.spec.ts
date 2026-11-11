@@ -83,7 +83,7 @@ describe('withScheduleDayTray()', () => {
     expect(r.beyondBudgetTasks).toEqual([]);
   });
 
-  it('reports the overrun as negative free time and marks the tasks that do not fit', () => {
+  it('reports the overrun as negative free time and leaves the does-not-fit badge empty', () => {
     const r = withScheduleDayTray(fakeDay(MON), {
       ...PARAMS,
       budgetMs: 2 * H,
@@ -94,7 +94,7 @@ describe('withScheduleDayTray()', () => {
       ],
     });
     expect(r.tray?.freeMs).toBe(-1.5 * H);
-    expect(r.beyondBudgetTasks.map((t) => t.id)).toEqual(['B', 'C']);
+    expect(r.beyondBudgetTasks).toEqual([]);
     // over capacity keeps every task on its day
     expect(r.tray?.tasks.map((t) => t.id)).toEqual(['A', 'B', 'C']);
   });
