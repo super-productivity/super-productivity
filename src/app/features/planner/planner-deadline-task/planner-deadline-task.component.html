@@ -1,4 +1,8 @@
-<div (click)="editDeadline()">
+<div
+  tabindex="0"
+  (click)="openTask()"
+  (keydown.enter)="openTask()"
+>
   <mat-icon>flag</mat-icon>
   <div class="title">{{ task().title }}</div>
   <div class="planner-time-remaining-shared">

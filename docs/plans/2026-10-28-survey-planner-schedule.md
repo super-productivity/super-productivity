@@ -207,3 +207,8 @@ not build C unless A and B ship and confusion reports continue.
   which day, Schedule = what time; also deadline vs. scheduled date). A rename
   churns docs and screenshots, and other languages would lag.
 - **C declined.**
+
+Update 2026-11-11, after the survey closed: the decisions stand. Dragging a
+Planner card onto the day panel shipped in v20.0.0 (`4403b170c0`). Next are
+overdue tasks in the panel, then the tray wireframe. See
+[open feature gaps](2026-11-11-survey-feature-gaps.md).
