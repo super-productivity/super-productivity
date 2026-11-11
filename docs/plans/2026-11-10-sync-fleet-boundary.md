@@ -559,6 +559,42 @@ for the evidence its recommendation names.
   not from a diff.
 - **Self-hosted proxies** that replace 5xx bodies: unknown share.
 
+## Progress
+
+**2026-11-11, recommendation 2 (reproduction): red, as suspected.** Branch
+`claude/repair-deferral-behind-base-repro` adds
+`gives an offline client with pending work the ops uploaded before the REPAIR`
+to `e2e/tests/sync/supersync-repair-lifecycle.spec.ts`. It failed in the
+scheduled E2E workflow
+([run 42923512758](https://github.com/super-productivity/super-productivity/actions/runs/42923512758),
+SuperSync shard 2 of 6). The server log of that run shows the mechanism:
+client B downloads with `sinceSeq=2`, the server skips to the `REPAIR` at
+sequence 5 ("Optimized download: skipping from sinceSeq=2 to 4"), B receives
+that one op, and B's pending op is then accepted at sequence 6. Sequence 3,
+the other device's task, never reaches B. Read from the job result and the
+server log; the Playwright assertion text itself was not read. The "suspected"
+notes above therefore describe a reproduced divergence on master, which goes
+through fix intake on its own and is not fixed here.
+
+**2026-11-11, recommendation 3 (v3 default): built on branch
+`claude/file-sync-v3-default`, not merged, no pull request.**
+
+- The snapshot path of a discovered-empty folder claims the v2 name with the
+  create-only tombstone before it publishes split files (follow-up 1).
+- Discovery treats a v2 backup without its primary as v2 (follow-up 2). The
+  Android write itself (delete, then create) is unchanged: it cannot be tested
+  here.
+- `EMPTY_FOLDER_SYNC_FORMAT` is `'v3'`. A v16 force overwrite writes v3 (F9).
+- Evidence: two new WebDAV E2Es and two new adapter tests fail with only the
+  constant flipped and pass with the fixes. The rollout spec (12 tests) and
+  the late-snapshot spec pass against a local Apache `mod_dav` server built
+  from `e2e/webdav-server/httpd.conf`; 1,352 file-sync and sync-wrapper unit
+  tests pass. The full WebDAV suite was dispatched in CI for both harness
+  formats; its result is not recorded here yet.
+
+**Recommendation 1 (the two production queries)** needs access to the hosted
+database and is not done.
+
 ## Review
 
 A fresh-context subagent challenged the draft's claims against the code on
