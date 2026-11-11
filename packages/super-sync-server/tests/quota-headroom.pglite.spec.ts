@@ -65,6 +65,10 @@ const SCHEMA = `
   CREATE UNIQUE INDEX operations_user_seq ON operations (user_id, server_seq);
   CREATE INDEX operations_user_id_received_at_server_seq_idx
     ON operations (user_id, received_at, server_seq);
+  CREATE TABLE user_sync_state (
+    user_id integer PRIMARY KEY,
+    last_seq integer NOT NULL DEFAULT 0
+  );
 `;
 
 const MB = 1024 * 1024;
@@ -157,6 +161,33 @@ describe('quota headroom projection', () => {
   });
 });
 
+describe('quota growth estimate', () => {
+  it('multiplies the window operation count by the window average size', async () => {
+    const { estimateWindowBytes } = await import('../scripts/quota-headroom');
+    const row = { user_id: 1, last_seq: 50, avg_bytes: 999 };
+    expect(estimateWindowBytes({ ...row, first_seq: 41, avg_window_bytes: 100 })).toBe(
+      1000,
+    );
+    // No in-window size known: fall back to the tail average.
+    expect(estimateWindowBytes({ ...row, first_seq: 50, avg_window_bytes: null })).toBe(
+      999,
+    );
+    // Nothing in the window.
+    expect(estimateWindowBytes({ ...row, first_seq: null, avg_window_bytes: null })).toBe(
+      0,
+    );
+    // bigint columns from Postgres.
+    expect(
+      estimateWindowBytes({
+        ...row,
+        last_seq: BigInt(10),
+        first_seq: BigInt(9),
+        avg_window_bytes: 5,
+      }),
+    ).toBe(10);
+  });
+});
+
 describe('monitor quota SQL (PGlite)', () => {
   let db: PGlite;
   let previousScopeUsers: string | undefined;
@@ -166,7 +197,6 @@ describe('monitor quota SQL (PGlite)', () => {
   beforeAll(async () => {
     db = new PGlite();
     await db.exec(SCHEMA + SYNC_DEVICES_DDL);
-    let seq = 0;
     for (const f of FIXTURES) {
       await db.query(
         `INSERT INTO users (id, email, storage_quota_bytes, storage_used_bytes)
@@ -186,13 +216,20 @@ describe('monitor quota SQL (PGlite)', () => {
           );
         }
       }
-      for (const [ago, mb] of f.ops ?? []) {
-        seq++;
+      // server_seq is per account and grows with received_at, as in production.
+      const ops = [...(f.ops ?? [])].sort(([a], [b]) => b - a);
+      for (const [index, [ago, mb]] of ops.entries()) {
         await db.query(
           `INSERT INTO operations
              (id, user_id, server_seq, payload, payload_bytes, vector_clock, received_at)
            VALUES ($1, $2, $3, '{}', $4, '{}', $5)`,
-          [`op-${seq}`, f.id, seq, mb * MB, NOW - ago * ONE_DAY],
+          [`op-${f.id}-${index + 1}`, f.id, index + 1, mb * MB, NOW - ago * ONE_DAY],
+        );
+      }
+      if (ops.length > 0) {
+        await db.query(
+          `INSERT INTO user_sync_state (user_id, last_seq) VALUES ($1, $2)`,
+          [f.id, ops.length],
         );
       }
     }
@@ -292,14 +329,22 @@ describe('monitor quota SQL (PGlite)', () => {
     expect(consoleLog.mock.calls.flat().join('\n')).not.toContain('@');
   });
 
-  it('reads operations through one per-account window scan, never the whole table', async () => {
+  it('reads operations through bounded per-account lookups, never a window sum', async () => {
     const { showQuotaHeadroom } = await import('../scripts/quota-headroom');
     await showQuotaHeadroom([], NOW);
     const opsQueries = renderedQueries().filter((q) => /\boperations\b/.test(q));
     expect(opsQueries).toHaveLength(1);
-    expect(opsQueries[0]).toContain('unnest(');
-    expect(opsQueries[0]).toContain('CROSS JOIN LATERAL');
-    expect(opsQueries[0]).toMatch(/operations\.user_id = scope_users\.user_id/);
+    const [query] = opsQueries;
+    expect(query).toContain('unnest(');
+    // Both per-account lookups are LIMITed index reads...
+    expect(query.match(/LATERAL/g)).toHaveLength(2);
+    expect(query.match(/LIMIT (\?|1)(?!\d)/g)).toHaveLength(2);
+    expect(query).toMatch(
+      /ORDER BY operations\.received_at, operations\.server_seq\s+LIMIT/,
+    );
+    expect(query).toMatch(/ORDER BY operations\.server_seq DESC\s+LIMIT/);
+    // ...and nothing sums the window, which timed out on the hosted instance.
+    expect(query).not.toMatch(/SUM\(/);
   });
 
   it('runs through the monitor CLI', async () => {
