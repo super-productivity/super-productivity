@@ -82,8 +82,8 @@ test.describe('@webdav two devices seeding one empty v3 folder', () => {
   // Device S (one task) seeds an empty v3 folder while the first write of a
   // fresh device J (one pending task) is held. Both then sync again and a
   // third, empty device C joins. A conflict dialog is the app asking, not a
-  // silent loss: no device may drop its own task without being asked, and a
-  // new device must still get S's data.
+  // silent loss, and every dialog is cancelled: no device may drop its own
+  // task or end a sync in an error, and a new device must still get S's data.
   for (const seedBy of ['first upload', 'folder move'] as const) {
     test(`a seed by ${seedBy} racing a fresh device loses no task silently`, async ({
       browser,
@@ -103,6 +103,7 @@ test.describe('@webdav two devices seeding one empty v3 folder', () => {
       const j = await setupSyncClient(browser, baseURL);
       let c: Awaited<ReturnType<typeof setupSyncClient>> | undefined;
       let jSetupError: string | undefined;
+      const syncErrors: string[] = [];
       const asked = { s: 0, j: 0, c: 0 };
       const settle = async (
         key: keyof typeof asked,
@@ -119,8 +120,11 @@ test.describe('@webdav two devices seeding one empty v3 folder', () => {
         sync: SyncPage,
       ): Promise<void> => {
         await sync.triggerSync();
+        // Recorded, not thrown: the summary below must still be printed.
         await waitForSyncComplete(page, sync, 30000, { expectConflict: true }).catch(
-          () => undefined,
+          (e: unknown) => {
+            syncErrors.push(`${key}: ${String(e).slice(0, 300)}`);
+          },
         );
         await settle(key, page, sync);
       };
@@ -206,6 +210,7 @@ test.describe('@webdav two devices seeding one empty v3 folder', () => {
           seedBy,
           asked,
           jSetupError,
+          syncErrors,
           serverAfterJoin: {
             s: afterJoin.includes(sTitle),
             j: afterJoin.includes(jTitle),
@@ -217,8 +222,11 @@ test.describe('@webdav two devices seeding one empty v3 folder', () => {
         };
         console.log(`V3_RACE_SUMMARY ${JSON.stringify(summary)}`);
 
-        if (asked.s === 0) expect.soft(summary.s.s, 'S kept its task').toBe(true);
-        if (asked.j === 0) expect.soft(summary.j.j, 'J kept its task').toBe(true);
+        // Every dialog is answered with Cancel, which keeps both sides, so a
+        // device holds its own task whether or not it was asked.
+        expect.soft(summary.s.s, 'S kept its task').toBe(true);
+        expect.soft(summary.j.j, 'J kept its task').toBe(true);
+        expect.soft(syncErrors, 'no later sync ended in an error').toEqual([]);
         expect.soft(summary.serverFinal.s, "the server keeps S's task").toBe(true);
         expect.soft(summary.c.s, "a new device gets S's task").toBe(true);
       } finally {

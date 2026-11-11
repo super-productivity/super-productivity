@@ -71,11 +71,13 @@ jobs:
     needs: [server-tests, sync-e2e]
     # `!cancelled()` replaces the implicit success() so that a dispatch builds although
     # the suites were skipped. A push must therefore check both results itself: a
-    # failed, cancelled or skipped suite publishes nothing.
+    # failed, cancelled or skipped suite publishes nothing. The ungated dispatch is
+    # limited to master, like the release dispatch below: from another branch it
+    # would publish that branch's code as `latest`.
     if: >-
       !cancelled() && (
         (github.event_name == 'push' && needs.server-tests.result == 'success' && needs.sync-e2e.result == 'success') ||
-        (github.event_name == 'workflow_dispatch' && inputs.release_tag == '')
+        (github.event_name == 'workflow_dispatch' && inputs.release_tag == '' && github.ref == 'refs/heads/master')
       )
     runs-on: ubuntu-latest
     permissions:

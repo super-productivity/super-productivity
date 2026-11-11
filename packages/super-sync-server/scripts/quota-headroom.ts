@@ -17,14 +17,24 @@
  *   the window (an upload bumps `last_seen_at`, so an account without one has
  *   uploaded nothing), capped at `MONITOR_SCOPE_USERS` and taking the highest
  *   quota use first. Per account it costs one index descent (the first
- *   operation in the window) plus the newest OPS_PER_USER operations for the
- *   average size, so the work is `users x tail`, as for the other reports. The
- *   uploaded bytes are therefore an estimate: window operations times their
- *   average size.
+ *   operation in the window), the newest OPS_PER_USER operations for the
+ *   average size and at most OPS_PER_USER full-state operations through their
+ *   partial index, so the work is `users x tail`, as for the other reports.
+ *   The uploaded bytes are therefore an estimate: the newest OPS_PER_USER
+ *   full-state operations in the window are summed exactly (one is up to five
+ *   orders of magnitude larger than a delta, so averaging it in or out put the
+ *   result off by 10x and more), and the remaining operations count times
+ *   their average size. An account with more full-state operations than that
+ *   in the window is underestimated.
+ * - The full-state lookup is only bounded with the partial index
+ *   `operations_user_id_full_state_server_seq_idx` (migration 20260512000000).
+ *   Without it (a `prisma db push` database, or an INVALID index after an
+ *   interrupted build) it reads every operation in the window.
  *
  * The projection uses gross uploaded bytes and assumes nothing is pruned, which
- * is the routine case above; cleanup or a full-state boundary can only make the
- * real time to quota longer.
+ * is the routine case above; cleanup or a full-state boundary makes the real
+ * time to quota longer. A one-off import counts as if it recurred every window,
+ * and the delta estimate can be off in either direction.
  */
 
 import { prisma } from './monitoring-db';
@@ -143,20 +153,29 @@ export interface GrowthRow {
   user_id: number;
   last_seq: number | bigint;
   first_seq: number | bigint | null;
-  avg_window_bytes: number | null;
-  avg_bytes: number | null;
+  /** The newest OPS_PER_USER full-state operations in the window: count, bytes. */
+  full_state_count: number | bigint | null;
+  full_state_bytes: number | null;
+  /** Average size of the newest delta operations, inside the window / overall. */
+  avg_window_delta_bytes: number | null;
+  avg_delta_bytes: number | null;
 }
 
 /**
- * Estimated bytes uploaded in the window: the window's operation count (from
- * sequence numbers) times their average size (from the newest operations,
- * those inside the window when there are any).
+ * Estimated bytes uploaded in the window: its full-state operations exactly,
+ * plus the remaining operation count (from sequence numbers) times the average
+ * delta size (from the newest operations, those inside the window when there
+ * are any).
  */
 export const estimateWindowBytes = (row: GrowthRow): number => {
   if (row.first_seq === null) return 0;
   const count = Number(row.last_seq) - Number(row.first_seq) + 1;
-  const avg = row.avg_window_bytes ?? row.avg_bytes ?? 0;
-  return count > 0 ? Math.round(count * avg) : 0;
+  if (count <= 0) return 0;
+  const fullStateCount = Math.min(Number(row.full_state_count ?? 0), count);
+  const deltaAvg = row.avg_window_delta_bytes ?? row.avg_delta_bytes ?? 0;
+  return Math.round(
+    Number(row.full_state_bytes ?? 0) + (count - fullStateCount) * deltaAvg,
+  );
 };
 
 /**
@@ -212,17 +231,23 @@ export const queryGrowingAccounts = async (
   // on (user_id, received_at, server_seq) finds the first operation in the
   // window, `last_seq` gives the newest, and their difference counts the
   // window's operations (the server prunes only behind a full-state boundary,
-  // so a window is contiguous). The size comes from the newest
+  // so a window is contiguous). The delta size comes from the newest
   // OPS_PER_USER operations, preferring those inside the window. Summing every
   // operation in the window instead hit statement_timeout on the hosted
-  // instance with 1,000 accounts (2026-11-11).
+  // instance with 1,000 accounts (2026-11-11). Full-state operations are the
+  // exception: there are few, each can outweigh every delta in the window, and
+  // the partial index on them makes a LIMITed sum of the newest ones cheap.
+  // Their op_type values stay literals so that the query implies that index's
+  // predicate under any plan (see latestCausalFullStateSql).
   const growth = await prisma.$queryRaw<GrowthRow[]>`
     SELECT
       scope_users.user_id,
       COALESCE(state.last_seq, 0) AS last_seq,
       first_in_window.server_seq AS first_seq,
-      tail.avg_window_bytes,
-      tail.avg_bytes
+      full_state.full_state_count,
+      full_state.full_state_bytes,
+      tail.avg_window_delta_bytes,
+      tail.avg_delta_bytes
     FROM unnest(${userIds}::int[]) AS scope_users(user_id)
     LEFT JOIN user_sync_state state ON state.user_id = scope_users.user_id
     LEFT JOIN LATERAL (
@@ -235,11 +260,31 @@ export const queryGrowingAccounts = async (
     ) AS first_in_window ON true
     LEFT JOIN LATERAL (
       SELECT
-        AVG(newest.bytes) FILTER (WHERE newest.received_at > ${since})::float8
-          AS avg_window_bytes,
-        AVG(newest.bytes)::float8 AS avg_bytes
+        COUNT(*) AS full_state_count,
+        COALESCE(SUM(newest_full_state.bytes), 0)::float8 AS full_state_bytes
       FROM (
-        SELECT ${OPERATION_BYTES} AS bytes, operations.received_at
+        SELECT ${OPERATION_BYTES} AS bytes
+        FROM operations
+        WHERE operations.user_id = scope_users.user_id
+          AND operations.server_seq >= first_in_window.server_seq
+          AND operations.op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR')
+        ORDER BY operations.server_seq DESC
+        LIMIT ${OPS_PER_USER}
+      ) AS newest_full_state
+    ) AS full_state ON true
+    LEFT JOIN LATERAL (
+      SELECT
+        AVG(newest.bytes) FILTER (
+          WHERE newest.received_at > ${since} AND NOT newest.is_full_state
+        )::float8 AS avg_window_delta_bytes,
+        AVG(newest.bytes) FILTER (WHERE NOT newest.is_full_state)::float8
+          AS avg_delta_bytes
+      FROM (
+        SELECT
+          ${OPERATION_BYTES} AS bytes,
+          operations.received_at,
+          operations.op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR')
+            AS is_full_state
         FROM operations
         WHERE operations.user_id = scope_users.user_id
         ORDER BY operations.server_seq DESC
@@ -307,7 +352,8 @@ export const showQuotaHeadroom = async (
 
   console.log(
     `\nProjected time to quota at each account's ${windowDays}-day upload rate, for ${population}.` +
-      ' Assumes no pruning, so real times can only be longer:',
+      ' Uploaded bytes are an estimate (full-state operations exact, the rest count x average size);' +
+      ' pruning makes real times longer:',
   );
   console.table([
     ...QUOTA_PROJECTION_HORIZONS_DAYS.map((horizon) => ({
@@ -325,7 +371,7 @@ export const showQuotaHeadroom = async (
         Used: formatMb(r.usedBytes),
         Quota: formatMb(r.quotaBytes),
         'Used %': `${r.usedPercent.toFixed(1)}%`,
-        [`Uploaded ${windowDays}d`]: formatMb(r.uploadedBytes),
+        [`Uploaded ${windowDays}d (est.)`]: formatMb(r.uploadedBytes),
         'To quota': formatDays(r.daysToQuota),
       })),
     );
