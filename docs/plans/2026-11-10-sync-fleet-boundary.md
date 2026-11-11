@@ -614,10 +614,17 @@ follow-ups:
   `claude/repair-fast-forward-keeps-prefix`: the download no longer skips to
   a causal `REPAIR` for a device that synced before while the ops between its
   cursor and the `REPAIR` are retained. Imports and new devices keep the
-  skip. Server tests (1,528) and the client sync-fuzz specs (147) pass; the
-  E2E run that should turn the reproduction green was dispatched and is not
-  recorded here yet. This does not cover the pruned case, which still needs
-  the client rule described under "Devices unseen for 45 days".
+  skip. It is draft pull request
+  [#11688](https://github.com/super-productivity/super-productivity/pull/11688),
+  with its fresh-context review in the body. The scheduled E2E workflow on
+  its first commit
+  ([run 42976989704](https://github.com/super-productivity/super-productivity/actions/runs/42976989704),
+  full SuperSync suite plus released clients) finished with no failed job,
+  so the reproduction is green there. After review the skip is also kept
+  when an import lies between the cursor and the `REPAIR`; the run on that
+  second commit is not recorded here yet. Not covered: the pruned case,
+  which still needs the client rule described under "Devices unseen for 45
+  days", and two causal `REPAIR`s ahead of a device with unsynced edits.
 
 **Recommendation 1 (the two production queries)** needs access to the hosted
 database and is not done.
