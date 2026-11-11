@@ -18,6 +18,7 @@ describe('FocusModeLocalSettingsService', () => {
 
     expect(service.settings()).toEqual({
       isLoopBreakEndAlarm: false,
+      isNotifyOnSessionEnd: false,
     });
   });
 
@@ -28,6 +29,7 @@ describe('FocusModeLocalSettingsService', () => {
 
     expect(service.settings()).toEqual({
       isLoopBreakEndAlarm: true,
+      isNotifyOnSessionEnd: false,
     });
   });
 
@@ -38,9 +40,11 @@ describe('FocusModeLocalSettingsService', () => {
 
     expect(service.settings()).toEqual({
       isLoopBreakEndAlarm: true,
+      isNotifyOnSessionEnd: false,
     });
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')).toEqual({
       isLoopBreakEndAlarm: true,
+      isNotifyOnSessionEnd: false,
     });
   });
 
@@ -51,6 +55,7 @@ describe('FocusModeLocalSettingsService', () => {
 
     expect(service.settings()).toEqual({
       isLoopBreakEndAlarm: false,
+      isNotifyOnSessionEnd: false,
     });
   });
 });

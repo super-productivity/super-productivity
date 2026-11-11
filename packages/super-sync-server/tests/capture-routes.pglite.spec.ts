@@ -147,6 +147,17 @@ describe('capture routes (PGlite)', () => {
     expect(list.json().result.tools.map((t: { name: string }) => t.name)).toEqual([
       'create_task',
     ]);
+    // The connector directories require a title and every hint, explicitly.
+    expect(list.json().result.tools[0]).toMatchObject({
+      title: 'Add task to Inbox',
+      annotations: {
+        title: 'Add task to Inbox',
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    });
     const call = await mcp(token, toolCall(3, 'Buy milk', 'two litres'));
     expect(toolText(call)).toEqual({ text: CAPTURE_SAVED_TEXT, isError: undefined });
 

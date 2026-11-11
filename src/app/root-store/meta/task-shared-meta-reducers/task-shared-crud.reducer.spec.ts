@@ -44,6 +44,130 @@ describe('taskSharedCrudMetaReducer', () => {
     baseState = createBaseState();
   });
 
+  describe('addTask action for a repeat instance (#10812)', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const todayStr = getDbDateStr();
+    const yesterday = new Date(Date.now() - DAY_MS);
+    const yesterdayStr = getDbDateStr(yesterday);
+
+    const createAddInstanceAction = (taskOverrides: Partial<Task> = {}) =>
+      TaskSharedActions.addTask({
+        task: createMockTask({
+          id: 'rpt_today',
+          repeatCfgId: 'cfg1',
+          dueDay: todayStr,
+          created: Date.now(),
+          ...taskOverrides,
+        }),
+        workContextId: 'project1',
+        workContextType: WorkContextType.PROJECT,
+        isAddToBottom: false,
+        isAddToBacklog: false,
+      });
+
+    it('takes the place of the previous instance in the project and tag lists', () => {
+      const state = createStateWithExistingTasks(
+        ['a', 'rpt_yesterday', 'b'],
+        [],
+        ['c', 'rpt_yesterday'],
+      );
+      state[TASK_FEATURE_NAME].entities.rpt_yesterday = {
+        ...(state[TASK_FEATURE_NAME].entities.rpt_yesterday as Task),
+        repeatCfgId: 'cfg1',
+        dueDay: yesterdayStr,
+        created: yesterday.getTime(),
+        isDone: true,
+      };
+      const action = createAddInstanceAction();
+
+      metaReducer(state, action);
+
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', {
+            taskIds: ['a', 'rpt_today', 'rpt_yesterday', 'b'],
+          }),
+          ...expectTagUpdate('tag1', { taskIds: ['c', 'rpt_today', 'rpt_yesterday'] }),
+        },
+        action,
+        mockReducer,
+        state,
+      );
+    });
+
+    it('follows the most recently created instance when several are left', () => {
+      const state = createStateWithExistingTasks(['rpt_old', 'a', 'rpt_yesterday', 'b']);
+      for (const [id, created] of [
+        ['rpt_old', yesterday.getTime() - DAY_MS],
+        ['rpt_yesterday', yesterday.getTime()],
+      ] as const) {
+        state[TASK_FEATURE_NAME].entities[id] = {
+          ...(state[TASK_FEATURE_NAME].entities[id] as Task),
+          repeatCfgId: 'cfg1',
+          created,
+        };
+      }
+      const action = createAddInstanceAction();
+
+      metaReducer(state, action);
+
+      expectStateUpdate(
+        expectProjectUpdate('project1', {
+          taskIds: ['rpt_old', 'a', 'rpt_today', 'rpt_yesterday', 'b'],
+        }),
+        action,
+        mockReducer,
+        state,
+      );
+    });
+
+    it('goes to the top as before when the previous instance is already archived', () => {
+      // The archived instance is no longer in task state or any list
+      const state = createStateWithExistingTasks(['a', 'b'], [], ['c'], ['d', 'e']);
+      const action = createAddInstanceAction();
+
+      metaReducer(state, action);
+
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: ['rpt_today', 'a', 'b'] }),
+          ...expectTagUpdates({
+            tag1: { taskIds: ['rpt_today', 'c'] },
+            TODAY: { taskIds: ['rpt_today', 'd', 'e'] },
+          }),
+        },
+        action,
+        mockReducer,
+        state,
+      );
+    });
+
+    it('goes to the top when the previous instance sits in the backlog, not the task list', () => {
+      const state = createStateWithExistingTasks(['a', 'rpt_yesterday'], ['b']);
+      state[TASK_FEATURE_NAME].entities.b = {
+        ...(state[TASK_FEATURE_NAME].entities.b as Task),
+        repeatCfgId: 'cfg1',
+        created: yesterday.getTime(),
+      };
+      state[TASK_FEATURE_NAME].entities.rpt_yesterday = {
+        ...(state[TASK_FEATURE_NAME].entities.rpt_yesterday as Task),
+        repeatCfgId: 'cfg1',
+        created: yesterday.getTime() - DAY_MS,
+      };
+      const action = createAddInstanceAction();
+
+      metaReducer(state, action);
+
+      // anchor 'b' is only in backlogTaskIds, so the main list falls back to the top
+      expectStateUpdate(
+        expectProjectUpdate('project1', { taskIds: ['rpt_today', 'a', 'rpt_yesterday'] }),
+        action,
+        mockReducer,
+        state,
+      );
+    });
+  });
+
   describe('addTask action', () => {
     const createAddTaskAction = (
       taskOverrides: Partial<Task> = {},

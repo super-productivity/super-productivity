@@ -87,7 +87,7 @@
                             <div>{{ week.timeSpent | msToString }}</div>
                           </div>
                           <button
-                            (click)="exportData(year.key, month.key, week.weekNr)"
+                            (click)="exportWeek(week)"
                             [matTooltip]="
                               T.F.WORKLOG.CMP.WEEK_RANGE_TOOLTIP
                                 | translate
@@ -133,8 +133,7 @@
                               </tr>
                             </thead>
                             @for (
-                              worklogForDay of week.ent
-                                | keyvalue: sortWorklogItemsReverse;
+                              worklogForDay of week.ent | keyvalue: sortWeekDays;
                               track worklogForDay.key
                             ) {
                               <ng-container class="day">
@@ -142,6 +141,9 @@
                                   (click)="toggleDay(worklogForDay.value.dateStr)"
                                   [class.isExpanded]="
                                     isDayExpanded(worklogForDay.value.dateStr)
+                                  "
+                                  [class.isOtherMonth]="
+                                    isOtherMonth(worklogForDay.value.dateStr, month.key)
                                   "
                                   class="week-row"
                                 >
@@ -154,7 +156,10 @@
                                         toggleDay(worklogForDay.value.dateStr)
                                       "
                                       [attr.aria-controls]="
-                                        'history-day-' + worklogForDay.value.dateStr
+                                        'history-day-' +
+                                        month.key +
+                                        '-' +
+                                        worklogForDay.value.dateStr
                                       "
                                       [attr.aria-expanded]="
                                         isDayExpanded(worklogForDay.value.dateStr)
@@ -162,6 +167,17 @@
                                     >
                                       {{ worklogForDay.value.dayStr }}
                                       {{ worklogForDay.key }}.
+                                      @if (
+                                        isOtherMonth(
+                                          worklogForDay.value.dateStr,
+                                          month.key
+                                        )
+                                      ) {
+                                        {{
+                                          worklogForDay.value.dateStr.slice(5, 7)
+                                            | numberToMonth
+                                        }}
+                                      }
                                     </button>
                                   </td>
                                   <td class="work-range">
@@ -193,7 +209,10 @@
                                     @if (isDayExpanded(worklogForDay.value.dateStr)) {
                                       <div
                                         [id]="
-                                          'history-day-' + worklogForDay.value.dateStr
+                                          'history-day-' +
+                                          month.key +
+                                          '-' +
+                                          worklogForDay.value.dateStr
                                         "
                                         [@expandFade]
                                         class="summary-table-wrapper material-table"

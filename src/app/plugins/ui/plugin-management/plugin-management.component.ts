@@ -28,6 +28,8 @@ import { MatChip, MatChipSet } from '@angular/material/chips';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatError } from '@angular/material/form-field';
 import { MatDialog } from '@angular/material/dialog';
+import { openBuildPluginDialog } from '../dialog-build-plugin/open-build-plugin-dialog';
+import { confirmPluginInstall } from '../confirm-plugin-install';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { PluginIconComponent } from '../plugin-icon/plugin-icon.component';
@@ -49,7 +51,11 @@ import { selectAll as selectAllIssueProviders } from '../../../features/issue/st
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import COMMUNITY_PLUGINS_DATA from '../../../../assets/community-plugins.json';
 import { PluginApiAccess, PluginSecurityService } from '../../plugin-security';
-import { DEV_ONLY_BUNDLED_PLUGIN_IDS } from '../../bundled-plugins.const';
+import {
+  BUNDLED_PLUGIN_IDS,
+  DEV_ONLY_BUNDLED_PLUGIN_IDS,
+} from '../../bundled-plugins.const';
+import { renderDataSharingHtml } from '../../util/plugin-data-sharing.util';
 import { environment } from '../../../../environments/environment';
 import { Capacitor } from '@capacitor/core';
 import {
@@ -68,10 +74,6 @@ const COMMUNITY_DOWNLOAD_ERROR_KEYS: Record<CommunityPluginDownloadFailure, stri
   hashMismatch: T.PLUGINS.COMMUNITY_HASH_MISMATCH,
   manifestMismatch: T.PLUGINS.COMMUNITY_MANIFEST_MISMATCH,
 };
-
-interface PluginManifestAuthor {
-  author?: unknown;
-}
 
 /**
  * The app's Chinese codes stand for scripts, not regions: `zh` is Simplified
@@ -369,7 +371,8 @@ export class PluginManagementComponent {
   }
 
   getPluginAuthor(plugin: PluginInstance): string | null {
-    const author = (plugin.manifest as PluginManifestAuthor).author;
+    // Manifests are third-party JSON: the declared type is not a guarantee.
+    const author: unknown = plugin.manifest.author;
     return typeof author === 'string' && author.trim().length > 0 ? author.trim() : null;
   }
 
@@ -403,7 +406,7 @@ export class PluginManagementComponent {
     }
 
     this.uploadError.set(null);
-    if (!(await this._confirmInstall())) {
+    if (!(await this._confirmInstall(file))) {
       input.value = '';
       return;
     }
@@ -446,14 +449,14 @@ export class PluginManagementComponent {
     if (!id || !release || this.isUploading()) {
       return;
     }
-    // Re-checked: another install may have started while the dialog was open.
-    if (!(await this._confirmInstall()) || this.isUploading()) {
-      return;
-    }
-
     this.isUploading.set(true);
     try {
+      // Downloaded before confirming, so the confirmation can show what the plugin
+      // declares it sends. Nothing runs until the user confirms.
       const file = await downloadVerifiedCommunityPlugin(id, release);
+      if (!(await this._confirmInstall(file))) {
+        return;
+      }
       const installed = await this._pluginService.loadPluginFromZip(file);
       if (!installed.error) {
         this._snackService.open({
@@ -562,30 +565,12 @@ export class PluginManagementComponent {
     }
   }
 
-  /** Resolves true only for the OK button; Cancel, Esc and backdrop resolve false. */
-  // Uploaded code is unreviewed, so the full risk list is shown here, right before it
-  // is installed, instead of above every plugin on the page.
-  private async _confirmInstall(): Promise<boolean> {
-    const t = (key: string): string => escapeHtml(this._translateService.instant(key));
-    const risks = [
-      T.PLUGINS.RISK_DATA_ACCESS,
-      T.PLUGINS.RISK_MALICIOUS_CODE,
-      T.PLUGINS.RISK_SYSTEM_ACCESS,
-      T.PLUGINS.RISK_PERFORMANCE,
-    ];
-    const message =
-      `<p>${t(T.PLUGINS.SECURITY_WARNING)}</p>` +
-      `<ul>${risks.map((risk) => `<li>${t(risk)}</li>`).join('')}</ul>` +
-      `<p>${t(T.PLUGINS.RECOMMENDATION)}</p>`;
-    const result = await firstValueFrom(
-      this._dialog
-        .open(DialogConfirmComponent, {
-          restoreFocus: true,
-          data: { message, okTxt: T.PLUGINS.INSTALL_PLUGIN },
-        })
-        .afterClosed(),
-    );
-    return result === true;
+  private _confirmInstall(file: Blob): Promise<boolean> {
+    return confirmPluginInstall(file, {
+      matDialog: this._dialog,
+      translateService: this._translateService,
+      pluginStates: this._pluginService.pluginStates(),
+    });
   }
 
   private async _confirmInDialog(
@@ -651,6 +636,15 @@ export class PluginManagementComponent {
     return this._pluginSecurity.getDeclaredApiAccess(plugin.manifest);
   }
 
+  /** What the plugin declares it sends off the device, for its card Details. */
+  getDataSharingHtml(plugin: PluginInstance): string {
+    return renderDataSharingHtml(
+      plugin.manifest,
+      { isBundled: BUNDLED_PLUGIN_IDS.has(plugin.manifest.id) },
+      (key, params) => this._translateService.instant(key, params),
+    );
+  }
+
   /** Declared permissions not described by getApiAccess (nothing checks them). */
   getOtherPermissions(plugin: PluginInstance): string[] {
     const described = new Set(this.getApiAccess(plugin).map((a) => a.permission));
@@ -703,6 +697,10 @@ export class PluginManagementComponent {
 
   openPluginConfig(plugin: PluginInstance): void {
     this._pluginBridge.invokeConfigHandler(plugin.manifest.id);
+  }
+
+  openBuildPluginDialog(): Promise<void> {
+    return openBuildPluginDialog(this._dialog);
   }
 
   async openConfigDialog(plugin: PluginInstance): Promise<void> {

@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "المسار الكامل أو اسم المستخدم / المشروع",
+    "PROJECT_HINT": "على سبيل المثال، johannesjo/الإنتاجية الفائقة",
+    "TOKEN": "رمز الوصول",
+    "HOW_TO_GET_TOKEN": "كيف تحصل على الرمز المميز؟",
+    "SCOPE": "نطاق",
+    "SCOPE_ALL": "الكل",
+    "SCOPE_CREATED": "التي أنشأتها بنفسي",
+    "SCOPE_ASSIGNED": "تعيين لي",
+    "GITLAB_BASE_URL": "عنوان URL الأساسي المخصص لـ GitLab",
+    "FILTER_USER": "اسم المستخدم (مثل تصفية التغييرات بنفسك)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "فلتر مخصص",
+    "FILTER_DESCRIPTION": "راجع https://docs.gitlab.com/ee/api/issues.html#list-issues. يمكن دمج العديد من خلال &",
+    "SUBMIT_TIMELOGS": "إرسال السجلات الزمنية إلى جيت لاب",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "إظهار مربع حوار تتبع الوقت بعد النقر على إنهاء اليوم"
+  },
+  "DISPLAY": {
+    "SUMMARY": "ملخص",
+    "STATE": "الحالة",
+    "ASSIGNEE": "المحال",
+    "LABELS": "ملصقات",
+    "DESCRIPTION": "وصف"
+  },
+  "FORM_HELP": "<p> هنا يمكنك تهيئة SuperProductivity لإدراج مشكلات GitLab المفتوحة (إما الإصدار عبر الإنترنت أو مثيل مستضاف ذاتيًا) لمشروع معين في لوحة إنشاء المهام في عرض التخطيط اليومي. سيتم إدراجها كاقتراحات وستوفر رابطًا للمشكلة بالإضافة إلى مزيد من المعلومات حولها. </p> <p> بالإضافة إلى ذلك ، يمكنك إضافة ومزامنة جميع المشكلات المفتوحة تلقائيًا إلى تراكم المهام. </p>"
+}

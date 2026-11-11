@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "Caminho completo ou nome de usuário / projeto",
+    "PROJECT_HINT": "e.g. johannesjo/super-produtividade",
+    "TOKEN": "Token de acesso",
+    "HOW_TO_GET_TOKEN": "Como obter um token?",
+    "SCOPE": "escopo",
+    "SCOPE_ALL": "Todos",
+    "SCOPE_CREATED": "Criado por mim",
+    "SCOPE_ASSIGNED": "Atribuído a mim",
+    "GITLAB_BASE_URL": "URL base GitLab personalizado",
+    "FILTER_USER": "Nome de usuário (ex.: para filtrar as alterações sozinho)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Filtro customizado",
+    "FILTER_DESCRIPTION": "Consulte https://docs.gitlab.com/ee/api/issues.html#list-issues. Vários podem ser combinados por &",
+    "SUBMIT_TIMELOGS": "Enviar registros de tempo para o Gitlab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Mostrar a caixa de diálogo de controle de tempo após clicar no dia de término"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Indíce",
+    "STATE": "Status",
+    "ASSIGNEE": "Responsável",
+    "LABELS": "Etiquetas",
+    "DESCRIPTION": "Descrição"
+  },
+  "FORM_HELP": "<p> Aqui você pode configurar o SuperProductivity para listar problemas abertos do GitLab (seja a versão on-line ou uma instância auto-hospedada) para um projeto específico no painel de criação de tarefas na exibição de planejamento diário. Eles serão listados como sugestões e fornecerão um link para o problema, além de mais informações sobre o assunto. </p> <p> Além disso, você pode adicionar e sincronizar automaticamente todos os problemas em aberto no backlog de tarefas. </p>"
+}

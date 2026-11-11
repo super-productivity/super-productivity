@@ -90,7 +90,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
   animations: [
     trigger('modeSwitchFade', [
       transition('* => *', [
-        style({ opacity: 0, transform: 'scale(0.8)' }),
+        style({ opacity: 0, transform: 'scale(0.95)' }),
         animate(ANI_STANDARD_TIMING, style({ opacity: 1, transform: 'scale(1)' })),
       ]),
     ]),
@@ -601,9 +601,9 @@ export class FocusModeMainComponent {
     this._store.dispatch(resetCycles());
   }
 
-  exitToPlanning(): void {
-    // Cancelling the session clears tracking and hides the overlay, returning
-    // the user to wherever they were before focus mode (no forced navigation).
+  cancelSession(): void {
+    // Ends the session without logging it: unlike completing, it advances no
+    // Pomodoro cycle and starts no break. Clears tracking and hides the overlay.
     this._store.dispatch(cancelFocusSession());
   }
 

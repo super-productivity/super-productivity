@@ -5,7 +5,7 @@
 .key-i {
   // Plain text like native menus: an outlined badge per row is noisy. Keeps
   // the item's text color: muted grey drops below 4.5:1 on hover (#4988).
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   max-width: 80px;
   @include truncateText();
   display: none;

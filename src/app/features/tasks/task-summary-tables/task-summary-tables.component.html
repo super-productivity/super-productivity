@@ -2,12 +2,20 @@
   @if (project.id !== (workContextService.activeWorkContextId$ | async)) {
     <collapsible
       class="project-section task-section"
-      [style.border-left-color]="project.color"
       [title]="project.title"
       [isIconBefore]="true"
       [isExpanded]="!collapsedProjectIds().includes(project.id)"
       (isExpandedChange)="toggleProjectExpanded(project.id)"
     >
+      @if (project.icon) {
+        <mat-icon
+          before-title
+          class="project-icon"
+          [class.project-icon--emoji]="project.isEmojiIcon"
+          [style.color]="project.isEmojiIcon ? null : project.color"
+          >{{ project.icon }}</mat-icon
+        >
+      }
       <div
         actions
         class="project-time"

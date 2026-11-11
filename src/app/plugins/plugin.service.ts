@@ -16,6 +16,7 @@ import { PluginUserPersistenceService } from './plugin-user-persistence.service'
 import { PluginCacheService } from './plugin-cache.service';
 import {
   MAX_PLUGIN_CODE_SIZE,
+  MAX_PLUGIN_INDEX_HTML_SIZE,
   MAX_PLUGIN_MANIFEST_SIZE,
   MAX_PLUGIN_TRANSLATIONS_TOTAL_SIZE,
   MAX_PLUGIN_ZIP_SIZE,
@@ -1092,11 +1093,10 @@ export class PluginService implements OnDestroy {
         manifest.iFrame === true && extractedFiles['index.html'] !== undefined;
       if (hasIndexHtml) {
         const indexHtmlBytes = extractedFiles['index.html'];
-        // Reuse the manifest size limit for index.html.
-        if (indexHtmlBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
+        if (indexHtmlBytes.length > MAX_PLUGIN_INDEX_HTML_SIZE) {
           throw new Error(
             this._translateService.instant(T.PLUGINS.INDEX_HTML_TOO_LARGE, {
-              maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
+              maxSize: (MAX_PLUGIN_INDEX_HTML_SIZE / 1024).toFixed(1),
             }),
           );
         }

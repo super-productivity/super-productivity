@@ -44,6 +44,11 @@ export const parseCsv = (text: string): string[][] => {
       field += ch;
     }
   }
+  // A truncated quoted field consumes every following row. Reject the whole
+  // file instead of offering a partial import with those rows in one title.
+  if (inQuotes) {
+    return [];
+  }
   if (field !== '' || row.length) {
     endRow();
   }

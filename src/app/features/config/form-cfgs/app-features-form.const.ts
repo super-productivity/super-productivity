@@ -1,6 +1,25 @@
-import { ConfigFormSection, AppFeaturesConfig } from '../global-config.model';
+import {
+  AppFeaturesConfig,
+  ConfigFormSection,
+  LimitedFormlyFieldConfig,
+} from '../global-config.model';
 import { T } from '../../../t.const';
 import { IS_DONATION_UI_RESTRICTED } from '../../../app.constants';
+
+/**
+ * Also shown at the top of the Time Tracking tab: people who want tracking off
+ * look there first, not in General › App Features (2026 survey).
+ */
+export const TIME_TRACKING_SWITCH_FORM_ITEM: LimitedFormlyFieldConfig<AppFeaturesConfig> =
+  {
+    key: 'isTimeTrackingEnabled',
+    type: 'slide-toggle',
+    props: {
+      label: T.GCF.APP_FEATURES.TIME_TRACKING,
+      description: T.GCF.APP_FEATURES.TIME_TRACKING_HINT,
+      icon: 'play_arrow',
+    },
+  };
 
 export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
   title: T.GCF.APP_FEATURES.TITLE,
@@ -43,15 +62,7 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
         icon: 'heart_check',
       },
     },
-    {
-      key: 'isTimeTrackingEnabled',
-      type: 'slide-toggle',
-      props: {
-        label: T.GCF.APP_FEATURES.TIME_TRACKING,
-        description: T.GCF.APP_FEATURES.TIME_TRACKING_HINT,
-        icon: 'play_arrow',
-      },
-    },
+    TIME_TRACKING_SWITCH_FORM_ITEM,
     {
       key: 'isFocusModeEnabled',
       type: 'slide-toggle',

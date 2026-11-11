@@ -80,7 +80,7 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
 import { firstValueFrom } from 'rxjs';
 import {
-  selectAppFeaturesConfig,
+  selectNewInstallSections,
   selectSyncConfig,
 } from '../../features/config/store/global-config.reducer';
 import { buildRemoteRebuildBaselineState } from './remote-rebuild-baseline.util';
@@ -741,7 +741,7 @@ export class OperationLogSyncService {
           snapshotVectorClock: result.snapshotVectorClock,
         });
       }
-      if (hydrationPlan.shouldSkipHydration) {
+      if (await this.syncLocalStateService.confirmSnapshotSkip(hydrationPlan, result)) {
         OpLog.normal(
           `OperationLogSyncService: Local vector clock ${hydrationPlan.comparison} remote snapshot — ` +
             'skipping snapshot hydration (local already has all remote data).',
@@ -901,7 +901,7 @@ export class OperationLogSyncService {
 
           keepPendingOps =
             gate === 'dialog' &&
-            canKeepPendingOnSnapshot(result, unsyncedOps, hasCompletedSyncBaseline);
+            (await canKeepPendingOnSnapshot(result, unsyncedOps, syncProvider));
 
           if (gate === 'dialog' && !keepPendingOps) {
             // Client has meaningful user data and clocks can't be auto-resolved -
@@ -1899,8 +1899,8 @@ export class OperationLogSyncService {
     // an unseen suffix onto a defaults reset.
     // ─────────────────────────────────────────────────────────────────────────
     // Reset the vector clock to the remote's causal knowledge (snapshot clock
-    // merged with every downloaded op clock). This also drops entries from
-    // rejected local ops that would otherwise pollute conflict detection.
+    // merged with every downloaded op clock); only this device's own counter is
+    // kept (in the lock below) so its next op never reuses a seen one (#11564).
     let rebuiltClock: VectorClock = { ...(result.snapshotVectorClock ?? {}) };
     for (const opClock of result.allOpClocks ?? []) {
       rebuiltClock = mergeVectorClocks(rebuiltClock, opClock);
@@ -1910,7 +1910,7 @@ export class OperationLogSyncService {
     const baselineState = buildRemoteRebuildBaselineState(
       baselineSource,
       localOnlySyncSettings,
-      await firstValueFrom(this.store.select(selectAppFeaturesConfig)),
+      await firstValueFrom(this.store.select(selectNewInstallSections)),
     );
     const archiveYoung =
       (snapshotState?.[
@@ -1992,7 +1992,7 @@ export class OperationLogSyncService {
           // the cursor is therefore advanced only after replay/hydration succeeds.
           await this.opLogStore.runRemoteStateReplacement({
             baselineState,
-            vectorClock: rebuiltClock,
+            vectorClock: await this.vectorClockService.keepOwnCounter(rebuiltClock),
             schemaVersion: CURRENT_SCHEMA_VERSION,
             snapshotEntityKeys: extractEntityKeysFromState(
               baselineState as unknown as Parameters<

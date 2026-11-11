@@ -72,6 +72,89 @@ test.describe('Work View Features', () => {
     }
   });
 
+  test('should restore the done list after collapsing it across a reload', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    // keeps the undone list on screen after reload, which waitForTaskList needs
+    await workViewPage.addTask('Open task');
+    await workViewPage.addTask('Finished task');
+    await expect(page.locator(TASK)).toHaveCount(2);
+
+    const finished = page.locator(TASK, { hasText: 'Finished task' });
+    await finished.hover();
+    await finished.locator('done-toggle').click();
+    await expect(page.locator(`${DONE_TASK_LIST} ${TASK}`)).toHaveCount(1);
+
+    const doneHeader = page.locator('collapsible .collapsible-header', {
+      hasText: 'Completed Tasks',
+    });
+    await doneHeader.click();
+    await expect(page.locator(DONE_TASK_LIST)).toHaveCount(0);
+
+    // the collapsed state is persisted, so the list must stay absent on boot
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(doneHeader).toBeVisible();
+    await expect(page.locator(DONE_TASK_LIST)).toHaveCount(0);
+
+    await doneHeader.click();
+    await expect(page.locator(`${DONE_TASK_LIST} ${TASK}`)).toHaveCount(1);
+    await expect(page.locator(`${DONE_TASK_LIST} ${TASK_TITLE}`)).toContainText(
+      'Finished task',
+    );
+  });
+
+  test('should keep the done rows while the done list collapses', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('Open task');
+    await workViewPage.addTask('Finished task');
+    await expect(page.locator(TASK)).toHaveCount(2);
+
+    const finished = page.locator(TASK, { hasText: 'Finished task' });
+    await finished.hover();
+    await finished.locator('done-toggle').click();
+    await expect(page.locator(`${DONE_TASK_LIST} ${TASK}`)).toHaveCount(1);
+
+    // sample every frame of the leave animation: while the panel is still on
+    // screen it must not have been emptied ahead of it
+    const frames = await page.evaluate(
+      () =>
+        new Promise<{ hasPanel: boolean; rows: number }[]>((resolve) => {
+          const header = [...document.querySelectorAll('collapsible .collapsible-header')]
+            .filter((el): el is HTMLElement => el instanceof HTMLElement)
+            .find((el) => el.textContent?.includes('Completed Tasks'));
+          const collapsible = header?.closest('collapsible');
+          if (!header || !collapsible) {
+            resolve([]);
+            return;
+          }
+          const out: { hasPanel: boolean; rows: number }[] = [];
+          const sample = (): void => {
+            const hasPanel = !!collapsible.querySelector('.collapsible-panel');
+            out.push({ hasPanel, rows: collapsible.querySelectorAll('task').length });
+            if (hasPanel && out.length < 300) {
+              requestAnimationFrame(sample);
+            } else {
+              resolve(out);
+            }
+          };
+          header.click();
+          requestAnimationFrame(sample);
+        }),
+    );
+
+    const panelFrames = frames.filter((f) => f.hasPanel);
+    // at least one frame mid-animation, or the check below passes vacuously
+    expect(panelFrames.length).toBeGreaterThan(0);
+    expect(panelFrames.every((f) => f.rows === 1)).toBe(true);
+    await expect(page.locator(DONE_TASK_LIST)).toHaveCount(0);
+  });
+
   test('should handle task order correctly', async ({ page, workViewPage }) => {
     test.setTimeout(process.env.CI ? 60000 : 45000);
 

@@ -430,52 +430,6 @@
         "WRITE_A_COMMENT": "Napiši komentar"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Unaprijed popunjeno vrijeme sadrži nepraćene podatke iz prošlih dana.",
-        "T_ALREADY_TRACKED": "Već praćeno",
-        "T_TITLE": "Naslov",
-        "T_TO_BE_SUBMITTED": "Za poslati",
-        "TITLE": "Pošalji evidentirano vrijeme na GitLab",
-        "TOTAL_MSG": "Poslat ćeš ukupno <em>{{totalTimeToSubmit}}</em> vremena rada za danas na <em>{{nrOfTasksToSubmit}}</em> različitih zadataka."
-      },
-      "FORM": {
-        "FILTER": "Prilagođeni filter",
-        "FILTER_DESCRIPTION": "Pogledaj https://docs.gitlab.com/ee/api/issues.html#list-issues. Možeš kombinirati više sa znakom &",
-        "FILTER_USER": "Filtriraj po korisničkom imenu",
-        "GITLAB_BASE_URL": "Prilagođeni GitLab URL (opcionalno)",
-        "PROJECT": "korisnik/projekt",
-        "PROJECT_HINT": "npr. super-productivity/super-productivity",
-        "SCOPE": "Opseg",
-        "SCOPE_ALL": "Sve",
-        "SCOPE_ASSIGNED": "Dodijeljeno meni",
-        "SCOPE_CREATED": "Stvoreno od mene",
-        "SOURCE": "Izvor",
-        "SOURCE_GLOBAL": "Sve",
-        "SOURCE_GROUP": "Grupa",
-        "SOURCE_PROJECT": "Projekt",
-        "SUBMIT_TIMELOGS": "Pošalji evidenciju vremena u GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Prikaži dijalog za praćenje vremena nakon klika na \"Završi dan\"",
-        "TOKEN": "Access token"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Ovdje možeš postaviti Super Productivity da prikazuje otvorene GitLab zadatke (online ili self-hosted) za određeni projekt u ploči za stvaranje zadataka u dnevnom planiranju. Prikazat će se kao prijedlozi s poveznicom i dodatnim informacijama.</p><p>Također možeš automatski uvesti sve otvorene zadatke.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Dodijeljeno",
-        "AT": "u",
-        "DESCRIPTION": "Opis",
-        "LABELS": "Oznake",
-        "MARK_AS_CHECKED": "Označi aktualiziranja kao pročitana",
-        "PROJECT": "Projekt",
-        "STATUS": "Status",
-        "SUMMARY": "Sažetak",
-        "WRITE_A_COMMENT": "Napiši komentar"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Nepoznata greška {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Ova integracija vjerojatno neće raditi u tvom pregledniku. Preuzmi desktop ili Android verziju Super Productivity!",
       "DEFAULT": {
@@ -3109,8 +3063,8 @@
       "PLANNER": "Planiraj sljedeće dane u {{plannerIcon}} <b>Planer</b>",
       "TASK_MENU_TOUCH": "Povuci zadatak ulijevo za njegov izbornik: {{playIcon}} <b>Pokreni praćenje vremena</b>, {{subtaskIcon}} <b>Dodaj podzadatak</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Povuci zadatak ulijevo za njegov izbornik, npr. {{subtaskIcon}} <b>Dodaj podzadatak</b>",
-      "TIMER_RUNNING": "Mjerač vremena radi. Ponovno pritisni {{playIcon}} ili <kbd>{{key}}</kbd> za pauzu.",
-      "TIMER_RUNNING_TOUCH": "Mjerač vremena radi. Dodirni {{playIcon}} na vrhu za pauzu.",
+      "TIMER_RUNNING": "Mjerač vremena radi. Ponovno pritisni {{pauseIcon}} ili <kbd>{{key}}</kbd> za pauzu.",
+      "TIMER_RUNNING_TOUCH": "Mjerač vremena radi. Dodirni {{pauseIcon}} na vrhu za pauzu.",
       "TRACK_TIME": "Pređi mišem preko zadatka i pritisni {{playIcon}} za praćenje vremena"
     },
     "WANT_MORE": {

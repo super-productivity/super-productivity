@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  countCaptureRateLimitEntriesForTests,
   ipLimitKey,
+  isCaptureOAuthLimited,
   isGrantDailyCapReached,
   isAuthFailureLimited,
   recordAuthFailure,
   recordAuthSuccess,
   recordGrantCreate,
+  pruneCaptureRateLimits,
   resetCaptureRateLimitForTests,
 } from '../src/capture/capture-rate-limit';
 import {
@@ -18,6 +21,24 @@ const GRANT = '01890000-0000-7000-8000-000000000000';
 
 describe('capture rate limit', () => {
   beforeEach(() => resetCaptureRateLimitForTests());
+
+  it('prunes only expired entries, so IP addresses do not outlive their window', () => {
+    const HOUR = 60 * 60 * 1000;
+    const DAY = 24 * HOUR;
+    recordAuthFailure('10.0.0.1', null, NOW);
+    isCaptureOAuthLimited('authorize', '10.0.0.2', NOW);
+    recordAuthSuccess(GRANT, NOW);
+    expect(countCaptureRateLimitEntriesForTests()).toBe(3);
+
+    // The failure counter's one-minute window has ended; the hour and the
+    // recent-grant day have not.
+    pruneCaptureRateLimits(NOW + 2 * 60 * 1000);
+    expect(countCaptureRateLimitEntriesForTests()).toBe(2);
+    pruneCaptureRateLimits(NOW + HOUR);
+    expect(countCaptureRateLimitEntriesForTests()).toBe(1);
+    pruneCaptureRateLimits(NOW + DAY);
+    expect(countCaptureRateLimitEntriesForTests()).toBe(0);
+  });
 
   it('counts an IPv6 /64 as one IP and IPv4 per address', () => {
     expect(ipLimitKey('2001:db8:1:2:aaaa::1')).toBe('ip:2001:db8:1:2::/64');

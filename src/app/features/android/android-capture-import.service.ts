@@ -15,6 +15,9 @@ import {
 } from '../tasks/agent-capture/super-sync-capture-source';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { TODAY_TAG } from '../tag/tag.const';
+import { WorkContextType } from '../work-context/work-context.model';
 
 /** One entry of the native `CaptureInbox` (see CaptureInbox.kt). */
 export interface AndroidCapture {
@@ -77,8 +80,9 @@ const parseCaptures = (json: string): AndroidCapture[] => {
 };
 
 /**
- * Imports CaptureInbox.kt: Android shares, and title-only tasks left by the
- * removed startup quick-add overlay of an older app version.
+ * Imports CaptureInbox.kt: Android shares, and title-only tasks typed into the
+ * widget's quick add (or left by the removed startup quick-add overlay of an
+ * older app version).
  */
 @Injectable({ providedIn: 'root' })
 export class AndroidCaptureImportService {
@@ -107,10 +111,27 @@ export class AndroidCaptureImportService {
         return parseCaptures(json);
       },
       isValid: () => true,
-      // Same behaviour as typing into the in-app add bar: active work context
-      // and short syntax. Only the id is fixed.
+      // As if typed into Today's add bar (short syntax on), only the id is
+      // fixed. Today, because the capture came from the Today widget, which
+      // shows it as pending until now (WidgetData.withPendingCaptures). Not
+      // the active work context: the import runs on whatever screen the app
+      // resumes on, which the user did not pick for the capture.
       createTask: (capture) => {
-        this._taskService.add(capture.title, false, { id: capture.id });
+        const task = this._taskService.createNewTaskWithDefaults({
+          title: capture.title,
+          id: capture.id,
+          workContextType: WorkContextType.TAG,
+          workContextId: TODAY_TAG.id,
+        });
+        this._store.dispatch(
+          TaskSharedActions.addTask({
+            task,
+            workContextId: TODAY_TAG.id,
+            workContextType: WorkContextType.TAG,
+            isAddToBacklog: false,
+            isAddToBottom: false,
+          }),
+        );
       },
       acknowledge: async (id) => {
         if (!inbox.acknowledgeCapture(id)) {

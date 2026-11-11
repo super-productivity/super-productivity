@@ -1,2 +1,8 @@
 // Styles for folder context menu component
 // Keep minimal since it inherits from mat-menu styling
+
+// Renders only a <mat-menu>, which draws into the overlay: the host must not
+// take part in layout (e.g. take a flex gap).
+:host {
+  display: contents;
+}

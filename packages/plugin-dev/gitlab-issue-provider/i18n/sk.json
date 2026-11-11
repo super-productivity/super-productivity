@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "(predvolené) ID projektu alebo meno používateľa/projektu",
+    "PROJECT_HINT": "napr. johannesjo/superproduktivita",
+    "TOKEN": "Prístupový token",
+    "HOW_TO_GET_TOKEN": "Ako získať token?",
+    "SCOPE": "Rozsah",
+    "SCOPE_ALL": "Všetko",
+    "SCOPE_CREATED": "Vytvorené mnou",
+    "SCOPE_ASSIGNED": "Pridelené mne",
+    "GITLAB_BASE_URL": "Vlastná základná adresa URL aplikácie GitLab (voliteľné)",
+    "FILTER_USER": "Používateľské meno (napr. na odfiltrovanie vlastných zmien)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Vlastný filter",
+    "FILTER_DESCRIPTION": "Pozri https://docs.gitlab.com/ee/api/issues.html#list-issues. Viaceré možno kombinovať pomocou &",
+    "SUBMIT_TIMELOGS": "Odosielanie časových záznamov do systému Gitlab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Zobrazenie dialógového okna sledovania času po kliknutí na deň ukončenia"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Súhrn",
+    "STATE": "Stav",
+    "ASSIGNEE": "Príjemca",
+    "LABELS": "Štítky",
+    "DESCRIPTION": "Popis"
+  },
+  "FORM_HELP": "<p>Here you can configure SuperProductivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and sync all open issues to your task backlog.</p>"
+}

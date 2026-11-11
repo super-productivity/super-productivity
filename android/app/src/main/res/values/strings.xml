@@ -44,6 +44,16 @@
   <string name="widget_tracking_title">Tracking: %1$s</string>
   <!-- Device currently tracking it, e.g. "on Desktop"; %1$s is the device label -->
   <string name="widget_tracking_device">on %1$s</string>
+  <string name="widget_add_task">Add task</string>
+
+  <!-- Widget quick add (QuickAddActivity): a dialog over the home screen -->
+  <string name="quick_add_title">New task</string>
+  <string name="quick_add_hint">Task title</string>
+  <string name="quick_add_save">Add</string>
+  <!-- Not "Added to Today": the app adds it on next open, and short syntax
+       may schedule it for another day -->
+  <string name="quick_add_saved">Task saved</string>
+  <string name="quick_add_failed">Could not save the task</string>
 
   <!-- Launcher shortcuts (long-press the app icon), res/xml/shortcuts.xml.
        Same set as the iOS Home Screen quick actions, in Android's sentence

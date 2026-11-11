@@ -3,6 +3,7 @@ import type { OperationLogStoreService } from '../persistence/operation-log-stor
 import { isFullStateOpType, OperationLogEntry } from '../core/operation.types';
 import type { SnackService } from '../../core/snack/snack.service';
 import type { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
+import type { OperationSyncCapable } from '../sync-providers/provider.interface';
 import { OpLog } from '../../core/log';
 import { T } from '../../t.const';
 
@@ -11,16 +12,19 @@ import { T } from '../../t.const';
  * last synced is a catch-up past trimmed ops, not a replacement. The pending
  * ops can then stay on top of it: receivers resolve any crossing with their
  * own edits on the normal LWW path. A pending full-state op still needs the
- * user's decision, as does a client that never completed a sync.
+ * user's decision, as does a client that never completed a sync with this
+ * target: having synced elsewhere is not enough, since after a target switch a
+ * baseline staged by a download that was never applied can still read as last
+ * seen (webdav-late-snapshot.spec.ts).
  */
-export const canKeepPendingOnSnapshot = (
+export const canKeepPendingOnSnapshot = async (
   result: { snapshotExtendsLastSeen?: boolean },
   unsyncedOps: readonly OperationLogEntry[],
-  hasCompletedSyncBaseline: boolean,
-): boolean =>
+  syncProvider: Pick<OperationSyncCapable, 'getLastServerSeq'>,
+): Promise<boolean> =>
   result.snapshotExtendsLastSeen === true &&
-  hasCompletedSyncBaseline &&
-  !unsyncedOps.some((entry) => isFullStateOpType(entry.op.opType));
+  !unsyncedOps.some((entry) => isFullStateOpType(entry.op.opType)) &&
+  (await syncProvider.getLastServerSeq()) > 0;
 
 /**
  * #10972: replays the pending ops a catch-up file snapshot kept, on top of the

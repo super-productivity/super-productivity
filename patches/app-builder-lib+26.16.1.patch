@@ -9,9 +9,9 @@ index da2d687..900c2b4 100644
 -        const desktopFilePath = await this.helper.writeDesktopEntry(this.options);
 +        // super-productivity patch (#11117): the default Exec is "/opt/Super Productivity/superproductivity" %U, and
 +        // xdg-open discards a handler whose quoted Exec path contains a space, so superproductivity:// URLs open the
-+        // browser. Point the .deb entry at the /usr/bin link its postinst always (re)creates. Not rpm: the old
-+        // package's unconditional %postun removes that link on every upgrade.
-+        const exec = target === "deb" ? `/usr/bin/${packager.executableName} %U` : undefined;
++        // browser. Point the entry at the /usr/bin link its postinst (re)creates. On rpm upgrades the old package's
++        // unconditional %postun removes that link afterwards; electron-builder.yaml adds a %posttrans that restores it.
++        const exec = target === "deb" || target === "rpm" ? `/usr/bin/${packager.executableName} %U` : undefined;
 +        const desktopFilePath = await this.helper.writeDesktopEntry(this.options, exec);
          args.push(`${desktopFilePath}=/usr/share/applications/${this.helper.getDesktopFileName()}.desktop`);
          if (packager.packagerOptions.effectiveOptionComputed != null && (await packager.packagerOptions.effectiveOptionComputed([args, desktopFilePath]))) {

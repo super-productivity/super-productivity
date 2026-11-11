@@ -56,8 +56,8 @@ export class ConflictLocalWinOpsService {
 
   /**
    * SPAP-14: whether this plan must win the WHOLE entity and so is excluded from
-   * disjoint-field merge. Both archive and project-delete-wins have this
-   * property — the winner replaces the entity outright, never partially merged
+   * disjoint-field merge. Both archive and marked delete-wins (project, tag)
+   * have this property — the winner replaces the entity outright, never partially merged
    * with a concurrent edit.
    */
   private _isWholeEntityWinPlan(

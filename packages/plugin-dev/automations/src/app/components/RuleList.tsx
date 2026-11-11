@@ -28,16 +28,9 @@ export function RuleList(props: RuleListProps) {
 
   return (
     <div class="rule-list-container">
-      <div class="grid">
-        <div>
-          <h2>Automation Rules</h2>
-        </div>
-        <div class="warning-box">
-          <strong>Warning:</strong> The plugin is very powerful and using it can destroy your data.
-          Use at your own risk!
-        </div>
-
-        <div style={{ 'text-align': 'right' }}>
+      <div class="page-header">
+        <h2>Automation Rules</h2>
+        <div class="actions">
           <input
             type="file"
             accept=".json"
@@ -45,19 +38,22 @@ export function RuleList(props: RuleListProps) {
             ref={fileInputRef!}
             onChange={handleFileChange}
           />
-          <button
-            class="btn-outline"
-            onClick={handleImportClick}
-            style={{ 'margin-right': '0.5rem' }}
-          >
+          <button class="btn-outline" onClick={handleImportClick}>
             Import
           </button>
-          <button class="btn-outline" onClick={props.onExport} style={{ 'margin-right': '0.5rem' }}>
+          <button class="btn-outline" onClick={props.onExport}>
             Export
           </button>
           <button class="btn-primary" onClick={props.onCreate}>
             + New Rule
           </button>
+        </div>
+      </div>
+
+      <div class="callout callout--warning">
+        <div>
+          <strong>Warning:</strong> The plugin is very powerful and using it can destroy your data.
+          Use at your own risk!
         </div>
       </div>
 
@@ -100,14 +96,14 @@ export function RuleList(props: RuleListProps) {
                     </label>
                   </td>
                   <td style={{ 'text-align': 'right', 'white-space': 'nowrap' }}>
-                    <button
-                      class="btn-outline"
-                      onClick={() => props.onEdit(rule)}
-                      style={{ 'margin-right': '0.5rem' }}
-                    >
-                      Edit
-                    </button>
-                    <button onClick={() => props.onDelete(rule)}>Delete</button>
+                    <div class="actions">
+                      <button class="btn-outline" onClick={() => props.onEdit(rule)}>
+                        Edit
+                      </button>
+                      <button class="btn-danger" onClick={() => props.onDelete(rule)}>
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )}

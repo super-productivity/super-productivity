@@ -7,7 +7,12 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  -webkit-app-region: no-drag !important;
+  // No `-webkit-app-region` here. Since Electron 44 it is inherited and
+  // Chromium emits each box as a region in DOM order, so a no-drag here made
+  // every overlay box after `.electron-drag-bar` cancel it: the window could
+  // not be moved on macOS in focus mode (same as #10170). The overlay replaces
+  // the app shell, so no drag region lies beneath it; buttons/links stay
+  // no-drag via `page.scss`.
   // Push all content below the system status bar / nav bar on native mobile.
   // Fixed-position overlays bypass body safe-area padding, so we handle it here.
   padding-top: var(--safe-area-top);
@@ -69,7 +74,7 @@ main {
   height: 56px;
   z-index: var(--z-focus-mode-close-btn);
   @include mousePrimaryDevice {
-    transition: opacity var(--transition-leave);
+    transition: opacity var(--transition-duration-m) var(--ani-leave-timing);
     //visibility: hidden;
     opacity: 0;
 
@@ -79,7 +84,7 @@ main {
   }
 
   :host:hover & {
-    transition: opacity var(--transition-enter);
+    transition: opacity var(--transition-duration-m) var(--ani-enter-timing);
     //visibility: visible;
     opacity: 1;
   }

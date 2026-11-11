@@ -5,24 +5,22 @@ import {
   inject,
   input,
   OnInit,
-  TemplateRef,
   viewChild,
 } from '@angular/core';
-import {
-  MatMenu,
-  MatMenuContent,
-  MatMenuItem,
-  MatMenuTrigger,
-} from '@angular/material/menu';
+import { FocusMonitor, InputModalityDetector } from '@angular/cdk/a11y';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatIconButton } from '@angular/material/button';
-import { NgTemplateOutlet } from '@angular/common';
 import { isTouchActive } from '../../util/input-intent';
 import { UI_LONG_PRESS_DURATION, UI_LONG_PRESS_MOVE_TOLERANCE_PX } from '../ui.const';
 import { performHapticFeedback } from '../../util/haptic-feedback';
 
+/**
+ * Opens `menu` at the pointer on right-click or long-press, and on a click of
+ * `leftClickTriggerEl`.
+ */
 @Component({
   selector: 'context-menu',
-  imports: [MatMenu, MatMenuTrigger, MatMenuContent, NgTemplateOutlet],
+  imports: [MatMenuTrigger],
   templateUrl: './context-menu.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -30,7 +28,9 @@ import { performHapticFeedback } from '../../util/haptic-feedback';
 export class ContextMenuComponent implements OnInit {
   leftClickTriggerEl = input<HTMLElement | MatMenuItem | MatIconButton | undefined>();
   rightClickTriggerEl = input.required<HTMLElement | MatMenuItem | MatIconButton>();
-  contextMenu = input.required<TemplateRef<any>>();
+  // A menu, not a template of items: MatMenu's arrow keys only reach items
+  // written in the template that holds its <mat-menu> (#11403).
+  menu = input.required<MatMenu>();
   allowedSelectors = input<string>('');
   isEnabled = input<boolean>(true);
   // Opens the menu on a stationary touch long-press of the right-click trigger.
@@ -44,6 +44,10 @@ export class ContextMenuComponent implements OnInit {
   contextMenuPosition: { x: string; y: string } = { x: '0px', y: '0px' };
   private _longPressTimeout: number | undefined;
   private _isDestroyed = false;
+  private _returnFocusEl: HTMLElement | undefined;
+  private _rightClickEl: HTMLElement | undefined;
+  private readonly _focusMonitor = inject(FocusMonitor);
+  private readonly _inputModality = inject(InputModalityDetector);
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -55,6 +59,7 @@ export class ContextMenuComponent implements OnInit {
   ngOnInit(): void {
     const tEl = this.rightClickTriggerEl();
     const el = tEl instanceof HTMLElement ? tEl : (tEl as any)._elementRef.nativeElement;
+    this._rightClickEl = el;
 
     // On touch devices, skip contextmenu/longpress to avoid conflicting
     // with cdkDragStartDelay. The context menu is still accessible via the
@@ -62,7 +67,7 @@ export class ContextMenuComponent implements OnInit {
     // isTouchLongPress, which tells a long-press from a drag by movement.
     el.addEventListener('contextmenu', (ev) => {
       if (!isTouchActive()) {
-        this.openContextMenu(ev);
+        this.openContextMenu(ev, el);
       } else if (this.isTouchLongPress()) {
         // The long-press handler below opens it; keep the browser's own
         // long-press menu or text selection out of the way.
@@ -71,7 +76,7 @@ export class ContextMenuComponent implements OnInit {
     });
     el.addEventListener('longPressIOS', (ev) => {
       if (!isTouchActive()) {
-        this.openContextMenu(ev);
+        this.openContextMenu(ev, el);
       }
     });
 
@@ -86,7 +91,7 @@ export class ContextMenuComponent implements OnInit {
           ? leftClickEl
           : (leftClickEl as any)._elementRef.nativeElement;
       htmlLeftClickEl.addEventListener('click', (ev) => {
-        this.openContextMenu(ev);
+        this.openContextMenu(ev, htmlLeftClickEl);
       });
     }
   }
@@ -108,7 +113,7 @@ export class ContextMenuComponent implements OnInit {
         }
         start = { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
         this._longPressTimeout = window.setTimeout(() => {
-          isOpenedByPress = this.openContextMenu(ev);
+          isOpenedByPress = this.openContextMenu(ev, el);
           if (isOpenedByPress) {
             performHapticFeedback('longPress');
           }
@@ -157,7 +162,52 @@ export class ContextMenuComponent implements OnInit {
     );
   }
 
-  private openContextMenu(event: TouchEvent | MouseEvent): boolean {
+  /** Bound to the hidden trigger's `menuClosed`. */
+  onMenuClosed(): void {
+    // Material returns focus to its trigger, which here is a hidden div that
+    // cannot take it, so focus fell to <body>. Give it back to the element
+    // that opened the menu instead.
+    const openerEl = this._returnFocusEl;
+    this._returnFocusEl = undefined;
+    if (!openerEl) {
+      return;
+    }
+    this._focusWithModality(openerEl);
+    // A side-menu row's ⋮ shows only while the row is hovered (desktop), so it
+    // may be gone by now: the row is the next best place.
+    if (document.activeElement !== openerEl && this._rightClickEl) {
+      this._focusWithModality(this._rightClickEl);
+    }
+  }
+
+  // As Material's own restore: a plain focus() counts as 'program' focus,
+  // which menu items and icon buttons highlight, so a menu closed by mouse
+  // left its row grey. Tell the focus monitor how the menu was closed.
+  private _focusWithModality(el: HTMLElement): void {
+    const origin = this._inputModality.mostRecentModality ?? 'program';
+    this._focusMonitor.focusVia(el, origin, { preventScroll: true });
+  }
+
+  private _getMenuPoint(
+    event: TouchEvent | MouseEvent,
+    openerEl: HTMLElement,
+  ): { x: number; y: number } {
+    if ('touches' in event) {
+      return { x: event.touches[0].clientX, y: event.touches[0].clientY };
+    }
+    // A click from Enter or Space has no pointer (detail 0, at 0,0), which put
+    // the menu in the window's corner: open it below its button instead.
+    if (event.type === 'click' && event.detail === 0) {
+      const rect = openerEl.getBoundingClientRect();
+      return { x: rect.left, y: rect.bottom };
+    }
+    return { x: event.clientX, y: event.clientY };
+  }
+
+  private openContextMenu(
+    event: TouchEvent | MouseEvent,
+    openerEl: HTMLElement,
+  ): boolean {
     // When disabled the menu must stay inert (e.g. the background menu is only
     // valid on the work-view, not on unrelated pages like Habits). See #7734.
     if (!this.isEnabled()) {
@@ -187,9 +237,9 @@ export class ContextMenuComponent implements OnInit {
 
     event.preventDefault();
     event.stopPropagation();
-    this.contextMenuPosition.x =
-      ('touches' in event ? event.touches[0].clientX : event.clientX) + 'px';
-    const rawY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+    this._returnFocusEl = openerEl;
+    const { x, y: rawY } = this._getMenuPoint(event, openerEl);
+    this.contextMenuPosition.x = x + 'px';
     const safeAreaTop =
       parseInt(
         getComputedStyle(document.documentElement).getPropertyValue(

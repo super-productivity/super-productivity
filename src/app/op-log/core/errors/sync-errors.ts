@@ -113,9 +113,10 @@ export class LocalDataConflictError extends Error {
 }
 
 /**
- * The remote snapshot lost changes this device already synced (#10916): with
- * nothing pending, hydrating it would delete them silently. Routed to the same
- * dialog as LocalDataConflictError; its reason adds an explanation.
+ * The remote snapshot lost changes this device already synced (#10916).
+ * Hydrating it would delete them here; skipping it (local clock dominates)
+ * would leave them out of the remote for good. Routed to the same dialog as
+ * LocalDataConflictError; its reason adds an explanation.
  */
 export class OwnUploadsMissingConflictError extends LocalDataConflictError {
   override name = 'OwnUploadsMissingConflictError';
@@ -140,6 +141,21 @@ export class LockAcquisitionTimeoutError extends Error {
     super(
       `Timed out waiting ${timeoutMs}ms to acquire lock "${lockName}". ` +
         `A previous lock holder may have crashed or stalled.`,
+    );
+  }
+}
+
+/**
+ * flushThenRunExclusive could not find a moment with no capture in flight:
+ * actions kept arriving between the flush and the lock. Transient — retrying
+ * once dispatch activity settles succeeds.
+ */
+export class OperationWriteCutoffError extends Error {
+  override name = 'OperationWriteCutoffError';
+
+  constructor(attempts: number) {
+    super(
+      `Operation write cutoff not reached after ${attempts} attempts — continuous dispatch activity. Try again.`,
     );
   }
 }

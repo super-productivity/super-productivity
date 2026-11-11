@@ -3,7 +3,15 @@ import { provideLocationMocks } from '@angular/common/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, UrlTree } from '@angular/router';
 import { BehaviorSubject, Subject, firstValueFrom, of, throwError } from 'rxjs';
-import { DefaultStartPageGuard, DonatePageGuard, FeatureEnabledGuard } from './app.guard';
+import {
+  BoardRouteGuard,
+  DefaultStartPageGuard,
+  DonatePageGuard,
+  FeatureEnabledGuard,
+} from './app.guard';
+import { Store } from '@ngrx/store';
+import { BoardCfg } from './features/boards/boards.model';
+import { LS } from './core/persistence/storage-keys.const';
 import { IS_DONATION_UI_RESTRICTED_TOKEN } from './app.constants';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { GlobalConfigService } from './features/config/global-config.service';
@@ -341,5 +349,74 @@ describe('FeatureEnabledGuard', () => {
     expect(result).toBeTrue();
 
     subscription.unsubscribe();
+  });
+});
+
+describe('BoardRouteGuard', () => {
+  let guard: BoardRouteGuard;
+  let router: Router;
+  let dataLoaded$: Subject<boolean>;
+  let boards$: BehaviorSubject<BoardCfg[]>;
+
+  const board = (id: string): BoardCfg => ({ id, title: id, cols: 1, panels: [] });
+
+  const runGuard = (boardId?: string): Promise<true | UrlTree> =>
+    firstValueFrom(guard.canActivate({ params: boardId ? { boardId } : {} } as any));
+
+  beforeEach(() => {
+    dataLoaded$ = new Subject<boolean>();
+    boards$ = new BehaviorSubject<BoardCfg[]>([board('a'), board('b')]);
+    localStorage.removeItem(LS.SELECTED_BOARD);
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: Store, useValue: { select: () => boards$ } },
+        {
+          provide: DataInitStateService,
+          useValue: { isAllDataLoadedInitially$: dataLoaded$ },
+        },
+      ],
+    });
+    guard = TestBed.inject(BoardRouteGuard);
+    router = TestBed.inject(Router);
+  });
+
+  afterEach(() => localStorage.removeItem(LS.SELECTED_BOARD));
+
+  it('waits for the initial data load before checking the id', async () => {
+    // Before load the store only holds the default boards.
+    boards$.next([board('a')]);
+    const result = runGuard('custom');
+    boards$.next([board('a'), board('custom')]);
+    dataLoaded$.next(true);
+    expect(await result).toBeTrue();
+  });
+
+  it('redirects an unknown id to /boards', async () => {
+    const result = runGuard('gone');
+    dataLoaded$.next(true);
+    expect(router.serializeUrl((await result) as UrlTree)).toBe('/boards');
+  });
+
+  it('opens the last opened view for /boards', async () => {
+    localStorage.setItem(LS.SELECTED_BOARD, 'b');
+    const result = runGuard();
+    dataLoaded$.next(true);
+    expect(router.serializeUrl((await result) as UrlTree)).toBe('/boards/b');
+  });
+
+  it('opens the first view when the stored value is unknown (e.g. a legacy tab index)', async () => {
+    localStorage.setItem(LS.SELECTED_BOARD, '1');
+    const result = runGuard();
+    dataLoaded$.next(true);
+    expect(router.serializeUrl((await result) as UrlTree)).toBe('/boards/a');
+  });
+
+  it('shows the empty page when there are no views', async () => {
+    boards$.next([]);
+    const result = runGuard();
+    dataLoaded$.next(true);
+    expect(await result).toBeTrue();
   });
 });

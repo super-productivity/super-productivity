@@ -613,14 +613,38 @@ magic-side-nav {
   margin: 8px 0 8px 8px;
   position: relative;
   isolation: isolate;
+  /* Corner radius of the panel, published for the resize indicator so
+   * its fade ends exactly where the panel's edge straightens out
+   * (`.resize-handle::after` in magic-side-nav.component.scss). */
+  --sidenav-panel-radius: var(--lg-radius-lg);
 }
 
 /* On macOS Electron the traffic lights sit at ~y=14–28 in the
  * frameless title-bar area (`titleBarStyle: hiddenInset`). Push
  * the panel down so its top edge clears the controls with a
- * comfortable gap above. */
+ * comfortable gap above.
+ *
+ * This offset is also the height of the band above the panel, which is what
+ * `--title-bar-drag-height` publishes to the component's
+ * `.title-bar-drag-strip`: the strip covers exactly that empty band and stops
+ * where the panel starts, the panel itself being `no-drag` (see #6435).
+ *
+ * It replaces the base rule's `margin-top: 8px` rather than adding to it — the
+ * value below is the whole gap above the panel, not the gap plus 8px. Fold an
+ * extra 8px in and the panel sits that much lower than it does today.
+ *
+ * Padding, not margin: the band has to be inside the host box, or the strip
+ * starts where the panel does — i.e. on top of the `no-drag` panel, where its
+ * rectangle is subtracted from the drag region instead of contributing to it,
+ * and the window cannot be moved by its own top edge at all. The host is a
+ * stretched flex item, so its border box still fills the column and the panel
+ * stays where it was. Only the vertical offset moves in: a `padding-left`
+ * instead of `margin-left` would eat into the panel's own width (the host
+ * `width` is a fixed value bound by the component). */
 body.isMac.isElectron magic-side-nav {
-  margin-top: calc(var(--mac-title-bar-padding) + 12px);
+  --title-bar-drag-height: calc(var(--mac-title-bar-padding) + 12px);
+  margin-top: 0;
+  padding-top: var(--title-bar-drag-height);
 }
 
 magic-side-nav .nav-sidenav {
@@ -667,7 +691,7 @@ magic-side-nav .mode-toggle {
 }
 
 /* On macOS Electron we've moved the panel itself below the
- * title bar via the host margin, so the inner mac-title-bar
+ * title bar via the host padding, so the inner mac-title-bar
  * padding the component adds to the toggle's `top` would push
  * it down twice. Match the existing `right: 8px` so the button
  * sits equidistant from the top and right corners of the panel,
@@ -678,6 +702,75 @@ body.isMac.isElectron magic-side-nav .mode-toggle {
 
 body.isMac.isElectron magic-side-nav .nav-list {
   padding-top: 48px !important;
+}
+
+/* Resize affordance: the panel's own straight edge lighting up rather than a
+ * bar drawn across the divider.
+ *
+ * The component's default paints the whole 4px handle on hover. On this panel
+ * that reads as a heavy line cut off by the rounded corners, so the tint is
+ * dropped here and the hairline below takes over — `!important` because the
+ * component's rule carries Angular's view-encapsulation attribute, which
+ * outranks a plain class selector from a theme file.
+ *
+ * The hairline runs along the panel's edge the whole way down, and over a
+ * corner that edge curves inwards, so the line would hang in the page
+ * background just outside the panel. Hence a window between the two tangent
+ * points: nothing at all over the corners, and inside the straight stretch a
+ * ramp that only reaches full strength one radius in from each end — solid
+ * along the middle of the panel, dissolving towards the corners instead of
+ * being cut off by them.
+ *
+ * The radius comes from the token published next to the panel's own
+ * `border-radius` above, so the two cannot drift apart. Scoped to this theme:
+ * it is the only one that rounds the panel, and on a square edge the fade
+ * would dissolve towards corners that are not there. */
+magic-side-nav .resize-handle {
+  background-color: transparent !important;
+}
+
+magic-side-nav .resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: var(--sidenav-active-text);
+  opacity: 0;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    transparent var(--sidenav-panel-radius),
+    #000 calc(var(--sidenav-panel-radius) * 2),
+    #000 calc(100% - var(--sidenav-panel-radius) * 2),
+    transparent calc(100% - var(--sidenav-panel-radius)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0,
+    transparent var(--sidenav-panel-radius),
+    #000 calc(var(--sidenav-panel-radius) * 2),
+    #000 calc(100% - var(--sidenav-panel-radius) * 2),
+    transparent calc(100% - var(--sidenav-panel-radius)),
+    transparent 100%
+  );
+  transition: opacity var(--transition-duration-s) var(--ani-standard-timing);
+}
+
+magic-side-nav .resize-handle:focus-visible::after,
+magic-side-nav .resize-handle:hover::after {
+  opacity: 0.35;
+}
+
+/* Dragging a resize is a committed gesture — show the edge a little more
+ * firmly. `:active` on the handle itself would drop out as soon as the pointer
+ * leaves the 4px strip, and this has to hold for the whole drag. */
+magic-side-nav.resizing .resize-handle::after {
+  opacity: 0.6;
 }
 
 /* Selection colors come from --sidenav-item-active-bg /

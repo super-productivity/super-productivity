@@ -12,7 +12,11 @@ import { SnackService } from '../../core/snack/snack.service';
 import { ImmediateUploadService } from '../sync/immediate-upload.service';
 import { ActionType, OpType } from '../core/operation.types';
 import { PersistentAction } from '../core/persistent-action.interface';
-import { COMPACTION_THRESHOLD } from '../core/operation-log.const';
+import {
+  COMPACTION_THRESHOLD,
+  MAX_COMPACTION_FAILURES,
+} from '../core/operation-log.const';
+import { OperationWriteCutoffError } from '../core/errors/sync-errors';
 import {
   bufferDeferredAction,
   clearDeferredActions,
@@ -961,6 +965,28 @@ describe('OperationLogEffects', () => {
         );
       });
       expect(errorCalls.length).toBe(0);
+    }));
+
+    it('should not escalate compaction that lost the write cutoff to dispatch activity', fakeAsync(() => {
+      mockOpLogStore.getCompactionCounter.and.resolveTo(COMPACTION_THRESHOLD - 1);
+      mockCompactionService.compact.and.callFake(() =>
+        Promise.reject(new OperationWriteCutoffError(5)),
+      );
+      actions$ = of(
+        ...Array.from({ length: MAX_COMPACTION_FAILURES + 1 }, () =>
+          createPersistentAction(ActionType.TASK_SHARED_UPDATE),
+        ),
+      );
+
+      effects.persistOperation$.subscribe();
+      tick(100);
+
+      expect(mockCompactionService.compact).toHaveBeenCalledTimes(
+        MAX_COMPACTION_FAILURES + 1,
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.SYNC.S.COMPACTION_FAILED }),
+      );
     }));
 
     it('should keep the threshold counter when compaction safely skips', fakeAsync(() => {

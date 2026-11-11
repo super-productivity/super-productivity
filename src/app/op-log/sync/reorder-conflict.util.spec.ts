@@ -131,10 +131,10 @@ const apply = (s: State, actions: Action[]): State => actions.reduce(reduce, s);
 
 const provider = (id: string): IssueProvider =>
   ({
-    ...DEFAULT_ISSUE_PROVIDER_CFGS.GITLAB,
+    ...DEFAULT_ISSUE_PROVIDER_CFGS.JIRA,
     ...ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
     id,
-    issueProviderKey: 'GITLAB',
+    issueProviderKey: 'JIRA',
     isEnabled: true,
   }) as IssueProvider;
 
@@ -249,6 +249,7 @@ const BOARD_FIELDS: Required<BoardCfg> = {
   title: 'changed',
   cols: 4,
   panels: [{ ...DEFAULT_PANEL_CFG, id: 'panel-new', title: 'new' }],
+  boardCols: 3,
 };
 // The shared and plugin fields, plus every key of each built-in provider.
 const PROVIDER_BASE_FIELDS: Required<IssueProviderPluginType> = {

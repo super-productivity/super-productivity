@@ -164,10 +164,13 @@ class SuperSyncBackgroundProvider(
 
         // Keyed by (taskId, isDeadline) so later ops naturally overwrite earlier ones
         val reminderMap = mutableMapOf<Pair<String, Boolean>, ReminderToSchedule>()
-        // Tasks whose alarms are all cancelled before their collected reminders
-        // are scheduled. Ops are in server sequence order, so processing forward
-        // ensures the latest op wins: dismiss-then-reschedule keeps only the reschedule.
+        // Tasks whose alarms are all cancelled, and single alarms cancelled,
+        // before the collected reminders are scheduled. Ops are in server sequence
+        // order, so processing forward ensures the latest op wins:
+        // dismiss-then-reschedule keeps only the reschedule.
         val taskIdsToCancel = mutableSetOf<String>()
+        val reminderIdsToCancel = mutableSetOf<String>()
+        val unreadableTaskIds = mutableSetOf<String>()
 
         for (i in 0 until ops.length()) {
             val serverOp = ops.getJSONObject(i)
@@ -177,31 +180,40 @@ class SuperSyncBackgroundProvider(
 
             val tempMap = mutableMapOf<Pair<String, Boolean>, ReminderToSchedule>()
             extractRemindersToSchedule(op, payload, tempMap, now)
-            val cancelIds = mutableSetOf<String>()
-            extractReminderRelevantTaskIds(op, payload, cancelIds)
+            val cancels = OpCancels()
+            extractCancels(op, payload, cancels)
+            // Needed but undecryptable (no key for its salt yet): the alarm
+            // receiver can't trust a "not stale" answer for these tasks.
+            if (payload.isInitialized() && payload.value == null && op.opt("payload") is String) {
+                collectEntityIds(op, unreadableTaskIds)
+            }
 
-            for (id in cancelIds) {
+            for (id in cancels.taskIds) {
                 taskIdsToCancel.add(id)
-                // A cancel clears every alarm slot of the task, so reminders
-                // collected from earlier ops are stale: drop them, or a later
-                // schedule of the other slot (e.g. setDeadline) would revive them.
+                // A whole-task cancel clears every alarm slot of the task, so
+                // reminders collected from earlier ops are stale: drop them, or a
+                // later schedule of the other slot (e.g. setDeadline) would revive them.
                 reminderMap.keys.removeAll { it.first == id }
+            }
+            for (reminderId in cancels.reminderIds) {
+                reminderIdsToCancel.add(reminderId)
+                reminderMap.values.removeAll { reminderIdOf(it) == reminderId }
             }
             for ((key, reminder) in tempMap) {
                 reminderMap[key] = reminder
-                // A schedule supersedes an EARLIER op's cancel. The same op's
-                // cancel stays: it clears the slot this op does not set, e.g. an
-                // LWW snapshot that sets remindAt and lists the absent
-                // deadlineRemindAt in clearedFields. Done ops schedule nothing.
-                if (reminder.taskId !in cancelIds) taskIdsToCancel.remove(reminder.taskId)
+                // A schedule supersedes an EARLIER op's cancel. Done ops schedule nothing.
+                if (reminder.taskId !in cancels.taskIds) taskIdsToCancel.remove(reminder.taskId)
+                reminderIdsToCancel.remove(reminderIdOf(reminder))
             }
         }
 
         return ReminderChangeResult(
             taskIdsToCancel = taskIdsToCancel,
+            reminderIdsToCancel = reminderIdsToCancel,
             remindersToSchedule = reminderMap.values.toList(),
             latestSeq = latestSeq,
-            hasMore = hasMore
+            hasMore = hasMore,
+            unreadableTaskIds = unreadableTaskIds,
         )
     }
 
@@ -229,17 +241,27 @@ class SuperSyncBackgroundProvider(
     }
 
     /**
-     * Extracts task IDs from an operation if it represents a reminder-relevant change.
+     * One op's cancels: tasks whose alarms all go (deleted, done, archived) and
+     * single alarms by reminder id, for ops that clear one reminder kind only —
+     * cancelling the whole task there would drop its other alarms (#10618).
+     */
+    private class OpCancels {
+        val taskIds = mutableSetOf<String>()
+        val reminderIds = mutableSetOf<String>()
+    }
+
+    /**
+     * Collects the alarms an operation cancels.
      * Server operation format:
      *   actionType = full NgRx action string, opType = "CRT"/"UPD"/"DEL",
      *   entityType = "TASK"/"PROJECT"/etc.,
      *   entityId = single ID, entityIds = batch IDs,
      *   payload = { actionPayload: {...}, entityChanges: [...] } (encrypted: base64 string)
      */
-    private fun extractReminderRelevantTaskIds(
+    private fun extractCancels(
         op: JSONObject,
         payloadLazy: Lazy<JSONObject?>,
-        out: MutableSet<String>
+        out: OpCancels
     ) {
         val entityType = op.optString("entityType", "")
         if (entityType != "TASK") return
@@ -247,25 +269,29 @@ class SuperSyncBackgroundProvider(
         val actionType = op.optString("actionType", "")
         val opType = op.optString("opType", "")
 
-        // Action-based detection: these actions always mean the reminder should be cancelled.
+        // Action-based detection: these actions always mean reminders should be cancelled.
         // NOTE: Most of these actions produce empty entityChanges in the op-log
         // (the op-log system only populates entityChanges for TIME_TRACKING actions).
         // That's why we match on actionType strings rather than inspecting field changes.
-        when (actionType) {
-            ACTION_DISMISS_REMINDER,
-            ACTION_MOVE_TO_ARCHIVE,
+        // Slots mirror the fields each reducer clears (task-shared-scheduling/-deadline.reducer.ts).
+        val slotsOf: ((String) -> List<String>)? = when (actionType) {
+            ACTION_DISMISS_REMINDER -> { id -> listOf(id) }
+            // dueDay is cleared too (or moved to today), so its alarm is outdated
+            ACTION_UNSCHEDULE -> { id -> listOf(id, dueDayReminderIdOf(id)) }
             ACTION_CLEAR_DEADLINE_REMINDER,
-            ACTION_DELETE_TASK,
-            ACTION_UNSCHEDULE,
-            ACTION_REMOVE_DEADLINE -> {
-                collectEntityIds(op, out)
-                return
-            }
+            ACTION_REMOVE_DEADLINE -> { id -> listOf(deadlineReminderIdOf(id)) }
+            else -> null
+        }
+        if (slotsOf != null) {
+            val ids = mutableSetOf<String>()
+            collectEntityIds(op, ids)
+            ids.forEach { out.reminderIds.addAll(slotsOf(it)) }
+            return
         }
 
-        // Delete operations always cancel reminders
-        if (opType == "DEL") {
-            collectEntityIds(op, out)
+        // Archive and delete operations cancel all of a task's alarms
+        if (actionType == ACTION_MOVE_TO_ARCHIVE || actionType == ACTION_DELETE_TASK || opType == "DEL") {
+            collectEntityIds(op, out.taskIds)
             return
         }
 
@@ -282,7 +308,7 @@ class SuperSyncBackgroundProvider(
             // Secondary: task fields carried in actionPayload (updateTask, updateTasks,
             // applyShortSyntax, LWW Update)
             for (patch in extractTaskPatches(actionType, payload)) {
-                if (isCancellingPatch(patch)) out.add(patch.taskId)
+                collectPatchCancels(patch, out)
             }
         }
     }
@@ -292,7 +318,7 @@ class SuperSyncBackgroundProvider(
      * This is the most reliable source since it always has a consistent structure.
      * Returns true if any reminder-relevant changes were found.
      */
-    private fun checkEntityChanges(payload: JSONObject, out: MutableSet<String>): Boolean {
+    private fun checkEntityChanges(payload: JSONObject, out: OpCancels): Boolean {
         val entityChanges = payload.optJSONArray("entityChanges") ?: return false
         var found = false
 
@@ -305,10 +331,7 @@ class SuperSyncBackgroundProvider(
             if (entityId.isEmpty()) continue
 
             val changes = entry.optJSONObject("changes") ?: continue
-            if (isReminderRelevantChanges(changes)) {
-                out.add(entityId)
-                found = true
-            }
+            if (collectFieldCancels(entityId, changes, out)) found = true
         }
         return found
     }
@@ -404,29 +427,48 @@ class SuperSyncBackgroundProvider(
     }
 
     /**
-     * True when the patch means the task's reminders must go: it is marked done,
-     * or its reminder is cleared — explicitly (null), out-of-band (clearedFields),
-     * or by a snapshot that no longer carries any reminder.
+     * Collects the alarms a patch cancels: all of them when the task is marked
+     * done, else each reminder (or due day) it clears — explicitly (null),
+     * out-of-band (clearedFields), or by a snapshot that no longer carries it.
      */
-    private fun isCancellingPatch(patch: TaskPatch): Boolean {
-        if (isReminderRelevantChanges(patch.fields)) return true
-        if ("remindAt" in patch.clearedFields || "deadlineRemindAt" in patch.clearedFields) return true
-        return patch.isSnapshot &&
-            !hasTimestamp(patch.fields, "remindAt") &&
-            !hasTimestamp(patch.fields, "deadlineRemindAt")
+    private fun collectPatchCancels(patch: TaskPatch, out: OpCancels) {
+        collectFieldCancels(patch.taskId, patch.fields, out)
+        fun isCleared(field: String) = field in patch.clearedFields ||
+            (patch.isSnapshot && !hasTimestamp(patch.fields, field))
+        if (isCleared("remindAt")) out.reminderIds.add(patch.taskId)
+        if (isCleared("deadlineRemindAt")) out.reminderIds.add(deadlineReminderIdOf(patch.taskId))
+        // shortcut: only a cleared dueDay; a moved one keeps its old alarm until the app reschedules
+        if (patch.fields.has("dueDay") && patch.fields.isNull("dueDay") ||
+            "dueDay" in patch.clearedFields ||
+            (patch.isSnapshot && !patch.fields.has("dueDay"))
+        ) {
+            out.reminderIds.add(dueDayReminderIdOf(patch.taskId))
+        }
     }
 
     private fun hasTimestamp(obj: JSONObject, key: String): Boolean =
         obj.has(key) && !obj.isNull(key) && obj.optLong(key, 0L) > 0L
 
     /**
-     * Check if a changes object contains reminder-relevant field changes.
+     * Collects the alarms a changes object cancels for [taskId]: all of them
+     * when it marks the task done, else each reminder it sets to null.
+     * Returns true if it cancels any.
      */
-    private fun isReminderRelevantChanges(changes: JSONObject): Boolean {
-        if (changes.has("isDone") && changes.optBoolean("isDone", false)) return true
-        if (changes.has("remindAt") && changes.isNull("remindAt")) return true
-        if (changes.has("deadlineRemindAt") && changes.isNull("deadlineRemindAt")) return true
-        return false
+    private fun collectFieldCancels(taskId: String, changes: JSONObject, out: OpCancels): Boolean {
+        if (changes.optBoolean("isDone", false)) {
+            out.taskIds.add(taskId)
+            return true
+        }
+        var found = false
+        if (changes.has("remindAt") && changes.isNull("remindAt")) {
+            out.reminderIds.add(taskId)
+            found = true
+        }
+        if (changes.has("deadlineRemindAt") && changes.isNull("deadlineRemindAt")) {
+            out.reminderIds.add(deadlineReminderIdOf(taskId))
+            found = true
+        }
+        return found
     }
 
     private fun collectEntityIds(op: JSONObject, out: MutableSet<String>) {

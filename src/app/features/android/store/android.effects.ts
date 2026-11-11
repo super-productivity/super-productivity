@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
+import { defer } from 'rxjs';
 import { concatMap, startWith, tap } from 'rxjs/operators';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
@@ -11,6 +12,7 @@ import {
 } from '../android-interface';
 import { T } from '../../../t.const';
 import { AndroidCaptureImportService } from '../android-capture-import.service';
+import { AndroidOnlineModeSunsetService } from '../android-online-mode-sunset.service';
 import { getCaptureImportErrorReason } from '../../tasks/native-capture/native-capture-importer.service';
 
 // TODO send message to electron when current task changes here
@@ -19,6 +21,7 @@ import { getCaptureImportErrorReason } from '../../tasks/native-capture/native-c
 export class AndroidEffects {
   private _snackService = inject(SnackService);
   private _captureImport = inject(AndroidCaptureImportService);
+  private _onlineModeSunset = inject(AndroidOnlineModeSunsetService);
 
   showForegroundServiceFailure$ =
     IS_ANDROID_WEB_VIEW &&
@@ -43,10 +46,17 @@ export class AndroidEffects {
       { dispatch: false },
     );
 
-  // Import the native capture inbox (Android shares, and tasks left by the
-  // removed startup quick-add overlay of an older app version) on cold start
-  // and every resume (a retry if the first import failed). concatMap keeps
-  // imports serial; startWith covers cold start.
+  // Once per app start: the legacy online-mode WebView hands its data over to
+  // the bundled offline app (#8832). A no-op everywhere else.
+  handOverLegacyOnlineMode$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(() => defer(() => this._onlineModeSunset.handOverToOfflineApp()), {
+      dispatch: false,
+    });
+
+  // Import the native capture inbox (Android shares and widget quick adds) on
+  // cold start and every resume (a retry if the first import failed). concatMap
+  // keeps imports serial; startWith covers cold start.
   importNativeCaptures$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(

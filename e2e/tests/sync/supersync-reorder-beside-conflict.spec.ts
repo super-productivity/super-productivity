@@ -154,7 +154,13 @@ const cases: { list: ListName; direction: Direction }[] = [
 ];
 
 for (const { list, direction } of cases) {
-  for (const bNewer of [true, false]) {
+  // `reorderer receives the resolution` needs B to win its edit conflict, so
+  // that B uploads a resolution (LWW) row that meets A's pending order. With
+  // A's edit newer, B simply applies the remote edit, uploads no resolution
+  // row, and the case collapses into `reorderer resolves`.
+  const bNewerVariants =
+    direction === 'reorderer receives the resolution' ? [true] : [true, false];
+  for (const bNewer of bNewerVariants) {
     test(`@supersync reorder beside a conflict: ${list} / ${direction} / ${bNewer ? 'B' : 'A'} edits last`, async ({
       browser,
       baseURL,
@@ -200,10 +206,10 @@ for (const { list, direction } of cases) {
         const editB = (): Promise<void> => editListed(b.page, list, target, valueB);
         // Real UI action order decides the timestamps.
         if (direction === 'reorderer receives the resolution') {
-          if (!bNewer) await editB();
+          // Only the B-newer variant runs here (see `bNewerVariants`).
           await editA();
           await sync(a);
-          if (bNewer) await editB();
+          await editB();
           await reorder(a.page, list, 0);
         } else {
           const actA = async (): Promise<void> => {
@@ -225,6 +231,19 @@ for (const { list, direction } of cases) {
           await sync(b);
         } else {
           await sync(b);
+          if (direction === 'reorderer receives the resolution') {
+            // B really resolved with a habit LWW row, synced to the server,
+            // before A (holding its order) downloads it.
+            expect(
+              (await rows(b.page)).some(
+                (r) =>
+                  r.source === 'local' &&
+                  !!r.syncedAt &&
+                  r.op.a === '[SIMPLE_COUNTER] LWW Update' &&
+                  r.op.d === target,
+              ),
+            ).toBe(true);
+          }
           await sync(a);
           await sync(b);
           await sync(a);
