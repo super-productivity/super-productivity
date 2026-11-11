@@ -76,7 +76,6 @@ const CH_DEADLINE = '!';
 const ALL_SPECIAL = `(\\${CH_PRO}|\\${CH_TAG}|\\${CH_DUE}|\\${CH_DEADLINE})`;
 
 const CH_TAG_REM = '-';
-const CH_TAG_REMALL = '\\';
 
 // The following project name extraction pattern attempts to improve on the
 // previous version by not immediately terminating upon encountering a short
@@ -761,9 +760,7 @@ const parseTagChanges = (
             return false;
           }
 
-          if (newTagTitle === (CH_TAG_REMALL as string)) {
-            modifiers.isClearAll = true;
-          } else if (newTagTitle.startsWith(CH_TAG_REM)) {
+          if (newTagTitle.startsWith(CH_TAG_REM)) {
             if (newTagTitle[1]) {
               modifiers.removeTitles.push(newTagTitle.substring(1));
             }
@@ -848,16 +845,6 @@ const parseTagChanges = (
   }
 
   // Make sure to get #\, as it won't necessarily have any addTitles or removeTitles
-  const removeAllTag: string = `${CH_TAG}${CH_TAG_REMALL}`;
-  if (tracked.text.includes(removeAllTag)) {
-    const start = tracked.text.indexOf(removeAllTag);
-    if (start !== -1) {
-      ranges.push(...tracked.rawRanges(start, start + removeAllTag.length));
-      tracked.remove(start, start + removeAllTag.length);
-    }
-    tracked.trim();
-    isTitleChanged = true;
-  }
 
   return {
     taskChanges,
