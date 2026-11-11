@@ -1709,7 +1709,7 @@
   },
   {
     "class": "move-loses-to-edit",
-    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "ref": "#11685 (reproduced in the app: e2e/tests/sync/supersync-task-move-conflict.spec.ts)",
     "name": "a later rename undoes a concurrent move everywhere but on the mover",
     "steps": [
       {
@@ -1731,7 +1731,7 @@
   },
   {
     "class": "move-loses-to-edit",
-    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "ref": "#11685 (reproduced in the app: e2e/tests/sync/supersync-task-move-conflict.spec.ts)",
     "name": "a later time delta undoes a concurrent move",
     "steps": [
       {
@@ -1749,7 +1749,7 @@
   },
   {
     "class": "move-drops-time",
-    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "ref": "#11685 (reproduced in the app: e2e/tests/sync/supersync-task-move-conflict.spec.ts)",
     "name": "a later move drops concurrently tracked time everywhere but on the tracker",
     "steps": [
       {
@@ -1771,7 +1771,7 @@
   },
   {
     "class": "move-crossing-repair",
-    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "ref": "#11686 (harness only, untriaged)",
     "name": "a move and a delete crossing a time delta end in a dev error and a REPAIR",
     "steps": [
       {
@@ -1796,7 +1796,7 @@
   },
   {
     "class": "move-crossing-repair",
-    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "ref": "#11686 (harness only, untriaged)",
     "name": "a REPAIR after two moves crossing deletes loses a task added later",
     "steps": [
       {
@@ -1846,7 +1846,7 @@
   },
   {
     "class": "concurrent-moves",
-    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "ref": "#11686 (harness only, untriaged)",
     "name": "two concurrent moves and a later notes edit leave the task in its old project",
     "steps": [
       {
@@ -1871,7 +1871,7 @@
   },
   {
     "class": "concurrent-moves",
-    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "ref": "#11686 (harness only, untriaged)",
     "name": "the older of two concurrent moves wins beside time deltas, and the newer mover keeps its own",
     "steps": [
       {
@@ -1906,7 +1906,7 @@
   },
   {
     "class": "unlisted-task",
-    "ref": "untriaged, found by the move mix; no issue yet (docs/plans/2026-11-10-sync-model-based-testing.md, decision M4)",
+    "ref": "#11686 (harness only, untriaged)",
     "name": "a task added beside a delete-versus-delta crossing is in no project list on its own device",
     "steps": [
       {

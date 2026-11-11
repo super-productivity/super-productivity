@@ -428,7 +428,16 @@ current behaviour (class names as in `sync-fuzz-pinned-traces.json`):
 | `concurrent-moves`     | 5 steps: two moves of `t1` beside time deltas and a notes edit           | The older move wins, the newer mover keeps its own project, and 1 s of time is lost               |
 | `unlisted-task`        | 8 steps: a delete-versus-delta crossing on `t1`, a move of `t2`, an add  | On the adding device the new task is in no project list. It may not need the move (see below)     |
 
-These are harness outcomes on the fake SuperSync server. By M4 they become
+**In the app (2026-11-11):** the first three rows were run as an E2E on
+SuperSync, in both upload orders and both timestamp orders. 7 of 8 tests fail
+on master `108534af`: the move, the rename or the tracked time is lost, and in
+4 of them the two devices disagree for good
+([#11685](https://github.com/super-productivity/super-productivity/issues/11685),
+spec `e2e/tests/sync/supersync-task-move-conflict.spec.ts`). The other five
+rows are tracked, untriaged, in
+[#11686](https://github.com/super-productivity/super-productivity/issues/11686).
+
+The table shows harness outcomes on the fake SuperSync server. By M4 they become
 issues after the slice merges, each needing a real-app reproduction and its
 rule 15 category before any fix. Read from the traces, not verified further:
 the first three rows are a whole-entity winner whose snapshot predates the

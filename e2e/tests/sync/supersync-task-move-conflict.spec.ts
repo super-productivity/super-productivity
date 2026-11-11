@@ -12,7 +12,7 @@ import {
 import { waitForAppReady } from '../../utils/waits';
 
 /**
- * Reproduces the sync fuzz `move` mix's two-step traces in the app
+ * #11685. Reproduces the sync fuzz `move` mix's two-step traces in the app
  * (sync-fuzz-pinned-traces.json, classes `move-loses-to-edit` and
  * `move-drops-time`): one device moves a task to another project while a
  * second device renames it or tracks time on it, both offline.
