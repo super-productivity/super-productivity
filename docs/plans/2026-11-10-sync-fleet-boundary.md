@@ -603,6 +603,22 @@ Received: 3`). A control run of only that spec on master code with harness
     fails in the same WebDAV job, so the failures predate this branch. Which
     of the spec's tests failed in the control run was not read.
 
+**2026-11-11, later.** The maintainer answered "do as recommended" to two
+follow-ups:
+
+- The v3-default branch is draft pull request
+  [#11684](https://github.com/super-productivity/super-productivity/pull/11684),
+  with the fresh-context review recorded in its body. It is a draft because
+  more than five sync pull requests are open.
+- A server-side fix for the reproduced divergence is on branch
+  `claude/repair-fast-forward-keeps-prefix`: the download no longer skips to
+  a causal `REPAIR` for a device that synced before while the ops between its
+  cursor and the `REPAIR` are retained. Imports and new devices keep the
+  skip. Server tests (1,528) and the client sync-fuzz specs (147) pass; the
+  E2E run that should turn the reproduction green was dispatched and is not
+  recorded here yet. This does not cover the pruned case, which still needs
+  the client rule described under "Devices unseen for 45 days".
+
 **Recommendation 1 (the two production queries)** needs access to the hosted
 database and is not done.
 
