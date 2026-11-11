@@ -162,6 +162,31 @@ describe('createIosReminderBudget', () => {
     expect(deps.cancel).not.toHaveBeenCalled();
   }));
 
+  it('does not arm a reminder late whose time passed while it waited for a slot', fakeAsync(() => {
+    setup(2);
+    budget.want(reminder(1, fromNow(1, MINUTE)));
+    budget.want(reminder(2, fromNow(2, MINUTE)));
+    budget.want(reminder(3, fromNow(3, MINUTE)));
+    tick(SETTLE_MS);
+    deps.schedule.calls.reset();
+
+    // All three are due; the effects skip past reminders, so 3 is not asked
+    // for again and must not fire now, minutes late.
+    tick(4 * MINUTE);
+    budget.want(reminder(4, fromNow(1)));
+    tick(SETTLE_MS);
+
+    expect(scheduledIds()).toEqual([4]);
+  }));
+
+  it('still arms a reminder whose time comes before its pass runs', fakeAsync(() => {
+    setup(2);
+    budget.want(reminder(1, fromNow(100, 1)));
+    tick(SETTLE_MS);
+
+    expect(scheduledIds()).toEqual([1]);
+  }));
+
   describe('with reminders left pending by an earlier app run', () => {
     it('cancels one that no longer fits and re-arms one that does', fakeAsync(() => {
       setup(2, [3, 2]);

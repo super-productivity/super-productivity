@@ -71,6 +71,8 @@ export const createIosReminderBudget = (
   // What iOS holds; null for one left by an earlier run, whose content is unknown.
   const armed = new Map<number, ScheduleReminderOptions | null>();
   const unwanted = new Set<number>();
+  // Wanted but left out by the last pass, and not asked for since.
+  const waiting = new Set<number>();
   let hasLoadedPending = false;
   let isRunning = false;
   let isDirty = false;
@@ -86,16 +88,17 @@ export const createIosReminderBudget = (
   };
 
   // A reminder that fired left iOS's pending list: it frees its slot and must
-  // not be armed again.
-  const forgetFired = (): void => {
+  // not be armed again. One that came due while waiting for a slot is dropped
+  // too: the effects skip past reminders, so nobody asks to cancel it, and
+  // arming it now would fire it late.
+  const forgetDue = (): void => {
     const now = Date.now();
     for (const [id, reminder] of wanted) {
-      if (
-        reminder.triggerAtMs <= now &&
-        armed.get(id)?.triggerAtMs === reminder.triggerAtMs
-      ) {
+      const hasFired = armed.get(id)?.triggerAtMs === reminder.triggerAtMs;
+      if (reminder.triggerAtMs <= now && (hasFired || waiting.has(id))) {
         wanted.delete(id);
         armed.delete(id);
+        waiting.delete(id);
       }
     }
   };
@@ -131,10 +134,15 @@ export const createIosReminderBudget = (
 
   const reconcile = async (): Promise<void> => {
     await loadPendingOnce();
-    forgetFired();
+    forgetDue();
     const admitted = pickSoonest([...wanted.values()], budget);
+    const admittedIds = new Set(admitted.map((r) => r.notificationId));
+    waiting.clear();
+    [...wanted.keys()]
+      .filter((id) => !admittedIds.has(id))
+      .forEach((id) => waiting.add(id));
     // Cancel first, so iOS never holds more than the budget.
-    await cancelDisplaced(new Set(admitted.map((r) => r.notificationId)));
+    await cancelDisplaced(admittedIds);
     await armChanged(admitted);
     deps.onPlanned(
       admitted.length >= budget ? admitted[admitted.length - 1].triggerAtMs : null,
@@ -170,6 +178,7 @@ export const createIosReminderBudget = (
     want: (reminder) => {
       wanted.set(reminder.notificationId, reminder);
       unwanted.delete(reminder.notificationId);
+      waiting.delete(reminder.notificationId);
       // Also for an unchanged reminder: a pass moves waiting reminders into
       // slots that fired ones left, and costs no native call when nothing changed.
       request();
