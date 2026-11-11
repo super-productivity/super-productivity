@@ -719,6 +719,52 @@ interface TagModifiers {
   removeTitles: string[];
   isClearAll: boolean;
 }
+const isTokenBoundary = (ch: string): boolean => ch === '' || /\s/.test(ch);
+
+// The tag regex stops at whitespace, but the autocomplete inserts full titles
+// ("#Deep Work"). So existing tags with whitespace in their title are matched
+// literally first, longest title first ("Deep Work" beats "Deep"); only exact
+// titles of existing tags count, so "#work meeting notes" stays a single tag.
+// Matches are removed from `tracked`; everything else is left to the regex.
+const consumeMultiWordTags = (
+  tracked: TrackedTitle,
+  allTags: Tag[],
+  ranges: TextRange[],
+): string[] => {
+  const tagTitles: string[] = [];
+  const multiWordTags = allTags
+    .map((tag) => ({ id: tag.id, title: tag.title.trim() }))
+    .filter((tag) => /\s/.test(tag.title))
+    .sort((a, b) => b.title.length - a.title.length);
+  if (!multiWordTags.length) {
+    return tagTitles;
+  }
+
+  let start = tracked.text.indexOf(CH_TAG);
+  while (start !== -1) {
+    const text = tracked.text;
+    const isSubtract = text.charAt(start + CH_TAG.length) == CH_TAG_REM;
+    const titleStart = start + CH_TAG.length + (isSubtract ? CH_TAG_REM.length : 0);
+    const tag = isTokenBoundary(text.charAt(start - 1))
+      ? multiWordTags.find(
+          (t) =>
+            text.slice(titleStart, titleStart + t.title.length).toLowerCase() ===
+              t.title.toLowerCase() &&
+            isTokenBoundary(text.charAt(titleStart + t.title.length)),
+        )
+      : undefined;
+    if (tag) {
+      const end = titleStart + tag.title.length;
+      ranges.push(...tracked.rawRanges(start, end));
+      tracked.remove(start, end);
+      tagTitles.push((isSubtract ? '-' : '') + tag.title);
+      start = tracked.text.indexOf(CH_TAG, start);
+    } else {
+      start = text.indexOf(CH_TAG, start + 1);
+    }
+  }
+  return tagTitles;
+};
 
 const parseTagChanges = (
   task: Partial<TaskCopy>,
@@ -740,35 +786,37 @@ const parseTagChanges = (
   const remTagIDs: string[] = [];
   // only exec if previous ones are also passed
   if (Array.isArray(task.tagIds) && Array.isArray(allTags)) {
+    const multiWordTagTitles = consumeMultiWordTags(tracked, allTags, ranges);
     const initialTitle = tracked.text;
-    const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX);
+    const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX) || [];
 
-    if (regexTagTitles && regexTagTitles.length) {
-      regexTagTitles
-        .map((title) => title.trim().replace(CH_TAG, ''))
-        .forEach((newTagTitle) => {
-          const charBeforeTag = initialTitle.charAt(
-            initialTitle.lastIndexOf(CH_TAG + newTagTitle) - 1,
-          );
-          // don't parse Fun title#blu as tag
-          if (charBeforeTag && charBeforeTag !== ' ') {
-            return false;
-          }
+    if ((regexTagTitles && regexTagTitles.length) || multiWordTagTitles.length) {
+      const tagTitles = regexTagTitles
+        .map((title: string) => title.trim().replace(CH_TAG, ''))
+        .concat(multiWordTagTitles);
+      tagTitles.forEach((newTagTitle) => {
+        const charBeforeTag = initialTitle.charAt(
+          initialTitle.lastIndexOf(CH_TAG + newTagTitle) - 1,
+        );
+        // don't parse Fun title#blu as tag
+        if (charBeforeTag && charBeforeTag !== ' ') {
+          return false;
+        }
 
-          const isNumericOnly = /^[0-9]+$/.test(newTagTitle);
-          if (isNumericOnly) {
-            return false;
-          }
+        const isNumericOnly = /^[0-9]+$/.test(newTagTitle);
+        if (isNumericOnly) {
+          return false;
+        }
 
-          if (newTagTitle.startsWith(CH_TAG_REM)) {
-            if (newTagTitle[1]) {
-              modifiers.removeTitles.push(newTagTitle.substring(1));
-            }
-          } else {
-            modifiers.addTitles.push(newTagTitle);
+        if (newTagTitle.startsWith(CH_TAG_REM)) {
+          if (newTagTitle[1]) {
+            modifiers.removeTitles.push(newTagTitle.substring(1));
           }
-          return true;
-        });
+        } else {
+          modifiers.addTitles.push(newTagTitle);
+        }
+        return true;
+      });
 
       const getExistingTag = (newTagTitle: string): Tag | undefined => {
         return allTags.find(
@@ -843,8 +891,6 @@ const parseTagChanges = (
     tracked.trim();
     isTitleChanged = true;
   }
-
-  // Make sure to get #\, as it won't necessarily have any addTitles or removeTitles
 
   return {
     taskChanges,
