@@ -83,6 +83,34 @@ export const latestCausalFullStateSql = (
   LIMIT 1
 `;
 
+/**
+ * Any full-state op strictly between two sequences: an import, or a REPAIR with
+ * or without a base cursor. The op types are literals for the same reason as in
+ * {@link latestCausalFullStateSql}, and they match the predicate of the
+ * full-state partial index.
+ */
+export const fullStateOpBetweenSql = (
+  userId: number,
+  afterSeq: number,
+  beforeSeq: number,
+): Prisma.Sql => Prisma.sql`
+  SELECT server_seq
+  FROM operations
+  WHERE user_id = ${userId}
+    AND server_seq > ${afterSeq}
+    AND server_seq < ${beforeSeq}
+    AND op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR')
+  LIMIT 1
+`;
+
+/**
+ * Longest stretch of ops the download keeps sending ahead of a causal REPAIR
+ * instead of skipping to it. Beyond it the skip applies as before: a release
+ * that cannot checkpoint a long download (v19.1.0 stops at 50,000 ops) must not
+ * lose the shortcut, and the in-between probe stays a short range read.
+ */
+export const MAX_KEPT_REPAIR_PREFIX_OPS = 10_000;
+
 /** Row shape of {@link latestCausalFullStateSql}. */
 export type LatestCausalFullStateRow = {
   server_seq: number;

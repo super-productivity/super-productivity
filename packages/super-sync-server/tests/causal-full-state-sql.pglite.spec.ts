@@ -3,6 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 import {
   CAUSAL_FULL_STATE_OPERATION_WHERE,
+  fullStateOpBetweenSql,
   latestCausalFullStateSql,
 } from '../src/sync/sync.types';
 import { createIndexFromMigration } from './migration-index.helper';
@@ -128,6 +129,30 @@ describe('latestCausalFullStateSql (real Postgres)', () => {
 
   afterAll(async () => {
     await db.close();
+  });
+
+  describe('fullStateOpBetweenSql', () => {
+    const between = async (user: number, after: number, before: number) =>
+      (await query(fullStateOpBetweenSql(user, after, before))).map((r) => r.server_seq);
+
+    it('finds an import strictly between the bounds', async () => {
+      expect(await between(USER, 1, 15)).toEqual([5]);
+    });
+
+    it('finds a legacy REPAIR, which the causal lookup never offers', async () => {
+      expect(await between(USER, 15, 30)).toEqual([25]);
+    });
+
+    it('excludes both bounds', async () => {
+      expect(await between(USER, 5, 15)).toEqual([]);
+      expect(await between(USER, 15, 25)).toEqual([]);
+    });
+
+    it('ignores ordinary ops and other users', async () => {
+      expect(await between(USER, 25, 31)).toEqual([]);
+      expect(await between(OTHER_USER, 7, 100)).toEqual([]);
+      expect(await between(OTHER_USER, 1, 100)).toEqual([7]);
+    });
   });
 
   describe('rows', () => {

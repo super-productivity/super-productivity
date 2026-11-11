@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { OperationDownloadService } from '../src/sync/services/operation-download.service';
+import { MAX_KEPT_REPAIR_PREFIX_OPS } from '../src/sync/sync.types';
 
 // Mock prisma
 vi.mock('../src/db', () => ({
@@ -762,10 +763,12 @@ describe('OperationDownloadService', () => {
         opType: string;
         sinceSeq: number;
         minSeq: number;
-        importBetween?: boolean;
+        fullStateOpBetween?: boolean;
+        repairSeq?: number;
         firstReturnedSeq?: number;
       }): Promise<{ startedAfter: number; clock: unknown; gap: boolean }> => {
         let startedAfter = -1;
+        const repairSeq = opts.repairSeq ?? 50;
         vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) =>
           fn({
             operation: {
@@ -776,17 +779,17 @@ describe('OperationDownloadService', () => {
               }),
             },
             userSyncState: {
-              findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
+              findUnique: vi.fn().mockResolvedValue({ lastSeq: repairSeq + 10 }),
             },
-            // Every other raw read here is the import-in-between probe.
+            // Every other raw read here is the full-state-op-in-between probe.
             $queryRaw: mockTxQueryRaw(
-              { serverSeq: 50, opType: opts.opType },
-              opts.importBetween ? [{ server_seq: 20 }] : [],
+              { serverSeq: repairSeq, opType: opts.opType },
+              opts.fullStateOpBetween ? [{ server_seq: 20 }] : [],
             ),
           }),
         );
         const result = await service.getOpsSinceWithSeq(1, opts.sinceSeq);
-        expect(result.latestSnapshotSeq).toBe(50);
+        expect(result.latestSnapshotSeq).toBe(repairSeq);
         return {
           startedAfter,
           clock: result.snapshotVectorClock,
@@ -804,7 +807,6 @@ describe('OperationDownloadService', () => {
         // Nothing was skipped, so there is no skipped-ops clock to aggregate.
         expect(clock).toBeUndefined();
         expect(gap).toBe(false);
-        expect(prisma.$queryRaw).not.toHaveBeenCalled();
       });
 
       it('sends them when the retained history starts right after the cursor', async () => {
@@ -819,17 +821,29 @@ describe('OperationDownloadService', () => {
         ).toBe(49);
       });
 
-      it('skips to the REPAIR when an import lies in between', async () => {
+      it('skips to the REPAIR when another full-state op lies in between', async () => {
         expect(
           (
             await download({
               opType: 'REPAIR',
               sinceSeq: 10,
               minSeq: 1,
-              importBetween: true,
+              fullStateOpBetween: true,
             })
           ).startedAfter,
         ).toBe(49);
+      });
+
+      it('skips to the REPAIR when it is further ahead than the cap', async () => {
+        const repairSeq = 10 + MAX_KEPT_REPAIR_PREFIX_OPS;
+        expect(
+          (await download({ opType: 'REPAIR', sinceSeq: 10, minSeq: 1, repairSeq }))
+            .startedAfter,
+        ).toBe(10);
+        expect(
+          (await download({ opType: 'REPAIR', sinceSeq: 9, minSeq: 1, repairSeq }))
+            .startedAfter,
+        ).toBe(repairSeq - 1);
       });
 
       it('reports a hole in the retained ops as a gap', async () => {

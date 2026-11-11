@@ -8,7 +8,9 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
 import {
   LatestCausalFullStateRow,
+  fullStateOpBetweenSql,
   latestCausalFullStateSql,
+  MAX_KEPT_REPAIR_PREFIX_OPS,
   Operation,
   ServerOperation,
   VectorClock,
@@ -139,29 +141,6 @@ const parsePersistedVectorClock = (value: unknown): VectorClock | undefined => {
   return clock;
 };
 
-/**
- * Whether a SYNC_IMPORT or BACKUP_IMPORT lies strictly between two sequences.
- * The op types are literals, as in latestCausalFullStateSql, and the range is
- * the prefix the caller is about to send anyway.
- */
-const hasImportBetween = async (
-  tx: Prisma.TransactionClient,
-  userId: number,
-  afterSeq: number,
-  beforeSeq: number,
-): Promise<boolean> => {
-  const rows = await tx.$queryRaw<{ server_seq: number }[]>(Prisma.sql`
-    SELECT server_seq
-    FROM operations
-    WHERE user_id = ${userId}
-      AND server_seq > ${afterSeq}
-      AND server_seq < ${beforeSeq}
-      AND op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT')
-    LIMIT 1
-  `);
-  return rows.length > 0;
-};
-
 export class OperationDownloadService {
   /**
    * Get operations and latest sequence atomically with gap detection.
@@ -248,21 +227,28 @@ export class OperationDownloadService {
         // Imports replace state by design and keep the skip, as does a new device
         // (sinceSeq 0), which has nothing to merge. Once the prefix is pruned the
         // skip is all that is left.
-        // An import between the cursor and the REPAIR keeps the skip too: sending
-        // it would put the import's replace-or-keep question to a device that
-        // today is moved past it.
+        // Another full-state op between the cursor and the REPAIR keeps the skip
+        // too. The client defers only the first full-state op of a batch, so an
+        // import or a legacy REPAIR there would put the import question to a
+        // device that today is moved past it, and a second causal REPAIR would
+        // discard the ops just sent. So does a stretch longer than the cap.
         let minSeq: number | null = null;
         let keepsRepairPrefix = false;
         if (
           latestFullStateOp?.isRepair &&
           sinceSeq > 0 &&
-          sinceSeq < latestFullStateOp.serverSeq
+          sinceSeq < latestFullStateOp.serverSeq &&
+          latestFullStateOp.serverSeq - sinceSeq <= MAX_KEPT_REPAIR_PREFIX_OPS
         ) {
           minSeq = await findMinSeq(tx, userId, latestSeq);
           keepsRepairPrefix =
             minSeq !== null &&
             minSeq <= sinceSeq + 1 &&
-            !(await hasImportBetween(tx, userId, sinceSeq, latestFullStateOp.serverSeq));
+            (
+              await tx.$queryRaw<{ server_seq: number }[]>(
+                fullStateOpBetweenSql(userId, sinceSeq, latestFullStateOp.serverSeq),
+              )
+            ).length === 0;
         }
 
         if (

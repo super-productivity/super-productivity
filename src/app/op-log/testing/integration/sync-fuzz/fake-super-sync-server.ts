@@ -78,6 +78,8 @@ const MAX_CLOCK_DRIFT_MS = 60 * 1000; // DEFAULT_SYNC_CONFIG.maxClockDriftMs
 const MISC_TASKS_SPLIT_SCHEMA_VERSION = 2;
 const PIGGYBACK_LIMIT = 500;
 const FULL_STATE_OP_TYPES = new Set(['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR']);
+/** sync.types.ts MAX_KEPT_REPAIR_PREFIX_OPS. */
+const MAX_KEPT_REPAIR_PREFIX_OPS = 10_000;
 /** The action type the snapshot route stores on a full-state op. */
 export const FULL_STATE_ACTION_TYPE = '[SP_ALL] Load(import) all data';
 /** sync.types.ts STATE_REPLACEMENT_REQUIRED_ERROR: the fence's rejection text. */
@@ -883,13 +885,14 @@ export class FakeSuperSyncServer {
       snapshotRow?.op.opType === 'REPAIR' &&
       sinceSeq > 0 &&
       sinceSeq < snapshotRow.serverSeq &&
+      snapshotRow.serverSeq - sinceSeq <= MAX_KEPT_REPAIR_PREFIX_OPS &&
       firstSeq !== null &&
       firstSeq <= sinceSeq + 1 &&
       !this.rows.some(
         (row) =>
           row.serverSeq > sinceSeq &&
           row.serverSeq < snapshotRow.serverSeq &&
-          (row.op.opType === 'SYNC_IMPORT' || row.op.opType === 'BACKUP_IMPORT'),
+          FULL_STATE_OP_TYPES.has(row.op.opType),
       );
     if (snapshotRow && sinceSeq < snapshotRow.serverSeq && !keepsRepairPrefix) {
       effectiveSinceSeq = snapshotRow.serverSeq - 1;
