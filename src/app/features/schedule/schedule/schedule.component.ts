@@ -9,6 +9,7 @@ import {
   Signal,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { combineLatest, fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
@@ -405,6 +406,11 @@ export class ScheduleComponent {
   isPagerWarm = signal(false);
   readonly dayPageKey = scheduleDayPageKey;
   private _dayPager = viewChild(SwipePagerComponent);
+  // the week view's schedule-week, or one per rendered page of the day pager
+  private _scheduleWeeks = viewChildren(ScheduleWeekComponent);
+  private _scheduleWeekEls = viewChildren(ScheduleWeekComponent, {
+    read: ElementRef<HTMLElement>,
+  });
 
   currentDayPage = computed<ScheduleDayPage | undefined>(() => {
     const day = this.daysToShow()[0];
@@ -583,9 +589,11 @@ export class ScheduleComponent {
     // for; a scroll margin on the target adds the difference in the same
     // scroll, so it is still clamped at the end of the day. offsetHeight is a
     // layout value: the enter animation's transform does not skew it.
+    const weekIndex = this._scheduleWeekEls().findIndex((ref) =>
+      ref.nativeElement.contains(element),
+    );
     const trayHeight =
-      element.closest('schedule-week')?.querySelector<HTMLElement>('schedule-tray')
-        ?.offsetHeight ?? 0;
+      this._scheduleWeeks()[weekIndex]?.getVisibleTrayEl()?.offsetHeight ?? 0;
     element.style.scrollMarginTop = `${trayHeight}px`;
     element.scrollIntoView({ block: 'start', inline: 'start', behavior: 'instant' });
   }

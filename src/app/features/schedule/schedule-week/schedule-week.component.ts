@@ -285,6 +285,19 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   });
 
   readonly gridContainer = viewChild.required<ElementRef>('gridContainer');
+  private readonly _trayRef = viewChild(ScheduleTrayComponent, {
+    read: ElementRef<HTMLElement>,
+  });
+
+  /**
+   * The tray's element while it takes up space in the sticky header; undefined
+   * outside tray mode and while the shown days have no task without a time
+   * (an empty tray renders nothing).
+   */
+  getVisibleTrayEl(): HTMLElement | undefined {
+    const el = this._trayRef()?.nativeElement;
+    return el?.offsetHeight ? el : undefined;
+  }
 
   // Drag preview properties for time indicator
   private readonly _dragPreviewContext = this._service.dragPreviewContext;

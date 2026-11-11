@@ -261,6 +261,34 @@ describe('ScheduleWeekDragService', () => {
       expect(service.dragOverTrayDay()).toBeNull();
     });
 
+    it('neither highlights nor moves a calendar event released on a tray', () => {
+      const calEv = {
+        id: 'calendar-1::event-1',
+        type: SVEType.CalendarEvent,
+        style: '',
+        startHours: 10,
+        timeLeftInHours: 0.5,
+        data: {
+          id: 'calendar-1::event-1',
+          calProviderId: 'provider-1',
+          issueProviderKey: 'plugin:google-calendar-provider',
+          title: 'Meeting',
+          start: new Date(2026, 0, 5, 10, 0).getTime(),
+          duration: ONE_HOUR_MS,
+          icon: 'event',
+        },
+      } as ScheduleEvent;
+      const release = dragTo(calEv, [tray, col], { x: 50, y: 20 });
+
+      expect(service.dragOverTrayDay()).toBeNull();
+      expect(service.dragPreviewStyle()).toBeNull();
+
+      release();
+
+      expect(calendarEventActionsSpy.moveToStartTime).not.toHaveBeenCalled();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
     it('does nothing when a chip is dropped back on its own tray', () => {
       tray.setAttribute('data-tray-day', DAY);
 

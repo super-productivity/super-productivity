@@ -491,7 +491,11 @@ export class ScheduleWeekDragService {
       interactiveElements
         .find((el) => el.hasAttribute(TRAY_DAY_ATTR))
         ?.getAttribute(TRAY_DAY_ATTR) ?? null;
-    this._dragOverTrayDay.set(trayDay);
+    // Only a task can go to a day without a time: a calendar event over the
+    // tray gets no drop highlight, since its release there changes nothing.
+    this._dragOverTrayDay.set(
+      trayDay && this._pluckTaskFromEvent(this._currentDragEvent()) ? trayDay : null,
+    );
     // Content below the date row is no target at all: released there, a task
     // stays where it was instead of getting the hidden time underneath.
     const isGridCovered =
