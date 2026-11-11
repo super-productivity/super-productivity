@@ -153,8 +153,8 @@ run_test() {
 
   set_phase cap
   xcrun simctl launch "$UDID" "$BUNDLE_ID"
-  # Arming 70 reminders takes the app minutes while it re-arms all of them on
-  # every change.
+  # Generous: a build that re-arms every reminder on each change (as before the
+  # iOS budget) takes minutes to arm 70.
   wait_phase cap 1800
   terminate_until_fired cap
 
