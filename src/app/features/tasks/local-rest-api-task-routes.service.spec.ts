@@ -202,6 +202,18 @@ describe('LocalRestApiTaskRoutesService', () => {
       expect(response.status).toBe(200);
     });
 
+    it('reports the logical day', async () => {
+      Object.defineProperty(taskServiceMock, 'currentTask$', { get: () => of(null) });
+      Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of([]) });
+      dateServiceMock.todayStr.and.returnValue('2026-05-11');
+
+      const response = await sendRequestAndWait(createRequest('GET', '/status'));
+
+      expect((response.body as { data: Record<string, unknown> }).data['todayStr']).toBe(
+        '2026-05-11',
+      );
+    });
+
     describe('trackingOnOtherDevice', () => {
       const setRemote = (
         state: 'tracking' | 'stopped',
