@@ -9,6 +9,8 @@ import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLog } from '../core/log';
 import { ExecBeforeCloseService } from '../core/electron/exec-before-close.service';
 import { withUnknownMemberWarning } from './util/unknown-plugin-api-member.util';
+import { withRevocableApi } from './util/revocable-plugin-api.util';
+import { createPluginTimers } from './util/plugin-timers.util';
 
 /**
  * Simplified plugin runner following KISS principles.
@@ -29,6 +31,8 @@ export class PluginRunner {
   private _pluginApis = new Map<string, PluginAPI>();
   private _readyCallbacks = new Map<string, () => void | Promise<void>>();
   private _unloadCallbacks = new Map<string, () => void | Promise<void>>();
+  // revokes the API and stops the timers handed to the plugin's code on unload
+  private _runtimeDisposers = new Map<string, () => void>();
 
   /**
    * Load and execute a plugin
@@ -135,7 +139,12 @@ export class PluginRunner {
           });
         }
       } catch (error) {
+        // Let onUnload finish its synchronous cleanup before revoking the API.
         this.triggerUnload(manifest.id);
+        // a failed plugin stays registered with an error and may never reach
+        // unloadPlugin (e.g. failed upload, then uninstall) — stop it now
+        this._runtimeDisposers.get(manifest.id)?.();
+        this._runtimeDisposers.delete(manifest.id);
         this._pluginBridge.unregisterPluginHooks(manifest.id);
         pluginInstance.error =
           error instanceof Error ? error.message : 'Failed to load plugin';
@@ -181,9 +190,14 @@ export class PluginRunner {
       try {
         // Simple function execution with plugin API in scope
         // Provide both 'plugin' and 'PluginAPI' for backward compatibility
+        // timer params shadow the window globals so unload can stop them
         const pluginFunction = new Function(
           'plugin',
           'PluginAPI',
+          'setTimeout',
+          'setInterval',
+          'clearTimeout',
+          'clearInterval',
           `
           'use strict';
           try {
@@ -195,10 +209,27 @@ export class PluginRunner {
         );
 
         // Execute with API (pass same object for both parameter names)
-        const guardedApi = withUnknownMemberWarning(api, (msg) =>
-          PluginLog.warn(`[${manifest.id}] ${msg}`),
+        const revocable = withRevocableApi(
+          withUnknownMemberWarning(api, (msg) =>
+            PluginLog.warn(`[${manifest.id}] ${msg}`),
+          ),
+          (member) =>
+            PluginLog.warn(`[${manifest.id}] ignored ${member}() call after unload`),
         );
-        pluginFunction(guardedApi, guardedApi);
+        const { timers, dispose } = createPluginTimers();
+        this._runtimeDisposers.set(manifest.id, () => {
+          revocable.revoke();
+          dispose();
+        });
+        const guardedApi = revocable.api;
+        pluginFunction(
+          guardedApi,
+          guardedApi,
+          timers.setTimeout,
+          timers.setInterval,
+          timers.clearTimeout,
+          timers.clearInterval,
+        );
         resolve();
       } catch (error) {
         reject(error);
@@ -218,6 +249,10 @@ export class PluginRunner {
     // service already fired it. Outside the loaded-check so a plugin whose
     // loadPlugin threw after API creation still gets cleaned up.
     this.triggerUnload(pluginId);
+    // after triggerUnload, so the onUnload callback's synchronous part can
+    // still use the API for its own cleanup
+    this._runtimeDisposers.get(pluginId)?.();
+    this._runtimeDisposers.delete(pluginId);
 
     const plugin = this._loadedPlugins.get(pluginId);
     if (plugin) {

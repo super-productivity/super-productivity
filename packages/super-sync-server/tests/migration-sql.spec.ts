@@ -459,6 +459,11 @@ describe('performance migrations', () => {
     expect(dockerWorkflow).toContain('revision=$revision');
     expect(dockerWorkflow).toContain('VCS_REF=${{ steps.source-ref.outputs.revision }}');
     expect(dockerWorkflow).not.toContain('labels: ${{ steps.meta.outputs.labels }}');
+    // Master image: `latest` is pushed only after the gate suites of the same run pass.
+    expect(dockerWorkflow).toContain('needs: [server-tests, sync-e2e]');
+    expect(dockerWorkflow).toContain(
+      "needs.server-tests.result == 'success' && needs.sync-e2e.result == 'success'",
+    );
     // Release images: a vX.Y.Z tag built from the tag's tree, never `latest`, never pruned.
     expect(dockerWorkflow).toContain('types: [published]');
     expect(dockerWorkflow).toContain('!github.event.release.prerelease');

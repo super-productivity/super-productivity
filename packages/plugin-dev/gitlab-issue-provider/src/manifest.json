@@ -13,8 +13,10 @@
   "dataSharing": [
     {
       "recipient": "GitLab",
+      "hosts": ["gitlab.com"],
       "userServer": true,
-      "data": ["credentials", "userText"]
+      "data": ["credentials", "userText"],
+      "optionalData": ["timeTracked"]
     }
   ],
   "hooks": [],
