@@ -1,6 +1,5 @@
 import { effect, inject, Injectable, signal } from '@angular/core';
 import { PluginLog } from '../core/log';
-import { GlobalConfigService } from '../features/config/global-config.service';
 import { DEFAULT_LANGUAGE } from '../core/locale.constants';
 import { environment } from '../../environments/environment';
 import { LanguageService } from '../core/language/language.service';
@@ -17,7 +16,6 @@ interface PluginTranslations {
   providedIn: 'root',
 })
 export class PluginI18nService {
-  private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _languageService = inject(LanguageService);
 
   // Map of pluginId -> translations by language
@@ -28,10 +26,9 @@ export class PluginI18nService {
   readonly currentLanguage = this._currentLanguage.asReadonly();
 
   constructor() {
-    // Reactively sync with global config language
+    // Follow the language applied to the UI, including fresh-install autoswitching.
     effect(() => {
-      const lng =
-        this._globalConfigService.localization()?.lng || this._languageService.detect();
+      const lng = this._languageService.currentLanguage();
       if (lng && lng !== this._currentLanguage()) {
         this._currentLanguage.set(lng);
         PluginLog.log(`[PluginI18n] Language initialized/updated to: ${lng}`);

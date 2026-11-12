@@ -26,16 +26,17 @@ import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
 import { DataInitStateService } from '../core/data-init/data-init-state.service';
 import { HydrationStateService } from '../op-log/apply/hydration-state.service';
 import { PluginUserData } from './plugin-persistence.model';
-import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
-import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
 import { LanguageCode } from '../core/locale.constants';
 import { LanguageService } from '../core/language/language.service';
 import { initialTaskState, taskReducer } from '../features/tasks/store/task.reducer';
 import { setSelectedTask } from '../features/tasks/store/task.actions';
 import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
+import { TranslateService } from '@ngx-translate/core';
+import { DateTimeFormatService } from '../core/date-time-format/date-time-format.service';
 
 describe('PluginHooksEffects', () => {
   let effects: PluginHooksEffects;
+  let languageService: LanguageService;
   let actions$: Observable<any>;
   let pluginServiceMock: jasmine.SpyObj<PluginService>;
   let pluginI18nServiceMock: jasmine.SpyObj<PluginI18nService>;
@@ -113,7 +114,19 @@ describe('PluginHooksEffects', () => {
         }),
         { provide: PluginService, useValue: pluginServiceMock },
         { provide: PluginI18nService, useValue: pluginI18nServiceMock },
-        { provide: LanguageService, useValue: { detect: () => LanguageCode.de } },
+        LanguageService,
+        {
+          provide: TranslateService,
+          useValue: {
+            use: jasmine.createSpy('use'),
+            getBrowserCultureLang: () => 'ja',
+            getBrowserLang: () => 'ja',
+          },
+        },
+        {
+          provide: DateTimeFormatService,
+          useValue: { setUiLanguage: jasmine.createSpy('setUiLanguage') },
+        },
         // workContextChange$ reads activeWorkContext$ at construction; an
         // empty stream keeps that effect inert for the other effects' tests.
         { provide: WorkContextService, useValue: { activeWorkContext$: EMPTY } },
@@ -149,6 +162,7 @@ describe('PluginHooksEffects', () => {
     });
 
     effects = TestBed.inject(PluginHooksEffects);
+    languageService = TestBed.inject(LanguageService);
     store = TestBed.inject(MockStore);
 
     // Override selector to return our mock task
@@ -452,65 +466,54 @@ describe('PluginHooksEffects', () => {
   });
 
   describe('languageChange$', () => {
-    it('notifies plugins when switching back to System default', () => {
-      const selector = store.overrideSelector(selectLocalizationConfig, {
-        lng: LanguageCode.zh,
-        dateTimeLocale: undefined,
-        firstDayOfWeek: undefined,
-      });
-      const changes = new ReplaySubject<ReturnType<typeof updateGlobalConfigSection>>();
-      actions$ = changes;
+    it('notifies plugins of the English UI on a fresh Japanese install', () => {
+      languageService.tryAutoswitch();
       const subscription = effects.languageChange$.subscribe();
-      const change = updateGlobalConfigSection({
-        sectionKey: 'localization',
-        sectionCfg: {},
-      });
-      changes.next(change);
-      selector.setResult({
-        lng: undefined,
-        dateTimeLocale: undefined,
-        firstDayOfWeek: undefined,
-      });
-      store.refreshState();
-      changes.next(change);
+      TestBed.tick();
 
-      expect(pluginI18nServiceMock.setCurrentLanguage.calls.allArgs()).toEqual([
-        [LanguageCode.zh],
-        [LanguageCode.de],
-      ]);
+      expect(pluginI18nServiceMock.setCurrentLanguage).toHaveBeenCalledOnceWith(
+        LanguageCode.en,
+      );
       expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
         PluginHooks.LANGUAGE_CHANGE,
-        { code: LanguageCode.de, newLanguage: LanguageCode.de },
+        { code: LanguageCode.en, newLanguage: LanguageCode.en },
       );
       subscription.unsubscribe();
     });
 
-    it('updates plugin i18n and dispatches a language hook payload compatible with documented and typed plugins', (done) => {
-      store.overrideSelector(selectLocalizationConfig, {
-        lng: LanguageCode.de,
-        dateTimeLocale: undefined,
-        firstDayOfWeek: undefined,
-      });
-      actions$ = of(
-        updateGlobalConfigSection({
-          sectionKey: 'localization',
-          sectionCfg: {},
-        }),
-      );
+    it('notifies plugins when switching back to System default', () => {
+      languageService.setLng(LanguageCode.zh);
+      const subscription = effects.languageChange$.subscribe();
+      TestBed.tick();
+      languageService.setLng(null);
+      TestBed.tick();
 
-      effects.languageChange$.subscribe(() => {
-        expect(pluginI18nServiceMock.setCurrentLanguage).toHaveBeenCalledOnceWith(
-          LanguageCode.de,
-        );
-        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
-          PluginHooks.LANGUAGE_CHANGE,
-          {
-            code: LanguageCode.de,
-            newLanguage: LanguageCode.de,
-          },
-        );
-        done();
-      });
+      expect(pluginI18nServiceMock.setCurrentLanguage.calls.allArgs()).toEqual([
+        [LanguageCode.zh],
+        [LanguageCode.ja],
+      ]);
+      expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+        PluginHooks.LANGUAGE_CHANGE,
+        { code: LanguageCode.ja, newLanguage: LanguageCode.ja },
+      );
+      subscription.unsubscribe();
+    });
+
+    it('does not repeat the hook when the applied language stays the same', () => {
+      languageService.setLng(LanguageCode.de);
+      const subscription = effects.languageChange$.subscribe();
+      TestBed.tick();
+      languageService.setLng(LanguageCode.de);
+      TestBed.tick();
+
+      expect(pluginI18nServiceMock.setCurrentLanguage).toHaveBeenCalledOnceWith(
+        LanguageCode.de,
+      );
+      expect(pluginServiceMock.dispatchHook).toHaveBeenCalledOnceWith(
+        PluginHooks.LANGUAGE_CHANGE,
+        { code: LanguageCode.de, newLanguage: LanguageCode.de },
+      );
+      subscription.unsubscribe();
     });
   });
 

@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
@@ -129,7 +130,10 @@ describe('PluginService uploaded translations round-trip', () => {
         PluginI18nService,
         { provide: HttpClient, useValue: { get: () => of(null) } },
         { provide: GlobalConfigService, useValue: globalConfig },
-        { provide: LanguageService, useValue: { detect: () => LanguageCode.en } },
+        {
+          provide: LanguageService,
+          useValue: { currentLanguage: signal(LanguageCode.en).asReadonly() },
+        },
         { provide: PluginRunner, useValue: pluginRunner },
         { provide: PluginSecurityService, useValue: pluginSecurity },
         { provide: PluginMetaPersistenceService, useValue: pluginMetaPersistence },

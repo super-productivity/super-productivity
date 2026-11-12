@@ -4,10 +4,13 @@ import { LanguageService } from '../core/language/language.service';
 import { LanguageCode } from '../core/locale.constants';
 import { PluginI18nService } from './plugin-i18n.service';
 import { GlobalConfigService } from '../features/config/global-config.service';
+import { TranslateService } from '@ngx-translate/core';
+import { DateTimeFormatService } from '../core/date-time-format/date-time-format.service';
 
 describe('PluginI18nService', () => {
   let service: PluginI18nService;
-  const localization = signal<{ lng?: LanguageCode }>({ lng: LanguageCode.en });
+  let languageService: LanguageService;
+  const localization = signal<{ lng?: LanguageCode | null }>({ lng: LanguageCode.en });
 
   beforeEach(() => {
     localization.set({ lng: LanguageCode.en });
@@ -19,15 +22,44 @@ describe('PluginI18nService', () => {
       providers: [
         PluginI18nService,
         { provide: GlobalConfigService, useValue: globalConfigSpy },
-        { provide: LanguageService, useValue: { detect: () => LanguageCode.de } },
+        LanguageService,
+        {
+          provide: TranslateService,
+          useValue: {
+            use: jasmine.createSpy('use'),
+            getBrowserCultureLang: () => 'de',
+            getBrowserLang: () => 'de',
+          },
+        },
+        {
+          provide: DateTimeFormatService,
+          useValue: { setUiLanguage: jasmine.createSpy('setUiLanguage') },
+        },
       ],
     });
 
     service = TestBed.inject(PluginI18nService);
+    languageService = TestBed.inject(LanguageService);
+    spyOn(languageService, 'detect').and.returnValue(LanguageCode.de);
+  });
+
+  it('keeps plugins in English when a fresh install detects Japanese', () => {
+    localization.set({ lng: undefined });
+    (languageService.detect as jasmine.Spy).and.returnValue(LanguageCode.ja);
+    languageService.tryAutoswitch();
+    service.loadPluginTranslationsFromContent('test-plugin', {
+      en: JSON.stringify({ GREETING: 'Hello' }),
+      ja: JSON.stringify({ GREETING: 'こんにちは' }),
+    });
+    TestBed.tick();
+
+    expect(service.getCurrentLanguage()).toBe('en');
+    expect(service.translate('test-plugin', 'GREETING')).toBe('Hello');
   });
 
   it('uses the detected UI language under System default', () => {
-    localization.set({});
+    localization.set({ lng: null });
+    languageService.setLng(null);
     service.loadPluginTranslationsFromContent('test-plugin', {
       en: JSON.stringify({ GREETING: 'Hello' }),
       de: JSON.stringify({ GREETING: 'Hallo' }),
@@ -40,12 +72,23 @@ describe('PluginI18nService', () => {
 
   it('returns from an explicit language to the detected UI language', () => {
     localization.set({ lng: LanguageCode.zh });
+    languageService.setLng(LanguageCode.zh);
     TestBed.tick();
     expect(service.getCurrentLanguage()).toBe('zh');
 
-    localization.set({});
+    localization.set({ lng: null });
+    languageService.setLng(null);
     TestBed.tick();
     expect(service.getCurrentLanguage()).toBe('de');
+  });
+
+  it('uses Japanese when System default is explicitly selected', () => {
+    localization.set({ lng: null });
+    (languageService.detect as jasmine.Spy).and.returnValue(LanguageCode.ja);
+    languageService.setLng(null);
+    TestBed.tick();
+
+    expect(service.getCurrentLanguage()).toBe('ja');
   });
 
   describe('loadPluginTranslationsFromContent', () => {
