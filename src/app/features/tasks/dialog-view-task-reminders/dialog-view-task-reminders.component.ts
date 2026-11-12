@@ -25,6 +25,7 @@ import { T } from '../../../t.const';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
 import { getTomorrow } from '../../../util/get-tomorrow';
 import { ProjectService } from '../../project/project.service';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatIconButton } from '@angular/material/button';
@@ -35,6 +36,7 @@ import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';

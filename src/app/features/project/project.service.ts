@@ -14,7 +14,9 @@ import {
   WorkContextType,
 } from '../work-context/work-context.model';
 import { MatDialog } from '@angular/material/dialog';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskService } from '../tasks/task.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { addSubTask } from '../tasks/store/task.actions';
 import { Task, TaskState } from '../tasks/task.model';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -38,6 +40,7 @@ import {
   selectUnarchivedProjectsWithoutCurrent,
 } from './store/project.selectors';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { getTaskById } from '../tasks/store/task.reducer.util';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
@@ -53,9 +56,11 @@ import { selectSectionsByContextIdMap } from '../section/store/section.selectors
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { DateService } from '../../core/date/date.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 import { MenuTreeService } from '../menu-tree/menu-tree.service';
 import { selectMenuTreeProjectTree } from '../menu-tree/store/menu-tree.selectors';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskTimeSyncService } from '../tasks/task-time-sync.service';
 
 export interface ProjectCompletionInfo {
