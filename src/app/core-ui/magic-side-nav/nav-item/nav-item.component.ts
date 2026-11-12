@@ -34,17 +34,12 @@ import {
   MatMenuPanel,
 } from '@angular/material/menu';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { selectTaskSchedulingSnapshot } from '../../../features/tasks/store/task.selectors';
-import { createSelector, Store } from '@ngrx/store';
+import { selectOpenTaskIds } from '../../../features/tasks/store/task.selectors';
+import { Store } from '@ngrx/store';
 import { TranslatePipe } from '@ngx-translate/core';
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { MenuTreeKind } from '../../../features/menu-tree/store/menu-tree.model';
 import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
-
-const selectOpenTaskIds = createSelector(
-  selectTaskSchedulingSnapshot,
-  (tasks) => new Set(tasks.filter((task) => !task.isDone).map((task) => task.id)),
-);
 
 @Component({
   selector: 'nav-item',

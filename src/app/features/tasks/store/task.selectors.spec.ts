@@ -260,7 +260,7 @@ describe('Task Selectors', () => {
     fromSelectors.selectAllTasksInActiveProjects.release();
     fromSelectors.selectOverdueTasks.release();
     fromSelectors.selectAllTasksWithDueTimeSorted.release();
-    fromSelectors.selectAllDoneIds.release();
+    fromSelectors.selectOpenTaskIds.release();
     selectTodayStr.release();
     selectStartOfNextDayDiffMs.release();
     selectProjectFeatureState.release();
@@ -1469,6 +1469,9 @@ describe('Task Selectors', () => {
     const ids = fromSelectors.selectOverdueTasks(archivedState as any).map((t) => t.id);
     expect(ids).not.toContain('overdueInArchived');
     expect(ids).toContain('task6');
+    expect(
+      fromSelectors.selectOpenTaskIds(archivedState as any).has('overdueInArchived'),
+    ).toBe(false);
   });
 
   // -------------------------------------------------------------------------
@@ -1754,9 +1757,9 @@ describe('Task Selectors', () => {
         );
       });
 
-      it('selectAllDoneIds is referentially stable', () => {
-        const r1 = fromSelectors.selectAllDoneIds(mockState);
-        expect(fromSelectors.selectAllDoneIds(bumpTimeSpent('task3'))).toBe(r1);
+      it('selectOpenTaskIds is referentially stable', () => {
+        const r1 = fromSelectors.selectOpenTaskIds(mockState);
+        expect(fromSelectors.selectOpenTaskIds(bumpTimeSpent('task3'))).toBe(r1);
       });
     });
 
@@ -1794,14 +1797,16 @@ describe('Task Selectors', () => {
         expect(r2.map((t) => t.id)).toContain('task4');
       });
 
-      it('selectAllDoneIds recomputes when a task is marked done or undone', () => {
-        const r1 = fromSelectors.selectAllDoneIds(mockState);
-        const r2 = fromSelectors.selectAllDoneIds(patchTask('task3', { isDone: true }));
+      it('selectOpenTaskIds recomputes when a task is marked done or undone', () => {
+        const r1 = fromSelectors.selectOpenTaskIds(mockState);
+        const r2 = fromSelectors.selectOpenTaskIds(patchTask('task3', { isDone: true }));
         expect(r2).not.toBe(r1);
-        expect(r2).toContain('task3');
+        expect(r2.has('task3')).toBe(false);
         expect(
-          fromSelectors.selectAllDoneIds(patchTask('task2', { isDone: false })),
-        ).not.toContain('task2');
+          fromSelectors
+            .selectOpenTaskIds(patchTask('task2', { isDone: false }))
+            .has('task2'),
+        ).toBe(true);
       });
 
       it('a member task with a non-scheduling change is served with its LIVE ref', () => {
@@ -1828,8 +1833,20 @@ describe('Task Selectors', () => {
         expect(result.map((t) => t.id)).toEqual(['task6']);
       });
 
-      it('selectAllDoneIds returns exactly the done tasks', () => {
-        expect(fromSelectors.selectAllDoneIds(mockState)).toEqual(['task2', 'subtask2']);
+      it('selectOpenTaskIds returns exactly the open tasks in active projects', () => {
+        expect(fromSelectors.selectOpenTaskIds(mockState)).toEqual(
+          new Set([
+            'task1',
+            'task3',
+            'task4',
+            'task5',
+            'task6',
+            'task7',
+            'task8',
+            'task9',
+            'subtask1',
+          ]),
+        );
       });
     });
   });
