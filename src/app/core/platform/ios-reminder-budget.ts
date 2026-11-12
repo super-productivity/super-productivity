@@ -29,7 +29,7 @@ export interface IosReminderBudgetDeps {
   getPendingIds: () => Promise<number[]>;
   /**
    * Called after each pass with the fire time of the last armed reminder while
-   * the budget is full (nothing later is armed), else null.
+   * later ones are left out, else null.
    */
   onPlanned: (horizonAtMs: number | null) => void;
 }
@@ -134,12 +134,12 @@ export const createIosReminderBudget = (
     await loadPendingOnce();
     forgetDue();
     const admitted = pickSoonest([...wanted.values()], budget);
+    const horizonAtMs =
+      wanted.size > admitted.length ? admitted[admitted.length - 1].triggerAtMs : null;
     // Cancel first, so iOS never holds more than the budget.
     await cancelDisplaced(new Set(admitted.map((r) => r.notificationId)));
     await armChanged(admitted);
-    deps.onPlanned(
-      admitted.length >= budget ? admitted[admitted.length - 1].triggerAtMs : null,
-    );
+    deps.onPlanned(horizonAtMs);
   };
 
   const run = async (): Promise<void> => {

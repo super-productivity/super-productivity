@@ -304,7 +304,16 @@ describe('createIosReminderBudget', () => {
       expect(deps.onPlanned.calls.mostRecent().args).toEqual([null]);
     }));
 
-    it('reports when the last armed reminder fires once the budget is full', fakeAsync(() => {
+    it('reports no horizon when everything wanted just fits', fakeAsync(() => {
+      setup(2);
+      budget.want(reminder(1, fromNow(1)));
+      budget.want(reminder(2, fromNow(2)));
+      tick(SETTLE_MS);
+
+      expect(deps.onPlanned.calls.mostRecent().args).toEqual([null]);
+    }));
+
+    it('reports when the last armed reminder fires once some are left out', fakeAsync(() => {
       setup(2);
       for (const days of [1, 2, 3]) {
         budget.want(reminder(days, fromNow(days)));
