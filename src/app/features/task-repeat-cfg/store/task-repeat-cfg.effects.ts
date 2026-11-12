@@ -17,6 +17,7 @@ import { Task, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskService } from '../../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { TaskRepeatCfg, TaskRepeatCfgCopy } from '../task-repeat-cfg.model';
 import { MatDialog } from '@angular/material/dialog';
@@ -54,6 +55,7 @@ import { SCHEDULE_AFFECTING_FIELDS } from './schedule-affecting-fields.const';
 export class TaskRepeatCfgEffects {
   private _localActions$ = inject(LOCAL_ACTIONS);
   private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _taskArchiveService = inject(TaskArchiveService);
@@ -649,7 +651,9 @@ export class TaskRepeatCfgEffects {
 
                 // fallback to archive
                 return from(
-                  this._taskService.getArchiveTasksForRepeatCfgId(repeatCfgId),
+                  this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(
+                    repeatCfgId,
+                  ),
                 ).pipe(
                   switchMap((arch) => {
                     if (!arch || arch.length === 0) {
@@ -771,7 +775,7 @@ export class TaskRepeatCfgEffects {
           return forkJoin([
             rxOf(taskRepeatCfg),
             this._taskService.getTasksByRepeatCfgId$(id).pipe(first()),
-            this._taskService.getArchiveTasksForRepeatCfgId(id),
+            this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(id),
           ]);
         }),
         concatMap(([{ id, changes }, todayTasks, archiveTasks]) => {
@@ -840,7 +844,7 @@ export class TaskRepeatCfgEffects {
                     }
                     return { id: task.id, changes: changesForArchiveTask };
                   });
-                  this._taskService.updateArchiveTasks(archiveUpdates);
+                  this._taskArchiveOrchestrator.updateArchiveTasks(archiveUpdates);
                 }
               }),
             );

@@ -3,6 +3,7 @@ import { TaskRepeatCfgService } from './task-repeat-cfg.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import {
   addTaskRepeatCfgToTask,
@@ -42,6 +43,7 @@ describe('TaskRepeatCfgService', () => {
   let store: MockStore;
   let matDialog: jasmine.SpyObj<MatDialog>;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let dispatchSpy: jasmine.Spy;
 
   const formatIsoDate = (d: Date): string => getDbDateStr(d);
@@ -82,6 +84,8 @@ describe('TaskRepeatCfgService', () => {
       'createNewTaskWithDefaults',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getTasksByRepeatCfgId$',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
       'getArchiveTasksForRepeatCfgId',
     ]);
     const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
@@ -102,6 +106,7 @@ describe('TaskRepeatCfgService', () => {
         }),
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         {
           provide: DateService,
@@ -1904,7 +1909,9 @@ describe('TaskRepeatCfgService', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([uncompletedTask]),
       );
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithWaitForCompletion,
@@ -1938,7 +1945,9 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -1969,7 +1978,9 @@ describe('TaskRepeatCfgService', () => {
 
       // No prior instances exist
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -2009,7 +2020,9 @@ describe('TaskRepeatCfgService', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([uncompletedTask]),
       );
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithBothFlags,
@@ -2044,7 +2057,9 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -2093,7 +2108,9 @@ describe('TaskRepeatCfgService', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([uncompletedTask1, uncompletedTask2]),
       );
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithWaitForCompletion,
@@ -2127,7 +2144,7 @@ describe('TaskRepeatCfgService', () => {
         isDone: false,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
         Promise.resolve([archivedUncompletedTask]),
       );
 
@@ -2138,7 +2155,7 @@ describe('TaskRepeatCfgService', () => {
 
       // Should block creation because archived uncompleted instance exists
       expect(actions).toEqual([]);
-      expect(taskService.getArchiveTasksForRepeatCfgId).toHaveBeenCalledWith(
+      expect(taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId).toHaveBeenCalledWith(
         cfgWithWaitForCompletion.id,
       );
     });
@@ -2166,7 +2183,7 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
         Promise.resolve([archivedCompletedTask]),
       );
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
@@ -2204,7 +2221,9 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithWaitForCompletion,

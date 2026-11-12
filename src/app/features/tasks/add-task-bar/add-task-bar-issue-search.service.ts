@@ -11,6 +11,7 @@ import {
 } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { TaskService } from '../task.service';
+import { TaskArchiveOrchestratorService } from '../task-archive-orchestrator.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TagService } from '../../tag/tag.service';
 import { ProjectService } from '../../project/project.service';
@@ -32,6 +33,7 @@ import { selectMainTasksWithoutProject } from '../store/task.selectors';
 })
 export class AddTaskBarIssueSearchService {
   private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _workContextService = inject(WorkContextService);
   private _tagService = inject(TagService);
   private _projectService = inject(ProjectService);
@@ -186,7 +188,7 @@ export class AddTaskBarIssueSearchService {
           isAddToBacklog: isAddToBacklog,
         });
       } else if (res.isFromArchive) {
-        this._taskService.restoreTask(res.task, res.subTasks || []);
+        this._taskArchiveOrchestrator.restoreTask(res.task, res.subTasks || []);
         this._snackService.open({
           ico: 'info',
           msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,

@@ -26,6 +26,7 @@ import {
   PLAINSPACE_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
@@ -91,6 +92,7 @@ const isIssueAwaitingNextOccurrence = (
 })
 export class IssueService {
   private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _pendingRemoteIssueDelete = inject(PendingRemoteIssueDeleteService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
@@ -277,7 +279,9 @@ export class IssueService {
     }
 
     const allExistingIssueIds: string[] | number[] =
-      await this._taskService.getAllIssueIdsForProviderEverywhere(issueProviderId);
+      await this._taskArchiveOrchestrator.getAllIssueIdsForProviderEverywhere(
+        issueProviderId,
+      );
     // A task whose remote delete is still to come is no longer among them, but
     // its item is about to be deleted remotely: not new. Pending before the
     // request too, as a delete that completes while it is in flight leaves the
@@ -833,7 +837,7 @@ export class IssueService {
         ...subTask,
         remindAt: undefined,
       }));
-      this._taskService.restoreTask(task, subTasks);
+      this._taskArchiveOrchestrator.restoreTask(task, subTasks);
 
       // Background ('always'-mode) polls stay quiet, same as the import snack
       // above: the task reappearing in the project is the signal.
@@ -876,7 +880,7 @@ export class IssueService {
     }
 
     if (res?.isFromArchive) {
-      this._taskService.restoreTask(res.task, res.subTasks || []);
+      this._taskArchiveOrchestrator.restoreTask(res.task, res.subTasks || []);
       this._snackService.open({
         ico: 'info',
         msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,

@@ -14,7 +14,7 @@ import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { getWeekStartDate } from '../../../util/get-week-start-date';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
-import { TaskService } from '../../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { T } from '../../../t.const';
 import { SimpleCounterService } from '../../simple-counter/simple-counter.service';
 import { DateAdapter, MatRipple } from '@angular/material/core';
@@ -58,7 +58,7 @@ export class WorklogWeekComponent {
   readonly worklogService = inject(WorklogService);
   readonly simpleCounterService = inject(SimpleCounterService);
   private readonly _matDialog = inject(MatDialog);
-  private readonly _taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _dateAdapter = inject(DateAdapter);
   private readonly _dateService = inject(DateService);
   private readonly _metricService = inject(MetricService);
@@ -106,7 +106,7 @@ export class WorklogWeekComponent {
     dateStr: string,
     newVal: number | string,
   ): Promise<void> {
-    await this._taskService.updateEverywhere(task.id, {
+    await this._taskArchiveOrchestrator.updateEverywhere(task.id, {
       timeSpentOnDay: {
         ...task.timeSpentOnDay,
         [dateStr]: +newVal,

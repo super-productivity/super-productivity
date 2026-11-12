@@ -53,6 +53,7 @@ import { TaskSummaryTablesComponent } from '../../features/tasks/task-summary-ta
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { isCompletedTask } from '../../features/tasks/util/is-wont-do-task';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { TasksByTagComponent } from '../../features/tasks/tasks-by-tag/tasks-by-tag.component';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
 import { WorkContextType } from '../../features/work-context/work-context.model';
@@ -120,6 +121,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _confettiService = inject(ConfettiService);
   readonly workContextService = inject(WorkContextService);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private readonly _router = inject(Router);
   private readonly _matDialog = inject(MatDialog);
   private readonly _snackService = inject(SnackService);
@@ -487,7 +489,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     const parentTaskCount = doneTasks.filter((task) => !task.parentId).length;
 
     // Actually wait for the archive operation to complete
-    await this._taskService.moveToArchive(doneTasks);
+    await this._taskArchiveOrchestrator.moveToArchive(doneTasks);
     Log.log('[DailySummary] Archive operation completed');
 
     // Show snackbar notification

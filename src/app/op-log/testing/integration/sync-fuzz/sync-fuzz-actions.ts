@@ -360,8 +360,8 @@ export const executeIntent = async (
       const [, id] = intent;
       const t = task(id);
       if (!t || !t.isDone || t.parentId) return undefined;
-      // TaskService.moveToArchive: persist to the archive first (the local
-      // ArchiveOperationHandler skips moveToArchive), then dispatch.
+      // TaskArchiveOrchestratorService.moveToArchive: persist to the archive
+      // first (the local ArchiveOperationHandler skips moveToArchive), then dispatch.
       const tasks = [{ ...t, subTasks: [] }];
       await TestBed.inject(ArchiveService).moveTasksToArchiveAndFlushArchiveIfDue(tasks);
       await run(TaskSharedActions.moveToArchive({ tasks }));

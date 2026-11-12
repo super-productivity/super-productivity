@@ -12,6 +12,7 @@ import { ReactiveFormsModule, UntypedFormControl } from '@angular/forms';
 import { BehaviorSubject, combineLatest, from, Observable } from 'rxjs';
 import { debounceTime, filter, map, startWith, switchMap } from 'rxjs/operators';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { DEFAULT_TAG, TODAY_TAG } from '../../features/tag/tag.const';
 import { NoteService } from '../../features/note/note.service';
 import { Note } from '../../features/note/note.model';
@@ -74,6 +75,7 @@ const MIN_DELETED_RESULTS = 5;
 })
 export class SearchPageComponent implements OnInit {
   private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
   private _navigateToTaskService = inject(NavigateToTaskService);
@@ -111,7 +113,7 @@ export class SearchPageComponent implements OnInit {
 
   private _liveItems$: Observable<SearchItem[]> = combineLatest([
     this._taskService.allTasks$,
-    this._taskService.getArchivedTasks(),
+    this._taskArchiveOrchestrator.getArchivedTasks(),
     this._noteService.notes$,
     this._projectService.list$,
     this._tagService.tags$,
@@ -501,7 +503,7 @@ export class SearchPageComponent implements OnInit {
     event.stopPropagation();
     let task: Task;
     try {
-      task = await this._taskService.getByIdFromEverywhere(item.id, true);
+      task = await this._taskArchiveOrchestrator.getByIdFromEverywhere(item.id, true);
     } catch (e) {
       Log.warn('Could not load archived task', e);
       return;

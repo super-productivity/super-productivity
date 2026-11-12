@@ -15,6 +15,7 @@ import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 
 import { WorkViewComponent } from './work-view.component';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
@@ -97,6 +98,7 @@ const activeContext = { id: 'ctx' };
 const configureWorkViewTestBed = (
   overrides: {
     taskService?: ServiceStub;
+    taskArchiveOrchestrator?: ServiceStub;
     customizerService?: ServiceStub;
     sectionService?: ServiceStub;
     queryParams$?: Observable<Record<string, string>>;
@@ -147,8 +149,14 @@ const configureWorkViewTestBed = (
         useValue: {
           selectedTaskId: signal<string | null>(null),
           setSelectedId: () => {},
-          moveToArchive: () => Promise.resolve(),
           ...overrides.taskService,
+        },
+      },
+      {
+        provide: TaskArchiveOrchestratorService,
+        useValue: {
+          moveToArchive: () => Promise.resolve(),
+          ...overrides.taskArchiveOrchestrator,
         },
       },
       { provide: TakeABreakService, useValue: { resetTimer: () => {} } },
@@ -415,7 +423,7 @@ describe('WorkViewComponent', () => {
       const earlier = buildTask('done-earlier');
       configureWorkViewTestBed({
         isTodayList: true,
-        taskService: { moveToArchive },
+        taskArchiveOrchestrator: { moveToArchive },
         doneTasksToArchive: [listed, earlier],
       });
       store = TestBed.inject(MockStore);
@@ -436,7 +444,7 @@ describe('WorkViewComponent', () => {
     it('offers History, where the archived tasks can be found again', async () => {
       const done = buildTask('done');
       configureWorkViewTestBed({
-        taskService: { moveToArchive: () => Promise.resolve() },
+        taskArchiveOrchestrator: { moveToArchive: () => Promise.resolve() },
         doneTasksToArchive: [done],
       });
       store = TestBed.inject(MockStore);

@@ -19,6 +19,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
@@ -162,6 +163,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private static readonly _FOCUS_ITEM_MAX_RETRIES = 20;
 
   taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   takeABreakService = inject(TakeABreakService);
   layoutService = inject(LayoutService);
   sectionService = inject(SectionService);
@@ -605,7 +607,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    await this.taskService.moveToArchive(doneTasks);
+    await this._taskArchiveOrchestrator.moveToArchive(doneTasks);
     this._snackService.open({
       msg: T.F.TASK.S.MOVED_TO_ARCHIVE,
       type: 'SUCCESS',

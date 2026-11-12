@@ -4,7 +4,7 @@ import { expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { SimpleCounter } from '../simple-counter/simple-counter.model';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../tasks/task.model';
-import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { DialogWorklogExportComponent } from '../worklog/dialog-worklog-export/dialog-worklog-export.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -70,7 +70,7 @@ export class HistoryComponent {
   private readonly _worklogService = inject(WorklogService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _simpleCounterService = inject(SimpleCounterService);
-  private readonly _taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _router = inject(Router);
   private readonly _route = inject(ActivatedRoute);
@@ -249,7 +249,7 @@ export class HistoryComponent {
     dateStr: string,
     newVal: number | string,
   ): Promise<void> {
-    await this._taskService.updateEverywhere(task.id, {
+    await this._taskArchiveOrchestrator.updateEverywhere(task.id, {
       timeSpentOnDay: {
         ...task.timeSpentOnDay,
         [dateStr]: +newVal,

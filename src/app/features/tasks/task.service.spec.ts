@@ -5,7 +5,6 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateService } from '../../core/date/date.service';
 import { Router } from '@angular/router';
-import { ArchiveService } from '../archive/archive.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskFocusService } from './task-focus.service';
@@ -33,7 +32,6 @@ import { selectTaskEntities } from './store/task.selectors';
 describe('TaskService', () => {
   let service: TaskService;
   let store: MockStore;
-  let archiveService: jasmine.SpyObj<ArchiveService>;
   let deletedTaskIssueSidecar: DeletedTaskIssueSidecarService;
   let taskTimeSync: TaskTimeSyncService;
   let tickSubject: Subject<{ duration: number; date: string }>;
@@ -93,13 +91,6 @@ describe('TaskService', () => {
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
 
-    const archiveServiceSpy = jasmine.createSpyObj('ArchiveService', [
-      'moveTasksToArchiveAndFlushArchiveIfDue',
-    ]);
-    archiveServiceSpy.moveTasksToArchiveAndFlushArchiveIfDue.and.returnValue(
-      Promise.resolve(),
-    );
-
     const taskArchiveServiceSpy = jasmine.createSpyObj('TaskArchiveService', [
       'load',
       'updateTask',
@@ -157,7 +148,6 @@ describe('TaskService', () => {
         },
         { provide: DateService, useValue: dateServiceSpy },
         { provide: Router, useValue: routerSpy },
-        { provide: ArchiveService, useValue: archiveServiceSpy },
         { provide: TaskArchiveService, useValue: taskArchiveServiceSpy },
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskFocusService, useValue: taskFocusServiceSpy },
@@ -167,7 +157,6 @@ describe('TaskService', () => {
 
     service = TestBed.inject(TaskService);
     store = TestBed.inject(MockStore);
-    archiveService = TestBed.inject(ArchiveService) as jasmine.SpyObj<ArchiveService>;
     deletedTaskIssueSidecar = TestBed.inject(DeletedTaskIssueSidecarService);
     taskTimeSync = TestBed.inject(TaskTimeSyncService);
 
@@ -578,135 +567,6 @@ describe('TaskService', () => {
     });
   });
 
-  describe('moveToArchive', () => {
-    it('should persist parent tasks before dispatching the archive action', async () => {
-      const task = createMockTaskWithSubTasks(createMockTask('task-1'));
-      const callOrder: string[] = [];
-      archiveService.moveTasksToArchiveAndFlushArchiveIfDue.and.callFake(async () => {
-        callOrder.push('persist-archive');
-      });
-      store.dispatch = jasmine
-        .createSpy('dispatch')
-        .and.callFake(() => callOrder.push('dispatch'));
-
-      await service.moveToArchive(task);
-
-      expect(callOrder).toEqual(['persist-archive', 'dispatch']);
-    });
-
-    it('should coalesce concurrent archive requests for the same task', async () => {
-      const task = createMockTaskWithSubTasks(createMockTask('task-1'));
-      let finishPersistence: (() => void) | undefined;
-      archiveService.moveTasksToArchiveAndFlushArchiveIfDue.and.returnValue(
-        new Promise<void>((resolve) => {
-          finishPersistence = resolve;
-        }),
-      );
-
-      const first = service.moveToArchive(task);
-      const duplicate = service.moveToArchive(task);
-      let duplicateResolved = false;
-      void duplicate.then(() => {
-        duplicateResolved = true;
-      });
-
-      expect(archiveService.moveTasksToArchiveAndFlushArchiveIfDue).toHaveBeenCalledTimes(
-        1,
-      );
-      expect(store.dispatch).not.toHaveBeenCalledWith(
-        jasmine.objectContaining({ type: TaskSharedActions.moveToArchive.type }),
-      );
-      await Promise.resolve();
-      expect(duplicateResolved).toBeFalse();
-
-      finishPersistence?.();
-      await Promise.all([first, duplicate]);
-
-      expect(duplicateResolved).toBeTrue();
-      expect(store.dispatch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should release the in-flight archive guard after persistence fails', async () => {
-      const task = createMockTaskWithSubTasks(createMockTask('task-1'));
-      archiveService.moveTasksToArchiveAndFlushArchiveIfDue.and.rejectWith(
-        new Error('archive write failed'),
-      );
-
-      await expectAsync(service.moveToArchive(task)).toBeRejectedWithError(
-        'archive write failed',
-      );
-
-      archiveService.moveTasksToArchiveAndFlushArchiveIfDue.and.resolveTo();
-      await service.moveToArchive(task);
-
-      expect(archiveService.moveTasksToArchiveAndFlushArchiveIfDue).toHaveBeenCalledTimes(
-        2,
-      );
-      expect(store.dispatch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should dispatch moveToArchive and call archive service for parent tasks', async () => {
-      const task = createMockTaskWithSubTasks(
-        createMockTask('task-1', { projectId: 'test-project' }),
-      );
-
-      await service.moveToArchive(task);
-
-      expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.moveToArchive({ tasks: [task] }),
-      );
-      expect(archiveService.moveTasksToArchiveAndFlushArchiveIfDue).toHaveBeenCalledWith([
-        task,
-      ]);
-    });
-
-    it('should handle array of tasks', async () => {
-      const tasks = [
-        createMockTaskWithSubTasks(createMockTask('task-1')),
-        createMockTaskWithSubTasks(createMockTask('task-2')),
-      ];
-
-      await service.moveToArchive(tasks);
-
-      expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.moveToArchive({ tasks }),
-      );
-    });
-
-    it('should only archive parent tasks (subtasks are handled separately)', async () => {
-      // When archiving both parent and subtasks, only parent tasks are dispatched
-      // Subtasks trigger a devError in PROJECT context (tested behavior)
-      const parentTask = createMockTaskWithSubTasks(createMockTask('parent-1'));
-
-      await service.moveToArchive([parentTask]);
-
-      expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.moveToArchive({ tasks: [parentTask] }),
-      );
-    });
-
-    it('should handle null/undefined gracefully', async () => {
-      await service.moveToArchive(null as any);
-
-      expect(store.dispatch).not.toHaveBeenCalledWith(
-        jasmine.objectContaining({ type: TaskSharedActions.moveToArchive.type }),
-      );
-    });
-
-    it('should delegate malformed-task filtering to archive.service', async () => {
-      // Sanitization lives in archive.service (sanitizeTasksForArchiving) so the
-      // same rules apply to both moveTasksToArchiveAndFlushArchiveIfDue and
-      // writeTasksToArchiveForRemoteSync. task.service is a pass-through here.
-      const invalidTask = { title: 'Broken task', subTasks: [] } as any;
-
-      await service.moveToArchive([invalidTask]);
-
-      expect(archiveService.moveTasksToArchiveAndFlushArchiveIfDue).toHaveBeenCalledWith([
-        invalidTask,
-      ]);
-    });
-  });
-
   describe('moveToProject', () => {
     it('should dispatch moveToOtherProject', () => {
       const task = createMockTaskWithSubTasks(createMockTask('task-1'));
@@ -728,19 +588,6 @@ describe('TaskService', () => {
 
       expect(() => service.moveToProject(subtask, 'new-project')).toThrowError(
         'Wrong task model',
-      );
-    });
-  });
-
-  describe('restoreTask', () => {
-    it('should dispatch restoreTask', () => {
-      const task = createMockTask('task-1');
-      const subTasks = [createMockTask('subtask-1', { parentId: 'task-1' })];
-
-      service.restoreTask(task, subTasks);
-
-      expect(store.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.restoreTask({ task, subTasks }),
       );
     });
   });

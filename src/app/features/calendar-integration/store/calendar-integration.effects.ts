@@ -33,6 +33,7 @@ import { IssueProviderCalendar, IssueProviderKey } from '../../issue/issue.model
 import { IssueService } from '../../issue/issue.service';
 import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { Log } from '../../../core/log';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
@@ -55,6 +56,7 @@ export class CalendarIntegrationEffects {
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _bannerService = inject(BannerService);
   private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _datePipe = inject(LocaleDatePipe);
   private _calendarIntegrationService = inject(CalendarIntegrationService);
   private _navigateToTaskService = inject(NavigateToTaskService);
@@ -124,7 +126,7 @@ export class CalendarIntegrationEffects {
                       const getAllIssueIdsForProvider = async (): Promise<string[]> => {
                         if (!allIssueIdsForProvider) {
                           allIssueIdsForProvider =
-                            await this._taskService.getAllIssueIdsForProviderEverywhere(
+                            await this._taskArchiveOrchestrator.getAllIssueIdsForProviderEverywhere(
                               calProvider.id,
                             );
                         }
