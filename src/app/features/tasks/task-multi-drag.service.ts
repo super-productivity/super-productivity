@@ -69,6 +69,12 @@ export class TaskMultiDragService {
 
   start(task: Task): void {
     this.clear();
+    // Cancellation also belongs to a single row or a subtask drag.
+    const cancel = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') this._cancelled.set(true);
+    };
+    window.addEventListener('keydown', cancel);
+    this._stopListening = () => window.removeEventListener('keydown', cancel);
     if (
       task.parentId ||
       !this._selection.has(task.id) ||
@@ -81,11 +87,6 @@ export class TaskMultiDragService {
       .filter((id) => entities[id] && !entities[id]!.parentId);
     if (ids.length > 1) {
       this._ids.set(ids);
-      const cancel = (event: KeyboardEvent): void => {
-        if (event.key === 'Escape') this._cancelled.set(true);
-      };
-      window.addEventListener('keydown', cancel);
-      this._stopListening = () => window.removeEventListener('keydown', cancel);
     }
   }
 
