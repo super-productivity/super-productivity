@@ -95,11 +95,16 @@
   },
   {
     "name": "Dashboard",
-    "shortDescription": "A lightweight dashboard plugin that visualizes time tracked, completed tasks, overdue items, and project/tag breakdowns within a user‑defined date range, with live time tracking and chart share/export. It ships as a self-contained HTML/JavaScript widget with no external dependencies and is styled to support light/dark themes.",
+    "shortDescription": "Time tracked, completed, overdue and late tasks, broken down by day, project and tag over any date range, plus a heatmap of your activity and habits. Share or print any view. English, Spanish and Simplified Chinese.",
     "url": "https://github.com/ahanel13/sp-dashboard",
     "author": "ahanel13",
     "authorUrl": "https://github.com/ahanel13",
-    "id": "sp-dashboard"
+    "id": "sp-dashboard",
+    "release": {
+      "version": "1.9.0",
+      "downloadUrl": "https://github.com/ahanel13/sp-dashboard/releases/download/v1.9.0/sp-dashboard.zip",
+      "sha256": "698d057da3235d4d3b549b8f202d3e07388b6670000a35fe9b74d7209ffb142d"
+    }
   },
   {
     "name": "Invoicer",
