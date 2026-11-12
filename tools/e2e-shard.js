@@ -9,6 +9,7 @@
  *
  * Usage:
  *   node tools/e2e-shard.js --grep @supersync --shards 8 --shard 3 --out <file>
+ *   node tools/e2e-shard.js --grep-invert "@supersync|@webdav" --shards 4 --shard 1 --out <file>
  *       [--count-out <file>] [--only sync/a.spec.ts,sync/b.spec.ts]
  *   node tools/e2e-shard.js --update-durations <junit.xml...>
  *
@@ -19,9 +20,10 @@
  * writes the shard's expected test count, which CI compares with the junit
  * report: Playwright passes a `--test-list` run that found no tests.
  *
- * Refresh the durations from the junit artifacts (`e2e-sync-pr-junit-*`) of
- * ONE green full run: download them, run `--update-durations` on those XML
- * files and commit the result. Reports are summed per file, so mixing runs
+ * Refresh the durations from the junit artifacts of ONE green full run
+ * (`e2e-sync-pr-junit-*` for the sync suites, `e2e-junit-*` for the regular
+ * one): download them, run `--update-durations` on those XML files and commit
+ * the result. Reports are summed per file, so mixing runs
  * double-counts, and a red run under-counts the tests it never reached.
  */
 const { spawnSync } = require('child_process');
@@ -43,6 +45,7 @@ const parseArgs = (argv) => {
   const args = {};
   const known = new Set([
     '--grep',
+    '--grep-invert',
     '--shards',
     '--shard',
     '--out',
@@ -56,8 +59,12 @@ const parseArgs = (argv) => {
     if (value === undefined) throw new Error(`${flag} needs a value`);
     args[flag.slice(2)] = value;
   }
-  for (const required of ['grep', 'shards', 'shard', 'out']) {
+  for (const required of ['shards', 'shard', 'out']) {
     if (!args[required]) throw new Error(`--${required} is required`);
+  }
+  // Exactly one: the regular suite is defined by what it excludes.
+  if (!args.grep === !args['grep-invert']) {
+    throw new Error('exactly one of --grep or --grep-invert is required');
   }
   const shards = Number(args.shards);
   const shard = Number(args.shard);
@@ -72,7 +79,9 @@ const parseArgs = (argv) => {
         .filter(Boolean)
     : null;
   return {
-    grep: args.grep,
+    filter: args.grep
+      ? { flag: '--grep', pattern: args.grep }
+      : { flag: '--grep-invert', pattern: args['grep-invert'] },
     shards,
     shard,
     out: args.out,
@@ -145,9 +154,9 @@ const assignShards = (weighted, shardCount) => {
  * passes a `--test-list` run that found no tests, so a renamed tag would turn
  * every shard green without running anything.
  */
-const selectFiles = (testCounts, only, grep) => {
+const selectFiles = (testCounts, only, label) => {
   if (!only) {
-    if (!testCounts.size) throw new Error(`no tests match ${grep}`);
+    if (!testCounts.size) throw new Error(`no tests match ${label}`);
     return testCounts;
   }
   const wanted = new Set(only);
@@ -191,7 +200,7 @@ const readDurations = () =>
     ? JSON.parse(fs.readFileSync(DURATIONS_FILE, 'utf8'))
     : {};
 
-const listTests = (grep) => {
+const listTests = (filter) => {
   const result = spawnSync(
     process.execPath,
     [
@@ -201,8 +210,8 @@ const listTests = (grep) => {
       CONFIG,
       '--list',
       '--reporter=json',
-      '--grep',
-      grep,
+      filter.flag,
+      filter.pattern,
     ],
     { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   );
@@ -236,14 +245,15 @@ const main = () => {
     return 0;
   }
 
-  const testCounts = selectFiles(listTests(args.grep), args.only, args.grep);
+  const label = `${args.filter.flag} ${args.filter.pattern}`;
+  const testCounts = selectFiles(listTests(args.filter), args.only, label);
   const weighted = weighFiles(testCounts, readDurations());
   const shards = assignShards(weighted, args.shards);
 
   const estimated = weighted.filter((w) => w.estimated).map((w) => w.file);
   const mine = shards[args.shard - 1];
   console.log(
-    `${args.grep}: ${testCounts.size} files in ${args.shards} shards, est. worker-min per shard: ` +
+    `${label}: ${testCounts.size} files in ${args.shards} shards, est. worker-min per shard: ` +
       shards.map((s) => (s.sec / 60).toFixed(1)).join(' / '),
   );
   if (estimated.length) {
