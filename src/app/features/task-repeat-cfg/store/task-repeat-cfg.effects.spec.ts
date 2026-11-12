@@ -4,6 +4,7 @@ import { firstValueFrom, Observable, of, throwError } from 'rxjs';
 import { Action } from '@ngrx/store';
 import { TaskRepeatCfgEffects } from './task-repeat-cfg.effects';
 import { TaskService } from '../../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { DateService } from '../../../core/date/date.service';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -37,6 +38,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
   let actions$: Observable<Action>;
   let effects: TaskRepeatCfgEffects;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let taskRepeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let taskArchiveService: jasmine.SpyObj<TaskArchiveService>;
   let addTasksForTomorrowService: jasmine.SpyObj<AddTasksForTomorrowService>;
@@ -92,8 +94,10 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       'getByIdOnce$',
       'getTasksByRepeatCfgId$',
       'getByIdsLive$',
-      'getArchiveTasksForRepeatCfgId',
       'update',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchiveTasksForRepeatCfgId',
       'updateArchiveTasks',
     ]);
 
@@ -121,6 +125,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         TaskRepeatCfgEffects,
         provideMockActions(() => actions$),
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: TaskArchiveService, useValue: taskArchiveServiceSpy },
@@ -157,7 +162,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         }),
       );
       taskService.getTasksByRepeatCfgId$.and.returnValue(of([mockTask]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
         Promise.resolve([{ ...mockTask, id: 'archived-instance' }]),
       );
       taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
@@ -170,7 +175,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       await firstValueFrom(effects.checkToUpdateAllTaskInstances$);
 
       expect(taskService.update).toHaveBeenCalledWith(mockTask.id, { priority });
-      expect(taskService.updateArchiveTasks).toHaveBeenCalledWith([
+      expect(taskArchiveOrchestrator.updateArchiveTasks).toHaveBeenCalledWith([
         { id: 'archived-instance', changes: { priority } },
       ]);
     });
@@ -1500,7 +1505,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
       taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(mockRepeatCfg));
       taskService.getTasksByRepeatCfgId$.and.returnValue(of([])); // No live instances
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
         Promise.resolve([archiveTask]),
       );
       taskArchiveService.load.and.returnValue(Promise.resolve(archiveState));
@@ -3622,6 +3627,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
   let actions$: Observable<Action>;
   let effects: TaskRepeatCfgEffects;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let taskRepeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let testScheduler: TestScheduler;
 
@@ -3658,11 +3664,13 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       'getByIdOnce$',
       'getTasksByRepeatCfgId$',
       'getByIdsLive$',
-      'getArchiveTasksForRepeatCfgId',
       'update',
       'scheduleTask',
       'reScheduleTask',
       'updateTags',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchiveTasksForRepeatCfgId',
     ]);
 
     const taskRepeatCfgServiceSpy = jasmine.createSpyObj('TaskRepeatCfgService', [
@@ -3682,6 +3690,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
         TaskRepeatCfgEffects,
         provideMockActions(() => actions$),
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: TaskArchiveService, useValue: taskArchiveServiceSpy },

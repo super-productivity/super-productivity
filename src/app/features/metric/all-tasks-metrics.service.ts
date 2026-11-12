@@ -4,7 +4,7 @@ import { combineLatest, from, Observable } from 'rxjs';
 import { SimpleMetrics } from './metric.model';
 import { filter, map, switchMap, take, withLatestFrom } from 'rxjs/operators';
 import { mapSimpleMetrics } from './metric.util';
-import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { WorklogService } from '../worklog/worklog.service';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { BreakNr, BreakTime, WorkContextType } from '../work-context/work-context.model';
@@ -16,7 +16,7 @@ import { TODAY_TAG } from '../tag/tag.const';
   providedIn: 'root',
 })
 export class AllTasksMetricsService {
-  private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _worklogService = inject(WorklogService);
   private _workContextService = inject(WorkContextService);
   private _timeTrackingService = inject(TimeTrackingService);
@@ -38,7 +38,7 @@ export class AllTasksMetricsService {
           this._getAllBreakTime$(),
           this._worklogService.worklog$,
           this._worklogService.totalTimeSpent$,
-          from(this._taskService.getAllTasksEverywhere()),
+          from(this._taskArchiveOrchestrator.getAllTasksEverywhere()),
         ]).pipe(
           map(mapSimpleMetrics),
           // prevent constant redraws - take 1 per context switch

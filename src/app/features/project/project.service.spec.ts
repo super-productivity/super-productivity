@@ -5,6 +5,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { Task, TaskState } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { Store, StoreModule } from '@ngrx/store';
 import { createProject } from './project.test-helper';
 import { EMPTY, of } from 'rxjs';
@@ -35,6 +36,7 @@ describe('ProjectService', () => {
   let service: ProjectService;
   let store: MockStore;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let snackService: jasmine.SpyObj<SnackService>;
   let workContextService: jasmine.SpyObj<WorkContextService>;
   let timeTrackingService: jasmine.SpyObj<TimeTrackingService>;
@@ -142,6 +144,8 @@ describe('ProjectService', () => {
       'moveToProject',
       'setDone',
       'setUnDone',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
       'getAllTasksForProject',
     ]);
     taskTimeSync = jasmine.createSpyObj('TaskTimeSyncService', ['clearOne']);
@@ -152,7 +156,7 @@ describe('ProjectService', () => {
         title: `New Task ${taskCounter}`,
       });
     });
-    taskService.getAllTasksForProject.and.callFake((projectId: string) =>
+    taskArchiveOrchestrator.getAllTasksForProject.and.callFake((projectId: string) =>
       Promise.resolve(
         Object.values(initialTaskState.entities).filter(
           (task): task is Task => task?.projectId === projectId,
@@ -190,6 +194,7 @@ describe('ProjectService', () => {
         }),
         provideMockActions(() => EMPTY),
         { provide: TaskService, useValue: taskService },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskTimeSyncService, useValue: taskTimeSync },
         {
           provide: TranslateService,
@@ -729,7 +734,7 @@ describe('ProjectService', () => {
         parentId: 'archived-task',
         isDone: false,
       });
-      taskService.getAllTasksForProject.and.returnValue(
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(
         Promise.resolve([
           initialTaskState.entities['task-1']!,
           initialTaskState.entities['sub-task-1']!,

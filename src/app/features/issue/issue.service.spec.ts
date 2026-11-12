@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { IssueService } from './issue.service';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
@@ -47,6 +48,7 @@ import {
 describe('IssueService', () => {
   let service: IssueService;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestratorSpy: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let workContextServiceSpy: jasmine.SpyObj<WorkContextService>;
   let issueProviderServiceSpy: jasmine.SpyObj<IssueProviderService>;
@@ -97,16 +99,18 @@ describe('IssueService', () => {
   beforeEach(() => {
     taskServiceSpy = jasmine.createSpyObj('TaskService', [
       'checkForTaskWithIssueEverywhere',
-      'getAllIssueIdsForProviderEverywhere',
       'getByIdWithSubTaskData$',
       'moveToCurrentWorkContext',
       'add',
       'addAndSchedule',
       'addSubTaskTo',
-      'restoreTask',
       'update',
       'remove',
       'removeMultipleTasks',
+    ]);
+    taskArchiveOrchestratorSpy = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'restoreTask',
+      'getAllIssueIdsForProviderEverywhere',
     ]);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
@@ -179,6 +183,7 @@ describe('IssueService', () => {
       providers: [
         IssueService,
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestratorSpy },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         { provide: IssueProviderService, useValue: issueProviderServiceSpy },
@@ -1179,7 +1184,9 @@ describe('IssueService', () => {
         issue,
       ]);
       // the issue is known: its task was imported before and then archived
-      taskServiceSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([ISSUE_ID]);
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([
+        ISSUE_ID,
+      ]);
       return service.checkAndImportNewIssuesToBacklogForProject(
         'PLAINSPACE',
         PROVIDER_ID,
@@ -1200,7 +1207,7 @@ describe('IssueService', () => {
         subTasks: null,
         isFromArchive: true,
       });
-      taskServiceSpy.restoreTask.and.callFake((task, subTasks) => {
+      taskArchiveOrchestratorSpy.restoreTask.and.callFake((task, subTasks) => {
         storeSpy.dispatch(TaskSharedActions.restoreTask({ task, subTasks }));
       });
       taskServiceSpy.update.and.callFake((id, changes) => {
@@ -1264,14 +1271,14 @@ describe('IssueService', () => {
     it('does NOT restore a non-recurring archived task', async () => {
       await importForIssue(createPlainspaceIssue({ isRecurring: false }));
 
-      expect(taskServiceSpy.restoreTask).not.toHaveBeenCalled();
+      expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
       expect(taskServiceSpy.checkForTaskWithIssueEverywhere).not.toHaveBeenCalled();
     });
 
     it('does NOT restore while the remote occurrence is still done', async () => {
       await importForIssue(createPlainspaceIssue({ isDone: true }));
 
-      expect(taskServiceSpy.restoreTask).not.toHaveBeenCalled();
+      expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
       expect(taskServiceSpy.checkForTaskWithIssueEverywhere).not.toHaveBeenCalled();
     });
 
@@ -1284,7 +1291,7 @@ describe('IssueService', () => {
 
       await importForIssue(createPlainspaceIssue());
 
-      expect(taskServiceSpy.restoreTask).not.toHaveBeenCalled();
+      expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
       expect(taskServiceSpy.update).not.toHaveBeenCalled();
     });
 
@@ -1423,12 +1430,14 @@ describe('IssueService', () => {
         .and.resolveTo([
           { ...createPlainspaceIssue(), issueProviderKey: 'ICAL' } as unknown,
         ]);
-      taskServiceSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([ISSUE_ID]);
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([
+        ISSUE_ID,
+      ]);
 
       await service.checkAndImportNewIssuesToBacklogForProject('ICAL', PROVIDER_ID, true);
 
       expect(taskServiceSpy.checkForTaskWithIssueEverywhere).not.toHaveBeenCalled();
-      expect(taskServiceSpy.restoreTask).not.toHaveBeenCalled();
+      expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
     });
 
     // Review finding: a poll inside a delete's undo window found the item
@@ -1439,7 +1448,7 @@ describe('IssueService', () => {
       (plainspaceService.getNewIssuesToAddToBacklog as jasmine.Spy).and.resolveTo([
         createPlainspaceIssue({ isRecurring: false }),
       ]);
-      taskServiceSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([]);
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([]);
       const poll = (): Promise<void> =>
         service.checkAndImportNewIssuesToBacklogForProject(
           'PLAINSPACE',
@@ -1467,7 +1476,7 @@ describe('IssueService', () => {
           return [createPlainspaceIssue({ isRecurring: false })];
         },
       );
-      taskServiceSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([]);
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([]);
 
       pending.add(PROVIDER_ID, ISSUE_ID);
       await service.checkAndImportNewIssuesToBacklogForProject(
@@ -1500,7 +1509,7 @@ describe('IssueService', () => {
       openProjectService.getNewIssuesToAddToBacklog = jasmine
         .createSpy('getNewIssuesToAddToBacklog')
         .and.resolveTo([{ id: workPackageId, subject: 'Work package' } as unknown]);
-      taskServiceSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo(
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo(
         existingIssueIds as string[],
       );
       translateServiceSpy.instant.and.returnValue('work packages');

@@ -21,6 +21,7 @@ import { NotifyService } from '../core/notify/notify.service';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../features/tasks/task-archive-orchestrator.service';
 import { DEFAULT_TASK, TaskWithSubTasks } from '../features/tasks/task.model';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { ProjectService } from '../features/project/project.service';
@@ -1284,6 +1285,7 @@ describe('PluginBridgeService - deleteProject', () => {
 describe('PluginBridgeService - updateTask() with a new projectId', () => {
   let service: PluginBridgeService;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let repeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let dialogOpen: jasmine.Spy;
   let store: MockStore;
@@ -1301,19 +1303,17 @@ describe('PluginBridgeService - updateTask() with a new projectId', () => {
   beforeEach(() => {
     taskService = jasmine.createSpyObj<TaskService>(
       'TaskService',
-      [
-        'moveToProject',
-        'update',
-        'getTasksWithSubTasksByRepeatCfgId$',
-        'getArchiveTasksForRepeatCfgId',
-        'updateArchiveTasks',
-      ],
+      ['moveToProject', 'update', 'getTasksWithSubTasksByRepeatCfgId$'],
       { allTasks$: of([]), selectedTask$: of(null) },
     );
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchiveTasksForRepeatCfgId',
+      'updateArchiveTasks',
+    ]);
     taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
       of([task, otherInstance]),
     );
-    taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+    taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
     repeatCfgService = jasmine.createSpyObj<TaskRepeatCfgService>(
       'TaskRepeatCfgService',
       ['getTaskRepeatCfgByIdAllowUndefined$', 'updateTaskRepeatCfg'],
@@ -1332,6 +1332,7 @@ describe('PluginBridgeService - updateTask() with a new projectId', () => {
         { provide: MatDialog, useValue: { open: dialogOpen } },
         { provide: PluginHooksService, useValue: {} },
         { provide: TaskService, useValue: taskService },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskRepeatCfgService, useValue: repeatCfgService },
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         {

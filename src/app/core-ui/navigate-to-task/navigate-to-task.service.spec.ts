@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { NavigateToTaskService } from './navigate-to-task.service';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { DateService } from '../../core/date/date.service';
 import { LayoutService } from '../layout/layout.service';
@@ -32,6 +33,7 @@ const createTask = (partial: Partial<Task>): Task =>
 describe('NavigateToTaskService', () => {
   let service: NavigateToTaskService;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let router: jasmine.SpyObj<Router> & { url: string };
   let layoutService: jasmine.SpyObj<LayoutService>;
   let store: MockStore;
@@ -74,15 +76,14 @@ describe('NavigateToTaskService', () => {
 
   const setNavigatedTask = (task: Task, projects: Project[] = [INBOX_PROJECT]): void => {
     setStoreState([task], projects);
-    taskService.getByIdFromEverywhere.and.resolveTo(task);
+    taskArchiveOrchestrator.getByIdFromEverywhere.and.resolveTo(task);
   };
 
   beforeEach(() => {
-    taskService = jasmine.createSpyObj('TaskService', [
+    taskService = jasmine.createSpyObj('TaskService', ['update', 'showSubTasks']);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
       'getByIdFromEverywhere',
       'getArchivedTasks',
-      'update',
-      'showSubTasks',
     ]);
     const snackService = jasmine.createSpyObj('SnackService', ['open']);
     const dateService = jasmine.createSpyObj('DateService', ['isToday', 'todayStr']);
@@ -118,6 +119,7 @@ describe('NavigateToTaskService', () => {
           },
         }),
         { provide: TaskService, useValue: taskService },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: SnackService, useValue: snackService },
         { provide: DateService, useValue: dateService },
         { provide: LayoutService, useValue: layoutService },
@@ -276,7 +278,7 @@ describe('NavigateToTaskService', () => {
       parentId: task.id,
     });
     setStoreState([task, child], [createProject(INBOX_PROJECT.id)]);
-    taskService.getByIdFromEverywhere.and.resolveTo(task);
+    taskArchiveOrchestrator.getByIdFromEverywhere.and.resolveTo(task);
 
     await service.navigate('unlisted-inbox-task');
 
@@ -322,7 +324,7 @@ describe('NavigateToTaskService', () => {
     // reads the LIVE entity, so it must not mistake that for a broken shape.
     const archived = createTask({ id: 'archived-task', projectId: 'p1', tagIds: [] });
     setStoreState([], [createProject('p1', [])]);
-    taskService.getByIdFromEverywhere.and.resolveTo(archived);
+    taskArchiveOrchestrator.getByIdFromEverywhere.and.resolveTo(archived);
 
     await service.navigate('archived-task');
 
@@ -368,7 +370,7 @@ describe('NavigateToTaskService', () => {
       projectId: parent.projectId,
     });
     setStoreState([parent, child], [createProject('p1', [], [parent.id])]);
-    taskService.getByIdFromEverywhere.and.callFake((id: string) =>
+    taskArchiveOrchestrator.getByIdFromEverywhere.and.callFake((id: string) =>
       Promise.resolve(id === child.id ? child : parent),
     );
 
@@ -397,7 +399,7 @@ describe('NavigateToTaskService', () => {
       tagIds: [],
     });
     setStoreState([sub], [INBOX_PROJECT]);
-    taskService.getByIdFromEverywhere.and.callFake((id: string) =>
+    taskArchiveOrchestrator.getByIdFromEverywhere.and.callFake((id: string) =>
       Promise.resolve(id === 'sub-1' ? sub : (undefined as unknown as Task)),
     );
 
@@ -500,7 +502,7 @@ describe('NavigateToTaskService', () => {
         ...childChanges,
       });
       setStoreState([parent, child], [createProject('p1', [parent.id])], currentTaskId);
-      taskService.getByIdFromEverywhere.and.callFake((id: string) =>
+      taskArchiveOrchestrator.getByIdFromEverywhere.and.callFake((id: string) =>
         Promise.resolve(id === child.id ? child : parent),
       );
       return child;
@@ -607,7 +609,7 @@ describe('NavigateToTaskService', () => {
 
     it('does not touch live task UI state when navigating into the archive', async () => {
       const child = setUpSubTask({ _hideSubTasksMode: HideSubTasksMode.HideAll });
-      taskService.getArchivedTasks.and.resolveTo([]);
+      taskArchiveOrchestrator.getArchivedTasks.and.resolveTo([]);
 
       await service.navigate(child.id, true);
 
