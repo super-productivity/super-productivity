@@ -943,11 +943,25 @@ export class SuperSyncProvider
     const code =
       error instanceof SuperSyncHttpStatusError && error.code !== undefined
         ? error.code
-        : syncError.code;
+        : (syncError.code ?? this._getSafeNativeErrorCode(error));
     return {
       errorName: syncError.name,
       ...(code !== undefined ? { errorCode: code } : {}),
     };
+  }
+
+  /**
+   * `toSyncLogError` drops `.code` on `Error` instances, but that is where the
+   * native HTTP executor puts the one safe detail it has: the Java exception
+   * class on Android (`SSLHandshakeException`), the error domain on iOS. Only a
+   * plain identifier is accepted, so free text that could carry a hostname
+   * never passes (#10219).
+   */
+  private _getSafeNativeErrorCode(error: unknown): string | undefined {
+    const rawCode = (error as { code?: unknown } | null)?.code;
+    return typeof rawCode === 'string' && /^[A-Za-z][A-Za-z0-9_.]{0,63}$/.test(rawCode)
+      ? rawCode
+      : undefined;
   }
 
   /**
@@ -999,7 +1013,9 @@ export class SuperSyncProvider
       throw error;
     }
     if (error instanceof Error) {
-      throw new Error(`SuperSync native request failed: ${error.name}`);
+      throw new Error(
+        `SuperSync native request failed: ${this._getSafeNativeErrorCode(error) ?? error.name}`,
+      );
     }
     throw new Error(`SuperSync native request failed: ${toSyncLogError(error).name}`);
   }
