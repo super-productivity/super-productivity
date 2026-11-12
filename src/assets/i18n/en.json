@@ -1106,6 +1106,7 @@
       "EXACT_ALARM_HINT": "Reminders may be delayed because \"Alarms & reminders\" is turned off for this app in Android settings.",
       "EXACT_ALARM_OPEN_SETTINGS": "Open settings",
       "S_ACTIVE_TASK_DUE": "The task you are currently working on is now due!<br/> ({{title}})",
+      "S_IOS_LIMIT": "iOS limits how many reminders an app can set. Yours are set for the next {{days}} days. Later ones follow as you keep using the app.",
       "S_REMINDER_ERR": "Error for reminder interface"
     },
     "SCHEDULE": {
