@@ -1013,6 +1013,10 @@ export class SuperSyncProvider
       throw error;
     }
     if (error instanceof Error) {
+      // The code reaches the app's string classifiers: an exhausted
+      // `SocketTimeoutException` whose message matched no retryable pattern
+      // (e.g. "Read timed out") now hits SyncWrapperService._isTimeoutError
+      // (quiet timeout branch) instead of the generic ERROR branch.
       throw new Error(
         `SuperSync native request failed: ${this._getSafeNativeErrorCode(error) ?? error.name}`,
       );
