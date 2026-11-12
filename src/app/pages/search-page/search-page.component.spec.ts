@@ -8,6 +8,7 @@ import { MenuTreeService } from '../../features/menu-tree/menu-tree.service';
 
 import { SearchPageComponent } from './search-page.component';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
@@ -69,6 +70,7 @@ describe('SearchPageComponent', () => {
   let tagFolderMapSignal: WritableSignal<Map<string, string>>;
 
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let navigateToTaskServiceSpy: jasmine.SpyObj<NavigateToTaskService>;
   let routerSpy: jasmine.SpyObj<Router>;
   let layoutServiceSpy: jasmine.SpyObj<LayoutService>;
@@ -84,10 +86,15 @@ describe('SearchPageComponent', () => {
     projectFolderMapSignal = signal<Map<string, string>>(new Map());
     tagFolderMapSignal = signal<Map<string, string>>(new Map());
 
-    taskServiceSpy = jasmine.createSpyObj('TaskService', ['getArchivedTasks'], {
+    taskServiceSpy = jasmine.createSpyObj('TaskService', [], {
       allTasks$,
     });
-    taskServiceSpy.getArchivedTasks.and.callFake(() => Promise.resolve(archivedTasks));
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchivedTasks',
+    ]);
+    taskArchiveOrchestrator.getArchivedTasks.and.callFake(() =>
+      Promise.resolve(archivedTasks),
+    );
 
     navigateToTaskServiceSpy = jasmine.createSpyObj('NavigateToTaskService', [
       'navigate',
@@ -113,6 +120,7 @@ describe('SearchPageComponent', () => {
       imports: [SearchPageComponent, NoopAnimationsModule, TranslateModule.forRoot()],
       providers: [
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         {
           provide: ProjectService,
           useValue: { list$: projectList$ },
@@ -335,7 +343,9 @@ describe('SearchPageComponent', () => {
     // Must set archive tasks before creating a new component instance,
     // because _searchableItems$ calls getArchivedTasks() at construction time.
     const archiveTask = createTask({ id: 'archived-1', title: 'Old Task' });
-    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    taskArchiveOrchestrator.getArchivedTasks.and.returnValue(
+      Promise.resolve([archiveTask]),
+    );
     // Recreate component so the new archive promise is used
     fixture = TestBed.createComponent(SearchPageComponent);
     component = fixture.componentInstance;
@@ -349,7 +359,9 @@ describe('SearchPageComponent', () => {
 
   it('should hide archived tasks by default (#5943)', fakeAsync(() => {
     const archiveTask = createTask({ id: 'archived-1', title: 'Old Task' });
-    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    taskArchiveOrchestrator.getArchivedTasks.and.returnValue(
+      Promise.resolve([archiveTask]),
+    );
     fixture = TestBed.createComponent(SearchPageComponent);
     component = fixture.componentInstance;
     initAndFlush();
@@ -359,7 +371,9 @@ describe('SearchPageComponent', () => {
 
   it('should include archived tasks when completed tasks are enabled (#5943)', fakeAsync(() => {
     const archiveTask = createTask({ id: 'archived-1', title: 'Old Task' });
-    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    taskArchiveOrchestrator.getArchivedTasks.and.returnValue(
+      Promise.resolve([archiveTask]),
+    );
     fixture = TestBed.createComponent(SearchPageComponent);
     component = fixture.componentInstance;
     initAndFlush();
@@ -726,7 +740,9 @@ describe('SearchPageComponent', () => {
       title: 'Old Task',
       projectId: 'proj-1',
     });
-    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    taskArchiveOrchestrator.getArchivedTasks.and.returnValue(
+      Promise.resolve([archiveTask]),
+    );
     projectList$.next([createProject({ id: 'proj-1', title: 'My Project' })]);
 
     // Recreate component so the new archive promise is used

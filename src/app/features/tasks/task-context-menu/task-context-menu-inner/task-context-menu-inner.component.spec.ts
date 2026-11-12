@@ -2,6 +2,7 @@ import { TaskContextMenuInnerComponent } from './task-context-menu-inner.compone
 import { ComponentFixture, TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { TaskService } from '../../task.service';
+import { TaskArchiveOrchestratorService } from '../../task-archive-orchestrator.service';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { TaskRepeatCfgService } from '../../../task-repeat-cfg/task-repeat-cfg.service';
 import { MatDialog } from '@angular/material/dialog';
@@ -56,6 +57,7 @@ describe('TaskContextMenuInnerComponent', () => {
   let component: TaskContextMenuInnerComponent;
   let fixture: ComponentFixture<TaskContextMenuInnerComponent>;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let taskDuplicateService: jasmine.SpyObj<TaskDuplicateService>;
   let addSubtaskInputService: jasmine.SpyObj<AddSubtaskInputService>;
   let store: MockStore;
@@ -71,11 +73,13 @@ describe('TaskContextMenuInnerComponent', () => {
       'moveToProject',
       'remove',
       'getTasksWithSubTasksByRepeatCfgId$',
-      'getArchiveTasksForRepeatCfgId',
       'update',
       'setCurrentId',
       'moveToTop',
       'moveToBottom',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchiveTasksForRepeatCfgId',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
     focusModeService = jasmine.createSpyObj<FocusModeService>('FocusModeService', [
@@ -101,6 +105,7 @@ describe('TaskContextMenuInnerComponent', () => {
       providers: [
         provideMockStore(),
         { provide: TaskService, useValue: taskService },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskDuplicateService, useValue: taskDuplicateService },
         { provide: AddSubtaskInputService, useValue: addSubtaskInputService },
         { provide: FocusModeService, useValue: focusModeService },
@@ -999,7 +1004,9 @@ describe('TaskContextMenuInnerComponent', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([taskWithSubTasks]),
       );
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
       // guard against regressing to the throwing selector (the #8715 root cause)
       const repeatCfgService = TestBed.inject(TaskRepeatCfgService);
       (
