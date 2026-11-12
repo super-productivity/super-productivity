@@ -140,6 +140,16 @@ export class AddSubtaskInputComponent {
     this._commit();
   }
 
+  /** Programmatic entry point for non-UI callers (e.g. a CLI controller). */
+  addSubtask(title: string): boolean {
+    const trimmed = title.trim();
+    if (!trimmed) {
+      return false;
+    }
+    this._taskService.addSubTaskTo(this.parentId(), { title: trimmed });
+    return true;
+  }
+
   private _commit(): void {
     // Enter that *confirms* an IME candidate carries isComposing and is already
     // filtered out in onKeydown, so this only runs for genuinely-entered text.
