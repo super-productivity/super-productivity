@@ -13,6 +13,10 @@ import { isPersistentAction } from '../../op-log/core/persistent-action.interfac
 import { isLwwUpdateActionType } from '../../op-log/core/lww-update-action-types';
 import { isFullStateOpType } from '../../op-log/core/operation.types';
 import { RootState } from '../root-state';
+import {
+  readTaskHistoryRecordingConfig,
+  TASK_HISTORY_PLUGIN_ID,
+} from '../../features/tasks/task-history/task-history-recording-config';
 
 /** Wraps domain reducers so every real task mutation has the same coverage. */
 export const taskHistoryMetaReducer =
@@ -57,6 +61,11 @@ export const taskHistoryMetaReducer =
         capture.operationId,
         capture.occurredAt,
         action.type,
+        state.pluginMetadata?.some(
+          (plugin) => plugin.id === TASK_HISTORY_PLUGIN_ID && plugin.isEnabled,
+        )
+          ? readTaskHistoryRecordingConfig()
+          : undefined,
       );
       capture.envelope = envelope;
     }

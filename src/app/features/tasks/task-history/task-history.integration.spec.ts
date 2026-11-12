@@ -32,6 +32,11 @@ import {
 } from '../../../plugins/store/plugin.actions';
 import { TASK_HISTORY_DELIVERY_PREFIX } from './task-history-delivery';
 import { toLwwUpdateActionType } from '../../../op-log/core/lww-update-action-types';
+import {
+  clearTaskHistoryRecordingConsent,
+  readTaskHistoryPreferences,
+  saveTaskHistoryPreferences,
+} from './task-history-recording-config';
 
 describe('Task history through real task reducers and operation replay', () => {
   let reduce: ActionReducer<RootState>;
@@ -59,8 +64,13 @@ describe('Task history through real task reducers and operation replay', () => {
     setIsApplyingRemoteOps(false);
     clearDeferredActions();
   });
-  const events = (state: RootState, id = 'parent'): TaskHistoryEvent[] =>
-    Object.values(state.tasks.taskHistory?.[id]?.events ?? {});
+  const events = (state: RootState, id = 'parent'): TaskHistoryEvent[] => {
+    const record = state.tasks.taskHistory?.[id];
+    return [
+      ...Object.values(record?.events ?? {}),
+      ...Object.values(record?.optionalEvents ?? {}),
+    ];
+  };
   const operation = (action: PersistentAction): Operation => {
     const capture = peekTaskHistoryCapture(action)!;
     const { type, meta, ...payload } = action;
@@ -87,6 +97,86 @@ describe('Task history through real task reducers and operation replay', () => {
     id: string,
     changes: Parameters<typeof TaskSharedActions.updateTask>[0]['task']['changes'],
   ): PersistentAction => TaskSharedActions.updateTask({ task: { id, changes } });
+
+  it('records only locally opted-in fields and preserves them on a receiver with recording off', () => {
+    const previousPreferences = readTaskHistoryPreferences();
+    try {
+      clearTaskHistoryRecordingConsent();
+      const start = {
+        ...initial,
+        pluginMetadata: [{ id: 'task-history', isEnabled: true }],
+      };
+      const firstEdit = update('parent', {
+        title: 'Before',
+        notes: 'First note',
+        priority: 'high',
+      });
+      const withoutOptIn = reduce(start, firstEdit);
+      expect(events(withoutOptIn)).toEqual([]);
+
+      saveTaskHistoryPreferences({
+        recordTitle: true,
+        recordNotes: true,
+        recordPriority: true,
+      });
+      const samePriority = reduce(withoutOptIn, update('parent', { priority: 3 }));
+      expect(events(samePriority)).toEqual([]);
+      const edit = update('parent', { title: 'After', notes: '', priority: null });
+      const changed = reduce(samePriority, edit);
+      expect(events(changed).map((e) => [e.field, e.before, e.after])).toEqual([
+        ['title', { kind: 'text', value: 'Before' }, { kind: 'text', value: 'After' }],
+        ['priority', { kind: 'priority', value: 3 }, { kind: 'none' }],
+        ['notes', { kind: 'text', value: 'First note' }, { kind: 'none' }],
+      ]);
+      expect(peekTaskHistoryCapture(edit)?.envelope?.events).toEqual([]);
+      expect(changed.tasks.taskHistory?.['parent'].events).toEqual({});
+
+      const authored = operation(edit);
+      expect(validateOperationPayload(authored).success).toBeTrue();
+      clearTaskHistoryRecordingConsent();
+      const receiver = reduce(
+        withoutOptIn,
+        bulkApplyOperations({ operations: [authored] }),
+      );
+      expect(events(receiver)).toEqual(events(changed));
+      const optedOut = reduce(
+        changed,
+        update('parent', { title: 'Ignored title', notes: 'Ignored note', priority: 2 }),
+      );
+      expect(events(optedOut)).toEqual(events(changed));
+    } finally {
+      saveTaskHistoryPreferences(previousPreferences);
+    }
+  });
+
+  it('retains a marked note event when text changes outside the bounded preview', () => {
+    const preview = 'x'.repeat(8_191);
+    const prefix = preview + '😀';
+    const task = initial.tasks.entities.parent!;
+    const before = {
+      ...initial.tasks,
+      entities: { ...initial.tasks.entities, parent: { ...task, notes: prefix + 'old' } },
+    };
+    const after = {
+      ...before,
+      entities: { ...before.entities, parent: { ...task, notes: prefix + 'new' } },
+    };
+    const envelope = collectTaskHistory(before, after, 'op', 100, 'update', {
+      notes: true,
+    });
+    expect(envelope.optionalEvents?.length).toBe(1);
+    expect(envelope.optionalEvents?.[0].before).toEqual({
+      kind: 'text',
+      value: preview,
+      truncated: true,
+    });
+    expect(envelope.optionalEvents?.[0].after).toEqual({
+      kind: 'text',
+      value: preview,
+      truncated: true,
+    });
+    expect(after.entities.parent.notes).toBe(prefix + 'new');
+  });
 
   it('records old/new planning and deadline values separately, keeping the parent unrelated', () => {
     const action = update('child', { dueDay: '2026-10-31', deadlineDay: '2026-11-02' });

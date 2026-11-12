@@ -24,6 +24,8 @@ export interface TaskHistoryRecord {
   /** A legacy replay can reveal a gap before any recorder baseline exists. */
   baseline?: TaskHistoryBaseline;
   events: Record<string, TaskHistoryEvent>;
+  /** Kept outside the original event map for earlier preview readers. */
+  optionalEvents?: Record<string, TaskHistoryEvent>;
   gaps?: Record<string, TaskHistoryGap>;
 }
 
@@ -37,6 +39,8 @@ export interface TaskHistoryEnvelope {
   occurredAt: number;
   baselines: TaskHistoryBaseline[];
   events: TaskHistoryEvent[];
+  /** Additive extension. Older readers still apply the task and core events. */
+  optionalEvents?: TaskHistoryEvent[];
   /** Monotonic coverage warnings travel with the next author operation too. */
   gaps?: TaskHistoryGap[];
 }

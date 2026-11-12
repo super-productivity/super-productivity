@@ -3,10 +3,19 @@ export type TaskHistoryValue =
   | { kind: 'status'; value: 'open' | 'done' | 'wontDo' }
   | { kind: 'day'; value: string }
   | { kind: 'time'; value: number }
+  | { kind: 'text'; value: string; truncated?: true }
+  | { kind: 'priority'; value: 1 | 2 | 3 }
   | { kind: 'none' }
   | { kind: 'unknown' };
 
-export type TaskHistoryField = 'status' | 'schedule' | 'deadline';
+export type TaskHistoryField =
+  | 'status'
+  | 'schedule'
+  | 'deadline'
+  | 'title'
+  | 'priority'
+  | 'notes';
+export type TaskHistoryOrder = 'newest' | 'oldest';
 
 export interface TaskHistoryEvent {
   id: string;
@@ -33,10 +42,13 @@ export interface TaskHistoryQuery {
   cursor?: string;
   /** 1..200, default 50. */
   limit?: number;
+  /** Defaults to newest. Keep the same order when using a cursor. */
+  order?: TaskHistoryOrder;
 }
 
 export interface TaskHistoryPage {
   taskId: string;
+  order: TaskHistoryOrder;
   createdAt: number | null;
   recordingStartedAt: number | null;
   events: TaskHistoryEvent[];

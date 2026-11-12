@@ -66,13 +66,20 @@ export class PluginTaskHistoryService {
     const limit = options.limit ?? 50;
     if (!Number.isInteger(limit) || limit < 1 || limit > 200)
       throw new Error('History page limit must be 1..200');
+    const order = options.order ?? 'newest';
+    if (order !== 'newest' && order !== 'oldest')
+      throw new Error('Invalid history order');
     let cursor: { taskId: string; eventId: string } | undefined;
     if (options.cursor !== undefined) {
       try {
         const value: unknown = JSON.parse(decodeURIComponent(atob(options.cursor)));
         if (!value || typeof value !== 'object') throw new Error();
         const parsed = value as Record<string, unknown>;
-        if (parsed['taskId'] !== taskId || typeof parsed['eventId'] !== 'string')
+        if (
+          parsed['taskId'] !== taskId ||
+          typeof parsed['eventId'] !== 'string' ||
+          (parsed['order'] ?? 'newest') !== order
+        )
           throw new Error();
         cursor = { taskId, eventId: parsed['eventId'] };
       } catch {
@@ -99,10 +106,14 @@ export class PluginTaskHistoryService {
           : undefined;
         const createdAt =
           state.entities[taskId]?.created ?? record?.baseline?.createdAt ?? null;
-        const events = Object.values(record?.events ?? {}).sort(
+        const events = [
+          ...Object.values(record?.events ?? {}),
+          ...Object.values(record?.optionalEvents ?? {}),
+        ].sort(
           (a, b) =>
             b.occurredAt - a.occurredAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
         );
+        if (order === 'oldest') events.reverse();
         const cursorId = cursor?.eventId;
         const start = cursorId
           ? events.findIndex((event) => event.id === cursorId) + 1
@@ -116,6 +127,7 @@ export class PluginTaskHistoryService {
         );
         return structuredClone({
           taskId,
+          order,
           createdAt,
           recordingStartedAt: record?.baseline?.observedAt ?? null,
           events: page,
@@ -124,7 +136,9 @@ export class PluginTaskHistoryService {
           revision: `${record?.baseline?.id ?? ''}:${events.length}:${gaps.length}:${createdAt}`,
           nextCursor:
             last && start + page.length < events.length
-              ? btoa(encodeURIComponent(JSON.stringify({ taskId, eventId: last.id })))
+              ? btoa(
+                  encodeURIComponent(JSON.stringify({ taskId, eventId: last.id, order })),
+                )
               : null,
         });
       });

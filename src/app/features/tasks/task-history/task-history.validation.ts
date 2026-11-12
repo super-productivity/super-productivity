@@ -1,6 +1,7 @@
 import typia from 'typia';
 import { TaskHistoryEnvelope } from './task-history.model';
 import { isValidDBDateStr } from '../../../util/get-db-date-str';
+import { OPTIONAL_TASK_HISTORY_FIELDS } from './task-history-recording-config';
 
 /** The history envelope is untrusted synced input, just like the task payload. */
 export const isTaskHistoryEnvelope = (
@@ -18,11 +19,32 @@ export const isTaskHistoryEnvelope = (
   const validField = (
     field: TaskHistoryEnvelope['events'][number]['field'],
     v: TaskHistoryEnvelope['events'][number]['before'],
-  ): boolean =>
-    validValue(v) &&
-    (v.kind === 'unknown' ||
-      (field === 'status' ? v.kind === 'status' : v.kind !== 'status'));
+  ): boolean => {
+    if (!validValue(v)) return false;
+    if (v.kind === 'unknown') return true;
+    switch (field) {
+      case 'status':
+        return v.kind === 'status';
+      case 'title':
+        return v.kind === 'text';
+      case 'notes':
+        return v.kind === 'text' || v.kind === 'none';
+      case 'priority':
+        return v.kind === 'priority' || v.kind === 'none';
+      default:
+        return v.kind === 'day' || v.kind === 'time' || v.kind === 'none';
+    }
+  };
   const baselineIds = new Set(value.baselines.map((b) => b.taskId));
+  const isOptional = (field: string): boolean =>
+    OPTIONAL_TASK_HISTORY_FIELDS.some((optional) => optional === field);
+  const validEvent = (e: TaskHistoryEnvelope['events'][number]): boolean =>
+    baselineIds.has(e.taskId) &&
+    e.operationId === value.operationId &&
+    e.id === `${value.operationId}:${encodeURIComponent(e.taskId)}:${e.field}` &&
+    e.occurredAt === value.occurredAt &&
+    validField(e.field, e.before) &&
+    validField(e.field, e.after);
   return (
     value.baselines.every(
       (b) =>
@@ -40,14 +62,7 @@ export const isTaskHistoryEnvelope = (
         g.id === `recording-unavailable:${encodeURIComponent(g.taskId)}` &&
         (g.detectedAt === null || Number.isFinite(g.detectedAt)),
     ) &&
-    value.events.every(
-      (e) =>
-        baselineIds.has(e.taskId) &&
-        e.operationId === value.operationId &&
-        e.id === `${value.operationId}:${encodeURIComponent(e.taskId)}:${e.field}` &&
-        e.occurredAt === value.occurredAt &&
-        validField(e.field, e.before) &&
-        validField(e.field, e.after),
-    )
+    value.events.every((e) => !isOptional(e.field) && validEvent(e)) &&
+    (value.optionalEvents ?? []).every((e) => isOptional(e.field) && validEvent(e))
   );
 };

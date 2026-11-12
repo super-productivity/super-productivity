@@ -63,6 +63,25 @@ describe('PluginTaskHistoryService', () => {
     await expectAsync(service.read('task2', { cursor: one.nextCursor! })).toBeRejected();
   });
 
+  it('paginates oldest first and rejects a cursor from the opposite direction', async () => {
+    const oldest = await service.read('task1', { limit: 2, order: 'oldest' });
+    const next = await service.read('task1', {
+      limit: 2,
+      order: 'oldest',
+      cursor: oldest.nextCursor!,
+    });
+    expect(oldest.order).toBe('oldest');
+    expect([...oldest.events, ...next.events].map((event) => event.operationId)).toEqual([
+      'op0',
+      'op1',
+      'op2',
+      'op3',
+    ]);
+    await expectAsync(
+      service.read('task1', { cursor: oldest.nextCursor! }),
+    ).toBeRejected();
+  });
+
   it('does not leak mutable store objects to plugin code', async () => {
     const page = await service.read('task1');
     page.events[0].after = { kind: 'unknown' };

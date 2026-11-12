@@ -1,5 +1,10 @@
 import { Task, TaskState } from '../task.model';
 import { isWontDoTask } from '../util/is-wont-do-task';
+import { getTaskPriority } from '../task-priority.const';
+import {
+  OPTIONAL_TASK_HISTORY_FIELDS,
+  TaskHistoryRecordingConfig,
+} from './task-history-recording-config';
 import {
   TaskHistoryBaseline,
   TaskHistoryEnvelope,
@@ -8,7 +13,10 @@ import {
   TaskHistoryValue,
 } from './task-history.model';
 
-const FIELDS: readonly TaskHistoryField[] = ['status', 'schedule', 'deadline'];
+const FIELDS = ['status', 'schedule', 'deadline'] as const;
+type CoreHistoryField = (typeof FIELDS)[number];
+const MAX_TEXT_VALUE_LENGTH = 8_192;
+const MAX_TEXT_PER_OPERATION = 32_768;
 
 const dateValue = (
   day: string | null | undefined,
@@ -20,9 +28,9 @@ const dateValue = (
       ? { kind: 'day', value: day }
       : { kind: 'none' };
 
-export const getTaskHistoryValues = (
+const getTaskHistoryValues = (
   task: Task,
-): Record<TaskHistoryField, TaskHistoryValue> => ({
+): Record<CoreHistoryField, TaskHistoryValue> => ({
   status: {
     kind: 'status',
     value: !task.isDone ? 'open' : isWontDoTask(task) ? 'wontDo' : 'done',
@@ -30,6 +38,16 @@ export const getTaskHistoryValues = (
   schedule: dateValue(task.dueDay, task.dueWithTime),
   deadline: dateValue(task.deadlineDay, task.deadlineWithTime),
 });
+
+const optionalValues = {
+  title: (task: Task): TaskHistoryValue => ({ kind: 'text', value: task.title }),
+  priority: (task: Task): TaskHistoryValue => {
+    const value = getTaskPriority(task.priority);
+    return value === null ? { kind: 'none' } : { kind: 'priority', value };
+  },
+  notes: (task: Task): TaskHistoryValue =>
+    task.notes ? { kind: 'text', value: task.notes } : { kind: 'none' },
+};
 
 const equalValue = (a: TaskHistoryValue, b: TaskHistoryValue): boolean =>
   a.kind === b.kind && (!('value' in a) || ('value' in b && a.value === b.value));
@@ -41,6 +59,7 @@ export const collectTaskHistory = (
   operationId: string,
   occurredAt: number,
   sourceAction: string,
+  recording: TaskHistoryRecordingConfig = {},
 ): TaskHistoryEnvelope => {
   const result: TaskHistoryEnvelope = {
     version: 1,
@@ -50,6 +69,26 @@ export const collectTaskHistory = (
     events: [],
   };
   if (before.entities === after.entities) return result;
+  const optionalFields = OPTIONAL_TASK_HISTORY_FIELDS.filter((field) => recording[field]);
+  let remainingText = MAX_TEXT_PER_OPERATION;
+  const boundedValue = (value: TaskHistoryValue): TaskHistoryValue => {
+    if (value.kind !== 'text') return value;
+    let limit = Math.min(MAX_TEXT_VALUE_LENGTH, remainingText);
+    const beforeCut = value.value.charCodeAt(limit - 1);
+    const afterCut = value.value.charCodeAt(limit);
+    if (
+      beforeCut >= 0xd800 &&
+      beforeCut <= 0xdbff &&
+      afterCut >= 0xdc00 &&
+      afterCut <= 0xdfff
+    ) {
+      limit--;
+    }
+    remainingText -= Math.min(limit, value.value.length);
+    return value.value.length <= limit
+      ? value
+      : { kind: 'text', value: value.value.slice(0, limit), truncated: true };
+  };
 
   for (const taskId of after.ids) {
     const task = after.entities[taskId];
@@ -74,18 +113,34 @@ export const collectTaskHistory = (
     if (gaps) (result.gaps ??= []).push(...Object.values(gaps));
     // Initial values of a newly created instance belong to its baseline.
     if (!previous) continue;
-    for (const field of FIELDS) {
-      if (equalValue(previousValues[field], values[field])) continue;
-      result.events.push({
+    const appendChange = (
+      field: TaskHistoryField,
+      previousValue: TaskHistoryValue,
+      nextValue: TaskHistoryValue,
+      bucket: 'events' | 'optionalEvents',
+    ): void => {
+      if (equalValue(previousValue, nextValue)) return;
+      (result[bucket] ??= []).push({
         id: `${key}:${field}`,
         operationId,
         taskId,
         field,
-        before: previousValues[field],
-        after: values[field],
+        before: boundedValue(previousValue),
+        after: boundedValue(nextValue),
         occurredAt,
         sourceAction,
       });
+    };
+    for (const field of FIELDS) {
+      appendChange(field, previousValues[field], values[field], 'events');
+    }
+    for (const field of optionalFields) {
+      appendChange(
+        field,
+        optionalValues[field](previous),
+        optionalValues[field](task),
+        'optionalEvents',
+      );
     }
   }
   return result;
@@ -102,10 +157,14 @@ export const mergeTaskHistory = (
   state: TaskHistoryState | undefined,
   envelope: TaskHistoryEnvelope,
 ): TaskHistoryState | undefined => {
-  if (!envelope.baselines.length && !envelope.events.length && !envelope.gaps?.length)
+  if (
+    !envelope.baselines.length &&
+    !envelope.events.length &&
+    !envelope.optionalEvents?.length &&
+    !envelope.gaps?.length
+  )
     return state;
   const next = { ...state };
-  const touched = new Set<string>();
   for (const baseline of envelope.baselines) {
     const current = Object.hasOwn(next, baseline.taskId)
       ? next[baseline.taskId]
@@ -118,18 +177,20 @@ export const mergeTaskHistory = (
       events: current?.events ?? {},
     };
   }
-  for (const event of envelope.events) {
-    const current = Object.hasOwn(next, event.taskId) ? next[event.taskId] : undefined;
-    // The first event for a task always travels with its baseline. A missing
-    // baseline is invalid input, not a reason to invent the task's old state.
-    if (!current?.baseline)
-      throw new Error('Task history event has no recording baseline');
-    if (Object.hasOwn(current.events, event.id)) continue;
-    if (!touched.has(event.taskId)) {
-      next[event.taskId] = { ...current, events: { ...current.events } };
-      touched.add(event.taskId);
+  for (const bucket of ['events', 'optionalEvents'] as const) {
+    const touched = new Set<string>();
+    for (const event of envelope[bucket] ?? []) {
+      const current = Object.hasOwn(next, event.taskId) ? next[event.taskId] : undefined;
+      // Author events always travel with a baseline.
+      if (!current?.baseline)
+        throw new Error('Task history event has no recording baseline');
+      if (Object.hasOwn(current[bucket] ?? {}, event.id)) continue;
+      if (!touched.has(event.taskId)) {
+        next[event.taskId] = { ...current, [bucket]: { ...current[bucket] } };
+        touched.add(event.taskId);
+      }
+      next[event.taskId][bucket]![event.id] = event;
     }
-    next[event.taskId].events[event.id] = event;
   }
   for (const gap of envelope.gaps ?? []) {
     const current = Object.hasOwn(next, gap.taskId) ? next[gap.taskId] : undefined;
