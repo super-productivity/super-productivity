@@ -278,15 +278,19 @@ export class CalendarIntegrationEffects {
   );
 
   /**
-   * Undo puts the task back, so skip its event again. The due-event banner only
-   * checks the skip list, and a restored task would otherwise show it.
+   * A restore (undo, Recently Deleted, History, REST API, issue search) puts the
+   * task back, so skip its event again. The due-event banner only checks the
+   * skip list, and a restored task would otherwise show it.
    */
   skipEventsOfRestoredTasks$ = createEffect(
     () =>
       this._actions$.pipe(
-        ofType(TaskSharedActions.restoreDeletedTask),
-        tap(({ task }) => {
-          const tasks = [task, ...(task.subTasks ?? [])];
+        ofType(TaskSharedActions.restoreDeletedTask, TaskSharedActions.restoreTask),
+        tap((action) => {
+          const tasks =
+            action.type === TaskSharedActions.restoreTask.type
+              ? [action.task, ...action.subTasks]
+              : [action.task, ...(action.task.subTasks ?? [])];
           this._calendarIntegrationService.skipCalendarEvents(
             getCalendarAutoImportDismissals(tasks).map(({ issueId }) => issueId),
           );

@@ -505,6 +505,20 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
 
       expect(skipCalendarEventsSpy).toHaveBeenCalledOnceWith(['parent-issue']);
     });
+
+    it('skips the events of a task restored through restoreTask', () => {
+      localActions$.next(
+        TaskSharedActions.restoreTask({
+          task: buildTask('parent', 'ICAL'),
+          subTasks: [buildTask('sub', 'ICAL'), buildTask('other', 'JIRA')],
+        }),
+      );
+
+      expect(skipCalendarEventsSpy).toHaveBeenCalledOnceWith([
+        'parent-issue',
+        'sub-issue',
+      ]);
+    });
   });
 
   describe('offline', () => {
