@@ -4,6 +4,13 @@ on:
     branches:
       - master
       - main
+  push:
+    branches:
+      - master
+    # No app change, nothing to measure.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   workflow_dispatch:
     inputs: {}
   release:
@@ -115,7 +122,7 @@ jobs:
   lint:
     name: Lint
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -134,7 +141,7 @@ jobs:
   unit-tests:
     name: Unit Tests (${{ matrix.suite }} ${{ matrix.shard }})
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -159,7 +166,7 @@ jobs:
   unit-tests-tooling:
     name: Unit Tests (tooling and packages)
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -181,7 +188,7 @@ jobs:
   e2e-build:
     name: Build E2E Frontend
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' && github.event_name != 'push' }}
     # Owner PRs run E2E on sponsored Blacksmith runners for faster feedback; everything else
     # stays on GitHub. Repo variable USE_BLACKSMITH is the kill switch (unset = GitHub only);
     # unset it if these jobs sit queued (app uninstalled or sponsorship ended).
@@ -295,6 +302,8 @@ jobs:
   # One production web build serves both the PWA offline test and Lighthouse
   # (`npm run e2e:pwa` would build it a second time).
   # Lighthouse is designed to audit the performance, accessibility, SEO, and other metrics of a web application.
+  # Also runs on pushes to master so budget overruns are caught before they
+  # surface as red checks on unrelated PRs (see #11709).
   pwa-lighthouse:
     name: PWA & Lighthouse
     needs: changes
