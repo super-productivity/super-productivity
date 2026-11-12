@@ -62,6 +62,9 @@ import {
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { processDeferredActions } from './process-deferred-actions-flush.util';
 import { HydrationStateService } from '../apply/hydration-state.service';
+import { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
+import { RemoteStateRebuildService } from './remote-state-rebuild.service';
+import { partitionSnapshotOps } from './partition-snapshot-ops.util';
 import { getDeferredActions } from '../capture/operation-capture.meta-reducer';
 
 type RemoteOpsProcessingResult = Awaited<
@@ -89,9 +92,6 @@ type GuardedRemoteOpsProcessingResult = RemoteOpsProcessingResult & {
   deferredRepairHealFailed?: boolean;
 };
 
-import { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
-import { RemoteStateRebuildService } from './remote-state-rebuild.service';
-import { partitionSnapshotOps } from './partition-snapshot-ops.util';
 /**
  * Orchestrates synchronization of the Operation Log with remote storage.
  *

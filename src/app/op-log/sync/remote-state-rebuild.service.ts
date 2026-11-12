@@ -44,7 +44,6 @@ import {
 } from '../../features/config/local-only-sync-settings.util';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { processDeferredActions } from './process-deferred-actions-flush.util';
-
 import { partitionSnapshotOps } from './partition-snapshot-ops.util';
 
 /**
