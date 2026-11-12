@@ -166,9 +166,34 @@ body {
   }
 
   // Focus is Astryx's 2px ink ring, offset — never Material's purple halo.
-  :focus-visible {
+  // Form fields keep their own outline styling below, so the ring is limited to
+  // controls that have no border of their own; otherwise a focused text field
+  // ends up with a 2px ring on top of its 1px border and reads as a dark slab.
+  :where(a, button, [role='button'], [role='tab'], [role='menuitem'], summary, [tabindex]):focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [contenteditable]:focus-visible {
+    outline: none;
+  }
+
+  // Focused field: one accent hairline, exactly like an unfocused Astryx field.
+  .mat-mdc-form-field.mat-focused {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--color-accent) !important;
+      border-width: 1px !important;
+    }
+
+    .mdc-line-ripple::before,
+    .mdc-line-ripple::after {
+      border-bottom-width: 1px;
+    }
   }
 
   // Slim scrollbars in the Astryx border tone.
@@ -248,5 +273,107 @@ body.isDarkTheme {
     .mdc-switch--unselected .mdc-switch__handle::after {
       background: var(--color-icon-secondary);
     }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Legacy alias + remaining surfaces
+//
+// Components that predate the token families (`--card-bg`, `--text-color*`,
+// `--c-*`) still read these names, onboarding hints and menus among them.
+// -----------------------------------------------------------------------------
+
+body,
+body.isDarkTheme {
+  --card-bg: var(--color-background-card);
+  --text-color: var(--color-text-primary);
+  --text-color-muted: var(--color-text-secondary);
+  --text-color-inverse: var(--color-background-body);
+  --color-success: var(--color-text-success, var(--color-text-primary));
+  --color-danger: var(--color-text-error, var(--color-text-primary));
+
+  // Tooltips: Astryx uses an inverted ink chip, not Material's grey slab.
+  .mat-mdc-tooltip .mdc-tooltip__surface,
+  .mat-mdc-tooltip-surface {
+    border-radius: var(--radius-element);
+    background: var(--color-text-primary);
+    color: var(--color-background-body);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    box-shadow: var(--shadow-low);
+  }
+
+  // Snackbars: card surface + hairline, radius container.
+  .mat-mdc-snack-bar-container .mdc-snackbar__surface,
+  .mat-snack-bar-container {
+    border-radius: var(--radius-container);
+    background: var(--color-background-popover);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-med);
+  }
+
+  // Dialogs: Astryx heading rhythm, hairline header.
+  .mat-mdc-dialog-title,
+  .mat-mdc-dialog-container h2 {
+    font-family: var(--font-family-heading);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0;
+  }
+
+  .mat-mdc-dialog-actions {
+    border-top: 1px solid var(--color-border);
+  }
+
+  // Mobile chrome: bottom nav sits on the card surface with a hairline edge.
+  .mobile-bottom-nav {
+    background: var(--color-background-card);
+    border-top: 1px solid var(--color-border);
+    box-shadow: none;
+
+    .nav-button.is-active,
+    .nav-button.active {
+      color: var(--color-accent);
+      background: var(--color-background-gray);
+      border-radius: var(--radius-element);
+    }
+  }
+
+  // Schedule / planner day headers: one type rhythm, hairline rules.
+  .schedule-day,
+  .planner-day-header,
+  planner-day > header {
+    border-color: var(--color-border);
+    font-family: var(--font-family-heading);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  // Tags and chips inside task rows.
+  tag,
+  .mat-mdc-chip.mat-mdc-standard-chip {
+    border-radius: var(--radius-full);
+  }
+
+  // Onboarding hint chip and the quick-tour card.
+  .hint-chip,
+  quick-tour-card .card {
+    background: var(--color-background-popover);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-container);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-med);
+  }
+
+  // Add-task bar keeps its surfaces but takes the Astryx radius.
+  .add-task-bar,
+  .add-task-bar-panel,
+  add-task-bar .input-wrapper {
+    border-radius: var(--radius-container);
+  }
+
+  // Selection highlight: Astryx ink at low alpha instead of Material's tint.
+  ::selection {
+    background: var(--color-background-gray);
+    color: var(--color-text-primary);
   }
 }
