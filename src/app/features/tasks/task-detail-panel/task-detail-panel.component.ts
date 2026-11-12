@@ -678,7 +678,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   addAttachment(): void {
     this._matDialog
       .open(DialogEditTaskAttachmentComponent, {
-        data: {},
+        data: { taskId: this.task().id },
       })
       .afterClosed()
       .subscribe((result) => {

@@ -26,7 +26,7 @@ describe('IssueIconPipe', () => {
   });
 
   it('should return the built-in icon for a built-in provider', () => {
-    expect(pipe.transform('GITLAB')).toBe('gitlab');
+    expect(pipe.transform('JIRA')).toBe('jira');
   });
 
   it('should return a plugin provider SVG icon', () => {

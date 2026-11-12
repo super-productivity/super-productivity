@@ -30,7 +30,7 @@ import { SharePayload } from '../share.model';
 
       button {
         opacity: 0.7;
-        transition: opacity 120ms ease-in-out;
+        transition: opacity var(--transition-duration-s) ease-in-out;
       }
 
       button:hover,

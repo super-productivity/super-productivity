@@ -419,52 +419,6 @@
         "WRITE_A_COMMENT": "Escreva um comentário"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "A duração pré-preenchida contém dados não rastreados de dias anteriores.",
-        "T_ALREADY_TRACKED": "Já rastreado",
-        "T_TITLE": "Título",
-        "T_TO_BE_SUBMITTED": "A ser enviado",
-        "TITLE": "Enviar tempo gasto em problemas para o GitLab",
-        "TOTAL_MSG": "Você enviará o total de tempo trabalhado hoje <em>{{totalTimeToSubmit}}</em> para <em>{{nrOfTasksToSubmit}}</em> diferentes questões."
-      },
-      "FORM": {
-        "FILTER": "Filtro customizado",
-        "FILTER_DESCRIPTION": "Consulte https://docs.gitlab.com/ee/api/issues.html#list-issues. Vários podem ser combinados por &",
-        "FILTER_USER": "Nome de usuário (ex.: para filtrar as alterações sozinho)",
-        "GITLAB_BASE_URL": "URL base GitLab personalizado",
-        "PROJECT": "Caminho completo ou nome de usuário / projeto",
-        "PROJECT_HINT": "e.g. johannesjo/super-produtividade",
-        "SCOPE": "escopo",
-        "SCOPE_ALL": "Todos",
-        "SCOPE_ASSIGNED": "Atribuído a mim",
-        "SCOPE_CREATED": "Criado por mim",
-        "SOURCE": "Fonte",
-        "SOURCE_GLOBAL": "Todos",
-        "SOURCE_GROUP": "grupo",
-        "SOURCE_PROJECT": "projeto",
-        "SUBMIT_TIMELOGS": "Enviar registros de tempo para o Gitlab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Mostrar a caixa de diálogo de controle de tempo após clicar no dia de término",
-        "TOKEN": "Token de acesso"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p> Aqui você pode configurar o SuperProductivity para listar problemas abertos do GitLab (seja a versão on-line ou uma instância auto-hospedada) para um projeto específico no painel de criação de tarefas na exibição de planejamento diário. Eles serão listados como sugestões e fornecerão um link para o problema, além de mais informações sobre o assunto. </p> <p> Além disso, você pode adicionar e sincronizar automaticamente todos os problemas em aberto no backlog de tarefas. </p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Responsável",
-        "AT": "em",
-        "DESCRIPTION": "Descrição",
-        "LABELS": "Etiquetas",
-        "MARK_AS_CHECKED": "Marcar atualizações como checadas",
-        "PROJECT": "projeto",
-        "STATUS": "Status",
-        "SUMMARY": "Indíce",
-        "WRITE_A_COMMENT": "Comentar"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Erro desconhecido {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "É provável que esta integração não funcione no seu browser. Descarregue a versão para computador ou Android do Super Productivity!",
       "DEFAULT": {

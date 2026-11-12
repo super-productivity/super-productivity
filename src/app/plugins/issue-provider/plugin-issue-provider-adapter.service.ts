@@ -15,7 +15,7 @@ import { PluginIssueProviderRegistryService } from './plugin-issue-provider-regi
 import { PluginHttpService } from './plugin-http.service';
 import { PluginHttp, RegisteredPluginIssueProvider } from './plugin-issue-provider.model';
 import { selectIssueProviderById } from '../../features/issue/store/issue-provider.selectors';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { TaskService } from '../../features/tasks/task.service';
 import { TagService } from '../../features/tag/tag.service';
@@ -32,6 +32,14 @@ type MutableTaskChanges = { -readonly [K in keyof Task]?: Task[K] };
 
 const DEFAULT_DONE_STATES = ['closed', 'done', 'completed', 'resolved'];
 
+const ISSUE_NOT_FOUND = 'ISSUE_NOT_FOUND';
+
+interface FreshIssueData {
+  taskChanges: Partial<Task>;
+  issue: IssueData;
+  issueTitle: string;
+}
+
 interface FreshTaskData {
   task: Task;
   taskChanges: Partial<Task>;
@@ -46,6 +54,10 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
   private _tagService = inject(TagService);
+
+  // Tasks already warned about a missing issue this session, so a poll every
+  // few minutes does not repeat the warning.
+  private _notFoundWarnedKeys = new Set<string>();
 
   // Not meaningful for a multi-plugin adapter, but required by interface
   pollInterval = 0;
@@ -202,11 +214,18 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     }
   }
 
-  async getFreshDataForIssueTask(task: Task): Promise<{
-    taskChanges: Partial<Task>;
-    issue: IssueData;
-    issueTitle: string;
-  } | null> {
+  async getFreshDataForIssueTask(task: Task): Promise<FreshIssueData | null> {
+    const result = await this._fetchFreshData(task);
+    if (result === ISSUE_NOT_FOUND) {
+      this._warnIssuesNotFound([task]);
+      return null;
+    }
+    return result;
+  }
+
+  private async _fetchFreshData(
+    task: Task,
+  ): Promise<FreshIssueData | typeof ISSUE_NOT_FOUND | null> {
     if (!task.issueProviderId || !task.issueId) {
       return null;
     }
@@ -226,10 +245,10 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       );
       return issue ? this._toFreshData(task, issue, cfg, resolved) : null;
     } catch (e) {
-      // Detect 404 = issue deleted remotely
+      // Not proof of a deletion: GitLab also answers 404 when the token lost
+      // access, and a wrong base URL or proxy 404s every issue. Never delete here.
       if (e instanceof HttpErrorResponse && (e.status === 404 || e.status === 410)) {
-        this._handleRemoteDeletion(task);
-        return null;
+        return ISSUE_NOT_FOUND;
       }
       PluginLog.err(
         `[PluginIssueAdapter] getFreshDataForIssueTask failed for ${cfg.issueProviderKey}:`,
@@ -264,12 +283,16 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     const getByIds = resolved?.provider.definition.getByIds;
     if (!cfg || !resolved || !getByIds) {
       const results: FreshTaskData[] = [];
+      const notFoundTasks: Task[] = [];
       for (const task of tasks) {
-        const result = await this.getFreshDataForIssueTask(task);
-        if (result) {
+        const result = await this._fetchFreshData(task);
+        if (result === ISSUE_NOT_FOUND) {
+          notFoundTasks.push(task);
+        } else if (result) {
           results.push({ task, taskChanges: result.taskChanges, issue: result.issue });
         }
       }
+      this._warnIssuesNotFound(notFoundTasks);
       return results;
     }
     try {
@@ -387,6 +410,9 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       );
       delete baseTaskData.dueDay;
       delete baseTaskData.dueWithTime;
+      // local bookkeeping of time already submitted (finish-day worklog);
+      // the issue carries no such data, so a refresh must not reset it
+      delete baseTaskData.issueTimeTracked;
       // Completion is only re-pulled from a provider that declares what done
       // means. Without doneStates the default word list is a guess, and a
       // calendar's 'confirmed' would reopen a task the user completed (#9905);
@@ -529,7 +555,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       issueWasUpdated: false,
       issueLastUpdated: data.lastUpdated ?? 0,
       issueAttachmentNr: 0,
-      issuePoints: undefined,
+      issuePoints: typeof data.points === 'number' ? data.points : undefined,
       issueTimeTracked: undefined,
       isDone,
       ...(dueWithTime != null
@@ -548,15 +574,13 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return (doneStates ?? DEFAULT_DONE_STATES).some((s) => s.toLowerCase() === state);
   }
 
+  // Only for an issue state the provider declares as deleted (`deletedStates`,
+  // e.g. a cancelled calendar event): an explicit answer, unlike a 404.
   private _handleRemoteDeletion(requestedTask: Task): void {
     // Re-read synchronously from NgRx so a delayed response cannot delete or
     // warn about a task that was relinked while the provider request was in flight.
     this._taskService.getByIdOnce$(requestedTask.id).subscribe((currentTask) => {
-      if (
-        !currentTask ||
-        currentTask.issueId !== requestedTask.issueId ||
-        currentTask.issueProviderId !== requestedTask.issueProviderId
-      ) {
+      if (!currentTask || !this._isSameIssueLink(currentTask, requestedTask)) {
         return;
       }
 
@@ -582,12 +606,61 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     });
   }
 
+  private _warnIssuesNotFound(requestedTasks: Task[]): void {
+    if (!requestedTasks.length) {
+      return;
+    }
+    // Re-read from NgRx so a delayed response cannot warn about a task that was
+    // relinked or deleted while the provider request was in flight.
+    forkJoin(
+      requestedTasks.map((task) => this._taskService.getByIdOnce$(task.id)),
+    ).subscribe((currentTasks) => {
+      const tasksToWarn = currentTasks.filter((currentTask, i) => {
+        if (!currentTask || !this._isSameIssueLink(currentTask, requestedTasks[i])) {
+          return false;
+        }
+        const key = `${currentTask.id}|${currentTask.issueProviderId}|${currentTask.issueId}`;
+        if (this._notFoundWarnedKeys.has(key)) {
+          return false;
+        }
+        this._notFoundWarnedKeys.add(key);
+        return true;
+      });
+
+      if (tasksToWarn.length === 1) {
+        const task = tasksToWarn[0];
+        this._snackService.open({
+          type: 'WARNING',
+          msg: T.F.ISSUE.S.ISSUE_NOT_FOUND,
+          translateParams: { taskTitle: task.title },
+          actionStr: T.G.DELETE,
+          actionFn: () => this._removeIfIssueStillMatches(task),
+          // Sticky, so the "No update required" / "Updated data" snack that
+          // follows a refresh cannot replace the only warning of this session.
+          config: { duration: 0 },
+        });
+      } else if (tasksToWarn.length > 1) {
+        // Many misses at once usually mean a wrong setting, not deleted
+        // issues, so there is no bulk delete action.
+        this._snackService.open({
+          type: 'WARNING',
+          msg: T.F.ISSUE.S.ISSUES_NOT_FOUND,
+          translateParams: { nr: tasksToWarn.length },
+        });
+      }
+    });
+  }
+
+  private _isSameIssueLink(currentTask: Task, requestedTask: Task): boolean {
+    return (
+      currentTask.issueId === requestedTask.issueId &&
+      currentTask.issueProviderId === requestedTask.issueProviderId
+    );
+  }
+
   private _removeIfIssueStillMatches(requestedTask: Task): void {
     this._taskService.getByIdOnce$(requestedTask.id).subscribe((currentTask) => {
-      if (
-        currentTask?.issueId === requestedTask.issueId &&
-        currentTask.issueProviderId === requestedTask.issueProviderId
-      ) {
+      if (currentTask && this._isSameIssueLink(currentTask, requestedTask)) {
         this._taskService.removeMultipleTasks([currentTask.id]);
       }
     });

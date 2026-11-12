@@ -5,10 +5,7 @@ import {
   MigratedIssueProviderKey,
 } from './issue.model';
 // GitHub is now a plugin — no built-in config needed
-import {
-  DEFAULT_GITLAB_CFG,
-  GITLAB_CONFIG_FORM_SECTION,
-} from './providers/gitlab/gitlab.const';
+// GitLab is now a plugin — no built-in config needed
 import {
   CALDAV_CONFIG_FORM_SECTION,
   DEFAULT_CALDAV_CFG,
@@ -36,7 +33,6 @@ import {
 
 export const DELAY_BEFORE_ISSUE_POLLING = 8000;
 
-export const GITLAB_TYPE: BuiltInIssueProviderKey = 'GITLAB';
 export const GITHUB_TYPE: MigratedIssueProviderKey = 'GITHUB';
 export const JIRA_TYPE: BuiltInIssueProviderKey = 'JIRA';
 export const CALDAV_TYPE: BuiltInIssueProviderKey = 'CALDAV';
@@ -48,7 +44,6 @@ export const AZURE_DEVOPS_TYPE: MigratedIssueProviderKey = 'AZURE_DEVOPS';
 export const PLAINSPACE_TYPE: BuiltInIssueProviderKey = 'PLAINSPACE';
 
 export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
-  GITLAB_TYPE,
   JIRA_TYPE,
   CALDAV_TYPE,
   ICAL_TYPE,
@@ -58,7 +53,6 @@ export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
 
 export const ISSUE_PROVIDER_ICON_MAP = {
   [JIRA_TYPE]: 'jira',
-  [GITLAB_TYPE]: 'gitlab',
   [CALDAV_TYPE]: 'caldav',
   [ICAL_TYPE]: 'calendar',
   [OPEN_PROJECT_TYPE]: 'open_project',
@@ -67,7 +61,6 @@ export const ISSUE_PROVIDER_ICON_MAP = {
 
 export const ISSUE_PROVIDER_HUMANIZED = {
   [JIRA_TYPE]: 'Jira',
-  [GITLAB_TYPE]: 'GitLab',
   [CALDAV_TYPE]: 'CalDAV',
   [ICAL_TYPE]: 'Calendar',
   [OPEN_PROJECT_TYPE]: 'OpenProject',
@@ -76,7 +69,6 @@ export const ISSUE_PROVIDER_HUMANIZED = {
 
 export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [JIRA_TYPE]: DEFAULT_JIRA_CFG,
-  [GITLAB_TYPE]: DEFAULT_GITLAB_CFG,
   [CALDAV_TYPE]: DEFAULT_CALDAV_CFG,
   [ICAL_TYPE]: DEFAULT_CALENDAR_CFG,
   [OPEN_PROJECT_TYPE]: DEFAULT_OPEN_PROJECT_CFG,
@@ -85,7 +77,6 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
 
 export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [JIRA_TYPE]: JIRA_CONFIG_FORM_SECTION,
-  [GITLAB_TYPE]: GITLAB_CONFIG_FORM_SECTION,
   [CALDAV_TYPE]: CALDAV_CONFIG_FORM_SECTION,
   [ICAL_TYPE]: CALENDAR_FORM_CFG_NEW as any,
   [OPEN_PROJECT_TYPE]: OPEN_PROJECT_CONFIG_FORM_SECTION,
@@ -102,7 +93,6 @@ export const ISSUE_STR_MAP: Record<
   { ISSUE_STR: string; ISSUES_STR: string }
 > = {
   [JIRA_TYPE]: DEFAULT_ISSUE_STRS,
-  [GITLAB_TYPE]: DEFAULT_ISSUE_STRS,
   [CALDAV_TYPE]: DEFAULT_ISSUE_STRS,
   [ICAL_TYPE]: {
     ISSUE_STR: T.F.CALENDARS.EVENT_STRINGS.EVENT_STR,

@@ -7,7 +7,7 @@ import {
 } from '@angular/core/testing';
 import { Component, ElementRef, inject, NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
@@ -24,6 +24,7 @@ import { ProjectService } from '../project/project.service';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import { SnackService } from '../../core/snack/snack.service';
+import { SnackParams } from '../../core/snack/snack.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { T } from '../../t.const';
@@ -430,6 +431,32 @@ describe('WorkViewComponent', () => {
       await fixture.componentInstance.moveDoneToArchive();
 
       expect(moveToArchive).toHaveBeenCalledOnceWith([listed, earlier]);
+    });
+
+    it('offers History, where the archived tasks can be found again', async () => {
+      const done = buildTask('done');
+      configureWorkViewTestBed({
+        taskService: { moveToArchive: () => Promise.resolve() },
+        doneTasksToArchive: [done],
+      });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+
+      await TestBed.compileComponents();
+      const open = spyOn(TestBed.inject(SnackService), 'open');
+      const navigate = spyOn(TestBed.inject(Router), 'navigate');
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', [done]);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+
+      await fixture.componentInstance.moveDoneToArchive();
+
+      const snack = open.calls.mostRecent().args[0] as SnackParams;
+      expect(snack.actionStr).toBe('MH.HISTORY');
+      snack.actionFn?.();
+      expect(navigate).toHaveBeenCalledOnceWith(['/active/history']);
     });
   });
 

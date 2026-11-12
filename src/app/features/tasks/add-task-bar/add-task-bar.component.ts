@@ -792,7 +792,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const planForDay = this.planForDay();
     let didPlanForDay = false;
 
-    if (suggestion.taskId && this.isNoDefaults() && !suggestion.isArchivedTask) {
+    if (suggestion.taskId && this.isNoDefaults()) {
       taskId = suggestion.taskId;
     } else if (suggestion.taskId && suggestion.isFromOtherContextAndTagOnlySearch) {
       let isTaskFound = true;
@@ -837,13 +837,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         this._projectService.moveTaskToTodayList(suggestion.taskId, suggestion.projectId);
       }
 
-      if (suggestion.isArchivedTask) {
-        this._snackService.open({
-          ico: 'unarchive',
-          msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,
-          translateParams: { title: suggestion.title },
-        });
-      } else if (suggestion.projectId) {
+      if (suggestion.projectId) {
         this._snackService.open({
           ico: 'arrow_upward',
           msg: T.F.TASK.S.FOUND_MOVE_FROM_BACKLOG,

@@ -501,6 +501,9 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       translateParams: { count: parentTaskCount },
       type: 'SUCCESS',
       ico: 'archive',
+      // archived tasks leave every list; History is where they can be viewed and restored
+      actionStr: T.MH.HISTORY,
+      actionFn: () => this._router.navigate(['/active/history']),
     });
   }
 

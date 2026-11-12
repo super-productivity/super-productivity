@@ -7,6 +7,7 @@ import {
   map,
   shareReplay,
   switchMap,
+  tap,
 } from 'rxjs/operators';
 import { getRelevantEventsForCalendarIntegrationFromIcal } from '../schedule/ical/get-relevant-events-from-ical';
 import {
@@ -32,6 +33,7 @@ import {
   selectAllCalendarTaskEventIds,
 } from '../tasks/store/task.selectors';
 import { loadFromRealLs, saveToRealLs } from '../../core/persistence/local-storage';
+import { lsGetJSON, lsSetJSON } from '../../util/ls-util';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { Store } from '@ngrx/store';
 import {
@@ -477,6 +479,7 @@ export class CalendarIntegrationService {
             color: getCalendarProviderColor(calProvider),
           })),
         ),
+        tap(() => this._clearFailure(calProvider.id)),
         catchError((err) => {
           // iCal feed URLs frequently embed a secret token (Google/Outlook
           // private feeds). HttpErrorResponse puts the full URL in `.url` and
@@ -487,28 +490,33 @@ export class CalendarIntegrationService {
             name: (err as Error)?.name,
             status: (err as { status?: number })?.status,
           });
-          if (err instanceof NotIcalResponseError) {
-            this._snackService.open({
-              type: 'ERROR',
-              msg: T.F.CALENDARS.S.CAL_PROVIDER_NOT_ICAL,
-            });
-          } else {
-            // Replace the raw iCal URL (which may embed a secret token) with
-            // the sanitized host so the user-visible snackbar can't leak it
-            // via screenshot/screenshare.
-            const rawErrTxt = getErrorTxt(err);
-            const errTxt = calProvider.icalUrl
-              ? rawErrTxt
-                  .split(calProvider.icalUrl)
-                  .join(sanitizeIcalUrlForDisplay(calProvider.icalUrl))
-              : rawErrTxt;
-            this._snackService.open({
-              type: 'ERROR',
-              msg: T.F.CALENDARS.S.CAL_PROVIDER_ERROR,
-              translateParams: {
-                errTxt,
-              },
-            });
+          // A broken calendar is reported once, not on every poll and app start:
+          // on a phone the repeated snack sits on top of the add-task bar. It is
+          // reported again after the provider has recovered.
+          if (this._isNewFailure(calProvider.id)) {
+            if (err instanceof NotIcalResponseError) {
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.CALENDARS.S.CAL_PROVIDER_NOT_ICAL,
+              });
+            } else {
+              // Replace the raw iCal URL (which may embed a secret token) with
+              // the sanitized host so the user-visible snackbar can't leak it
+              // via screenshot/screenshare.
+              const rawErrTxt = getErrorTxt(err);
+              const errTxt = calProvider.icalUrl
+                ? rawErrTxt
+                    .split(calProvider.icalUrl)
+                    .join(sanitizeIcalUrlForDisplay(calProvider.icalUrl))
+                : rawErrTxt;
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.CALENDARS.S.CAL_PROVIDER_ERROR,
+                translateParams: {
+                  errTxt,
+                },
+              });
+            }
           }
           if (isForwardError) {
             throw err;
@@ -516,6 +524,31 @@ export class CalendarIntegrationService {
           return of([]);
         }),
       );
+  }
+
+  /** True only for the first failure since the provider last worked. */
+  private _isNewFailure(providerId: string): boolean {
+    const failingIds = this._readFailingProviderIds();
+    if (failingIds.includes(providerId)) {
+      return false;
+    }
+    lsSetJSON(LS.CAL_PROVIDER_FAILING_IDS, [...failingIds, providerId]);
+    return true;
+  }
+
+  private _clearFailure(providerId: string): void {
+    const failingIds = this._readFailingProviderIds();
+    if (failingIds.includes(providerId)) {
+      lsSetJSON(
+        LS.CAL_PROVIDER_FAILING_IDS,
+        failingIds.filter((id) => id !== providerId),
+      );
+    }
+  }
+
+  private _readFailingProviderIds(): string[] {
+    const ids = lsGetJSON<unknown>(LS.CAL_PROVIDER_FAILING_IDS, []);
+    return Array.isArray(ids) ? ids : [];
   }
 
   requestEventsForSchedule$(

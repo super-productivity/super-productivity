@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma, disconnectDb, reportMonitoringError } from './monitoring-db';
 import { newestOpsPerUser, resolveOperationScope } from './monitoring-scope';
+import { showQuotaHeadroom } from './quota-headroom';
 import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -1064,6 +1065,9 @@ const main = async (): Promise<void> => {
       case 'usage-history':
         await showUsageHistory(args);
         break;
+      case 'quota':
+        await showQuotaHeadroom(args);
+        break;
       case 'logs':
         await showLogs(args);
         break;
@@ -1085,6 +1089,12 @@ const main = async (): Promise<void> => {
         console.log('    --no-save      Skip saving snapshot to history');
         console.log('  usage-history  Show usage over time');
         console.log('    --tail <n>     Show last n snapshots (default 10)');
+        console.log(
+          '  quota          Storage used vs quota, 30-day growth and projected time to quota',
+        );
+        console.log(
+          '    --limit <n>    Per-account rows (default 20); summaries stay complete',
+        );
         console.log('  active-users   Show active user counts and recent activity');
         console.log(
           '    --engaged      Add the engaged-users section (reads 2 weeks of ops)',
@@ -1108,7 +1118,7 @@ const main = async (): Promise<void> => {
         console.log('  --unmask         Show full email addresses (masked by default)');
         console.log('\nEnvironment:');
         console.log(
-          '  MONITOR_SCOPE_USERS  Users sampled by unfiltered `ops` (default 200)',
+          '  MONITOR_SCOPE_USERS  Users sampled by unfiltered `ops` and by `quota` growth (default 200)',
         );
         break;
     }

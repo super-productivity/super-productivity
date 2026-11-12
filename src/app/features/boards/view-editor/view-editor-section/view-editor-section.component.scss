@@ -51,15 +51,20 @@
   cursor: grab;
 }
 
-// Keeps a bar-less card's rules where they are once it has a bar.
+// Keeps a bar-less card's rules where they are once it has a bar. Zero height,
+// not just hidden: the bar expands in (`expandFadeFast`) and the handle grows
+// with it, so the rules don't jump down by the handle's height first.
 .drag-handle.is-placeholder {
   visibility: hidden;
+  height: 0;
 }
 
 // With a mouse, the handle shows where the pointer is (and while dragged);
 // touch has no hover, so it always shows there.
 .drag-handle {
-  transition: opacity var(--transition-duration-s);
+  transition:
+    opacity var(--transition-duration-s),
+    height var(--transition-duration-m) var(--ani-standard-timing);
 
   @include mousePrimaryDevice {
     opacity: 0;
