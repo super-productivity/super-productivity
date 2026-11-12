@@ -871,14 +871,18 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     move: (id: string, parentId: string | undefined, isBacklog: boolean) => void,
   ): void {
     const t = this.task();
-    // Top-level done tasks in the main list are ordered by completion date, so
-    // a manual reorder can't take effect — skip it to avoid emitting a spurious
-    // taskIds-reorder op that would sync to other devices. Done subtasks and
-    // backlog tasks are not auto-sorted, so they stay reorderable.
-    if (t.isDone && !t.parentId && !this.isBacklog()) {
+    const isInSubTaskList = this.isInSubTaskList();
+    // Done tasks in the main list are ordered by completion date, so a manual
+    // reorder can't take effect — skip it to avoid emitting a spurious
+    // taskIds-reorder op that would sync to other devices. Done subtasks under
+    // their parent and backlog tasks are not auto-sorted, so they stay
+    // reorderable.
+    if (t.isDone && !isInSubTaskList && !this.isBacklog()) {
       return;
     }
-    move(t.id, t.parentId, this.isBacklog());
+    // A subtask shown on its own (e.g. in Today without its parent) moves within
+    // the list it's shown in, not among its hidden siblings.
+    move(t.id, isInSubTaskList ? t.parentId : undefined, this.isBacklog());
     // timeout required to let changes take place
     setTimeout(() => this.focusSelf());
     setTimeout(() => this.focusSelf(), 10);
