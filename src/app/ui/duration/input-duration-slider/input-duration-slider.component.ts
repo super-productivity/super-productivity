@@ -189,8 +189,10 @@ export class InputDurationSliderComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (!this.endHandler || !this.moveHandler || !this.startHandler || !this.circleEl()) {
-      throw new Error();
+    // A dialog closed before its first change detection destroys the slider
+    // before ngOnInit ran, so no listeners were added.
+    if (!this.endHandler || !this.moveHandler || !this.startHandler) {
+      return;
     }
 
     // remove mouse events
