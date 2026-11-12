@@ -57,6 +57,21 @@ export class PluginCacheService {
     });
   }
 
+  private async _createTransaction(mode: IDBTransactionMode): Promise<IDBTransaction> {
+    const db = await this._getDB();
+    try {
+      return db.transaction([this.STORE_NAME], mode);
+    } catch (error) {
+      if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') {
+        throw error;
+      }
+      // A forced close can reject transactions before its close event arrives.
+      if (this._db === db) this._db = null;
+      const reopened = await this._getDB();
+      return reopened.transaction([this.STORE_NAME], mode);
+    }
+  }
+
   /**
    * Store a plugin in the cache - simple and direct
    */
@@ -105,8 +120,7 @@ export class PluginCacheService {
       );
     }
 
-    const db = await this._getDB();
-    const transaction = db.transaction([this.STORE_NAME], 'readwrite');
+    const transaction = await this._createTransaction('readwrite');
     const store = transaction.objectStore(this.STORE_NAME);
 
     const plugin: CachedPlugin = {
@@ -141,8 +155,7 @@ export class PluginCacheService {
    */
   async getPlugin(pluginId: string): Promise<CachedPlugin | null> {
     PluginLog.log(`[PluginCache] Loading plugin "${pluginId}"`);
-    const db = await this._getDB();
-    const transaction = db.transaction([this.STORE_NAME], 'readonly');
+    const transaction = await this._createTransaction('readonly');
     const store = transaction.objectStore(this.STORE_NAME);
 
     return new Promise((resolve, reject) => {
@@ -156,8 +169,7 @@ export class PluginCacheService {
    * Remove a plugin from the cache
    */
   async removePlugin(pluginId: string): Promise<void> {
-    const db = await this._getDB();
-    const transaction = db.transaction([this.STORE_NAME], 'readwrite');
+    const transaction = await this._createTransaction('readwrite');
     const store = transaction.objectStore(this.STORE_NAME);
 
     return new Promise((resolve, reject) => {
@@ -172,8 +184,7 @@ export class PluginCacheService {
    */
   async getAllPlugins(): Promise<CachedPlugin[]> {
     PluginLog.log('[PluginCache] Loading all plugins from cache');
-    const db = await this._getDB();
-    const transaction = db.transaction([this.STORE_NAME], 'readonly');
+    const transaction = await this._createTransaction('readonly');
     const store = transaction.objectStore(this.STORE_NAME);
 
     return new Promise((resolve, reject) => {
@@ -187,8 +198,7 @@ export class PluginCacheService {
    * Clear all plugins
    */
   async clearCache(): Promise<void> {
-    const db = await this._getDB();
-    const transaction = db.transaction([this.STORE_NAME], 'readwrite');
+    const transaction = await this._createTransaction('readwrite');
     const store = transaction.objectStore(this.STORE_NAME);
 
     return new Promise((resolve, reject) => {

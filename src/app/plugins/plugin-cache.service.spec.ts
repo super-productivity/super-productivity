@@ -74,6 +74,21 @@ describe('PluginCacheService connection lifecycle', () => {
     await service.getPlugin('plugin-1');
     expect(open).toHaveBeenCalledTimes(1);
   });
+
+  for (const operation of ['read', 'write'] as const) {
+    it(`retries a ${operation} before the closed connection emits its close event`, async () => {
+      await service.storePlugin('plugin-1', '{}', 'code');
+      connection.close();
+
+      if (operation === 'write') {
+        await service.storePlugin('plugin-2', '{}', 'new code');
+        expect((await service.getPlugin('plugin-2'))?.code).toBe('new code');
+      } else {
+        expect((await service.getPlugin('plugin-1'))?.code).toBe('code');
+      }
+      expect(open).toHaveBeenCalledTimes(2);
+    });
+  }
 });
 
 describe('PluginCacheService', () => {
@@ -93,7 +108,10 @@ describe('PluginCacheService', () => {
     mockTransaction = jasmine.createSpyObj<IDBTransaction>('IDBTransaction', [
       'objectStore',
     ]);
-    mockDb = jasmine.createSpyObj<IDBDatabase>('IDBDatabase', ['transaction']);
+    mockDb = jasmine.createSpyObj<IDBDatabase>('IDBDatabase', [
+      'transaction',
+      'addEventListener',
+    ]);
 
     mockDb.transaction.and.returnValue(mockTransaction);
     mockTransaction.objectStore.and.returnValue(mockStore as unknown as IDBObjectStore);
@@ -104,6 +122,31 @@ describe('PluginCacheService', () => {
 
     service = TestBed.inject(PluginCacheService);
     (service as unknown as { _db: IDBDatabase | null })._db = mockDb;
+  });
+
+  it('propagates unrelated transaction errors without reopening', async () => {
+    const error = new DOMException('Quota exceeded', 'QuotaExceededError');
+    mockDb.transaction.and.throwError(error);
+    const open = spyOn(indexedDB, 'open');
+
+    await expectAsync(service.getPlugin('plugin-1')).toBeRejectedWith(error);
+    expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('propagates a second closed-connection error without another retry', async () => {
+    const error = new DOMException(
+      'The database connection is closing.',
+      'InvalidStateError',
+    );
+    mockDb.transaction.and.throwError(error);
+    const open = spyOn(indexedDB, 'open').and.returnValue(
+      successfulRequest<IDBDatabase>(mockDb) as IDBOpenDBRequest,
+    );
+
+    await expectAsync(service.getPlugin('plugin-1')).toBeRejectedWith(error);
+    expect(mockDb.transaction).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(1);
   });
 
   it('stores complete plugin data in IndexedDB', async () => {
