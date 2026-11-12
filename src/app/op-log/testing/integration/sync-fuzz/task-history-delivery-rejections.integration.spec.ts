@@ -9,95 +9,111 @@ import { SyncFuzzHarness } from './sync-fuzz-harness';
 import pinnedTraces from './sync-fuzz-pinned-traces.json';
 import { runFuzz } from './sync-fuzz-runner';
 
-describe('Task history delivery rejections on the pinned recreate trace', () => {
+const traces = [
+  'after a delete, a recreate and concurrent renames, a restart moves the task in Today; title and time stay',
+  'two moves crossing deletes need no REPAIR and keep a task added later',
+  'a task added beside a delete-versus-delta crossing is in no project list on its own device',
+];
+
+describe('Task history delivery rejections on pinned traces', () => {
   afterEach(() => SyncFuzzHarness.dispose());
 
-  it('retries identical immutable facts without adding state failures or a delivery loop', async () => {
-    const pin = pinnedTraces.find(
-      (trace) =>
-        trace.class === 'restart-changes-state' &&
-        trace.name ===
-          'after a delete, a recreate and concurrent renames, a restart moves the task in Today; title and time stay',
-    )!;
-    expect(pin).toBeDefined();
+  for (const name of traces) {
+    it(`retries identical immutable facts on ${name}`, async () => {
+      const pin = pinnedTraces.find((trace) => trace.name === name)!;
+      expect(pin).toBeDefined();
 
-    // Observe the real harness instance; runFuzz still owns every action,
-    // transport verdict, settle round, restart and whole-state oracle.
-    const instances: SyncFuzzHarness[] = [];
-    const create = SyncFuzzHarness.create.bind(SyncFuzzHarness);
-    spyOn(SyncFuzzHarness, 'create').and.callFake(async () => {
-      const harness = await create();
-      instances.push(harness);
-      return harness;
-    });
-    const result = await runFuzz({ steps: pin.steps as FuzzStep[] });
-    expect(instances).toHaveSize(1);
-    expect(result.steps).toEqual(pin.steps as FuzzStep[]);
-    expect(result.failures.map((failure) => failure.signature).sort()).toEqual(
-      pin.signatures,
-    );
-    expect(result.rejections).toEqual([
-      'CONFLICT_CONCURRENT [Plugin] Upsert User Data',
-      'CONFLICT_CONCURRENT [TASK] LWW Update',
-    ]);
-
-    const harness = instances[0];
-    const rejectedDeliveries = harness.server.rejections.filter(
-      (rejection) => rejection.actionType === ActionType.PLUGIN_UPSERT_USER_DATA,
-    );
-    expect(rejectedDeliveries.length).toBeGreaterThan(0);
-    for (const rejection of rejectedDeliveries) {
-      const author = harness.devices.find(
-        (device) => device.clientId === rejection.clientId,
-      )!;
-      expect(author).toBeDefined();
-      const entry = await harness.as(author, () =>
-        TestBed.inject(OperationLogStoreService).getOpById(rejection.opId),
+      // Observe the real harness instance; runFuzz still owns every action,
+      // transport verdict, settle round, restart and whole-state oracle.
+      const instances: SyncFuzzHarness[] = [];
+      const create = SyncFuzzHarness.create.bind(SyncFuzzHarness);
+      spyOn(SyncFuzzHarness, 'create').and.callFake(async () => {
+        const harness = await create();
+        instances.push(harness);
+        return harness;
+      });
+      const result = await runFuzz({ steps: pin.steps as FuzzStep[] });
+      expect(instances).toHaveSize(1);
+      expect(result.steps).toEqual(pin.steps as FuzzStep[]);
+      expect(result.failures.map((failure) => failure.signature).sort()).toEqual(
+        pin.signatures,
       );
-      expect(entry).toBeDefined();
-      if (!entry) throw new Error('Rejected delivery missing from its author log');
-      const envelope = readTaskHistoryDelivery(extractActionPayload(entry.op.payload));
-      expect(envelope).toBeDefined();
-      if (!envelope) throw new Error('Rejected row is not an immutable delivery');
+      expect(result.rejections).toEqual(pin.rejections);
 
-      const accepted = harness.server.rows.filter(
-        ({ op }) => op.entityId === entry.op.entityId,
+      const harness = instances[0];
+      const rejectedDeliveries = harness.server.rejections.filter(
+        (rejection) => rejection.actionType === ActionType.PLUGIN_UPSERT_USER_DATA,
       );
-      expect(accepted.length).toBeGreaterThan(0);
-      // The rejected write and every accepted version of this key carry the
-      // same author envelope; only transport IDs and clocks may differ.
-      for (const { op } of accepted) {
-        expect(readTaskHistoryDelivery(extractActionPayload(op.payload))).toEqual(
-          envelope,
+      expect(rejectedDeliveries.length).toBeGreaterThan(0);
+      for (const rejection of rejectedDeliveries) {
+        const uploader = harness.devices.find(
+          (device) => device.clientId === rejection.clientId,
+        )!;
+        expect(uploader).toBeDefined();
+        const entry = await harness.as(uploader, () =>
+          TestBed.inject(OperationLogStoreService).getOpById(rejection.opId),
         );
-      }
-      for (const device of harness.devices) {
-        const snapshot = (await harness.syncedState(device)) as unknown as {
-          task: { taskHistory: TaskHistoryState };
-          pluginUserData: PluginUserDataState;
-        };
-        const delivered = snapshot.pluginUserData.find(
-          (row) => row.id === entry.op.entityId,
+        expect(entry).toBeDefined();
+        if (!entry) throw new Error('Rejected delivery missing from its uploader log');
+        const envelope = readTaskHistoryDelivery(extractActionPayload(entry.op.payload));
+        expect(envelope).toBeDefined();
+        if (!envelope) throw new Error('Rejected row is not an immutable delivery');
+
+        let original = harness.server.rows.find(
+          ({ op }) => op.id === envelope.operationId,
+        )?.op;
+        for (const device of harness.devices) {
+          if (original) break;
+          original = (
+            await harness.as(device, () =>
+              TestBed.inject(OperationLogStoreService).getOpById(envelope.operationId),
+            )
+          )?.op;
+        }
+        if (!original) throw new Error('Original history operation missing for ' + name);
+        expect(extractActionPayload(original.payload)['taskHistory'])
+          .withContext(name)
+          .toEqual(envelope);
+
+        const accepted = harness.server.rows.filter(
+          ({ op }) => op.entityId === entry.op.entityId,
         );
-        expect(delivered).toBeDefined();
-        expect(readTaskHistoryDelivery(delivered)).toEqual(envelope);
-        for (const event of envelope.events) {
-          expect(snapshot.task.taskHistory[event.taskId]?.events[event.id]).toEqual(
-            event,
+        expect(accepted.length).toBeGreaterThan(0);
+        // The rejected write and every accepted version of this key carry the
+        // same author envelope; only transport IDs and clocks may differ.
+        for (const { op } of accepted) {
+          expect(readTaskHistoryDelivery(extractActionPayload(op.payload))).toEqual(
+            envelope,
           );
         }
+        for (const device of harness.devices) {
+          const snapshot = (await harness.syncedState(device)) as unknown as {
+            task: { taskHistory: TaskHistoryState };
+            pluginUserData: PluginUserDataState;
+          };
+          const delivered = snapshot.pluginUserData.find(
+            (row) => row.id === entry.op.entityId,
+          );
+          expect(delivered).toBeDefined();
+          expect(readTaskHistoryDelivery(delivered)).toEqual(envelope);
+          for (const event of envelope.events) {
+            expect(snapshot.task.taskHistory[event.taskId]?.events[event.id]).toEqual(
+              event,
+            );
+          }
+        }
       }
-    }
 
-    // A further complete sync round must not manufacture another delivery or
-    // repeat the same rejection indefinitely after all original facts arrived.
-    const settledSeq = harness.server.latestSeq;
-    const settledRejections = harness.server.rejections.length;
-    for (const device of harness.devices) {
-      expect(await harness.sync(device)).toBeTrue();
-      expect(await harness.pendingOpCount(device)).toBe(0);
-    }
-    expect(harness.server.latestSeq).toBe(settledSeq);
-    expect(harness.server.rejections).toHaveSize(settledRejections);
-  }, 60_000);
+      // A further complete sync round must not manufacture another delivery or
+      // repeat the same rejection indefinitely after all original facts arrived.
+      const settledSeq = harness.server.latestSeq;
+      const settledRejections = harness.server.rejections.length;
+      for (const device of harness.devices) {
+        expect(await harness.sync(device)).toBeTrue();
+        expect(await harness.pendingOpCount(device)).toBe(0);
+      }
+      expect(harness.server.latestSeq).toBe(settledSeq);
+      expect(harness.server.rejections).toHaveSize(settledRejections);
+    }, 60_000);
+  }
 });

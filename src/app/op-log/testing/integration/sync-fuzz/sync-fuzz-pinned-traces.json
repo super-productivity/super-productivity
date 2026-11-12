@@ -1860,6 +1860,7 @@
     ],
     "signatures": [],
     "rejections": [
+      "CONFLICT_CONCURRENT [Plugin] Upsert User Data",
       "CONFLICT_CONCURRENT [TASK] LWW Update",
       "CONFLICT_CONCURRENT [Task Shared] deleteTask"
     ]
@@ -1962,6 +1963,7 @@
       "restart-changed:.task.ids.*"
     ],
     "rejections": [
+      "CONFLICT_CONCURRENT [Plugin] Upsert User Data",
       "CONFLICT_CONCURRENT [TASK] LWW Update",
       "CONFLICT_CONCURRENT [Task Shared] deleteTask",
       "CONFLICT_CONCURRENT [TimeTracking] Sync time spent"
