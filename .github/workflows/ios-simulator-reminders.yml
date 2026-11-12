@@ -5,13 +5,6 @@ name: iOS Simulator Reminders
 # a macOS job per push is not worth it. See tools/ios-sim-reminders/run.sh.
 on:
   workflow_dispatch:
-  # TEMPORARY: workflow_dispatch only works once this file is on the default
-  # branch. Remove this trigger before merging.
-  push:
-    branches:
-      - feat/ios-reminders-that-fire-when-the-app-is-closed-b5aa05
-    paths:
-      - '.github/workflows/ios-simulator-reminders.yml'
 
 permissions:
   contents: read
