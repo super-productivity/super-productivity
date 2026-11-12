@@ -1,6 +1,8 @@
 name: Build and Push SuperSync Docker Image
 
 on:
+  # A master push that changes the image inputs runs the gate suites below and
+  # publishes `latest` only if they pass for that commit.
   push:
     branches:
       - master
@@ -29,16 +31,54 @@ on:
         type: string
         default: ''
 
-# Master runs publish the same mutable `latest` tag, so only the newest may push.
+# Master runs publish the same mutable `latest` tag, so only the newest may push:
+# a newer image push cancels the older run, including its gate suites.
 # Release runs get their own group per tag and are never canceled by master pushes.
 concurrency:
   group: ${{ (github.event.release.tag_name || inputs.release_tag) && format('supersync-release-{0}', github.event.release.tag_name || inputs.release_tag) || 'supersync-docker-publish' }}
   cancel-in-progress: ${{ !(github.event.release.tag_name || inputs.release_tag) }}
 
 jobs:
+  # Gate for the master image. `latest` is the default self-hosted image
+  # (packages/super-sync-server/docker-compose.yml), so a master push publishes it
+  # only after both suites pass in this run, i.e. for the commit being built.
+  # A master workflow_dispatch skips them and publishes at once (manual override);
+  # release images are not gated.
+  server-tests:
+    name: Gate (server tests)
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/supersync-server-tests.yml
+
+  # Only the SuperSync E2E shards of the sync E2E workflow. WebDAV does not test the
+  # image. The released-client job is left out until it is stable on master: it was
+  # red in 6 of 32 master runs from test defects (measured 2026-11), and a gate that
+  # is often red for other reasons gets bypassed. No secrets are passed; the only
+  # ones the workflow reads are the optional Unsplash build keys. A push that also
+  # matches that workflow's own paths runs the full suite there as well.
+  sync-e2e:
+    name: Gate (SuperSync E2E)
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e-scheduled.yml
+    with:
+      supersync_only: true
+
   build-and-push:
     name: Build and Push to GHCR
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag == '')
+    needs: [server-tests, sync-e2e]
+    # `!cancelled()` replaces the implicit success() so that a dispatch builds although
+    # the suites were skipped. A push must therefore check both results itself: a
+    # failed, cancelled or skipped suite publishes nothing. The ungated dispatch is
+    # limited to master, like the release dispatch below: from another branch it
+    # would publish that branch's code as `latest`.
+    if: >-
+      !cancelled() && (
+        (github.event_name == 'push' && needs.server-tests.result == 'success' && needs.sync-e2e.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.release_tag == '' && github.ref == 'refs/heads/master')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -1140,7 +1140,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   addAttachment(): void {
     this._matDialog
       .open(DialogEditTaskAttachmentComponent, {
-        data: {},
+        data: { taskId: this.task().id },
       })
       .afterClosed()
       .subscribe((result) => {

@@ -9,10 +9,12 @@ import {
   EntityType,
 } from '../core/operation.types';
 import { VectorClock } from '../../core/util/vector-clock';
+import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 
 describe('VectorClockService', () => {
   let service: VectorClockService;
   let mockStoreService: jasmine.SpyObj<OperationLogStoreService>;
+  let loadClientId: jasmine.Spy<() => Promise<string | null>>;
 
   const createMockOperation = (
     id: string,
@@ -46,6 +48,7 @@ describe('VectorClockService', () => {
   });
 
   beforeEach(() => {
+    loadClientId = jasmine.createSpy('loadClientId').and.resolveTo('own');
     mockStoreService = jasmine.createSpyObj('OperationLogStoreService', [
       'loadStateCache',
       'getOpsAfterSeq',
@@ -56,6 +59,10 @@ describe('VectorClockService', () => {
       providers: [
         VectorClockService,
         { provide: OperationLogStoreService, useValue: mockStoreService },
+        {
+          provide: CLIENT_ID_PROVIDER,
+          useValue: { loadClientId: () => loadClientId() },
+        },
       ],
     });
 
@@ -182,6 +189,60 @@ describe('VectorClockService', () => {
       await service.getCurrentVectorClock();
 
       expect(mockStoreService.getOpsAfterSeq).toHaveBeenCalledWith(0);
+    });
+  });
+
+  describe('keepOwnCounter', () => {
+    // #11564: a rolled-back remote no longer holds this device's latest ops.
+    // Taking its counter would make the next own op reuse a counter other
+    // devices already saw, and they would drop it as a duplicate.
+    it('keeps the local own counter when the remote clock lost own ops', async () => {
+      mockStoreService.getVectorClock.and.resolveTo({ own: 4, other: 1 });
+
+      const result = await service.keepOwnCounter({ own: 2, other: 3 });
+
+      expect(result).toEqual({ own: 4, other: 3 });
+    });
+
+    it('takes the remote own counter when it is ahead of the local one', async () => {
+      mockStoreService.getVectorClock.and.resolveTo({ own: 1 });
+
+      const result = await service.keepOwnCounter({ own: 5, other: 3 });
+
+      expect(result).toEqual({ own: 5, other: 3 });
+    });
+
+    it('adds the own counter when the remote clock has no entry for this device', async () => {
+      mockStoreService.getVectorClock.and.resolveTo({ own: 3 });
+
+      const result = await service.keepOwnCounter({ other: 3 });
+
+      expect(result).toEqual({ other: 3, own: 3 });
+    });
+
+    it('keeps the clock when local and remote own counters are equal', async () => {
+      mockStoreService.getVectorClock.and.resolveTo({ own: 3 });
+
+      const result = await service.keepOwnCounter({ own: 3, other: 1 });
+
+      expect(result).toEqual({ own: 3, other: 1 });
+    });
+
+    it('returns the remote clock unchanged when no client id is stored', async () => {
+      loadClientId.and.resolveTo(null);
+      mockStoreService.getVectorClock.and.resolveTo({ own: 9 });
+
+      const result = await service.keepOwnCounter({ own: 2 });
+
+      expect(result).toEqual({ own: 2 });
+    });
+
+    it('returns the remote clock unchanged when this device has no counter yet', async () => {
+      mockStoreService.getVectorClock.and.resolveTo({});
+
+      const result = await service.keepOwnCounter({ other: 3 });
+
+      expect(result).toEqual({ other: 3 });
     });
   });
 

@@ -8,6 +8,19 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
   key: 'schedule',
   items: [
     {
+      key: 'untimedTaskPlacement',
+      type: 'select',
+      // on-disk configs lack the field; show the behaviour they already have
+      defaultValue: 'auto',
+      templateOptions: {
+        label: T.GCF.SCHEDULE.L_UNTIMED_TASK_PLACEMENT,
+        options: [
+          { label: T.GCF.SCHEDULE.UNTIMED_TASK_PLACEMENT_AUTO, value: 'auto' },
+          { label: T.GCF.SCHEDULE.UNTIMED_TASK_PLACEMENT_TRAY, value: 'tray' },
+        ],
+      },
+    },
+    {
       key: 'isWorkStartEndEnabled',
       type: 'checkbox',
       templateOptions: {

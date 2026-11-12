@@ -48,55 +48,42 @@ export class ProjectPage extends BasePage {
     const prefixedProjectName = this.applyPrefix(projectName);
 
     try {
-      // Check for empty state first (single "Create Project" button)
-      const emptyStateBtn = this.page
-        .locator('nav-item')
-        .filter({ hasText: 'Create Project' })
-        .locator('button');
-      try {
-        await emptyStateBtn.waitFor({ state: 'visible', timeout: 5000 });
-        await emptyStateBtn.click();
-        // Continue to dialog handling below
-      } catch {
-        // Not in empty state, continue with normal flow
-        // Find the Projects group item and wait for it to be visible
-        const projectsGroup = this.page
-          .locator('nav-list-tree')
-          .filter({ hasText: 'Projects' })
-          .locator('nav-item button')
-          .first();
-        await projectsGroup.waitFor({ state: 'visible', timeout: 10000 }); // Increased for CI stability
+      const projectsGroup = this.page
+        .locator('nav-list-tree')
+        .filter({ hasText: 'Projects' })
+        .locator('nav-item button')
+        .first();
+      await projectsGroup.waitFor({ state: 'visible', timeout: 10000 }); // Increased for CI stability
 
-        // Ensure expanded
-        const isExpanded = await projectsGroup.getAttribute('aria-expanded');
-        if (isExpanded !== 'true') {
-          await projectsGroup.click();
-          await this.page.waitForTimeout(500);
-        }
-
-        // Get the Projects nav-list-tree container to scope the button search
-        const projectsTree = this.page
-          .locator('nav-list-tree')
-          .filter({ hasText: 'Projects' });
-
-        // Hover over the Projects group to show additional buttons
-        await projectsGroup.hover();
-
-        // Wait a bit for the hover effect to take place
+      // Ensure expanded
+      const isExpanded = await projectsGroup.getAttribute('aria-expanded');
+      if (isExpanded !== 'true') {
+        await projectsGroup.click();
         await this.page.waitForTimeout(500);
+      }
 
-        // Look for the create project button (add icon) within the Projects tree only
-        const createProjectBtn = projectsTree.locator(
-          '.additional-btns button[mat-icon-button]:has(mat-icon:text("add"))',
-        );
-        // Try to wait for visibility, but if it fails, try forcing click if attached
-        try {
-          await createProjectBtn.waitFor({ state: 'visible', timeout: 5000 });
-          await createProjectBtn.click();
-        } catch (e) {
-          console.log('Additional button not visible via hover, trying force click...');
-          await createProjectBtn.click({ force: true });
-        }
+      // Get the Projects nav-list-tree container to scope the button search
+      const projectsTree = this.page
+        .locator('nav-list-tree')
+        .filter({ hasText: 'Projects' });
+
+      // Hover over the Projects group to show additional buttons
+      await projectsGroup.hover();
+
+      // Wait a bit for the hover effect to take place
+      await this.page.waitForTimeout(500);
+
+      // Look for the create project button (add icon) within the Projects tree only
+      const createProjectBtn = projectsTree.locator(
+        '.additional-btns button[mat-icon-button]:has(mat-icon:text("add"))',
+      );
+      // Try to wait for visibility, but if it fails, try forcing click if attached
+      try {
+        await createProjectBtn.waitFor({ state: 'visible', timeout: 5000 });
+        await createProjectBtn.click();
+      } catch (e) {
+        console.log('Additional button not visible via hover, trying force click...');
+        await createProjectBtn.click({ force: true });
       }
     } catch (error) {
       // If the specific selectors fail, try a more general approach
@@ -280,29 +267,16 @@ export class ProjectPage extends BasePage {
     // Wait for the nav to be fully loaded
     await this.sidenav.waitFor({ state: 'visible', timeout: 3000 }); // Reduced from 5s to 3s
 
-    // Handle empty state vs existing projects scenario
-    const addProjectBtn = this.page
-      .locator('nav-item')
-      .filter({ hasText: 'Create Project' })
-      .locator('button');
     const projectsGroupBtn = this.page
       .locator('nav-list-tree')
       .filter({ hasText: 'Projects' })
       .locator('nav-item button')
       .first();
-
-    // Check if we're in empty state (no projects yet) or if projects group exists
-    try {
-      await addProjectBtn.waitFor({ state: 'visible', timeout: 1000 });
-      // Empty state: just create project directly since button is already visible
-    } catch {
-      // Normal state: expand projects group first
-      await projectsGroupBtn.waitFor({ state: 'visible', timeout: 5000 });
-      const projectsGroupExpanded = await projectsGroupBtn.getAttribute('aria-expanded');
-      if (projectsGroupExpanded !== 'true') {
-        await projectsGroupBtn.click();
-        await this.page.waitForTimeout(500); // Wait for expansion animation
-      }
+    await projectsGroupBtn.waitFor({ state: 'visible', timeout: 5000 });
+    const projectsGroupExpanded = await projectsGroupBtn.getAttribute('aria-expanded');
+    if (projectsGroupExpanded !== 'true') {
+      await projectsGroupBtn.click();
+      await this.page.waitForTimeout(500); // Wait for expansion animation
     }
 
     // Create a new default project

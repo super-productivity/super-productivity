@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "nombre de usuario/proyecto",
+    "PROJECT_HINT": "p. ej. super-productivity/super-productivity",
+    "TOKEN": "Token de Acceso",
+    "HOW_TO_GET_TOKEN": "¿Cómo obtener un token?",
+    "SCOPE": "Ámbito",
+    "SCOPE_ALL": "Todo",
+    "SCOPE_CREATED": "Creado por mí",
+    "SCOPE_ASSIGNED": "Asignado a mí",
+    "GITLAB_BASE_URL": "URL base de GitLab personalizada (opcional)",
+    "FILTER_USER": "Filtrar usuario",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Filtro personalizado",
+    "FILTER_DESCRIPTION": "Ver https://docs.gitlab.com/ee/api/issues.html#list-issues. Se pueden combinar varios con &",
+    "SUBMIT_TIMELOGS": "Enviar registros de tiempo a Gitlab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Mostrar diálogo de seguimiento de tiempo después de hacer clic en finalizar día"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumen",
+    "STATE": "Estado",
+    "ASSIGNEE": "Asignado",
+    "LABELS": "Etiquetas",
+    "DESCRIPTION": "Descripción"
+  },
+  "FORM_HELP": "<p>Aquí puedes configurar SuperProductivity para listar incidencias abiertas de GitLab (ya sea su versión online o una instancia autoalojada) para un proyecto específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la incidencia así como más información sobre ella.</p> <p>Además puedes importar automáticamente todas las incidencias abiertas.</p>"
+}
