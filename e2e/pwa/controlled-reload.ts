@@ -19,10 +19,11 @@ export const reloadControlledDocument = async (
     });
   });
   if (bypassCachedImports) {
+    // A legacy worker can abort cached imports before the app boots.
     await page.setExtraHTTPHeaders({ ['ngsw-bypass']: 'true' });
   }
   try {
-    // Bypass cached imports too: a legacy worker can abort them before the app boots.
+    // Gain worker control without scheduling Angular's navigation-driven idle check.
     await page.goto('/?ngsw-bypass=true', { waitUntil: 'domcontentloaded' });
     await waitForAppReady(page);
     // The app's timeout also logs false, without completing the worker's update check.
