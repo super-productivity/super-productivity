@@ -101,6 +101,7 @@ import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe
 import {
   selectTaskRepeatCfgsByProjectId,
   selectTaskRepeatCfgsByTagId,
+  selectInboxTaskRepeatCfgs,
 } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
@@ -350,7 +351,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
           ? this._store.select(selectTaskRepeatCfgsByProjectId, {
               projectId: activeId,
             })
-          : this._store.select(selectTaskRepeatCfgsByTagId, { tagId: activeId }),
+          : activeId === TODAY_TAG.id
+            ? this._store.select(selectInboxTaskRepeatCfgs)
+            : this._store.select(selectTaskRepeatCfgsByTagId, { tagId: activeId }),
       ),
     ),
     { initialValue: [] as TaskRepeatCfg[] },

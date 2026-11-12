@@ -179,6 +179,15 @@ export const selectTaskRepeatCfgsByTagId = createSelector(
       .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   },
 );
+// Inbox recurring tasks: no project and no tags (belong to no specific context).
+// Shown in the Today view so they are discoverable without a project.
+export const selectInboxTaskRepeatCfgs = createSelector(
+  selectActiveTaskRepeatCfgs,
+  (taskRepeatCfgs: TaskRepeatCfg[]): TaskRepeatCfg[] =>
+    taskRepeatCfgs
+      .filter((cfg) => !cfg.projectId && (!cfg.tagIds || cfg.tagIds.length === 0))
+      .sort((a, b) => (a.title || '').localeCompare(b.title || '')),
+);
 export const selectTaskRepeatCfgByIdAllowUndefined = createSelector(
   selectTaskRepeatCfgFeatureState,
   (state: TaskRepeatCfgState, props: { id: string }): TaskRepeatCfg | undefined =>
