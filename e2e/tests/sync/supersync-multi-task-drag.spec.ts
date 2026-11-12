@@ -8,6 +8,7 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ProjectPage } from '../../pages/project.page';
+import { PlannerPage } from '../../pages/planner.page';
 import {
   selectDragTasks,
   startTaskDrag,
@@ -126,6 +127,100 @@ test.describe('@supersync Multi-task drag', () => {
         await client.workView.waitForTaskList();
         await expect(client.page.locator('task .task-title')).toHaveText(movedTitles);
       }
+    } finally {
+      if (a) await closeClient(a);
+      if (b) await closeClient(b);
+    }
+  });
+
+  test('Today and planner group drags converge across clients and reloads', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(180000);
+    let a: SimulatedE2EClient | undefined;
+    let b: SimulatedE2EClient | undefined;
+    try {
+      const user = await createTestUser(testRunId);
+      const config = getSuperSyncConfig(user);
+      a = await createSimulatedClient(
+        browser,
+        baseURL || 'http://localhost:4242',
+        'A',
+        testRunId,
+      );
+      await a.workView.waitForTaskList();
+      await a.sync.setupSuperSync(config);
+      for (const name of ['Today 1', 'Today 2', 'Today 3'])
+        await a.workView.addTask(name);
+      await a.workView.addTask('Later @tomorrow', false, null);
+      await a.sync.syncAndWait();
+      b = await createSimulatedClient(
+        browser,
+        baseURL || 'http://localhost:4242',
+        'B',
+        testRunId,
+      );
+      await b.workView.waitForTaskList();
+      await b.sync.setupSuperSync(config);
+      await b.sync.syncAndWait();
+      const todayTitles = (client: SimulatedE2EClient): Locator =>
+        client.page.locator('task:not(.cdk-drag-preview) task-title');
+
+      // Today: the bottom two rows move to the top as one block.
+      const before = await todayTitles(a).allTextContents();
+      await selectDragTasks(a.page, before.slice(1));
+      await startTaskDrag(
+        a.page,
+        a.page.locator('task:not(.cdk-drag-preview)').last().locator('done-toggle'),
+      );
+      await dropTaskDrag(a.page, a.page.locator('task-list').first(), true);
+      const reordered = [before[1], before[2], before[0]];
+      await expect(todayTitles(a)).toHaveText(reordered);
+      await a.sync.syncAndWait();
+      await b.sync.syncAndWait();
+      await expect(todayTitles(b)).toHaveText(reordered);
+
+      // Planner: the first two Today cards move to tomorrow, above "Later".
+      const openPlanner = async (client: SimulatedE2EClient): Promise<void> => {
+        const planner = new PlannerPage(client.page);
+        await planner.navigateToPlanner();
+        await planner.waitForPlannerView();
+        await expect(client.page.locator('planner-task').first()).toBeVisible();
+      };
+      const card = (client: SimulatedE2EClient, title: string): Locator =>
+        client.page
+          .locator('planner-task[data-task-selectable="true"]')
+          .filter({ hasText: title });
+      await openPlanner(a);
+      const tomorrow = await card(a, 'Later')
+        .locator('xpath=ancestor::planner-day')
+        .getAttribute('data-day');
+      if (!tomorrow) throw new Error('Missing tomorrow');
+      const tomorrowCards = (client: SimulatedE2EClient): Locator =>
+        client.page.locator(
+          `planner-day[data-day="${tomorrow}"] .normal-tasks-items planner-task`,
+        );
+      for (const title of reordered.slice(0, 2))
+        await card(a, title).click({ modifiers: ['Control'] });
+      await startTaskDrag(a.page, card(a, reordered[0]));
+      await dropTaskDrag(
+        a.page,
+        a.page.locator(`planner-day[data-day="${tomorrow}"] .normal-tasks-items`),
+        true,
+      );
+      const moved = [reordered[0], reordered[1], 'Later'].map(
+        (title) => new RegExp(title),
+      );
+      await expect(tomorrowCards(a)).toHaveText(moved);
+      await a.sync.syncAndWait();
+      await b.sync.syncAndWait();
+      await openPlanner(b);
+      await expect(tomorrowCards(b)).toHaveText(moved);
+      await b.page.reload();
+      await openPlanner(b);
+      await expect(tomorrowCards(b)).toHaveText(moved);
     } finally {
       if (a) await closeClient(a);
       if (b) await closeClient(b);

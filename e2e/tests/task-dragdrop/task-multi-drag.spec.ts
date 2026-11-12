@@ -409,7 +409,7 @@ test.describe('Multi-task drag', () => {
     await expect(page.locator('.multi-task-drag-preview')).toHaveCount(0);
   });
 
-  test('reorders a selected task on its own outside project views', async ({
+  test('reorders a selected group in Today as one block', async ({
     page,
     workViewPage,
     testPrefix,
@@ -420,22 +420,16 @@ test.describe('Multi-task drag', () => {
     const rows = page.locator('task:not(.cdk-drag-preview)');
     const titles = rows.locator('task-title');
     const before = await titles.allTextContents();
-    // Group list drops only target project lists; in Today the dragged row
-    // must still reorder on its own instead of refusing every drop.
     await select(page, before.slice(1));
-    const from = await rows.last().boundingBox();
-    const to = await rows.first().boundingBox();
-    if (!from || !to) throw new Error('Missing drag rows');
-    const halfHeight = from.height / 2;
-    const centerY = from.y + halfHeight;
-    await page.mouse.move(from.x + 30, centerY);
-    await page.mouse.down();
-    await page.mouse.move(from.x + 30, centerY - 10, { steps: 3 });
-    await expect(page.locator('.cdk-drag-preview')).toBeVisible();
-    await page.mouse.move(to.x + 30, to.y + 5, { steps: 25 });
-    await page.mouse.up();
+    await startDrag(page, rows.last().locator('done-toggle'));
+    await expect(page.locator('.multi-task-drag-preview')).toContainText('2 selected');
+    await drop(page, page.locator('task-list').first(), true);
     await expect(page.locator('.cdk-drag-preview')).toBeHidden();
-    await expect(titles).toHaveText([before[2], before[0], before[1]]);
+    await expect(titles).toHaveText([before[1], before[2], before[0]]);
+    await flushPendingWrites(page);
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(titles).toHaveText([before[1], before[2], before[0]]);
   });
 
   test('moves all selected tasks to a sidebar project outside project views', async ({
