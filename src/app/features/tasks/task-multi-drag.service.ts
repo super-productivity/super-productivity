@@ -8,6 +8,7 @@ import {
   selectTaskEntities,
 } from './store/task.selectors';
 import { selectAllSections } from '../section/store/section.selectors';
+import { selectActiveWorkContext } from '../work-context/store/work-context.selectors';
 import { SectionService } from '../section/section.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { moveTaskInTodayList } from '../work-context/store/work-context-meta.actions';
@@ -35,9 +36,17 @@ export class TaskMultiDragService {
   private readonly _tasks = this._store.selectSignal(selectTaskEntities);
   private readonly _sections = this._store.selectSignal(selectAllSections);
   private readonly _overdue = this._store.selectSignal(selectOverdueTasksWithSubTasks);
+  private readonly _activeContext = this._store.selectSignal(selectActiveWorkContext);
   // Read only by Today drops; canDrop runs on every pointer move.
   private readonly _overdueIds = computed(
     () => new Set(this._overdue().map((task) => task.id)),
+  );
+  /**
+   * The open list's top-level rows. Today lists a subtask on its own when its
+   * parent isn't due today (and so does its overdue list); projects never do.
+   */
+  private readonly _contextRowIds = computed(
+    () => new Set(this._activeContext().taskIds),
   );
   private readonly _ids = signal<readonly string[]>([]);
   private readonly _origin = signal<TaskGroupDragOrigin>('LIST');
@@ -63,7 +72,7 @@ export class TaskMultiDragService {
     const entities = this._tasks();
     return ids.flatMap((id) => {
       const task = entities[id];
-      return task && !task.parentId ? [task] : [];
+      return task && this._isListRow(task) ? [task] : [];
     });
   });
   /** Planner cards include planned subtasks, so their preview does too. */
@@ -79,7 +88,7 @@ export class TaskMultiDragService {
     () =>
       [...this.selectedIds()].filter((id) => {
         const task = this._tasks()[id];
-        return task && !task.parentId;
+        return !!task && this._isListRow(task);
       }).length,
   );
   readonly isListGroupDrag = computed(
@@ -93,7 +102,7 @@ export class TaskMultiDragService {
     this.clear();
     const isPlanner = origin === 'PLANNER';
     if (
-      (!isPlanner && task.parentId) ||
+      (!isPlanner && !this._isListRow(task)) ||
       !this._selection.has(task.id) ||
       this._selection.isTouchSelectionMode()
     )
@@ -101,7 +110,7 @@ export class TaskMultiDragService {
     const entities = this._tasks();
     const ids = this._selection
       .selectedIdsInDomOrder()
-      .filter((id) => entities[id] && (isPlanner || !entities[id]!.parentId));
+      .filter((id) => entities[id] && (isPlanner || this._isListRow(entities[id]!)));
     if (ids.length > 1) {
       this._origin.set(origin);
       this._ids.set(ids);
@@ -156,9 +165,7 @@ export class TaskMultiDragService {
       !this.ids().length ||
       this.ids().some((id) => {
         const task = this._tasks()[id];
-        return (
-          !task || task.parentId || task.isDone || (!undone.has(id) && !overdue.has(id))
-        );
+        return !task || task.isDone || (!undone.has(id) && !overdue.has(id));
       })
     )
       return false;
@@ -256,6 +263,20 @@ export class TaskMultiDragService {
 
   moveToProject(projectId: string, ids: readonly string[]): Promise<void> {
     return this._bulk.moveToProject(projectId, ids);
+  }
+
+  /**
+   * A list group moves the rows the user sees at the list's top level: parents,
+   * and subtasks listed on their own. Subtasks nested under a parent row stay
+   * out of the group, as before.
+   */
+  private _isListRow(task: Task): boolean {
+    return (
+      !task.parentId ||
+      this._contextRowIds().has(task.id) ||
+      (this._context.activeWorkContextId === TODAY_TAG.id &&
+        this._overdueIds().has(task.id))
+    );
   }
 
   private _getGroupAnchor(

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { computed, signal } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { TaskMultiDragService } from './task-multi-drag.service';
@@ -10,6 +10,7 @@ import { Section } from '../section/section.model';
 import { SectionService } from '../section/section.service';
 import { selectAllSections } from '../section/store/section.selectors';
 import { selectOverdueTasksWithSubTasks } from './store/task.selectors';
+import { selectActiveWorkContext } from '../work-context/store/work-context.selectors';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
 import { DateService } from '../../core/date/date.service';
@@ -26,6 +27,7 @@ describe('TaskMultiDragService', () => {
   let dispatch: jasmine.Spy;
   let undone$: BehaviorSubject<Task[]>;
   let overdue: ReturnType<typeof signal<Task[]>>;
+  let contextRowIds: ReturnType<typeof signal<string[]>>;
   let context: {
     activeWorkContextId: string;
     activeWorkContextType: WorkContextType;
@@ -57,6 +59,7 @@ describe('TaskMultiDragService', () => {
     dispatch = jasmine.createSpy('dispatch');
     undone$ = new BehaviorSubject([task('a'), task('b'), task('c')]);
     overdue = signal<Task[]>([]);
+    contextRowIds = signal(['a', 'b', 'c']);
     context = {
       activeWorkContextId: 'p',
       activeWorkContextType: WorkContextType.PROJECT,
@@ -75,7 +78,9 @@ describe('TaskMultiDragService', () => {
                 ? sections
                 : selector === selectOverdueTasksWithSubTasks
                   ? overdue
-                  : tasks,
+                  : selector === selectActiveWorkContext
+                    ? computed(() => ({ taskIds: contextRowIds() }))
+                    : tasks,
           },
         },
         { provide: SectionService, useValue: sectionService },
@@ -352,6 +357,44 @@ describe('TaskMultiDragService', () => {
       context.activeWorkContextId = 'some-tag';
       start();
       expect(service.canDrop('PARENT', 'UNDONE')).toBeFalse();
+    });
+
+    describe('with a subtask listed on its own (parent not due today)', () => {
+      beforeEach(() => {
+        tasks.update((value) => ({ ...value, s: task('s', { parentId: 'x' }) }));
+        contextRowIds.set(['a', 'b', 's']);
+        undone$.next([task('a'), task('b'), task('s', { parentId: 'x' })]);
+        selection.toggle('a');
+        selection.toggle('b');
+        selection.toggle('s');
+      });
+
+      it('moves the subtask row with the group, whichever row leads', async () => {
+        service.start(tasks()['a']);
+        expect(service.ids()).toEqual(['s', 'b', 'a']);
+        expect(service.selectionSize()).toBe(3);
+        expect(service.previewTasks().map((item) => item.id)).toEqual(['s', 'b', 'a']);
+        expect(service.canDrop('PARENT', 'UNDONE')).toBeTrue();
+
+        await service.drop('UNDONE', 'a', ['c', 'a']);
+        expect(dispatch.calls.allArgs().map(([action]) => action.taskId)).toEqual([
+          's',
+          'b',
+          'a',
+        ]);
+
+        service.start(tasks()['s']);
+        expect(service.ids()).toEqual(['s', 'b', 'a']);
+      });
+
+      it('includes an overdue subtask row', () => {
+        contextRowIds.set(['a', 'b']);
+        undone$.next([task('a'), task('b')]);
+        overdue.set([task('s', { parentId: 'x' })]);
+        service.start(tasks()['s']);
+        expect(service.ids()).toEqual(['s', 'b', 'a']);
+        expect(service.canDrop('PARENT', 'UNDONE')).toBeTrue();
+      });
     });
 
     it('stops watching the undone list when the drag is cleared', () => {

@@ -57,7 +57,7 @@
       (cdkDragEnded)="onDragEnded()"
     >
       @if (
-        !task.parentId &&
+        listId() === 'PARENT' &&
         multiDrag.selectedIds().has(task.id) &&
         multiDrag.selectionSize() > 1
       ) {
