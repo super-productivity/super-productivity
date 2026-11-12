@@ -3,12 +3,15 @@ import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import typia from 'typia';
 import { TaskService } from './task.service';
-import { Task, TaskWithSubTasks } from './task.model';
+import { DEFAULT_TASK, Task, TaskWithSubTasks } from './task.model';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { ArchiveOperationHandler } from '../../op-log/apply/archive-operation-handler.service';
 import { ProjectService } from '../project/project.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { DateService } from '../../core/date/date.service';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { GlobalConfigService } from '../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { isTodayWithOffset } from '../../util/is-today.util';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
 import { IssueLog } from '../../core/log';
@@ -27,6 +30,8 @@ import { mapLegacyPlannedAt } from './local-rest-api-legacy-fields';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
+import { getExplicitReminderConflict } from './util/local-rest-api-reminder-guard';
+import { selectTodayTagTaskIds } from '../tag/store/tag.reducer';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -363,6 +368,8 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
   private readonly _archiveOperationHandler = inject(ArchiveOperationHandler);
   private readonly _projectService = inject(ProjectService);
   private readonly _dateService = inject(DateService);
+  private readonly _dateTimeFormatService = inject(DateTimeFormatService);
+  private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _featureBridge = inject(LocalRestApiFeatureBridgeService);
   private readonly _store = inject(Store);
   private readonly _trackingPresence = inject(TrackingPresenceService);
@@ -660,7 +667,18 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       delete writableFields[field];
     }
     const additionalFields = mapLegacyPlannedAt(writableFields);
-
+    if (
+      hasOwn(additionalFields, 'remindAt') &&
+      !isValidTimestamp(additionalFields.dueWithTime)
+    ) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        'remindAt requires a valid dueWithTime',
+      );
+    }
+    let parent: Task | undefined;
     if ('parentId' in body) {
       if (typeof body.parentId !== 'string' || !body.parentId) {
         return createErrorResponse(
@@ -681,7 +699,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
         );
       }
 
-      const parent = await this._getTaskById(body.parentId);
+      parent = await this._getTaskById(body.parentId);
       if (!parent) {
         return createErrorResponse(
           requestId,
@@ -699,19 +717,45 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
           'Cannot nest subtasks: parent task is itself a subtask',
         );
       }
-
+    }
+    if (hasOwn(additionalFields, 'remindAt')) {
+      const conflict = await getExplicitReminderConflict({
+        task: {
+          ...DEFAULT_TASK,
+          ...additionalFields,
+          id: '',
+          title,
+          projectId: parent?.projectId ?? '',
+          ...(parent ? { parentId: parent.id } : {}),
+        },
+        deadline: deadlineResolution.change,
+        title,
+        isIgnoreShortSyntax,
+        config:
+          this._globalConfigService.cfg()?.shortSyntax ??
+          DEFAULT_GLOBAL_CONFIG.shortSyntax,
+        locale: this._dateTimeFormatService.dateInputLocale(),
+        dateService: this._dateService,
+        getParent: (id) => this._getTaskById(id),
+        getTodayTaskIds: () => firstValueFrom(this._store.select(selectTodayTagTaskIds)),
+      });
+      if (conflict) {
+        return createErrorResponse(requestId, 400, 'INVALID_INPUT', conflict);
+      }
+    }
+    if (parent) {
       const subTaskId = isIgnoreShortSyntax
-        ? this._featureBridge.addLiteralSubTask(body.parentId, {
+        ? this._featureBridge.addLiteralSubTask(parent.id, {
             title,
             ...additionalFields,
           })
         : hasOwn(additionalFields, 'remindAt')
           ? this._taskService.addSubTaskTo(
-              body.parentId,
+              parent.id,
               { title, ...additionalFields },
               true,
             )
-          : this._taskService.addSubTaskTo(body.parentId, { title, ...additionalFields });
+          : this._taskService.addSubTaskTo(parent.id, { title, ...additionalFields });
       if (deadlineResolution.change?.type === 'set') {
         this._dispatchDeadlineChange(
           subTaskId,
@@ -855,6 +899,39 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
           delete writableFields[field];
         }
         const changes = mapLegacyPlannedAt(writableFields);
+        if (
+          hasOwn(changes, 'remindAt') &&
+          !isValidTimestamp(
+            hasOwn(changes, 'dueWithTime') ? changes.dueWithTime : task.dueWithTime,
+          )
+        ) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'INVALID_INPUT',
+            'remindAt requires a valid dueWithTime',
+          );
+        }
+        if (
+          hasOwn(changes, 'remindAt') &&
+          (await getExplicitReminderConflict({
+            task: { ...task, ...changes },
+            deadline: deadlineResolution.change,
+            dateService: this._dateService,
+            getParent: (id) => this._getTaskById(id),
+            getTodayTaskIds: () =>
+              firstValueFrom(this._store.select(selectTodayTagTaskIds)),
+          }))
+        ) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'INVALID_INPUT',
+            'remindAt conflicts with deadline auto-planning that clears dueWithTime',
+          );
+        }
+        const wasTitleOnly =
+          Object.keys(changes).length === 1 && hasOwn(changes, 'title');
         const explicitRemindAt = changes.remindAt;
         // A deadline set may auto-plan Today and clear the reminder. Apply the
         // explicit value only afterward, avoiding an immediately overwritten
@@ -915,7 +992,9 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
           // update() and whatever bookkeeping it does.
           const isTitleOnly =
             Object.keys(changes).length === 1 && hasOwn(changes, 'title');
-          if (patchShortSyntaxFlag.value && isTitleOnly) {
+          // Removing remindAt for the deadline re-apply must not turn a
+          // multi-field PATCH into a title-only short-syntax update.
+          if (isTitleOnly && (patchShortSyntaxFlag.value || !wasTitleOnly)) {
             this._store.dispatch(
               TaskSharedActions.updateTask({
                 task: { id: taskId, changes },
