@@ -23,6 +23,7 @@ import {
 } from '../features/tasks/store/task.selectors';
 import { selectProjectFeatureState } from '../features/project/store/project.selectors';
 import { selectTagFeatureState } from '../features/tag/store/tag.reducer';
+import { selectSectionFeatureState } from '../features/section/store/section.selectors';
 import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { Task } from '../features/tasks/task.model';
@@ -453,6 +454,7 @@ export class PluginHooksEffects {
             this.store.select(selectTaskFeatureState),
             this.store.select(selectProjectFeatureState),
             this.store.select(selectTagFeatureState),
+            this.store.select(selectSectionFeatureState),
           ]).pipe(skip(1), auditTime(DATA_CHANGED_AUDIT_MS)),
         ),
         tap(() => {
