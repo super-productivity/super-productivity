@@ -102,6 +102,12 @@
               <td>{{ getPluginLanguages(plugin) }}</td>
             </tr>
           </table>
+          @if (getDataSharingHtml(plugin); as dataSharingHtml) {
+            <div
+              class="plugin-info-section"
+              [innerHTML]="dataSharingHtml"
+            ></div>
+          }
           @if (getApiAccess(plugin); as apiAccess) {
             @if (apiAccess.length > 0) {
               <div class="plugin-info-section">
@@ -336,6 +342,22 @@
         {{ uploadError() }}
       </mat-error>
     }
+    <p>
+      {{ T.PLUGINS.BUILD_YOUR_OWN | translate }}
+      <a
+        href="https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md"
+        target="_blank"
+        >{{ T.PLUGINS.BUILD_YOUR_OWN_LINK | translate }}</a
+      >
+    </p>
+    <button
+      mat-stroked-button
+      type="button"
+      (click)="openBuildPluginDialog()"
+    >
+      <mat-icon>auto_awesome</mat-icon>
+      {{ T.PLUGINS.BUILD_WITH_AI | translate }}
+    </button>
   </mat-card-content>
 </mat-card>
 

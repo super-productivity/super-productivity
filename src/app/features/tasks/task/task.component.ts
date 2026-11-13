@@ -11,12 +11,14 @@ import {
   inject,
   input,
   OnDestroy,
+  Signal,
   signal,
   untracked,
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
 import { TaskDuplicateService } from '../task-duplicate.service';
+import { VIEW_TASK_LIST } from '../view-task-list.token';
 import { TaskMultiSelectService } from '../task-multi-select.service';
 import { TaskMoveToProjectService } from '../task-move-to-project.service';
 import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
@@ -83,6 +85,7 @@ import {
   KeyboardConfig,
   keyboardConfigOrEmpty,
 } from '@sp/keyboard-config';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { PlannerService } from '../../planner/planner.service';
@@ -109,7 +112,9 @@ import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { SubTaskTotalTimeSpentPipe } from '../pipes/sub-task-total-time-spent.pipe';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagToggleMenuListComponent } from '../../tag/tag-toggle-menu-list/tag-toggle-menu-list.component';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -129,9 +134,15 @@ import {
 } from '../add-subtask-input/add-subtask-input.component';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for-display';
-import { getScheduledDateColor } from '../util/get-scheduled-date-color';
+import {
+  getScheduledDateColor,
+  readClockUntilDue,
+} from '../util/get-scheduled-date-color';
 import { isWontDoTask } from '../util/is-wont-do-task';
 import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
+
+// Outside a view: tag-list hides the open context's tag, as before.
+const NO_VIEW_TAGS_TO_HIDE = signal<string[] | undefined>(undefined).asReadonly();
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -267,7 +278,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return 'chat';
   });
 
-  isTodayListActive = computed(() => this.workContextService.isTodayListSignal());
+  // In a view (`VIEW_TASK_LIST`), the active context is a stale leftover from
+  // the last list opened: rows then act as in any non-Today list.
+  private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
+  readonly isInView = !!this._viewTaskList;
+  // The host's signal itself: no extra computed per row (hot path).
+  readonly viewTagsToHide: Signal<string[] | undefined> =
+    this._viewTaskList?.tagsToHide ?? NO_VIEW_TAGS_TO_HIDE;
+  isTodayListActive = computed(
+    () => !this._viewTaskList && this.workContextService.isTodayListSignal(),
+  );
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
   isRepeatTaskCreatedToday = computed(
     () => !!(this.task().repeatCfgId && this._dateService.isToday(this.task().created)),
@@ -308,8 +328,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       task,
       this.globalTrackingIntervalService.todayDateStr(),
       this._dateService.getStartOfNextDayDiffMs(),
-      // Only timed tasks depend on the clock, with no per-row subscription.
-      task.dueWithTime ? this.globalTrackingIntervalService.clockTimestamp() : 0,
+      // Only timed tasks not yet due depend on the clock, with no per-row subscription.
+      task.dueWithTime
+        ? readClockUntilDue(
+            this.globalTrackingIntervalService.clockTimestamp,
+            this.globalTrackingIntervalService.clockMinute,
+            task.dueWithTime,
+          )
+        : 0,
     );
   });
   hasTimeConflict = computed(() => {
@@ -672,6 +698,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    if (this._taskFocusService.lastFocusedTaskComponent() === this) {
+      this._taskFocusService.lastFocusedTaskComponent.set(null);
+    }
     // Possibly no longer rendered (checked after the DOM settles, since rows
     // re-mount when they change lists and the detail panel renders copies).
     this._multiSelect.removeWhenUnrendered(
@@ -768,6 +797,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   async editTaskRepeatCfg(): Promise<void> {
     const { DialogEditTaskRepeatCfgComponent } =
+      // eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
       await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
     this._matDialog
       .open(DialogEditTaskRepeatCfgComponent, {
@@ -845,41 +875,68 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     move: (id: string, parentId: string | undefined, isBacklog: boolean) => void,
   ): void {
     const t = this.task();
-    // Top-level done tasks in the main list are ordered by completion date, so
-    // a manual reorder can't take effect — skip it to avoid emitting a spurious
-    // taskIds-reorder op that would sync to other devices. Done subtasks and
-    // backlog tasks are not auto-sorted, so they stay reorderable.
-    if (t.isDone && !t.parentId && !this.isBacklog()) {
+    const isInSubTaskList = this.isInSubTaskList();
+    // Done tasks in the main list are ordered by completion date, so a manual
+    // reorder can't take effect — skip it to avoid emitting a spurious
+    // taskIds-reorder op that would sync to other devices. Done subtasks under
+    // their parent and backlog tasks are not auto-sorted, so they stay
+    // reorderable.
+    if (t.isDone && !isInSubTaskList && !this.isBacklog()) {
       return;
     }
-    move(t.id, t.parentId, this.isBacklog());
+    // A subtask shown on its own (e.g. in Today without its parent) moves within
+    // the list it's shown in, not among its hidden siblings.
+    move(t.id, isInSubTaskList ? t.parentId : undefined, this.isBacklog());
     // timeout required to let changes take place
     setTimeout(() => this.focusSelf());
     setTimeout(() => this.focusSelf(), 10);
   }
 
   moveTaskUp(): void {
+    if (this._moveViewRow('up')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveUp(id, parentId, isBacklog),
     );
   }
 
   moveTaskDown(): void {
+    if (this._moveViewRow('down')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveDown(id, parentId, isBacklog),
     );
   }
 
   moveTaskToTop(): void {
+    if (this._moveViewRow('top')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveToTop(id, parentId, isBacklog),
     );
   }
 
   moveTaskToBottom(): void {
+    if (this._moveViewRow('bottom')) return;
     this._moveAndRefocus((id, parentId, isBacklog) =>
       this._taskService.moveToBottom(id, parentId, isBacklog),
     );
+  }
+
+  /**
+   * A view's own rows (subtasks shown on their own included) are ordered by
+   * the view, never by the stale active context. Nested subtasks keep their
+   * normal order within the parent.
+   */
+  private _moveViewRow(to: 'up' | 'down' | 'top' | 'bottom'): boolean {
+    const id = this.task().id;
+    if (!this._viewTaskList?.isRow(id)) {
+      return false;
+    }
+    // A row that moved into another section is leaving: the target section
+    // focuses its new row instead.
+    if (!this._viewTaskList.moveRow(id, to)) {
+      setTimeout(() => this.focusSelf());
+      setTimeout(() => this.focusSelf(), 10);
+    }
+    return true;
   }
 
   handleArrowUp(): void {
@@ -947,7 +1004,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   moveToBacklogWithFocus(): void {
     const t = this.task();
-    if (!t.projectId || t.parentId) {
+    // A view has no backlog of its own (and the active context is stale there).
+    if (!t.projectId || t.parentId || this._viewTaskList) {
       return;
     }
     // Gated on the ACTIVE context, like the context menu's move-to-backlog item
@@ -1090,7 +1148,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   addAttachment(): void {
     this._matDialog
       .open(DialogEditTaskAttachmentComponent, {
-        data: {},
+        data: { taskId: this.task().id },
       })
       .afterClosed()
       .subscribe((result) => {

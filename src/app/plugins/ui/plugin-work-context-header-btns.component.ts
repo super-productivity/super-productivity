@@ -3,6 +3,7 @@ import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { PluginBridgeService } from '../plugin-bridge.service';
+import { PluginBridgeContextService } from '../plugin-bridge-context.service';
 import { PluginWorkContextHeaderBtnCfg } from '../plugin-api.model';
 
 @Component({
@@ -33,7 +34,7 @@ import { PluginWorkContextHeaderBtnCfg } from '../plugin-api.model';
          for time tracking. */
       button.isActive {
         background: rgba(var(--ink-on-channel), 0.18);
-        transition: background var(--transition-standard);
+        transition: background var(--transition-duration-m) var(--ani-standard-timing);
       }
 
       button.isActive:hover:not(:disabled) {
@@ -46,6 +47,7 @@ import { PluginWorkContextHeaderBtnCfg } from '../plugin-api.model';
 })
 export class PluginWorkContextHeaderBtnsComponent {
   private readonly _pluginBridge = inject(PluginBridgeService);
+  private readonly _contextBridge = inject(PluginBridgeContextService);
 
   readonly buttons = this._pluginBridge.workContextHeaderButtons;
 
@@ -57,7 +59,7 @@ export class PluginWorkContextHeaderBtnsComponent {
   readonly activeEmbedPluginId = this._pluginBridge.workContextEmbedPluginId;
 
   async onClick(button: PluginWorkContextHeaderBtnCfg): Promise<void> {
-    const ctx = await this._pluginBridge.getActiveWorkContext();
+    const ctx = await this._contextBridge.getActiveWorkContext();
     if (ctx) {
       button.onClick(ctx);
     }

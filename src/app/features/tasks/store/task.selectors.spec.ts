@@ -684,6 +684,191 @@ describe('Task Selectors', () => {
         confirmSpy.and.returnValue(true);
       }
     });
+    // #9589: a task with a past deadline and no plan date has no dueDay, so the
+    // plan-date overdue rule alone never surfaces it in Today.
+    describe('selectOverdueTasksWithSubTasks with missed deadlines (#9589)', () => {
+      const TWO_DAYS_MS = 2 * 86400000;
+      const twoDaysAgo = getDbDateStr(new Date(Date.now() - TWO_DAYS_MS));
+      const baseTask: Task = {
+        id: 'base',
+        title: 'Deadline',
+        created: Date.now(),
+        isDone: false,
+        subTaskIds: [],
+        tagIds: [],
+        projectId: 'project1',
+        timeSpentOnDay: {},
+        timeEstimate: 0,
+        timeSpent: 0,
+        attachments: [],
+      };
+      const stateWith = (...tasks: Task[]): typeof mockState => ({
+        ...mockState,
+        [TASK_FEATURE_NAME]: {
+          ...mockTaskState,
+          ids: [...mockTaskState.ids, ...tasks.map((t) => t.id)],
+          entities: {
+            ...mockTaskState.entities,
+            ...Object.fromEntries(tasks.map((t) => [t.id, t])),
+          },
+        },
+      });
+      const resultIds = (state: typeof mockState): string[] =>
+        fromSelectors.selectOverdueTasksWithSubTasks(state).map((t) => t.id);
+
+      it('should include an unplanned task whose deadlineDay is past', () => {
+        const ids = resultIds(
+          stateWith({ ...baseTask, id: 'missedDay', deadlineDay: yesterday }),
+        );
+        expect(ids).toContain('missedDay');
+      });
+
+      it('should include an unplanned task whose deadlineWithTime is past', () => {
+        const ids = resultIds(
+          stateWith({
+            ...baseTask,
+            id: 'missedTime',
+            deadlineWithTime: Date.now() - TWO_DAYS_MS,
+          }),
+        );
+        expect(ids).toContain('missedTime');
+      });
+
+      it('should not include an unplanned task whose deadline is today or later', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'deadlineToday', deadlineDay: today },
+            { ...baseTask, id: 'deadlineTomorrow', deadlineDay: tomorrow },
+          ),
+        );
+        expect(ids).not.toContain('deadlineToday');
+        expect(ids).not.toContain('deadlineTomorrow');
+      });
+
+      it('should respect a plan date over a missed deadline', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'plannedToday', deadlineDay: yesterday, dueDay: today },
+            {
+              ...baseTask,
+              id: 'plannedTomorrow',
+              deadlineDay: yesterday,
+              dueDay: tomorrow,
+            },
+          ),
+        );
+        expect(ids).not.toContain('plannedToday');
+        expect(ids).not.toContain('plannedTomorrow');
+      });
+
+      it('should exclude done tasks with a missed deadline', () => {
+        const ids = resultIds(
+          stateWith({
+            ...baseTask,
+            id: 'doneMissed',
+            isDone: true,
+            deadlineDay: yesterday,
+          }),
+        );
+        expect(ids).not.toContain('doneMissed');
+      });
+
+      it('should sort missed deadlines chronologically with plan-date overdue tasks', () => {
+        const ids = resultIds(
+          stateWith({ ...baseTask, id: 'olderMissed', deadlineDay: twoDaysAgo }),
+        );
+        // task6 is overdue by dueDay: yesterday
+        expect(ids).toEqual(['olderMissed', 'task6']);
+      });
+
+      it('should sort a planned overdue task by its plan date, not its deadline', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'olderMissed', deadlineDay: twoDaysAgo },
+            {
+              ...baseTask,
+              id: 'plannedWithOldDeadline',
+              dueDay: yesterday,
+              deadlineWithTime: Date.now() - TWO_DAYS_MS - TWO_DAYS_MS,
+            },
+          ),
+        );
+        expect(ids.indexOf('olderMissed')).toBeLessThan(
+          ids.indexOf('plannedWithOldDeadline'),
+        );
+      });
+
+      it('should not list a missed-deadline subtask whose parent is planned', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'plannedParent', dueDay: today, subTaskIds: ['subA'] },
+            {
+              ...baseTask,
+              id: 'subA',
+              parentId: 'plannedParent',
+              deadlineDay: yesterday,
+            },
+          ),
+        );
+        expect(ids).not.toContain('subA');
+      });
+
+      it('should list a missed-deadline subtask whose parent is unplanned', () => {
+        const ids = resultIds(
+          stateWith(
+            { ...baseTask, id: 'unplannedParent', subTaskIds: ['subB'] },
+            {
+              ...baseTask,
+              id: 'subB',
+              parentId: 'unplannedParent',
+              deadlineDay: yesterday,
+            },
+          ),
+        );
+        expect(ids).toContain('subB');
+        expect(ids).not.toContain('unplannedParent');
+      });
+
+      it('should nest a missed-deadline subtask under its missed-deadline parent', () => {
+        const ids = resultIds(
+          stateWith(
+            {
+              ...baseTask,
+              id: 'missedParent',
+              deadlineDay: yesterday,
+              subTaskIds: ['subC'],
+            },
+            { ...baseTask, id: 'subC', parentId: 'missedParent', deadlineDay: yesterday },
+          ),
+        );
+        expect(ids).toContain('missedParent');
+        expect(ids).not.toContain('subC');
+      });
+
+      it('should keep an overdue subtask visible when its done parent missed a deadline', () => {
+        const ids = resultIds(
+          stateWith(
+            {
+              ...baseTask,
+              id: 'doneParent',
+              isDone: true,
+              deadlineDay: yesterday,
+              subTaskIds: ['subD'],
+            },
+            { ...baseTask, id: 'subD', parentId: 'doneParent', dueDay: yesterday },
+          ),
+        );
+        expect(ids).toContain('subD');
+      });
+
+      it('should not change the plan-date based selectOverdueTasks', () => {
+        const state = stateWith({ ...baseTask, id: 'missedDay', deadlineDay: yesterday });
+        expect(fromSelectors.selectOverdueTasks(state).map((t) => t.id)).toEqual([
+          'task6',
+        ]);
+      });
+    });
+
     describe('selectOverdueTasks with startOfNextDayDiffMs offset', () => {
       const FOUR_HOURS = 4 * 3600 * 1000;
 
@@ -693,6 +878,36 @@ describe('Task Selectors', () => {
         d.setHours(hours, minutes, 0, 0);
         return d.getTime();
       };
+
+      it('should use the offset-adjusted today start for missed deadlineWithTime (#9589)', () => {
+        // today starts at Feb 15 4AM: 3:59AM is missed, 4:00AM is not
+        const stateWithOffset = {
+          ...mockState,
+          [appStateFeatureKey]: {
+            todayStr: '2026-02-15',
+            startOfNextDayDiffMs: FOUR_HOURS,
+          },
+          [TASK_FEATURE_NAME]: taskAdapter.setAll(
+            [
+              {
+                ...DEFAULT_TASK,
+                id: 'missedBeforeStart',
+                deadlineWithTime: makeTime('2026-02-15', 3, 59),
+              } as Task,
+              {
+                ...DEFAULT_TASK,
+                id: 'deadlineAtStart',
+                deadlineWithTime: makeTime('2026-02-15', 4),
+              } as Task,
+            ],
+            taskAdapter.getInitialState(),
+          ),
+        };
+        const ids = fromSelectors
+          .selectOverdueTasksWithSubTasks(stateWithOffset as any)
+          .map((t) => t.id);
+        expect(ids).toEqual(['missedBeforeStart']);
+      });
 
       it('should NOT consider a task overdue if dueWithTime is within offset-adjusted today', () => {
         // With 4h offset and todayStr='2026-02-15', "today" runs from Feb 15 4AM to Feb 16 4AM
@@ -792,19 +1007,6 @@ describe('Task Selectors', () => {
       expect(result.map((r) => r.id)).toEqual(
         jasmine.arrayContaining(['task2', 'task3', 'task6']),
       );
-    });
-
-    it('should select tasks with due time for range', () => {
-      const start = Date.now();
-      const end = Date.now() + 7200000; // 2 hours
-      const allTasks = Object.values(mockTasks);
-      const params = { start, end };
-      const result = fromSelectors.selectTasksWithDueTimeForRange.projector(
-        allTasks,
-        params,
-      );
-      expect(result.length).toBe(1);
-      expect(result[0].id).toBe('task5');
     });
 
     it('should select tasks with due time until', () => {
@@ -1125,6 +1327,26 @@ describe('Task Selectors', () => {
     },
   });
 
+  describe('selectMainTasksWithoutProject', () => {
+    it('should return parent tasks of other projects only', () => {
+      const result = fromSelectors.selectMainTasksWithoutProject(mockState, {
+        projectId: 'project2',
+      });
+      const ids = result.map((t) => t.id);
+      expect(ids).toContain('task1');
+      // sub tasks of project1 are left out, as is the project's own task
+      expect(ids).not.toContain('subtask1');
+      expect(result.every((t) => t.projectId !== 'project2')).toBeTrue();
+    });
+
+    it('should exclude tasks from archived projects', () => {
+      const result = fromSelectors.selectMainTasksWithoutProject(withArchivedProject1(), {
+        projectId: 'project2',
+      });
+      expect(result.map((t) => t.id)).not.toContain('task1');
+    });
+  });
+
   describe('selectAllTasksWithDueTimeSorted', () => {
     it('should return only tasks with dueWithTime, sorted ascending', () => {
       const result = fromSelectors.selectAllTasksWithDueTimeSorted(mockState);
@@ -1320,6 +1542,48 @@ describe('Task Selectors', () => {
         expect(ab2[1]).toBe(ab1[1]);
         expect(cd2[0]).toBe(cd1[0]);
         expect(cd2[1]).toBe(cd1[1]);
+      });
+
+      it('reuses unchanged wrappers across id-sets that share a cache (add, reorder)', () => {
+        const state = wrap(makeTaskState([makeTask('A'), makeTask('B'), makeTask('C')]));
+        const cache: fromSelectors.TaskWithSubTasksCache = new Map();
+        const select = (ids: string[]): TaskWithSubTasks[] =>
+          fromSelectors.selectTasksWithSubTasksByIdsFactory(ids, cache)(state);
+
+        const [a, b] = select(['A', 'B']);
+        const added = select(['A', 'B', 'C']);
+        const reordered = select(['C', 'A', 'B']);
+
+        expect(added[0]).toBe(a);
+        expect(added[1]).toBe(b);
+        expect(reordered[0]).toBe(added[2]);
+        expect(reordered[1]).toBe(a);
+        expect(reordered[2]).toBe(b);
+      });
+
+      it('rebuilds a shared-cache wrapper whose task changed and prunes ids that left', () => {
+        const a = makeTask('A');
+        const b = makeTask('B');
+        const cache: fromSelectors.TaskWithSubTasksCache = new Map();
+        const r1 = fromSelectors.selectTasksWithSubTasksByIdsFactory(
+          ['A', 'B'],
+          cache,
+        )(wrap(makeTaskState([a, b])));
+        const a2 = { ...a, title: 'A2' };
+        const r2 = fromSelectors.selectTasksWithSubTasksByIdsFactory(
+          ['B', 'A'],
+          cache,
+        )(wrap(makeTaskState([a2, b])));
+
+        expect(r2[0]).toBe(r1[1]);
+        expect(r2[1]).not.toBe(r1[0]);
+        expect(r2[1].title).toBe('A2');
+
+        fromSelectors.selectTasksWithSubTasksByIdsFactory(
+          ['B'],
+          cache,
+        )(wrap(makeTaskState([a2, b])));
+        expect([...cache.keys()]).toEqual(['B']);
       });
 
       it('produces output deep-equal to the legacy selectTasksWithSubTasksByIds (shape parity)', () => {
@@ -1555,5 +1819,69 @@ describe('Task Selectors', () => {
         expect(fromSelectors.selectAllDoneIds(mockState)).toEqual(['task2', 'subtask2']);
       });
     });
+  });
+});
+
+describe('selectTasksWithDueTimeForDay', () => {
+  const timedTask = (id: string, date: string): Task => ({
+    ...DEFAULT_TASK,
+    id,
+    projectId: 'INBOX',
+    dueWithTime: new Date(date).getTime(),
+  });
+
+  it('excludes the previous logical night and includes the following early morning', () => {
+    const tasks = [
+      timedTask('previous-night', '2026-06-16T02:00:00'),
+      timedTask('boundary', '2026-06-16T04:00:00'),
+      timedTask('late-night', '2026-06-17T02:00:00'),
+      timedTask('tomorrow', '2026-06-17T04:00:00'),
+    ];
+    expect(
+      fromSelectors.selectTasksWithDueTimeForDay
+        .projector(tasks, 4 * 60 * 60 * 1000, { day: '2026-06-16' })
+        .map((task: Task) => task.id),
+    ).toEqual(['boundary', 'late-night']);
+  });
+
+  // Run by both the Berlin and Los Angeles timezone suites. Four elapsed
+  // hours after local midnight can be 05:00 at spring-forward or 03:00 at
+  // fall-back. This preserves the existing absolute-offset contract (#10718).
+  for (const day of ['2026-03-08', '2026-03-29', '2026-10-25', '2026-11-01']) {
+    it(`keeps the absolute-offset boundaries on ${day}`, () => {
+      const offsetMs = 4 * 60 * 60 * 1000;
+      const midnight = new Date(`${day}T00:00:00`);
+      const nextMidnight = new Date(midnight);
+      nextMidnight.setDate(nextMidnight.getDate() + 1);
+      const start = midnight.getTime() + offsetMs;
+      const end = nextMidnight.getTime() + offsetMs;
+      const tasks: Task[] = [
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'before', dueWithTime: start - 1 },
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'start', dueWithTime: start },
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'last', dueWithTime: end - 1 },
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'next', dueWithTime: end },
+      ];
+
+      expect(
+        fromSelectors.selectTasksWithDueTimeForDay
+          .projector(tasks, offsetMs, { day })
+          .map((task: Task) => task.id),
+      ).toEqual(['start', 'last']);
+    });
+  }
+
+  it('keeps calendar-day membership at the default zero offset', () => {
+    const tasks = [
+      { ...DEFAULT_TASK, projectId: 'INBOX', id: 'untimed' },
+      { ...DEFAULT_TASK, projectId: 'INBOX', id: 'zero', dueWithTime: 0 },
+      timedTask('early', '2026-06-16T02:00:00'),
+      timedTask('late', '2026-06-16T23:59:59.999'),
+      timedTask('tomorrow', '2026-06-17T00:00:00'),
+    ];
+    expect(
+      fromSelectors.selectTasksWithDueTimeForDay
+        .projector(tasks, 0, { day: '2026-06-16' })
+        .map((task: Task) => task.id),
+    ).toEqual(['early', 'late']);
   });
 });

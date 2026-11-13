@@ -6,6 +6,7 @@ import {
   selectSimpleCounterStopWatchLineChartData,
 } from './metric.selectors';
 import { MetricState } from '../metric.model';
+import { initialSimpleCounterState } from '../../simple-counter/store/simple-counter.reducer';
 import {
   SimpleCounter,
   SimpleCounterType,
@@ -280,5 +281,51 @@ describe('Metric Selectors - Evaluation', () => {
     };
 
     expect(selectEvaluationLineChartData.projector(mockState).labels).toEqual([]);
+  });
+});
+
+describe('Metric chart selectors with concurrent chart subscriptions', () => {
+  it('keeps unchanged chart references across unrelated tracking ticks', () => {
+    const clickProps = { howMany: 60 };
+    const stopwatchProps = { howMany: 60 };
+    const state = { simpleCounter: initialSimpleCounterState, tick: 0 };
+    const clicks = selectSimpleCounterClickCounterLineChartData(state, clickProps);
+    const stopwatch = selectSimpleCounterStopWatchLineChartData(state, stopwatchProps);
+    const next = { ...state, tick: 1 };
+
+    expect(selectSimpleCounterClickCounterLineChartData(next, clickProps)).toBe(clicks);
+    expect(selectSimpleCounterStopWatchLineChartData(next, stopwatchProps)).toBe(
+      stopwatch,
+    );
+  });
+
+  it('still updates both charts when their counter data changes', () => {
+    const clickProps = { howMany: 60 };
+    const stopwatchProps = { howMany: 60 };
+    const state = { simpleCounter: initialSimpleCounterState };
+    const clicks = selectSimpleCounterClickCounterLineChartData(state, clickProps);
+    const stopwatch = selectSimpleCounterStopWatchLineChartData(state, stopwatchProps);
+    const next = {
+      simpleCounter: {
+        ids: ['click', 'watch'],
+        entities: {
+          click: createMockSimpleCounter({
+            id: 'click',
+            countOnDay: { '2026-10-23': 3 },
+          }),
+          watch: createMockSimpleCounter({
+            id: 'watch',
+            type: SimpleCounterType.StopWatch,
+            countOnDay: { '2026-10-23': 120000 },
+          }),
+        },
+      },
+    };
+    const nextClicks = selectSimpleCounterClickCounterLineChartData(next, clickProps);
+    const nextStopwatch = selectSimpleCounterStopWatchLineChartData(next, stopwatchProps);
+    expect(nextClicks).not.toBe(clicks);
+    expect(nextStopwatch).not.toBe(stopwatch);
+    expect(nextClicks.datasets[0].data).toEqual([3]);
+    expect(nextStopwatch.datasets[0].data).toEqual([2]);
   });
 });

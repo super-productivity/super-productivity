@@ -1,5 +1,5 @@
 /**
- * ESLint rule: no-multi-entity-effect  (heuristic, warn)
+ * ESLint rule: no-multi-entity-effect  (heuristic; configured as an error)
  *
  * Flags ONE narrow syntactic shape: an effect whose dispatch arm returns a
  * *literal array* of >=2 action-creator calls directly as an arrow body or a

@@ -30,7 +30,9 @@
   // render the labels in Arial while the rest of the UI uses the theme font.
   font: inherit;
   color: var(--text-color);
-  border-radius: var(--card-border-radius);
+  // Straight edges: the hover fill meets the separators and row border
+  // instead of floating as a rounded blob inside a square grid.
+  border-radius: 0;
   cursor: pointer;
   transition: background-color var(--transition-duration-s) ease;
 
@@ -59,7 +61,7 @@
 }
 
 @mixin quickAccessLabel {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   line-height: var(--line-height-tight);
   text-align: center;
   // Long locales ("Nächsten Monat") wrap to a second line rather than overflow.

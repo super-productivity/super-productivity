@@ -16,7 +16,6 @@ import { TaskAttachment } from '../tasks/task-attachment/task-attachment.model';
 import { firstValueFrom, forkJoin, from, merge, Observable, of, Subject } from 'rxjs';
 import {
   CALDAV_TYPE,
-  GITLAB_TYPE,
   ICAL_TYPE,
   ISSUE_PROVIDER_HUMANIZED,
   ISSUE_PROVIDER_ICON_MAP,
@@ -37,7 +36,7 @@ import { JiraCommonInterfacesService } from './providers/jira/jira-common-interf
 // Trello is now a plugin — no built-in service needed
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { IssueLog } from '../../core/log';
-import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
+// GitLab is now a plugin — no built-in service needed
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
 // Gitea is now a plugin — no built-in service needed
@@ -63,7 +62,7 @@ import { getCalendarEventIdCandidates } from '../calendar-integration/get-calend
 import { Store } from '@ngrx/store';
 import { selectEnabledIssueProviders } from './store/issue-provider.selectors';
 import { getErrorTxt } from '../../util/get-error-text';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import typia from 'typia';
 import { GlobalProgressBarService } from '../../core-ui/global-progress-bar/global-progress-bar.service';
@@ -87,14 +86,30 @@ const isIssueAwaitingNextOccurrence = (
   !!(issue as PlainspaceIssue).isRecurring &&
   !(issue as PlainspaceIssue).isDone;
 
+interface AddTaskFromIssueOptions {
+  issueDataReduced: IssueDataReduced;
+  issueProviderId: string;
+  issueProviderKey: IssueProviderKey;
+  additional?: Partial<Task>;
+  isAddToBacklog?: boolean;
+  isForceDefaultProject?: boolean;
+  // Automatic (non-user-initiated) import — a background backlog poll or
+  // calendar auto-import. Such imports fire regardless of what the user is
+  // viewing, so they must not inherit the active context's tag (#8673).
+  isAutoImport?: boolean;
+}
+
 @Injectable({
   providedIn: 'root',
 })
 export class IssueService {
+  private _pendingIssueImports = new Map<
+    string,
+    { promise: Promise<string | undefined>; hasForegroundRequest: boolean }
+  >();
   private _taskService = inject(TaskService);
   private _pendingRemoteIssueDelete = inject(PendingRemoteIssueDeleteService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
-  private _gitlabCommonInterfacesService = inject(GitlabCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
   private _plainspaceCommonInterfaceService = inject(PlainspaceCommonInterfacesService);
@@ -111,9 +126,9 @@ export class IssueService {
   private _pluginAdapter = inject(PluginIssueProviderAdapterService);
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateService = inject(DateService);
 
   ISSUE_SERVICE_MAP: { [key: string]: IssueServiceInterface } = {
-    [GITLAB_TYPE]: this._gitlabCommonInterfacesService,
     [JIRA_TYPE]: this._jiraCommonInterfacesService,
     [CALDAV_TYPE]: this._caldavCommonInterfaceService,
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
@@ -293,9 +308,14 @@ export class IssueService {
         !this._pendingRemoteIssueDelete.has(issueProviderId, String(issue.id)),
     );
 
+    // Compare as strings: task.issueId is stored as a string, but some providers
+    // (OpenProject) return numeric ids, which never matched and were re-imported
+    // on every poll (#11223).
+    const existingIssueIds = new Set<string>(
+      (allExistingIssueIds as (string | number)[]).map(String),
+    );
     const issuesToAdd: IssueDataReduced[] = potentialIssuesToAdd.filter(
-      (issue: IssueDataReduced): boolean =>
-        !(allExistingIssueIds as string[]).includes(issue.id as string),
+      (issue: IssueDataReduced): boolean => !existingIssueIds.has(String(issue.id)),
     );
 
     // Already-imported recurring issues whose task may sit in the archive: those
@@ -303,7 +323,7 @@ export class IssueService {
     // Kept out of `issuesToAdd` so the import snack below still counts imports.
     const reactivationCandidates: IssueDataReduced[] = potentialIssuesToAdd.filter(
       (issue: IssueDataReduced): boolean =>
-        (allExistingIssueIds as string[]).includes(issue.id as string) &&
+        existingIssueIds.has(String(issue.id)) &&
         isIssueAwaitingNextOccurrence(providerKey, issue),
     );
     if (reactivationCandidates.length) {
@@ -438,16 +458,7 @@ export class IssueService {
         taskCount: tasksIssueIdsByIssueProviderKey[providerKey].length,
         taskIds: tasksIssueIdsByIssueProviderKey[providerKey].map((t) => t.id),
       });
-      const pollingLabelParams = {
-        issueProviderName: this._getProviderName(providerKey),
-        issuesStr: this._translateService.instant(
-          this._getIssueStrings(providerKey).ISSUES_STR,
-        ),
-      };
-
-      this._globalProgressBarService.countUp('POLL', {
-        labelParams: pollingLabelParams,
-      });
+      this._globalProgressBarService.countUp();
 
       const service = this._getService(providerKey);
       if (!service) {
@@ -511,7 +522,36 @@ export class IssueService {
     }
   }
 
-  async addTaskFromIssue({
+  async addTaskFromIssue(options: AddTaskFromIssueOptions): Promise<string | undefined> {
+    const { issueDataReduced, issueProviderId } = options;
+    if (!issueDataReduced || !issueDataReduced.id || !issueProviderId) {
+      throw new Error('No issueData');
+    }
+    const key = JSON.stringify([issueProviderId, String(issueDataReduced.id)]);
+    // Archive lookup is async: two clicks can both observe "not imported".
+    const pending = this._pendingIssueImports.get(key);
+    if (pending) {
+      // Let one foreground caller finish its planning/board action when a
+      // background import won. Further clicks must not repeat that completion.
+      if (!options.isAutoImport && !pending.hasForegroundRequest) {
+        pending.hasForegroundRequest = true;
+        return pending.promise;
+      }
+      return undefined;
+    }
+    const promise = this._addTaskFromIssue(options);
+    this._pendingIssueImports.set(key, {
+      promise,
+      hasForegroundRequest: !options.isAutoImport,
+    });
+    try {
+      return await promise;
+    } finally {
+      this._pendingIssueImports.delete(key);
+    }
+  }
+
+  private async _addTaskFromIssue({
     issueDataReduced,
     issueProviderId,
     issueProviderKey,
@@ -519,22 +559,7 @@ export class IssueService {
     isAddToBacklog = false,
     isForceDefaultProject = false,
     isAutoImport = false,
-  }: {
-    issueDataReduced: IssueDataReduced;
-    issueProviderId: string;
-    issueProviderKey: IssueProviderKey;
-    additional?: Partial<Task>;
-    isAddToBacklog?: boolean;
-    isForceDefaultProject?: boolean;
-    // Automatic (non-user-initiated) import — a background backlog poll or
-    // calendar auto-import. Such imports fire regardless of what the user is
-    // viewing, so they must not inherit the active context's tag (#8673).
-    isAutoImport?: boolean;
-  }): Promise<string | undefined> {
-    if (!issueDataReduced || !issueDataReduced.id || !issueProviderId) {
-      throw new Error('No issueData');
-    }
-
+  }: AddTaskFromIssueOptions): Promise<string | undefined> {
     const issueIdCandidates = this._getIssueIdCandidates(
       issueProviderKey,
       issueDataReduced,
@@ -644,7 +669,7 @@ export class IssueService {
       // Default plan for today unless a precise time is provided by provider.
       // Skip when going to backlog — a backlog task that's also "due today"
       // shows up in the Today tab, defeating the point of the backlog.
-      ...(isAddToBacklog ? {} : { dueDay: getDbDateStr() }),
+      ...(isAddToBacklog ? {} : { dueDay: this._dateService.todayStr() }),
       ...additionalFromProviderIssueService,
       ...taskDefaults,
       ...additional,

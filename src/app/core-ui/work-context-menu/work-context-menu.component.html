@@ -1,145 +1,155 @@
-@if (isForProject ? contextId !== INBOX_PROJECT.id : contextId !== TODAY_TAG_ID) {
-  <button
-    (click)="rename()"
-    mat-menu-item
-  >
-    <mat-icon>edit</mat-icon>
-    <span class="text">{{ T.G.RENAME | translate }}</span>
-  </button>
-}
-
-<button
-  [routerLink]="[base, contextId, 'history']"
-  mat-menu-item
+<!-- The items sit in this template, next to their <mat-menu>: MatMenu's arrow
+     keys only reach items written in its own template (#11403). -->
+<!-- The class lands on the overlay panel, where tests find the menu. -->
+<mat-menu
+  #menu="matMenu"
+  class="work-context-menu-panel"
 >
-  <mat-icon>history</mat-icon>
-  <span class="text">{{ T.MH.HISTORY | translate }}</span>
-</button>
+  <ng-template matMenuContent>
+    @if (isForProject ? contextId !== INBOX_PROJECT.id : contextId !== TODAY_TAG_ID) {
+      <button
+        (click)="rename()"
+        mat-menu-item
+      >
+        <mat-icon>edit</mat-icon>
+        <span class="text">{{ T.G.RENAME | translate }}</span>
+      </button>
+    }
 
-@if (isForProject || contextId === TODAY_TAG_ID) {
-  <button
-    [routerLink]="[base, contextId, 'metrics']"
-    mat-menu-item
-  >
-    <mat-icon>donut_large</mat-icon>
-    <span class="text">{{ T.MH.METRICS | translate }}</span>
-  </button>
-}
-
-@if (contextId === TODAY_TAG_ID) {
-  <button
-    (click)="unplanAllTodayTasks()"
-    mat-menu-item
-  >
-    <mat-icon>event_busy</mat-icon>
-    <span class="text">{{ T.MH.UNPLAN_ALL_TASKS | translate }}</span>
-  </button>
-}
-
-<button
-  (click)="shareTasksAsMarkdown()"
-  mat-menu-item
->
-  <mat-icon>{{ shareSupport === 'none' ? 'content_copy' : 'ios_share' }}</mat-icon>
-  <span class="text">
-    {{
-      (shareSupport === 'none'
-        ? T.MH.COPY_TASK_LIST_MARKDOWN
-        : T.MH.SHARE_TASK_LIST_MARKDOWN
-      ) | translate
-    }}
-  </span>
-</button>
-
-@if (
-  isForProject &&
-  contextId !== INBOX_PROJECT.id &&
-  !(isArchived$ | async) &&
-  !(isSharedOnPlainspace$ | async)
-) {
-  <button
-    (click)="shareProjectOnPlainspace()"
-    mat-menu-item
-  >
-    <mat-icon>group_add</mat-icon>
-    <span class="text">{{ T.PLAINSPACE.SHARE_MENU | translate }}</span>
-  </button>
-}
-
-@if (isForProject && (inviteUrl$ | async); as inviteUrl) {
-  <button
-    (click)="copyPlainspaceInviteUrl(inviteUrl)"
-    mat-menu-item
-  >
-    <mat-icon>link</mat-icon>
-    <span class="text">{{ T.PLAINSPACE.COPY_INVITE_LINK | translate }}</span>
-  </button>
-}
-
-@if (isForProject || contextId === TODAY_TAG_ID) {
-  <button
-    (click)="addSection()"
-    mat-menu-item
-  >
-    <mat-icon>list</mat-icon>
-    <span class="text">{{ T.MH.ADD_SECTION | translate }}</span>
-  </button>
-}
-
-<button
-  (click)="openSettings()"
-  mat-menu-item
->
-  <mat-icon>settings</mat-icon>
-  <span class="text">{{ T.MH.SETTINGS | translate }}</span>
-</button>
-
-@if (!isForProject && contextId !== TODAY_TAG_ID) {
-  <button
-    (click)="deleteTag()"
-    mat-menu-item
-  >
-    <mat-icon class="color-warn-i">delete_forever</mat-icon>
-    <span class="text">{{ T.MH.DELETE_TAG | translate }}</span>
-  </button>
-}
-@if (isForProject && contextId !== INBOX_PROJECT.id) {
-  @if (isArchived$ | async) {
     <button
-      (click)="restoreProject()"
+      [routerLink]="[base, contextId, 'history']"
       mat-menu-item
     >
-      <mat-icon>{{ (isDone$ | async) ? 'replay' : 'unarchive' }}</mat-icon>
+      <mat-icon>history</mat-icon>
+      <span class="text">{{ T.MH.HISTORY | translate }}</span>
+    </button>
+
+    @if (isForProject || contextId === TODAY_TAG_ID) {
+      <button
+        [routerLink]="[base, contextId, 'metrics']"
+        mat-menu-item
+      >
+        <mat-icon>donut_large</mat-icon>
+        <span class="text">{{ T.MH.METRICS | translate }}</span>
+      </button>
+    }
+
+    @if (contextId === TODAY_TAG_ID) {
+      <button
+        (click)="unplanAllTodayTasks()"
+        mat-menu-item
+      >
+        <mat-icon>event_busy</mat-icon>
+        <span class="text">{{ T.MH.UNPLAN_ALL_TASKS | translate }}</span>
+      </button>
+    }
+
+    <button
+      (click)="shareTasksAsMarkdown()"
+      mat-menu-item
+    >
+      <mat-icon>{{ shareSupport === 'none' ? 'content_copy' : 'ios_share' }}</mat-icon>
       <span class="text">
         {{
-          ((isDone$ | async)
-            ? T.F.PROJECT.COMPLETE.REOPEN
-            : T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE
+          (shareSupport === 'none'
+            ? T.MH.COPY_TASK_LIST_MARKDOWN
+            : T.MH.SHARE_TASK_LIST_MARKDOWN
           ) | translate
         }}
       </span>
     </button>
-  } @else {
+
+    @if (
+      isForProject &&
+      contextId !== INBOX_PROJECT.id &&
+      !(isArchived$ | async) &&
+      !(isSharedOnPlainspace$ | async)
+    ) {
+      <button
+        (click)="shareProjectOnPlainspace()"
+        mat-menu-item
+      >
+        <mat-icon>group_add</mat-icon>
+        <span class="text">{{ T.PLAINSPACE.SHARE_MENU | translate }}</span>
+      </button>
+    }
+
+    @if (isForProject && (inviteUrl$ | async); as inviteUrl) {
+      <button
+        (click)="copyPlainspaceInviteUrl(inviteUrl)"
+        mat-menu-item
+      >
+        <mat-icon>link</mat-icon>
+        <span class="text">{{ T.PLAINSPACE.COPY_INVITE_LINK | translate }}</span>
+      </button>
+    }
+
+    @if (isForProject || contextId === TODAY_TAG_ID) {
+      <button
+        (click)="addSection()"
+        mat-menu-item
+      >
+        <mat-icon>list</mat-icon>
+        <span class="text">{{ T.MH.ADD_SECTION | translate }}</span>
+      </button>
+    }
+
     <button
-      (click)="completeProject()"
+      (click)="openSettings()"
       mat-menu-item
     >
-      <mat-icon>check_circle</mat-icon>
-      <span class="text">{{ T.MH.COMPLETE_PROJECT | translate }}</span>
+      <mat-icon>settings</mat-icon>
+      <span class="text">{{ T.MH.SETTINGS | translate }}</span>
     </button>
-  }
-  <button
-    (click)="duplicateProject()"
-    mat-menu-item
-  >
-    <mat-icon>file_copy</mat-icon>
-    <span class="text">{{ T.MH.DUPLICATE_PROJECT | translate }}</span>
-  </button>
-  <button
-    (click)="deleteProject()"
-    mat-menu-item
-  >
-    <mat-icon class="color-warn-i">delete_forever</mat-icon>
-    <span class="text">{{ T.MH.DELETE_PROJECT | translate }}</span>
-  </button>
-}
+
+    @if (!isForProject && contextId !== TODAY_TAG_ID) {
+      <button
+        (click)="deleteTag()"
+        mat-menu-item
+      >
+        <mat-icon class="color-warn-i">delete_forever</mat-icon>
+        <span class="text">{{ T.MH.DELETE_TAG | translate }}</span>
+      </button>
+    }
+    @if (isForProject && contextId !== INBOX_PROJECT.id) {
+      @if (isArchived$ | async) {
+        <button
+          (click)="restoreProject()"
+          mat-menu-item
+        >
+          <mat-icon>{{ (isDone$ | async) ? 'replay' : 'unarchive' }}</mat-icon>
+          <span class="text">
+            {{
+              ((isDone$ | async)
+                ? T.F.PROJECT.COMPLETE.REOPEN
+                : T.F.PROJECT.ARCHIVED_PROJECTS.UNARCHIVE
+              ) | translate
+            }}
+          </span>
+        </button>
+      } @else {
+        <button
+          (click)="completeProject()"
+          mat-menu-item
+        >
+          <mat-icon>check_circle</mat-icon>
+          <span class="text">{{ T.MH.COMPLETE_PROJECT | translate }}</span>
+        </button>
+      }
+      <button
+        (click)="duplicateProject()"
+        mat-menu-item
+      >
+        <mat-icon>file_copy</mat-icon>
+        <span class="text">{{ T.MH.DUPLICATE_PROJECT | translate }}</span>
+      </button>
+      <button
+        (click)="deleteProject()"
+        mat-menu-item
+      >
+        <mat-icon class="color-warn-i">delete_forever</mat-icon>
+        <span class="text">{{ T.MH.DELETE_PROJECT | translate }}</span>
+      </button>
+    }
+  </ng-template>
+</mat-menu>

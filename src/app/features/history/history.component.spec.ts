@@ -344,4 +344,76 @@ describe('HistoryComponent', () => {
       startOfNextDayDiffMs: 60 * 60 * 1000,
     });
   }));
+
+  describe('week crossing a month boundary (#9950)', () => {
+    // Mon 2026-08-31 – Sun 2026-09-06 is listed under August and September
+    const setCrossMonthWorklog = (): void => {
+      const tasks = [createTaskForDate('2026-08-31'), createTaskForDate('2026-09-01')];
+      worklogData$.next(
+        mapArchiveToWorklog(
+          {
+            ids: tasks.map((task) => task.id),
+            entities: tasks.reduce(
+              (entities, task) => ({ ...entities, [task.id]: task }),
+              {},
+            ),
+          },
+          [],
+          { workStart: {}, workEnd: {} },
+          1,
+          'en-US',
+        ),
+      );
+    };
+    const renderedDayLabels = (): string[] => {
+      fixture.debugElement.injector.get(ChangeDetectorRef).markForCheck();
+      fixture.detectChanges();
+      return fixture.debugElement
+        .queryAll(By.css('.week-row td:first-child'))
+        .map((de) => de.nativeElement.textContent.replace(/\s+/g, ' ').trim());
+    };
+
+    it('lists the whole week under both months, marking days of the other month', () => {
+      setCrossMonthWorklog();
+      fixture.componentInstance.toggleMonth('2026', '9');
+
+      expect(renderedDayLabels()).toEqual(['Mon 31. August', 'Tue 1.']);
+      expect(
+        fixture.debugElement
+          .queryAll(By.css('.week-row.isOtherMonth td:first-child'))
+          .map((de) => de.nativeElement.textContent.replace(/\s+/g, ' ').trim()),
+      ).toEqual(['Mon 31. August']);
+
+      fixture.componentInstance.toggleMonth('2026', '8');
+
+      expect(renderedDayLabels()).toEqual([
+        'Mon 31. August',
+        'Tue 1.',
+        'Mon 31.',
+        'Tue 1. September',
+      ]);
+    });
+
+    it('keeps element ids unique when a day is expanded under both months', () => {
+      setCrossMonthWorklog();
+      fixture.componentInstance.toggleMonth('2026', '8');
+      fixture.componentInstance.toggleMonth('2026', '9');
+      fixture.componentInstance.toggleDay('2026-08-31');
+      renderedDayLabels();
+
+      const ids = fixture.debugElement
+        .queryAll(By.css('[id^="history-day-"]'))
+        .map((de) => de.nativeElement.id);
+      expect(ids.length).toBe(2);
+      expect(new Set(ids).size).toBe(2);
+    });
+
+    it('expands the logical current month by default', () => {
+      dateServiceSpy.todayStr.and.returnValue('2026-09-01');
+      fixture = TestBed.createComponent(HistoryComponent);
+      setCrossMonthWorklog();
+
+      expect(renderedDayLabels()).toEqual(['Mon 31. August', 'Tue 1.']);
+    });
+  });
 });

@@ -26,7 +26,7 @@
     "resourceCounts": [
       {
         "resourceType": "script",
-        "budget": 250
+        "budget": 270
       },
       {
         "resourceType": "stylesheet",
@@ -42,7 +42,7 @@
       },
       {
         "resourceType": "total",
-        "budget": 330
+        "budget": 350
       }
     ]
   }

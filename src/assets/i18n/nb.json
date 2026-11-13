@@ -419,52 +419,6 @@
         "WRITE_A_COMMENT": "Skriv en kommentar"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Den forhåndsutfylte varigheten inneholder ikke-sporede data fra de siste dagene.",
-        "T_ALREADY_TRACKED": "Allerede sporet",
-        "T_TITLE": "Tittel",
-        "T_TO_BE_SUBMITTED": "Skal sendes inn",
-        "TITLE": "Send inn tid brukt på problemer til GitLab",
-        "TOTAL_MSG": "Du skal sende inn <em>{{totalTimeToSubmit}}</em> arbeidstid for i dag totalt til <em>{{nrOfTasksToSubmit}}</em> forskjellige problemer."
-      },
-      "FORM": {
-        "FILTER": "Tilpasset filter",
-        "FILTER_DESCRIPTION": "Se https://docs.gitlab.com/ee/api/issues.html#list-issues. Flere kan kombineres av &.",
-        "FILTER_USER": "Brukernavn (f.eks. For å filtrere ut endringer selv)",
-        "GITLAB_BASE_URL": "Egendefinert GitLab-base-URL (valgfritt)",
-        "PROJECT": "Full sti eller brukernavn / prosjekt",
-        "PROJECT_HINT": "f.eks. johannesjo/superproduktivitet",
-        "SCOPE": "Omfang",
-        "SCOPE_ALL": "Alle",
-        "SCOPE_ASSIGNED": "Tildelt meg",
-        "SCOPE_CREATED": "Opprettet av meg",
-        "SOURCE": "Kilde",
-        "SOURCE_GLOBAL": "Alle",
-        "SOURCE_GROUP": "Gruppe",
-        "SOURCE_PROJECT": "Prosjekt",
-        "SUBMIT_TIMELOGS": "Send inn tidslogger til Gitlab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Vis tidsregistreringsdialogen etter at du har klikket på sluttdagen",
-        "TOKEN": "Tilgangstoken"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne GitLab-problemer (enten den online-versjonen eller en selvstyrt forekomst) for et bestemt prosjekt i oppgavelagerpanelet i den daglige planvisningen. De vil bli oppført som forslag og vil gi en lenke til problemet, samt mer informasjon om det.</p><p> I tillegg kan du automatisk legge til og synkronisere alle åpne problemer i oppgaven din.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Oppdragsgiver",
-        "AT": "på",
-        "DESCRIPTION": "Beskrivelse",
-        "LABELS": "Etiketter",
-        "MARK_AS_CHECKED": "Merk oppdateringer som merket",
-        "PROJECT": "Prosjekt",
-        "STATUS": "Status",
-        "SUMMARY": "Sammendrag",
-        "WRITE_A_COMMENT": "Skriv en kommentar"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Ukjent feil {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Denne integrasjonen vil sannsynligvis ikke fungere i nettleseren din. Last ned Desktop- eller Android-versjonen av Super Productivity!",
       "DEFAULT": {
@@ -3122,8 +3076,8 @@
       "PLANNER": "Planlegg de neste dagene i {{plannerIcon}} <b>Planlegger</b>",
       "TASK_MENU_TOUCH": "Sveip en oppgave mot venstre for menyen: {{playIcon}} <b>Begynn å spore tid</b>, {{subtaskIcon}} <b>Legg til underoppgave</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Sveip en oppgave mot venstre for menyen, f.eks. {{subtaskIcon}} <b>Legg til underoppgave</b>",
-      "TIMER_RUNNING": "Tidtakeren går. Trykk {{playIcon}} igjen eller <kbd>{{key}}</kbd> for å pause.",
-      "TIMER_RUNNING_TOUCH": "Tidtakeren går. Trykk på {{playIcon}} øverst for å pause.",
+      "TIMER_RUNNING": "Tidtakeren går. Trykk {{pauseIcon}} igjen eller <kbd>{{key}}</kbd> for å pause.",
+      "TIMER_RUNNING_TOUCH": "Tidtakeren går. Trykk på {{pauseIcon}} øverst for å pause.",
       "TRACK_TIME": "Hold musepekeren over oppgaven og trykk {{playIcon}} for å spore tid"
     },
     "WANT_MORE": {

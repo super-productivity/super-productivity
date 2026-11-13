@@ -165,6 +165,11 @@ export class PluginLoaderService {
     }
 
     const manifest: PluginManifest = JSON.parse(cached.manifest);
+    const validation = validatePluginManifest(manifest);
+    if (!validation.isValid) {
+      throw new Error(`Invalid manifest: ${validation.errors.join(', ')}`);
+    }
+
     return {
       manifest,
       code: cached.code,

@@ -8,7 +8,7 @@ import {
   upsertTaskRepeatCfg,
   deleteTaskRepeatCfgInstance,
 } from './store/task-repeat-cfg.actions';
-import { Observable } from 'rxjs';
+import { firstValueFrom, Observable } from 'rxjs';
 import {
   TaskRepeatCfg,
   TaskRepeatCfgCopy,
@@ -30,6 +30,7 @@ import { getRepeatDueWithTime } from './store/get-repeat-due-with-time.util';
 import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
 import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.util';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import {
@@ -45,6 +46,8 @@ import {
 } from './get-repeatable-task-id.util';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 import { getTaskPriority } from '../tasks/task-priority.const';
+import { addTaskToSection } from '../section/store/section.actions';
+import { selectSectionFeatureState } from '../section/store/section.selectors';
 
 @Injectable({
   providedIn: 'root',
@@ -140,6 +143,51 @@ export class TaskRepeatCfgService {
     this._store$.dispatch(deleteTaskRepeatCfgInstance({ repeatCfgId, dateStr }));
   }
 
+  /**
+   * Turns the occurrence on `dateStr` into a normal task (#11694): skips the
+   * day in the series and adds the task the series would have created, without
+   * a link to it. Unlike `createRepeatableTask` it leaves the creation cursor
+   * (`lastTaskCreationDay`) alone, so the occurrences before `dateStr` are
+   * still created.
+   *
+   * Copied from the series: what a new instance gets from the template (title,
+   * notes, estimate, priority, project, tags), its time and reminder, and its
+   * inherited subtasks. Deliberately not copied: the section of the previous
+   * instance (the task is placed like any new task) and the back-dated
+   * `created`, which the series needs for its duplicate check and day label.
+   */
+  async detachTaskRepeatCfgInstance(repeatCfgId: string, dateStr: string): Promise<void> {
+    // The series as it is now, not a copy the caller holds: the skip is written
+    // as the whole date list, so a stale copy would drop dates skipped since.
+    const taskRepeatCfg = await firstValueFrom(
+      this.getTaskRepeatCfgByIdAllowUndefined$(repeatCfgId),
+    );
+    if (!taskRepeatCfg) {
+      return;
+    }
+    const task = this._getTaskFromRepeatCfg(taskRepeatCfg, dateStr, false);
+    const skippedDates = taskRepeatCfg.deletedInstanceDates ?? [];
+    [
+      // Skip first: an interrupted detach then loses the occurrence instead of
+      // leaving the task next to the occurrence the series still creates.
+      // A field update, not deleteTaskRepeatCfgInstance: conflict resolution
+      // cannot read that op's change, so a rule edit or cursor update made on
+      // another device at the same time replaces the whole series and drops
+      // the skip, which puts a series instance next to the new task.
+      updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: repeatCfgId,
+          changes: { deletedInstanceDates: [...new Set([...skippedDates, dateStr])] },
+        },
+      }),
+      this._getAddTaskAction(taskRepeatCfg, task),
+      ...this._getScheduleActions(taskRepeatCfg, task, dateStrToUtcDate(dateStr)),
+      // Random subtask ids: the deterministic ones dedupe a second creation
+      // run of a series instance, which a detached task never has.
+      ...this._getSubTaskActions(taskRepeatCfg, task, () => undefined),
+    ].forEach((action) => this._store$.dispatch(action));
+  }
+
   async createRepeatableTask(
     taskRepeatCfg: TaskRepeatCfg,
     targetDayDate: number,
@@ -181,6 +229,7 @@ export class TaskRepeatCfgService {
       | ReturnType<typeof updateTaskRepeatCfg>
       | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
       | ReturnType<typeof addSubTask>
+      | ReturnType<typeof addTaskToSection>
     )[]
   > {
     // A paused series creates nothing. The day-change selectors already skip
@@ -291,10 +340,7 @@ export class TaskRepeatCfgService {
       ];
     }
 
-    const { task, isAddToBottom } = this._getTaskRepeatTemplate(
-      taskRepeatCfg,
-      targetDateStr,
-    );
+    const task = this._getTaskFromRepeatCfg(taskRepeatCfg, targetDateStr, true);
     const taskWithTargetDates: Task = {
       ...task,
       // NOTE if moving this to top isCreateNew check above would not work as intended
@@ -307,27 +353,16 @@ export class TaskRepeatCfgService {
       | ReturnType<typeof updateTaskRepeatCfg>
       | ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>
       | ReturnType<typeof addSubTask>
+      | ReturnType<typeof addTaskToSection>
     )[] = [
-      TaskSharedActions.addTask({
-        task: taskWithTargetDates,
-        // Use the repeat config's projectId when available to ensure the task
-        // is associated with the correct project regardless of which project is
-        // currently active on this device. Falls back to active context for
-        // tag-based repeat configs without a project.
-        workContextType: taskRepeatCfg.projectId
-          ? WorkContextType.PROJECT
-          : (this._workContextService.activeWorkContextType as WorkContextType),
-        workContextId: taskRepeatCfg.projectId
-          ? taskRepeatCfg.projectId
-          : (this._workContextService.activeWorkContextId as string),
-        isAddToBacklog: false,
-        isAddToBottom,
-        ...getDeadlineAutoPlanFields(
-          this._dateService,
-          taskWithTargetDates.deadlineDay,
-          taskWithTargetDates.deadlineWithTime,
-        ),
-      }),
+      this._getAddTaskAction(taskRepeatCfg, taskWithTargetDates),
+      // A separate action, not part of addTask: older clients apply addTask
+      // without placing the task in a section, but all of them handle this.
+      ...(await this._getAddToSectionsOfPreviousInstance(
+        taskRepeatCfg,
+        expectedTaskId,
+        existingTaskInstances,
+      )),
       updateTaskRepeatCfg({
         taskRepeatCfg: {
           id: taskRepeatCfg.id,
@@ -339,81 +374,165 @@ export class TaskRepeatCfgService {
       }),
     ];
 
-    // Schedule if given
-    if (isValidSplitTime(taskRepeatCfg.startTime) && taskRepeatCfg.remindAt) {
-      // NOTE: schedule tasks against the computed repeat day to avoid mismatched due dates.
-      const dateTime = getRepeatDueWithTime(
-        taskRepeatCfg.startTime as string,
-        targetCreated,
-        this._dateService.getStartOfNextDayDiffMs(),
-      );
-      createNewActions.push(
-        TaskSharedActions.scheduleTaskWithTime({
-          task: taskWithTargetDates,
-          dueWithTime: dateTime,
-          remindAt: remindOptionToMilliseconds(dateTime, taskRepeatCfg.remindAt),
-          isMoveToBacklog: false,
-          // Only keep in today list if scheduled for today (#5594)
-          isSkipAutoRemoveFromToday: this._dateService.isToday(dateTime),
-        }),
-      );
-    }
-
-    if (
-      taskRepeatCfg.shouldInheritSubtasks &&
-      taskRepeatCfg.subTaskTemplates &&
-      taskRepeatCfg.subTaskTemplates.length > 0
-    ) {
-      taskRepeatCfg.subTaskTemplates.forEach((subTask, i) => {
-        const newSubTask = this._taskService.createNewTaskWithDefaults({
-          title: subTask.title,
-          // Deterministic, so a second creation run for the same day is a
-          // no-op instead of a second set of subtasks (#9728).
-          id: getRepeatableSubTaskId(task.id, i),
-          additional: {
-            notes: subTask.notes ?? '',
-            timeEstimate: subTask.timeEstimate ?? 0,
-            parentId: task.id,
-            projectId: taskRepeatCfg.projectId || undefined,
-            isDone: false, // Always start fresh
-          },
-        });
-
-        createNewActions.push(
-          addSubTask({
-            task: newSubTask,
-            parentId: task.id,
-          }),
-        );
-      });
-    }
+    createNewActions.push(
+      ...this._getScheduleActions(taskRepeatCfg, taskWithTargetDates, targetCreated),
+      // Deterministic ids, so a second creation run for the same day is a
+      // no-op instead of a second set of subtasks (#9728).
+      ...this._getSubTaskActions(taskRepeatCfg, taskWithTargetDates, (i) =>
+        getRepeatableSubTaskId(taskWithTargetDates.id, i),
+      ),
+    );
 
     return createNewActions;
   }
 
-  private _getTaskRepeatTemplate(
+  /**
+   * A new repeat instance goes into each project section that holds the
+   * previous instance, right before it (#10812). TODAY sections are left out:
+   * the previous instance is no longer due today, so it has already left
+   * TODAY (`repairTodayTagConsistency$`) when the new one is created.
+   */
+  private async _getAddToSectionsOfPreviousInstance(
+    taskRepeatCfg: TaskRepeatCfg,
+    taskId: string,
+    existingTaskInstances: Task[],
+  ): Promise<ReturnType<typeof addTaskToSection>[]> {
+    const projectId = taskRepeatCfg.projectId;
+    if (!projectId) return [];
+    let previous: Task | undefined;
+    for (const candidate of existingTaskInstances) {
+      if (candidate.id === taskId || candidate.parentId) continue;
+      if (!previous || candidate.created > previous.created) previous = candidate;
+    }
+    if (!previous) return [];
+    const previousId = previous.id;
+
+    const sectionState = await this._store$
+      .select(selectSectionFeatureState)
+      .pipe(take(1))
+      .toPromise();
+    const actions: ReturnType<typeof addTaskToSection>[] = [];
+    for (const id of (sectionState?.ids ?? []) as string[]) {
+      const section = sectionState?.entities[id];
+      const index = section?.taskIds.indexOf(previousId) ?? -1;
+      if (
+        !section ||
+        index === -1 ||
+        section.contextType !== WorkContextType.PROJECT ||
+        section.contextId !== projectId
+      ) {
+        continue;
+      }
+      actions.push(
+        addTaskToSection({
+          sectionId: section.id,
+          taskId,
+          afterTaskId: index > 0 ? section.taskIds[index - 1] : null,
+          sourceSectionId: null,
+        }),
+      );
+    }
+    return actions;
+  }
+
+  private _getAddTaskAction(
+    taskRepeatCfg: TaskRepeatCfg,
+    task: Task,
+  ): ReturnType<typeof TaskSharedActions.addTask> {
+    return TaskSharedActions.addTask({
+      task,
+      // Use the repeat config's projectId when available to ensure the task
+      // is associated with the correct project regardless of which project is
+      // currently active on this device. Falls back to active context for
+      // tag-based repeat configs without a project.
+      workContextType: taskRepeatCfg.projectId
+        ? WorkContextType.PROJECT
+        : (this._workContextService.activeWorkContextType as WorkContextType),
+      workContextId: taskRepeatCfg.projectId
+        ? taskRepeatCfg.projectId
+        : (this._workContextService.activeWorkContextId as string),
+      isAddToBacklog: false,
+      isAddToBottom: taskRepeatCfg.order > 0,
+      ...getDeadlineAutoPlanFields(
+        this._dateService,
+        task.deadlineDay,
+        task.deadlineWithTime,
+      ),
+    });
+  }
+
+  private _getScheduleActions(
+    taskRepeatCfg: TaskRepeatCfg,
+    task: Task,
+    occurrenceDay: Date,
+  ): ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>[] {
+    if (!isValidSplitTime(taskRepeatCfg.startTime) || !taskRepeatCfg.remindAt) {
+      return [];
+    }
+    // NOTE: schedule tasks against the computed repeat day to avoid mismatched due dates.
+    const dateTime = getRepeatDueWithTime(
+      taskRepeatCfg.startTime as string,
+      occurrenceDay,
+      this._dateService.getStartOfNextDayDiffMs(),
+    );
+    return [
+      TaskSharedActions.scheduleTaskWithTime({
+        task,
+        dueWithTime: dateTime,
+        remindAt: remindOptionToMilliseconds(dateTime, taskRepeatCfg.remindAt),
+        isMoveToBacklog: false,
+        // Only keep in today list if scheduled for today (#5594)
+        isSkipAutoRemoveFromToday: this._dateService.isToday(dateTime),
+      }),
+    ];
+  }
+
+  private _getSubTaskActions(
+    taskRepeatCfg: TaskRepeatCfg,
+    parent: Task,
+    getId: (index: number) => string | undefined,
+  ): ReturnType<typeof addSubTask>[] {
+    if (!taskRepeatCfg.shouldInheritSubtasks || !taskRepeatCfg.subTaskTemplates) {
+      return [];
+    }
+    return taskRepeatCfg.subTaskTemplates.map((subTask, i) =>
+      addSubTask({
+        task: this._taskService.createNewTaskWithDefaults({
+          title: subTask.title,
+          id: getId(i),
+          additional: {
+            notes: subTask.notes ?? '',
+            timeEstimate: subTask.timeEstimate ?? 0,
+            parentId: parent.id,
+            projectId: taskRepeatCfg.projectId || undefined,
+            isDone: false, // Always start fresh
+          },
+        }),
+        parentId: parent.id,
+      }),
+    );
+  }
+
+  private _getTaskFromRepeatCfg(
     taskRepeatCfg: TaskRepeatCfg,
     dueDay: string,
-  ): {
-    task: Task;
-    isAddToBottom: boolean;
-  } {
-    const taskId = getRepeatableTaskId(taskRepeatCfg.id, dueDay);
-    return {
-      task: this._taskService.createNewTaskWithDefaults({
-        title: taskRepeatCfg.title,
-        id: taskId,
-        additional: {
-          repeatCfgId: taskRepeatCfg.id,
-          timeEstimate: taskRepeatCfg.defaultEstimate || 0,
-          priority: getTaskPriority(taskRepeatCfg.priority),
-          projectId: taskRepeatCfg.projectId || undefined,
-          notes: taskRepeatCfg.notes || '',
-          dueDay,
-          tagIds: taskRepeatCfg.tagIds.filter((tagId) => tagId !== TODAY_TAG.id),
-        },
-      }),
-      isAddToBottom: taskRepeatCfg.order > 0,
-    };
+    isLinkedToSeries: boolean,
+  ): Task {
+    return this._taskService.createNewTaskWithDefaults({
+      title: taskRepeatCfg.title,
+      // The series recognises its instances by `repeatCfgId` and the
+      // deterministic id; a detached task (#11694) gets neither, so rule
+      // edits, wait-for-completion and the duplicate cleanup leave it alone.
+      id: isLinkedToSeries ? getRepeatableTaskId(taskRepeatCfg.id, dueDay) : undefined,
+      additional: {
+        ...(isLinkedToSeries ? { repeatCfgId: taskRepeatCfg.id } : {}),
+        timeEstimate: taskRepeatCfg.defaultEstimate || 0,
+        priority: getTaskPriority(taskRepeatCfg.priority),
+        projectId: taskRepeatCfg.projectId || undefined,
+        notes: taskRepeatCfg.notes || '',
+        dueDay,
+        tagIds: taskRepeatCfg.tagIds.filter((tagId) => tagId !== TODAY_TAG.id),
+      },
+    });
   }
 }

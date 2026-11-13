@@ -252,6 +252,40 @@ describe('MenuTreeService', () => {
       const folderPath = folderMap.get(candidate.id);
       expect(folderPath).toBe('Folder 2');
     });
+
+    // Pickers show hidden projects, so they need folder paths too (#11190).
+    it('should provide folder paths for projects hidden from the menu but not archived ones', () => {
+      const mockProjectTree: MenuTreeTreeNode[] = [
+        {
+          id: 'folder-1',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder 1',
+          children: [
+            { id: 'project-1', k: MenuTreeKind.PROJECT },
+            { id: 'project-archived', k: MenuTreeKind.PROJECT },
+          ],
+        },
+        {
+          id: 'folder-2',
+          k: MenuTreeKind.FOLDER,
+          name: 'Folder 2',
+          children: [{ id: 'project-2', k: MenuTreeKind.PROJECT }],
+        },
+      ];
+
+      store.overrideSelector(selectAllProjects, [
+        { id: 'project-1', title: 'Marketing', isHiddenFromMenu: true },
+        { id: 'project-2', title: 'Marketing' },
+        { id: 'project-archived', title: 'Marketing', isArchived: true },
+      ] as any);
+      store.overrideSelector(selectMenuTreeProjectTree, mockProjectTree);
+      store.refreshState();
+
+      const folderMap = service.projectFolderMap();
+      expect(folderMap.get('project-1')).toBe('Folder 1');
+      expect(folderMap.get('project-2')).toBe('Folder 2');
+      expect(folderMap.get('project-archived')).toBeUndefined();
+    });
   });
 
   describe('tagFolderMap', () => {

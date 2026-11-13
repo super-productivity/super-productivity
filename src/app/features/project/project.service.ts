@@ -14,7 +14,9 @@ import {
   WorkContextType,
 } from '../work-context/work-context.model';
 import { MatDialog } from '@angular/material/dialog';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskService } from '../tasks/task.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { addSubTask } from '../tasks/store/task.actions';
 import { Task, TaskState } from '../tasks/task.model';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -38,6 +40,7 @@ import {
   selectUnarchivedProjectsWithoutCurrent,
 } from './store/project.selectors';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { getTaskById } from '../tasks/store/task.reducer.util';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
@@ -53,10 +56,17 @@ import { selectSectionsByContextIdMap } from '../section/store/section.selectors
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { DateService } from '../../core/date/date.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 import { MenuTreeService } from '../menu-tree/menu-tree.service';
 import { selectMenuTreeProjectTree } from '../menu-tree/store/menu-tree.selectors';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskTimeSyncService } from '../tasks/task-time-sync.service';
+import { selectAllTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
+import { upsertTaskRepeatCfg } from '../task-repeat-cfg/store/task-repeat-cfg.actions';
+import { PersistentActionMeta } from '../../op-log/core/persistent-action.interface';
+import { OpType } from '../../op-log/core/operation.types';
 
 export interface ProjectCompletionInfo {
   topLevelTasks: Task[];
@@ -124,24 +134,21 @@ export class ProjectService {
   list$: Observable<Project[]> = this._store$.pipe(select(selectUnarchivedProjects));
   list = toSignal(this.list$, { initialValue: [] });
 
-  private _listInTreeOrder = computed(() =>
+  // Unarchived projects in menu-tree order, including those hidden from the menu:
+  // isHiddenFromMenu only governs menu presence, so pickers that assign a project
+  // need the full list. Menu-facing consumers use listInTreeOrderForUI below.
+  listInTreeOrder = computed(() =>
     this._menuTreeService.buildProjectListInTreeOrder(this.list()),
   );
-  listInTreeOrder$ = toObservable(this._listInTreeOrder);
+  listInTreeOrder$ = toObservable(this.listInTreeOrder);
 
   listSorted$: Observable<Project[]> = this.list$.pipe(
     map((projects) => sortByTitle(projects)),
   );
   listSorted = toSignal(this.listSorted$, { initialValue: [] });
 
-  // Filtered and sorted list for UI (excludes archived and hidden projects)
-  listSortedForUI$: Observable<Project[]> = this.listSorted$.pipe(
-    map((projects) => projects.filter((p) => !p.isArchived && !p.isHiddenFromMenu)),
-  );
-  listSortedForUI = toSignal(this.listSortedForUI$, { initialValue: [] });
-
   listInTreeOrderForUI = computed(() =>
-    this._listInTreeOrder().filter((p) => !p.isArchived && !p.isHiddenFromMenu),
+    this.listInTreeOrder().filter((p) => !p.isArchived && !p.isHiddenFromMenu),
   );
 
   archived$: Observable<Project[]> = this._store$.pipe(select(selectArchivedProjects));
@@ -454,6 +461,7 @@ export class ProjectService {
     }
 
     const taskState = await firstValueFrom(this._store$.select(selectTaskFeatureState));
+    const repeatCfgs = await firstValueFrom(this._store$.select(selectAllTaskRepeatCfgs));
     const parentTasks = template.taskIds
       .map((id) => taskState.entities[id])
       .filter((t): t is Task => !!t);
@@ -522,8 +530,53 @@ export class ProjectService {
     this._duplicateTasksToProject(backlogTasks, newProjectId, true, taskState, taskIdMap);
 
     this._duplicateSectionsToProject(sectionsToCopy, newProjectId, taskIdMap);
+    this._duplicateRepeatCfgsToProject(
+      repeatCfgs.filter((cfg) => cfg.projectId === templateProjectId),
+      newProjectId,
+      taskState,
+      taskIdMap,
+    );
 
     return newProjectId;
+  }
+
+  private _duplicateRepeatCfgsToProject(
+    repeatCfgs: TaskRepeatCfg[],
+    newProjectId: string,
+    taskState: TaskState,
+    taskIdMap: Map<string, string>,
+  ): void {
+    const repeatCfgIdMap = new Map<string, string>();
+    for (const cfg of repeatCfgs) {
+      const id = nanoid();
+      repeatCfgIdMap.set(cfg.id, id);
+      // Making a task repeatable recalculates dates; a copy keeps its schedule cursor.
+      this._store$.dispatch({
+        ...upsertTaskRepeatCfg({
+          taskRepeatCfg: { ...cfg, id, projectId: newProjectId },
+        }),
+        meta: {
+          isPersistent: true,
+          entityType: 'TASK_REPEAT_CFG',
+          entityId: id,
+          opType: OpType.Create,
+        } satisfies PersistentActionMeta,
+      });
+    }
+    for (const [originalId, copiedId] of taskIdMap) {
+      const original = taskState.entities[originalId];
+      const repeatCfgId = original?.repeatCfgId
+        ? repeatCfgIdMap.get(original.repeatCfgId)
+        : undefined;
+      if (original && repeatCfgId && !original.parentId) {
+        this._store$.dispatch(
+          TaskSharedActions.updateTask({
+            // Recurrence processing identifies the occurrence by its creation date.
+            task: { id: copiedId, changes: { repeatCfgId, created: original.created } },
+          }),
+        );
+      }
+    }
   }
 
   private _duplicateTasksToProject(

@@ -9,6 +9,7 @@ import {
   deleteTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { readOpLogEntries } from '../../utils/audit-concurrency-helpers';
 
 /**
  * SuperSync Edge Cases E2E Tests
@@ -428,6 +429,22 @@ test.describe('@supersync SuperSync Edge Cases', () => {
       expect(countA).toBe(1);
       expect(countB).toBe(1);
 
+      // B never lost the task, so seeing it there proves nothing by itself: an
+      // undo that merely dropped the unsynced delete op would look the same.
+      // The delete and the restore must both have travelled through sync:
+      // synced local ops on A, received remote ops on B (compact action codes
+      // HD = [Task Shared] deleteTask, HRD = [Task Shared] restoreDeletedTask).
+      const taskOps = async (client: SimulatedE2EClient): Promise<string[]> =>
+        (await readOpLogEntries(client))
+          .filter((e) => e.actionCode === 'HD' || e.actionCode === 'HRD')
+          .map((e) => `${e.actionCode}:${e.source}:${e.isSynced ? 'synced' : 'pending'}`);
+      expect(await taskOps(clientA)).toEqual(['HD:local:synced', 'HRD:local:synced']);
+      expect((await taskOps(clientB)).map((op) => op.split(':')[0])).toEqual([
+        'HD',
+        'HRD',
+      ]);
+      expect((await taskOps(clientB)).every((op) => op.includes(':remote:'))).toBe(true);
+
       console.log('[UndoDelete] ✓ Undo task delete synced successfully to other client');
     } finally {
       if (clientA) await closeClient(clientA);
@@ -436,25 +453,23 @@ test.describe('@supersync SuperSync Edge Cases', () => {
   });
 
   /**
-   * Scenario 8: Rejected Op Does Not Pollute Entity Frontier
+   * Scenario 8: A new task syncs after a resolved conflict
    *
-   * This test verifies Fix 2.2: rejected operations should NOT be included
-   * in the entity frontier used for conflict detection. If rejected ops
-   * pollute the frontier, subsequent unrelated operations may be incorrectly
-   * rejected or cause false conflicts.
+   * Both clients mark the same task done; B then creates an unrelated task,
+   * which must still reach A. That rejected ops stay out of the entity
+   * frontier is unit-tested in vector-clock.service.spec.ts ("should skip
+   * rejected ops in BOTH maps"); this ordinary A-then-B sync resolves the
+   * conflict from the download and need not reject anything on the server.
    *
    * Actions:
    * 1. Client A creates Task1, syncs
    * 2. Client B syncs (downloads Task1)
-   * 3. Both clients concurrently edit Task1 (causing conflict)
-   * 4. Client A syncs first (succeeds)
-   * 5. Client B syncs (Task1 edit rejected due to conflict)
-   * 6. Client B creates NEW Task2 (unrelated to Task1)
-   * 7. Client B syncs again
-   * 8. Verify Task2 syncs successfully to Client A
-   *    (proves frontier wasn't polluted by rejected op)
+   * 3. Both clients mark Task1 done
+   * 4. Client A syncs, then Client B syncs (conflict resolved)
+   * 5. Client B creates NEW Task2, syncs
+   * 6. Verify Task2 reaches Client A
    */
-  test('Rejected op does not pollute entity frontier for subsequent syncs', async ({
+  test('New task syncs after a resolved conflict', async ({
     browser,
     baseURL,
     testRunId,
@@ -538,9 +553,7 @@ test.describe('@supersync SuperSync Edge Cases', () => {
       expect(countA).toBe(2);
       expect(countB).toBe(2);
 
-      console.log(
-        '[RejectedOpFrontier] ✓ Rejected op did not pollute frontier - subsequent sync succeeded',
-      );
+      console.log('[ConflictThenNewTask] ✓ New task synced after the resolved conflict');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

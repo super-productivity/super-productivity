@@ -1670,6 +1670,84 @@ END:VCALENDAR`);
     });
   });
 
+  describe('timeBlock.logWorkSession', () => {
+    const session = {
+      taskId: 'task-1',
+      title: 'Write report',
+      start: new Date('2026-05-14T09:00:00Z').getTime(),
+      end: new Date('2026-05-14T09:45:00Z').getTime(),
+    };
+    let mockHttp: { get: any; post: any; put: any; patch: any; delete: any };
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn().mockResolvedValue(''),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+    });
+
+    it('PUTs an event with the session start and end to the tracked time calendar', async () => {
+      const cfg = {
+        serverUrl: 'https://dav.example.com/',
+        writeCalendarId: 'https://dav.example.com/default/',
+        workSessionCalendarId: 'https://dav.example.com/worked/',
+      };
+
+      await definition.timeBlock!.logWorkSession!(session, cfg as any, mockHttp as any);
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const [url, body] = mockHttp.put.mock.calls[0];
+      expect(url.startsWith('https://dav.example.com/worked/')).toBe(true);
+      expect(body).toContain('SUMMARY:Write report');
+      expect(body).toContain('DTSTART:20260514T090000Z');
+      expect(body).toContain('DTEND:20260514T094500Z');
+    });
+
+    it('falls back to the default calendar for new events', async () => {
+      const cfg = {
+        serverUrl: 'https://dav.example.com/',
+        writeCalendarId: 'https://dav.example.com/default/',
+      };
+
+      await definition.timeBlock!.logWorkSession!(session, cfg as any, mockHttp as any);
+
+      expect(
+        mockHttp.put.mock.calls[0][0].startsWith('https://dav.example.com/default/'),
+      ).toBe(true);
+    });
+
+    it('writes a separate event for each session of the same task', async () => {
+      const cfg = {
+        serverUrl: 'https://dav.example.com/',
+        writeCalendarId: 'https://dav.example.com/default/',
+      };
+      const later = {
+        ...session,
+        start: session.end + 60_000,
+        end: session.end + 3_600_000,
+      };
+
+      await definition.timeBlock!.logWorkSession!(session, cfg as any, mockHttp as any);
+      await definition.timeBlock!.logWorkSession!(later, cfg as any, mockHttp as any);
+
+      expect(mockHttp.put.mock.calls[0][0]).not.toBe(mockHttp.put.mock.calls[1][0]);
+    });
+
+    it('rejects when no calendar is configured', async () => {
+      await expect(
+        definition.timeBlock!.logWorkSession!(
+          session,
+          { serverUrl: 'https://dav.example.com/' } as any,
+          mockHttp as any,
+        ),
+      ).rejects.toThrow();
+      expect(mockHttp.put).not.toHaveBeenCalled();
+    });
+  });
+
   // Regression coverage for issue #8259 — CalDAV servers advertise a root or
   // principal URL, not the calendar-home, so a plain Depth:1 PROPFIND there
   // lists no <calendar> resources and the config dropdowns stayed empty.

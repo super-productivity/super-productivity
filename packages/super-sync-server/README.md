@@ -97,8 +97,9 @@ nano .env
 > `git checkout <sha>`. The deploy scripts and compose file come from the
 > checkout; migrations run from the image.
 >
-> Right after a push to `master` the image can lag behind it (the build takes
-> from several minutes to about an hour). `deploy.sh` then stops with "image
+> Right after a push to `master` the image lags behind it: `latest` is published
+> only after the server tests and the SuperSync E2E suite pass for that commit (about
+> an hour), and not while they fail. `deploy.sh` then stops with "image
 > revision does not match" before touching the running stack: wait for the
 > [image build](https://github.com/super-productivity/super-productivity/actions/workflows/supersync-docker.yml)
 > to finish and run it again.
@@ -366,6 +367,8 @@ All configuration is done via environment variables.
 | `SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES` | `104857600` (100 MB)                 | Quota for accounts created from now on. Existing accounts keep the value stored on their row.                                                                                                                                |
 | `CAPTURE_OAUTH_CLIENTS`                 | Claude and Claude Code               | JSON array of `{ "clientId": "https://…", "name": "…", "redirectUris": ["https://…"] }`; replaces the pinned OAuth client allowlist. No dynamic registration or URL fetching.                                                |
 | `CAPTURE_CONNECTOR_ENABLED`             | `false`                              | Agent task capture: the `/mcp` endpoint and `/api/capture`. Single instance only (in-process retry window and per-grant limit).                                                                                              |
+| `CAPTURE_REVIEW_EMAIL`                  | -                                    | With `CAPTURE_REVIEW_CODE`: the one verified account the reviewer code connects to. Set both or neither. See [Capture OAuth](#capture-oauth).                                                                                |
+| `CAPTURE_REVIEW_CODE`                   | -                                    | Reusable consent-page code for connector directory reviewers: 20–32 letters, digits or dashes. Only for `CAPTURE_REVIEW_EMAIL`, only while that account has capture switched on. Unset it after review.                      |
 
 ### Legal pages
 
@@ -420,6 +423,7 @@ is no production password-based `/api/register` or `/api/login` endpoint.
 | `/api/login/magic-link*`   | Request and consume a one-time login link                         |
 | `/api/recover/passkey*`    | Replace a passkey after email-token recovery                      |
 | `/api/replace-token`       | Revoke all earlier JWTs and return a replacement                  |
+| `/api/connect/requests*`   | Sign in a new device through the browser                          |
 
 See [Authentication Architecture](./docs/authentication.md) for lifecycle and
 security boundaries. Executable routes and schemas live in
@@ -492,6 +496,16 @@ approval quota: invalid guesses must not block other users from connecting.
 This remains a single-instance feature. Sign-out everywhere
 and switching capture off revoke grants and invalidate unconsumed codes in one
 transaction. Apply the Prisma migration before starting the updated server.
+
+Connector directories (Claude, ChatGPT) review a connector days after
+submission, from their own infrastructure, so a 10-minute connection code from
+a running app cannot reach their reviewers. For that, set `CAPTURE_REVIEW_EMAIL`
+to a demo account with capture switched on and `CAPTURE_REVIEW_CODE` to a
+random code, and give reviewers that code. It approves only that account, can
+be reused (each approval is its own connection), is rate-limited like a
+connection code, and is never stored, only its hash. The server logs a warning
+while it is set and each approval it makes. Unset both once the review is done;
+existing connections stay until revoked in the demo account's app.
 
 The local browser test covers app code → consent → token → refresh → Inbox
 and a second device. Real Claude web reconnection must also be checked after

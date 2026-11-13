@@ -340,23 +340,84 @@ recoverable via local undo, not via sync.
 - The shared LWW planner accepts a host-supplied delete-wins classifier. A remote
   marked delete is applied regardless of timestamps. A local marked delete is
   replaced with one operation whose vector clock dominates both conflict sides.
+- **Frontier guard (#11489, applies to projects and tags):** a marked delete
+  wins only while no same-side op re-creates the entity after it. Such an op
+  is causally after the delete (vector clock greater: it saw the delete) and
+  would re-create the entity on replay: a Create, or an LWW Update (matched by
+  its `] LWW Update` action type, so released clients' envelope-less ones
+  count), e.g. a released client's re-creating LWW update, the board's same-id
+  `createTags`, or a pending same-id `addTag`. Then the whole entity falls
+  back to timestamp LWW. A plain update of a deleted id does not block (it is
+  a no-op on replay; blocking on it would reject the delete without a
+  replacement), nor does a recreate-marked `'patch'` delta (ignored while the
+  entity is absent). The planner judges this across all conflicts of the
+  entity, because detection emits one conflict per remote op; without it one
+  entity could get split plans (the delete applied here while a local-win
+  snapshot re-creates it elsewhere). Concurrent same-side ops do not block the
+  delete. For projects the guard is effectively inert: nothing re-creates a
+  project id after a marked delete.
 - SuperSync keeps its generic conflict protocol: if the first delete upload is
   rejected, the existing retry path uploads the causally dominant replacement.
   File-based providers use the same client planner and marker.
 - Do not add per-task/note restoration operations or project-sized snapshots to
   compensate a losing marked project delete.
+- **Notes that reach the project concurrently (#10744)** are kept in the Inbox,
+  not deleted. A marked delete moves notes listed in the project but not named
+  in its payload to the Inbox, and a note move whose target project is gone is
+  applied as a move to the Inbox. Both are derived from state below op capture,
+  so every replay agrees. Tasks still go with the project (#8997 enrichment).
+  This also catches a note added to the project concurrently: the adding device
+  keeps it in the Inbox, while the deleting device never had it (unchanged).
+  Proof: [`supersync-note-move-into-deleted-project.spec.ts`](e2e/tests/sync/supersync-note-move-into-deleted-project.spec.ts).
+
+**Extension — single-tag deletion (#11489, since November 2026)**: new
+`deleteTag` actions carry `tagDeleteWins: true` and win the same way. Under
+timestamp LWW, a concurrent tag rename recreated the tag on the deleting device,
+while that device's delete cascade had already stripped the tag from its live and
+archived tasks. Nothing re-applied the membership, so the devices stayed
+different for good. Restoring that cascade would need affected live and archived
+task ids in the delete payload, and still could not bring back what the cascade
+dropped (orphaned tasks, repeat-config tags, issue-provider default tags). That is
+the same reasoning as for projects.
+
+- Trade-off: a tag rename or other tag edit concurrent with the delete is lost,
+  whichever timestamp is newer.
+- **No schema barrier and no bump.** The marker alone is the discriminator; the
+  classifier still requires the authenticated payload `id` to match the
+  plaintext `entityId` and tolerates a null payload. A released client ignores
+  the marker and resolves the delete by timestamp exactly as before. That leaves
+  the pre-existing membership divergence for that pair, not data loss (unlike the
+  empty project shell that justified v4, which itself needed no bump, see
+  [Bump Policy](docs/sync-and-op-log/operation-log-architecture.md#bump-policy--a-bump-does-not-protect-the-released-fleet)).
+- Mixed fleet: two updated clients converge on the delete in both directions;
+  any pair with a released client behaves as before; deletes stored before this
+  change carry no marker and keep LWW.
+- The frontier guard above applies: a later same-side re-create of the tag
+  returns the entity to timestamp LWW.
+- Trade-off reach: references to the tag that another device adds concurrently
+  (task tags, repeat-config tags, issue-provider default tags) are dropped on
+  that device by the cascade, or left dangling on the deleting device. That
+  was already possible when the delete won by timestamp; it now also applies
+  when a concurrent rename would have kept the tag.
+- `deleteTags` (several tag ids in one op) is excluded: it is never stamped and
+  the classifier accepts only `[Tag] Delete Tag`. Delete-wins for a
+  multi-entity op is a new conflict crossing that needs its own resolution
+  path and E2E (AGENTS.md sync rule 14).
+- Proof: [`supersync-tag-delete-rename-race-11489.spec.ts`](e2e/tests/sync/supersync-tag-delete-rename-race-11489.spec.ts)
+  covers both directions, live and archived.
 
 **Key Files**:
 
 - [`task-shared.actions.ts`](src/app/root-store/meta/task-shared.actions.ts) — the `PROJECT_DELETE_WINS_MARKER` producer
+- [`tag.actions.ts`](src/app/features/tag/store/tag.actions.ts) — the `TAG_DELETE_WINS_MARKER` producer
 - [`conflict-resolution.ts`](packages/sync-core/src/conflict-resolution.ts)
-- [`conflict-resolution.service.ts`](src/app/op-log/sync/conflict-resolution.service.ts) — the delete-wins classifier
+- [`conflict-resolution.util.ts`](src/app/op-log/sync/conflict-resolution.util.ts) — the delete-wins classifier (`isDeleteWinsOperation`)
 - [`schema-version.ts`](packages/shared-schema/src/schema-version.ts)
 - [`project-delete-wins-barrier-v3-to-v4.ts`](packages/shared-schema/src/migrations/project-delete-wins-barrier-v3-to-v4.ts) (registered in [`migrations/index.ts`](packages/shared-schema/src/migrations/index.ts))
 
 **When to Update This Pattern**:
 
-- Changing the cascade performed by `deleteProject`
+- Changing the cascade performed by `deleteProject` or `deleteTag`
 - Adding another operation with delete-wins conflict semantics
 - Changing schema compatibility or LWW replacement behavior
 
@@ -469,10 +530,13 @@ The boundary today:
 
 **Implementation**:
 
-- Contract: `timeBlock: { upsertEvent, deleteEvent }` in
+- Contract: `timeBlock: { upsertEvent, deleteEvent, logWorkSession? }` in
   [`packages/plugin-api/src/issue-provider-types.ts`](packages/plugin-api/src/issue-provider-types.ts)
 - Driver: [`time-block-sync.effects.ts`](src/app/features/calendar-integration/time-block/time-block-sync.effects.ts),
   registered in [`feature-stores.module.ts`](src/app/root-store/feature-stores.module.ts)
+- Tracked work sessions (#6378, append-only, written only by the tracking device;
+  unwritten sessions wait in device-local `LS.WORK_SESSION_LOG`, never synced):
+  [`work-session-log.effects.ts`](src/app/features/calendar-integration/time-block/work-session-log.effects.ts)
 - Manual per-event actions (reschedule, delete): [`calendar-event-actions.service.ts`](src/app/features/calendar-integration/calendar-event-actions.service.ts)
 - Events themselves are **not** op-log entities — a converted task is an ordinary
   task with a derived stable id

@@ -133,6 +133,9 @@ const withTestGitRepository = (
     runGit(repositoryRoot, ['init', '--quiet']);
     runGit(repositoryRoot, ['config', 'user.name', 'Compatibility Test']);
     runGit(repositoryRoot, ['config', 'user.email', 'compatibility@test.invalid']);
+    // Local config overrides a global signing setup (commit.gpgsign and tag.gpgSign).
+    runGit(repositoryRoot, ['config', 'commit.gpgsign', 'false']);
+    runGit(repositoryRoot, ['config', 'tag.gpgsign', 'false']);
     writeFileSync(
       join(repositoryRoot, 'released-source.ts'),
       'export const value = 1;\n',

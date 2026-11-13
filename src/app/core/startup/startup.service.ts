@@ -44,7 +44,7 @@ import { alertDialog } from '../../util/native-dialogs';
 import { DataInitStateService } from '../data-init/data-init-state.service';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { OnboardingHintService } from '../../features/onboarding/onboarding-hint.service';
-import { LocalRestApiHandlerService } from '../electron/local-rest-api-handler.service';
+import { LocalRestApiRouterService } from '../electron/local-rest-api-router.service';
 import { CustomThemeService } from '../theme/custom-theme.service';
 import { UpdateCheckService } from '../update-check/update-check.service';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
@@ -199,7 +199,7 @@ export class StartupService {
     }, DEFERRED_INIT_DELAY_MS);
 
     if (IS_ELECTRON) {
-      this._injector.get(LocalRestApiHandlerService).init();
+      this._injector.get(LocalRestApiRouterService).init();
 
       window.ea.on(IPC.TRANSFER_SETTINGS_REQUESTED, () =>
         this._sendCurrentSettingsToElectronAfterDataLoad(),

@@ -286,6 +286,12 @@ export type ScheduleConfig = Readonly<{
   isLunchBreakEnabled: boolean;
   lunchBreakStart: string;
   lunchBreakEnd: string;
+  /**
+   * Where tasks planned for a day without a time go on the Schedule.
+   * Missing = 'auto' (placed in the grid). Keep this at two values: a client
+   * that only knows these two fails validation on a third.
+   */
+  untimedTaskPlacement?: 'auto' | 'tray';
 }>;
 
 export type ReminderConfig = Readonly<{
@@ -294,7 +300,8 @@ export type ReminderConfig = Readonly<{
   defaultTaskRemindOption?: TaskReminderOptionId;
   disableReminders?: boolean;
   isFocusWindow?: boolean;
-  // Android only: use alarm-style notifications (louder, more intrusive)
+  // Android: alarm-style notifications (louder, more intrusive). Desktop: a bell
+  // loops while the reminder dialog is open, and the window is focused.
   useAlarmStyleReminders?: boolean;
   notifyOnDueDate?: boolean;
   dueDateNotificationHour?: number;
@@ -366,6 +373,7 @@ export type TaskWidgetConfig = Readonly<{
 
 export type FocusModeLocalConfig = Readonly<{
   isLoopBreakEndAlarm?: boolean;
+  isNotifyOnSessionEnd?: boolean;
 }>;
 
 export type ClipboardImagesConfig = Readonly<{

@@ -444,52 +444,6 @@
         "WRITE_A_COMMENT": "Scrie un comentariu"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Durata predefinită conține date neurmărite din zilele trecute.",
-        "T_ALREADY_TRACKED": "Deja urmărit",
-        "T_TITLE": "Titlu",
-        "T_TO_BE_SUBMITTED": "Urmează a fi trimis",
-        "TITLE": "Trimite timpul petrecut pe probleme la GitLab",
-        "TOTAL_MSG": "Vei trimite <em>{{totalTimeToSubmit}}</em> timp de lucru pentru astăzi în total la <em>{{nrOfTasksToSubmit}}</em> probleme diferite."
-      },
-      "FORM": {
-        "FILTER": "Filtru personalizat",
-        "FILTER_DESCRIPTION": "Vezi https://docs.gitlab.com/ee/api/issues.html#list-issues. Mai multe pot fi combinate cu &",
-        "FILTER_USER": "Filtrează după numele de utilizator",
-        "GITLAB_BASE_URL": "URL de bază personalizat GitLab (opțional)",
-        "PROJECT": "nume utilizator/proiect",
-        "PROJECT_HINT": "d.e. super-productivity/super-productivity",
-        "SCOPE": "Domeniu de aplicare",
-        "SCOPE_ALL": "Toate",
-        "SCOPE_ASSIGNED": "Atribuite mie",
-        "SCOPE_CREATED": "Create de mine",
-        "SOURCE": "Sursă",
-        "SOURCE_GLOBAL": "Toate",
-        "SOURCE_GROUP": "Grup",
-        "SOURCE_PROJECT": "Proiect",
-        "SUBMIT_TIMELOGS": "Trimite jurnale de timp la GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Arată dialogul de urmărire a timpului după clic pe \"Finalizează ziua\"",
-        "TOKEN": "Jeton de acces"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>De aici poți configura Super Productivity pentru a lista problemele deschise pe GitLab (fie că este versiunea online sau o instanță self-hosted) pentru un proiect specific în panoul de creare a sarcinilor în modul de planificare zilnic. Acestea vor fi listate ca sugestii și vor conține o legătură către problemă și mai multe informații despre acesta.</p> <p>În plus, poți importa automat toate problemele deschise.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Asignat lui",
-        "AT": "la",
-        "DESCRIPTION": "Descriere",
-        "LABELS": "Etichete",
-        "MARK_AS_CHECKED": "Marchează actualizările ca bifate",
-        "PROJECT": "Proiect",
-        "STATUS": "Stare",
-        "SUMMARY": "Sumar",
-        "WRITE_A_COMMENT": "Scrie un comentariu"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Eroare necunoscută {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Această integrare probabil nu va funcționa în navigatorul tău web. Te rugăm să descarci versiunea desktop sau Android a Super Productivity!",
       "DEFAULT": {
@@ -3056,8 +3010,8 @@
       "PLANNER": "Planifică zilele următoare în {{plannerIcon}} <b>Planificator</b>",
       "TASK_MENU_TOUCH": "Glisează o sarcină spre stînga pentru meniul ei: {{playIcon}} <b>Începe contorizarea timpului</b>, {{subtaskIcon}} <b>Adaugă subsarcină</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Glisează o sarcină spre stînga pentru meniul ei, de ex. {{subtaskIcon}} <b>Adaugă subsarcină</b>",
-      "TIMER_RUNNING": "Cronometrul rulează. Apasă din nou {{playIcon}} sau <kbd>{{key}}</kbd> pentru pauză.",
-      "TIMER_RUNNING_TOUCH": "Cronometrul rulează. Atinge {{playIcon}} din partea de sus pentru pauză.",
+      "TIMER_RUNNING": "Cronometrul rulează. Apasă din nou {{pauseIcon}} sau <kbd>{{key}}</kbd> pentru pauză.",
+      "TIMER_RUNNING_TOUCH": "Cronometrul rulează. Atinge {{pauseIcon}} din partea de sus pentru pauză.",
       "TRACK_TIME": "Treci cu mouse-ul peste sarcină și apasă {{playIcon}} pentru a contoriza timpul"
     },
     "WANT_MORE": {

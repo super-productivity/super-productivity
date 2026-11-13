@@ -256,8 +256,8 @@ test('BACKUP rejects with a path-free error when the write fails (#10022)', asyn
   );
 });
 
-// start-app.ts imports backup.ts before it moves userData (snap common dir,
-// --user-data-dir), so the dir must be read at use time, not at import (#11049).
+// backup.ts is imported before userData moves (snap common dir in main.ts,
+// --user-data-dir in start-app.ts), so the dir must be read at use time (#11049).
 test('backups follow a userData path changed after import (#11049)', () => {
   const { initBackupAdapter } = loadBackupModule();
   userDataPath = path.join('home', 'u', 'snap', 'sp', 'common', '.config', 'sp');

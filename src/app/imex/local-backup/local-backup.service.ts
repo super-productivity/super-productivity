@@ -449,6 +449,22 @@ export class LocalBackupService {
     }
   }
 
+  /**
+   * Writes the Android backup now and confirms the primary slot holds exactly
+   * the current state. The legacy online-mode handover (#8832) relies on it:
+   * the offline app restores this slot on its blank first start, so a skipped
+   * (empty / near-empty guard) or lost write must stop the handover.
+   */
+  async writeVerifiedAndroidBackup(): Promise<boolean> {
+    const data =
+      (await this._stateSnapshotService.getAllSyncModelDataFromStoreAsync()) as AppDataComplete;
+    if (!hasMeaningfulStateData(data) || !(await this._backupAndroid(data))) {
+      return false;
+    }
+    this._recordLastBackupTime();
+    return (await this._loadAndroidDbValueSafe(ANDROID_DB_KEY)) === JSON.stringify(data);
+  }
+
   private _recordLastBackupTime(): void {
     try {
       localStorage.setItem(LS.LAST_LOCAL_BACKUP, Date.now().toString());

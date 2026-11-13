@@ -4,10 +4,15 @@ import { PGlite } from '@electric-sql/pglite';
 import * as jwt from 'jsonwebtoken';
 import { revokeAllTokens } from '../src/auth';
 import { captureMcpRoutes, captureRoutes } from '../src/capture';
-import { captureKeyFingerprint } from '../src/capture/capture-seal';
+import {
+  captureKeyFingerprint,
+  parseCapturePublicKey,
+  sealCapture,
+} from '../src/capture/capture-seal';
 import { resetCaptureMemoryForTests } from '../src/capture/capture-retry-window';
 import { resetCaptureRateLimitForTests } from '../src/capture/capture-rate-limit';
 import {
+  CAPTURE_MAX_PENDING_PER_GRANT,
   CAPTURE_SAVED_TEXT,
   CAPTURE_SWITCHED_OFF_TEXT,
 } from '../src/capture/capture.const';
@@ -142,6 +147,17 @@ describe('capture routes (PGlite)', () => {
     expect(list.json().result.tools.map((t: { name: string }) => t.name)).toEqual([
       'create_task',
     ]);
+    // The connector directories require a title and every hint, explicitly.
+    expect(list.json().result.tools[0]).toMatchObject({
+      title: 'Add task to Inbox',
+      annotations: {
+        title: 'Add task to Inbox',
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    });
     const call = await mcp(token, toolCall(3, 'Buy milk', 'two litres'));
     expect(toolText(call)).toEqual({ text: CAPTURE_SAVED_TEXT, isError: undefined });
 
@@ -310,5 +326,152 @@ describe('capture routes (PGlite)', () => {
     expect((await mcp(token, { jsonrpc: '2.0', id: 1, method: 'ping' })).statusCode).toBe(
       200,
     );
+  });
+
+  describe('POST /items (device-sealed captures)', () => {
+    const SHARE = {
+      v: 1,
+      title: 'example.com: article',
+      notes: 'https://example.com/article',
+      link: 'https://example.com/article',
+      createdAt: 5,
+      client: 'Android share',
+    };
+    const ID = '0b3f6a4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b';
+    const item = (
+      id = ID,
+      publicKey = key.publicKey,
+    ): { id: string; fingerprint: string; ciphertext: string } => ({
+      id,
+      fingerprint: captureKeyFingerprint(publicKey),
+      ciphertext: sealCapture(parseCapturePublicKey(publicKey), id, SHARE),
+    });
+    const claim = async (deviceId: string) =>
+      (
+        await api('POST', '/claim', {
+          deviceId,
+          fingerprint: captureKeyFingerprint(key.publicKey),
+        })
+      ).json();
+
+    it('queues it under a server-issued task id that a device opens and acks', async () => {
+      await api('PUT', '/key', { publicKey: key.publicKey });
+      const res = await api('POST', '/items', item());
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ status: 'queued' });
+
+      const { items } = await claim('dev-a');
+      expect(items.length).toBe(1);
+      expect(items[0].itemId).toBe(ID);
+      expect(items[0].taskId).not.toBe(ID);
+      expect(openCapture(key.ecdh, ID, items[0].ciphertext)).toEqual(SHARE);
+      // Server time, not the payload's: retention deletes by it.
+      expect(items[0].createdAt).toBeGreaterThan(SHARE.createdAt);
+      await api('POST', '/ack', {
+        deviceId: 'dev-a',
+        acks: [{ itemId: ID, taskId: items[0].taskId }],
+      });
+
+      // A re-send after the ack queues a new task id, never the acked one.
+      expect((await api('POST', '/items', item())).statusCode).toBe(200);
+      const again = await claim('dev-b');
+      expect(again.items.length).toBe(1);
+      expect(again.items[0].taskId).not.toBe(items[0].taskId);
+    });
+
+    it('stores a retry once, even when the queue is full by then', async () => {
+      await api('PUT', '/key', { publicKey: key.publicKey });
+      await api('POST', '/items', item());
+      expect((await api('POST', '/items', item())).json()).toEqual({ status: 'queued' });
+      expect((await api('GET', '/grants')).json()).toEqual({
+        grants: [],
+        otherPendingCount: 1,
+      });
+
+      for (let i = 1; i < CAPTURE_MAX_PENDING_PER_GRANT; i++) {
+        await db.query(
+          `INSERT INTO capture_items (id, user_id, grant_id, ciphertext, task_id, created_at)
+           VALUES ($1, $2, 'app-share', 'x', $1, 1)`,
+          [`filler-${i}`, userId],
+        );
+      }
+      expect((await api('POST', '/items', item())).json()).toEqual({ status: 'queued' });
+      const full = await api(
+        'POST',
+        '/items',
+        item('1b3f6a4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b'),
+      );
+      expect(full.statusCode).toBe(409);
+      expect(full.json()).toEqual({ error: 'queue_full' });
+    });
+
+    it("accepts the Android client's content type (OkHttp adds a charset)", async () => {
+      await api('PUT', '/key', { publicKey: key.publicKey });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/capture/items',
+        headers: {
+          authorization: `Bearer ${syncJwt}`,
+          'content-type': 'application/json; charset=utf-8',
+        },
+        payload: JSON.stringify(item()),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ status: 'queued' });
+    });
+
+    it('refuses with 409 while capture is off or for another key', async () => {
+      const off = await api('POST', '/items', item());
+      expect(off.statusCode).toBe(409);
+      expect(off.json()).toEqual({ error: 'switched_off' });
+
+      await api('PUT', '/key', { publicKey: key.publicKey });
+      const stale = await api('POST', '/items', item(ID, newCaptureKeyPair().publicKey));
+      expect(stale.statusCode).toBe(409);
+      expect(stale.json()).toEqual({ error: 'key_mismatch' });
+
+      await api('POST', '/items', item());
+      expect((await api('DELETE', '/key')).json()).toEqual({ discarded: 1 });
+    });
+
+    it("refuses another account's item id", async () => {
+      await api('PUT', '/key', { publicKey: key.publicKey });
+      await api('POST', '/items', item());
+      const otherId = await addUser(db, 'b@example.com');
+      const otherJwt = jwt.sign(
+        { userId: otherId, email: 'b@example.com', tokenVersion: 0 },
+        process.env.JWT_SECRET as string,
+      );
+      await api('PUT', '/key', { publicKey: key.publicKey }, otherJwt);
+      const res = await api('POST', '/items', item(), otherJwt);
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({ error: 'id_conflict' });
+    });
+
+    it('refuses malformed bodies and capture tokens', async () => {
+      await api('PUT', '/key', { publicKey: key.publicKey });
+      const valid = item();
+      const bytes = Buffer.from(valid.ciphertext, 'base64');
+      const wrongVersion = Buffer.from(bytes);
+      wrongVersion[0] = 0x02;
+      const offCurve = Buffer.from(bytes);
+      offCurve[10] ^= 0xff;
+      for (const body of [
+        { ...valid, id: 'not-a-uuid' },
+        { ...valid, id: ID.toUpperCase() },
+        { ...valid, fingerprint: 'has space' },
+        { ...valid, ciphertext: `${valid.ciphertext}\n` },
+        { ...valid, ciphertext: wrongVersion.toString('base64') },
+        { ...valid, ciphertext: offCurve.toString('base64') },
+        { ...valid, ciphertext: bytes.subarray(0, 94).toString('base64') },
+        { ...valid, ciphertext: Buffer.alloc(33 * 1024, 1).toString('base64') },
+        { id: ID },
+      ]) {
+        expect((await api('POST', '/items', body)).statusCode).toBe(400);
+      }
+      const token = await newToken();
+      expect((await api('POST', '/items', valid, token)).statusCode).toBe(401);
+      expect((await claim('dev-a')).items).toEqual([]);
+    });
   });
 });

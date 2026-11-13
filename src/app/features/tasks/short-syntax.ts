@@ -87,6 +87,9 @@ const SHORT_SYNTAX_TAGS_REG_EX = new RegExp(`\\${CH_TAG}[^${ALL_SPECIAL}|\\s]+`,
 // Match string starting with the literal @ and followed by 1 or more of the characters
 // not in the ALL_SPECIAL
 const SHORT_SYNTAX_DUE_REG_EX = new RegExp(`\\${CH_DUE}[^${ALL_SPECIAL}]+`, 'gi');
+// The domain after an email's at-sign ("@example.com" in "max@example.com")
+const EMAIL_DOMAIN_START_REG_EX =
+  /^@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,}(?![\p{L}\p{N}-])/u;
 
 // Weekday unit → Date.getDay() index; covers abbreviations and singular form
 // (plural "fridays" is normalized by stripping the trailing "s" before lookup)
@@ -346,6 +349,24 @@ const isTimeOnlyChronoMatch = (result: ParsedResult): boolean =>
     result.start.isCertain(component),
   );
 
+// French-style clock time right after the trigger: "@09h", "@14h30". Only this
+// position: a spaced "@demain 18h" stays a time estimate (see the docs).
+// Trailing punctuation ends it too ("@9h, then"), but "@1h30m" does not.
+const SHORT_SYNTAX_H_TIME_REG_EX = /^(\d{1,2})h(\d{2})?(?=[\s,.;:!?)]|$)/i;
+
+// The next occurrence of a wall-clock time from `now`, or null when it is no
+// clock time ("25h")
+const getNextClockTime = (now: Date, hours: number, minutes: number): number | null => {
+  if (hours > 23 || minutes > 59) {
+    return null;
+  }
+  const due = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+  if (due.getTime() <= now.getTime()) {
+    due.setDate(due.getDate() + 1);
+  }
+  return due.getTime();
+};
+
 const parseNthWeekdaySyntax = (
   dueMatchContent: string,
 ): NthWeekdaySyntaxResult | null => {
@@ -507,7 +528,8 @@ export const shortSyntax = async (
     const projectResult = parseProjectTracked(
       task,
       tracked,
-      allProjects?.filter((p) => !p.isArchived && !p.isHiddenFromMenu),
+      // isHiddenFromMenu only hides from the sidebar; +project still assigns it (#11190)
+      allProjects?.filter((p) => !p.isArchived),
     );
     if (projectResult) {
       projectId = projectResult.projectId;
@@ -710,6 +732,54 @@ const parseProjectTracked = (
   return null;
 };
 
+const isTokenBoundary = (ch: string): boolean => ch === '' || /\s/.test(ch);
+
+// The tag regex stops at whitespace, but the autocomplete inserts full titles
+// ("#Deep Work"). So existing tags with whitespace in their title are matched
+// literally first, longest title first ("Deep Work" beats "Deep"); only exact
+// titles of existing tags count, so "#work meeting notes" stays a single tag.
+// Matches are removed from `tracked`; everything else is left to the regex.
+const consumeMultiWordTags = (
+  tracked: TrackedTitle,
+  allTags: Tag[],
+  ranges: TextRange[],
+): string[] => {
+  const tagIds: string[] = [];
+  const multiWordTags = allTags
+    .map((tag) => ({ id: tag.id, title: tag.title.trim() }))
+    .filter((tag) => /\s/.test(tag.title))
+    .sort((a, b) => b.title.length - a.title.length);
+  if (!multiWordTags.length) {
+    return tagIds;
+  }
+
+  let start = tracked.text.indexOf(CH_TAG);
+  while (start !== -1) {
+    const text = tracked.text;
+    const titleStart = start + CH_TAG.length;
+    const tag = isTokenBoundary(text.charAt(start - 1))
+      ? multiWordTags.find(
+          (t) =>
+            text.slice(titleStart, titleStart + t.title.length).toLowerCase() ===
+              t.title.toLowerCase() &&
+            isTokenBoundary(text.charAt(titleStart + t.title.length)),
+        )
+      : undefined;
+    if (tag) {
+      const end = titleStart + tag.title.length;
+      ranges.push(...tracked.rawRanges(start, end));
+      tracked.remove(start, end);
+      if (!tagIds.includes(tag.id)) {
+        tagIds.push(tag.id);
+      }
+      start = tracked.text.indexOf(CH_TAG, start);
+    } else {
+      start = text.indexOf(CH_TAG, start + 1);
+    }
+  }
+  return tagIds;
+};
+
 const parseTagChanges = (
   task: Partial<TaskCopy>,
   tracked: TrackedTitle,
@@ -723,10 +793,11 @@ const parseTagChanges = (
   let isTitleChanged = false;
   // only exec if previous ones are also passed
   if (Array.isArray(task.tagIds) && Array.isArray(allTags)) {
+    const multiWordTagIds = consumeMultiWordTags(tracked, allTags, ranges);
     const initialTitle = tracked.text;
-    const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX);
+    const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX) || [];
 
-    if (regexTagTitles && regexTagTitles.length) {
+    if (regexTagTitles.length || multiWordTagIds.length) {
       const regexTagTitlesTrimmedAndFiltered: string[] = regexTagTitles
         .map((title) => title.trim().replace(CH_TAG, ''))
         .filter((newTagTitle) => {
@@ -750,7 +821,7 @@ const parseTagChanges = (
           );
         });
 
-      const matchingTagIds: string[] = [];
+      const matchingTagIds: string[] = [...multiWordTagIds];
       regexTagTitlesTrimmedAndFiltered.forEach((newTagTitle) => {
         const existingTag = allTags.find(
           (tag) => newTagTitle.toLowerCase() === tag.title.toLowerCase(),
@@ -784,7 +855,7 @@ const parseTagChanges = (
         }
       }
 
-      if (regexTagTitlesTrimmedAndFiltered.length) {
+      if (regexTagTitlesTrimmedAndFiltered.length || multiWordTagIds.length) {
         regexTagTitlesTrimmedAndFiltered.forEach((tagTitle) => {
           const matchedText = `${CH_TAG}${tagTitle}`;
           const start = tracked.text.indexOf(matchedText);
@@ -830,12 +901,42 @@ const parseShortSyntaxDate = async (
   // A deadline trigger only counts at the start of the title or after a space
   // (so "Done!" is not a deadline). Skip a match that fails this check rather
   // than giving up, so "wow! !tomorrow" still finds "!tomorrow" (#10217).
-  const rr =
-    [...text.matchAll(regEx)].find((m) => {
-      const index = m.index ?? 0;
-      const charBeforeTrigger = index > 0 ? text.charAt(index - 1) : '';
-      return !isDeadline || !charBeforeTrigger || charBeforeTrigger === ' ';
-    }) ?? null;
+  // Skip an email's at-sign the same way: a date word or digits in its domain
+  // or the prose after it must not erase the address, and an "@date" after it
+  // still counts. Attached syntax such as "lunch@12" stays a trigger.
+  let rr: RegExpMatchArray | null = null;
+  for (const m of text.matchAll(regEx)) {
+    const index = m.index ?? 0;
+    const charBeforeTrigger = index > 0 ? text.charAt(index - 1) : '';
+    if (charBeforeTrigger && charBeforeTrigger !== ' ') {
+      if (isDeadline) {
+        continue;
+      }
+      if (EMAIL_DOMAIN_START_REG_EX.test(m[0])) {
+        // Prefer established day-dot-month syntax ("Termin@3.okt.") only when
+        // chrono recognizes the entire token, never a fragment of "3.okt.de"
+        // or an arbitrary numeric domain such as "3.com". Prose punctuation
+        // ends the token; chrono can leave it outside the consumed date.
+        const token = m[0].match(/^@\d{1,2}\.[^\s,;:?]+/)?.[0];
+        if (!token) {
+          continue;
+        }
+        const dateParser = await loadShortSyntaxDateParser(dateLocale);
+        const [date] = dateParser.parse(token, now, { forwardDate: true });
+        if (
+          !date ||
+          date.index !== 1 ||
+          date.text.length !== token.length - 1 ||
+          !date.start.isCertain('day') ||
+          !date.start.isCertain('month')
+        ) {
+          continue;
+        }
+      }
+    }
+    rr = m;
+    break;
+  }
 
   if (rr && rr[0]) {
     const triggerIndex = rr.index ?? 0;
@@ -862,11 +963,6 @@ const parseShortSyntaxDate = async (
       );
     }
 
-    const dateParser = await loadShortSyntaxDateParser(dateLocale);
-    const parsedDateArr = dateParser.parse(rr[0], now, {
-      forwardDate: true,
-    });
-
     // Strip out the short syntax for scheduled date and given date
     const consume = (textToReplace: string): TextRange[] => {
       const removeStart = tracked.text.indexOf(textToReplace, triggerIndex);
@@ -878,6 +974,41 @@ const parseShortSyntaxDate = async (
       tracked.trim();
       return ranges;
     };
+
+    const dateParser = await loadShortSyntaxDateParser(dateLocale);
+
+    // Before chrono, which reads "@09h" as "in 9 hours" (#11180)
+    const hourMatch = rr[0].substring(1).match(SHORT_SYNTAX_H_TIME_REG_EX);
+    if (hourMatch) {
+      const hours = +hourMatch[1];
+      const minutes = +(hourMatch[2] ?? 0);
+      let due = getNextClockTime(now, hours, minutes);
+      if (due === null) {
+        // "@25h" is no clock time: keep it in the title rather than guess
+        return null;
+      }
+      let consumedLength = 1 + hourMatch[0].length;
+      // A day right after the time sets the day: "@18h demain"
+      const rest = rr[0].substring(consumedLength);
+      const day = dateParser.parse(rest, now, { forwardDate: true })[0];
+      if (day && /^\s*$/.test(rest.slice(0, day.index)) && !day.start.isCertain('hour')) {
+        const date = day.start.date();
+        date.setHours(hours, minutes, 0, 0);
+        due = date.getTime();
+        consumedLength += day.index + day.text.length;
+      }
+      const ranges = consume(rr[0].substring(0, consumedLength));
+      return {
+        changes: isDeadline
+          ? { deadlineWithTime: due, deadlineDay: null, hasDeadlineTime: true }
+          : { dueWithTime: due, dueDay: null },
+        ranges,
+      };
+    }
+
+    const parsedDateArr = dateParser.parse(rr[0], now, {
+      forwardDate: true,
+    });
 
     if (parsedDateArr.length) {
       const parsedDateResult = parsedDateArr[0];

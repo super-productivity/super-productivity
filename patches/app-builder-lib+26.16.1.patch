@@ -1,3 +1,21 @@
+diff --git a/node_modules/app-builder-lib/out/targets/FpmTarget.js b/node_modules/app-builder-lib/out/targets/FpmTarget.js
+index da2d687..900c2b4 100644
+--- a/node_modules/app-builder-lib/out/targets/FpmTarget.js
++++ b/node_modules/app-builder-lib/out/targets/FpmTarget.js
+@@ -222,7 +222,12 @@ class FpmTarget extends core_1.Target {
+         if (mimeTypeFilePath != null) {
+             args.push(`${mimeTypeFilePath}=/usr/share/mime/packages/${packager.executableName}.xml`);
+         }
+-        const desktopFilePath = await this.helper.writeDesktopEntry(this.options);
++        // super-productivity patch (#11117): the default Exec is "/opt/Super Productivity/superproductivity" %U, and
++        // xdg-open discards a handler whose quoted Exec path contains a space, so superproductivity:// URLs open the
++        // browser. Point the entry at the /usr/bin link its postinst (re)creates. On rpm upgrades the old package's
++        // unconditional %postun removes that link afterwards; electron-builder.yaml adds a %posttrans that restores it.
++        const exec = target === "deb" || target === "rpm" ? `/usr/bin/${packager.executableName} %U` : undefined;
++        const desktopFilePath = await this.helper.writeDesktopEntry(this.options, exec);
+         args.push(`${desktopFilePath}=/usr/share/applications/${this.helper.getDesktopFileName()}.desktop`);
+         if (packager.packagerOptions.effectiveOptionComputed != null && (await packager.packagerOptions.effectiveOptionComputed([args, desktopFilePath]))) {
+             return;
 diff --git a/node_modules/app-builder-lib/out/targets/snap/coreLegacy.js b/node_modules/app-builder-lib/out/targets/snap/coreLegacy.js
 index 98b626c..5d7156a 100644
 --- a/node_modules/app-builder-lib/out/targets/snap/coreLegacy.js

@@ -5,26 +5,30 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.window.SplashScreenView
 import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
+import com.getcapacitor.WebViewListener
+import com.superproductivity.superproductivity.app.LaunchUrlReplayGuard
 import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
+import com.superproductivity.superproductivity.receiver.NotificationActionReceiver
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
-import com.superproductivity.superproductivity.service.FocusModeNotificationHelper
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
-import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.util.printWebViewVersion
 import com.superproductivity.superproductivity.webview.ImeWebViewHeight
 import com.superproductivity.superproductivity.webview.JavaScriptInterface
@@ -33,7 +37,7 @@ import com.superproductivity.superproductivity.webview.WebHelper
 import com.superproductivity.superproductivity.webview.WebViewBlockActivity
 import com.superproductivity.superproductivity.webview.WebViewCompatibilityChecker
 import com.superproductivity.superproductivity.webview.WebViewRecovery
-import com.superproductivity.superproductivity.widget.ShareIntentQueue
+import com.superproductivity.superproductivity.widget.NotificationActionQueue
 import com.superproductivity.superproductivity.widget.TaskListWidgetProvider
 import com.superproductivity.plugins.webdavhttp.WebDavHttpPlugin
 import org.json.JSONObject
@@ -46,8 +50,6 @@ class CapacitorMainActivity : BridgeActivity() {
     private var webViewCompatibility: WebViewCompatibilityChecker.Result? = null
     private var webViewBlocked = false
     private var webViewRecoveryScheduled = false
-    private var pendingShareIntent: JSONObject? = null
-    private var isFrontendReady = false
 
     // Soft-keyboard workaround: the WebView's resting layout height
     // (e.g. MATCH_PARENT), captured so it can be restored when the keyboard hides.
@@ -71,6 +73,7 @@ class CapacitorMainActivity : BridgeActivity() {
     private var isTimerCompleteReceiverRegistered = false
     private var isForegroundServiceFailureReceiverRegistered = false
     private var isWidgetDoneDrainReceiverRegistered = false
+    private var isNotificationActionDrainReceiverRegistered = false
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -92,6 +95,15 @@ class CapacitorMainActivity : BridgeActivity() {
                 // getWidgetDoneQueue(), so there is a single delivery path and no
                 // task data crosses the string-interpolated JS bridge.
                 callJSInterfaceFunctionIfExists("next", "onWidgetDoneDrainRequest$")
+            }
+        }
+    }
+
+    private val notificationActionDrainReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == NotificationActionReceiver.ACTION_DRAIN) {
+                // Contentless: Angular pulls the queued actions itself.
+                callJSInterfaceFunctionIfExists("next", "onNotificationActionDrainRequest$")
             }
         }
     }
@@ -143,9 +155,14 @@ class CapacitorMainActivity : BridgeActivity() {
         // through onNewIntent — without the LAUNCHED_FROM_HISTORY flag, so the
         // recents guard in onNewIntent doesn't catch it. A stale VIEW data URI
         // would re-fire appUrlOpen and duplicate the URL scheme task action;
-        // clear it (mirrors the savedInstanceState guard for share intents below).
+        // clear it (mirrors the savedInstanceState guard for handleIntent below).
         if (savedInstanceState != null) {
             intent?.data = null
+        } else if (intent != null &&
+            !LaunchUrlReplayGuard.shouldDispatchFreshLaunch(this)
+        ) {
+            // The system relaunched the task after a package update (#11153).
+            intent.data = null
         }
         try {
             super.onCreate(savedInstanceState)
@@ -164,6 +181,7 @@ class CapacitorMainActivity : BridgeActivity() {
             showWebViewInitFailure("Bridge or WebView is null after onCreate")
             return
         }
+        holdSystemSplashUntilPageVisible()
 
         try {
             printWebViewVersion(webView)
@@ -260,16 +278,35 @@ class CapacitorMainActivity : BridgeActivity() {
             IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_DONE_DRAIN)
         )
         isWidgetDoneDrainReceiverRegistered = true
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            notificationActionDrainReceiver,
+            IntentFilter(NotificationActionReceiver.ACTION_DRAIN)
+        )
+        isNotificationActionDrainReceiverRegistered = true
 
-        // Schedule background sync worker if credentials are configured
-        if (BackgroundSyncCredentialStore.get(this) != null) {
-            SyncReminderScheduler.ensureScheduled(this)
-        }
+        // Schedule background sync worker if credentials are configured.
+        // Off the main thread: the first credential read opens the
+        // EncryptedSharedPreferences store (Keystore + Tink keyset setup), and
+        // in a WebView app the main thread also runs Chromium's browser side,
+        // so blocking it here stalls the page load super.onCreate() just
+        // started — on every cold start, sync configured or not. If a JS
+        // clear() lands between the read and the schedule, a periodic worker
+        // stays scheduled; it is a no-op (it skips without credentials).
+        val appContext = applicationContext
+        Thread({
+            try {
+                if (BackgroundSyncCredentialStore.hasAnyCredentials(appContext)) {
+                    SyncReminderScheduler.ensureScheduled(appContext)
+                }
+            } catch (e: Exception) {
+                Log.e("CapacitorMainActivity", "Background sync scheduling check failed", e)
+            }
+        }, "sync-schedule-check").start()
 
         // Handle initial intent (cold start) only on a fresh launch.
         // On Activity recreation (config change) savedInstanceState is non-null
-        // and getIntent() still holds the original share/reminder Intent — re-running
-        // handleIntent() there would create a duplicate task from the same share.
+        // and getIntent() still holds the original reminder/notification Intent —
+        // re-running handleIntent() there would replay the same action.
         if (savedInstanceState == null) {
             handleIntent(intent)
         }
@@ -330,7 +367,7 @@ class CapacitorMainActivity : BridgeActivity() {
         // VIEW data URI would re-fire Capacitor's appUrlOpen and repeat the URL
         // scheme task action (create-task would add the same task again, syncing
         // a duplicate to all devices), so strip the stale URI. OAuth callback
-        // replays are equally unwanted. SEND shares carry no data URI — unaffected.
+        // replays are equally unwanted.
         if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) {
             intent.data = null
         }
@@ -338,8 +375,8 @@ class CapacitorMainActivity : BridgeActivity() {
         handleIntent(intent)
     }
 
-    fun flushPendingShareIntent() {
-        isFrontendReady = true
+    /** Called by the web app once its bundle has initialised, including after a reload. */
+    fun onFrontendReady() {
         // A web-side reload (e.g. language change, PWA update, sync-conflict
         // recovery — all do window.location.reload()) re-runs the bundle and
         // re-enters here, but it also wipes the inline --android-status-bar-overlap
@@ -348,20 +385,10 @@ class CapacitorMainActivity : BridgeActivity() {
         // header overlaps the status bar again on the WebView < 140 / API < 35
         // tail. See pushStatusBarOverlap.
         lastStatusBarOverlapCssPx = -1
-        pendingShareIntent?.let {
-            Log.d("SP_SHARE", "Flushing pending share intent")
-            callJSInterfaceFunctionIfExists("next", "onShareWithAttachment$", it.toString())
-            pendingShareIntent = null
-            ShareIntentQueue.getAndClear(this)
-        }
-    }
-
-    fun clearPendingShareIntent() {
-        pendingShareIntent = null
     }
 
     private fun handleIntent(intent: Intent) {
-        Log.d("SP_SHARE", "handleIntent action: ${intent.action} type: ${intent.type}")
+        Log.d("SP_INTENT", "handleIntent action: ${intent.action} type: ${intent.type}")
 
         // Handle reminder notification tap
         val reminderTaskId = intent.getStringExtra("REMINDER_TASK_ID")
@@ -392,90 +419,24 @@ class CapacitorMainActivity : BridgeActivity() {
             return
         }
 
-        // Handle tracking notification actions
-        when (intent.action) {
-            TrackingForegroundService.ACTION_PAUSE -> {
-                Log.d("SP_TRACKING", "Pause action received from notification")
-                callJSInterfaceFunctionIfExists("next", "onPauseTracking$")
-                return
-            }
-            TrackingForegroundService.ACTION_DONE -> {
-                Log.d("SP_TRACKING", "Done action received from notification")
-                callJSInterfaceFunctionIfExists("next", "onMarkTaskDone$")
-                return
-            }
-            // Stop tracking on ANOTHER device (remote tracking presence notification)
-            RemoteTrackingNotificationHelper.ACTION_REMOTE_STOP -> {
-                Log.d("SP_TRACKING", "Remote stop action received from notification")
-                callJSInterfaceFunctionIfExists("next", "onRemoteTrackingStop$")
-                return
-            }
-            // Handle focus mode notification actions
-            FocusModeForegroundService.ACTION_PAUSE -> {
-                Log.d("SP_FOCUS", "Pause action received from focus mode notification")
-                callJSInterfaceFunctionIfExists("next", "onFocusPause$")
-                return
-            }
-            FocusModeForegroundService.ACTION_RESUME -> {
-                Log.d("SP_FOCUS", "Resume action received from focus mode notification")
-                callJSInterfaceFunctionIfExists("next", "onFocusResume$")
-                return
-            }
-            FocusModeForegroundService.ACTION_SKIP -> {
-                Log.d("SP_FOCUS", "Skip action received from focus mode notification")
-                FocusModeNotificationHelper.cancelCompletionNotification(this)
-                callJSInterfaceFunctionIfExists("next", "onFocusSkip$")
-                return
-            }
-            FocusModeForegroundService.ACTION_COMPLETE -> {
-                Log.d("SP_FOCUS", "Complete action received from focus mode notification")
-                FocusModeNotificationHelper.cancelCompletionNotification(this)
-                callJSInterfaceFunctionIfExists("next", "onFocusComplete$")
-                return
-            }
+        // A relaunch from recents redelivers the base intent: a notification
+        // action in it was handled already and must not be queued again.
+        val isFromHistory = intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        // Tracking/focus buttons are broadcasts now (NotificationActionReceiver).
+        // Activity intents with these actions can only come from a notification
+        // posted by an older build; handle them the same way (#10683).
+        if (!isFromHistory && NotificationActionReceiver.handle(this, intent.action)) {
+            return
         }
-
-        // Handle share intent
-        if (Intent.ACTION_SEND == intent.action && intent.type != null) {
-            if (intent.type?.startsWith("text/") == true) {
-                val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-                // Leave title/subject empty when absent so the frontend can derive a
-                // meaningful title from the URL or note content. Defaulting to a literal
-                // "Shared Content" here masks that derivation (issue: blank shared tasks).
-                val sharedTitle = intent.getStringExtra(Intent.EXTRA_TITLE) ?: ""
-                val sharedSubject = intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: ""
-                // Shape only, never the content: logcat is world-readable to adb and
-                // ends up in bug reports, and this carries whatever the user shared.
-                Log.d(
-                    "SP_SHARE",
-                    "Received share: textLen=${sharedText?.length ?: 0} " +
-                        "hasTitle=${sharedTitle.isNotEmpty()} hasSubject=${sharedSubject.isNotEmpty()}",
-                )
-
-                // Ignore empty/blank shares — they only produce useless blank tasks.
-                if (!sharedText.isNullOrBlank()) {
-                    val json = JSONObject()
-                    json.put("title", sharedTitle)
-                    json.put("subject", sharedSubject)
-                    val type = if (sharedText.startsWith("http")) "LINK" else "NOTE"
-                    json.put("type", type)
-                    json.put("path", sharedText)
-
-                    // Always persist for crash safety
-                    ShareIntentQueue.setPending(this, json.toString())
-
-                    if (isFrontendReady) {
-                        Log.d("SP_SHARE", "Frontend ready, sending directly (type=$type)")
-                        callJSInterfaceFunctionIfExists("next", "onShareWithAttachment$", json.toString())
-                        pendingShareIntent = null
-                        ShareIntentQueue.getAndClear(this)
-                    } else {
-                        Log.d("SP_SHARE", "Frontend NOT ready, queueing (type=$type)")
-                        pendingShareIntent = json
-                        Toast.makeText(this, R.string.share_received, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
+        // Stop tracking on ANOTHER device (remote tracking presence notification).
+        // Stays an Activity intent on purpose (unlock required, see
+        // RemoteTrackingNotificationHelper.show), but is persisted: on a cold
+        // start the WebView isn't ready to receive a push yet.
+        if (!isFromHistory && intent.action == RemoteTrackingNotificationHelper.ACTION_REMOTE_STOP) {
+            Log.d("SP_TRACKING", "Remote stop action received from notification")
+            NotificationActionQueue.setRemoteStop(this, System.currentTimeMillis())
+            callJSInterfaceFunctionIfExists("next", "onNotificationActionDrainRequest$")
+            return
         }
     }
 
@@ -491,6 +452,52 @@ class CapacitorMainActivity : BridgeActivity() {
         // Restore scoped storage permission on Android 10+
         storageHelper.onRestoreInstanceState(savedInstanceState)
         bridge?.webView?.restoreState(savedInstanceState)
+    }
+
+    /**
+     * Keeps the Android 12+ system splash up until the WebView shows index.html's
+     * boot splash, which looks the same. By default the system removes its splash
+     * on the activity's first frame, before the WebView has painted the page, so
+     * a few frames of blank background (no logo) showed before the web splash.
+     *
+     * Taking over the splash's exit leaves it on screen as an overlay while the
+     * window keeps drawing underneath, so the WebView can render and report
+     * onPageCommitVisible (its first frame with the page's content); only then is
+     * the overlay removed. (Withholding the window's first draw instead would also
+     * keep the WebView from drawing, so that signal could not arrive.) Page load,
+     * a load error, or a 2s cap also release it, so a slow or failing page never
+     * leaves the app stuck on the splash. Older Android shows no icon splash.
+     */
+    private fun holdSystemSplashUntilPageVisible() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        var isPageVisible = false
+        var splashView: SplashScreenView? = null
+        val handler = Handler(Looper.getMainLooper())
+        val release = {
+            if (!isPageVisible) {
+                isPageVisible = true
+                handler.removeCallbacksAndMessages(SPLASH_HOLD_TOKEN)
+                splashView?.remove()
+                splashView = null
+            }
+        }
+        splashScreen.setOnExitAnimationListener { view ->
+            if (isPageVisible) {
+                view.remove()
+            } else {
+                splashView = view
+            }
+        }
+        handler.postAtTime(
+            release,
+            SPLASH_HOLD_TOKEN,
+            SystemClock.uptimeMillis() + SPLASH_HOLD_MAX_MS,
+        )
+        bridge?.addWebViewListener(object : WebViewListener() {
+            override fun onPageCommitVisible(view: WebView?, url: String?) = release()
+            override fun onPageLoaded(webView: WebView?) = release()
+            override fun onReceivedError(webView: WebView?) = release()
+        })
     }
 
     override fun onPause() {
@@ -702,11 +709,19 @@ class CapacitorMainActivity : BridgeActivity() {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(widgetDoneDrainReceiver)
             isWidgetDoneDrainReceiverRegistered = false
         }
+        if (isNotificationActionDrainReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(
+                notificationActionDrainReceiver
+            )
+            isNotificationActionDrainReceiverRegistered = false
+        }
         super.onDestroy()
     }
 
     companion object {
         const val WINDOW_INTERFACE_PROPERTY: String = "SUPAndroid"
         const val WINDOW_PROPERTY_F_DROID: String = "SUPFDroid"
+        private const val SPLASH_HOLD_MAX_MS = 2_000L
+        private val SPLASH_HOLD_TOKEN = Any()
     }
 }

@@ -12,6 +12,10 @@ import {
 } from '../../utils/supersync-helpers';
 import { expectTaskNotVisible } from '../../utils/supersync-assertions';
 import { waitForMenuSettled } from '../../utils/waits';
+import {
+  getTagIdFromStore,
+  getTasksFromStore,
+} from '../../utils/audit-import-encryption-helpers';
 
 /**
  * SuperSync Advanced E2E Tests
@@ -76,6 +80,10 @@ test.describe('@supersync SuperSync Advanced', () => {
 
       // Verify tag is present on Client A
       await expect(clientA.page.locator(`task tag:has-text("${tagName}")`)).toBeVisible();
+      const tagId = await getTagIdFromStore(clientA.page, tagName);
+      expect(tagId, 'the tag exists in A store').not.toBeNull();
+      const [taskOnAWithTag] = await getTasksFromStore(clientA.page, taskName);
+      expect(taskOnAWithTag?.tagIds).toContain(tagId);
 
       // Sync A
       await clientA.sync.syncAndWait();
@@ -158,10 +166,15 @@ test.describe('@supersync SuperSync Advanced', () => {
         `[TagTest] Client A has ${tagCount} tag(s) on task: [${tagTexts.join(', ')}]`,
       );
 
-      // Verify tag is gone on A
+      // Verify tag is gone on A. Anchor on the task first: an unrendered task
+      // has no visible tag either. Then read the store, which is what synced.
+      await waitForTask(clientA.page, taskName);
       await expect(
         clientA.page.locator(`task tag:has-text("${tagName}")`),
       ).not.toBeVisible();
+      const tasksOnA = await getTasksFromStore(clientA.page, taskName);
+      expect(tasksOnA, 'the task still exists on A').toHaveLength(1);
+      expect(tasksOnA[0].tagIds, 'the removal synced to A').not.toContain(tagId);
 
       console.log('[TagTest] ✓ Tag added and removed successfully across clients');
     } finally {

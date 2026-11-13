@@ -29,6 +29,7 @@ import { WorkContextType } from '../../../features/work-context/work-context.mod
 import { getRepeatableTaskId } from '../../../features/task-repeat-cfg/get-repeatable-task-id.util';
 import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { selectTasksWithDueTimeForDay } from '../../../features/tasks/store/task.selectors';
 
 describe('Recurring task TODAY_TAG integration (#6269)', () => {
   let combinedReducer: ActionReducer<any, Action>;
@@ -390,29 +391,20 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
       expect(tasksDueByDay.find((t) => t.id === day1TaskId)).toBeUndefined();
     });
 
-    it('should show selectTasksWithDueTimeForRange DOES find dueWithTime-only tasks', () => {
+    it('should show selectTasksWithDueTimeForDay DOES find dueWithTime-only tasks', () => {
       jasmine.clock().mockDate(DAY1);
       let state = baseState;
 
       state = combinedReducer(state, createAddTaskAction(day1TaskId, day1Str));
       state = combinedReducer(state, createScheduleAction(day1TaskId, day1_9am));
 
-      // Simulate what selectTasksWithDueTimeForRange does
-      const dayStart = new Date(DAY1);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(DAY1);
-      dayEnd.setHours(23, 59, 59, 0);
-
       const taskEntities = state[TASK_FEATURE_NAME].entities;
       const allTasks = Object.values(taskEntities).filter(Boolean) as Task[];
-      const tasksDueByTime = allTasks.filter(
-        (t) =>
-          typeof t.dueWithTime === 'number' &&
-          t.dueWithTime >= dayStart.getTime() &&
-          t.dueWithTime <= dayEnd.getTime(),
-      );
+      const tasksDueByTime = selectTasksWithDueTimeForDay.projector(allTasks, 0, {
+        day: day1Str,
+      });
 
-      // dueWithTime IS set → found by time range selector
+      // dueWithTime IS set → found by the automatic planning selector
       expect(tasksDueByTime.length).toBe(1);
       expect(tasksDueByTime[0].id).toBe(day1TaskId);
     });

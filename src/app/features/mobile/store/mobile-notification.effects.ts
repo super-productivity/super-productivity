@@ -15,6 +15,7 @@ import {
 } from '../../tasks/store/task.selectors';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
 import { CapacitorPlatformService } from '../../../core/platform/capacitor-platform.service';
+import { IOS_REMINDER_BUDGET } from '../../../core/platform/ios-reminder-budget';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { ReminderConfig } from '../../config/global-config.model';
 import {
@@ -29,6 +30,9 @@ import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-mi
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getDueDateNotificationOffsetMs } from '../due-date-notification-offset';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
+import { LS } from '../../../core/persistence/storage-keys.const';
+import { loadArmedIds, loadArmedTriggers, saveArmed } from '../armed-reminder-store';
 
 const DELAY_PERMISSIONS = 2000;
 const DELAY_SCHEDULE = 5000;
@@ -41,17 +45,20 @@ const DELAY_SCHEDULE = 5000;
 // window. See #7850.
 const REPEAT_LOOKAHEAD_DAYS = 14;
 
-// Upper bound on how many recurring reminders we pre-schedule in one pass.
-// iOS caps pending local notifications at 64 GLOBALLY (across every reminder
-// effect), silently dropping the rest, and it keeps the soonest-firing ones;
-// Android allows ~500 alarms per app. Over the cap we keep every config's next
-// occurrence before any config's second (then soonest first), so a weekly
-// config is never crowded out by daily ones, and leave headroom for the
-// live/due-date effects. Truncation is logged, never silent.
-// shortcut: one cap for both platforms, so with many timed daily configs the
-// app-closed coverage shrinks to 32 / configs days (e.g. 5 configs → ~6 days)
-// — raise it on Android only if users report gaps.
+// Android: upper bound on how many recurring reminders we pre-schedule in one
+// pass (Android allows ~500 alarms per app). Over the cap we keep every
+// config's next occurrence before any config's second (then soonest first), so
+// a weekly config is never crowded out by daily ones. Truncation is logged,
+// never silent.
+// shortcut: with many timed daily configs the app-closed coverage shrinks to
+// 32 / configs days (e.g. 5 configs → ~6 days) — raise it if users report gaps.
 const REPEAT_MAX_SCHEDULED = 32;
+
+// iOS holds 64 pending notifications per app, so one budget picks what is
+// armed there, soonest first across every reminder effect (see
+// ios-reminder-budget.ts). Recurring reminders are offered far enough ahead to
+// fill its free slots: a daily config alone fills the budget in this many days.
+const IOS_REPEAT_LOOKAHEAD_DAYS = IOS_REMINDER_BUDGET;
 
 // Settle window for the recurring-reminder scheduler. Instance creation
 // dispatches addTask → updateTaskRepeatCfg → scheduleTaskWithTime back-to-back,
@@ -69,17 +76,24 @@ export class MobileNotificationEffects {
   private _platformService = inject(CapacitorPlatformService);
   private _globalConfigService = inject(GlobalConfigService);
   private _dateService = inject(DateService);
+  private _dataInitStateService = inject(DataInitStateService);
   // Single-shot guard so we don't spam the user with duplicate warnings.
   private _hasShownNotificationWarning = false;
-  // Track scheduled reminder IDs to cancel removed ones
-  private _scheduledReminderIds = new Set<string>();
+  // Track scheduled reminder IDs to cancel removed ones. Seeded from the
+  // previous run (see armed-reminder-store) so removals while closed cancel too.
+  private _scheduledReminderIds = loadArmedIds(LS.MOBILE_ARMED_REMINDER_IDS);
   // Track scheduled due-date notification IDs separately
-  private _scheduledDueDateIds = new Set<string>();
+  private _scheduledDueDateIds = loadArmedIds(LS.MOBILE_ARMED_DUE_DATE_IDS);
+  private _hasClearedStaleDueDateAlarms = false;
   // Track scheduled deadline reminders separately: taskId → triggerAtMs, so a
   // pending alarm can be told apart from one that already fired
-  private _scheduledDeadlineIds = new Map<string, number>();
-  // Track pre-scheduled recurring reminder IDs (the predicted task instance IDs)
-  private _scheduledRepeatReminderIds = new Set<string>();
+  private _scheduledDeadlineIds = loadArmedTriggers(LS.MOBILE_ARMED_DEADLINE_IDS);
+  // Track pre-scheduled recurring reminders (predicted task instance id →
+  // triggerAtMs), so an alarm that already fired is not cancelled — on Android
+  // that would dismiss its shown notification before the instance exists.
+  private _scheduledRepeatReminderIds = loadArmedTriggers(
+    LS.MOBILE_ARMED_REPEAT_REMINDER_IDS,
+  );
 
   // Narrowed cfg slice so the scheduling effects only re-run on reminder-config
   // changes, not on every unrelated global-config edit (theme, sync, etc.).
@@ -90,6 +104,12 @@ export class MobileNotificationEffects {
       map((c) => c?.reminder),
       distinctUntilChanged(),
     );
+
+  // Wait for hydration: with tracking seeded from the previous run, a pass over
+  // the still-empty store would cancel every armed alarm.
+  private _afterDataLoaded$: Observable<boolean> = timer(DELAY_SCHEDULE).pipe(
+    switchMap(() => this._dataInitStateService.isAllDataLoadedInitially$),
+  );
 
   // Only SuperSync alarms run a stale-check GET on firing, so only SuperSync
   // users gain from the due-date offset — everyone else would just be delayed.
@@ -153,7 +173,7 @@ export class MobileNotificationEffects {
     this._platformService.isNative &&
     createEffect(
       () =>
-        timer(DELAY_SCHEDULE).pipe(
+        this._afterDataLoaded$.pipe(
           switchMap(() =>
             combineLatest([
               this._store.select(selectAllTasksWithReminder),
@@ -235,6 +255,8 @@ export class MobileNotificationEffects {
             } catch (error) {
               Log.err(error);
               this._notifyPermissionIssue(error?.toString());
+            } finally {
+              saveArmed(LS.MOBILE_ARMED_REMINDER_IDS, this._scheduledReminderIds);
             }
           }),
         ),
@@ -271,7 +293,7 @@ export class MobileNotificationEffects {
     this._platformService.isNative &&
     createEffect(
       () =>
-        timer(DELAY_SCHEDULE).pipe(
+        this._afterDataLoaded$.pipe(
           switchMap(() =>
             combineLatest([
               this._store.select(selectActiveTaskRepeatCfgs),
@@ -283,7 +305,7 @@ export class MobileNotificationEffects {
           tap(async ([cfgs, tasksWithReminders, reminderCfg]) => {
             try {
               if (reminderCfg?.disableReminders) {
-                for (const previousId of this._scheduledRepeatReminderIds) {
+                for (const previousId of this._scheduledRepeatReminderIds.keys()) {
                   await this._reminderService.cancelReminder(
                     generateNotificationId(previousId),
                   );
@@ -292,8 +314,9 @@ export class MobileNotificationEffects {
                 return;
               }
 
-              const upcoming = this._getUpcomingRepeatReminders(cfgs, Date.now());
-              const currentIds = new Set(upcoming.map((u) => u.taskId));
+              const now = Date.now();
+              const upcoming = this._getUpcomingRepeatReminders(cfgs, now);
+              const current = new Map(upcoming.map((u) => [u.taskId, u.triggerAtMs]));
 
               // IDs whose real instance already exists with a live reminder.
               // scheduleNotifications$ owns those alarms under the SAME
@@ -304,8 +327,21 @@ export class MobileNotificationEffects {
                 (tasksWithReminders || []).map((t) => t.id),
               );
 
-              for (const previousId of this._scheduledRepeatReminderIds) {
-                if (!currentIds.has(previousId) && !liveReminderIds.has(previousId)) {
+              // `rpt_<cfgId>_` of each active config: an id minus its
+              // YYYY-MM-DD suffix tells whether its config still exists.
+              const activeIdPrefixes = new Set((cfgs || []).map((c) => `rpt_${c.id}_`));
+              for (const [previousId, triggerAtMs] of this._scheduledRepeatReminderIds) {
+                // A fired alarm of an existing config is left alone (its
+                // instance takes over); one of a deleted config is cancelled,
+                // as a native snooze may have re-armed it under the same id.
+                const isPendingOrOrphaned =
+                  triggerAtMs > now ||
+                  !activeIdPrefixes.has(previousId.slice(0, -'YYYY-MM-DD'.length));
+                if (
+                  isPendingOrOrphaned &&
+                  !current.has(previousId) &&
+                  !liveReminderIds.has(previousId)
+                ) {
                   await this._reminderService.cancelReminder(
                     generateNotificationId(previousId),
                   );
@@ -334,13 +370,18 @@ export class MobileNotificationEffects {
                 });
               }
 
-              this._scheduledRepeatReminderIds = currentIds;
+              this._scheduledRepeatReminderIds = current;
 
               Log.log('MobileEffects: scheduled repeat reminders', {
                 count: upcoming.length,
               });
             } catch (error) {
               Log.err(error);
+            } finally {
+              saveArmed(
+                LS.MOBILE_ARMED_REPEAT_REMINDER_IDS,
+                this._scheduledRepeatReminderIds,
+              );
             }
           }),
         ),
@@ -357,7 +398,7 @@ export class MobileNotificationEffects {
     this._platformService.isNative &&
     createEffect(
       () =>
-        timer(DELAY_SCHEDULE).pipe(
+        this._afterDataLoaded$.pipe(
           switchMap(() =>
             combineLatest([
               this._store.select(selectUndoneTasksWithDueDayNoReminder),
@@ -367,7 +408,9 @@ export class MobileNotificationEffects {
           ),
           tap(async ([tasks, reminderCfg, isSuperSyncActive]) => {
             try {
-              const notifyOnDueDate = reminderCfg?.notifyOnDueDate ?? true;
+              // Opt-in: one notification per planned task fires at the same hour, which
+              // rang phones once per Today task every morning (2026 survey #88).
+              const notifyOnDueDate = reminderCfg?.notifyOnDueDate ?? false;
               const disableReminders = reminderCfg?.disableReminders ?? false;
               const dueDateHour = Math.floor(
                 Math.max(0, Math.min(23, reminderCfg?.dueDateNotificationHour ?? 9)),
@@ -376,6 +419,14 @@ export class MobileNotificationEffects {
               // If disabled (by master switch or per-category), cancel previously
               // scheduled due-date notifications and short-circuit.
               if (disableReminders || !notifyOnDueDate) {
+                // The persisted tracked set misses alarms armed by builds that kept
+                // it in-memory only (e.g. under the old default-on); native alarms
+                // outlive the app, so those would still fire. Ids are
+                // deterministic: cancel them once per run.
+                if (!this._hasClearedStaleDueDateAlarms && tasks?.length) {
+                  tasks.forEach((t) => this._scheduledDueDateIds.add(t.id));
+                  this._hasClearedStaleDueDateAlarms = true;
+                }
                 for (const previousId of this._scheduledDueDateIds) {
                   const notificationId = generateNotificationId(previousId + '_dueday');
                   await this._reminderService.cancelReminder(notificationId);
@@ -441,6 +492,8 @@ export class MobileNotificationEffects {
               });
             } catch (error) {
               Log.err(error);
+            } finally {
+              saveArmed(LS.MOBILE_ARMED_DUE_DATE_IDS, this._scheduledDueDateIds);
             }
           }),
         ),
@@ -461,7 +514,7 @@ export class MobileNotificationEffects {
     this._platformService.isNative &&
     createEffect(
       () =>
-        timer(DELAY_SCHEDULE).pipe(
+        this._afterDataLoaded$.pipe(
           switchMap(() =>
             combineLatest([
               this._store.select(selectAllTasksWithDeadlineReminder),
@@ -537,6 +590,8 @@ export class MobileNotificationEffects {
               });
             } catch (error) {
               Log.err(error);
+            } finally {
+              saveArmed(LS.MOBILE_ARMED_DEADLINE_IDS, this._scheduledDeadlineIds);
             }
           }),
         ),
@@ -574,7 +629,10 @@ export class MobileNotificationEffects {
     const baseDay = new Date(now);
     baseDay.setHours(12, 0, 0, 0);
 
-    for (let dayOffset = 0; dayOffset <= REPEAT_LOOKAHEAD_DAYS; dayOffset++) {
+    const isIOS = this._platformService.isIOS();
+    const lookaheadDays = isIOS ? IOS_REPEAT_LOOKAHEAD_DAYS : REPEAT_LOOKAHEAD_DAYS;
+
+    for (let dayOffset = 0; dayOffset <= lookaheadDays; dayOffset++) {
       const day = new Date(baseDay);
       day.setDate(baseDay.getDate() + dayOffset);
       const dayMs = day.getTime();
@@ -613,6 +671,14 @@ export class MobileNotificationEffects {
           rank,
         });
       }
+    }
+
+    if (isIOS) {
+      // Soonest first, as the budget picks them; it cannot arm more than its size.
+      return result
+        .sort((a, b) => a.triggerAtMs - b.triggerAtMs)
+        .slice(0, IOS_REMINDER_BUDGET)
+        .map(({ taskId, triggerAtMs, title }) => ({ taskId, triggerAtMs, title }));
     }
 
     // Over the cap, keep each config's nearer occurrences first, soonest first

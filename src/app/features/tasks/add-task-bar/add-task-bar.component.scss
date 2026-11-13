@@ -31,6 +31,15 @@
   }
 }
 
+// The narrow layout pins the bar near the window top, where macOS draws the
+// `hiddenInset` traffic lights over it (#11118). The wide layout's offset
+// already clears them.
+:host-context(.isMac.isElectron).global {
+  @include mq(xs, max) {
+    top: calc(var(--s) + var(--mac-title-bar-padding));
+  }
+}
+
 // Pin the floating bar to the bottom whenever touch is the primary input.
 // Keys on `.isTouchPrimary`, not `.isTouchOnly`: Android Chrome advertises a
 // fine pointer, so detect-it classifies phones as `hybrid` rather than
@@ -399,6 +408,26 @@
   }
 }
 
+// The view the task is added in won't show it with the chips as they are.
+.view-hidden-note {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  padding: 0 var(--s) 0 var(--s2);
+  font-size: var(--font-size-sm);
+  color: var(--c-warn);
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  button {
+    margin-left: auto;
+  }
+}
+
 .note-input-section {
   border-top: 1px solid var(--divider-color);
   // Padding lives on the wrapper, not the textarea — same cdkTextareaAutosize
@@ -525,10 +554,6 @@
       .option-icon {
         flex-shrink: 0;
         color: var(--text-color-muted);
-
-        &.archived {
-          color: var(--c-accent);
-        }
       }
 
       .option-title {

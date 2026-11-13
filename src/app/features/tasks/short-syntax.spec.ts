@@ -731,6 +731,143 @@ describe('shortSyntax', () => {
       });
     });
 
+    describe('multi word tags (#10735)', () => {
+      const DEEP_TAGS: Tag[] = [
+        ...ALL_TAGS,
+        { ...DEFAULT_TAG, id: 'deep_id', title: 'Deep' },
+        { ...DEFAULT_TAG, id: 'deep_work_id', title: 'Deep Work' },
+      ];
+
+      it('should parse an existing multi word tag as inserted by the autocomplete', async () => {
+        const t = { ...TASK, title: 'Write report #Multi Word Tag ' };
+        const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+
+        expect(r).toEqual({
+          newTagTitles: [],
+          remindAt: null,
+          repeat: null,
+          parsedRanges: expectedRanges(t.title, [['tag', '#Multi Word Tag']]),
+          projectId: undefined,
+          attachments: [],
+          taskChanges: { title: 'Write report', tagIds: ['multi_word_id'] },
+        });
+      });
+
+      it('should prefer the longest matching tag title', async () => {
+        const t = { ...TASK, title: 'Write report #Deep Work' };
+        const r = await shortSyntax(t, CONFIG, DEEP_TAGS);
+
+        expect(r?.newTagTitles).toEqual([]);
+        expect(r?.parsedRanges).toEqual(expectedRanges(t.title, [['tag', '#Deep Work']]));
+        expect(r?.taskChanges).toEqual({
+          title: 'Write report',
+          tagIds: ['deep_work_id'],
+        });
+      });
+
+      it('should still match the shorter tag when followed by other words', async () => {
+        const t = { ...TASK, title: 'Write report #deep Workshop' };
+        const r = await shortSyntax(t, CONFIG, DEEP_TAGS);
+
+        expect(r?.newTagTitles).toEqual([]);
+        expect(r?.taskChanges).toEqual({
+          title: 'Write report  Workshop',
+          tagIds: ['deep_id'],
+        });
+      });
+
+      it('should parse a multi word tag case-insensitively next to other tags', async () => {
+        const t = { ...TASK, title: 'Write report #deep work #blu' };
+        const r = await shortSyntax(t, CONFIG, DEEP_TAGS);
+
+        expect(r?.newTagTitles).toEqual([]);
+        expect(r?.parsedRanges).toEqual(
+          expectedRanges(t.title, [
+            ['tag', '#deep work'],
+            ['tag', '#blu'],
+          ]),
+        );
+        expect(r?.taskChanges).toEqual({
+          title: 'Write report',
+          tagIds: ['deep_work_id', 'blu_id'],
+        });
+      });
+
+      it('should keep words after a single word tag when no multi word tag matches', async () => {
+        const t = { ...TASK, title: '#work meeting notes' };
+        const tags: Tag[] = [{ ...DEFAULT_TAG, id: 'work_id', title: 'work' }];
+        const r = await shortSyntax(t, CONFIG, tags);
+
+        expect(r?.newTagTitles).toEqual([]);
+        expect(r?.taskChanges).toEqual({
+          title: 'meeting notes',
+          tagIds: ['work_id'],
+        });
+      });
+
+      it('should not change behavior for unknown multi word text', async () => {
+        const t = { ...TASK, title: 'Write report #Shallow Work' };
+        const r = await shortSyntax(t, CONFIG, DEEP_TAGS);
+
+        expect(r?.newTagTitles).toEqual(['Shallow']);
+        expect(r?.taskChanges).toEqual({ title: 'Write report  Work' });
+      });
+
+      it('should not parse a multi word tag glued to a preceding word', async () => {
+        const t = { ...TASK, title: 'Write report#Deep Work' };
+        const r = await shortSyntax(t, CONFIG, DEEP_TAGS);
+
+        expect(r).toBeUndefined();
+      });
+
+      it('should leave project syntax alone', async () => {
+        const projects = [
+          { title: 'Deep Work', id: 'deep_work_project_id' },
+          { title: 'Some Project Title', id: 'some_project_id' },
+        ] as Project[];
+
+        const plusOnly = await shortSyntax(
+          { ...TASK, title: 'Write report +Deep Work' },
+          CONFIG,
+          DEEP_TAGS,
+          projects,
+        );
+        expect(plusOnly?.projectId).toBe('deep_work_project_id');
+        expect(plusOnly?.taskChanges).toEqual({ title: 'Write report' });
+
+        const t = { ...TASK, title: 'Write report +Some Project Title #Deep Work' };
+        const both = await shortSyntax(t, CONFIG, DEEP_TAGS, projects);
+        expect(both?.projectId).toBe('some_project_id');
+        expect(both?.parsedRanges).toEqual(
+          expectedRanges(t.title, [
+            ['project', '+Some Project Title'],
+            ['tag', '#Deep Work'],
+          ]),
+        );
+        expect(both?.taskChanges).toEqual({
+          title: 'Write report',
+          tagIds: ['deep_work_id'],
+        });
+      });
+
+      it('should replace tags with a multi word tag in replace mode', async () => {
+        const t = { ...TASK, title: 'Write report #Deep Work', tagIds: ['blu_id'] };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          DEEP_TAGS,
+          undefined,
+          undefined,
+          'replace',
+        );
+
+        expect(r?.taskChanges).toEqual({
+          title: 'Write report',
+          tagIds: ['deep_work_id'],
+        });
+      });
+    });
+
     it('should not overwrite existing tags', async () => {
       const t = {
         ...TASK,
@@ -1157,6 +1294,28 @@ describe('shortSyntax', () => {
           title: 'Fun title',
         },
       });
+    });
+
+    // isHiddenFromMenu only hides from the sidebar; +project must still assign it (#11190)
+    it('should work for a project hidden from the menu but not an archived one', async () => {
+      const ps = [
+        { title: 'HiddenProj', id: 'HiddenID', isHiddenFromMenu: true },
+        { title: 'ArchivedProj', id: 'ArchivedID', isArchived: true },
+      ] as Project[];
+      const hidden = await shortSyntax(
+        { ...TASK, title: 'Fun title +HiddenProj' },
+        CONFIG,
+        [],
+        ps,
+      );
+      const archived = await shortSyntax(
+        { ...TASK, title: 'Fun title +ArchivedProj' },
+        CONFIG,
+        [],
+        ps,
+      );
+      expect(hidden?.projectId).toBe('HiddenID');
+      expect(archived?.projectId).toBeUndefined();
     });
 
     it("shouldn't work when disabled", async () => {
@@ -4039,6 +4198,137 @@ describe('shortSyntax localized dates', () => {
     expect(r?.taskChanges.hasPlannedTime).toBe(false);
   });
 
+  // #11180: chrono read "@09h" as "in 9 hours" (seconds included), so after
+  // 15:00 the task landed on the next day
+  [
+    { language: 'fr', isDayFirst: true },
+    { language: 'en', isDayFirst: false },
+  ].forEach((locale) => {
+    it(`should read "@09h" as 09:00 for ${locale.language}`, async () => {
+      const afternoon = new Date(2026, 9, 20, 16, 0, 0, 0);
+      const r = await shortSyntax(
+        { ...TASK, title: 'Task @09h' },
+        CONFIG,
+        [],
+        [],
+        afternoon,
+        'combine',
+        false,
+        locale,
+      );
+      expect(r?.taskChanges.title).toBe('Task');
+      expect(r?.taskChanges.timeEstimate).toBeUndefined();
+      const due = dueOf(r);
+      // 09:00 has passed at 16:00, so the next 09:00
+      expect(formatDateToISO(due)).toBe('2026-10-21');
+      expect(due.getHours()).toBe(9);
+      expect(due.getMinutes()).toBe(0);
+      expect(due.getSeconds()).toBe(0);
+      expect(r?.parsedRanges).toEqual(expectedRanges('Task @09h', [['due', '@09h']]));
+    });
+
+    it(`should read "@14h30" as 14:30 today for ${locale.language}`, async () => {
+      const r = await parseIn(locale, 'Task @14h30');
+      expect(r?.taskChanges.title).toBe('Task');
+      const due = dueOf(r);
+      expect(formatDateToISO(due)).toBe('2026-10-20');
+      expect(due.getHours()).toBe(14);
+      expect(due.getMinutes()).toBe(30);
+    });
+  });
+
+  it('should read the issue\'s "@09h00" as 09:00', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @09h00');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(9);
+    expect(due.getMinutes()).toBe(0);
+  });
+
+  it('should read "@2h" as 02:00, not in 2 hours', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @2h');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(2);
+    expect(r?.taskChanges.timeEstimate).toBeUndefined();
+  });
+
+  it('should join a day word after "@18h" to the time', async () => {
+    // 18:00 is still ahead at NOW (10:00), so only the day word moves it
+    const r = await parseIn({ language: 'fr', isDayFirst: true }, 'Task @18h demain');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(18);
+    expect(r?.parsedRanges).toEqual(
+      expectedRanges('Task @18h demain', [['due', '@18h demain']]),
+    );
+  });
+
+  it('should join a weekday after "@9h30" to the time', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @9h30 friday');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-23');
+    expect(due.getHours()).toBe(9);
+    expect(due.getMinutes()).toBe(30);
+  });
+
+  it('should keep a non-date word after "@09h" in the title', async () => {
+    const r = await parseIn({ language: 'en', isDayFirst: false }, 'Task @09h call');
+    // removing a token mid-title keeps both neighbouring spaces
+    expect(r?.taskChanges.title).toBe('Task  call');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(9);
+  });
+
+  it('should read "@09h" followed by punctuation as 09:00', async () => {
+    const r = await parseIn(
+      { language: 'en', isDayFirst: false },
+      'Call @09h, then review',
+    );
+    expect(r?.taskChanges.title).not.toContain('@09h');
+    expect(r?.taskChanges.title).toContain('then review');
+    const due = dueOf(r);
+    expect(formatDateToISO(due)).toBe('2026-10-21');
+    expect(due.getHours()).toBe(9);
+    expect(due.getMinutes()).toBe(0);
+  });
+
+  // Documented: "@9h" is the clock time, never "in 9 hours" — also when
+  // punctuation other than a comma follows it.
+  ['Standup @9h: notes', 'Call (@9h) now', 'Call @9h; then review'].forEach((input) => {
+    it(`should read "${input}" as 09:00`, async () => {
+      const r = await parseIn({ language: 'en', isDayFirst: false }, input);
+      const due = dueOf(r);
+      expect(formatDateToISO(due)).toBe('2026-10-21');
+      expect(due.getHours()).toBe(9);
+      expect(due.getMinutes()).toBe(0);
+    });
+  });
+
+  it('should read "!09h" as a 09:00 deadline', async () => {
+    const r = await parseIn(
+      { language: 'fr', isDayFirst: true },
+      'Task !09h',
+      DEADLINE_CONFIG,
+    );
+    expect(r?.taskChanges.title).toBe('Task');
+    const deadline = new Date(r?.taskChanges.deadlineWithTime as number);
+    // 09:00 has passed at NOW (10:00), so the next 09:00
+    expect(formatDateToISO(deadline)).toBe('2026-10-21');
+    expect(deadline.getHours()).toBe(9);
+    expect(r?.taskChanges.hasDeadlineTime).toBe(true);
+  });
+
+  it('should keep an "@<n>h" that is no clock time in the title', async () => {
+    const r = await parseIn({ language: 'fr', isDayFirst: true }, 'Task @25h');
+    // nothing parsed, so the title is left as typed
+    expect(r).toBeUndefined();
+  });
+
   it('should leave a time the locale cannot join to its day word in the title', async () => {
     // chrono's Swedish locale reads only "idag"; the earlier match wins over
     // the English "18:00" further in
@@ -4203,6 +4493,166 @@ describe('shortSyntax localized dates', () => {
   // A UI-language short word is a date only right after the trigger: further in
   // it is ordinary text, and a match there would eat the title up to it
   describe('UI-language words inside a token', () => {
+    it('should parse complete attached day-dot-month dates and consume only their range', async () => {
+      for (const [language, prefix, expression] of [
+        ['de', 'Termin', '@3.okt'],
+        ['de', 'Termin', '@3.okt.'],
+        ['de', 'Termin', '@3.Oktober'],
+        ['fi', 'Task', '@3.lokakuuta'],
+      ]) {
+        for (const isDayFirst of [true, false]) {
+          for (const suffix of [
+            '',
+            ' vorbereiten',
+            ', vorbereiten',
+            '; vorbereiten',
+            ': vorbereiten',
+            '? vorbereiten',
+            ',vorbereiten',
+            ';vorbereiten',
+            ':vorbereiten',
+            '?vorbereiten',
+          ]) {
+            const title = `${prefix}${expression}${suffix}`;
+            const context = `${title}, isDayFirst=${isDayFirst}`;
+            const r = await parseIn({ language, isDayFirst }, title);
+            expect(r?.taskChanges.title).withContext(context).toBe(`${prefix}${suffix}`);
+            expect(formatDateToISO(dueOf(r)))
+              .withContext(context)
+              .toBe('2027-10-03');
+            expect(r?.taskChanges.hasPlannedTime).withContext(context).toBe(false);
+            expect(r?.parsedRanges)
+              .withContext(context)
+              .toEqual([
+                {
+                  type: 'due',
+                  start: prefix.length,
+                  end: prefix.length + expression.length,
+                },
+              ]);
+          }
+        }
+      }
+    });
+
+    it('should keep an email before a full date word without adding dates', async () => {
+      for (const [locale, template] of [
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail max@DOMAIN tomorrow reply'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail max@DOMAIN, tomorrow reply'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail <max@DOMAIN> tomorrow reply'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail max@DOMAIN. tomorrow reply'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an max@DOMAIN morgen beantworten'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an max@DOMAIN, morgen beantworten'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an <max@DOMAIN> morgen beantworten'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an max@DOMAIN. morgen beantworten'],
+      ] as const) {
+        for (const domain of ['example.com', 'firma2.de']) {
+          const title = template.replace('DOMAIN', domain);
+          const r = await parseIn(locale, title, { ...CONFIG, isEnableDeadline: true });
+          expect(r?.taskChanges.title ?? title)
+            .withContext(title)
+            .toBe(title);
+          for (const field of [
+            'dueWithTime',
+            'dueDay',
+            'deadlineWithTime',
+            'deadlineDay',
+          ] as const) {
+            expect(r?.taskChanges[field])
+              .withContext(`${title}: ${field}`)
+              .toBeUndefined();
+          }
+        }
+      }
+    });
+
+    it('should keep an email whose domain looks like a date or an hour', async () => {
+      for (const [locale, title] of [
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail anna@monday.com about it'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Write to bob@tomorrow.io'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail info@1und1.de'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail max@firma2.de'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an max@morgen.de beantworten'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an redaktion@heute.de'],
+        [{ language: 'de', isDayFirst: true }, 'Mail user@3.okt.de morgen'],
+        [{ language: 'de', isDayFirst: false }, 'Mail user@3.okt.de morgen'],
+        [{ language: 'de', isDayFirst: true }, 'Mail user@3.com morgen'],
+        [{ language: 'fi', isDayFirst: true }, 'Mail user@3.lokakuuta.fi'],
+      ] as const) {
+        const r = await parseIn(locale, title, { ...CONFIG, isEnableDeadline: true });
+        expect(r?.taskChanges.title ?? title)
+          .withContext(title)
+          .toBe(title);
+        expect(r?.taskChanges.dueWithTime).withContext(title).toBeUndefined();
+        expect(r?.taskChanges.dueDay).withContext(title).toBeUndefined();
+      }
+    });
+
+    it('should schedule an @date that follows an email address', async () => {
+      for (const [locale, title, expectedTitle, day] of [
+        [
+          DEFAULT_DATE_INPUT_LOCALE,
+          'Mail max@example.com @tomorrow',
+          'Mail max@example.com',
+          '2026-10-21',
+        ],
+        [
+          DEFAULT_DATE_INPUT_LOCALE,
+          'Mail anna@monday.com @friday',
+          'Mail anna@monday.com',
+          '2026-10-23',
+        ],
+        [
+          { language: 'de', isDayFirst: true },
+          'Mail an max@firma2.de @morgen',
+          'Mail an max@firma2.de',
+          '2026-10-21',
+        ],
+      ] as const) {
+        const r = await parseIn(locale, title);
+        expect(r?.taskChanges.title).withContext(title).toBe(expectedTitle);
+        expect(formatDateToISO(dueOf(r)))
+          .withContext(title)
+          .toBe(day);
+      }
+    });
+
+    it('should preserve date matches after prefixes that chrono leaves out', async () => {
+      const cases: [string, string, string, number, boolean][] = [
+        ['fr', '!d’ici vendredi', '2026-10-23', 12, false],
+        ['fr', "!d'ici vendredi", '2026-10-23', 12, false],
+        ['fr', '@l’après-midi', '2026-10-20', 14, false],
+        ['fr', "@l'après-midi", '2026-10-20', 14, false],
+        ['zh', '@在明天下午6点', '2026-10-21', 18, true],
+        ['zh-tw', '@在明天下午6點', '2026-10-21', 18, true],
+        ['it', '@il 1° novembre', '2026-11-01', 12, false],
+        ['en', '@v2 tomorrow', '2026-10-21', 10, false],
+        ['en', '!v2 tomorrow', '2026-10-21', 10, false],
+      ];
+      for (const [language, expression, day, hour, hasTime] of cases) {
+        const r = await parseIn({ language, isDayFirst: true }, `Task ${expression}`, {
+          ...CONFIG,
+          isEnableDeadline: true,
+        });
+        expect(r?.taskChanges.title).withContext(expression).toBe('Task');
+        const isDeadline = expression.startsWith('!');
+        const date = new Date(
+          (isDeadline
+            ? r?.taskChanges.deadlineWithTime
+            : r?.taskChanges.dueWithTime) as number,
+        );
+        expect(formatDateToISO(date)).withContext(expression).toBe(day);
+        expect(date.getHours()).withContext(expression).toBe(hour);
+        if (isDeadline) {
+          expect(r?.taskChanges.hasDeadlineTime).withContext(expression).toBe(hasTime);
+        } else {
+          expect(r?.taskChanges.hasPlannedTime !== false)
+            .withContext(expression)
+            .toBe(hasTime);
+        }
+      }
+    });
+
     it('should not read a German short word after an email address as a date', async () => {
       const title = 'Mail an max@firma.de so bald wie möglich';
       const r = await parseIn({ language: 'de', isDayFirst: true }, title);

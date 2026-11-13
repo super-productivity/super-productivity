@@ -17,6 +17,7 @@ import { first } from 'rxjs/operators';
 import { ProjectService } from '../../../project/project.service';
 import { TagService } from '../../../tag/tag.service';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { AddTaskBarStateService } from '../add-task-bar-state.service';
@@ -90,6 +91,7 @@ export class AddTaskBarActionsComponent {
   // Inputs
   isHideDueBtn = input<boolean>(false);
   isHideTagBtn = input<boolean>(false);
+  isHideDeadlineBtn = input<boolean>(false);
 
   // Outputs
   estimateChanged = output<string>();
@@ -108,7 +110,7 @@ export class AddTaskBarActionsComponent {
   isAutoDetected = computed(() => this.stateService.isAutoDetected());
 
   // Signals for projects and tags
-  allProjects = this._projectService.listInTreeOrderForUI;
+  allProjects = this._projectService.listInTreeOrder;
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   selectedProject = computed(() =>
     this.allProjects().find((p) => p.id === this.state().projectId),

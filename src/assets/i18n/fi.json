@@ -419,52 +419,6 @@
         "WRITE_A_COMMENT": "Kirjoita kommentti"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Esitäytetty kesto sisältää seuraamattomia tietoja aiemmilta päiviltä.",
-        "T_ALREADY_TRACKED": "Jo seurattu",
-        "T_TITLE": "Otsikko",
-        "T_TO_BE_SUBMITTED": "Lähetettävä",
-        "TITLE": "Lähetä ongelmiin käytetty aika GitLabiin",
-        "TOTAL_MSG": "Lähetät yhteensä <em>{{totalTimeToSubmit}}</em> työaikaa tänään <em>{{nrOfTasksToSubmit}}</em> eri ongelmalle."
-      },
-      "FORM": {
-        "FILTER": "Mukautettu suodatin",
-        "FILTER_DESCRIPTION": "Katso https://docs.gitlab.com/ee/api/issues.html#list-issues. Useita voidaan yhdistää &-merkillä",
-        "FILTER_USER": "Suodata käyttäjänimi",
-        "GITLAB_BASE_URL": "Mukautettu GitLab-perus-URL (valinnainen)",
-        "PROJECT": "käyttäjänimi/projekti",
-        "PROJECT_HINT": "esim. super-productivity/super-productivity",
-        "SCOPE": "Laajuus",
-        "SCOPE_ALL": "Kaikki",
-        "SCOPE_ASSIGNED": "Minulle osoitetut",
-        "SCOPE_CREATED": "Minun luomat",
-        "SOURCE": "Lähde",
-        "SOURCE_GLOBAL": "Kaikki",
-        "SOURCE_GROUP": "Ryhmä",
-        "SOURCE_PROJECT": "Projekti",
-        "SUBMIT_TIMELOGS": "Lähetä aikataulut GitLabiin",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Näytä ajanseurantaikkuna päivän tallentamisen jälkeen",
-        "TOKEN": "Käyttöoikeustunnus"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan avoimet GitLab-ongelmat (joko verkkoversio tai itse isännöity instanssi) tietystä projektista tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin ongelmaan sekä lisätietoja siitä.</p> <p>Lisäksi voit automaattisesti tuoda kaikki avoimet ongelmat.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Vastuuhenkilö",
-        "AT": "klo",
-        "DESCRIPTION": "Kuvaus",
-        "LABELS": "Tunnisteet",
-        "MARK_AS_CHECKED": "Merkitse päivitykset tarkastetuiksi",
-        "PROJECT": "Projekti",
-        "STATUS": "Tila",
-        "SUMMARY": "Yhteenveto",
-        "WRITE_A_COMMENT": "Kirjoita kommentti"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Tuntematon virhe {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Tämä integraatio ei todennäköisesti toimi selaimessasi. Lataa Super Productivityn työpöytä- tai Android-versio!",
       "DEFAULT": {
@@ -3122,8 +3076,8 @@
       "PLANNER": "Suunnittele tulevat päivät kohdassa {{plannerIcon}} <b>Suunnittelija</b>",
       "TASK_MENU_TOUCH": "Pyyhkäise tehtävää vasemmalle nähdäksesi sen valikon: {{playIcon}} <b>Aloita ajan seuraaminen</b>, {{subtaskIcon}} <b>Lisää alitehtävä</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Pyyhkäise tehtävää vasemmalle nähdäksesi sen valikon, esim. {{subtaskIcon}} <b>Lisää alitehtävä</b>",
-      "TIMER_RUNNING": "Ajastin käy. Keskeytä painamalla {{playIcon}} uudelleen tai <kbd>{{key}}</kbd>.",
-      "TIMER_RUNNING_TOUCH": "Ajastin käy. Keskeytä napauttamalla ylhäällä {{playIcon}}.",
+      "TIMER_RUNNING": "Ajastin käy. Keskeytä painamalla {{pauseIcon}} uudelleen tai <kbd>{{key}}</kbd>.",
+      "TIMER_RUNNING_TOUCH": "Ajastin käy. Keskeytä napauttamalla ylhäällä {{pauseIcon}}.",
       "TRACK_TIME": "Vie hiiri tehtävän päälle ja seuraa aikaa painamalla {{playIcon}}"
     },
     "WANT_MORE": {

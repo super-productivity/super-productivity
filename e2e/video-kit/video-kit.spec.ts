@@ -21,6 +21,7 @@ import {
   timeLapse,
   typeText,
 } from './index';
+import { hideById } from './dom';
 
 const ORIGIN = 'http://vk.test';
 
@@ -84,6 +85,21 @@ test.describe('layer ownership', () => {
     await b.hide();
     await expect(page.locator('.vk-end-card', { hasText: 'Card B' })).toHaveCount(0);
     await expect(page.locator('.vk-end-card', { hasText: 'Card A' })).toHaveCount(1);
+  });
+
+  test('a layer hidden before its fade-in started is still removed', async ({ page }) => {
+    await page.goto(`${ORIGIN}/`);
+    // A busy renderer can skip the frame that starts the fade-in, so hide()
+    // sees opacity 0 -> 0: no transition runs and no transition event fires.
+    await page.evaluate(() => {
+      const el = document.createElement('div');
+      el.id = 'vk-unstarted';
+      el.style.transition = 'opacity 60ms';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+    });
+    await hideById(page, 'vk-unstarted', 60);
+    await expect(page.locator('#vk-unstarted')).toHaveCount(0);
   });
 
   test('a replaced caption handle cannot touch its replacement', async ({ page }) => {
