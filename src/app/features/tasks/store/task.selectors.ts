@@ -1004,6 +1004,15 @@ export const selectTasksWithDueTimeForDay = createSelector(
     ),
 );
 
+export const selectAllTasksWithDueTime = createSelector(
+  selectAllTasksInActiveProjects,
+  (tasks: Task[]): TaskWithDueTime[] => {
+    return tasks.filter(
+      (task): task is TaskWithDueTime => !!task && typeof task.dueWithTime === 'number',
+    );
+  },
+);
+
 // Decision: ids of tasks with a dueWithTime, sorted ascending, from the snapshot.
 export const selectDueTimeSortedTaskIds = createSelector(
   selectTaskSchedulingSnapshot,
