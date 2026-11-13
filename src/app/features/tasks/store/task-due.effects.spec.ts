@@ -12,7 +12,7 @@ import {
   selectAllTasks,
   selectOverdueTasksOnToday,
   selectTasksDueForDay,
-  selectTasksWithDueTimeForRange,
+  selectTasksWithDueTimeForDay,
 } from './task.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { DEFAULT_TASK, Task, TaskWithDueDay } from '../task.model';
@@ -141,7 +141,7 @@ describe('TaskDueEffects', () => {
             { selector: selectTodayStr, value: todayStr },
             { selector: selectStartOfNextDayDiffMs, value: startOfNextDayDiffMs },
             { selector: selectTasksDueForDay, value: [] },
-            { selector: selectTasksWithDueTimeForRange, value: [] },
+            { selector: selectTasksWithDueTimeForDay, value: [] },
             { selector: selectAllTasks, value: [] },
           ],
         }),

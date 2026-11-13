@@ -4493,6 +4493,166 @@ describe('shortSyntax localized dates', () => {
   // A UI-language short word is a date only right after the trigger: further in
   // it is ordinary text, and a match there would eat the title up to it
   describe('UI-language words inside a token', () => {
+    it('should parse complete attached day-dot-month dates and consume only their range', async () => {
+      for (const [language, prefix, expression] of [
+        ['de', 'Termin', '@3.okt'],
+        ['de', 'Termin', '@3.okt.'],
+        ['de', 'Termin', '@3.Oktober'],
+        ['fi', 'Task', '@3.lokakuuta'],
+      ]) {
+        for (const isDayFirst of [true, false]) {
+          for (const suffix of [
+            '',
+            ' vorbereiten',
+            ', vorbereiten',
+            '; vorbereiten',
+            ': vorbereiten',
+            '? vorbereiten',
+            ',vorbereiten',
+            ';vorbereiten',
+            ':vorbereiten',
+            '?vorbereiten',
+          ]) {
+            const title = `${prefix}${expression}${suffix}`;
+            const context = `${title}, isDayFirst=${isDayFirst}`;
+            const r = await parseIn({ language, isDayFirst }, title);
+            expect(r?.taskChanges.title).withContext(context).toBe(`${prefix}${suffix}`);
+            expect(formatDateToISO(dueOf(r)))
+              .withContext(context)
+              .toBe('2027-10-03');
+            expect(r?.taskChanges.hasPlannedTime).withContext(context).toBe(false);
+            expect(r?.parsedRanges)
+              .withContext(context)
+              .toEqual([
+                {
+                  type: 'due',
+                  start: prefix.length,
+                  end: prefix.length + expression.length,
+                },
+              ]);
+          }
+        }
+      }
+    });
+
+    it('should keep an email before a full date word without adding dates', async () => {
+      for (const [locale, template] of [
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail max@DOMAIN tomorrow reply'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail max@DOMAIN, tomorrow reply'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail <max@DOMAIN> tomorrow reply'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail max@DOMAIN. tomorrow reply'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an max@DOMAIN morgen beantworten'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an max@DOMAIN, morgen beantworten'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an <max@DOMAIN> morgen beantworten'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an max@DOMAIN. morgen beantworten'],
+      ] as const) {
+        for (const domain of ['example.com', 'firma2.de']) {
+          const title = template.replace('DOMAIN', domain);
+          const r = await parseIn(locale, title, { ...CONFIG, isEnableDeadline: true });
+          expect(r?.taskChanges.title ?? title)
+            .withContext(title)
+            .toBe(title);
+          for (const field of [
+            'dueWithTime',
+            'dueDay',
+            'deadlineWithTime',
+            'deadlineDay',
+          ] as const) {
+            expect(r?.taskChanges[field])
+              .withContext(`${title}: ${field}`)
+              .toBeUndefined();
+          }
+        }
+      }
+    });
+
+    it('should keep an email whose domain looks like a date or an hour', async () => {
+      for (const [locale, title] of [
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail anna@monday.com about it'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Write to bob@tomorrow.io'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail info@1und1.de'],
+        [DEFAULT_DATE_INPUT_LOCALE, 'Mail max@firma2.de'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an max@morgen.de beantworten'],
+        [{ language: 'de', isDayFirst: true }, 'Mail an redaktion@heute.de'],
+        [{ language: 'de', isDayFirst: true }, 'Mail user@3.okt.de morgen'],
+        [{ language: 'de', isDayFirst: false }, 'Mail user@3.okt.de morgen'],
+        [{ language: 'de', isDayFirst: true }, 'Mail user@3.com morgen'],
+        [{ language: 'fi', isDayFirst: true }, 'Mail user@3.lokakuuta.fi'],
+      ] as const) {
+        const r = await parseIn(locale, title, { ...CONFIG, isEnableDeadline: true });
+        expect(r?.taskChanges.title ?? title)
+          .withContext(title)
+          .toBe(title);
+        expect(r?.taskChanges.dueWithTime).withContext(title).toBeUndefined();
+        expect(r?.taskChanges.dueDay).withContext(title).toBeUndefined();
+      }
+    });
+
+    it('should schedule an @date that follows an email address', async () => {
+      for (const [locale, title, expectedTitle, day] of [
+        [
+          DEFAULT_DATE_INPUT_LOCALE,
+          'Mail max@example.com @tomorrow',
+          'Mail max@example.com',
+          '2026-10-21',
+        ],
+        [
+          DEFAULT_DATE_INPUT_LOCALE,
+          'Mail anna@monday.com @friday',
+          'Mail anna@monday.com',
+          '2026-10-23',
+        ],
+        [
+          { language: 'de', isDayFirst: true },
+          'Mail an max@firma2.de @morgen',
+          'Mail an max@firma2.de',
+          '2026-10-21',
+        ],
+      ] as const) {
+        const r = await parseIn(locale, title);
+        expect(r?.taskChanges.title).withContext(title).toBe(expectedTitle);
+        expect(formatDateToISO(dueOf(r)))
+          .withContext(title)
+          .toBe(day);
+      }
+    });
+
+    it('should preserve date matches after prefixes that chrono leaves out', async () => {
+      const cases: [string, string, string, number, boolean][] = [
+        ['fr', '!d’ici vendredi', '2026-10-23', 12, false],
+        ['fr', "!d'ici vendredi", '2026-10-23', 12, false],
+        ['fr', '@l’après-midi', '2026-10-20', 14, false],
+        ['fr', "@l'après-midi", '2026-10-20', 14, false],
+        ['zh', '@在明天下午6点', '2026-10-21', 18, true],
+        ['zh-tw', '@在明天下午6點', '2026-10-21', 18, true],
+        ['it', '@il 1° novembre', '2026-11-01', 12, false],
+        ['en', '@v2 tomorrow', '2026-10-21', 10, false],
+        ['en', '!v2 tomorrow', '2026-10-21', 10, false],
+      ];
+      for (const [language, expression, day, hour, hasTime] of cases) {
+        const r = await parseIn({ language, isDayFirst: true }, `Task ${expression}`, {
+          ...CONFIG,
+          isEnableDeadline: true,
+        });
+        expect(r?.taskChanges.title).withContext(expression).toBe('Task');
+        const isDeadline = expression.startsWith('!');
+        const date = new Date(
+          (isDeadline
+            ? r?.taskChanges.deadlineWithTime
+            : r?.taskChanges.dueWithTime) as number,
+        );
+        expect(formatDateToISO(date)).withContext(expression).toBe(day);
+        expect(date.getHours()).withContext(expression).toBe(hour);
+        if (isDeadline) {
+          expect(r?.taskChanges.hasDeadlineTime).withContext(expression).toBe(hasTime);
+        } else {
+          expect(r?.taskChanges.hasPlannedTime !== false)
+            .withContext(expression)
+            .toBe(hasTime);
+        }
+      }
+    });
+
     it('should not read a German short word after an email address as a date', async () => {
       const title = 'Mail an max@firma.de so bald wie möglich';
       const r = await parseIn({ language: 'de', isDayFirst: true }, title);

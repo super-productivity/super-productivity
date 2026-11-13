@@ -33,5 +33,23 @@ describe('schedule-day-page', () => {
       expect(page.events).toEqual([]);
       expect(page.hasNoEvents).toBeTrue();
     });
+
+    it('is not empty while the tray holds a task or a repeat projection', () => {
+      const tray = { tasks: [], repeatCfgs: [], plannedMs: 0 };
+      const withTask = { ...emptyDay, tray: { ...tray, tasks: [{ id: 'A' }] } };
+      const withRepeat = { ...emptyDay, tray: { ...tray, repeatCfgs: [{ id: 'R' }] } };
+
+      expect(
+        toScheduleDayPage('2026-10-12', [withTask as unknown as ScheduleDay]).hasNoEvents,
+      ).toBeFalse();
+      expect(
+        toScheduleDayPage('2026-10-12', [withRepeat as unknown as ScheduleDay])
+          .hasNoEvents,
+      ).toBeFalse();
+      expect(
+        toScheduleDayPage('2026-10-12', [{ ...emptyDay, tray } as ScheduleDay])
+          .hasNoEvents,
+      ).toBeTrue();
+    });
   });
 });

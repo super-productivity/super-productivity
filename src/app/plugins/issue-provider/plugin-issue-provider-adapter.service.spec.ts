@@ -924,6 +924,38 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
       });
 
+      it('keeps local title when the imported display title and fresh raw title map identically', async () => {
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo({
+            id: '42',
+            title: 'Original',
+            lastUpdated: 2000,
+          }),
+          fieldMappings: [
+            {
+              taskField: 'title',
+              issueField: 'title',
+              defaultDirection: 'pullOnly',
+              toIssueValue: (value: unknown) => value,
+              toTaskValue: (value: unknown) =>
+                String(value).startsWith('#42 ') ? value : `#42 ${value}`,
+            },
+          ],
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        const task = {
+          id: 'task-1',
+          issueId: '42',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 0,
+          title: 'Local plan',
+          issueLastSyncedValues: { title: '#42 Original' },
+        } as unknown as Task;
+        const result = await service.getFreshDataForIssueTask(task);
+        expect(result?.taskChanges.title).toBeUndefined();
+        expect(result?.taskChanges.issueLastSyncedValues).toEqual({ title: 'Original' });
+      });
+
       // Regression: github-issue-provider ships notes <- body with
       // defaultDirection 'off'. The refresh path applied every mapping regardless
       // of direction, so the next poll after any remote activity replaced whatever
@@ -1418,7 +1450,15 @@ describe('PluginIssueProviderAdapterService', () => {
         taskServiceSpy.getByIdOnce$.and.returnValue(of(task as Task));
       };
 
-      it('should use current tracked time instead of the stale request snapshot', async () => {
+      const runSnackAction = (): void => {
+        const snackParams = snackSpy.open.calls.mostRecent().args[0];
+        if (typeof snackParams === 'string' || !snackParams.actionFn) {
+          throw new Error('Expected an actionable warning');
+        }
+        snackParams.actionFn();
+      };
+
+      it('should warn with the current task instead of the stale request snapshot', async () => {
         const provider = createMockProvider({
           getById: jasmine
             .createSpy('getById')
@@ -1451,25 +1491,54 @@ describe('PluginIssueProviderAdapterService', () => {
           }),
         );
 
-        const snackParams = snackSpy.open.calls.mostRecent().args[0];
-        if (typeof snackParams === 'string') {
-          fail('Expected an actionable warning');
-          return;
-        }
-        const actionFn = snackParams.actionFn;
-        expect(actionFn).toBeDefined();
-        actionFn?.();
+        runSnackAction();
         expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledOnceWith(['task-1']);
       });
 
-      it('should auto-delete local task when getById returns 410 and no time tracked', async () => {
+      for (const status of [404, 410]) {
+        it(`should only warn, not delete, an untracked task when getById returns ${status}`, async () => {
+          const provider = createMockProvider({
+            getById: jasmine
+              .createSpy('getById')
+              .and.rejectWith(new HttpErrorResponse({ status })),
+          });
+          registrySpy.getProvider.and.returnValue(provider);
+
+          const task = {
+            id: 'task-1',
+            issueId: 'ISS-5',
+            issueProviderId: PROVIDER_ID,
+            timeSpent: 0,
+            title: 'Untracked task',
+          } as unknown as Task;
+          mockCurrentTask(task);
+
+          const result = await service.getFreshDataForIssueTask(task);
+
+          expect(result).toBeNull();
+          expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
+          expect(snackSpy.open).toHaveBeenCalledOnceWith(
+            jasmine.objectContaining({
+              type: 'WARNING',
+              msg: T.F.ISSUE.S.ISSUE_NOT_FOUND,
+              translateParams: { taskTitle: 'Untracked task' },
+              actionStr: T.G.DELETE,
+              config: { duration: 0 },
+            }),
+          );
+
+          runSnackAction();
+          expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledOnceWith(['task-1']);
+        });
+      }
+
+      it('should warn only once per task across repeated polls', async () => {
         const provider = createMockProvider({
           getById: jasmine
             .createSpy('getById')
-            .and.rejectWith(new HttpErrorResponse({ status: 410 })),
+            .and.rejectWith(new HttpErrorResponse({ status: 404 })),
         });
         registrySpy.getProvider.and.returnValue(provider);
-        spyOn(console, 'log');
 
         const task = {
           id: 'task-1',
@@ -1479,19 +1548,71 @@ describe('PluginIssueProviderAdapterService', () => {
         } as unknown as Task;
         mockCurrentTask(task);
 
-        const result = await service.getFreshDataForIssueTask(task);
+        await service.getFreshDataForIssueTasks([task]);
+        await service.getFreshDataForIssueTasks([task]);
+        await service.getFreshDataForIssueTask(task);
 
-        expect(result).toBeNull();
-        expect(taskServiceSpy.removeMultipleTasks).toHaveBeenCalledWith(['task-1']);
-        expect(snackSpy.open).toHaveBeenCalledWith(
-          jasmine.objectContaining({
-            type: 'CUSTOM',
-            ico: 'delete_forever',
-          }),
-        );
+        expect(snackSpy.open).toHaveBeenCalledTimes(1);
+        expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
       });
 
-      it('should not auto-delete an untracked task after it was relinked', async () => {
+      it('should warn again once the task links another issue', async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.rejectWith(new HttpErrorResponse({ status: 404 })),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+        } as unknown as Task;
+        const relinkedTask = { ...task, issueId: 'ISS-6' } as Task;
+        mockCurrentTask(task);
+        await service.getFreshDataForIssueTask(task);
+        mockCurrentTask(relinkedTask);
+        await service.getFreshDataForIssueTask(relinkedTask);
+
+        expect(snackSpy.open).toHaveBeenCalledTimes(2);
+      });
+
+      it('should aggregate several missing issues of one poll into one warning without delete', async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.rejectWith(new HttpErrorResponse({ status: 404 })),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+
+        const tasks = ['task-1', 'task-2', 'task-3'].map(
+          (id, i) =>
+            ({
+              id,
+              issueId: `ISS-${i}`,
+              issueProviderId: PROVIDER_ID,
+              timeSpent: 0,
+            }) as unknown as Task,
+        );
+        // task-3 was deleted while the request was in flight
+        taskServiceSpy.getByIdOnce$.and.callFake((id: string) =>
+          of(tasks.find((t) => t.id === id && id !== 'task-3') as Task),
+        );
+
+        const result = await service.getFreshDataForIssueTasks(tasks);
+        await service.getFreshDataForIssueTasks(tasks);
+
+        expect(result).toEqual([]);
+        expect(snackSpy.open).toHaveBeenCalledOnceWith({
+          type: 'WARNING',
+          msg: T.F.ISSUE.S.ISSUES_NOT_FOUND,
+          translateParams: { nr: 2 },
+        });
+        expect(taskServiceSpy.removeMultipleTasks).not.toHaveBeenCalled();
+      });
+
+      it('should not warn about an untracked task after it was relinked', async () => {
         const provider = createMockProvider({
           getById: jasmine
             .createSpy('getById')

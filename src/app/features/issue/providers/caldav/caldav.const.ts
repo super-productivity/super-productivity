@@ -9,6 +9,10 @@ export const DEFAULT_CALDAV_CFG: CaldavCfg = {
   username: null,
   password: null,
   categoryFilter: null,
+  // A todo list is the user's own: once they pick a default project they expect
+  // its tasks there, not only in the issue panel (#8275). Does nothing until a
+  // default project is set; applies to newly created providers only.
+  isAutoAddToBacklog: true,
   twoWaySync: {
     isDone: 'pullOnly',
     title: 'pullOnly',

@@ -119,6 +119,7 @@ export class ScheduleService {
       plannerDayMap,
       timelineCfg,
       currentTaskId = null,
+      isAutoPlacementOnly = false,
     } = params;
 
     if (!timelineTasks || !taskRepeatCfgs || !plannerDayMap) {
@@ -140,6 +141,10 @@ export class ScheduleService {
       realNow,
       this._startOfNextDayDiffMs() ?? 0,
       this._weekendDays(),
+      // the one place the setting is read: missing or unknown = auto-placement
+      timelineCfg?.untimedTaskPlacement === 'tray' && !isAutoPlacementOnly
+        ? { isCapacityLimited: !!timelineCfg.isWorkStartEndEnabled }
+        : undefined,
     );
   }
 
@@ -160,6 +165,7 @@ export class ScheduleService {
     contextNow: number;
     realNow: number;
     currentTaskId: string | null;
+    isAutoPlacementOnly?: boolean;
   }): ScheduleDay[] {
     this.scheduleRefreshTick();
     const timelineTasks = this._timelineTasks();
@@ -188,6 +194,7 @@ export class ScheduleService {
       plannerDayMap,
       timelineCfg,
       currentTaskId: params.currentTaskId,
+      isAutoPlacementOnly: params.isAutoPlacementOnly,
     });
   }
 
@@ -462,4 +469,6 @@ export interface BuildScheduleDaysParams {
   plannerDayMap: PlannerDayMap | undefined | null;
   timelineCfg?: ScheduleConfig | null;
   currentTaskId?: string | null;
+  // month view has no tray: it keeps auto-placement whatever the setting says
+  isAutoPlacementOnly?: boolean;
 }

@@ -14,7 +14,9 @@ import {
   FuzzStep,
   generateIntent,
   Intent,
+  IntentWeights,
   isUiPossible,
+  MOVE_WEIGHTS,
   REPLACEMENT_INTENTS,
   REPLACEMENT_WEIGHTS,
 } from './sync-fuzz-actions';
@@ -449,6 +451,7 @@ describe('sync fuzz generator', () => {
       { ...EMPTY_SIMPLE_COUNTER, id: 'hOff', isEnabled: false },
     ],
     timeTracking: { project: {}, tag: {} },
+    projectIds: ['INBOX_PROJECT'],
   };
 
   it('emits only steps the UI offers', () => {
@@ -474,6 +477,49 @@ describe('sync fuzz generator', () => {
     ]);
     expect(isUiPossible(['editNote', 'nT', 'isPinnedToToday', false], view)).toBeFalse();
     expect(isUiPossible(['countHabit', 'hOff'], view)).toBeFalse();
+  });
+
+  it('moves tasks only in the move mix, to another project, without shifting other mixes', () => {
+    const task = (id: string, projectId: string): Task => ({
+      ...DEFAULT_TASK,
+      id,
+      title: id,
+      projectId,
+    });
+    const oneProject: DeviceView = {
+      ...view,
+      tasks: [task('t1', 'INBOX_PROJECT'), task('t2', 'INBOX_PROJECT')],
+    };
+    const threeProjects: DeviceView = {
+      ...oneProject,
+      tasks: [task('t1', 'INBOX_PROJECT'), task('t2', 'p1')],
+      projectIds: ['INBOX_PROJECT', 'p1', 'p2'],
+    };
+    const sequence = (v: DeviceView, weights?: IntentWeights): (Intent | undefined)[] => {
+      const random = createRandom(13);
+      let id = 0;
+      return Array.from({ length: 2_000 }, (_, i) =>
+        generateIntent(random, v, [], `L${i}`, (p) => `${p}${++id}`, weights),
+      );
+    };
+    // The default mix draws the same numbers whatever projects exist.
+    const plain = sequence(threeProjects);
+    expect(plain.some((intent) => intent?.[0] === 'moveTask')).toBeFalse();
+    expect(plain.map((intent) => intent?.[0])).toEqual(
+      sequence(oneProject).map((intent) => intent?.[0]),
+    );
+    const moves = sequence(threeProjects, MOVE_WEIGHTS).filter(
+      (intent): intent is ['moveTask', string, string] => intent?.[0] === 'moveTask',
+    );
+    expect(moves.length).toBeGreaterThan(100);
+    for (const [, id, target] of moves) {
+      expect(threeProjects.projectIds).toContain(target);
+      expect(target).not.toBe(threeProjects.tasks.find((t) => t.id === id)!.projectId);
+    }
+    // With a single project there is nowhere to move a task.
+    expect(
+      sequence(oneProject, MOVE_WEIGHTS).some((intent) => intent?.[0] === 'moveTask'),
+    ).toBeFalse();
   });
 
   it('replaces state only in the replacement mix, and imports only exported backups', () => {

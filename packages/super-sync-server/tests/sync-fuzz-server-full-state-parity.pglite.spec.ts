@@ -600,6 +600,13 @@ describe('sync fuzz SuperSync port: full-state parity with the real server', () 
         const portDown = server.getOpsSinceWithSeq(sinceSeq, exclude, limit);
         if (realDown.snapshotVectorClock) reached.add('download snapshot clock');
         if (realDown.gapDetected) reached.add('download gap');
+        if (
+          realDown.latestSnapshotSeq !== undefined &&
+          sinceSeq < realDown.latestSnapshotSeq &&
+          realDown.ops.some((op) => op.serverSeq < realDown.latestSnapshotSeq!)
+        ) {
+          reached.add('download keeps the ops before a REPAIR');
+        }
         const author = server.rows.filter((row) => port.isCausalFullState(row.op)).pop()
           ?.op.clientId;
         const last = server.rows[server.rows.length - 1];
@@ -654,6 +661,7 @@ describe('sync fuzz SuperSync port: full-state parity with the real server', () 
       'SYNC_IMPORT clean-slate rolled back',
       'SYNC_IMPORT fenced',
       'download gap',
+      'download keeps the ops before a REPAIR',
       'download snapshot clock',
       'pruned clock keeps a low full-state author',
       'regular CONFLICT_CONCURRENT',

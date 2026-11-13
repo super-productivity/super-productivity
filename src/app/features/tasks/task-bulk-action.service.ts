@@ -19,6 +19,7 @@ import {
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../planner/store/planner.actions';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from './dialog-deadline/dialog-deadline.component';
 import { T } from '../../t.const';
