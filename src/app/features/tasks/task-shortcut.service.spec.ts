@@ -118,6 +118,7 @@ describe('TaskShortcutService', () => {
       requestMenuOpen: jasmine.createSpy('requestMenuOpen'),
     };
     mockBulkActions = {
+      duplicateSelected: jasmine.createSpy('duplicateSelected'),
       toggleDone: jasmine.createSpy('toggleDone'),
       deleteSelected: jasmine.createSpy('deleteSelected'),
       openScheduleDialog: jasmine.createSpy('openScheduleDialog'),
@@ -1193,6 +1194,14 @@ describe('TaskShortcutService', () => {
       const ev = createKeyboardEvent('Backspace', 'Backspace');
       expect(service.handleTaskShortcuts(ev)).toBeTrue();
       expect(mockBulkActions['deleteSelected']).toHaveBeenCalled();
+    });
+
+    it('duplicates the selection with Ctrl+D instead of only the focused task', () => {
+      mockMultiSelect.isActive.set(true);
+      setFocusedTask('task-1');
+      const ev = createKeyboardEvent('d', 'KeyD', { ctrlKey: true });
+      expect(service.handleTaskShortcuts(ev)).toBeTrue();
+      expect(mockBulkActions['duplicateSelected']).toHaveBeenCalledTimes(1);
     });
 
     it('opens the bulk menu for menu keys', () => {

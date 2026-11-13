@@ -4,6 +4,11 @@ import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { TaskService } from './task.service';
+import { TaskDuplicateService } from './task-duplicate.service';
+import { SectionService } from '../section/section.service';
+import { moveSubTask } from './store/task.actions';
+import { moveTaskInTodayList } from '../work-context/store/work-context-meta.actions';
+import { moveProjectTaskToBacklogList } from '../project/store/project.actions';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { ProjectService } from '../project/project.service';
@@ -18,6 +23,7 @@ import {
 } from './store/task.selectors';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../planner/store/planner.actions';
+import { selectPlannerState } from '../planner/store/planner.selectors';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 // eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../planner/dialog-schedule-task/dialog-schedule-task.component';
@@ -77,6 +83,8 @@ interface DateTimePick {
 export class TaskBulkActionService {
   private readonly _store = inject(Store);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskDuplicateService = inject(TaskDuplicateService);
+  private readonly _sectionService = inject(SectionService);
   private readonly _multiSelect = inject(TaskMultiSelectService);
   private readonly _moveToProjectService = inject(TaskMoveToProjectService);
   private readonly _projectService = inject(ProjectService);
@@ -91,6 +99,7 @@ export class TaskBulkActionService {
   private readonly _datePipe = inject(LocaleDatePipe);
 
   private readonly _taskEntities = this._store.selectSignal(selectTaskEntities);
+  private readonly _plannerState = this._store.selectSignal(selectPlannerState);
 
   /** See TaskMultiSelectService.isBulkFeedbackSuppressed. */
   readonly isFeedbackSuppressed = this._multiSelect.isBulkFeedbackSuppressed;
@@ -120,6 +129,83 @@ export class TaskBulkActionService {
   readonly hasEstimatable = computed(() =>
     this.selectedTasks().some((t) => !t.subTaskIds.length),
   );
+
+  async duplicateSelected(): Promise<void> {
+    const tasks = dedupeSubtasksOfSelectedParents(this._resolveInVisualOrder());
+    if (!tasks.length) {
+      this._snackNothingToDo();
+      return;
+    }
+    const context = await firstValueFrom(this._workContextService.activeWorkContext$);
+    const sections = await firstValueFrom(
+      this._sectionService.getSectionsByContextId$(context.id),
+    );
+    await this._runSuppressed(() => {
+      for (const selectedTask of tasks) {
+        const entities = this._taskEntities();
+        const task = entities[selectedTask.id];
+        if (!task) continue;
+        const copyId = this._taskDuplicateService.duplicate(
+          {
+            ...task,
+            subTasks: task.subTaskIds
+              .map((id) => entities[id])
+              .filter((child): child is Task => !!child),
+          },
+          true,
+        );
+        if (!copyId) continue;
+        if (task.dueDay && task.dueDay > this._dateService.todayStr()) {
+          const ids = this._plannerState().days[task.dueDay] || [];
+          const fromIndex = ids.indexOf(copyId);
+          const originalIndex = ids.indexOf(task.id);
+          if (fromIndex >= 0 && originalIndex >= 0) {
+            this._store.dispatch(
+              PlannerActions.moveInList({
+                targetDay: task.dueDay,
+                fromIndex,
+                toIndex: originalIndex + (fromIndex > originalIndex ? 1 : 0),
+              }),
+            );
+          }
+        }
+        if (task.parentId) {
+          this._store.dispatch(
+            moveSubTask({
+              taskId: copyId,
+              srcTaskId: task.parentId,
+              targetTaskId: task.parentId,
+              afterTaskId: task.id,
+            }),
+          );
+          continue;
+        }
+        const section = sections.find((candidate) => candidate.taskIds.includes(task.id));
+        if (section) {
+          this._sectionService.addTaskToSection(section.id, copyId, task.id, null);
+        } else if (context.backlogTaskIds?.includes(task.id)) {
+          this._store.dispatch(
+            moveProjectTaskToBacklogList({
+              taskId: copyId,
+              afterTaskId: task.id,
+              workContextId: context.id,
+            }),
+          );
+        } else {
+          this._store.dispatch(
+            moveTaskInTodayList({
+              taskId: copyId,
+              afterTaskId: task.id,
+              workContextId: context.id,
+              workContextType: context.type,
+              src: 'UNDONE',
+              target: 'UNDONE',
+            }),
+          );
+        }
+      }
+    });
+  }
 
   // ---- DONE -------------------------------------------------------------
 

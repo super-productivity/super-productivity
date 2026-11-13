@@ -54,6 +54,16 @@
   </div>
 
   <button
+    (click)="bulk.duplicateSelected()"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon>content_copy</mat-icon>
+      {{ T.F.TASK.CMP.DUPLICATE | translate }}
+    </span>
+    <span class="key-i">{{ kb().taskDuplicate }}</span>
+  </button>
+  <button
     (click)="bulk.openScheduleDialog()"
     mat-menu-item
   >

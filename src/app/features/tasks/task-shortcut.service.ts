@@ -469,6 +469,7 @@ export class TaskShortcutService {
     const bulkHandlers: [string | null | undefined, () => unknown][] = [
       [keys.taskToggleDone, () => this._bulkActions.toggleDone()],
       [keys.taskDelete, () => this._bulkActions.deleteSelected()],
+      [keys.taskDuplicate, () => this._bulkActions.duplicateSelected()],
       [keys.taskSchedule, () => this._bulkActions.openScheduleDialog()],
       [keys.taskScheduleDeadline, () => this._bulkActions.openDeadlineDialog()],
       [keys.taskScheduleToday, () => this._bulkActions.addToToday()],
@@ -507,6 +508,7 @@ export class TaskShortcutService {
       [
         keys.taskToggleDone,
         keys.taskDelete,
+        keys.taskDuplicate,
         keys.taskSchedule,
         keys.taskScheduleDeadline,
         keys.taskScheduleToday,

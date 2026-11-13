@@ -47,6 +47,7 @@ describe('TaskDuplicateService', () => {
   beforeEach(() => {
     taskService = jasmine.createSpyObj<TaskService>('TaskService', [
       'add',
+      'addSubTaskTo',
       'createNewTaskWithDefaults',
     ]);
     store = jasmine.createSpyObj<Store>('Store', ['dispatch']);
@@ -60,6 +61,50 @@ describe('TaskDuplicateService', () => {
     });
 
     service = TestBed.inject(TaskDuplicateService);
+  });
+
+  it('keeps a bulk copy title and ignores short syntax in its literal title', () => {
+    taskService.add.and.returnValue('new-parent');
+    service.duplicate({ ...parentTask, title: 'Literal @tomorrow', subTasks: [] }, true);
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Literal @tomorrow',
+      false,
+      jasmine.objectContaining({
+        notes: parentTask.notes,
+        attachments: parentTask.attachments,
+      }),
+      false,
+      true,
+    );
+  });
+
+  it('duplicates a selected standalone subtask under its existing parent', () => {
+    const copy = { ...subTask, id: 'new-child', parentId: 'parent', isDone: false };
+    taskService.createNewTaskWithDefaults.and.returnValue(copy);
+    const id = service.duplicate({ ...subTask, parentId: 'parent', subTasks: [] }, true);
+    expect(id).toBe('new-child');
+    expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        title: subTask.title,
+        additional: jasmine.objectContaining({
+          parentId: 'parent',
+          notes: subTask.notes,
+          attachments: subTask.attachments,
+          isDone: false,
+        }),
+      }),
+    );
+    expect(store.dispatch).toHaveBeenCalledWith(
+      addSubTask({ task: copy, parentId: 'parent' }),
+    );
+    expect(store.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        type: '[Planner] Plan Task for Day',
+        task: copy,
+        day: subTask.dueDay,
+      }),
+    );
+    expect(taskService.add).not.toHaveBeenCalled();
   });
 
   it('duplicates a parent task and its subtasks', () => {
