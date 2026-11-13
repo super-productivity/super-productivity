@@ -21,6 +21,7 @@ describe('MagicSideNavComponent', () => {
   let fixture: ComponentFixture<MagicSideNavComponent>;
   let isXs: ReturnType<typeof signal<boolean>>;
   let isMobileSideNavOpen: ReturnType<typeof signal<boolean>>;
+  let focusSideNavProjectsTrigger: ReturnType<typeof signal<number>>;
   let browserMatches: boolean;
   let navConfigServiceMock: {
     navConfig: ReturnType<typeof signal<NavConfig>>;
@@ -45,6 +46,7 @@ describe('MagicSideNavComponent', () => {
   beforeEach(async () => {
     isXs = signal(false);
     isMobileSideNavOpen = signal(false);
+    focusSideNavProjectsTrigger = signal(0);
     browserMatches = false;
     navConfigServiceMock = {
       navConfig: signal(navConfig),
@@ -85,7 +87,7 @@ describe('MagicSideNavComponent', () => {
           useValue: {
             isXs,
             focusSideNavTrigger: signal(0),
-            focusSideNavProjectsTrigger: signal(0),
+            focusSideNavProjectsTrigger,
             toggleSideNavModeTrigger: signal(0),
             isMobileSideNavOpen,
           },
@@ -499,6 +501,30 @@ describe('MagicSideNavComponent', () => {
       expect(document.activeElement).toBe(
         navList.querySelector('[aria-controls="group-projects"]'),
       );
+    });
+
+    const flushFocusTimeout = (): Promise<void> =>
+      new Promise((resolve) => window.setTimeout(resolve));
+
+    it('focuses the first project when the shortcut is pressed', async () => {
+      const navList = renderProjectsGroup(true);
+
+      focusSideNavProjectsTrigger.update((value) => value + 1);
+      fixture.detectChanges();
+      await flushFocusTimeout();
+
+      expect(document.activeElement).toBe(navList.querySelector('#first-project'));
+    });
+
+    // The shell, side nav included, is rebuilt when focus mode closes, while the
+    // root LayoutService keeps the trigger count from earlier presses.
+    it('does not move focus for a press made before it was created', async () => {
+      focusSideNavProjectsTrigger.set(1);
+      const navList = renderProjectsGroup(true);
+
+      await flushFocusTimeout();
+
+      expect(document.activeElement).not.toBe(navList.querySelector('#first-project'));
     });
   });
 

@@ -259,9 +259,12 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       }
     });
 
+    // LayoutService outlives this component (e.g. the shell is rebuilt when focus
+    // mode closes), so only react to presses made after this instance was created.
+    const initialProjectsTrigger = this._layoutService.focusSideNavProjectsTrigger();
     effect(() => {
       const trigger = this._layoutService.focusSideNavProjectsTrigger();
-      if (trigger > 0) {
+      if (trigger > initialProjectsTrigger) {
         window.setTimeout(() => {
           this.focusProjectsSection();
         });
