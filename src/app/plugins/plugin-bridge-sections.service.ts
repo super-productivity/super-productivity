@@ -21,6 +21,7 @@ import { selectTodayTaskIds } from '../features/work-context/store/work-context.
 import { moveTaskInTodayList } from '../features/work-context/store/work-context-meta.actions';
 import { moveItemAfterAnchor } from '../features/work-context/store/work-context-meta.helper';
 import { pluginAssert } from './plugin-bridge-asserts';
+import { MAX_SECTION_TITLE_LENGTH } from '../features/section/section.util';
 
 type State = RootState & { section: SectionState };
 export type PluginSectionBoundMethods = Pick<
@@ -80,8 +81,10 @@ export class PluginBridgeSectionsService {
 
   private _title(title: string): string {
     const value = title.trim();
-    if (!value || value.length > 200)
-      throw new Error('Section title must contain 1–200 characters');
+    if (!value || value.length > MAX_SECTION_TITLE_LENGTH)
+      throw new Error(
+        `Section title must contain 1–${MAX_SECTION_TITLE_LENGTH} characters`,
+      );
     return value;
   }
 

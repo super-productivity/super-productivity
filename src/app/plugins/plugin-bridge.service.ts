@@ -96,10 +96,6 @@ import {
   PluginContextBoundMethods,
 } from './plugin-bridge-context.service';
 import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
-import {
-  PluginBridgeSectionsService,
-  PluginSectionBoundMethods,
-} from './plugin-bridge-sections.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
 
 // Relational fields corrupt parent<->child links when applied as plain values (mirrors
@@ -247,65 +243,64 @@ export class PluginBridgeService implements OnDestroy {
   createBoundMethods(
     pluginId: string,
     manifest?: PluginManifest,
-  ): PluginContextBoundMethods &
-    PluginSectionBoundMethods & {
-      persistDataSynced: (dataStr: string, key?: string) => Promise<void>;
-      loadPersistedData: (key?: string) => Promise<string | null>;
-      listSyncedDataKeys: (prefix?: string) => Promise<string[]>;
-      getConfig: () => Promise<unknown>;
-      downloadFile: (filename: string, data: string) => Promise<void>;
-      registerHeaderButton: (cfg: PluginHeaderBtnCfg) => void;
-      registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) => void;
-      registerTaskContextMenuEntry: (cfg: PluginTaskContextMenuEntryCfg) => void;
-      registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) => void;
-      registerWorkContextHeaderButton: (
-        cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
-      ) => void;
-      registerShortcut: (cfg: PluginShortcutCfg) => void;
-      unregisterShortcut: (shortcutId: string) => void;
-      showIndexHtmlAsView: () => void;
-      showInWorkContext: () => void;
-      closeWorkContextView: () => void;
-      getSelectedTask: () => Promise<TaskCopy | null>;
-      getFocusedTask: () => Promise<TaskCopy | null>;
-      triggerSync: () => Promise<void>;
-      dispatchAction: (action: { type: string; [key: string]: unknown }) => void;
-      executeNodeScript: (
-        request: PluginNodeScriptRequest,
-      ) => Promise<PluginNodeScriptResult>;
-      getAllCounters: () => Promise<{ [key: string]: number }>;
-      getCounter: (id: string) => Promise<number | null>;
-      setCounter: (id: string, value: number) => Promise<void>;
-      incrementCounter: (id: string, incrementBy?: number) => Promise<number>;
-      decrementCounter: (id: string, decrementBy?: number) => Promise<number>;
-      deleteCounter: (id: string) => Promise<void>;
-      getAllSimpleCounters: () => Promise<SimpleCounter[]>;
-      getSimpleCounter: (id: string) => Promise<SimpleCounter | undefined>;
-      updateSimpleCounter: (id: string, updates: Partial<SimpleCounter>) => Promise<void>;
-      toggleSimpleCounter: (id: string) => Promise<void>;
-      setSimpleCounterEnabled: (id: string, isEnabled: boolean) => Promise<void>;
-      deleteSimpleCounter: (id: string) => Promise<void>;
-      setSimpleCounterToday: (id: string, value: number) => Promise<void>;
-      setSimpleCounterDate: (id: string, date: string, value: number) => Promise<void>;
-      registerConfigHandler: (handler: () => void) => void;
-      registerIssueProvider: (definition: IssueProviderPluginDefinition) => void;
-      unregisterIssueProvider: () => void;
-      startOAuthFlow: (
-        config: OAuthFlowConfig,
-        tokenKey?: string,
-      ) => Promise<OAuthTokenResult>;
-      getOAuthToken: (tokenKey?: string) => Promise<string | null>;
-      clearOAuthToken: (tokenKey?: string) => Promise<void>;
-      setSecret: (key: string, value: string) => Promise<void>;
-      getSecret: (key: string) => Promise<string | null>;
-      deleteSecret: (key: string) => Promise<void>;
-      request: <T = unknown>(url: string, options?: PluginRequestOptions) => Promise<T>;
-      deleteProject: (projectId: string) => Promise<void>;
-      translate: (key: string, params?: Record<string, string | number>) => string;
-      formatDate: (date: Date | string | number, format: PluginDateFormat) => string;
-      getCurrentLanguage: () => string;
-      log: ReturnType<typeof Log.withContext>;
-    } {
+  ): PluginContextBoundMethods & {
+    persistDataSynced: (dataStr: string, key?: string) => Promise<void>;
+    loadPersistedData: (key?: string) => Promise<string | null>;
+    listSyncedDataKeys: (prefix?: string) => Promise<string[]>;
+    getConfig: () => Promise<unknown>;
+    downloadFile: (filename: string, data: string) => Promise<void>;
+    registerHeaderButton: (cfg: PluginHeaderBtnCfg) => void;
+    registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) => void;
+    registerTaskContextMenuEntry: (cfg: PluginTaskContextMenuEntryCfg) => void;
+    registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) => void;
+    registerWorkContextHeaderButton: (
+      cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
+    ) => void;
+    registerShortcut: (cfg: PluginShortcutCfg) => void;
+    unregisterShortcut: (shortcutId: string) => void;
+    showIndexHtmlAsView: () => void;
+    showInWorkContext: () => void;
+    closeWorkContextView: () => void;
+    getSelectedTask: () => Promise<TaskCopy | null>;
+    getFocusedTask: () => Promise<TaskCopy | null>;
+    triggerSync: () => Promise<void>;
+    dispatchAction: (action: { type: string; [key: string]: unknown }) => void;
+    executeNodeScript: (
+      request: PluginNodeScriptRequest,
+    ) => Promise<PluginNodeScriptResult>;
+    getAllCounters: () => Promise<{ [key: string]: number }>;
+    getCounter: (id: string) => Promise<number | null>;
+    setCounter: (id: string, value: number) => Promise<void>;
+    incrementCounter: (id: string, incrementBy?: number) => Promise<number>;
+    decrementCounter: (id: string, decrementBy?: number) => Promise<number>;
+    deleteCounter: (id: string) => Promise<void>;
+    getAllSimpleCounters: () => Promise<SimpleCounter[]>;
+    getSimpleCounter: (id: string) => Promise<SimpleCounter | undefined>;
+    updateSimpleCounter: (id: string, updates: Partial<SimpleCounter>) => Promise<void>;
+    toggleSimpleCounter: (id: string) => Promise<void>;
+    setSimpleCounterEnabled: (id: string, isEnabled: boolean) => Promise<void>;
+    deleteSimpleCounter: (id: string) => Promise<void>;
+    setSimpleCounterToday: (id: string, value: number) => Promise<void>;
+    setSimpleCounterDate: (id: string, date: string, value: number) => Promise<void>;
+    registerConfigHandler: (handler: () => void) => void;
+    registerIssueProvider: (definition: IssueProviderPluginDefinition) => void;
+    unregisterIssueProvider: () => void;
+    startOAuthFlow: (
+      config: OAuthFlowConfig,
+      tokenKey?: string,
+    ) => Promise<OAuthTokenResult>;
+    getOAuthToken: (tokenKey?: string) => Promise<string | null>;
+    clearOAuthToken: (tokenKey?: string) => Promise<void>;
+    setSecret: (key: string, value: string) => Promise<void>;
+    getSecret: (key: string) => Promise<string | null>;
+    deleteSecret: (key: string) => Promise<void>;
+    request: <T = unknown>(url: string, options?: PluginRequestOptions) => Promise<T>;
+    deleteProject: (projectId: string) => Promise<void>;
+    translate: (key: string, params?: Record<string, string | number>) => string;
+    formatDate: (date: Date | string | number, format: PluginDateFormat) => string;
+    getCurrentLanguage: () => string;
+    log: ReturnType<typeof Log.withContext>;
+  } {
     return {
       // Data persistence
       persistDataSynced: (dataStr: string, key?: string) =>
@@ -341,7 +336,6 @@ export class PluginBridgeService implements OnDestroy {
       showInWorkContext: () => this._showInWorkContext(pluginId),
       closeWorkContextView: () => this._closeWorkContextView(pluginId),
       ...this._contextBridge.createBoundMethods(),
-      ...PluginBridgeSectionsService.createBoundMethods(this._injector),
       getSelectedTask: () => this.getSelectedTask(),
       getFocusedTask: () => this.getFocusedTask(),
 
