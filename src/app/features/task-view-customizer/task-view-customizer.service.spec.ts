@@ -14,7 +14,6 @@ import {
   selectTodayStr,
 } from '../../root-store/app-state/app-state.selectors';
 import { selectAllProjects } from '../project/store/project.selectors';
-import { getTomorrow } from '../../util/get-tomorrow';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -91,7 +90,10 @@ describe('TaskViewCustomizerService', () => {
   const mockLanguageService = { detect: () => DEFAULT_LOCALE };
 
   const todayStr = getDbDateStr(new Date());
-  const tomorrowStr = getDbDateStr(getTomorrow());
+  const tomorrow = new Date();
+  tomorrow.setHours(9, 0, 0, 0);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = getDbDateStr(tomorrow);
 
   const mockProjects: Project[] = [
     { id: 'Project A', title: 'Project A' } as Project,
@@ -941,7 +943,7 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should group by scheduledDate using dueWithTime when dueDay is not set', () => {
-    const tomorrowTimestamp = getTomorrow().getTime();
+    const tomorrowTimestamp = tomorrow.getTime();
     const taskWithTime: TaskWithSubTasks = {
       id: 'task-with-time',
       title: 'Task with time',
@@ -1525,7 +1527,7 @@ describe('TaskViewCustomizerService', () => {
   });
 
   it('should group by deadline using deadlineWithTime when deadlineDay is not set', () => {
-    const tomorrowTimestamp = getTomorrow().getTime();
+    const tomorrowTimestamp = tomorrow.getTime();
     const deadlineTasks: TaskWithSubTasks[] = [
       {
         id: 'dl-with-time',

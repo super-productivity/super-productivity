@@ -22,7 +22,6 @@ updates:
 
     labels:
       - 'dependencies'
-      - 'npm'
 
     commit-message:
       prefix: 'chore(deps)'

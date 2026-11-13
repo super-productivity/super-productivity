@@ -24,7 +24,7 @@ import {
   DEFAULT_CALENDAR_CFG,
 } from '../issue/providers/calendar/calendar.const';
 import { SnackService } from '../../core/snack/snack.service';
-import { take } from 'rxjs/operators';
+import { skip, take } from 'rxjs/operators';
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
@@ -1117,6 +1117,103 @@ END:VCALENDAR`;
 
       const skipDay = localStorage.getItem('SUP_CALENDER_EVENTS_LAST_SKIP_DAY');
       expect(skipDay).toBe(getDbDateStr());
+    });
+  });
+
+  describe('unskipCalendarEvents', () => {
+    const buildEvent = (id: string, legacyIds?: string[]): CalendarIntegrationEvent => ({
+      id,
+      legacyIds,
+      calProviderId: 'test-provider',
+      issueProviderKey: 'ICAL',
+      title: id,
+      start: Date.now(),
+      duration: 60 * 60 * 1000,
+    });
+
+    it('should remove the event and persist the remaining ids', () => {
+      service.skipCalendarEvent(buildEvent('deleted'));
+      service.skipCalendarEvent(buildEvent('kept'));
+
+      service.unskipCalendarEvents(['deleted']);
+
+      expect(service.skippedEventIds$.getValue()).toEqual(['kept']);
+      expect(localStorage.getItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY')).toBe(
+        JSON.stringify(['kept']),
+      );
+    });
+
+    it('should remove the legacy ids of a modified recurring instance', () => {
+      const instance = buildEvent('series_2026-05-20', ['series']);
+      const sibling = buildEvent('series_2026-05-21', ['series']);
+      localStorage.setItem(
+        'SUP_CAL_EVENTS_CACHE',
+        JSON.stringify([{ items: [instance, sibling] }]),
+      );
+      service.skipCalendarEvent(instance);
+      service.skipCalendarEvent(sibling);
+
+      service.unskipCalendarEvents([instance.id]);
+
+      expect(service.skippedEventIds$.getValue()).toEqual([sibling.id]);
+    });
+
+    it('should neither emit nor write when no id is skipped', () => {
+      service.skipCalendarEvent(buildEvent('kept'));
+      const emissionSpy = jasmine.createSpy('emission');
+      const emissionSub = service.skippedEventIds$.pipe(skip(1)).subscribe(emissionSpy);
+      localStorage.removeItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY');
+
+      service.unskipCalendarEvents(['unknown']);
+
+      expect(emissionSpy).not.toHaveBeenCalled();
+      expect(localStorage.getItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY')).toBeNull();
+      emissionSub.unsubscribe();
+    });
+  });
+
+  describe('skipCalendarEvents', () => {
+    const buildEvent = (id: string, legacyIds?: string[]): CalendarIntegrationEvent => ({
+      id,
+      legacyIds,
+      calProviderId: 'test-provider',
+      issueProviderKey: 'ICAL',
+      title: id,
+      start: Date.now(),
+      duration: 60 * 60 * 1000,
+    });
+
+    it('should add the ids and persist them for today', () => {
+      service.skipCalendarEvents(['restored']);
+
+      expect(service.skippedEventIds$.getValue()).toEqual(['restored']);
+      expect(localStorage.getItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY')).toBe(
+        JSON.stringify(['restored']),
+      );
+      expect(localStorage.getItem('SUP_CALENDER_EVENTS_LAST_SKIP_DAY')).toBe(
+        getDbDateStr(),
+      );
+    });
+
+    it('should also skip the legacy id of a modified recurring instance', () => {
+      const instance = buildEvent('series_2026-05-20', ['series']);
+      const sibling = buildEvent('series_2026-05-21', ['series']);
+      localStorage.setItem(
+        'SUP_CAL_EVENTS_CACHE',
+        JSON.stringify([{ items: [instance, sibling] }]),
+      );
+
+      service.skipCalendarEvents([instance.id]);
+
+      expect(service.skippedEventIds$.getValue()).toEqual([instance.id, 'series']);
+    });
+
+    it('should not add ids that are already skipped', () => {
+      service.skipCalendarEvent(buildEvent('kept'));
+
+      service.skipCalendarEvents(['kept']);
+
+      expect(service.skippedEventIds$.getValue()).toEqual(['kept']);
     });
   });
 
