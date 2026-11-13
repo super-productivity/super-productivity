@@ -199,7 +199,7 @@
   },
   "dependencies": {
     "@capacitor/browser": "^8.0.5",
-    "@capacitor/ios": "^8.5.3",
+    "@capacitor/ios": "^8.6.0",
     "@capacitor/keyboard": "^8.0.6",
     "@capacitor/status-bar": "^8.0.4",
     "@material-symbols/font-400": "^0.45.5",
@@ -236,7 +236,7 @@
     "@angular/platform-server": "^22.2.4",
     "@angular/router": "^22.2.4",
     "@angular/service-worker": "^22.2.4",
-    "@capacitor/android": "^8.5.3",
+    "@capacitor/android": "^8.6.0",
     "@capacitor/app": "^8.1.2",
     "@capacitor/cli": "^8.6.0",
     "@capacitor/core": "^8.5.3",
