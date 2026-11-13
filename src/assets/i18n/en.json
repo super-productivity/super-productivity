@@ -3015,18 +3015,14 @@
       "USE_ALARM_STYLE_REMINDERS": "Use alarm-style reminders",
       "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. On desktop, a bell rings until you act on the reminder (at most 10 minutes) and the window comes to the front. Recommended for critical reminders."
     },
-    "PLANNER": {
-      "HELP": "How the Planner lays out your days. Hiding weekends drops only the weekend columns that have nothing planned; a weekend day with work on it stays visible.",
-      "IS_HIDE_WEEKENDS_DESCRIPTION": "Hide Saturday and Sunday (or your locale's weekend days) when they are empty.",
-      "L_IS_HIDE_WEEKENDS": "Hide weekends",
-      "TITLE": "Planner"
-    },
     "SCHEDULE": {
       "HELP": "The schedule feature provides you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
       "L_IS_LUNCH_BREAK_ENABLED": "Enable lunch break",
       "L_IS_WORK_START_END_ENABLED": "Limit unscheduled task flow to specific work times",
       "L_LUNCH_BREAK_END": "Lunch break end",
       "L_LUNCH_BREAK_START": "Lunch break start",
+      "IS_HIDE_WEEKENDS_DESCRIPTION": "Hide Saturday and Sunday (or your locale's weekend days) in the Planner. A weekend day that has something planned, and today, stay visible.",
+      "L_IS_HIDE_WEEKENDS": "Hide weekends in the Planner",
       "L_UNTIMED_TASK_PLACEMENT": "Tasks without a time",
       "L_WORK_END": "Work Day End",
       "L_WORK_START": "Work Day Start",

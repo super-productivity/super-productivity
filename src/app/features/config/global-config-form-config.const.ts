@@ -11,7 +11,6 @@ import { TIME_TRACKING_FORM_CFG } from './form-cfgs/time-tracking-form.const';
 import { IS_ELECTRON } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { SCHEDULE_FORM_CFG } from './form-cfgs/schedule-form.const';
-import { PLANNER_FORM_CFG } from './form-cfgs/planner-form.const';
 import { FOCUS_MODE_FORM_CFG } from './form-cfgs/focus-mode-form.const';
 import { FOCUS_MODE_LOCAL_FORM_CFG } from './form-cfgs/focus-mode-local-form.const';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
@@ -33,7 +32,6 @@ const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
 // app is the first thing the default tab offers.
 export const GLOBAL_GENERAL_FORM_CONFIG: ConfigFormConfig = [
   APP_FEATURES_FORM_CFG,
-  PLANNER_FORM_CFG,
   LANGUAGE_SELECTION_FORM_FORM,
   MISC_SETTINGS_FORM_CFG,
   TASK_WIDGET_FORM_CFG,

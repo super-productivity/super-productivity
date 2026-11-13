@@ -85,6 +85,17 @@ describe('hideEmptyWeekendDays', () => {
     ]);
   });
 
+  it('should keep today even when it is an empty weekend day', () => {
+    const withToday = week.map((d) =>
+      d.dayDate === '2026-11-14' ? { ...day(d.dayDate), isToday: true } : d,
+    );
+    expect(hideEmptyWeekendDays(withToday, SAT_SUN).map((d) => d.dayDate)).toEqual([
+      '2026-11-13',
+      '2026-11-14',
+      '2026-11-16',
+    ]);
+  });
+
   it('should keep every day when the locale weekend is not among them', () => {
     expect(hideEmptyWeekendDays(week, [3]).length).toBe(4);
   });

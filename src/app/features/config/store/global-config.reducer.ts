@@ -108,7 +108,6 @@ export const selectPomodoroConfig = createConfigSectionSelector('pomodoro');
 export const selectFlowtimeConfig = createConfigSectionSelector('flowtime');
 export const selectReminderConfig = createConfigSectionSelector('reminder');
 export const selectAppFeaturesConfig = createConfigSectionSelector('appFeatures');
-export const selectPlannerConfig = createConfigSectionSelector('planner');
 export const selectNewInstallSections = createSelector(
   selectAppFeaturesConfig,
   selectIdleConfig,

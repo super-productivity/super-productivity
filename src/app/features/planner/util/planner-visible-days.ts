@@ -21,13 +21,20 @@ export const isEmptyPlannerDay = (day: PlannerDay): boolean =>
   day.scheduledIItems.length === 0;
 
 /**
- * Drops empty weekend columns when the user hid weekends (#7240). A weekend day
- * that holds work stays, so nothing planned silently disappears from the view.
+ * Drops empty weekend columns when the user hid weekends (#7240).
+ *
+ * Two days always survive: a weekend day that holds work, so nothing planned
+ * disappears from the view, and today, because the Today list and the overdue
+ * items are only attached to the day whose date is today — dropping that column
+ * would strand them.
  */
 export const hideEmptyWeekendDays = (
   days: readonly PlannerDay[],
   weekendDays: readonly number[],
 ): PlannerDay[] =>
   days.filter(
-    (day) => !isWeekendDayStr(day.dayDate, weekendDays) || !isEmptyPlannerDay(day),
+    (day) =>
+      !isWeekendDayStr(day.dayDate, weekendDays) ||
+      !isEmptyPlannerDay(day) ||
+      day.isToday === true,
   );

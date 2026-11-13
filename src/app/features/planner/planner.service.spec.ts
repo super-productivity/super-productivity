@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { PlannerService } from './planner.service';
 import { DateService } from '../../core/date/date.service';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of, BehaviorSubject, ReplaySubject } from 'rxjs';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
@@ -17,11 +18,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { signal, WritableSignal } from '@angular/core';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { selectPlannerState } from './store/planner.selectors';
-import {
-  selectLocalizationConfig,
-  selectPlannerConfig,
-  selectTimelineConfig,
-} from '../config/store/global-config.reducer';
+import { selectTimelineConfig } from '../config/store/global-config.reducer';
 import { selectStartOfNextDayDiffMs } from '../../root-store/app-state/app-state.selectors';
 import { findSpringForwardSunday } from '../tasks/dst.test-helper';
 
@@ -35,7 +32,15 @@ describe('PlannerService', () => {
     });
 
     it('should drop the locale weekend days when they are hidden', (done) => {
-      mockStore.overrideSelector(selectPlannerConfig, { isHideWeekends: true });
+      mockStore.overrideSelector(selectTimelineConfig, {
+        isHideWeekends: true,
+        isWorkStartEndEnabled: false,
+        workStart: '09:00',
+        workEnd: '17:00',
+        isLunchBreakEnabled: false,
+        lunchBreakStart: '12:00',
+        lunchBreakEnd: '13:00',
+      } as never);
       mockStore.refreshState();
       service.includedWeekDays$
         .pipe(first((days: number[]) => days.length < 7))
@@ -86,6 +91,7 @@ describe('PlannerService', () => {
             {
               selector: selectTimelineConfig,
               value: {
+                isHideWeekends: false,
                 isWorkStartEndEnabled: false,
                 workStart: '09:00',
                 workEnd: '17:00',
@@ -95,8 +101,6 @@ describe('PlannerService', () => {
               },
             },
             { selector: selectStartOfNextDayDiffMs, value: 0 },
-            { selector: selectLocalizationConfig, value: { lng: 'en' } },
-            { selector: selectPlannerConfig, value: { isHideWeekends: false } },
           ],
         }),
         {
@@ -110,6 +114,10 @@ describe('PlannerService', () => {
         {
           provide: LayoutService,
           useValue: { isXs: isXsSignal },
+        },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: () => 'en-us' },
         },
         {
           provide: PlannerService,

@@ -232,16 +232,13 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     dueDateNotificationHour: 9,
   },
   schedule: {
+    isHideWeekends: false,
     isWorkStartEndEnabled: true,
     workStart: DEFAULT_DAY_START,
     workEnd: '17:00',
     isLunchBreakEnabled: false,
     lunchBreakStart: '13:00',
     lunchBreakEnd: '14:00',
-  },
-
-  planner: {
-    isHideWeekends: false,
   },
 
   sync: {
