@@ -174,6 +174,19 @@ describe('validateCreateTaskArgs', () => {
     ).toEqual({ title: 'a', dueDate: '2028-02-29', dueTime: '09:30' });
   });
 
+  it('keeps a trimmed project title and rejects an empty or long one', () => {
+    expect(validateCreateTaskArgs({ title: 'a', project: ' Work ' })).toEqual({
+      title: 'a',
+      project: 'Work',
+    });
+    expect(typeof validateCreateTaskArgs({ title: 'a', project: '😀'.repeat(200) })).toBe(
+      'object',
+    );
+    for (const project of ['', '  ', 'x'.repeat(201), 1, null]) {
+      expect(typeof validateCreateTaskArgs({ title: 'a', project })).toBe('string');
+    }
+  });
+
   it('keeps a repeat in canonical form', () => {
     expect(
       validateCreateTaskArgs({

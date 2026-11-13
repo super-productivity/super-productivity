@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { BehaviorSubject } from 'rxjs';
 import { SyncWrapperService } from '../../../imex/sync/sync-wrapper.service';
 import { SyncEpochChangedError } from '../../../op-log/core/errors/sync-errors';
@@ -24,6 +24,10 @@ import {
 import { Log } from '../../../core/log';
 import { AgentCaptureService } from './agent-capture.service';
 import { AgentCaptureRun, CaptureUnsupportedError } from './super-sync-capture-source';
+import { selectUnarchivedVisibleProjects } from '../../project/store/project.selectors';
+import { Project } from '../../project/project.model';
+import { selectEnabledIssueProviders } from '../../issue/store/issue-provider.selectors';
+import { IssueProvider } from '../../issue/issue.model';
 
 describe('AgentCaptureService', () => {
   const KEY: CaptureKeyConfig = { v: 1, privateKeyPkcs8: 'priv', publicKeySpki: 'pub' };
@@ -295,6 +299,24 @@ describe('AgentCaptureService', () => {
           defaultRemindOption: TaskReminderOptionId.m10,
         }),
       );
+    });
+
+    it('offers visible projects without an issue provider, read when asked', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectUnarchivedVisibleProjects, []);
+      store.overrideSelector(selectEnabledIssueProviders, []);
+      const active = startRun() as AgentCaptureRun;
+      store.overrideSelector(selectUnarchivedVisibleProjects, [
+        { id: 'p-work', title: 'Work' } as Project,
+        { id: 'p-team', title: 'Team' } as Project,
+      ]);
+      store.overrideSelector(selectEnabledIssueProviders, [
+        { id: 'ip-1', defaultProjectId: 'p-team' } as IssueProvider,
+      ]);
+      store.refreshState();
+      expect(active.getTargetProjects()).toEqual([
+        jasmine.objectContaining({ id: 'p-work' }),
+      ]);
     });
 
     it('falls back to the app defaults before the config has loaded', () => {

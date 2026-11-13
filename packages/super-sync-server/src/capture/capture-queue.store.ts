@@ -50,6 +50,11 @@ export interface CapturePayload {
   dueTime?: string;
   /** Optional within v1; apps that predate it add a one-off task. */
   repeat?: CaptureRepeat;
+  /**
+   * Title of an existing project, matched on the importing device; optional
+   * within v1, apps that predate it (or find no single match) use the Inbox.
+   */
+  project?: string;
   createdAt: number;
   client: string;
 }
