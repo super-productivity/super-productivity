@@ -30,6 +30,9 @@ import { selectMenuTreeProjectTree } from '../menu-tree/store/menu-tree.selector
 import { MenuTreeKind } from '../menu-tree/store/menu-tree.model';
 import { menuTreeFeatureKey } from '../menu-tree/store/menu-tree.reducer';
 import { TaskTimeSyncService } from '../tasks/task-time-sync.service';
+import { updateTaskRepeatCfg } from '../task-repeat-cfg/store/task-repeat-cfg.actions';
+import { selectTaskRepeatCfgByIdAllowUndefined } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { DEFAULT_TASK_REPEAT_CFG } from '../task-repeat-cfg/task-repeat-cfg.model';
 
 describe('ProjectService', () => {
   let service: ProjectService;
@@ -766,6 +769,62 @@ describe('ProjectService', () => {
   });
 
   describe('resolve unfinished completion tasks', () => {
+    it('does not touch repeat configs when moving non-recurring tasks', async () => {
+      const task = createTask({ id: 'plain', projectId: 'project-1' });
+      taskService.getByIdWithSubTaskData$.and.returnValue(of({ ...task, subTasks: [] }));
+      const dispatch = spyOn(store, 'dispatch');
+
+      await service.moveTasksToInbox([task]);
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(taskService.moveToProject).toHaveBeenCalledTimes(1);
+    });
+
+    it('moves the repeat config to the Inbox once for several of its instances', async () => {
+      store.overrideSelector(selectTaskRepeatCfgByIdAllowUndefined, {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'repeat-1',
+        projectId: 'project-1',
+      });
+      const tasks = ['instance-1', 'instance-2'].map((id) =>
+        createTask({ id, repeatCfgId: 'repeat-1', projectId: 'project-1' }),
+      );
+      taskService.getByIdWithSubTaskData$.and.callFake((id) =>
+        of({ ...tasks.find((task) => task.id === id)!, subTasks: [] }),
+      );
+      const dispatch = spyOn(store, 'dispatch');
+
+      await service.moveTasksToInbox(tasks);
+
+      expect(dispatch).toHaveBeenCalledOnceWith(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-1', changes: { projectId: 'INBOX_PROJECT' } },
+          isAskToUpdateAllTaskInstances: false,
+        }),
+      );
+      expect(taskService.moveToProject).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps another project's repeat config when moving its instance", async () => {
+      store.overrideSelector(selectTaskRepeatCfgByIdAllowUndefined, {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'repeat-1',
+        projectId: 'project-2',
+      });
+      const task = createTask({
+        id: 'borrowed',
+        repeatCfgId: 'repeat-1',
+        projectId: 'project-1',
+      });
+      taskService.getByIdWithSubTaskData$.and.returnValue(of({ ...task, subTasks: [] }));
+      const dispatch = spyOn(store, 'dispatch');
+
+      await service.moveTasksToInbox([task]);
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(taskService.moveToProject).toHaveBeenCalledTimes(1);
+    });
+
     it('moves top-level task trees with unfinished work to the Inbox', async () => {
       const task = { ...initialTaskState.entities['task-1']!, isDone: true };
       const taskWithSubTasks = {
