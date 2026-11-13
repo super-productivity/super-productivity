@@ -10,8 +10,9 @@ import {
 
 /**
  * #7637: the phone bottom nav's second slot (Planner by default) can be pointed
- * at another destination by long-pressing it. The choice is device-local
- * (localStorage), so it must survive a reload.
+ * at another destination by long-pressing it. Picking also opens the
+ * destination (#11604). The choice is device-local (localStorage), so it must
+ * survive a reload.
  */
 
 // Held past UI_LONG_PRESS_DURATION (600ms) through the real touch pipeline,
@@ -41,7 +42,7 @@ const longPress = async (page: Page, target: Locator): Promise<void> => {
 test.describe('Bottom nav configurable slot #7637', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('long-press picks Inbox, a tap then opens it, and it survives a reload', async ({
+  test('long-press picks and opens Inbox, and it survives a reload', async ({
     page,
     workViewPage,
   }) => {
@@ -59,8 +60,7 @@ test.describe('Bottom nav configurable slot #7637', () => {
     await menu.getByRole('menuitemradio', { name: 'Inbox' }).tap();
     await expect(menu).toBeHidden();
     await expect(slot).toHaveAttribute('aria-label', 'Inbox');
-
-    await slot.tap();
+    // #11604: picking navigates too, without a further tap.
     await expect(page).toHaveURL(/\/project\/INBOX_PROJECT\/tasks/);
     await expect(slot).toHaveClass(/active/);
 
@@ -94,8 +94,6 @@ test.describe('Bottom nav slot with a plugin page #7637', () => {
     await menu.getByRole('menuitemradio', { name: 'API Test Plugin' }).tap();
     await expect(menu).toBeHidden();
     await expect(slot).toHaveAttribute('aria-label', 'API Test Plugin');
-
-    await slot.tap();
     await expect(page).toHaveURL(/\/plugins\/api-test-plugin\/index/);
     await expect(slot).toHaveClass(/active/);
   });
