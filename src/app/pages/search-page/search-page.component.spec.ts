@@ -195,6 +195,75 @@ describe('SearchPageComponent', () => {
     expect(latestResults[0].id).toBe('t1');
   }));
 
+  it('matches accented titles with accented and unaccented queries without changing display text', fakeAsync(() => {
+    allTasks$.next([
+      createTask({ id: 'accented', title: 'Réunion électricité tâche' }),
+      createTask({ id: 'plain', title: 'Reunion electricite tache' }),
+    ]);
+    initAndFlush();
+    for (const term of ['reunion', 'RÉUNION', 'electricite', 'tache']) {
+      typeAndFlush(term);
+      expect(latestResults.map((item) => item.id)).toEqual(['accented', 'plain']);
+    }
+    expect(latestResults[0].title).toBe('Réunion électricité tâche');
+  }));
+
+  it('matches composed and decomposed accents in notes and queries', fakeAsync(() => {
+    allTasks$.next([createTask({ id: 'notes', notes: 'Cafe\u0301 mañana' })]);
+    initAndFlush();
+    for (const term of ['cafe', 'café', 'cafe\u0301', 'manana']) {
+      typeAndFlush(term);
+      expect(latestResults.map((item) => item.id)).toEqual(['notes']);
+    }
+    expect(latestResults[0].taskNotes).toBe('Cafe\u0301 mañana');
+  }));
+
+  it('normalizes notes, projects and tags as well as tasks', fakeAsync(() => {
+    notes$.next([
+      {
+        id: 'note-accent',
+        content: 'Équipe',
+        projectId: 'proj-accent',
+        created: 1000,
+        modified: 1000,
+      } as Note,
+    ]);
+    projectList$.next([createProject({ id: 'proj-accent', title: 'Équipe' })]);
+    tags$.next([createTag({ id: 'tag-accent', title: 'Équipe' })]);
+    initAndFlush();
+    for (const term of ['equipe', 'E\u0301QUIPE']) {
+      typeAndFlush(term);
+      expect(latestResults.map((item) => item.id).sort()).toEqual([
+        'note-accent',
+        'proj-accent',
+        'tag-accent',
+      ]);
+    }
+  }));
+
+  it('finds an archived task by its unaccented title', fakeAsync(() => {
+    taskServiceSpy.getArchivedTasks.and.resolveTo([
+      createTask({ id: 'archive-accent', title: 'Réunion' }),
+    ]);
+    fixture = TestBed.createComponent(SearchPageComponent);
+    component = fixture.componentInstance;
+    initAndFlush();
+    component.includeCompletedForm.setValue(true);
+    tick(150);
+    typeAndFlush('reunion');
+    expect(latestResults.map((item) => item.id)).toEqual(['archive-accent']);
+  }));
+
+  it('preserves distinctions in non-Latin text', fakeAsync(() => {
+    allTasks$.next([
+      createTask({ id: 'voiced', title: 'ガイド' }),
+      createTask({ id: 'unvoiced', title: 'カイト' }),
+    ]);
+    initAndFlush();
+    typeAndFlush('ガイド');
+    expect(latestResults.map((item) => item.id)).toEqual(['voiced']);
+  }));
+
   it('should limit results to 50', fakeAsync(() => {
     const tasks = Array.from({ length: 60 }, (_, i) =>
       createTask({ id: `t${i}`, title: `Match Task ${i}` }),
@@ -396,6 +465,19 @@ describe('SearchPageComponent', () => {
       initAndFlush();
       typeAndFlush('hidden child');
       expect(latestResults.map((r) => r.id)).toEqual(['gone']);
+    }));
+
+    it('are found by unaccented parent and subtask titles', fakeAsync(() => {
+      deletedEntries = [
+        deletedEntry({ id: 'gone', title: 'Équipe' }, [
+          createTask({ id: 'sub', title: 'Réunion', parentId: 'gone' }),
+        ]),
+      ];
+      initAndFlush();
+      for (const term of ['equipe', 'reunion']) {
+        typeAndFlush(term);
+        expect(latestResults.map((item) => item.id)).toEqual(['gone']);
+      }
     }));
 
     it('are not listed once the task is live again', fakeAsync(() => {
