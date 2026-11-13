@@ -200,26 +200,53 @@ const fakeForward = (overrides = {}) => {
 };
 
 const READ = ['tasks:read'];
+const READ_TOOLS = [
+  'get_status',
+  'list_tasks',
+  'get_task',
+  'list_projects',
+  'list_tags',
+  'get_current_task',
+  'get_focus',
+  'list_repeat_configs',
+  'get_repeat_config',
+];
+const ALL_SCOPES = [
+  'tasks:read',
+  'tasks:read_notes',
+  'tasks:capture',
+  'tasks:edit',
+  'notes:read',
+  'counters:read',
+];
 
 test('only granted tools are listed', () => {
   const names = (scopes) => tools.listGrantedTools(scopes).map((t) => t.name);
   assert.deepEqual(names([]), ['get_status']);
   assert.deepEqual(names(['tasks:capture']), ['get_status', 'create_task']);
-  assert.deepEqual(names(READ), [
-    'get_status',
-    'list_tasks',
-    'get_task',
-    'list_projects',
-    'list_tags',
+  assert.deepEqual(names(READ), READ_TOOLS);
+  assert.deepEqual(names([...READ, 'tasks:edit']), [
+    ...READ_TOOLS,
+    'update_task',
+    'start_task',
+    'stop_tracking',
+    'log_time',
   ]);
-  for (const tool of tools.listGrantedTools([...READ, 'tasks:capture'])) {
+  assert.deepEqual(names(['notes:read', 'counters:read']), [
+    'get_status',
+    'list_notes',
+    'get_note',
+    'list_counters',
+    'get_counter',
+  ]);
+  for (const tool of tools.listGrantedTools(ALL_SCOPES)) {
     assert.equal(tool.inputSchema.type, 'object');
     assert.equal(tool.inputSchema.additionalProperties, false);
   }
 });
 
 test('every tool has a title and explicit behaviour hints', () => {
-  const all = tools.listGrantedTools([...READ, 'tasks:read_notes', 'tasks:capture']);
+  const all = tools.listGrantedTools(ALL_SCOPES);
   for (const tool of all) {
     assert.ok(tool.title, `${tool.name} needs a title`);
     assert.equal(tool.annotations.title, tool.title);
@@ -238,15 +265,18 @@ test('every tool has a title and explicit behaviour hints', () => {
   }
   const readOnly = all.filter((t) => t.annotations.readOnlyHint).map((t) => t.name);
   assert.deepEqual(readOnly, [
-    'get_status',
-    'list_tasks',
-    'get_task',
-    'list_projects',
-    'list_tags',
+    ...READ_TOOLS,
+    'list_notes',
+    'get_note',
+    'list_counters',
+    'get_counter',
   ]);
   const capture = all.find((t) => t.name === 'create_task');
   assert.equal(capture.annotations.destructiveHint, false);
   assert.equal(capture.annotations.idempotentHint, false);
+  // Nothing here removes anything.
+  const destructive = all.filter((t) => t.annotations.destructiveHint).map((t) => t.name);
+  assert.deepEqual(destructive, []);
 });
 
 test('list_tasks returns summaries only and forwards filters', async () => {
@@ -533,6 +563,390 @@ test('create_task never claims nothing happened when the outcome is unknown', as
   assert.match(busy.content[0].text, /^APP_BUSY/);
 });
 
+// --- editing, and reading notes, counters and recurring tasks ---------------------
+
+const kit = require('./mcp/mcp-tool-kit.ts');
+
+const EDIT = [...READ, 'tasks:edit'];
+const okReply = (data) => ({ status: 200, body: { ok: true, data } });
+const applied = (extra = {}) => okReply({ status: 'applied', ...extra });
+const refused = (code, status = 409) => ({
+  status,
+  body: { ok: false, error: { code, message: 'echo: ' + code } },
+});
+const freshCap = () => kit.createDailyWriteCap(kit.DAILY_WRITE_LIMIT);
+
+test('update_task sends the checked fields to the internal edit route', async () => {
+  const { forward, calls } = fakeForward({
+    '/assistant/tasks/update': () => applied({ task: TASKS[0] }),
+  });
+  const result = await tools.runTool(
+    'update_task',
+    {
+      id: 't1',
+      isDone: true,
+      dueDate: '2026-11-20',
+      dueTime: '15:30',
+      deadlineDate: null,
+      estimateMinutes: 90,
+      tagIds: ['tg1', 'tg1'],
+    },
+    () => EDIT,
+    forward,
+    freshCap(),
+  );
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(calls, [
+    {
+      method: 'POST',
+      path: '/assistant/tasks/update',
+      body: {
+        id: 't1',
+        isDone: true,
+        dueDate: '2026-11-20',
+        dueTime: '15:30',
+        deadlineDate: null,
+        estimateMinutes: 90,
+        tagIds: ['tg1'],
+      },
+      source: 'mcp',
+      timeoutMs: 45000,
+    },
+  ]);
+  // The answer is a summary, never notes or other fields.
+  assert.equal(result.structuredContent.status, 'applied');
+  assert.equal(result.structuredContent.task.id, 't1');
+  assert.doesNotMatch(result.content[0].text, /SECRET|JIRA|attachments/);
+});
+
+test('update_task cannot write notes and rejects invalid fields before forwarding', async () => {
+  const { forward, calls } = fakeForward();
+  for (const args of [
+    { id: 't1' },
+    { id: 't1', notes: '' },
+    { id: 't1', dueTime: '10:00' },
+    { id: 't1', dueDate: null, dueTime: '10:00' },
+    { id: 't1', deadlineTime: '10:00' },
+    { id: 't1', dueDate: '2026-02-30' },
+    { id: 't1', title: '   ' },
+    { id: 't1', estimateMinutes: -1 },
+    { id: 't1', tagIds: ['../x'] },
+    { id: 't1', projectId: 'p2' },
+    { id: '../status', isDone: true },
+  ]) {
+    const result = await tools.runTool(
+      'update_task',
+      args,
+      () => EDIT,
+      forward,
+      freshCap(),
+    );
+    assert.equal(result.isError, true, JSON.stringify(args));
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('tracking and logging time use the internal edit routes', async () => {
+  const { forward, calls } = fakeForward({
+    '/assistant/tasks/start': () => applied({ currentTaskId: 't2' }),
+    '/assistant/tasks/stop': () => applied({ currentTaskId: null }),
+    '/assistant/tasks/log-time': () => applied({ task: TASKS[1] }),
+  });
+  const cap = freshCap();
+  const started = await tools.runTool(
+    'start_task',
+    { id: 't2' },
+    () => EDIT,
+    forward,
+    cap,
+  );
+  assert.deepEqual(started.structuredContent, { status: 'applied', currentTaskId: 't2' });
+  await tools.runTool('stop_tracking', {}, () => EDIT, forward, cap);
+  const logged = await tools.runTool(
+    'log_time',
+    { id: 't2', minutes: 25, date: '2026-11-12' },
+    () => EDIT,
+    forward,
+    cap,
+  );
+  assert.equal(logged.structuredContent.task.id, 't2');
+  await tools.runTool(
+    'log_time',
+    { id: 't2', minutes: 0, date: '2026-11-12', mode: 'set' },
+    () => EDIT,
+    forward,
+    cap,
+  );
+  assert.deepEqual(
+    calls.map((c) => [c.method, c.path, c.source, c.body]),
+    [
+      ['POST', '/assistant/tasks/start', 'mcp', { id: 't2' }],
+      ['POST', '/assistant/tasks/stop', 'mcp', {}],
+      [
+        'POST',
+        '/assistant/tasks/log-time',
+        'mcp',
+        { id: 't2', date: '2026-11-12', minutes: 25, mode: 'add' },
+      ],
+      [
+        'POST',
+        '/assistant/tasks/log-time',
+        'mcp',
+        { id: 't2', date: '2026-11-12', minutes: 0, mode: 'set' },
+      ],
+    ],
+  );
+  const noMinutes = await tools.runTool(
+    'log_time',
+    { id: 't2', minutes: 0, date: '2026-11-12' },
+    () => EDIT,
+    forward,
+    cap,
+  );
+  assert.equal(noMinutes.isError, true, 'adding needs at least a minute');
+  assert.equal(calls.length, 4);
+});
+
+test('edit tools are only listed with the edit permission, which needs reading', () => {
+  const names = tools.listGrantedTools(['tasks:edit']).map((t) => t.name);
+  // A grant without its read never comes out of normalizeScopes; listing is per scope.
+  assert.deepEqual(names, [
+    'get_status',
+    'update_task',
+    'start_task',
+    'stop_tracking',
+    'log_time',
+  ]);
+  const hints = Object.fromEntries(
+    tools.listGrantedTools(EDIT).map((t) => [t.name, t.annotations]),
+  );
+  assert.equal(hints.update_task.idempotentHint, true);
+  assert.equal(hints.log_time.idempotentHint, false, 'adding time twice counts it twice');
+});
+
+test('a guarded edit is refused with a fixed message and does not count', async () => {
+  const cap = kit.createDailyWriteCap(1);
+  for (const code of [
+    'ISSUE_LINKED_TASK',
+    'CALENDAR_LINKED_TASK',
+    'RECURRING_TASK_SCHEDULE',
+    'PARENT_TASK_ESTIMATE',
+    'TAG_NOT_FOUND',
+    'APP_BUSY',
+  ]) {
+    const { forward } = fakeForward({ '/assistant/tasks/update': () => refused(code) });
+    const result = await tools.runTool(
+      'update_task',
+      { id: 't1', isDone: true },
+      () => EDIT,
+      forward,
+      cap,
+    );
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, new RegExp(`^${code}: `));
+    assert.doesNotMatch(result.content[0].text, /echo/);
+  }
+  for (const [tool, args, code] of [
+    ['start_task', { id: 't1' }, 'CANNOT_TRACK_TASK'],
+    ['start_task', { id: 't1' }, 'TIME_TRACKING_DISABLED'],
+    ['log_time', { id: 't1', minutes: 5, date: '2026-11-12' }, 'PARENT_TASK_TIME'],
+  ]) {
+    const { forward } = fakeForward({
+      '/assistant/tasks/start': () => refused(code),
+      '/assistant/tasks/log-time': () => refused(code),
+    });
+    const result = await tools.runTool(tool, args, () => EDIT, forward, cap);
+    assert.match(result.content[0].text, new RegExp(`^${code}: `));
+  }
+  // None of the refusals used up the single edit the cap allows.
+  const { forward } = fakeForward({ '/assistant/tasks/stop': () => applied() });
+  const stopped = await tools.runTool('stop_tracking', {}, () => EDIT, forward, cap);
+  assert.equal(stopped.isError, undefined);
+});
+
+test('edits stop at the daily limit and start again the next day', async () => {
+  let now = new Date(2026, 10, 20, 23, 59);
+  const cap = kit.createDailyWriteCap(2, () => now);
+  const { forward, calls } = fakeForward({
+    '/assistant/tasks/stop': () => applied(),
+    '/assistant/tasks/start': () => {
+      throw new Error('lost');
+    },
+  });
+  await tools.runTool('stop_tracking', {}, () => EDIT, forward, cap);
+  // An unknown outcome may have changed something, so it counts.
+  const unknown = await tools.runTool(
+    'start_task',
+    { id: 't1' },
+    () => EDIT,
+    forward,
+    cap,
+  );
+  assert.match(unknown.content[0].text, /^OUTCOME_UNKNOWN/);
+  const capped = await tools.runTool('stop_tracking', {}, () => EDIT, forward, cap);
+  assert.match(capped.content[0].text, /^DAILY_LIMIT_REACHED: .*2 changes today/);
+  assert.equal(calls.length, 2, 'a capped edit is not forwarded');
+  // Reads and captures are not edits.
+  const read = await tools.runTool('list_tasks', {}, () => EDIT, forward, cap);
+  assert.equal(read.isError, undefined);
+
+  now = new Date(2026, 10, 21, 0, 1);
+  const nextDay = await tools.runTool('stop_tracking', {}, () => EDIT, forward, cap);
+  assert.equal(nextDay.isError, undefined);
+});
+
+test('an edit whose reply is lost has an unknown outcome, not a failure', async () => {
+  const { forward } = fakeForward({
+    '/assistant/tasks/update': () => {
+      throw new tools.RendererTimeoutError();
+    },
+    '/assistant/tasks/log-time': () => okReply({ status: 'OUTCOME_UNKNOWN' }),
+  });
+  const update = await tools.runTool(
+    'update_task',
+    { id: 't1', isDone: true },
+    () => EDIT,
+    forward,
+    freshCap(),
+  );
+  assert.match(update.content[0].text, /^OUTCOME_UNKNOWN: .*get_task before retrying/);
+  // Not saved for certain: logging again could count the time twice.
+  const logged = await tools.runTool(
+    'log_time',
+    { id: 't2', minutes: 5, date: '2026-11-12' },
+    () => EDIT,
+    forward,
+    freshCap(),
+  );
+  assert.match(logged.content[0].text, /^OUTCOME_UNKNOWN: .*count it twice/);
+});
+
+test('an edit that ran is reported without its task once reading was revoked', async () => {
+  let scopes = EDIT;
+  const { forward } = fakeForward({
+    '/assistant/tasks/update': () => {
+      scopes = [];
+      return applied({ task: TASKS[0] });
+    },
+  });
+  const result = await tools.runTool(
+    'update_task',
+    { id: 't1', isDone: true },
+    () => scopes,
+    forward,
+    freshCap(),
+  );
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(result.structuredContent, { status: 'applied' });
+});
+
+test('archived tasks are not exposed', async () => {
+  const { forward, calls } = fakeForward();
+  const list = await tools.runTool(
+    'list_tasks',
+    { includeArchived: true },
+    () => READ,
+    forward,
+  );
+  assert.match(list.content[0].text, /^INVALID_ARGUMENTS/);
+  const get = await tools.runTool(
+    'get_task',
+    { id: 't1', includeArchived: true },
+    () => READ,
+    forward,
+  );
+  assert.match(get.content[0].text, /^INVALID_ARGUMENTS/);
+  assert.equal(calls.length, 0);
+});
+
+test('get_status reports the logical today and nothing else from the app', async () => {
+  const { forward } = fakeForward({
+    '/status': () =>
+      okReply({ todayStr: '2026-11-20', currentTask: TASKS[0], taskCount: 2 }),
+  });
+  const result = await tools.runTool('get_status', {}, () => READ, forward);
+  assert.deepEqual(result.structuredContent, {
+    isReady: true,
+    apiVersion: '1',
+    grantedScopes: READ,
+    today: '2026-11-20',
+  });
+});
+
+test('recurring tasks are read in repeat terms', async () => {
+  const stored = {
+    id: 'r1',
+    title: 'Practice',
+    projectId: 'p1',
+    tagIds: [],
+    repeatCycle: 'WEEKLY',
+    repeatEvery: 2,
+    monday: true,
+    wednesday: true,
+    isPaused: false,
+    notes: 'SECRET NOTES',
+  };
+  const { forward } = fakeForward({
+    '/task-repeat-cfgs': () => okReply([stored]),
+    '/task-repeat-cfgs/r1': () => okReply(stored),
+  });
+  const got = await tools.runTool('get_repeat_config', { id: 'r1' }, () => READ, forward);
+  assert.deepEqual(got.structuredContent.repeatConfig, {
+    id: 'r1',
+    title: 'Practice',
+    projectId: 'p1',
+    tagIds: [],
+    repeatEvery: 2,
+    isPaused: false,
+    cycle: 'weekly',
+    weekdays: ['mon', 'wed'],
+  });
+  const listed = await tools.runTool('list_repeat_configs', {}, () => READ, forward);
+  assert.equal(listed.structuredContent.repeatConfigs.length, 1);
+  assert.doesNotMatch(listed.content[0].text, /SECRET/);
+});
+
+test('notes and counters need their own permissions and are projected', async () => {
+  const note = {
+    id: 'n1',
+    content: 'x'.repeat(9000),
+    projectId: 'p1',
+    backgroundColor: '#f00',
+  };
+  const counter = {
+    id: 'c1',
+    title: 'Water',
+    type: 'ClickCounter',
+    isEnabled: true,
+    countOnDay: Object.fromEntries(
+      Array.from({ length: 40 }, (_, i) => [
+        `2026-10-${String(i + 1).padStart(2, '0')}`,
+        i,
+      ]),
+    ),
+  };
+  const { forward } = fakeForward({
+    '/notes': () => okReply([note]),
+    '/simple-counters/c1': () => okReply(counter),
+  });
+  const denied = await tools.runTool('list_notes', {}, () => READ, forward);
+  assert.match(denied.content[0].text, /^NOT_PERMITTED/);
+
+  const notes = await tools.runTool('list_notes', {}, () => ['notes:read'], forward);
+  const [listed] = notes.structuredContent.notes;
+  assert.equal(listed.content.length, 8192);
+  assert.equal(listed.contentTruncated, true);
+  assert.equal(listed.backgroundColor, undefined);
+
+  const got = await tools.runTool(
+    'get_counter',
+    { id: 'c1' },
+    () => ['counters:read'],
+    forward,
+  );
+  assert.equal(Object.keys(got.structuredContent.counter.countOnDay).length, 31);
+});
+
 // --- HTTP, through the real listener ---------------------------------------------
 
 const originalModuleLoad = Module._load;
@@ -775,13 +1189,24 @@ test('granted read scope serves projected tasks through the renderer routes', as
   assert.equal(call.source, undefined);
 });
 
-test('scopes are normalized: notes require read, unknown scopes are dropped', async () => {
+test('scopes are normalized: dependent scopes need theirs, unknown ones are dropped', async () => {
   const state = await ipc('ASSISTANT_ACCESS_SET_SCOPES', [
     'tasks:read_notes',
+    'tasks:edit',
+    'tasks:delete',
+    'tasks:read_archive',
     'tasks:capture',
     'admin',
   ]);
   assert.deepEqual(state.scopes, ['tasks:capture']);
+  const granted = await ipc('ASSISTANT_ACCESS_SET_SCOPES', [
+    'counters:read',
+    'tasks:edit',
+    'tasks:read',
+  ]);
+  assert.deepEqual(granted.scopes, ['tasks:read', 'tasks:edit', 'counters:read']);
+  // The next test expects the capture-only grant from above.
+  await ipc('ASSISTANT_ACCESS_SET_SCOPES', ['tasks:capture']);
 });
 
 test('capture-only access cannot read and captures with the mcp source', async () => {
