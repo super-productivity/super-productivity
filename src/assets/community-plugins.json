@@ -293,5 +293,18 @@
       "downloadUrl": "https://github.com/Jontata/deadlines-plugin/releases/download/v0.0.1/deadlines-plugin-0.0.1.zip",
       "sha256": "e7b147b25dbda9b232fff0bdb51b773a11a528d647e93bc34e2bf5e02d2ec6b7"
     }
+  },
+  {
+    "name": "Hours Grid",
+    "shortDescription": "Task × day grid of tracked hours, grouped by project, with 15/30/60-min rounding, tag filter and copy/CSV export for reporting.",
+    "url": "https://github.com/No-No-Space/SP-Hours-Grid",
+    "author": "Aksel Alvarez Jurgueson",
+    "authorUrl": "https://github.com/No-No-Space",
+    "id": "hours-grid",
+    "release": {
+      "version": "0.4.0",
+      "downloadUrl": "https://github.com/No-No-Space/SP-Hours-Grid/releases/download/v0.4.0/hours-grid-0.4.0.zip",
+      "sha256": "25600cade9bb4817b977210094125fea37c70e3389420c2badb606bd3e5b4cef"
+    }
   }
 ]
