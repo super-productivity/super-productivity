@@ -1016,6 +1016,42 @@ describe('PlannerTaskComponent', () => {
       expect(input.value).toBe('2h');
     }));
 
+    it('does not save an inline estimate typed before an external update replaced it', fakeAsync(() => {
+      const hour = 60 * 60 * 1000;
+      const task = makeTask({ timeEstimate: 0, timeSpent: 0 });
+      const { fixture, component } = create(task);
+      tick();
+      const input = fixture.nativeElement.querySelector(
+        'inline-input input',
+      ) as HTMLInputElement;
+      const update = taskServiceMock['update'] as jasmine.Spy;
+
+      input.focus();
+      input.value = '1h';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+
+      // A sync op or another window updates the estimate while the field is focused.
+      fixture.componentRef.setInput('task', { ...task, timeEstimate: 2 * hour });
+      fixture.detectChanges();
+      tick();
+      expect(fixture.nativeElement.querySelector('inline-input input')).toBe(input);
+      expect(input.value).toBe('2h');
+
+      input.value = '2h';
+      input.dispatchEvent(
+        new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertFromPaste',
+          data: '2h',
+        }),
+      );
+      input.blur();
+
+      expect(update.calls.allArgs()).toEqual([]);
+      expect(component.timeEstimate()).toBe(2 * hour);
+      expect(input.value).toBe('2h');
+    }));
+
     it('returns the raw estimate when the task has subTaskIds', () => {
       const { component } = create(
         makeTask({ timeEstimate: 5000, timeSpent: 2000, subTaskIds: ['s1'] }),
