@@ -47,7 +47,7 @@ export const MAX_RESPONSE_BYTES = 256 * 1024;
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
 
 export interface RendererRequest {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: string;
   query?: Record<string, string>;
   body?: unknown;
@@ -204,7 +204,15 @@ export const fitToResponseCap = <T>(items: T[], wrap: (items: T[]) => unknown): 
 
 const RENDERER_ERRORS: Record<string, string> = {
   APP_NOT_READY: 'Super Productivity is still loading. Retry in a few seconds.',
-  TASK_NOT_FOUND: 'No active task has this id.',
+  TASK_NOT_FOUND: 'No task has this id.',
+  PARENT_NOT_FOUND: 'No task has this parent id.',
+  PROJECT_NOT_FOUND: 'No active project has this id.',
+  NOTE_NOT_FOUND: 'No note has this id.',
+  REPEAT_CFG_NOT_FOUND: 'No repeat configuration has this id.',
+  SIMPLE_COUNTER_NOT_FOUND: 'No counter has this id.',
+  INVALID_INPUT:
+    'Super Productivity rejected these values. Check them against the tool description.',
+  UNSUPPORTED_FIELD: 'One of these fields cannot be changed this way.',
 };
 
 /**
@@ -235,3 +243,121 @@ export const forwardSafely = async (
 export const isToolResult = (
   value: RendererReply | McpToolResult,
 ): value is McpToolResult => 'content' in value;
+
+// --- writes ----------------------------------------------------------------------
+
+export const WRITE_HINTS = {
+  readOnly: false,
+  destructive: false,
+  idempotent: true,
+} as const;
+
+export const DESTRUCTIVE_HINTS = {
+  readOnly: false,
+  destructive: true,
+  idempotent: true,
+} as const;
+
+const OUTCOME_UNKNOWN_MESSAGE =
+  'The change may or may not have been saved. Check its current state before retrying.';
+
+/**
+ * Forwards a write. Once it is sent the renderer may already have applied it,
+ * so a timeout or a lost reply is reported as an unknown outcome, never as a
+ * failure, and the answer is the renderer's data (or its error).
+ */
+export const forwardWrite = async (
+  forward: ForwardToRenderer,
+  request: RendererRequest,
+): Promise<unknown | McpToolResult> => {
+  let reply: RendererReply;
+  try {
+    reply = await forward(request);
+  } catch {
+    return fail('OUTCOME_UNKNOWN', OUTCOME_UNKNOWN_MESSAGE);
+  }
+  if (!reply.body.ok) {
+    return failFromRenderer(reply);
+  }
+  return reply.body.data;
+};
+
+/** Reads a GET reply's data, or the tool error to return instead. */
+export const forwardRead = async (
+  forward: ForwardToRenderer,
+  request: RendererRequest,
+): Promise<unknown | McpToolResult> => {
+  const reply = await forwardSafely(forward, request);
+  if (isToolResult(reply)) {
+    return reply;
+  }
+  if (!reply.body.ok) {
+    return failFromRenderer(reply);
+  }
+  return reply.body.data;
+};
+
+export const isToolError = (value: unknown): value is McpToolResult =>
+  isRecord(value) && Array.isArray(value.content) && value.isError === true;
+
+export const requiredId = (
+  args: Record<string, unknown>,
+  key: string,
+): string | Error => {
+  const value = optionalId(args, key);
+  return value === undefined ? new Error(`${key} is required`) : value;
+};
+
+export const optionalInteger = (
+  args: Record<string, unknown>,
+  key: string,
+  min: number,
+  max: number,
+): number | undefined | Error => {
+  const value = args[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= min &&
+    value <= max
+    ? value
+    : new Error(`${key} must be an integer from ${min} to ${max}`);
+};
+
+/** Returns the first Error among already-read arguments. */
+export const firstError = (values: unknown[]): Error | undefined =>
+  values.find((value): value is Error => value instanceof Error);
+
+const ID_LIST_MAX = 50;
+
+export const optionalIdList = (
+  args: Record<string, unknown>,
+  key: string,
+): string[] | undefined | Error => {
+  const value = args[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  return Array.isArray(value) &&
+    value.length <= ID_LIST_MAX &&
+    value.every((id) => typeof id === 'string' && ID_PATTERN.test(id))
+    ? [...new Set(value as string[])]
+    : new Error(`${key} must be a list of at most ${ID_LIST_MAX} ids`);
+};
+
+/** Copies only the allowlisted fields of a record the route returned. */
+export const pick = (
+  source: Record<string, unknown>,
+  fields: readonly string[],
+): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
+  for (const field of fields) {
+    const value = source[field];
+    if (value !== undefined && value !== null) {
+      result[field] = value;
+    }
+  }
+  return result;
+};

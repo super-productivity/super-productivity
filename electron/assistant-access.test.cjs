@@ -200,26 +200,72 @@ const fakeForward = (overrides = {}) => {
 };
 
 const READ = ['tasks:read'];
+const READ_TOOLS = [
+  'get_status',
+  'list_tasks',
+  'get_task',
+  'list_projects',
+  'list_tags',
+  'get_current_task',
+  'get_focus',
+  'list_repeat_configs',
+  'get_repeat_config',
+];
+const ALL_SCOPES = [
+  'tasks:read',
+  'tasks:read_notes',
+  'tasks:read_archive',
+  'tasks:capture',
+  'tasks:edit',
+  'tasks:delete',
+  'notes:read',
+  'notes:edit',
+  'counters:read',
+  'counters:edit',
+];
 
 test('only granted tools are listed', () => {
   const names = (scopes) => tools.listGrantedTools(scopes).map((t) => t.name);
   assert.deepEqual(names([]), ['get_status']);
   assert.deepEqual(names(['tasks:capture']), ['get_status', 'create_task']);
-  assert.deepEqual(names(READ), [
-    'get_status',
-    'list_tasks',
-    'get_task',
-    'list_projects',
-    'list_tags',
+  assert.deepEqual(names(READ), READ_TOOLS);
+  assert.deepEqual(names([...READ, 'tasks:edit']), [
+    ...READ_TOOLS,
+    'update_task',
+    'add_subtask',
+    'start_task',
+    'stop_tracking',
+    'log_time',
+    'archive_task',
+    'restore_task',
+    'create_repeat_config',
+    'update_repeat_config',
   ]);
-  for (const tool of tools.listGrantedTools([...READ, 'tasks:capture'])) {
+  assert.deepEqual(names(['tasks:delete']), [
+    'get_status',
+    'delete_task',
+    'delete_repeat_config',
+  ]);
+  assert.deepEqual(names(['notes:read', 'notes:edit', 'counters:read', 'counters:edit']), [
+    'get_status',
+    'list_notes',
+    'get_note',
+    'create_note',
+    'update_note',
+    'delete_note',
+    'list_counters',
+    'get_counter',
+    'set_counter',
+    'increment_counter',
+  ]);
+  for (const tool of tools.listGrantedTools(ALL_SCOPES)) {
     assert.equal(tool.inputSchema.type, 'object');
     assert.equal(tool.inputSchema.additionalProperties, false);
   }
 });
 
 test('every tool has a title and explicit behaviour hints', () => {
-  const all = tools.listGrantedTools([...READ, 'tasks:read_notes', 'tasks:capture']);
+  const all = tools.listGrantedTools(ALL_SCOPES);
   for (const tool of all) {
     assert.ok(tool.title, `${tool.name} needs a title`);
     assert.equal(tool.annotations.title, tool.title);
@@ -238,15 +284,18 @@ test('every tool has a title and explicit behaviour hints', () => {
   }
   const readOnly = all.filter((t) => t.annotations.readOnlyHint).map((t) => t.name);
   assert.deepEqual(readOnly, [
-    'get_status',
-    'list_tasks',
-    'get_task',
-    'list_projects',
-    'list_tags',
+    ...READ_TOOLS,
+    'list_notes',
+    'get_note',
+    'list_counters',
+    'get_counter',
   ]);
   const capture = all.find((t) => t.name === 'create_task');
   assert.equal(capture.annotations.destructiveHint, false);
   assert.equal(capture.annotations.idempotentHint, false);
+  // Only what removes something is destructive, and every delete is.
+  const destructive = all.filter((t) => t.annotations.destructiveHint).map((t) => t.name);
+  assert.deepEqual(destructive, ['delete_task', 'delete_repeat_config', 'delete_note']);
 });
 
 test('list_tasks returns summaries only and forwards filters', async () => {
@@ -533,6 +582,305 @@ test('create_task never claims nothing happened when the outcome is unknown', as
   assert.match(busy.content[0].text, /^APP_BUSY/);
 });
 
+// --- editing, deleting, notes and counters ---------------------------------------
+
+const EDIT = [...READ, 'tasks:edit'];
+const okReply = (data) => ({ status: 200, body: { ok: true, data } });
+
+test('update_task turns dates, deadlines and estimates into task fields', async () => {
+  const { forward, calls } = fakeForward({ '/tasks/t1': () => okReply(TASKS[0]) });
+  const result = await tools.runTool(
+    'update_task',
+    {
+      id: 't1',
+      isDone: true,
+      dueDate: '2026-11-20',
+      deadlineDate: '2026-11-21',
+      deadlineTime: '08:00',
+      estimateMinutes: 90,
+      tagIds: ['tg1', 'tg1'],
+    },
+    () => EDIT,
+    forward,
+  );
+  assert.equal(result.isError, undefined);
+  assert.equal(calls[0].method, 'PATCH');
+  assert.equal(calls[0].path, '/tasks/t1');
+  assert.deepEqual(calls[0].body, {
+    isDone: true,
+    dueDay: '2026-11-20',
+    dueWithTime: null,
+    deadlineWithTime: new Date(2026, 10, 21, 8, 0).getTime(),
+    timeEstimate: 90 * 60000,
+    tagIds: ['tg1'],
+    isIgnoreShortSyntax: true,
+  });
+  // The answer is a summary, never notes or other fields.
+  assert.equal(result.structuredContent.task.id, 't1');
+  assert.doesNotMatch(result.content[0].text, /SECRET|JIRA|attachments/);
+});
+
+test('update_task plans a start time and clears dates with null', async () => {
+  const { forward, calls } = fakeForward({ '/tasks/t1': () => okReply(TASKS[0]) });
+  await tools.runTool(
+    'update_task',
+    { id: 't1', dueDate: '2026-11-20', dueTime: '15:30', deadlineDate: null },
+    () => EDIT,
+    forward,
+  );
+  assert.deepEqual(calls[0].body, {
+    dueWithTime: new Date(2026, 10, 20, 15, 30).getTime(),
+    deadlineDay: null,
+    deadlineWithTime: null,
+    isIgnoreShortSyntax: true,
+  });
+  await tools.runTool('update_task', { id: 't1', dueDate: null }, () => EDIT, forward);
+  assert.deepEqual(calls[1].body, {
+    dueDay: null,
+    dueWithTime: null,
+    isIgnoreShortSyntax: true,
+  });
+});
+
+test('update_task rejects what the route would, before forwarding', async () => {
+  const { forward, calls } = fakeForward();
+  for (const args of [
+    { id: 't1' },
+    { id: 't1', dueTime: '10:00' },
+    { id: 't1', deadlineTime: '10:00' },
+    { id: 't1', dueDate: '2026-02-30' },
+    { id: 't1', title: '   ' },
+    { id: 't1', estimateMinutes: -1 },
+    { id: 't1', tagIds: ['../x'] },
+    { id: 't1', parentId: 't2' },
+    { id: '../status', isDone: true },
+  ]) {
+    const result = await tools.runTool('update_task', args, () => EDIT, forward);
+    assert.equal(result.isError, true, JSON.stringify(args));
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('task actions use the matching routes', async () => {
+  const { forward, calls } = fakeForward({
+    '/tasks': () => okReply({ ...TASKS[1], id: 't3' }),
+    '/tasks/t1/start': () => okReply(TASKS[0]),
+    '/tasks/t1/archive': () => okReply(TASKS[0]),
+    '/tasks/t1/restore': () => okReply(TASKS[0]),
+    '/tasks/t1/time': () => okReply(TASKS[0]),
+    '/task-control/stop': () => okReply({ currentTaskId: null }),
+    '/tasks/t1': () => okReply({ deleted: true, id: 't1' }),
+  });
+  const all = () => [...EDIT, 'tasks:delete'];
+  await tools.runTool('start_task', { id: 't1' }, all, forward);
+  await tools.runTool('stop_tracking', {}, all, forward);
+  await tools.runTool('archive_task', { id: 't1' }, all, forward);
+  await tools.runTool('restore_task', { id: 't1' }, all, forward);
+  await tools.runTool(
+    'log_time',
+    { id: 't1', minutes: 25, date: '2026-11-12' },
+    all,
+    forward,
+  );
+  await tools.runTool(
+    'log_time',
+    { id: 't1', minutes: 0, date: '2026-11-12', mode: 'set' },
+    all,
+    forward,
+  );
+  await tools.runTool(
+    'add_subtask',
+    { parentId: 't1', title: '#notatag sub', estimateMinutes: 10 },
+    all,
+    forward,
+  );
+  const deleted = await tools.runTool('delete_task', { id: 't1' }, all, forward);
+  assert.deepEqual(
+    calls.map((c) => `${c.method} ${c.path}`),
+    [
+      'POST /tasks/t1/start',
+      'POST /task-control/stop',
+      'POST /tasks/t1/archive',
+      'POST /tasks/t1/restore',
+      'POST /tasks/t1/time',
+      'PUT /tasks/t1/time',
+      'POST /tasks',
+      'DELETE /tasks/t1',
+    ],
+  );
+  assert.deepEqual(calls[4].body, { date: '2026-11-12', duration: 25 * 60000 });
+  assert.deepEqual(calls[5].body, { date: '2026-11-12', duration: 0 });
+  assert.deepEqual(calls[6].body, {
+    title: '#notatag sub',
+    parentId: 't1',
+    isIgnoreShortSyntax: true,
+    timeEstimate: 10 * 60000,
+  });
+  assert.deepEqual(deleted.structuredContent, { id: 't1', deleted: true });
+});
+
+test('deleting needs its own permission', async () => {
+  const { forward, calls } = fakeForward();
+  const result = await tools.runTool('delete_task', { id: 't1' }, () => EDIT, forward);
+  assert.match(result.content[0].text, /^NOT_PERMITTED/);
+  assert.equal(calls.length, 0);
+});
+
+test('a write that ran is reported even if the grant was revoked meanwhile', async () => {
+  let scopes = EDIT;
+  const { forward: inner } = fakeForward({ '/tasks/t1': () => okReply(TASKS[0]) });
+  const revoking = async (request) => {
+    const reply = await inner(request);
+    scopes = [];
+    return reply;
+  };
+  const result = await tools.runTool(
+    'update_task',
+    { id: 't1', isDone: true },
+    () => scopes,
+    revoking,
+  );
+  assert.equal(result.isError, undefined);
+});
+
+test('a write whose reply is lost has an unknown outcome, not a failure', async () => {
+  const timeout = async () => {
+    throw new tools.RendererTimeoutError();
+  };
+  const result = await tools.runTool('archive_task', { id: 't1' }, () => EDIT, timeout);
+  assert.match(result.content[0].text, /^OUTCOME_UNKNOWN/);
+});
+
+test('archived tasks need the archive permission', async () => {
+  const { forward, calls } = fakeForward();
+  const denied = await tools.runTool(
+    'list_tasks',
+    { includeArchived: true },
+    () => READ,
+    forward,
+  );
+  assert.match(denied.content[0].text, /^ARCHIVE_NOT_PERMITTED/);
+  assert.equal(calls.length, 0);
+  await tools.runTool(
+    'list_tasks',
+    { includeArchived: true },
+    () => [...READ, 'tasks:read_archive'],
+    forward,
+  );
+  assert.equal(calls[0].query.source, 'all');
+  await tools.runTool(
+    'get_task',
+    { id: 't1', includeArchived: true },
+    () => [...READ, 'tasks:read_archive'],
+    forward,
+  );
+  assert.equal(calls[1].query, undefined, 'tasks of archived projects are not hidden');
+});
+
+test('repeat configs use the custom schedule and come back in repeat terms', async () => {
+  const stored = {
+    id: 'r1',
+    title: 'Practice',
+    projectId: 'p1',
+    tagIds: [],
+    repeatCycle: 'WEEKLY',
+    repeatEvery: 2,
+    monday: true,
+    wednesday: true,
+    isPaused: false,
+    notes: 'SECRET NOTES',
+  };
+  const { forward, calls } = fakeForward({
+    '/task-repeat-cfgs': () => okReply(stored),
+    '/task-repeat-cfgs/r1': () => okReply(stored),
+  });
+  const created = await tools.runTool(
+    'create_repeat_config',
+    { taskId: 't1', cycle: 'weekly', every: 2, weekdays: ['mon', 'wed'] },
+    () => EDIT,
+    forward,
+  );
+  assert.deepEqual(calls[0].body, {
+    taskId: 't1',
+    repeatCycle: 'WEEKLY',
+    monday: true,
+    tuesday: false,
+    wednesday: true,
+    thursday: false,
+    friday: false,
+    saturday: false,
+    sunday: false,
+    repeatEvery: 2,
+    quickSetting: 'CUSTOM',
+  });
+  assert.deepEqual(created.structuredContent.repeatConfig, {
+    id: 'r1',
+    title: 'Practice',
+    projectId: 'p1',
+    tagIds: [],
+    repeatEvery: 2,
+    isPaused: false,
+    cycle: 'weekly',
+    weekdays: ['mon', 'wed'],
+  });
+  await tools.runTool('update_repeat_config', { id: 'r1', isPaused: true }, () => EDIT, forward);
+  assert.deepEqual(calls[1].body, { isPaused: true }, 'pausing is not a schedule change');
+  await tools.runTool(
+    'create_repeat_config',
+    { taskId: 't1', startDate: '2026-12-01' },
+    () => EDIT,
+    forward,
+  );
+  assert.deepEqual(calls[2].body, {
+    taskId: 't1',
+    startDate: '2026-12-01',
+    quickSetting: 'CUSTOM',
+    repeatCycle: 'DAILY',
+  });
+});
+
+test('notes and counters need their own permissions and are projected', async () => {
+  const note = { id: 'n1', content: 'x'.repeat(9000), projectId: 'p1', backgroundColor: '#f00' };
+  const counter = {
+    id: 'c1',
+    title: 'Water',
+    type: 'ClickCounter',
+    isEnabled: true,
+    countOnDay: Object.fromEntries(
+      Array.from({ length: 40 }, (_, i) => [`2026-10-${String(i + 1).padStart(2, '0')}`, i]),
+    ),
+  };
+  const { forward, calls } = fakeForward({
+    '/notes': () => okReply([note]),
+    '/simple-counters/c1/increment': () => okReply(counter),
+  });
+  const denied = await tools.runTool('list_notes', {}, () => READ, forward);
+  assert.match(denied.content[0].text, /^NOT_PERMITTED/);
+
+  const notes = await tools.runTool('list_notes', {}, () => ['notes:read'], forward);
+  const [listed] = notes.structuredContent.notes;
+  assert.equal(listed.content.length, 8192);
+  assert.equal(listed.contentTruncated, true);
+  assert.equal(listed.backgroundColor, undefined);
+
+  const noTarget = await tools.runTool(
+    'create_note',
+    { content: 'Hi' },
+    () => ['notes:read', 'notes:edit'],
+    forward,
+  );
+  assert.equal(noTarget.isError, true);
+
+  const counted = await tools.runTool(
+    'increment_counter',
+    { id: 'c1', by: 2 },
+    () => ['counters:read', 'counters:edit'],
+    forward,
+  );
+  assert.deepEqual(calls.at(-1).body, { by: 2 });
+  assert.equal(Object.keys(counted.structuredContent.counter.countOnDay).length, 31);
+});
+
 // --- HTTP, through the real listener ---------------------------------------------
 
 const originalModuleLoad = Module._load;
@@ -775,13 +1123,31 @@ test('granted read scope serves projected tasks through the renderer routes', as
   assert.equal(call.source, undefined);
 });
 
-test('scopes are normalized: notes require read, unknown scopes are dropped', async () => {
+test('scopes are normalized: dependent scopes need theirs, unknown ones are dropped', async () => {
   const state = await ipc('ASSISTANT_ACCESS_SET_SCOPES', [
     'tasks:read_notes',
+    'tasks:read_archive',
+    'tasks:edit',
+    'tasks:delete',
+    'notes:edit',
+    'counters:edit',
     'tasks:capture',
     'admin',
   ]);
   assert.deepEqual(state.scopes, ['tasks:capture']);
+  const granted = await ipc('ASSISTANT_ACCESS_SET_SCOPES', [
+    'counters:edit',
+    'counters:read',
+    'tasks:edit',
+    'tasks:read',
+  ]);
+  assert.deepEqual(granted.scopes, [
+    'tasks:read',
+    'tasks:edit',
+    'counters:read',
+    'counters:edit',
+  ]);  // The next test expects the capture-only grant from above.
+  await ipc('ASSISTANT_ACCESS_SET_SCOPES', ['tasks:capture']);
 });
 
 test('capture-only access cannot read and captures with the mcp source', async () => {

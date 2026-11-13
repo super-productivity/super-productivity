@@ -44,6 +44,36 @@ import {
   forwardSafely,
   isToolResult,
 } from './mcp-tool-kit';
+import {
+  addSubtask,
+  archiveTask,
+  deleteTask,
+  getCurrentTask,
+  getFocus,
+  logTime,
+  restoreTask,
+  startTask,
+  stopTracking,
+  updateTask,
+} from './mcp-task-tools';
+import {
+  createRepeatConfig,
+  deleteRepeatConfig,
+  getRepeatConfig,
+  listRepeatConfigs,
+  updateRepeatConfig,
+} from './mcp-repeat-tools';
+import {
+  createNote,
+  deleteNote,
+  getCounter,
+  getNote,
+  incrementCounter,
+  listCounters,
+  listNotes,
+  setCounter,
+  updateNote,
+} from './mcp-note-counter-tools';
 
 /**
  * The assistant tools, mapped onto the renderer routes the local REST API
@@ -59,6 +89,12 @@ export type { ForwardToRenderer } from './mcp-tool-kit';
 export const MCP_API_VERSION = '1';
 
 // --- tools -----------------------------------------------------------------------
+
+const ARCHIVE_NOT_PERMITTED = (): McpToolResult =>
+  fail(
+    'ARCHIVE_NOT_PERMITTED',
+    'This connection may not read archived tasks. The user can allow it in Super Productivity settings.',
+  );
 
 const getStatus: ToolSpec = {
   definition: {
@@ -86,7 +122,8 @@ const listTasks: ToolSpec = {
     name: 'list_tasks',
     ...describeTool('List tasks', READ_ONLY_HINTS),
     description:
-      'Lists active (not archived) tasks as summaries, open tasks only unless includeDone is set. ' +
+      'Lists active tasks as summaries, open tasks only unless includeDone is set; includeArchived ' +
+      'also lists archived ones, if this connection may read them. ' +
       'Filter by a title search, a project id or a tag id (use tagId "TODAY" for today\'s tasks). ' +
       `Returns at most ${MAX_LIST_LIMIT} tasks; "truncated" means there are more, so narrow the filter. ` +
       UNTRUSTED_NOTE,
@@ -101,6 +138,10 @@ const listTasks: ToolSpec = {
         projectId: { type: 'string', description: 'Only tasks of this project.' },
         tagId: { type: 'string', description: 'Only tasks with this tag, or "TODAY".' },
         includeDone: { type: 'boolean', description: 'Also include completed tasks.' },
+        includeArchived: {
+          type: 'boolean',
+          description: 'Also include archived tasks (needs the archive permission).',
+        },
         limit: {
           type: 'integer',
           minimum: 1,
@@ -111,12 +152,13 @@ const listTasks: ToolSpec = {
       additionalProperties: false,
     },
   },
-  run: async (args, _scopes, forward) => {
+  run: async (args, scopes, forward, getScopes) => {
     const unknownArg = findUnknownArg(args, [
       'query',
       'projectId',
       'tagId',
       'includeDone',
+      'includeArchived',
       'limit',
     ]);
     if (unknownArg) {
@@ -126,10 +168,14 @@ const listTasks: ToolSpec = {
     const projectId = optionalId(args, 'projectId');
     const tagId = optionalId(args, 'tagId');
     const includeDone = optionalBoolean(args, 'includeDone');
-    for (const value of [query, projectId, tagId, includeDone]) {
+    const includeArchived = optionalBoolean(args, 'includeArchived');
+    for (const value of [query, projectId, tagId, includeDone, includeArchived]) {
       if (value instanceof Error) {
         return invalid(value.message);
       }
+    }
+    if (includeArchived === true && !scopes.includes('tasks:read_archive')) {
+      return ARCHIVE_NOT_PERMITTED();
     }
     const rawLimit = args.limit;
     if (
@@ -144,7 +190,7 @@ const listTasks: ToolSpec = {
     const limit = typeof rawLimit === 'number' ? rawLimit : DEFAULT_LIST_LIMIT;
 
     const routeQuery: Record<string, string> = {
-      source: 'active',
+      source: includeArchived === true ? 'all' : 'active',
       includeDone: includeDone === true ? 'true' : 'false',
     };
     if (typeof query === 'string' && query) routeQuery.query = query;
@@ -161,6 +207,10 @@ const listTasks: ToolSpec = {
     }
     if (!reply.body.ok || !Array.isArray(reply.body.data)) {
       return failFromRenderer(reply);
+    }
+    if (includeArchived === true && !getScopes().includes('tasks:read_archive')) {
+      // Revoked while the list was being fetched.
+      return ARCHIVE_NOT_PERMITTED();
     }
     const all = reply.body.data.filter(isRecord);
     const page = all.slice(0, limit).map(toTaskSummary);
@@ -183,23 +233,35 @@ const getTask: ToolSpec = {
       properties: {
         id: { type: 'string', description: 'The task id.' },
         includeNotes: { type: 'boolean', description: 'Also return the task notes.' },
+        includeArchived: {
+          type: 'boolean',
+          description:
+            'Also find tasks of archived projects (needs the archive permission). ' +
+            'Archived tasks themselves are listed by list_tasks.',
+        },
       },
       required: ['id'],
       additionalProperties: false,
     },
   },
   run: async (args, scopes, forward, getScopes) => {
-    const unknownArg = findUnknownArg(args, ['id', 'includeNotes']);
+    const unknownArg = findUnknownArg(args, ['id', 'includeNotes', 'includeArchived']);
     if (unknownArg) {
       return invalid(unknownArg);
     }
     const id = optionalId(args, 'id');
     const includeNotes = optionalBoolean(args, 'includeNotes');
+    const includeArchived = optionalBoolean(args, 'includeArchived');
     if (id === undefined || id instanceof Error) {
       return invalid('id must be a task id');
     }
-    if (includeNotes instanceof Error) {
-      return invalid(includeNotes.message);
+    for (const value of [includeNotes, includeArchived]) {
+      if (value instanceof Error) {
+        return invalid(value.message);
+      }
+    }
+    if (includeArchived === true && !scopes.includes('tasks:read_archive')) {
+      return ARCHIVE_NOT_PERMITTED();
     }
     if (includeNotes && !scopes.includes('tasks:read_notes')) {
       return fail(
@@ -212,7 +274,7 @@ const getTask: ToolSpec = {
     const reply = await forwardSafely(forward, {
       method: 'GET',
       path: `/tasks/${id}`,
-      query: { source: 'active' },
+      ...(includeArchived === true ? {} : { query: { source: 'active' } }),
     });
     if (isToolResult(reply)) {
       return reply;
@@ -225,6 +287,9 @@ const getTask: ToolSpec = {
       ...toTaskSummary(source),
       subTaskIds: Array.isArray(source.subTaskIds) ? source.subTaskIds : [],
     };
+    if (includeArchived === true && !getScopes().includes('tasks:read_archive')) {
+      return ARCHIVE_NOT_PERMITTED();
+    }
     if (includeNotes && !getScopes().includes('tasks:read_notes')) {
       // Revoked while the task was being fetched.
       return fail(
@@ -452,13 +517,38 @@ const createTask: ToolSpec = {
   },
 };
 
+// Listed in this order: reads, then writes, then deletes, per area.
 const ALL_TOOLS: ToolSpec[] = [
   getStatus,
   listTasks,
   getTask,
   listProjects,
   listTags,
+  getCurrentTask,
+  getFocus,
+  listRepeatConfigs,
+  getRepeatConfig,
   createTask,
+  updateTask,
+  addSubtask,
+  startTask,
+  stopTracking,
+  logTime,
+  archiveTask,
+  restoreTask,
+  createRepeatConfig,
+  updateRepeatConfig,
+  deleteTask,
+  deleteRepeatConfig,
+  listNotes,
+  getNote,
+  createNote,
+  updateNote,
+  deleteNote,
+  listCounters,
+  getCounter,
+  setCounter,
+  incrementCounter,
 ];
 
 const isGranted = (tool: ToolSpec, scopes: readonly AssistantAccessScope[]): boolean =>
@@ -494,9 +584,9 @@ export const runTool = async (
   }
   const result = await tool.run(args, scopes, forward, getScopes);
   // A grant revoked (or access switched off) while the renderer was answering
-  // must not still hand out the data. A capture that already ran is reported
-  // as such, since withholding it would invite a duplicate.
-  if (tool.scope !== 'tasks:capture' && !isGranted(tool, getScopes())) {
+  // must not still hand out the data. A write that already ran is reported as
+  // such, since withholding it would invite a retry (and, for an add, a duplicate).
+  if (tool.definition.annotations.readOnlyHint && !isGranted(tool, getScopes())) {
     return fail('NOT_PERMITTED', 'This connection may not use this tool.');
   }
   return result;
