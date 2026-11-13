@@ -54,6 +54,7 @@ import { TaskRepeatCfgEffects } from '../features/task-repeat-cfg/store/task-rep
 import { TaskRepeatCleanupEffects } from '../features/task-repeat-cfg/store/task-repeat-cleanup.effects';
 import { TaskDueEffects } from '../features/tasks/store/task-due.effects';
 import { TASK_FEATURE_NAME, taskReducer } from '../features/tasks/store/task.reducer';
+import { TaskTrackingLifecycleEffects } from '../features/tasks/task-tracking-lifecycle.effects';
 import { TaskInternalEffects } from '../features/tasks/store/task-internal.effects';
 import { TaskRelatedModelEffects } from '../features/tasks/store/task-related-model.effects';
 import { TaskReminderEffects } from '../features/tasks/store/task-reminder.effects';
@@ -157,6 +158,7 @@ import { ReducerFailureSnackEffects } from './meta/reducer-failure-snack.effects
     StoreModule.forFeature(TASK_FEATURE_NAME, taskReducer),
     EffectsModule.forFeature([
       TaskInternalEffects,
+      TaskTrackingLifecycleEffects,
       TaskRelatedModelEffects,
       TaskReminderEffects,
       TaskUiEffects,
