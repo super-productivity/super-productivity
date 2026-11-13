@@ -774,9 +774,9 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
   _laterTodayWithSubTasksMapper,
 );
 
-export const selectAllDoneIds = createSelector(
+export const selectOpenTaskIds = createSelector(
   selectTaskSchedulingSnapshot,
-  (snapshot): string[] => snapshot.filter((s) => s.isDone).map((s) => s.id),
+  (snapshot) => new Set(snapshot.filter((task) => !task.isDone).map((task) => task.id)),
 );
 
 // DYNAMIC SELECTORS
@@ -991,17 +991,17 @@ export const selectTasksDueAndOverdueForDay = createSelector(
   },
 );
 
-export const selectTasksWithDueTimeForRange = createSelector(
+// Automatic day planning must use the same logical-day membership as Today.
+// A calendar-midnight range also picks up overdue early-morning tasks from
+// the previous logical day and can erase their schedule when moving them.
+export const selectTasksWithDueTimeForDay = createSelector(
   selectAllTasksInActiveProjects,
-  (tasks: Task[], props: { start: number; end: number }): TaskWithDueTime[] => {
-    return tasks.filter(
-      (task) =>
-        !!task &&
-        typeof task.dueWithTime === 'number' &&
-        task.dueWithTime >= props.start &&
-        task.dueWithTime <= props.end,
-    ) as TaskWithDueTime[];
-  },
+  selectStartOfNextDayDiffMs,
+  (tasks: Task[], offsetMs: number, props: { day: string }): TaskWithDueTime[] =>
+    tasks.filter(
+      (task): task is TaskWithDueTime =>
+        !!task.dueWithTime && isTodayWithOffset(task.dueWithTime, props.day, offsetMs),
+    ),
 );
 
 export const selectAllTasksWithDueTime = createSelector(

@@ -53,6 +53,7 @@
                 [@expand]
                 [isHideAll]="!!task()._hideSubTasksMode"
                 [isHideDone]="task()._hideSubTasksMode === ShowSubTasksMode.HideDone"
+                [isSubTaskList]="true"
                 [listModelId]="task().id || ''"
                 [parentId]="task().id || ''"
                 [tasks]="task().subTasks || []"

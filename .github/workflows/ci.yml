@@ -232,9 +232,9 @@ jobs:
           name: ci-e2e-build-${{ github.run_id }}
           path: .tmp/angular-dist
       - name: Test E2E
-        # `e2e`, not `e2e:ci`: that alias calls `npm run e2e` without `--`, so
-        # npm would swallow the --shard flag and every shard would run everything.
-        run: npm run e2e -- --project=chromium --shard=${{ matrix.shard }}/4
+        uses: ./.github/actions/e2e-shard
+        with:
+          shard: ${{ matrix.shard }}
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

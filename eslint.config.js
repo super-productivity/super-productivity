@@ -418,6 +418,45 @@ module.exports = tseslint.config(
   // pure helpers typed against feature models (e.g. Task) — those types belong
   // in the helper or in a shared model, not the other way round.
 
+  // Feature boundary (#8299), project/tag/work-context sit beside
+  // tasks, not on top of it. They may read the Task model and selectors; any
+  // deeper reach into tasks/ (TaskService, actions, utils) is coupling.
+  // Same rule id as the layer fence above on purpose (see FEATURE_LAYER_FENCE):
+  // the file sets don't overlap, so neither block replaces the other's options.
+  {
+    files: ['src/app/features/{project,tag,work-context}/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '(^|/)tasks/(?!task\\.model$|store/task\\.selectors$)',
+              message:
+                'Feature boundary (#8299): project/tag/work-context may only import task.model and store/task.selectors from tasks/.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // Feature boundary (#8299), tasks/ must not pull UI (components,
+  // pipes) from sibling features. A local rule, because telling a sibling
+  // (`../../tag/x.component`) from shared UI (`../../../ui/x.component`) needs
+  // the path resolved, which no-restricted-imports cannot do. It checks
+  // import() too.
+  {
+    files: ['src/app/features/tasks/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    plugins: {
+      'local-rules': localRules,
+    },
+    rules: {
+      'local-rules/no-sibling-feature-ui': 'error',
+    },
+  },
+
   // Service size cap (AGENTS.md → Project rules): no service may exceed 1200
   // lines. 'error' so a new service crossing the cap fails CI on the PR that
   // introduces it — 'warn' would be inert, since `ng lint` defaults to
@@ -438,7 +477,7 @@ module.exports = tseslint.config(
     'src/app/op-log/persistence/operation-log-store.service.ts': 3033,
     'src/app/op-log/sync/operation-log-sync.service.ts': 1881,
     'src/app/plugins/plugin-bridge.service.ts': 2307,
-    'src/app/imex/sync/sync-wrapper.service.ts': 1892,
+    'src/app/imex/sync/sync-wrapper.service.ts': 1801,
     'src/app/plugins/plugin.service.ts': 1851,
     'src/app/features/tasks/task.service.ts': 1527,
   }).map(([file, max]) => ({

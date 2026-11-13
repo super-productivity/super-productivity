@@ -265,7 +265,7 @@ test.describe('Sections', () => {
     await expect(section).toBeVisible();
 
     // Open the section's per-section menu and click Edit.
-    await section.locator('button[mat-icon-button]').click();
+    await section.getByRole('button', { name: 'Section options', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Edit' }).click();
 
     const dialog = page.locator('mat-dialog-container');
@@ -293,7 +293,7 @@ test.describe('Sections', () => {
     const section = sectionByTitle(page, 'Doomed');
     await expect(section).toBeVisible();
 
-    await section.locator('button[mat-icon-button]').click();
+    await section.getByRole('button', { name: 'Section options', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Delete' }).click();
 
     const confirm = page.locator('dialog-confirm');
@@ -643,5 +643,52 @@ test.describe('Sections', () => {
     await projectPage.navigateToProjectByName('Test Project');
 
     await expect(sectionByTitle(page, 'Persistent')).toBeVisible({ timeout: 10000 });
+  });
+  test('header "+" adds a task straight into the section', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await setupTestProject(workViewPage, projectPage);
+    await workViewPage.addTask('Outside');
+
+    await openProjectContextMenu(page);
+    await clickAddSection(page);
+    await submitPromptDialog(page, 'Errands');
+
+    const section = sectionByTitle(page, 'Errands');
+    await section
+      .getByRole('button', { name: 'Add task to Errands', exact: true })
+      .click();
+    const input = section.locator('add-task-bar .main-input');
+    await input.fill('Inside');
+    await input.press('Enter');
+
+    await expect(section.locator('task .task-title')).toHaveText(['Inside']);
+    await expect(page.locator('.no-section task .task-title')).toHaveText([/Outside$/]);
+  });
+
+  test('header "+" on another section moves the open add bar in one click', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await setupTestProject(workViewPage, projectPage);
+    for (const title of ['Errands', 'Chores']) {
+      await openProjectContextMenu(page);
+      await clickAddSection(page);
+      await submitPromptDialog(page, title);
+    }
+    const errands = sectionByTitle(page, 'Errands');
+    const chores = sectionByTitle(page, 'Chores');
+
+    await errands
+      .getByRole('button', { name: 'Add task to Errands', exact: true })
+      .click();
+    await expect(errands.locator('add-task-bar')).toBeVisible();
+    await chores.getByRole('button', { name: 'Add task to Chores', exact: true }).click();
+
+    await expect(chores.locator('add-task-bar')).toBeVisible();
+    await expect(errands.locator('add-task-bar')).toHaveCount(0);
   });
 });

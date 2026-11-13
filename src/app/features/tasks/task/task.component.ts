@@ -85,6 +85,7 @@ import {
   KeyboardConfig,
   keyboardConfigOrEmpty,
 } from '@sp/keyboard-config';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { PlannerService } from '../../planner/planner.service';
@@ -111,7 +112,9 @@ import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { SubTaskTotalTimeSpentPipe } from '../pipes/sub-task-total-time-spent.pipe';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagToggleMenuListComponent } from '../../tag/tag-toggle-menu-list/tag-toggle-menu-list.component';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -794,6 +797,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   async editTaskRepeatCfg(): Promise<void> {
     const { DialogEditTaskRepeatCfgComponent } =
+      // eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
       await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
     this._matDialog
       .open(DialogEditTaskRepeatCfgComponent, {
@@ -871,14 +875,18 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     move: (id: string, parentId: string | undefined, isBacklog: boolean) => void,
   ): void {
     const t = this.task();
-    // Top-level done tasks in the main list are ordered by completion date, so
-    // a manual reorder can't take effect — skip it to avoid emitting a spurious
-    // taskIds-reorder op that would sync to other devices. Done subtasks and
-    // backlog tasks are not auto-sorted, so they stay reorderable.
-    if (t.isDone && !t.parentId && !this.isBacklog()) {
+    const isInSubTaskList = this.isInSubTaskList();
+    // Done tasks in the main list are ordered by completion date, so a manual
+    // reorder can't take effect — skip it to avoid emitting a spurious
+    // taskIds-reorder op that would sync to other devices. Done subtasks under
+    // their parent and backlog tasks are not auto-sorted, so they stay
+    // reorderable.
+    if (t.isDone && !isInSubTaskList && !this.isBacklog()) {
       return;
     }
-    move(t.id, t.parentId, this.isBacklog());
+    // A subtask shown on its own (e.g. in Today without its parent) moves within
+    // the list it's shown in, not among its hidden siblings.
+    move(t.id, isInSubTaskList ? t.parentId : undefined, this.isBacklog());
     // timeout required to let changes take place
     setTimeout(() => this.focusSelf());
     setTimeout(() => this.focusSelf(), 10);
