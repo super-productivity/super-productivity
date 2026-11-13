@@ -1,8 +1,7 @@
 # Snap + Wayland GPU init failure — root cause and shipped fix
 
-> **Status:** Workaround fixed and shipped (forced X11 on Snap+Wayland). The
-> structural fix is migrating the Snap to **core24 + `gpu-2404`** — packaging
-> for that lands in the open migration PR; the argv wrapper stays until
+> **Status:** Workaround fixed and shipped (forced X11 on Snap+Wayland). Snap
+> packaging migrates to **core24 + `gpu-2404`**; the argv wrapper stays until
 > Wayland is field-verified on that stack. Three files cite this document for
 > why their guards exist — `electron-builder.yaml`, `tools/afterPack.js` and
 > `build/linux/snap-wrapper.sh` — so it is maintained rather than deleted. (The
@@ -10,7 +9,7 @@
 > Before deleting, re-derive the citer list with
 > `grep -rn snap-wayland-gpu-fix-research`; do not trust this line.
 >
-> **Snapshot:** 2026-04-21 (workaround); packaging migration started 2026-11.
+> **Snapshot:** 2026-04-21 (workaround); core24 packaging 2026-11.
 > The 2026-04 investigation log (18 sections of review passes, options analysis,
 > field-data triage and multi-agent verification) was removed once its
 > conclusions landed in code — recover it with

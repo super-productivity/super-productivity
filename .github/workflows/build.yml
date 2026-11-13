@@ -233,26 +233,33 @@ jobs:
         run: npm run build
 
       # core24 snaps need snapcraft + an LXD build environment (the GNOME
-      # extension is incompatible with destructive mode). Retry the snap
-      # installs: contacting the Snap Store from runners has been flaky, which
-      # is why upload uses the snapcraft container — but packaging itself still
-      # has to invoke snapcraft on the host (electron-builder SnapCore24).
-      - name: Install snapcraft and LXD for core24
+      # extension is incompatible with destructive mode). Packaging still
+      # invokes snapcraft on the host (electron-builder SnapCore24); only the
+      # store *upload* uses the snapcraft container. Use canonical/setup-lxd so
+      # DOCKER-USER allows lxdbr0 outbound (Docker's FORWARD DROP otherwise
+      # blocks stage-packages / the GNOME SDK). Retry snapcraft install: the
+      # Snap Store from runners has been flaky (a168fb3).
+      - name: Setup LXD for core24 snaps
+        # Pins the DOCKER-USER FORWARD allow for lxdbr0 (Docker DROP blocks
+        # snapcraft's LXD outbound otherwise). Default group is `adm`.
+        uses: canonical/setup-lxd@8c6a87bfb56aa48f3fb9b830baa18562d8bfd4ee # v1
+        with:
+          channel: latest/stable
+
+      - name: Install snapcraft for core24
         uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
-          timeout_minutes: 15
+          timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
           shell: bash
           command: |
             set -euo pipefail
-            sudo snap install lxd
             sudo snap install snapcraft --classic
-            sudo lxd init --auto
-            # electron-builder runs as the runner user; grant LXD socket access
-            # without requiring a re-login for the new group membership.
-            sudo usermod -aG lxd "$USER"
-            sudo chmod a+rw /var/snap/lxd/common/lxd/unix.socket
+            # setup-lxd puts the socket behind daemon.group=adm; grant the
+            # runner user access without a re-login.
+            sudo usermod -aG adm "$USER" || true
+            sudo chmod a+rw /var/snap/lxd/common/lxd/unix.socket 2>/dev/null || true
             snapcraft --version
             lxc info >/dev/null
 

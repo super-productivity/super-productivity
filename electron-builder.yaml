@@ -181,14 +181,16 @@ snapcraft:
       # TMPDIR to $XDG_RUNTIME_DIR when unset; keep it explicit.
       TMPDIR: $XDG_RUNTIME_DIR
     # With the GNOME extension active, content snaps (gnome-46-2404, gpu-2404,
-    # themes) are added automatically — only list custom plugs here. The old
-    # gnome-3-28-1804 → gnome-42-2204 override is obsolete on core24.
+    # themes) are added automatically. The old gnome-3-28-1804 → gnome-42-2204
+    # override is obsolete on core24.
     #
-    # Setting `plugs` at all disables electron-builder's browser-support
-    # auto-inject. Without that interface Chromium cannot create files in
-    # /dev/shm and aborts. Do not set allow-sandbox: the namespace sandbox
-    # still dies in credentials.cc, and --no-sandbox above is what runs.
+    # Setting `plugs` at all disables electron-builder's plug defaults AND its
+    # browser-support auto-inject. Put `default` first so home, network,
+    # audio-playback, pulseaudio and unity7 stay (GNOME alone does not restore
+    # them). Keep browser-support without allow-sandbox: Chromium's namespace
+    # sandbox still dies in credentials.cc, and --no-sandbox above is what runs.
     plugs:
+      - default # desktop, desktop-legacy, home, x11, wayland, unity7, network, gsettings, audio-playback, pulseaudio, opengl
       - browser-support
       - password-manager-service
       - system-observe
