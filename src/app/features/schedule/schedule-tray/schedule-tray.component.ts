@@ -12,6 +12,7 @@ import {
   CdkDragMove,
   CdkDragRelease,
   CdkDragStart,
+  CdkDropList,
 } from '@angular/cdk/drag-drop';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
@@ -38,7 +39,7 @@ const MAX_CHIPS_XS = 2;
  */
 @Component({
   selector: 'schedule-tray',
-  imports: [CdkDrag, MatIcon, TranslatePipe],
+  imports: [CdkDrag, CdkDropList, MatIcon, TranslatePipe],
   templateUrl: './schedule-tray.component.html',
   styleUrl: './schedule-tray.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,8 +60,7 @@ export class ScheduleTrayComponent {
   isHorizontalScroll = input<boolean>(false);
   openDay = output<string>();
 
-  // shortcut: the expanded tray has no height cap, since a scrolling cell would
-  // clip a chip while it is dragged — cap it once chips drag as a detached preview
+  // CDK's preview lives outside the scrollable tray so chips can reach the grid.
   isExpanded = signal(false);
 
   // a phone's scrolling week has columns too narrow for chips: count and

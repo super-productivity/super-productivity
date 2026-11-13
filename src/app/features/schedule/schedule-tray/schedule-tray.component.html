@@ -3,6 +3,8 @@
   @for (cell of cells(); track cell.day) {
     <div
       class="tray-cell"
+      cdkDropList
+      [cdkDropListSortingDisabled]="true"
       [class.drag-over]="dragOverDay() === cell.day"
       [attr.data-tray-day]="cell.day"
     >
@@ -59,7 +61,7 @@
               [class.is-shown-in-grid]="chip.id === shownInGridId()"
               (cdkDragStarted)="dragStarted($event)"
               (cdkDragMoved)="dragMoved($event)"
-              (cdkDragReleased)="dragReleased($event)"
+              (cdkDragEnded)="dragReleased($event)"
             >
               <button
                 type="button"
