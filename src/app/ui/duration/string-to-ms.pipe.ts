@@ -1,21 +1,25 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
+/**
+ * Rewrites a duration typed by the user into the short form the parsers
+ * understand: commas become decimal points ("1,5h" → "1.5h"), a space between
+ * a number and its unit is dropped ("45 m", "1 h 30 m") and spelled-out units
+ * are shortened ("30 min", "2 hours", "1hr" → "30m", "2h", "1h").
+ */
+export const normalizeDurationString = (strValue: string): string =>
+  strValue
+    .replace(/,/g, '.')
+    .replace(/(\d)\s+(?=(?:[hms]|hours?|hrs?|minutes?|mins?|seconds?|secs?)\b)/gi, '$1')
+    .replace(/(\d)(?:hours?|hrs?)\b/gi, '$1h')
+    .replace(/(\d)(?:minutes?|mins?)\b/gi, '$1m')
+    .replace(/(\d)(?:seconds?|secs?)\b/gi, '$1s');
+
 export const stringToMs = (strValue: string, args?: unknown): number => {
   if (!strValue) {
     return 0;
   }
 
-  // Replace commas by dots to allow using them as float separator.
-  strValue = strValue.replace(/,/g, '.');
-
-  // Accept a space between a number and its unit ("45 m", "1 h 30 m") and
-  // spelled-out units ("30 min", "2 hours", "1hr"), which would otherwise
-  // be dropped and parse as 0.
-  strValue = strValue
-    .replace(/(\d)\s+(?=(?:[hms]|hours?|hrs?|minutes?|mins?|seconds?|secs?)\b)/gi, '$1')
-    .replace(/(\d)(?:hours?|hrs?)\b/gi, '$1h')
-    .replace(/(\d)(?:minutes?|mins?)\b/gi, '$1m')
-    .replace(/(\d)(?:seconds?|secs?)\b/gi, '$1s');
+  strValue = normalizeDurationString(strValue);
 
   // First try to parse simple formats like "1.5h", "30m", etc.
   // also accept (fractional) numbers without specifier
