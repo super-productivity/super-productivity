@@ -1014,6 +1014,11 @@ export class DialogEditTaskRepeatCfgComponent {
     // A cleared number input leaves `null`; the model only allows `undefined`.
     if (result.deadlineOffsetDays === null) {
       result = { ...result, deadlineOffsetDays: undefined };
+    } else if (
+      typeof result.deadlineOffsetDays === 'number' &&
+      !Number.isInteger(result.deadlineOffsetDays)
+    ) {
+      result = { ...result, deadlineOffsetDays: Math.round(result.deadlineOffsetDays) };
     }
     return result;
   }
