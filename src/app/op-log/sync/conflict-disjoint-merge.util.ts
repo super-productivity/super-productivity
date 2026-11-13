@@ -60,6 +60,40 @@ const asSafeUpdateChanges = (changes: unknown): Record<string, unknown> | undefi
   return 'id' in record ? undefined : record;
 };
 
+/**
+ * The project a single-task `moveToOtherProject` op moves task `entityId` to,
+ * else undefined. Its payload is the full PRE-move task plus the target, so it
+ * is neither `{ id, changes }` nor a flat entity whose fields are its change:
+ * the one task field it writes is `projectId` (the project lists follow from
+ * it, as `lwwUpdateMetaReducer` repairs them for a patch). Left opaque, a move
+ * took whole-entity LWW against any concurrent edit, and the later side's
+ * snapshot undid the move, the rename or the tracked time (#11685).
+ *
+ * The task id comes from the authenticated payload, not the envelope.
+ */
+export const projectMoveTarget = (
+  op: Operation,
+  entityId: string,
+): string | undefined => {
+  if (
+    op.actionType !== ActionType.TASK_SHARED_MOVE_TO_PROJECT ||
+    op.opType !== OpType.Update ||
+    isMultiEntityOperation(op)
+  ) {
+    return undefined;
+  }
+  const actionPayload = extractActionPayload(op.payload);
+  const task = actionPayload?.['task'];
+  const target = actionPayload?.['targetProjectId'];
+  return task !== null &&
+    typeof task === 'object' &&
+    (task as Record<string, unknown>)['id'] === entityId &&
+    typeof target === 'string' &&
+    target.length > 0
+    ? target
+    : undefined;
+};
+
 const extractOpChanges = (
   op: Operation,
   payloadKey: string,
@@ -99,6 +133,11 @@ const extractOpChanges = (
     // Old direct-format bulk payloads describe only their primary entity. They
     // cannot be projected onto an arbitrary sibling from entityIds.
     return {};
+  }
+
+  const moveTarget = projectMoveTarget(op, entityId);
+  if (moveTarget !== undefined) {
+    return { projectId: moveTarget };
   }
 
   const entityPayload = extractEntityFromPayload(op.payload, payloadKey, entityId);

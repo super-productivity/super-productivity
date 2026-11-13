@@ -1202,6 +1202,21 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    it('should remove the task from a project other than the payload`s (#11685)', () => {
+      // The receiving client still lists the task in the project it left:
+      // the payload names the project the deleting client held it in.
+      const testState = createStateWithExistingTasks(['task1', 'other-task'], [], [], []);
+      const action = createDeleteAction({ projectId: 'project-elsewhere' });
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        expectProjectUpdate('project1', { taskIds: ['other-task'] }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should delete task entity and handle subtasks', () => {
       const testState = createStateWithExistingTasks(
         ['task1', 'subtask1', 'other-task'],

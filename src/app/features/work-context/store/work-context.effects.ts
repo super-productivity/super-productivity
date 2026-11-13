@@ -3,7 +3,9 @@ import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { filter, map, tap, withLatestFrom, startWith } from 'rxjs/operators';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { setSelectedTask } from '../../tasks/store/task.actions';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskService } from '../../tasks/task.service';
 import { BannerId } from '../../../core/banner/banner.model';
 import { BannerService } from '../../../core/banner/banner.service';

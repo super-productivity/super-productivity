@@ -7,7 +7,7 @@ import {
 } from '@angular/core/testing';
 import { Component, ElementRef, inject, NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
@@ -24,9 +24,11 @@ import { ProjectService } from '../project/project.service';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import { SnackService } from '../../core/snack/snack.service';
+import { SnackParams } from '../../core/snack/snack.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { T } from '../../t.const';
+import { DEFAULT_OPTIONS } from '../task-view-customizer/types';
 import {
   selectLaterTodayTasksWithSubTasks,
   selectOverdueTasksWithSubTasks,
@@ -164,6 +166,7 @@ const configureWorkViewTestBed = (
         useValue: {
           customizeUndoneTasks: () => of({ list: [] as TaskWithSubTasks[] }),
           isCustomized: signal(false),
+          selectedFilter: signal({ type: null }),
           ...overrides.customizerService,
         },
       },
@@ -429,6 +432,32 @@ describe('WorkViewComponent', () => {
 
       expect(moveToArchive).toHaveBeenCalledOnceWith([listed, earlier]);
     });
+
+    it('offers History, where the archived tasks can be found again', async () => {
+      const done = buildTask('done');
+      configureWorkViewTestBed({
+        taskService: { moveToArchive: () => Promise.resolve() },
+        doneTasksToArchive: [done],
+      });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+
+      await TestBed.compileComponents();
+      const open = spyOn(TestBed.inject(SnackService), 'open');
+      const navigate = spyOn(TestBed.inject(Router), 'navigate');
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', [done]);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+
+      await fixture.componentInstance.moveDoneToArchive();
+
+      const snack = open.calls.mostRecent().args[0] as SnackParams;
+      expect(snack.actionStr).toBe('MH.HISTORY');
+      snack.actionFn?.();
+      expect(navigate).toHaveBeenCalledOnceWith(['/active/history']);
+    });
   });
 
   describe('undoneTasksBySection', () => {
@@ -572,12 +601,16 @@ describe('WorkViewComponent', () => {
       isCustomized?: boolean;
       isTodayList?: boolean;
       embedPluginId?: string | null;
+      /** An active customizer filter, e.g. `'priority'`. */
+      filterType?: string;
     }): {
       cmp: WorkViewComponent;
       toggleGroupExpansion: jasmine.Spy;
       updateSection: jasmine.Spy;
+      setFilter: jasmine.Spy;
     } => {
       const toggleGroupExpansion = jasmine.createSpy('toggleGroupExpansion');
+      const setFilter = jasmine.createSpy('setFilter');
       const updateSection = jasmine.createSpy('updateSection');
       const undone = opts.undone ?? [];
 
@@ -594,7 +627,9 @@ describe('WorkViewComponent', () => {
             }),
           isCustomized: signal(opts.isCustomized ?? !!(opts.grouped || opts.customized$)),
           collapsedGroupIds: signal(opts.collapsedGroupIds ?? []),
+          selectedFilter: signal({ type: opts.filterType ?? null }),
           toggleGroupExpansion,
+          setFilter,
         },
         sectionService: {
           getSectionsByContextId$: () =>
@@ -639,6 +674,7 @@ describe('WorkViewComponent', () => {
         cmp: fixture.componentInstance,
         toggleGroupExpansion,
         updateSection,
+        setFilter,
       };
     };
 
@@ -858,6 +894,141 @@ describe('WorkViewComponent', () => {
 
       expect(updateSection).not.toHaveBeenCalled();
       expect(cmp.isDoneHidden()).toBe(true);
+    });
+
+    describe('task hidden by the active filter (#11482)', () => {
+      const filteredOut$ = (): Observable<CustomizedStub> =>
+        of({ list: [buildTask('other')] });
+
+      it('stops retrying and offers to clear the filter', fakeAsync(() => {
+        const { setFilter } = setup({
+          focusItem: 'wanted',
+          undone: [buildTask('wanted'), buildTask('other')],
+          customized$: filteredOut$(),
+          filterType: 'priority',
+        });
+        const open = spyOn(TestBed.inject(SnackService), 'open');
+
+        tick(250);
+
+        expect(open).toHaveBeenCalledOnceWith(
+          jasmine.objectContaining({ msg: T.GLOBAL_SNACK.NAVIGATE_TO_TASK_FILTERED }),
+        );
+        // The filter is the user's: nothing changes until they ask.
+        expect(setFilter).not.toHaveBeenCalled();
+        tick(5000);
+        expect(open).toHaveBeenCalledTimes(1);
+
+        const params = open.calls.mostRecent().args[0] as unknown as {
+          actionFn: () => void;
+        };
+        params.actionFn();
+        expect(setFilter).toHaveBeenCalledOnceWith(DEFAULT_OPTIONS.filter);
+        discardPeriodicTasks();
+      }));
+
+      it('ignores the action once the view is gone', fakeAsync(() => {
+        const { setFilter } = setup({
+          focusItem: 'wanted',
+          undone: [buildTask('wanted'), buildTask('other')],
+          customized$: filteredOut$(),
+          filterType: 'priority',
+        });
+        const open = spyOn(TestBed.inject(SnackService), 'open');
+        tick(250);
+        const params = open.calls.mostRecent().args[0] as unknown as {
+          actionFn: () => void;
+        };
+
+        fixture?.destroy();
+        params.actionFn();
+
+        expect(setFilter).not.toHaveBeenCalled();
+        discardPeriodicTasks();
+      }));
+
+      it('still blames the filter off Today for an overdue task', fakeAsync(() => {
+        // The overdue list is global, but its panel renders on Today only.
+        setup({
+          focusItem: 'wanted',
+          undone: [buildTask('wanted')],
+          overdueTasks: [buildTask('wanted')],
+          customized$: filteredOut$(),
+          filterType: 'priority',
+          isTodayList: false,
+        });
+        const open = spyOn(TestBed.inject(SnackService), 'open');
+
+        tick(250);
+
+        expect(open).toHaveBeenCalledTimes(1);
+        discardPeriodicTasks();
+      }));
+
+      it('does not blame the filter on Today for a task in the overdue panel', fakeAsync(() => {
+        setup({
+          focusItem: 'wanted',
+          undone: [buildTask('wanted')],
+          overdueTasks: [buildTask('wanted')],
+          customized$: filteredOut$(),
+          filterType: 'priority',
+          isTodayList: true,
+        });
+        const open = spyOn(TestBed.inject(SnackService), 'open');
+
+        tick(5250);
+
+        expect(open).not.toHaveBeenCalled();
+        discardPeriodicTasks();
+      }));
+
+      it('does not blame the filter while a plugin embed replaces the list', fakeAsync(() => {
+        setup({
+          focusItem: 'wanted',
+          undone: [buildTask('wanted')],
+          customized$: filteredOut$(),
+          filterType: 'priority',
+          embedPluginId: 'plugin',
+        });
+        const open = spyOn(TestBed.inject(SnackService), 'open');
+
+        tick(5250);
+
+        expect(open).not.toHaveBeenCalled();
+        discardPeriodicTasks();
+      }));
+
+      it('does not blame the filter when the task passes it', fakeAsync(() => {
+        setup({
+          focusItem: 'wanted',
+          undone: [buildTask('wanted')],
+          customized$: of({ list: [buildTask('wanted')] }),
+          filterType: 'priority',
+        });
+        const open = spyOn(TestBed.inject(SnackService), 'open');
+
+        tick(5250);
+
+        expect(open).not.toHaveBeenCalled();
+        discardPeriodicTasks();
+      }));
+
+      it('does not blame the filter for a task shown in an unfiltered panel', fakeAsync(() => {
+        // The done panel ignores the customizer filter, so the row is reachable.
+        setup({
+          focusItem: 'wanted',
+          undone: [buildTask('wanted')],
+          doneTasks: [buildTask('wanted')],
+          customized$: filteredOut$(),
+          filterType: 'priority',
+        });
+        const open = spyOn(TestBed.inject(SnackService), 'open');
+
+        tick(5250);
+
+        expect(open).not.toHaveBeenCalled();
+        discardPeriodicTasks();
+      }));
     });
 
     it('expands the group once the grouped list arrives on a later retry', fakeAsync(() => {

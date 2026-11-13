@@ -1009,19 +1009,6 @@ describe('Task Selectors', () => {
       );
     });
 
-    it('should select tasks with due time for range', () => {
-      const start = Date.now();
-      const end = Date.now() + 7200000; // 2 hours
-      const allTasks = Object.values(mockTasks);
-      const params = { start, end };
-      const result = fromSelectors.selectTasksWithDueTimeForRange.projector(
-        allTasks,
-        params,
-      );
-      expect(result.length).toBe(1);
-      expect(result[0].id).toBe('task5');
-    });
-
     it('should select tasks with due time until', () => {
       const end = Date.now() + 7200000; // 2 hours
       const allTasks = Object.values(mockTasks);
@@ -1832,5 +1819,69 @@ describe('Task Selectors', () => {
         expect(fromSelectors.selectAllDoneIds(mockState)).toEqual(['task2', 'subtask2']);
       });
     });
+  });
+});
+
+describe('selectTasksWithDueTimeForDay', () => {
+  const timedTask = (id: string, date: string): Task => ({
+    ...DEFAULT_TASK,
+    id,
+    projectId: 'INBOX',
+    dueWithTime: new Date(date).getTime(),
+  });
+
+  it('excludes the previous logical night and includes the following early morning', () => {
+    const tasks = [
+      timedTask('previous-night', '2026-06-16T02:00:00'),
+      timedTask('boundary', '2026-06-16T04:00:00'),
+      timedTask('late-night', '2026-06-17T02:00:00'),
+      timedTask('tomorrow', '2026-06-17T04:00:00'),
+    ];
+    expect(
+      fromSelectors.selectTasksWithDueTimeForDay
+        .projector(tasks, 4 * 60 * 60 * 1000, { day: '2026-06-16' })
+        .map((task: Task) => task.id),
+    ).toEqual(['boundary', 'late-night']);
+  });
+
+  // Run by both the Berlin and Los Angeles timezone suites. Four elapsed
+  // hours after local midnight can be 05:00 at spring-forward or 03:00 at
+  // fall-back. This preserves the existing absolute-offset contract (#10718).
+  for (const day of ['2026-03-08', '2026-03-29', '2026-10-25', '2026-11-01']) {
+    it(`keeps the absolute-offset boundaries on ${day}`, () => {
+      const offsetMs = 4 * 60 * 60 * 1000;
+      const midnight = new Date(`${day}T00:00:00`);
+      const nextMidnight = new Date(midnight);
+      nextMidnight.setDate(nextMidnight.getDate() + 1);
+      const start = midnight.getTime() + offsetMs;
+      const end = nextMidnight.getTime() + offsetMs;
+      const tasks: Task[] = [
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'before', dueWithTime: start - 1 },
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'start', dueWithTime: start },
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'last', dueWithTime: end - 1 },
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'next', dueWithTime: end },
+      ];
+
+      expect(
+        fromSelectors.selectTasksWithDueTimeForDay
+          .projector(tasks, offsetMs, { day })
+          .map((task: Task) => task.id),
+      ).toEqual(['start', 'last']);
+    });
+  }
+
+  it('keeps calendar-day membership at the default zero offset', () => {
+    const tasks = [
+      { ...DEFAULT_TASK, projectId: 'INBOX', id: 'untimed' },
+      { ...DEFAULT_TASK, projectId: 'INBOX', id: 'zero', dueWithTime: 0 },
+      timedTask('early', '2026-06-16T02:00:00'),
+      timedTask('late', '2026-06-16T23:59:59.999'),
+      timedTask('tomorrow', '2026-06-17T00:00:00'),
+    ];
+    expect(
+      fromSelectors.selectTasksWithDueTimeForDay
+        .projector(tasks, 0, { day: '2026-06-16' })
+        .map((task: Task) => task.id),
+    ).toEqual(['early', 'late']);
   });
 });
