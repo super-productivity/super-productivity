@@ -35,6 +35,7 @@ describe('ScheduleComponent', () => {
   let mockLayoutService: jasmine.SpyObj<LayoutService>;
   let mockIsXs: WritableSignal<boolean>;
   let mockScheduleService: jasmine.SpyObj<ScheduleService>;
+  let calendarColorByProviderId: WritableSignal<Map<string, string>>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockGlobalTrackingIntervalService: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
@@ -54,18 +55,23 @@ describe('ScheduleComponent', () => {
       isXs: mockIsXs,
     });
 
-    mockScheduleService = jasmine.createSpyObj('ScheduleService', [
-      'getDaysToShow',
-      'getMonthDaysToShow',
-      'getMonthWeeksToShow',
-      'buildScheduleDays',
-      'scheduleRefreshTick',
-      'getTodayStr',
-      'createScheduleDaysWithContext',
-      'getDayClass',
-      'hasEventsForDay',
-      'getEventsForDay',
-    ]);
+    calendarColorByProviderId = signal(new Map<string, string>());
+    mockScheduleService = jasmine.createSpyObj(
+      'ScheduleService',
+      [
+        'getDaysToShow',
+        'getMonthDaysToShow',
+        'getMonthWeeksToShow',
+        'buildScheduleDays',
+        'scheduleRefreshTick',
+        'getTodayStr',
+        'createScheduleDaysWithContext',
+        'getDayClass',
+        'hasEventsForDay',
+        'getEventsForDay',
+      ],
+      { calendarColorByProviderId: calendarColorByProviderId },
+    );
     mockScheduleService.getDaysToShow.and.returnValue([
       '2026-01-20',
       '2026-01-21',
@@ -396,6 +402,28 @@ describe('ScheduleComponent', () => {
         expect(newDate?.getMonth()).toBe(0); // January
         expect(component.isViewingToday()).toBe(true);
       });
+    });
+  });
+
+  describe('openDayView', () => {
+    // it saves the view like selectTimeView; later specs must not inherit it
+    afterEach(() => localStorage.removeItem('SELECTED_TIME_VIEW'));
+
+    it('opens the day view on a later day', () => {
+      component.openDayView('2026-01-22');
+
+      const d = component['_selectedDate']();
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+      expect([d?.getFullYear(), d?.getMonth(), d?.getDate()]).toEqual([2026, 0, 22]);
+    });
+
+    it('opens (logical) today in the "today" mode', () => {
+      component['_selectedDate'].set(new Date(2026, 0, 22));
+
+      component.openDayView('2026-01-20');
+
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+      expect(component['_selectedDate']()).toBeNull();
     });
   });
 
@@ -1402,6 +1430,22 @@ describe('ScheduleComponent', () => {
       ]);
     });
 
+    it('uses the color the calendar source reported for a provider without one', () => {
+      const store = TestBed.inject(MockStore);
+      spyOn(
+        TestBed.inject(PluginIssueProviderRegistryService),
+        'getUseAgendaView',
+      ).and.returnValue(true);
+      store.overrideSelector(selectCalendarProviders, []);
+      store.overrideSelector(selectEnabledIssueProviders, [pluginProvider('plug')]);
+      store.refreshState();
+      calendarColorByProviderId.set(new Map([['plug', '#fbe983']]));
+      fixture.detectChanges();
+      expect(component.calProviderRows()).toEqual([
+        { id: 'plug', color: '#fbe983', label: 'plugin:cal' },
+      ]);
+    });
+
     it('shows the filter button for one iCal plus one plugin calendar provider', () => {
       const store = TestBed.inject(MockStore);
       spyOn(
@@ -1737,8 +1781,8 @@ describe('ScheduleComponent', () => {
       const plainTop = plainWrapper.scrollTop;
 
       plainWrapper.scrollTop = 0;
-      // warpRoute starts the view at scale(1.2); the scroll runs on a
-      // setTimeout(0) while that is still in flight.
+      // warpRoute transforms the view (it once zoomed from scale(1.2)); the
+      // scroll runs on a setTimeout(0) while that is still in flight.
       const scaledHost = renderScrollable('scale(1.2)');
       const scaledWrapper = scaledHost.querySelector('.scroll-wrapper') as HTMLElement;
       component['_scrollAnchorToTop']('current-time');

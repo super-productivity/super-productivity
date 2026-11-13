@@ -65,6 +65,17 @@ describe('discoverNextcloudUserId', () => {
     expect(decodeBasic(headers)).toBe('jane@example.com:app-pw');
   });
 
+  // RFC 7617 §2.1 worked example: user "test", password "123£" as UTF-8.
+  it('sends non-ASCII credentials as UTF-8', async () => {
+    const calls: RecordedReq[] = [];
+    await discoverNextcloudUserId(
+      { ...CFG, loginName: 'test', password: '123£' },
+      makeDeps(recordingFetch(calls, () => new Response(ocsBody('x'), { status: 200 }))),
+    );
+    const headers = calls[0]?.init?.headers as Record<string, string>;
+    expect(headers['Authorization']).toBe('Basic dGVzdDoxMjPCow==');
+  });
+
   it('trims a trailing slash from the server URL', async () => {
     const calls: RecordedReq[] = [];
     await discoverNextcloudUserId(

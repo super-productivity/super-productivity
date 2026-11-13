@@ -65,6 +65,21 @@ when all of the following hold:
 The recognized crossings are:
 
 - a move and removal of the same task from the move's source section;
+- two placements or removals of different tasks (#10969): each writes only its
+  own task's section membership (a removal also its own task's slot in the
+  work context's order), so membership commutes in either order. Position in a
+  shared list can depend on order; the device whose upload the server rejects
+  reissues its op from the merged state, which converges it. The reissue
+  repositions only the rejected op's task, so an op anchored on a task the
+  other op moves within the anchor's list (`afterTaskId` in the destination
+  section, `workContextAfterTaskId` in the work context's order) keeps the
+  stop, as do two ops
+  of the same task other than the move/removal pair above. File-based
+  providers never reject an upload and only reissue note and habit orders, so
+  two such ops that land at the same position of one list (both at the top, or
+  both after one anchor) can order differently per device until one of the
+  two tasks is moved again (membership converges, order does not; no E2E
+  covers this);
 - a section-order update crossing a placement/removal that touches one of the
   ordered sections;
 - a content reorder crossing a single-entity patch of an entity it lists, under
@@ -73,9 +88,8 @@ The recognized crossings are:
   it declares, under the same rule: a placement writes only the declared
   sections' `taskIds` (a removal also the work context's task order, which no
   section patch writes), so a collapse or rename of either section of a
-  cross-section move commutes with it (#10969). Another task's placement or
-  removal in the same lists, and a section delete, still stop: two placements
-  of different tasks in one list do not commute by order. So does a move
+  cross-section move commutes with it (#10969). A section delete still stops:
+  a rejected delete has no causal replay. So does a move
   beside a pending edit of the same section that the remote edit conflicts
   with (an expand, also the work view's auto-expand on focus, crossing a
   collapse): section ops beside a conflict keep the stop; and
@@ -262,6 +276,31 @@ performs conflict detection.
 The resolver appends all replacement/compensation operations and rejects their
 stale predecessors in one operation-log transaction. A crash must not expose
 only one half of the recovery.
+
+## Keyboard up/down moves against a concurrent delete
+
+`moveTaskUpInTodayList` and `moveTaskDownInTodayList` declare the work context
+(TAG or PROJECT), a task delete declares the TASK, so the two never conflict
+and every device applies both, in either order. The ops are relative, so the
+work-context reducers replay them with `moveUndoneTaskUpInList` /
+`moveUndoneTaskDownInList` (#11464): the op's `doneTaskIds` snapshot (the
+NOT-done ids, in list order) names the neighbour the user moved past. While
+that neighbour is still the next snapshot task in the list, the move is the
+legacy one; without a concurrent change it always is. When the neighbour is
+missing or already on the other side of the task, the task takes the
+neighbour's slot (right after the nearest earlier snapshot task, or before the
+nearest later one), which is where the moving device ends up after applying
+the delete. The visible (not-done) order then commutes with the delete
+(`work-context-meta.helper.spec.ts`; E2E
+`supersync-concurrent-delete-reorder.spec.ts`, both upload orders).
+
+Limits: released receivers still replay the legacy move. Done tasks between
+the two neighbours can end on different sides of the moved task, which is not
+visible until it is marked done. Section task lists keep the legacy move:
+their order is the section's own, not the snapshot's, so the rule would change
+moves without a concurrent change. The project backlog keeps it too; its
+moves carry the same kind of snapshot (`doneBacklogTaskIds`) and have the same
+gap, which no report has shown yet.
 
 ## Released-client compatibility
 

@@ -7,6 +7,7 @@ import {
   map,
   shareReplay,
   switchMap,
+  tap,
 } from 'rxjs/operators';
 import { getRelevantEventsForCalendarIntegrationFromIcal } from '../schedule/ical/get-relevant-events-from-ical';
 import {
@@ -32,6 +33,7 @@ import {
   selectAllCalendarTaskEventIds,
 } from '../tasks/store/task.selectors';
 import { loadFromRealLs, saveToRealLs } from '../../core/persistence/local-storage';
+import { lsGetJSON, lsSetJSON } from '../../util/ls-util';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { Store } from '@ngrx/store';
 import {
@@ -41,6 +43,7 @@ import {
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { selectCalendarProviders } from '../issue/store/issue-provider.selectors';
 import {
+  IssueProvider,
   IssueProviderCalendar,
   IssueProviderPluginType,
   isPluginIssueProvider,
@@ -66,6 +69,8 @@ import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 import { sanitizeIcalUrlForDisplay } from '../issue/mapping-helper/get-issue-provider-tooltip';
 import { isCalendarProviderDisabledOnCurrentPlatform } from '../issue/providers/calendar/is-calendar-provider-disabled-on-current-platform.util';
 import { withPluginOAuthTokenKey } from '../../plugins/oauth/plugin-oauth-token-key.util';
+import { IS_ONLINE$ } from '../../util/is-online.token';
+import { pollWhileOnline } from '../../util/poll-while-online';
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
 const ONE_WEEK = 60 * 60 * 1000 * 24 * 7;
@@ -82,6 +87,7 @@ export class CalendarIntegrationService {
   private _pluginHttp = inject(PluginHttpService);
   private _hiddenEventsService = inject(HiddenCalendarEventsService);
   private _taskArchiveService = inject(TaskArchiveService);
+  private _isOnline$ = inject(IS_ONLINE$);
   private _refreshTrigger$ = new Subject<void>();
 
   /**
@@ -156,7 +162,11 @@ export class CalendarIntegrationService {
         this._getFilteredCalProviderFromCache$(icalProviders, pluginCalProviders).pipe(
           first(),
         ),
-        merge(timer(0, minInterval), this._refreshTrigger$).pipe(
+        // Offline, the cached emission above stays in place until the connection is back.
+        pollWhileOnline(this._isOnline$, [
+          timer(0, minInterval),
+          this._refreshTrigger$,
+        ]).pipe(
           switchMap(() => this._fetchAllCombined(icalProviders, pluginCalProviders)),
         ),
       );
@@ -266,10 +276,9 @@ export class CalendarIntegrationService {
     pluginCalProviders: IssueProviderPluginType[],
   ): Observable<ScheduleCalendarMapEntry[]> {
     const icalProviderMap = new Map(icalProviders.map((p) => [p.id, p]));
-    const activeProviderIds = new Set([
-      ...icalProviders.map((p) => p.id),
-      ...pluginCalProviders.map((p) => p.id),
-    ]);
+    const activeProviderMap = new Map<string, IssueProvider>(
+      [...icalProviders, ...pluginCalProviders].map((p) => [p.id, p]),
+    );
 
     return combineLatest([
       this._allLinkedCalendarEventIds$,
@@ -281,7 +290,7 @@ export class CalendarIntegrationService {
       map(([allCalendarTaskEventIds, skippedEventIds, hiddenEventIds]) =>
         this._filterCalendarEntriesForView(
           entries,
-          activeProviderIds,
+          activeProviderMap,
           icalProviderMap,
           allCalendarTaskEventIds,
           skippedEventIds,
@@ -293,7 +302,7 @@ export class CalendarIntegrationService {
 
   private _filterCalendarEntriesForView(
     entries: ScheduleCalendarMapEntry[],
-    activeProviderIds: Set<string>,
+    activeProviderMap: Map<string, IssueProvider>,
     icalProviderMap: Map<string, IssueProviderCalendar>,
     allCalendarTaskEventIds: string[],
     skippedEventIds: string[],
@@ -301,22 +310,32 @@ export class CalendarIntegrationService {
   ): ScheduleCalendarMapEntry[] {
     return entries.map((entry) => ({
       ...entry,
-      items: entry.items.filter((calEv) => {
-        if (!activeProviderIds.has(calEv.calProviderId)) {
-          return false;
-        }
-        const cfg = icalProviderMap.get(calEv.calProviderId);
-        return (
-          passesCalendarEventRegexFilter(
-            calEv,
-            cfg?.filterIncludeRegex,
-            cfg?.filterExcludeRegex,
-          ) &&
-          !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
-          !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
-          !matchesAnyCalendarEventId(calEv, hiddenEventIds)
-        );
-      }),
+      items: entry.items
+        .filter((calEv) => {
+          if (!activeProviderMap.has(calEv.calProviderId)) {
+            return false;
+          }
+          const cfg = icalProviderMap.get(calEv.calProviderId);
+          return (
+            passesCalendarEventRegexFilter(
+              calEv,
+              cfg?.filterIncludeRegex,
+              cfg?.filterExcludeRegex,
+            ) &&
+            !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
+            !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
+            !matchesAnyCalendarEventId(calEv, hiddenEventIds)
+          );
+        })
+        // Events keep the color they were fetched with, also in the cache, so
+        // re-derive it to reflect color changes and events cached before colors.
+        .map((calEv) => {
+          const provider = activeProviderMap.get(calEv.calProviderId);
+          const color = provider
+            ? getCalendarProviderColor(provider, calEv.calendarColor)
+            : calEv.color;
+          return calEv.color === color ? calEv : { ...calEv, color };
+        }),
     }));
   }
 
@@ -340,7 +359,6 @@ export class CalendarIntegrationService {
     const results: PluginSearchResult[] =
       await provider.definition.getNewIssuesForBacklog(pluginConfig, http);
 
-    const color = getCalendarProviderColor(pluginProvider);
     return results
       .filter((r) => r.start != null)
       .map((r) => ({
@@ -353,7 +371,8 @@ export class CalendarIntegrationService {
         isAllDay: r.isAllDay,
         issueProviderKey: pluginProvider.issueProviderKey,
         dueWithTime: r.dueWithTime,
-        color,
+        color: getCalendarProviderColor(pluginProvider, r.color),
+        ...(typeof r.color === 'string' ? { calendarColor: r.color } : {}),
       }));
   }
 
@@ -410,8 +429,35 @@ export class CalendarIntegrationService {
     if (!calEv) {
       return;
     }
+    this._rememberSkippedEventIds(getCalendarEventIdCandidates(calEv));
+  }
 
-    const idsToAdd = getCalendarEventIdCandidates(calEv).filter(
+  /**
+   * Skip by the ids a task stores. A modified recurring instance is also skipped
+   * under its base UID, which only the cached event knows.
+   */
+  skipCalendarEvents(eventIds: string[]): void {
+    if (!eventIds.length) {
+      return;
+    }
+    this._rememberSkippedEventIds(this._idsWithCachedLegacyIds(eventIds));
+  }
+
+  unskipCalendarEvents(eventIds: string[]): void {
+    const current = this.skippedEventIds$.getValue();
+    if (!eventIds.some((id) => current.includes(id))) {
+      return;
+    }
+
+    // Skipping also stored the event's legacy ids, which only the event itself knows.
+    const idsToRemove = new Set(this._idsWithCachedLegacyIds(eventIds));
+    const updated = current.filter((id) => !idsToRemove.has(id));
+    this.skippedEventIds$.next(updated);
+    localStorage.setItem(LS.CALENDER_EVENTS_SKIPPED_TODAY, JSON.stringify(updated));
+  }
+
+  private _rememberSkippedEventIds(ids: string[]): void {
+    const idsToAdd = ids.filter(
       (id): id is string => typeof id === 'string' && id.length > 0,
     );
     if (!idsToAdd.length) {
@@ -419,10 +465,28 @@ export class CalendarIntegrationService {
     }
 
     const current = this.skippedEventIds$.getValue();
-    const updated = [...current, ...idsToAdd.filter((id) => !current.includes(id))];
+    const seen = new Set(current);
+    const updated = [...current];
+    for (const id of idsToAdd) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        updated.push(id);
+      }
+    }
     this.skippedEventIds$.next(updated);
     localStorage.setItem(LS.CALENDER_EVENTS_SKIPPED_TODAY, JSON.stringify(updated));
     localStorage.setItem(LS.CALENDER_EVENTS_LAST_SKIP_DAY, getDbDateStr());
+  }
+
+  private _idsWithCachedLegacyIds(eventIds: string[]): string[] {
+    return [
+      ...eventIds,
+      ...this._getCalProviderFromCache().flatMap(({ items }) =>
+        items
+          .filter((calEv) => matchesAnyCalendarEventId(calEv, eventIds))
+          .flatMap((calEv) => getCalendarEventIdCandidates(calEv)),
+      ),
+    ];
   }
 
   requestEvents$(
@@ -460,6 +524,7 @@ export class CalendarIntegrationService {
             color: getCalendarProviderColor(calProvider),
           })),
         ),
+        tap(() => this._clearFailure(calProvider.id)),
         catchError((err) => {
           // iCal feed URLs frequently embed a secret token (Google/Outlook
           // private feeds). HttpErrorResponse puts the full URL in `.url` and
@@ -470,28 +535,33 @@ export class CalendarIntegrationService {
             name: (err as Error)?.name,
             status: (err as { status?: number })?.status,
           });
-          if (err instanceof NotIcalResponseError) {
-            this._snackService.open({
-              type: 'ERROR',
-              msg: T.F.CALENDARS.S.CAL_PROVIDER_NOT_ICAL,
-            });
-          } else {
-            // Replace the raw iCal URL (which may embed a secret token) with
-            // the sanitized host so the user-visible snackbar can't leak it
-            // via screenshot/screenshare.
-            const rawErrTxt = getErrorTxt(err);
-            const errTxt = calProvider.icalUrl
-              ? rawErrTxt
-                  .split(calProvider.icalUrl)
-                  .join(sanitizeIcalUrlForDisplay(calProvider.icalUrl))
-              : rawErrTxt;
-            this._snackService.open({
-              type: 'ERROR',
-              msg: T.F.CALENDARS.S.CAL_PROVIDER_ERROR,
-              translateParams: {
-                errTxt,
-              },
-            });
+          // A broken calendar is reported once, not on every poll and app start:
+          // on a phone the repeated snack sits on top of the add-task bar. It is
+          // reported again after the provider has recovered.
+          if (this._isNewFailure(calProvider.id)) {
+            if (err instanceof NotIcalResponseError) {
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.CALENDARS.S.CAL_PROVIDER_NOT_ICAL,
+              });
+            } else {
+              // Replace the raw iCal URL (which may embed a secret token) with
+              // the sanitized host so the user-visible snackbar can't leak it
+              // via screenshot/screenshare.
+              const rawErrTxt = getErrorTxt(err);
+              const errTxt = calProvider.icalUrl
+                ? rawErrTxt
+                    .split(calProvider.icalUrl)
+                    .join(sanitizeIcalUrlForDisplay(calProvider.icalUrl))
+                : rawErrTxt;
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.CALENDARS.S.CAL_PROVIDER_ERROR,
+                translateParams: {
+                  errTxt,
+                },
+              });
+            }
           }
           if (isForwardError) {
             throw err;
@@ -499,6 +569,31 @@ export class CalendarIntegrationService {
           return of([]);
         }),
       );
+  }
+
+  /** True only for the first failure since the provider last worked. */
+  private _isNewFailure(providerId: string): boolean {
+    const failingIds = this._readFailingProviderIds();
+    if (failingIds.includes(providerId)) {
+      return false;
+    }
+    lsSetJSON(LS.CAL_PROVIDER_FAILING_IDS, [...failingIds, providerId]);
+    return true;
+  }
+
+  private _clearFailure(providerId: string): void {
+    const failingIds = this._readFailingProviderIds();
+    if (failingIds.includes(providerId)) {
+      lsSetJSON(
+        LS.CAL_PROVIDER_FAILING_IDS,
+        failingIds.filter((id) => id !== providerId),
+      );
+    }
+  }
+
+  private _readFailingProviderIds(): string[] {
+    const ids = lsGetJSON<unknown>(LS.CAL_PROVIDER_FAILING_IDS, []);
+    return Array.isArray(ids) ? ids : [];
   }
 
   requestEventsForSchedule$(
@@ -510,6 +605,25 @@ export class CalendarIntegrationService {
       Date.now() - ONE_WEEK,
       Date.now() + ONE_MONTHS,
       isForwardError,
+    );
+  }
+
+  /**
+   * Last fetched events of one provider overlapping `start`–`end`, from the cache
+   * the schedule poll writes. For showing something while the feed can't be reached.
+   */
+  getCachedEvents(
+    calProviderId: string,
+    start = getStartOfDayTimestamp(),
+    end = getEndOfDayTimestamp(),
+  ): CalendarIntegrationEvent[] {
+    return this._getCalProviderFromCache().flatMap((entry) =>
+      entry.items.filter(
+        (item) =>
+          item.calProviderId === calProviderId &&
+          item.start <= end &&
+          item.start + item.duration >= start,
+      ),
     );
   }
 

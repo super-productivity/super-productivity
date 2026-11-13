@@ -3,7 +3,15 @@
  * handling of compound emojis (ZWJ sequences, flags, keycaps).
  */
 
-const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+// Built on first use so app start doesn't pay for constructing it at module
+// evaluation (~1 ms on desktop, several ms on slow devices).
+let segmenter: Intl.Segmenter | undefined;
+const getSegmenter = (): Intl.Segmenter =>
+  (segmenter ??= new Intl.Segmenter(undefined, { granularity: 'grapheme' }));
+
+// Every emoji grapheme contains a non-ASCII code point (keycaps carry U+20E3),
+// so ASCII-only strings (e.g. Material icon names) can skip segmentation.
+const NON_ASCII = /[^\x00-\x7f]/;
 
 /**
  * Maximum UTF-16 code unit length for a single emoji grapheme.
@@ -78,11 +86,11 @@ export const extractFirstEmoji = (str: string): string => {
   }
 
   const trimmed = str.trim();
-  if (trimmed.length === 0) {
+  if (trimmed.length === 0 || !NON_ASCII.test(trimmed)) {
     return '';
   }
 
-  for (const { segment } of segmenter.segment(trimmed)) {
+  for (const { segment } of getSegmenter().segment(trimmed)) {
     if (isEmojiGrapheme(segment)) {
       return segment;
     }
@@ -103,11 +111,11 @@ export const isSingleEmoji = (str: string): boolean => {
   }
 
   const trimmed = str.trim();
-  if (trimmed.length === 0) {
+  if (trimmed.length === 0 || !NON_ASCII.test(trimmed)) {
     return false;
   }
 
-  const segments = Array.from(segmenter.segment(trimmed));
+  const segments = Array.from(getSegmenter().segment(trimmed));
   return segments.length === 1 && isEmojiGrapheme(segments[0].segment);
 };
 
@@ -123,11 +131,11 @@ export const containsEmoji = (str: string): boolean => {
   }
 
   const trimmed = str.trim();
-  if (trimmed.length === 0) {
+  if (trimmed.length === 0 || !NON_ASCII.test(trimmed)) {
     return false;
   }
 
-  for (const { segment } of segmenter.segment(trimmed)) {
+  for (const { segment } of getSegmenter().segment(trimmed)) {
     if (isEmojiGrapheme(segment)) {
       return true;
     }

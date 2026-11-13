@@ -428,52 +428,6 @@
         "WRITE_A_COMMENT": "یک کامنت بنویسید"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "مدت زمان از پیش پر شده حاوی داده های پیگیری نشده روزهای گذشته است.",
-        "T_ALREADY_TRACKED": "قبلا پیگیری شده است",
-        "T_TITLE": "عنوان",
-        "T_TO_BE_SUBMITTED": "ارسال شود",
-        "TITLE": "زمان صرف شده برای مسائل را به GitLab ارسال کنید",
-        "TOTAL_MSG": "شما در مجموع <em>{{totalTimeToSubmit}}</em> زمان کاری امروز را به <em>{{nrOfTasksToSubmit}}</em> مسائل مختلف ارسال خواهید کرد."
-      },
-      "FORM": {
-        "FILTER": "فیلتر سفارشی",
-        "FILTER_DESCRIPTION": "به https://docs.gitlab.com/ee/api/issues.html#list-issues مراجعه کنید. چندگانه را می توان با و ترکیب کرد",
-        "FILTER_USER": "نام کاربری (مثلا برای فیلتر کردن تغییراتی که خودتان انجام دادید)",
-        "GITLAB_BASE_URL": "URL پایه GitLab سفارشی",
-        "PROJECT": "مسیر کامل یا نام کاربری / پروژه",
-        "PROJECT_HINT": "به عنوان مثال johannesjo/فوق بهره وری",
-        "SCOPE": "محدوده",
-        "SCOPE_ALL": "همه",
-        "SCOPE_ASSIGNED": "به من اختصاص داده شده است",
-        "SCOPE_CREATED": "ایجاد شده توسط من",
-        "SOURCE": "منبع",
-        "SOURCE_GLOBAL": "همه",
-        "SOURCE_GROUP": "گروه",
-        "SOURCE_PROJECT": "پروژه",
-        "SUBMIT_TIMELOGS": "تایم لاگ ها را به Gitlab ارسال کنید",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "پس از کلیک بر روی روز پایان، گفتگوی ردیابی زمان را نشان دهید",
-        "TOKEN": "توکن دسترسی"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p> در اینجا می توانید SuperProductivity را تنظیم کنید تا لیست GitLab باز (یا نسخه آنلاین آن یا یک نمونه خود میزبان) را برای یک پروژه خاص در پانل ایجاد کار در نمای برنامه ریزی روزانه تنظیم کنید. آنها به عنوان پیشنهادات ذکر شده اند و پیوندی به موضوع و همچنین اطلاعات بیشتر در مورد آن را ارائه می دهند. </p> <p> علاوه بر این می توانید به طور خودکار همه موارد باز را به بک گراند وظیفه خود اضافه کنید و همگام سازی کنید. </p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "مسئول",
-        "AT": "در",
-        "DESCRIPTION": "توضیحات",
-        "LABELS": "برچسب ها",
-        "MARK_AS_CHECKED": "بروزرسانی ها به عنوان بررسی شده نشان شود.",
-        "PROJECT": "پروژه",
-        "STATUS": "وضعیت",
-        "SUMMARY": "خلاصه",
-        "WRITE_A_COMMENT": "دیدگاهتان را بنویسید"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: خطای ناشناخته {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "این ادغام احتمالاً در مرورگر شما کار نخواهد کرد. لطفا نسخه دسکتاپ یا اندروید Super Productivity را دانلود کنید!",
       "DEFAULT": {
@@ -3124,8 +3078,8 @@
       "PLANNER": "روزهای آینده را در {{plannerIcon}} <b>برنامه ریز</b> برنامه‌ریزی کنید",
       "TASK_MENU_TOUCH": "وظیفه را به چپ بکشید تا منویش باز شود: {{playIcon}} <b>شروع ردیابی زمان</b>، {{subtaskIcon}} <b>اضافه کردن کار فرعی</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "وظیفه را به چپ بکشید تا منویش باز شود، مثلاً {{subtaskIcon}} <b>اضافه کردن کار فرعی</b>",
-      "TIMER_RUNNING": "زمان‌سنج در حال اجراست. برای توقف، دوباره {{playIcon}} یا <kbd>{{key}}</kbd> را فشار دهید.",
-      "TIMER_RUNNING_TOUCH": "زمان‌سنج در حال اجراست. برای توقف، بالا روی {{playIcon}} بزنید.",
+      "TIMER_RUNNING": "زمان‌سنج در حال اجراست. برای توقف، دوباره {{pauseIcon}} یا <kbd>{{key}}</kbd> را فشار دهید.",
+      "TIMER_RUNNING_TOUCH": "زمان‌سنج در حال اجراست. برای توقف، بالا روی {{pauseIcon}} بزنید.",
       "TRACK_TIME": "اشاره‌گر را روی وظیفه ببرید و برای ردیابی زمان {{playIcon}} را فشار دهید"
     },
     "WANT_MORE": {

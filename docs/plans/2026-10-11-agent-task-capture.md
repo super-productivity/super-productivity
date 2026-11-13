@@ -182,8 +182,11 @@ server scales out.` A deliberate identical repeat within 10 minutes is merged.
 | `POST /api/capture/connect-code`                                      | Mint the code (replaces the previous one)                                                                                                                                                                                 |
 | `POST /api/capture/tokens`                                            | Create a capture token                                                                                                                                                                                                    |
 | `GET /api/capture/grants`, `DELETE /api/capture/grants/:id?discard=1` | List and revoke                                                                                                                                                                                                           |
+| `POST /api/capture/items`                                             | Store `{ id, fingerprint, ciphertext }` a device sealed itself (Android share, [plan](2026-10-24-android-share-capture.md)). Idempotent by `id`; 409 `switched_off`, `key_mismatch`, `queue_full`, `id_conflict`          |
 
-**`taskId` rule.** An item gets `taskId = itemId` on first lease. A
+**`taskId` rule.** An item gets `taskId = itemId` on first lease; a
+device-sealed item (`POST /items`) gets a server-issued `taskId` at insert
+instead, since its id is the device's own. A
 different `deviceId` taking over an expired lease gets a fresh `taskId`. A
 device always gets back the `taskId` it was given. So two devices never create
 the same task id, and acks from an old lease can't delete a newer one.

@@ -48,6 +48,8 @@ describe('PlainspaceHandoffService', () => {
     });
     service = TestBed.inject(PlainspaceHandoffService);
     syncState = TestBed.inject(IssueSyncStateService);
+    // Nothing pending by default; the two-way-sync effect answers in the app.
+    spyOn(syncState, 'pushPending').and.resolveTo(true);
   });
 
   describe('getMembers', () => {
@@ -91,6 +93,34 @@ describe('PlainspaceHandoffService', () => {
         type: 'SUCCESS',
         msg: T.PLAINSPACE.HANDOFF.ASSIGNED,
         translateParams: { name: 'Bob' },
+      });
+    });
+
+    it('pushes pending edits before the assignee PATCH', async () => {
+      const order: string[] = [];
+      (syncState.pushPending as jasmine.Spy).and.callFake(async () => {
+        order.push('push');
+        return true;
+      });
+      api.patchTask$.and.callFake(() => {
+        order.push('handoff');
+        return of({ id: 'item-1', isDone: false });
+      });
+      await service.handOff(task, bob);
+
+      expect(syncState.pushPending).toHaveBeenCalledWith('t1');
+      expect(order).toEqual(['push', 'handoff']);
+    });
+
+    it('does not hand off while pending edits cannot be pushed, and says why', async () => {
+      (syncState.pushPending as jasmine.Spy).and.resolveTo(false);
+      await service.handOff(task, bob);
+
+      expect(api.patchTask$).not.toHaveBeenCalled();
+      expect(syncState.isMissing('t1')).toBeFalse();
+      expect(snack.open).toHaveBeenCalledWith({
+        type: 'ERROR',
+        msg: T.PLAINSPACE.HANDOFF.UNSYNCED_EDITS,
       });
     });
 

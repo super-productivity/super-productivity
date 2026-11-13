@@ -19,6 +19,7 @@ import {
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../planner/store/planner.actions';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from './dialog-deadline/dialog-deadline.component';
 import { T } from '../../t.const';
@@ -51,6 +52,7 @@ import { isTouchActive } from '../../util/input-intent';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { msToString } from '../../ui/duration/ms-to-string.pipe';
 import { ADD_TASK_INLINE_BTN_SELECTOR } from '../planner/add-task-inline/add-task-inline.const';
+import { TASK_CARD_LIST_ADD_BTN_SELECTOR } from './task-card-list.token';
 import { getNextPlannerAddButton } from '../planner/get-next-planner-add-button';
 import { IssueSyncStateService } from '../issue/two-way-sync/issue-sync-state.service';
 
@@ -815,13 +817,16 @@ export class TaskBulkActionService {
     if (!rowScope) {
       return null;
     }
-    const inScope = rowScope.querySelector<HTMLElement>(ADD_TASK_INLINE_BTN_SELECTOR);
-    if (inScope || rowScope.matches('[data-board-selection-scope]')) {
-      // Board panels stop here even with nothing to offer: reaching into a
-      // sibling panel is the cross-panel jump this fallback exists to avoid.
-      return inScope ?? null;
+    if (rowScope.matches('[data-board-selection-scope]')) {
+      // A board column's header "+". Board panels stop here even with nothing
+      // to offer: reaching into a sibling panel is the cross-panel jump this
+      // fallback exists to avoid.
+      return rowScope.querySelector<HTMLElement>(TASK_CARD_LIST_ADD_BTN_SELECTOR);
     }
-    return getNextPlannerAddButton(rowScope);
+    return (
+      rowScope.querySelector<HTMLElement>(ADD_TASK_INLINE_BTN_SELECTOR) ??
+      getNextPlannerAddButton(rowScope)
+    );
   }
 
   /**

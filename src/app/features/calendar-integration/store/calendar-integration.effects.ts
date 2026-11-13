@@ -1,8 +1,17 @@
 import { Injectable, inject } from '@angular/core';
-import { createEffect } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { distinctUntilChanged, first, map, skip, switchMap, tap } from 'rxjs/operators';
-import { BehaviorSubject, EMPTY, forkJoin, timer } from 'rxjs';
+import {
+  catchError,
+  distinctUntilChanged,
+  filter,
+  first,
+  map,
+  skip,
+  switchMap,
+  tap,
+} from 'rxjs/operators';
+import { BehaviorSubject, EMPTY, forkJoin, merge, Observable, of, timer } from 'rxjs';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { BannerService } from '../../../core/banner/banner.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
@@ -35,11 +44,19 @@ import {
 } from '../get-calendar-event-id-candidates';
 import { getEffectiveCheckInterval } from '../../issue/providers/calendar/calendar.const';
 import { passesCalendarEventRegexFilter } from '../calendar-event-regex-filter';
+import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { pollWhileOnline } from '../../../util/poll-while-online';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import {
+  getCalendarAutoImportDismissals,
+  TaskSharedActions,
+} from '../../../root-store/meta/task-shared.actions';
 
 const CHECK_TO_SHOW_INTERVAL = 60 * 1000;
 
 @Injectable()
 export class CalendarIntegrationEffects {
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _store = inject(Store);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _bannerService = inject(BannerService);
@@ -53,6 +70,7 @@ export class CalendarIntegrationEffects {
   private _translateStore = inject(TranslateStore);
   private _syncTriggerService = inject(SyncTriggerService);
   private _hydrationStateService = inject(HydrationStateService);
+  private _isOnline$ = inject(IS_ONLINE$);
   private _taskState = this._store.selectSignal(selectTaskFeatureState);
 
   /**
@@ -97,14 +115,14 @@ export class CalendarIntegrationEffects {
 
           return forkJoin(
             activatedProviders.map((calProvider) =>
-              timer(0, getEffectiveCheckInterval(calProvider)).pipe(
-                switchMap(() =>
-                  this._calendarIntegrationService.requestEvents$(calProvider),
-                ),
-                switchMap((allEventsToday) =>
+              this._getTodayEvents$(calProvider).pipe(
+                switchMap(({ events: allEventsToday, isFromCache }) =>
                   timer(0, CHECK_TO_SHOW_INTERVAL).pipe(
                     tap(async () => {
                       const isAutoImportAllowed =
+                        // Cached events may be stale (deleted or moved remotely);
+                        // only show banners for them, never create tasks.
+                        !isFromCache &&
                         calProvider.isAutoImportForCurrentDay &&
                         this._syncTriggerService.isInitialSyncDoneSync() &&
                         !this._hydrationStateService.isInSyncWindow();
@@ -195,6 +213,86 @@ export class CalendarIntegrationEffects {
                 ),
               ),
             ),
+          );
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  /**
+   * Today's events of one provider, re-fetched every check interval while online.
+   * Offline ticks keep the last result; when the feed can't be reached at all
+   * (offline at start or a failed request) the cached events stand in so due
+   * event banners still show.
+   */
+  private _getTodayEvents$(
+    calProvider: IssueProviderCalendar,
+  ): Observable<{ events: CalendarIntegrationEvent[]; isFromCache: boolean }> {
+    const fromCache = (): {
+      events: CalendarIntegrationEvent[];
+      isFromCache: boolean;
+    } => ({
+      events: this._calendarIntegrationService.getCachedEvents(calProvider.id),
+      isFromCache: true,
+    });
+    return merge(
+      this._isOnline$.pipe(
+        first(),
+        filter((isOnline) => !isOnline),
+        map(fromCache),
+      ),
+      pollWhileOnline(this._isOnline$, [
+        timer(0, getEffectiveCheckInterval(calProvider)),
+      ]).pipe(
+        switchMap(() =>
+          this._calendarIntegrationService
+            .requestEvents$(calProvider, undefined, undefined, true)
+            .pipe(
+              map((events) => ({ events, isFromCache: false })),
+              catchError(() => of(fromCache())),
+            ),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Adding an event as a task skips it for the day. Once that task is deleted the
+   * skip is all that still hides the event, so lift it.
+   */
+  unskipEventsOfDeletedTasks$ = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.deleteTask, TaskSharedActions.deleteTasks),
+        tap((action) => {
+          const tasks =
+            action.type === TaskSharedActions.deleteTask.type
+              ? [action.task, ...(action.task.subTasks ?? [])]
+              : (action.tasks ?? []);
+          this._calendarIntegrationService.unskipCalendarEvents(
+            getCalendarAutoImportDismissals(tasks).map(({ issueId }) => issueId),
+          );
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  /**
+   * A restore (undo, Recently Deleted, History, REST API, issue search) puts the
+   * task back, so skip its event again. The due-event banner only checks the
+   * skip list, and a restored task would otherwise show it.
+   */
+  skipEventsOfRestoredTasks$ = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.restoreDeletedTask, TaskSharedActions.restoreTask),
+        tap((action) => {
+          const tasks =
+            action.type === TaskSharedActions.restoreTask.type
+              ? [action.task, ...action.subTasks]
+              : [action.task, ...(action.task.subTasks ?? [])];
+          this._calendarIntegrationService.skipCalendarEvents(
+            getCalendarAutoImportDismissals(tasks).map(({ issueId }) => issueId),
           );
         }),
       ),

@@ -76,6 +76,15 @@ const WEEKDAYS = [
   'saturday',
   'sunday',
 ] as const;
+const EMPTY_WEEKDAYS = {
+  monday: false,
+  tuesday: false,
+  wednesday: false,
+  thursday: false,
+  friday: false,
+  saturday: false,
+  sunday: false,
+} as const;
 const UPDATE_KEYS: ReadonlySet<string> = new Set([
   'quickSetting',
   'startDate',
@@ -407,8 +416,13 @@ export class LocalRestApiTaskRepeatCfgRoutesService implements LocalRestApiFeatu
       };
     }
 
+    // Supplied custom weekdays replace the selection; omitting all weekday
+    // fields preserves the existing selection or the defaults on creation.
+    const replaceWeekdays =
+      quickSetting === 'CUSTOM' && WEEKDAYS.some((day) => custom[day] !== undefined);
     let result: Omit<TaskRepeatCfgCopy, 'id'> = {
       ...base,
+      ...(replaceWeekdays ? EMPTY_WEEKDAYS : {}),
       ...custom,
       quickSetting,
       ...(startDate !== undefined ? { startDate } : {}),

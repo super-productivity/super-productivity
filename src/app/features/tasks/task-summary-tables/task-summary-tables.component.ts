@@ -4,11 +4,13 @@ import {
   computed,
   inject,
   input,
+  signal,
 } from '@angular/core';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../task.service';
 import { MatDialog } from '@angular/material/dialog';
 import { WorklogService } from '../../worklog/worklog.service';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogWorklogExportComponent } from '../../worklog/dialog-worklog-export/dialog-worklog-export.component';
 import { Project, RoundTimeOption } from '../../project/project.model';
 import { Task } from '../task.model';
@@ -30,9 +32,10 @@ import {
   MatMenuItem,
   MatMenuTrigger,
 } from '@angular/material/menu';
-import { AsyncPipe } from '@angular/common';
+import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 
 @Component({
   selector: 'task-summary-tables',
@@ -48,6 +51,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
     MatMenuContent,
     MatMenuItem,
     AsyncPipe,
+    NgTemplateOutlet,
+    CollapsibleComponent,
     MsToStringPipe,
     TranslatePipe,
   ],
@@ -69,6 +74,9 @@ export class TaskSummaryTablesComponent {
   readonly isForToday = input<boolean>(true);
 
   readonly isShowYesterday = input<boolean>(false);
+
+  // View-only state: all projects start expanded each time the summary opens.
+  readonly collapsedProjectIds = signal<(string | null)[]>([]);
 
   readonly projectIds = computed(() => {
     return unique(
@@ -99,6 +107,14 @@ export class TaskSummaryTablesComponent {
     }
     return mappedProjects;
   });
+
+  toggleProjectExpanded(projectId: string | null): void {
+    this.collapsedProjectIds.update((ids) =>
+      ids.includes(projectId)
+        ? ids.filter((id) => id !== projectId)
+        : [...ids, projectId],
+    );
+  }
 
   onTaskSummaryEdit(): void {
     this._worklogService.refreshWorklog();

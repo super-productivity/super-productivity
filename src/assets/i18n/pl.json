@@ -444,52 +444,6 @@
         "WRITE_A_COMMENT": "Napisz komentarz"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Wstępnie wypełniony czas trwania zawiera nieśledzone dane z poprzednich dni.",
-        "T_ALREADY_TRACKED": "Już śledzone",
-        "T_TITLE": "Tytuł",
-        "T_TO_BE_SUBMITTED": "Do przesłania",
-        "TITLE": "Prześlij czas spędzony na zgłoszeniach do GitLab",
-        "TOTAL_MSG": "Zgłosisz <em>{{totalTimeToSubmit}}</em> czasu pracy w dniu dzisiejszym do <em>{{nrOfTasksToSubmit}}</em> różnych zgłoszeń."
-      },
-      "FORM": {
-        "FILTER": "Filtr niestandardowy",
-        "FILTER_DESCRIPTION": "Zobacz https://docs.gitlab.com/ee/api/issues.html#list-issues. Można łączyć wiele filtrów przez użycie &",
-        "FILTER_USER": "Nazwa użytkownika (np. w celu filtrowania twoich zmian)",
-        "GITLAB_BASE_URL": "Własne URL do GitLab",
-        "PROJECT": "ID projektu lub nazwa użytkownika/projekt",
-        "PROJECT_HINT": "Ścieżka projektu (namespace/project-slug) lub numeryczny identyfikator projektu, a nie wyświetlana nazwa (np. super-productivity/super-productivity lub 12345)",
-        "SCOPE": "Zakres",
-        "SCOPE_ALL": "Wszystkie",
-        "SCOPE_ASSIGNED": "Przypisane do mnie",
-        "SCOPE_CREATED": "Utworzone przeze mnie",
-        "SOURCE": "Źródło",
-        "SOURCE_GLOBAL": "Wszystkie",
-        "SOURCE_GROUP": "Grupa",
-        "SOURCE_PROJECT": "Projekt",
-        "SUBMIT_TIMELOGS": "Przesyłanie dzienników czasowych do GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Wyświetlanie okna dialogowego śledzenia czasu po kliknięciu dnia zakończenia",
-        "TOKEN": "Token dostępu"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Tutaj możesz skonfigurować Super Productivity tak, aby wyświetlał otwarte zgłoszenia GitLab (zarówno wersji online, jak i instancji hostowanej samodzielnie) dla wybranego projektu w panelu tworzenia zadań w widoku planowania dziennego. Będą one pokazywane jako sugestie i będą zawierały link do zgłoszenia oraz dodatkowe informacje.</p><p>Możesz też automatycznie dodawać i synchronizować wszystkie otwarte zgłoszenia do zaległości.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Przypisany",
-        "AT": "o",
-        "DESCRIPTION": "Opis",
-        "LABELS": "Kategorie",
-        "MARK_AS_CHECKED": "Zaznacz zmiany jako sprawdzone",
-        "PROJECT": "Projekt",
-        "STATUS": "Status",
-        "SUMMARY": "Podsumowanie",
-        "WRITE_A_COMMENT": "Napisz komentarz"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: nieznany błąd {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Ta integracja prawdopodobnie nie będzie działać w Twojej przeglądarce. Pobierz wersję Super Productivity na komputer lub Androida!",
       "DEFAULT": {
@@ -3029,8 +2983,8 @@
       "PLANNER": "Zaplanuj kolejne dni w {{plannerIcon}} <b>Planer</b>",
       "TASK_MENU_TOUCH": "Przesuń zadanie w lewo, aby zobaczyć jego menu: {{playIcon}} <b>Rozpocznij śledzenie czasu</b>, {{subtaskIcon}} <b>Dodaj podzadanie</b>",
       "TASK_MENU_TOUCH_NO_TRACKING": "Przesuń zadanie w lewo, aby zobaczyć jego menu, np. {{subtaskIcon}} <b>Dodaj podzadanie</b>",
-      "TIMER_RUNNING": "Stoper działa. Naciśnij ponownie {{playIcon}} lub <kbd>{{key}}</kbd>, aby wstrzymać.",
-      "TIMER_RUNNING_TOUCH": "Stoper działa. Stuknij {{playIcon}} u góry, aby wstrzymać.",
+      "TIMER_RUNNING": "Stoper działa. Naciśnij ponownie {{pauseIcon}} lub <kbd>{{key}}</kbd>, aby wstrzymać.",
+      "TIMER_RUNNING_TOUCH": "Stoper działa. Stuknij {{pauseIcon}} u góry, aby wstrzymać.",
       "TRACK_TIME": "Najedź na zadanie i naciśnij {{playIcon}}, aby śledzić czas"
     },
     "WANT_MORE": {

@@ -69,14 +69,14 @@ test.describe('Recurring Task - Edit must not strand today (#7951)', () => {
 
     const dayToday = page
       .locator('planner-day')
-      .filter({ has: page.locator('.date', { hasText: /^16\/6$/ }) });
+      .filter({ has: page.locator('.date', { hasText: /^16\/06$/ }) });
     await expect(
       dayToday.locator('planner-task').filter({ hasText: taskTitle }),
     ).toHaveCount(1, { timeout: 15000 });
 
     const dayTomorrow = page
       .locator('planner-day')
-      .filter({ has: page.locator('.date', { hasText: /^17\/6$/ }) });
+      .filter({ has: page.locator('.date', { hasText: /^17\/06$/ }) });
     await expect(
       dayTomorrow.locator('planner-task').filter({ hasText: taskTitle }),
     ).toHaveCount(0);

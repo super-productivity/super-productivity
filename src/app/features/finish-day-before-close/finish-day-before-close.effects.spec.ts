@@ -7,6 +7,7 @@ import { GlobalConfigService } from '../config/global-config.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { TaskService } from '../tasks/task.service';
 import { WorkContextService } from '../work-context/work-context.service';
+import { UiHelperService } from '../ui-helper/ui-helper.service';
 import { DEFAULT_TASK, Task } from '../tasks/task.model';
 import { EMPTY } from 'rxjs';
 
@@ -15,6 +16,7 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
   let execBeforeCloseService: jasmine.SpyObj<ExecBeforeCloseService>;
   let router: jasmine.SpyObj<Router>;
   let showDialogSpy: jasmine.Spy;
+  let uiHelperService: jasmine.SpyObj<UiHelperService>;
 
   const doneTask: Task = {
     ...DEFAULT_TASK,
@@ -55,6 +57,7 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
     translateServiceSpy.instant.and.returnValue('Finish your day?');
 
     const routerSpy = jasmine.createSpyObj('Router', ['navigateByUrl']);
+    const uiHelperServiceSpy = jasmine.createSpyObj('UiHelperService', ['focusApp']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -66,6 +69,7 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
         { provide: WorkContextService, useValue: workContextServiceSpy },
         { provide: TranslateService, useValue: translateServiceSpy },
         { provide: Router, useValue: routerSpy },
+        { provide: UiHelperService, useValue: uiHelperServiceSpy },
       ],
     });
 
@@ -74,11 +78,24 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
       ExecBeforeCloseService,
     ) as jasmine.SpyObj<ExecBeforeCloseService>;
     router = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+    uiHelperService = TestBed.inject(UiHelperService) as jasmine.SpyObj<UiHelperService>;
 
     showDialogSpy = spyOn(effects, '_showDialog');
   });
 
   describe('when there are done tasks', () => {
+    // Quit from the tray leaves the window hidden; an unseen prompt stalls the quit.
+    it('shows the app window before the prompt', async () => {
+      showDialogSpy.and.callFake(() => {
+        expect(uiHelperService.focusApp).toHaveBeenCalled();
+        return Promise.resolve('quit');
+      });
+
+      await effects._handleCloseDecision([doneTask]);
+
+      expect(showDialogSpy).toHaveBeenCalled();
+    });
+
     it('calls setDone (allows close) when user picks "quit"', async () => {
       showDialogSpy.and.returnValue(Promise.resolve('quit'));
 
@@ -111,6 +128,24 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
     });
   });
 
+  it('a repeated quit while the prompt is open shows no second prompt', async () => {
+    let answer: (choice: 'quit') => void = () => undefined;
+    showDialogSpy.and.returnValue(new Promise((resolve) => (answer = resolve)));
+
+    const first = effects._handleCloseDecision([doneTask]);
+    await effects._handleCloseDecision([doneTask]);
+
+    expect(showDialogSpy).toHaveBeenCalledTimes(1);
+    expect(uiHelperService.focusApp).toHaveBeenCalledTimes(2);
+    expect(execBeforeCloseService.setDone).not.toHaveBeenCalled();
+
+    answer('quit');
+    await first;
+    expect(execBeforeCloseService.setDone).toHaveBeenCalledOnceWith(
+      'FINISH_DAY_BEFORE_CLOSE_EFFECT',
+    );
+  });
+
   // Finish Day archives won't-do tasks as well.
   it("counts tasks finished as won't do", async () => {
     showDialogSpy.and.returnValue(Promise.resolve('cancel'));
@@ -128,6 +163,7 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
       await effects._handleCloseDecision([undoneTask]);
 
       expect(showDialogSpy).not.toHaveBeenCalled();
+      expect(uiHelperService.focusApp).not.toHaveBeenCalled();
       expect(execBeforeCloseService.setDone).toHaveBeenCalledWith(
         'FINISH_DAY_BEFORE_CLOSE_EFFECT',
       );

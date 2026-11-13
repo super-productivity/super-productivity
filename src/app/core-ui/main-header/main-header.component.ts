@@ -48,9 +48,8 @@ import { DesktopPanelButtonsComponent } from './desktop-panel-buttons/desktop-pa
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { EmlDropDirective } from '../../core/drop-paste-input/eml-drop.directive';
-
-/** One `DOM_DELTA_LINE` notch, in CSS pixels. Matches the row's icon metrics. */
-const WHEEL_LINE_HEIGHT_PX = 16;
+import { wheelDeltaPx } from '../../util/wheel-delta-px';
+import { openSyncSettingsDialog } from '../../imex/sync/open-sync-settings-dialog';
 
 /**
  * How long a reveal keeps re-asserting its edge while the row's own box is
@@ -462,7 +461,7 @@ export class MainHeaderComponent implements OnDestroy {
     // fires at trackpad rates. Same source of truth: `app.component` sets `dir`
     // on the document element, which is what the computed value reflected.
     const towardsEnd = document.documentElement.dir === 'rtl' ? -1 : 1;
-    const step = towardsEnd * this._wheelDeltaPx(ev, el.clientWidth);
+    const step = towardsEnd * wheelDeltaPx(ev.deltaY, ev.deltaMode, el.clientWidth);
     const before = el.scrollLeft;
     el.scrollLeft = before + step;
     // Only swallow the gesture if it actually moved the row, so a wheel at
@@ -470,25 +469,6 @@ export class MainHeaderComponent implements OnDestroy {
     if (el.scrollLeft !== before) {
       ev.preventDefault();
     }
-  }
-
-  /**
-   * `deltaY` in CSS pixels, whatever unit the browser reported it in.
-   *
-   * Only `DOM_DELTA_PIXEL` is already pixels. Firefox reports `DOM_DELTA_LINE`
-   * for a classic mouse wheel -- about ±3 per notch -- so taking `deltaY` raw
-   * moves the row 3px and then `preventDefault()`s, which reads as broken
-   * rather than absent. `DOM_DELTA_PAGE` is reachable from the Windows
-   * "one screen at a time" setting.
-   */
-  private _wheelDeltaPx(ev: WheelEvent, clientWidth: number): number {
-    if (ev.deltaMode === WheelEvent.DOM_DELTA_LINE) {
-      return ev.deltaY * WHEEL_LINE_HEIGHT_PX;
-    }
-    if (ev.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
-      return ev.deltaY * clientWidth;
-    }
-    return ev.deltaY;
   }
 
   constructor() {
@@ -699,9 +679,10 @@ export class MainHeaderComponent implements OnDestroy {
     if (this.dialogSyncCfgRef) {
       return;
     }
-    const { DialogSyncCfgComponent } =
-      await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component');
-    this.dialogSyncCfgRef = this.matDialog.open(DialogSyncCfgComponent);
+    this.dialogSyncCfgRef = await openSyncSettingsDialog(
+      this.matDialog,
+      this._configService.sync(),
+    );
     this._subs.add(
       this.dialogSyncCfgRef.afterClosed().subscribe(() => {
         this.dialogSyncCfgRef = null;

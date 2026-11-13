@@ -3,11 +3,9 @@ import {
   hideAddTaskBar,
   hideIssuePanel,
   hideNonTaskSidePanelContent,
-  hideTaskViewCustomizerPanel,
   showAddTaskBar,
   toggleIssuePanel,
   toggleShowNotes,
-  toggleTaskViewCustomizerPanel,
   toggleScheduleDayPanel,
   hideScheduleDayPanel,
 } from './store/layout.actions';
@@ -20,7 +18,6 @@ import {
   selectIsShowIssuePanel,
   selectIsShowNotes,
   selectIsShowPluginPanel,
-  selectIsShowTaskViewCustomizerPanel,
   selectIsShowScheduleDayPanel,
 } from './store/layout.reducer';
 import { map } from 'rxjs/operators';
@@ -103,11 +100,6 @@ export class LayoutService {
   readonly isShowNotes = toSignal(this._store$.pipe(select(selectIsShowNotes)), {
     initialValue: false,
   });
-
-  readonly isShowTaskViewCustomizerPanel = toSignal(
-    this._store$.pipe(select(selectIsShowTaskViewCustomizerPanel)),
-    { initialValue: false },
-  );
 
   readonly isShowIssuePanel = toSignal(this.isShowIssuePanel$, { initialValue: false });
 
@@ -282,11 +274,29 @@ export class LayoutService {
     }
 
     const elementRect = el.getBoundingClientRect();
-    const relativeTop = el.offsetTop - scrollContainer.offsetTop;
+    // Not `el.offsetTop`: a task row's offsetParent is its own task-list
+    // (`position: relative`), so inside a section, group or sub-task list that
+    // value is the offset within that list and the reveal scrolled to the top.
+    const relativeTop =
+      this._getOffsetTopToRoot(el) - this._getOffsetTopToRoot(scrollContainer);
     const containerCenterOffset = scrollContainer.clientHeight / 2;
     const elementCenterOffset = elementRect.height / 2;
     const centeredTop = relativeTop - containerCenterOffset + elementCenterOffset;
     scrollContainer.scrollTop = Math.max(centeredTop, 0);
+  }
+
+  /**
+   * Layout offset summed over the whole offsetParent chain, so two elements can
+   * be compared whatever positioned ancestors sit between them.
+   */
+  private _getOffsetTopToRoot(el: HTMLElement): number {
+    let top = 0;
+    let current: HTMLElement | null = el;
+    while (current) {
+      top += current.offsetTop;
+      current = current.offsetParent as HTMLElement | null;
+    }
+    return top;
   }
 
   private _getNearestScrollableAncestor(el: HTMLElement): HTMLElement | null {
@@ -338,14 +348,6 @@ export class LayoutService {
 
   hideAddTaskPanel(): void {
     this._store$.dispatch(hideIssuePanel());
-  }
-
-  toggleTaskViewCustomizerPanel(): void {
-    this._store$.dispatch(toggleTaskViewCustomizerPanel());
-  }
-
-  hideTaskViewCustomizerPanel(): void {
-    this._store$.dispatch(hideTaskViewCustomizerPanel());
   }
 
   focusSideNav(): void {

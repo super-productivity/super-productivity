@@ -8,6 +8,8 @@ export interface IssueSyncPushRequest {
   taskId: string;
   /** Poll-time pushes stay quiet; their failure only shows on the task. */
   isSilent: boolean;
+  /** Told whether nothing pending is left unpushed once the push has run. */
+  onDone?: (isPushed: boolean) => void;
 }
 
 /**
@@ -17,7 +19,7 @@ export interface IssueSyncPushRequest {
  * synced, rebuilt by pushes and successful polls; a restart starts clean.
  *
  * Also carries requests to push a task's pending local edits (its fields that
- * differ from their baseline) from a poll or the Retry button to the
+ * differ from their baseline) from a poll, the Retry button or a handoff to the
  * two-way-sync effect, which runs them in line with ordinary pushes.
  */
 @Injectable({ providedIn: 'root' })
@@ -33,6 +35,17 @@ export class IssueSyncStateService {
 
   requestPush(taskId: string, isSilent: boolean): void {
     this._pushRequests$.next({ taskId, isSilent });
+  }
+
+  /**
+   * Pushes the task's pending edits quietly and resolves once that is done:
+   * true when nothing is left unpushed (nothing was pending, or the push went
+   * through), false when it failed (shown on the task).
+   */
+  pushPending(taskId: string): Promise<boolean> {
+    return new Promise((resolve) =>
+      this._pushRequests$.next({ taskId, isSilent: true, onDone: resolve }),
+    );
   }
 
   reportFailure(taskId: string, failure: IssueSyncFailure): void {

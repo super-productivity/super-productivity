@@ -163,6 +163,17 @@ describe('TaskElectronEffects', () => {
       sub.unsubscribe();
     });
 
+    it('sends nothing to the main process while the badge was never enabled', () => {
+      misc$.next({ isShowDueTaskBadge: false });
+      const counts: number[] = [];
+      const sub = effects.syncDueTaskBadge$.subscribe((count) => counts.push(count));
+      store.overrideSelector(selectTaskSchedulingSnapshot, []);
+      store.refreshState();
+      expect(counts).toEqual([]);
+      expect(window.ea.setDueTaskBadge).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
     it('publishes the latest count after a sync window without another task change', () => {
       inSyncWindow$.next(true);
       initialSyncGateOpen$.next(false);
@@ -179,6 +190,47 @@ describe('TaskElectronEffects', () => {
       inSyncWindow$.next(false);
       expect(counts).toEqual([2]);
       sub.unsubscribe();
+    });
+  });
+
+  describe('syncTodayTasksToElectron$', () => {
+    it('should resend the Today list when a title changes, not when only time does', () => {
+      const updateTodayTasksSpy = jasmine.createSpy('updateTodayTasks');
+      (window as any).ea.updateTodayTasks = updateTodayTasksSpy;
+      store.overrideSelector(selectTodayTaskIds, ['T1']);
+      store.refreshState();
+
+      const sub = effects.syncTodayTasksToElectron$.subscribe();
+      expect(updateTodayTasksSpy).toHaveBeenCalledTimes(1);
+
+      store.overrideSelector(selectTaskEntities, {
+        T1: { ...task, timeSpent: task.timeSpent + 60000 },
+      });
+      store.refreshState();
+      expect(updateTodayTasksSpy).toHaveBeenCalledTimes(1);
+
+      store.overrideSelector(selectTaskEntities, { T1: { ...task, title: 'Renamed' } });
+      store.refreshState();
+      sub.unsubscribe();
+
+      expect(updateTodayTasksSpy).toHaveBeenCalledTimes(2);
+      expect(updateTodayTasksSpy.calls.mostRecent().args[0]).toEqual([
+        jasmine.objectContaining({ id: 'T1', title: 'Renamed' }),
+      ]);
+    });
+
+    it('should drop a task from the list once it is done', () => {
+      const updateTodayTasksSpy = jasmine.createSpy('updateTodayTasks');
+      (window as any).ea.updateTodayTasks = updateTodayTasksSpy;
+      store.overrideSelector(selectTodayTaskIds, ['T1']);
+      store.refreshState();
+
+      const sub = effects.syncTodayTasksToElectron$.subscribe();
+      store.overrideSelector(selectTaskEntities, { T1: { ...task, isDone: true } });
+      store.refreshState();
+      sub.unsubscribe();
+
+      expect(updateTodayTasksSpy.calls.mostRecent().args[0]).toEqual([]);
     });
   });
 

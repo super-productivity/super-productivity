@@ -39,20 +39,33 @@
     >
       <mat-label>{{ timeLabel() }}</mat-label>
       <mat-icon matPrefix>schedule</mat-icon>
-      <!-- 12h/24h here follows the browser/OS UI locale, not our dateTimeLocale
-         setting: browsers ignore `lang`, navigator.language and the ICU default
-         for native time inputs, so this cannot be forced from the page (#8565). -->
-      <input
-        type="time"
-        spTimeStep
-        (focus)="onTimeFocus()"
-        [ngModel]="selectedTime()"
-        (ngModelChange)="onTimeChange($event)"
-        step="60"
-        matInput
-        (click)="onTimeInputClick($event)"
-        (keydown)="onTimeKeyDown($event)"
-      />
+      <!-- The native input's 12h/24h follows the browser/OS UI locale and cannot
+         be forced from the page, so it is only used when that already matches
+         our dateTimeLocale setting; otherwise MatTimepicker renders it (#8565). -->
+      @if (useNativeTimeInput()) {
+        <input
+          type="time"
+          spTimeStep
+          spTimeHourTypeahead
+          (focus)="onTimeFocus()"
+          [ngModel]="selectedTime()"
+          (ngModelChange)="onTimeChange($event)"
+          step="60"
+          matInput
+          (click)="onTimeInputClick($event)"
+          (keydown)="onTimeKeyDown($event)"
+        />
+      } @else {
+        <input
+          [matTimepicker]="timepicker"
+          [spClockStr]="selectedTime()"
+          (spClockStrChange)="onTimeChange($event)"
+          (focus)="onTimeFocus()"
+          matInput
+          (keydown)="onTimeKeyDown($event)"
+        />
+        <mat-timepicker #timepicker />
+      }
       @if (selectedTime()) {
         <mat-icon
           class="time-clear-btn"

@@ -29,7 +29,9 @@ class BackgroundReminderOpFixturesTest {
         val name: String,
         val op: JSONObject,
         val expectSchedule: Set<ReminderToSchedule>,
+        // Tasks whose alarms all go, and single alarms (reminder ids) that go
         val expectCancel: Set<String>,
+        val expectCancelReminders: Set<String>,
     )
 
     private val cases: List<Case> by lazy {
@@ -39,6 +41,7 @@ class BackgroundReminderOpFixturesTest {
             val c = arr.getJSONObject(i)
             val schedules = c.getJSONArray("expectSchedule")
             val cancels = c.getJSONArray("expectCancel")
+            val reminderCancels = c.getJSONArray("expectCancelReminders")
             Case(
                 name = c.getString("name"),
                 op = c.getJSONObject("op"),
@@ -52,6 +55,7 @@ class BackgroundReminderOpFixturesTest {
                     )
                 }.toSet(),
                 expectCancel = (0 until cancels.length()).map { cancels.getString(it) }.toSet(),
+                expectCancelReminders = (0 until reminderCancels.length()).map { reminderCancels.getString(it) }.toSet(),
             )
         }
     }
@@ -68,6 +72,7 @@ class BackgroundReminderOpFixturesTest {
     private fun assertCase(case: Case, result: ReminderChangeResult) {
         assertEquals("${case.name}: scheduled", case.expectSchedule, result.remindersToSchedule.toSet())
         assertEquals("${case.name}: cancelled", case.expectCancel, result.taskIdsToCancel)
+        assertEquals("${case.name}: cancelled reminders", case.expectCancelReminders, result.reminderIdsToCancel)
         // The fire-time check must keep every reminder this op (re)sets…
         for (r in result.remindersToSchedule) {
             val type = if (r.isDeadline) "DEADLINE" else "TASK"
@@ -114,8 +119,27 @@ class BackgroundReminderOpFixturesTest {
         }
     }
 
+    @Test
+    fun `flags a task whose op it cannot read yet, until the session key is derived`() {
+        // A done op from a desktop session this phone has no key for yet
+        val fixture = JSONObject(javaClass.classLoader!!.getResource(ENCRYPTED_DONE_RESOURCE)!!.readText())
+        val password = fixture.getString("password")
+        val taskId = fixture.getString("taskId")
+        val op = fixture.getJSONObject("op")
+        val cache = InMemoryKeyCache()
+
+        val cold = parseSingleOp(SuperSyncBackgroundProvider(OpPayloadDecryptor(password, cache, deriveOnMiss = false)), op)
+        assertEquals(emptySet<String>(), cold.taskIdsToCancel)
+        assertEquals(setOf(taskId), cold.unreadableTaskIds)
+
+        val derived = parseSingleOp(SuperSyncBackgroundProvider(OpPayloadDecryptor(password, cache)), op)
+        assertEquals(setOf(taskId), derived.taskIdsToCancel)
+        assertEquals(emptySet<String>(), derived.unreadableTaskIds)
+    }
+
     companion object {
         private const val FIXTURE_RESOURCE = "background-reminder-ops.json"
+        private const val ENCRYPTED_DONE_RESOURCE = "encrypted-done-op.json"
 
         // Must match tools/generate-android-crypto-fixtures.mjs
         private const val LIVE_ENTRY_PREFIX = "reminder-op:"

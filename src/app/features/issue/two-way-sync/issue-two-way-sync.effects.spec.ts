@@ -1,4 +1,6 @@
 import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
+import { IssueLog } from '../../../core/log';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { DEFAULT_DATE_INPUT_LOCALE } from '../../../core/date-time-format/date-input-locale';
 import { provideMockActions } from '@ngrx/effects/testing';
@@ -1486,6 +1488,43 @@ describe('IssueTwoWaySyncEffects', () => {
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
 
+    // Log history is exportable: an HTTP error carries the provider's URL.
+    it('logs only the status of a failed push', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+        fetchIssue: jasmine
+          .createSpy('fetchIssue')
+          .and.rejectWith(
+            new HttpErrorResponse({ status: 500, url: 'https://private.example/api' }),
+          ),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+      const logSpy = spyOn(IssueLog, 'err');
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick();
+
+      expect(logSpy).toHaveBeenCalledOnceWith(jasmine.any(String), { status: 500 });
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
     it('should NOT show a snack when push rejects with an expected sync-skip marker (#7492)', fakeAsync(() => {
       // The marker normally originates from a provider's updateIssue (e.g. a
       // single recurring CalDAV occurrence); injected here via fetchIssue, which
@@ -1729,6 +1768,91 @@ describe('IssueTwoWaySyncEffects', () => {
         jasmine.objectContaining({ issueLastUpdated: 42 }),
       );
     }));
+
+    // A handoff waits for this before handing the task off (#8648).
+    describe('pushPending outcome', () => {
+      const outcome = (): { value?: boolean } => {
+        const result: { value?: boolean } = {};
+        syncState.pushPending('task-1').then((isPushed) => (result.value = isPushed));
+        return result;
+      };
+
+      it('resolves true once the pending fields are pushed', fakeAsync(() => {
+        taskServiceSpy.getByIdOnce$.and.returnValue(of(linkedTask()));
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+
+        const result = outcome();
+        tick();
+
+        expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+          'issue-1',
+          { summary: 'New' },
+          jasmine.anything(),
+        );
+        expect(result.value).toBeTrue();
+        // Quiet: the caller says why it stops.
+        expect(snackServiceSpy.open).not.toHaveBeenCalled();
+      }));
+
+      it('resolves true when nothing is pending', fakeAsync(() => {
+        taskServiceSpy.getByIdOnce$.and.returnValue(of(linkedTask({ title: 'Old' })));
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+
+        const result = outcome();
+        tick();
+
+        expect(adapter.fetchIssue).not.toHaveBeenCalled();
+        expect(result.value).toBeTrue();
+      }));
+
+      it('resolves false and records the failure when the push fails', fakeAsync(() => {
+        taskServiceSpy.getByIdOnce$.and.returnValue(of(linkedTask()));
+        (adapter.fetchIssue as jasmine.Spy).and.rejectWith(new Error('offline'));
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+
+        const result = outcome();
+        tick();
+
+        expect(result.value).toBeFalse();
+        expect(syncState.failures().get('task-1')).toEqual({ text: 'offline' });
+        expect(snackServiceSpy.open).not.toHaveBeenCalled();
+      }));
+
+      it('resolves true for a task it would not push', fakeAsync(() => {
+        taskServiceSpy.getByIdOnce$.and.returnValue(of(linkedTask()));
+        syncState.setMissing(['task-1'], ['task-1']);
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+
+        const result = outcome();
+        tick();
+
+        expect(adapter.fetchIssue).not.toHaveBeenCalled();
+        expect(result.value).toBeTrue();
+      }));
+
+      it('waits for a push queued before it', fakeAsync(() => {
+        let resolveFirst!: () => void;
+        taskServiceSpy.getByIdOnce$.and.returnValue(of(linkedTask()));
+        (adapter.fetchIssue as jasmine.Spy).and.returnValues(
+          new Promise((resolve) => (resolveFirst = () => resolve(baseline))),
+          Promise.resolve(baseline),
+        );
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+
+        actions$.next(
+          TaskSharedActions.updateTask({
+            task: { id: 'task-1', changes: { isDone: true } },
+          }),
+        );
+        const result = outcome();
+        tick();
+        expect(result.value).toBeUndefined();
+
+        resolveFirst();
+        tick();
+        expect(result.value).toBeTrue();
+      }));
+    });
 
     it('never pushes a task its provider no longer lists for me', fakeAsync(() => {
       taskServiceSpy.getByIdOnce$.and.returnValue(of(linkedTask()));
@@ -3362,6 +3486,7 @@ describe('IssueTwoWaySyncEffects', () => {
         projectId: 'project-1',
         issueId: undefined,
       });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
 
       effects.autoCreateIssueOnTaskAdd$.subscribe();
 
@@ -3377,10 +3502,61 @@ describe('IssueTwoWaySyncEffects', () => {
 
       tick();
 
+      expect(createIssueSpy).toHaveBeenCalled();
       expect(snackServiceSpy.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ type: 'ERROR' }),
       );
 
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('logs only the status of a failed auto-create', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        createIssue: jasmine
+          .createSpy('createIssue')
+          .and.rejectWith(
+            new HttpErrorResponse({ status: 500, url: 'https://private.example/api' }),
+          ),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      const provider = createMockIssueProvider({
+        id: 'provider-1',
+        issueProviderKey: 'TEST_PROVIDER' as any,
+        defaultProjectId: 'project-1',
+        pluginConfig: { isAutoCreateIssues: true },
+      } as any);
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of(
+          createMockIssueProvider({
+            id: 'provider-1',
+            issueProviderKey: 'TEST_PROVIDER' as any,
+          }),
+        ),
+      );
+      const task = createMockTask({
+        id: 'task-new',
+        title: 'New Task',
+        projectId: 'project-1',
+        issueId: undefined,
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      const logSpy = spyOn(IssueLog, 'err');
+
+      effects.autoCreateIssueOnTaskAdd$.subscribe();
+      actions$.next(
+        TaskSharedActions.addTask({
+          task,
+          workContextId: 'project-1',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBacklog: false,
+          isAddToBottom: false,
+        }),
+      );
+      tick();
+
+      expect(logSpy).toHaveBeenCalledOnceWith(jasmine.any(String), { status: 500 });
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
 

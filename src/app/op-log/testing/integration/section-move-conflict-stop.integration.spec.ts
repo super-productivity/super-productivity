@@ -37,16 +37,16 @@ import { resetTestUuidCounter, TestClient } from './helpers/test-client.helper';
  * sectionId`) declares two SECTION ids. A concurrent edit of either section
  * that writes no task list (collapse, rename) commutes with it and stays out of
  * the conflict (`areCommutingReorderAndContentOperations`), as do a section
- * reorder and the removal of the same task from the move's source
+ * reorder, the removal of the same task from the move's source, and another
+ * task's placement or removal in the same section lists
  * (`areCommutingSectionOperations`). Convergence of the admitted crossings is
  * covered end to end by `e2e/tests/sync/supersync-section-move-vs-section-edit.spec.ts`.
  *
- * The `stops` cases pin what is still NOT resolved, not desired behaviour:
- * another task's placement or removal in the same section lists, and a delete
- * of either section, still throw `UnsupportedMultiEntityConflictError` (the
- * whole-dataset "Keep local / Keep remote" dialog). Two placements of
- * different tasks in one list do not commute by order, so these need an order
- * merge (#10393 D5), not this rule.
+ * The `stops` cases pin what is still NOT resolved, not desired behaviour: a
+ * delete of either section still throws `UnsupportedMultiEntityConflictError`
+ * (the whole-dataset "Keep local / Keep remote" dialog). A rejected section
+ * delete has no causal replay, so its entity LWW fallback would need its own
+ * delete-wins rule and E2E.
  */
 describe('cross-section task move vs concurrent section edit (#10969)', () => {
   const LOCAL_CLIENT_ID = 'device-a';
@@ -174,40 +174,6 @@ describe('cross-section task move vs concurrent section edit (#10969)', () => {
     action: () => PersistentAction;
   }[] = [
     {
-      name: "another task's cross-section move S3 → S1",
-      userFlow: 'drag a different task into S1',
-      action: () =>
-        addTaskToSection({
-          sectionId: S1,
-          taskId: OTHER_TASK,
-          afterTaskId: null,
-          sourceSectionId: S3,
-        }) as PersistentAction,
-    },
-    {
-      name: "another task's reorder within S2",
-      userFlow: 'drag a different task inside S2',
-      action: () =>
-        addTaskToSection({
-          sectionId: S2,
-          taskId: OTHER_TASK,
-          afterTaskId: null,
-          sourceSectionId: S2,
-        }) as PersistentAction,
-    },
-    {
-      name: 'removal of another task from S1',
-      userFlow: 'drag a different task out of S1 into the no-section bucket',
-      action: () =>
-        removeTaskFromSection({
-          sectionId: S1,
-          taskId: OTHER_TASK,
-          workContextId: PROJECT_ID,
-          workContextType: WorkContextType.PROJECT,
-          workContextAfterTaskId: null,
-        }) as PersistentAction,
-    },
-    {
       name: 'delete of the destination section S2',
       userFlow: 'section menu → delete',
       action: () => deleteSection({ id: S2 }) as PersistentAction,
@@ -289,13 +255,7 @@ describe('cross-section task move vs concurrent section edit (#10969)', () => {
         const conflicts = await detect(remote);
         expect(conflicts.length).toBeGreaterThan(0);
 
-        const thrown = await resolve(conflicts);
-        // A remote multi-entity op is checked first.
-        if ((remoteAction.meta.entityIds?.length ?? 0) > 1) {
-          expectStop(thrown, 'remote', remoteAction.type as ActionType, 2);
-        } else {
-          expectStop(thrown, 'local', ActionType.SECTION_ADD_TASK, 2);
-        }
+        expectStop(await resolve(conflicts), 'local', ActionType.SECTION_ADD_TASK, 2);
         expect((await opLogStore.getUnsynced()).map(({ op }) => op.id)).toEqual([
           local.id,
         ]);
@@ -382,6 +342,37 @@ describe('cross-section task move vs concurrent section edit (#10969)', () => {
 
   describe('admitted crossings (no conflict raised)', () => {
     const ADMITTED: { name: string; action: () => PersistentAction }[] = [
+      {
+        name: "another task's cross-section move S3 → S1",
+        action: () =>
+          addTaskToSection({
+            sectionId: S1,
+            taskId: OTHER_TASK,
+            afterTaskId: null,
+            sourceSectionId: S3,
+          }) as PersistentAction,
+      },
+      {
+        name: "another task's reorder within S2",
+        action: () =>
+          addTaskToSection({
+            sectionId: S2,
+            taskId: OTHER_TASK,
+            afterTaskId: null,
+            sourceSectionId: S2,
+          }) as PersistentAction,
+      },
+      {
+        name: 'removal of another task from S1',
+        action: () =>
+          removeTaskFromSection({
+            sectionId: S1,
+            taskId: OTHER_TASK,
+            workContextId: PROJECT_ID,
+            workContextType: WorkContextType.PROJECT,
+            workContextAfterTaskId: null,
+          }) as PersistentAction,
+      },
       {
         name: 'collapse of the source section S1',
         action: () =>

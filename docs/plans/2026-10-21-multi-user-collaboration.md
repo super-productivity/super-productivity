@@ -472,6 +472,12 @@ gets a fix only when it is reported.
   `updateTaskUi` would skip the planner and TODAY meta-reducer bookkeeping and
   needs its own design. My time edit is lost, visibly (a wrong time, no lost
   text). Revisit on a user report.
+- **Mixed fleet.** A v19.x device on the same SuperSync account still
+  overwrites a shared task's title, done state and time with Plainspace's copy
+  (its whole-row pull, with the baseline) whenever the Space item changes. An
+  edit made on an updated device that hasn't reached Plainspace yet is then
+  lost on every device. Released behaviour, transitional; the release note
+  asks users to update all devices. Revisit if reported.
 
 ## Sync and long-term cost
 

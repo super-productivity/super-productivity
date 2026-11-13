@@ -86,6 +86,50 @@ describe('mobile bottom nav slot', () => {
     });
   });
 
+  describe('views', () => {
+    const views = [
+      { id: 'v1', title: 'Week focus', cols: 1 },
+      { id: 'v2', title: 'Kanban', cols: 3 },
+    ];
+
+    it('offers each view in place of the generic Views entry', () => {
+      const options = getAvailableBottomNavSlotOptions(features(), { views });
+      expect(options.map((o) => o.id)).toEqual([
+        'planner',
+        'inbox',
+        'view:v1',
+        'view:v2',
+        'schedule',
+        'search',
+      ]);
+      const kanban = options[3];
+      expect(kanban.kind === 'route' && kanban.route).toBe('/boards/v2');
+      expect(kanban.kind === 'route' && kanban.labelKey).toBe('Kanban');
+      expect(kanban.icon).toBe('view_kanban');
+      expect(options[2].icon).toBe('view_list');
+    });
+
+    it('resolves a pinned view', () => {
+      expect(resolveBottomNavSlot('view:v2', features(), { views })?.id).toBe('view:v2');
+    });
+
+    it('opens the last view for a stored generic entry or a deleted view', () => {
+      expect(resolveBottomNavSlot('boards', features(), { views })?.id).toBe('boards');
+      expect(resolveBottomNavSlot('view:gone', features(), { views })?.id).toBe('boards');
+    });
+
+    it('falls back to Planner when Views are disabled', () => {
+      const off = features({ isBoardsEnabled: false });
+      expect(resolveBottomNavSlot('view:v1', off, { views })?.id).toBe('planner');
+      expect(getAvailableBottomNavSlotOptions(off, { views }).map((o) => o.id)).toEqual([
+        'planner',
+        'inbox',
+        'schedule',
+        'search',
+      ]);
+    });
+  });
+
   describe('plugin entries', () => {
     const entry = (pluginId: string, label: string): PluginMenuEntryCfg => ({
       pluginId,
@@ -99,7 +143,9 @@ describe('mobile bottom nav slot', () => {
     ];
 
     it('offers every registered entry after the built-in options', () => {
-      const ids = getAvailableBottomNavSlotOptions(features(), entries).map((o) => o.id);
+      const ids = getAvailableBottomNavSlotOptions(features(), {
+        pluginEntries: entries,
+      }).map((o) => o.id);
       expect(ids.slice(5)).toEqual([
         'plugin:p1:Doc Mode',
         'plugin:p1:Other',
@@ -108,25 +154,29 @@ describe('mobile bottom nav slot', () => {
     });
 
     it('resolves a stored entry, with a fallback icon', () => {
-      const slot = resolveBottomNavSlot('plugin:p2:Kanban', features(), entries);
+      const slot = resolveBottomNavSlot('plugin:p2:Kanban', features(), {
+        pluginEntries: entries,
+      });
       expect(slot?.kind).toBe('plugin');
       expect(slot?.icon).toBe('extension');
       expect(slot?.kind === 'plugin' && slot.pluginId).toBe('p2');
     });
 
     it("falls back to the plugin's first entry when the label changed", () => {
-      expect(resolveBottomNavSlot('plugin:p1:Renamed', features(), entries)?.id).toBe(
-        'plugin:p1:Doc Mode',
-      );
+      expect(
+        resolveBottomNavSlot('plugin:p1:Renamed', features(), { pluginEntries: entries })
+          ?.id,
+      ).toBe('plugin:p1:Doc Mode');
     });
 
     it('falls back to Planner while the plugin is not (yet) registered', () => {
-      expect(resolveBottomNavSlot('plugin:p3:Gone', features(), entries)?.id).toBe(
-        'planner',
-      );
-      expect(resolveBottomNavSlot('plugin:p1:Doc Mode', features(), [])?.id).toBe(
-        'planner',
-      );
+      expect(
+        resolveBottomNavSlot('plugin:p3:Gone', features(), { pluginEntries: entries })
+          ?.id,
+      ).toBe('planner');
+      expect(
+        resolveBottomNavSlot('plugin:p1:Doc Mode', features(), { pluginEntries: [] })?.id,
+      ).toBe('planner');
     });
   });
 

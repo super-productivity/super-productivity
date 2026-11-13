@@ -2,12 +2,12 @@
 
 <p align="center">
   <strong>
-    An advanced todo list app with timeboxing & time tracking capabilities that supports importing tasks from your calendar, Jira, GitHub and others
+    A to-do list, time tracker and daily planner for focused personal work. Private, offline-first and open source.
   </strong>
 </p>
 
 <p align="center">
-  :globe_with_meridians: <a href="https://app.super-productivity.com">Open Web App</a> or :computer: <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install">Download</a>
+  :globe_with_meridians: <a href="https://app.super-productivity.com">Open Web App</a> or :computer: <a href="https://super-productivity.com/download/">Download</a>
 </p>
 
 <br/>
@@ -177,6 +177,9 @@ Before opening a pull request, read [CONTRIBUTING.md](CONTRIBUTING.md) and follo
 A big thank you to all our sponsors!
 
 - **[SignPath.io](https://signpath.io?utm_source=foundation&utm_medium=github&utm_campaign=super-productivity)**: free code signing for our Windows binaries, with a certificate by [SignPath Foundation](https://signpath.org?utm_source=foundation&utm_medium=github&utm_campaign=super-productivity).
+- **[Blacksmith](https://www.blacksmith.sh)**: covers all our CI runner minutes for GitHub Actions.
+
+  <a href="https://www.blacksmith.sh"><img alt="CI powered by Blacksmith" src="docs/screens/blacksmith-powered-wob.png" height="60"/></a>
 
 _(If you are, intend to or have been a sponsor and want to be shown here, [please let me know](mailto:contact@super-productivity.com)!)_
 

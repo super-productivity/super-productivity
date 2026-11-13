@@ -334,11 +334,13 @@ describe('CaldavClientService.deleteTask$', () => {
   it('deletes only the exact UID, not one the substring UID match also returned', async () => {
     const containing = davTodo('x-todo-del-1-y', '"etag-other"');
     const exact = davTodo('todo-del-1', '"etag-1"');
-    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: false });
-    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([
-      containing,
-      exact,
-    ]);
+    // Stubbed at the server answer: the exact-UID filter is part of the lookup.
+    spyOn(svc as any, '_getCalendar').and.resolveTo({
+      readOnly: false,
+      calendarQuery: jasmine
+        .createSpy('calendarQuery')
+        .and.resolveTo([containing, exact]),
+    });
 
     await firstValueFrom(svc.deleteTask$(MOCK_CFG, 'todo-del-1'));
 
@@ -389,6 +391,140 @@ describe('CaldavClientService.deleteTask$', () => {
 
     expect(findSpy).not.toHaveBeenCalled();
     expect(snack.open).toHaveBeenCalled();
+  });
+});
+
+// ─── exact-UID lookup (#11182) ────────────────────────────────────────────────
+
+// The UID text-match is a substring match (RFC 4791 §9.7.5) and some servers
+// ignore it and answer with every VTODO of the calendar (Vikunja). These tests
+// go through the real lookup: the calendar answers with VTODOs that were not
+// asked for, the requested one never first.
+describe('CaldavClientService exact-UID lookup', () => {
+  let svc: CaldavClientService;
+  let snack: jasmine.SpyObj<SnackService>;
+
+  beforeEach(() => {
+    snack = jasmine.createSpyObj('SnackService', ['open']);
+    TestBed.configureTestingModule({
+      providers: [CaldavClientService, { provide: SnackService, useValue: snack }],
+    });
+    svc = TestBed.inject(CaldavClientService);
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const davTodo = (
+    uid: string,
+    summary: string,
+  ): { data: string; url: string; etag: string; update: jasmine.Spy } => ({
+    data: [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VTODO',
+      `UID:${uid}`,
+      `SUMMARY:${summary}`,
+      'STATUS:NEEDS-ACTION',
+      'END:VTODO',
+      'END:VCALENDAR',
+    ].join('\r\n'),
+    url: `https://cal.example.com/${uid}.ics`,
+    etag: `"etag-${uid}"`,
+    update: jasmine.createSpy('update').and.resolveTo(undefined),
+  });
+
+  const mockCalendar = (
+    todos: ReturnType<typeof davTodo>[],
+  ): { createObject: jasmine.Spy } => {
+    const cal = {
+      readOnly: false,
+      calendarQuery: jasmine.createSpy('calendarQuery').and.resolveTo(todos),
+      createObject: jasmine.createSpy('createObject').and.resolveTo(undefined),
+    };
+    spyOn(svc as any, '_getCalendar').and.resolveTo(cal);
+    return cal;
+  };
+
+  it('reads the VTODO with the requested UID, not the first one returned', async () => {
+    mockCalendar([
+      davTodo('other-1', 'Not mine'),
+      davTodo('x-todo-1-y', 'Contains the UID'),
+      davTodo('todo-1', 'Mine'),
+    ]);
+
+    const issue = await firstValueFrom(svc.getById$('todo-1', MOCK_CFG));
+
+    expect(issue?.id).toBe('todo-1');
+    expect(issue?.summary).toBe('Mine');
+  });
+
+  it('updates the VTODO with the requested UID and leaves the others alone', async () => {
+    const other = davTodo('other-1', 'Not mine');
+    const mine = davTodo('todo-1', 'Mine');
+    mockCalendar([other, mine]);
+
+    await firstValueFrom(svc.updateFields$(MOCK_CFG, 'todo-1', { completed: true }), {
+      defaultValue: undefined,
+    });
+
+    expect(other.update).not.toHaveBeenCalled();
+    expect(other.data).not.toContain('STATUS:COMPLETED');
+    expect(mine.update).toHaveBeenCalledTimes(1);
+    expect(mine.data).toContain('STATUS:COMPLETED');
+  });
+
+  it('does not update any VTODO when none has the requested UID', async () => {
+    const other = davTodo('other-1', 'Not mine');
+    const containing = davTodo('x-todo-1-y', 'Contains the UID');
+    mockCalendar([other, containing]);
+
+    await expectAsync(
+      firstValueFrom(svc.updateFields$(MOCK_CFG, 'todo-1', { completed: true })),
+    ).toBeRejected();
+
+    expect(other.update).not.toHaveBeenCalled();
+    expect(containing.update).not.toHaveBeenCalled();
+    expect(other.data).not.toContain('STATUS:COMPLETED');
+    expect(containing.data).not.toContain('STATUS:COMPLETED');
+  });
+
+  it('returns the created VTODO, not another one the lookup returned', async () => {
+    mockCalendar([davTodo('other-1', 'Not mine'), davTodo('todo-1', 'Buy milk')]);
+
+    const issue = await firstValueFrom(
+      svc.createTask$(MOCK_CFG, { uid: 'todo-1', summary: 'Buy milk' }),
+    );
+
+    expect(issue.id).toBe('todo-1');
+    expect(issue.summary).toBe('Buy milk');
+  });
+
+  it('fails a create whose VTODO is not among the ones returned', async () => {
+    const cal = mockCalendar([davTodo('other-1', 'Not mine')]);
+    cal.createObject.and.rejectWith({ status: 500 });
+
+    await expectAsync(
+      firstValueFrom(svc.createTask$(MOCK_CFG, { uid: 'todo-1', summary: 'Buy milk' })),
+    ).toBeRejected();
+  });
+
+  // #11583: a VTODO deleted on the server is an ordinary state, not an error.
+  it('resolves null without a snack when no VTODO has the requested UID', async () => {
+    mockCalendar([davTodo('other-1', 'Not mine'), davTodo('x-todo-1-y', 'Contains')]);
+
+    const issue = await firstValueFrom(svc.getById$('todo-1', MOCK_CFG));
+
+    expect(issue).toBeNull();
+    expect(snack.open).not.toHaveBeenCalled();
+  });
+
+  it('resolves null without a snack when the calendar returns nothing', async () => {
+    mockCalendar([]);
+
+    const issue = await firstValueFrom(svc.getById$('todo-1', MOCK_CFG));
+
+    expect(issue).toBeNull();
+    expect(snack.open).not.toHaveBeenCalled();
   });
 });
 
@@ -533,6 +669,21 @@ describe('CaldavClientService._getXhrProvider – web platform', () => {
     xhr.open('REPORT', 'https://cal.example.com/');
     expect(headers['Authorization']).toBe(EXPECTED_AUTH);
     expect(headers['X-Requested-With']).toBe('SuperProductivity');
+  });
+
+  it('encodes non-ASCII credentials as UTF-8 in the Authorization header', () => {
+    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider({
+      ...MOCK_CFG,
+      password: 'pw-€',
+    });
+    const xhr = factory();
+    const headers: Record<string, string> = {};
+    spyOn(xhr, 'setRequestHeader').and.callFake(
+      (name: string, value: string) => (headers[name] = value),
+    );
+    xhr.open('REPORT', 'https://cal.example.com/');
+    // printf 'user:pw-€' | base64
+    expect(headers['Authorization']).toBe('Basic dXNlcjpwdy3igqw=');
   });
 
   it('returns an empty DAV response header when the server does not expose it', () => {
@@ -941,6 +1092,22 @@ describe('CaldavClientService._getNativeXhrProvider – native platform', () => 
     const callArgs = svc.webDavRequestSpy.calls.mostRecent().args[0];
     expect(callArgs.headers?.['Depth']).toBe('1');
     expect(callArgs.data).toBe('<body/>');
+  });
+
+  // #11232: cdav-library's propFind() and principal REPORTs set a numeric Depth
+  // (`headers.Depth = 0`). The iOS plugin casts headers to [String: String], so
+  // one non-string value made it drop every header and Nextcloud returned 404.
+  it('send() stringifies numeric header values like a real XHR', async () => {
+    const xhr = getFakeXhr();
+    xhr.open('PROPFIND', 'https://cal.example.com/');
+    xhr.setRequestHeader('Depth', 0 as unknown as string);
+    xhr.send('<body/>');
+    await Promise.resolve();
+    const callArgs = svc.webDavRequestSpy.calls.mostRecent().args[0];
+    expect(callArgs.headers?.['Depth']).toBe('0');
+    expect(
+      Object.values(callArgs.headers ?? {}).every((v) => typeof v === 'string'),
+    ).toBeTrue();
   });
 
   it('fires onload and sets status/responseText after send() resolves', async () => {

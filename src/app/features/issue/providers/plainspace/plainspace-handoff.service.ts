@@ -21,6 +21,11 @@ import { PlainspaceCfg } from './plainspace.model';
  * PATCH with 422; both show "server too old" (no capability negotiation). The
  * PATCH carries `assigneeId` alone: an older server would apply the other
  * fields of a combined request and silently drop the assignee.
+ *
+ * Edits not pushed yet (e.g. a rename made while Plainspace was unreachable,
+ * waiting for the next poll) are pushed first: once handed off the task stops
+ * syncing, and they would never reach the Space. If that push fails, the task
+ * is not handed off.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceHandoffService {
@@ -42,6 +47,13 @@ export class PlainspaceHandoffService {
 
   /** Hands the task to `member`, or releases it to the space when null. */
   async handOff(task: Task, member: PlainspaceMember | null): Promise<void> {
+    if (!(await this._syncState.pushPending(task.id))) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.PLAINSPACE.HANDOFF.UNSYNCED_EDITS,
+      });
+      return;
+    }
     try {
       const cfg = await this._getCfg(task);
       await firstValueFrom(

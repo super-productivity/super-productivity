@@ -18,6 +18,7 @@ import { throwHandledError } from '../../../../util/throw-handled-error';
 import { IssueLog } from '../../../../core/log';
 import { Capacitor } from '@capacitor/core';
 import { WebDavHttp } from '../../../../op-log/sync-providers/file-based/webdav/capacitor-webdav-http';
+import { toBasicAuthHeader } from '../../../../util/to-basic-auth-header';
 
 // Loaded on first use to keep the library out of the initial bundle.
 // @ts-ignore
@@ -166,6 +167,12 @@ export class CaldavClientService {
     return await calendar.calendarQuery([query]);
   }
 
+  /**
+   * The VTODOs with exactly this UID: none when it does not exist. The server's
+   * answer is only a pre-filter — text-match is a substring match (RFC 4791
+   * §9.7.5), and some servers ignore it and return every VTODO of the calendar
+   * (Vikunja, #11182), so taking the first result reads or writes another task.
+   */
   private static async _findTaskByUid(
     calendar: Calendar,
     taskUid: string,
@@ -193,7 +200,14 @@ export class CaldavClientService {
         },
       ],
     };
-    return await calendar.calendarQuery([query]);
+    const candidates: CalDavTaskData[] = await calendar.calendarQuery([query]);
+    const ICAL = await loadIcalModule();
+    return candidates.filter(
+      (t) =>
+        new ICAL.Component(ICAL.parse(t.data))
+          .getFirstSubcomponent('vtodo')
+          ?.getFirstPropertyValue('uid') === taskUid,
+    );
   }
 
   // RFC 5545 lists COMPLETED, STATUS, and PERCENT-COMPLETE as independent
@@ -389,7 +403,7 @@ export class CaldavClientService {
     );
   }
 
-  getById$(id: string | number, caldavCfg: CaldavCfg): Observable<CaldavIssue> {
+  getById$(id: string | number, caldavCfg: CaldavCfg): Observable<CaldavIssue | null> {
     if (typeof id === 'number') {
       id = id.toString(10);
     }
@@ -468,7 +482,7 @@ export class CaldavClientService {
         xhr.setRequestHeader('X-Requested-With', 'SuperProductivity');
         xhr.setRequestHeader(
           'Authorization',
-          'Basic ' + btoa(cfg.username + ':' + cfg.password),
+          toBasicAuthHeader(cfg.username, cfg.password),
         );
         return result;
       };
@@ -495,7 +509,7 @@ export class CaldavClientService {
       const headers: Record<string, string> = {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         'X-Requested-With': 'SuperProductivity',
-        Authorization: 'Basic ' + btoa(cfg.username + ':' + cfg.password),
+        Authorization: toBasicAuthHeader(cfg.username, cfg.password),
       };
       let method = 'GET';
       let url = '';
@@ -521,7 +535,9 @@ export class CaldavClientService {
         },
 
         setRequestHeader: (name: string, value: string): void => {
-          headers[name] = value;
+          // Coerce like a real XHR: cdav-library passes numeric Depth values, and
+          // the iOS plugin drops all headers if any value is not a string (#11232).
+          headers[name] = String(value);
         },
 
         send: (body?: string | null): void => {
@@ -650,21 +666,17 @@ export class CaldavClientService {
     );
   }
 
-  private async _getTask(cfg: CaldavCfg, uid: string): Promise<CaldavIssue> {
+  /**
+   * The VTODO, or null when the calendar has none with this UID (deleted on the
+   * server): an ordinary state the callers decide on, not an error to raise
+   * from every read of a linked task (#11583).
+   */
+  private async _getTask(cfg: CaldavCfg, uid: string): Promise<CaldavIssue | null> {
     const cal = await this._getCalendar(cfg);
-    const task = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
+    const tasks = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
       this._handleNetErr(err),
     );
-
-    if (task.length < 1) {
-      this._snackService.open({
-        type: 'ERROR',
-        msg: T.F.CALDAV.S.ISSUE_NOT_FOUND,
-      });
-      throw new Error('ISSUE NOT FOUND: ' + uid);
-    }
-
-    return await CaldavClientService._mapTask(task[0]);
+    return tasks.length ? await CaldavClientService._mapTask(tasks[0]) : null;
   }
 
   private async _createTask(
@@ -751,15 +763,7 @@ export class CaldavClientService {
     const tasks = await CaldavClientService._findTaskByUid(cal, uid).catch((err) =>
       this._handleNetErr(err),
     );
-    // The UID text-match is a substring match (RFC 4791 §9.7.5), so it can also
-    // return VTODOs whose UID merely contains this one; delete only the exact one.
-    const ICAL = await loadIcalModule();
-    const task = tasks.find(
-      (t) =>
-        new ICAL.Component(ICAL.parse(t.data))
-          .getFirstSubcomponent('vtodo')
-          ?.getFirstPropertyValue('uid') === uid,
-    );
+    const task = tasks[0];
     // Already gone on the server (deleted there, or by another device) — the
     // goal state is reached, so stay silent.
     if (!task) {

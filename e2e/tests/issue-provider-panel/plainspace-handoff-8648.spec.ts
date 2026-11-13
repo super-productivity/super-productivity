@@ -67,6 +67,26 @@ const renameTask = async (page: Page, title: string, newTitle: string): Promise<
   await expect(taskRow(page, newTitle)).toBeVisible();
 };
 
+/**
+ * Renames while offline and waits until every push of the rename has failed
+ * (a rename can push more than once). Going back online earlier could let one
+ * of them reach Plainspace, leaving nothing pending.
+ */
+const renameOffline = async (
+  page: Page,
+  server: FakePlainspace,
+  title: string,
+  newTitle: string,
+): Promise<void> => {
+  server.isOffline = true;
+  await renameTask(page, title, newTitle);
+  await expect
+    .poll(() => server.offlineRequests, { timeout: 15000 })
+    .toContain(`GET /tasks/${TASK_ID}`);
+  // Deliberate: a later push of the same rename would arrive meanwhile.
+  await page.waitForTimeout(2000);
+};
+
 /** Restarts the app; the update and import polls run 8 s after load. */
 const restart = async (page: Page, server: FakePlainspace): Promise<void> => {
   const before = successfulPolls(server);
@@ -149,6 +169,61 @@ test.describe('Plainspace handoff (#8648)', () => {
     await expectNoLongerMineThenBack(page, server);
   });
 
+  test('a rename that has not reached Plainspace yet is pushed before the handoff', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const server = await setUp(page, projectPage);
+
+    // Renamed while Plainspace can't be reached: the push fails and the
+    // rename stays pending until the next poll, minutes away.
+    await renameOffline(page, server, 'Buy tent', 'Buy a bigger tent');
+    server.isOffline = false;
+
+    // Handed off before that poll: the rename is pushed first, then the
+    // assignee alone, so the Space has the title the task was handed off with.
+    await openContextMenu(page, 'Buy a bigger tent');
+    await menuItem(page, 'Assign to…').click();
+    await menuItem(page, 'Bob').click();
+
+    await expect(snack(page, 'Assigned to Bob in Plainspace.')).toBeVisible();
+    expect(server.patches).toEqual([
+      { id: TASK_ID, body: { title: 'Buy a bigger tent' }, status: 200 },
+      { id: TASK_ID, body: { assigneeId: 'member-bob' }, status: 200 },
+    ]);
+    expect(server.tasks.get(TASK_ID)!.title).toBe('Buy a bigger tent');
+  });
+
+  test('a pending rename that still cannot be pushed keeps the task mine and says why', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const server = await setUp(page, projectPage);
+
+    await renameOffline(page, server, 'Buy tent', 'Buy a bigger tent');
+    // Reachable again, but Plainspace fails every write for now.
+    server.isOffline = false;
+    server.isPatchServerError = true;
+
+    await openContextMenu(page, 'Buy a bigger tent');
+    await menuItem(page, 'Release to Space').click();
+
+    await expect(
+      snack(page, 'Not handed off: your latest changes to this task'),
+    ).toBeVisible();
+    // Only the rename was tried; the task was not handed off without it.
+    expect(server.patches).toEqual([
+      { id: TASK_ID, body: { title: 'Buy a bigger tent' }, status: 500 },
+    ]);
+    expect(server.assignedIds.has(TASK_ID)).toBe(true);
+    await openDetail(page, 'Buy a bigger tent');
+    await expect(notInList(page)).toHaveCount(0);
+  });
+
   test('an older server says it is too old to assign and the task stays mine', async ({
     page,
     workViewPage,
@@ -161,8 +236,13 @@ test.describe('Plainspace handoff (#8648)', () => {
     // No members endpoint: 404.
     await openContextMenu(page, 'Buy tent');
     await menuItem(page, 'Assign to…').click();
-    await expect(snack(page, 'Plainspace server too old to assign.')).toBeVisible();
+    const membersSnack = snack(page, 'Plainspace server too old to assign.');
+    await expect(membersSnack).toBeVisible();
     expect(server.patches).toEqual([]);
+    // Error snacks stay 10s. Close this one, so only the 422's own snack can
+    // pass the check below (and two containers never match during the swap).
+    await membersSnack.locator('button.close').click();
+    await expect(membersSnack).toHaveCount(0);
 
     // A PATCH with only assigneeId: 422.
     await page.keyboard.press('Escape');

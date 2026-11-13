@@ -216,8 +216,8 @@
   height: var(--s8);
   // Smoothly cross-fade out when the launch starts (see .is-launching below).
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+    opacity var(--transition-duration-m) ease,
+    transform var(--transition-duration-m) ease;
 
   mat-icon {
     font-size: 36px;
@@ -281,8 +281,9 @@
 }
 
 // ========== ROW 4 (In Progress): SESSION CONTROL ROW ==========
-// Back to Planning · Pause · Complete · More — one content-height bottom row.
-// Secondary actions use the More menu on mobile and stay direct on wider screens.
+// Pause · Complete · secondary actions · Cancel — one content-height bottom row.
+// Secondary actions and Cancel use the More menu on mobile and stay direct on
+// wider screens.
 // Keeps the hover/window-focus reveal (--revealed-opacity) so it stays
 // distraction-free, matching the rest of focus mode.
 .bottom-controls {

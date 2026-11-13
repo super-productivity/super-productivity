@@ -24,14 +24,21 @@ private class TaskListRemoteViewsFactory(
     override fun onCreate() {}
 
     override fun onDataSetChanged() {
-        tasks = try {
+        val snapshot = try {
             val json = (context.applicationContext as App).keyValStore
                 .get(WidgetData.KEYVAL_KEY, "{}")
-            WidgetData.parse(json, WidgetDoneQueue.peek(context)).take(MAX_TASKS)
+            WidgetData.parse(json, WidgetDoneQueue.peek(context))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse widget data", e)
             emptyList()
         }
+        // Separate try: an unreadable inbox must not hide the snapshot's tasks.
+        tasks = try {
+            WidgetData.withPendingCaptures(snapshot, CaptureInbox.forContext(context).pendingJson())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read pending quick adds", e)
+            snapshot
+        }.take(MAX_TASKS)
     }
 
     override fun onDestroy() {
@@ -75,12 +82,17 @@ private class TaskListRemoteViewsFactory(
         }
 
         // Checkbox toggles to the opposite of the DISPLAYED state; anywhere else
-        // on the row opens the app.
+        // on the row opens the app. A pending quick add has no task to toggle
+        // yet, so its checkbox opens the app too, which imports it.
         rv.setOnClickFillInIntent(
             R.id.widget_done_checkbox,
-            Intent()
-                .putExtra(TaskListWidgetProvider.EXTRA_TASK_ID, task.id)
-                .putExtra(TaskListWidgetProvider.EXTRA_SET_DONE, !task.isDone)
+            if (task.isPending) {
+                Intent().putExtra(TaskListWidgetProvider.EXTRA_OPEN_APP, true)
+            } else {
+                Intent()
+                    .putExtra(TaskListWidgetProvider.EXTRA_TASK_ID, task.id)
+                    .putExtra(TaskListWidgetProvider.EXTRA_SET_DONE, !task.isDone)
+            }
         )
         rv.setOnClickFillInIntent(
             R.id.widget_task_row,

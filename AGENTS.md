@@ -10,10 +10,13 @@ Read by section, not whole: the long sync docs open with a **Sections** index an
 
 ## Product principles
 
-- **Avoid feature creep:** extend existing building blocks; new UI, settings and sync surface must make users faster. A personal deep-work tool, not team management or reporting. Surface the leaner alternative when scope outgrows the problem.
-- **Less noise, more depth:** no constant alerts, vanity dashboards, streaks or dopamine loops. Attention-grabbing behavior ships off by default; reminders stay opt-in.
-- **Adapt, don't impose:** one calm default; add a setting only when real workflows diverge. Prefer not building a feature over adding a toggle to dodge a decision.
-- **Privacy & offline first:** no analytics, tracking or telemetry; user data stays local unless explicitly synced. Core tasks and time tracking work offline; sync and integrations are optional and degrade gracefully.
+Privacy is never traded away; the others are ranked, and the earlier one wins a conflict. In reviews, start with 2.
+
+1. **Privacy & offline first:** no analytics, tracking or telemetry. Data stays local unless the user syncs it or turns on a feature that sends it (AI planning: off by default, own key). Core tasks and time tracking work offline; sync and integrations degrade gracefully.
+2. **Avoid feature creep:** extend existing building blocks; new UI, settings and sync surface must make users faster. A personal deep-work tool, not team management, collaboration (#10830) or reporting. Surface the leaner alternative when scope outgrows the problem.
+3. **Less noise, more depth:** no constant alerts, vanity dashboards, streaks, gamification or dopamine loops; attention-grabbing behavior ships off, reminders stay opt-in. No always-visible explanatory UI (status lines, "what syncs" labels, badges): explain at the moment it matters (an error, a tooltip, the owning setting).
+4. **Fast & keyboard-first:** frequent actions are keyboard-reachable and take few steps (`Call Anna @tomorrow 3pm`, not a form); tighten existing flows rather than add surface.
+5. **Adapt, don't impose:** one calm default; add a setting only when real workflows diverge, never to dodge a decision.
 
 ## Required reading per task
 
@@ -32,6 +35,7 @@ Read by section, not whole: the long sync docs open with a **Sections** index an
 npm run checkFile <files...>   # prettier + lint
 npm run prettier               # multi-file format
 npm run lint                   # multi-file lint
+npm run typecheck              # app incl. templates, specs, Electron (not worker/e2e/packages)
 npm test                       # shared packages + release tooling + Angular specs (Berlin, LA subset; CI: test:ci, full LA)
 npm run test:affected          # Angular specs importing files changed vs master (Berlin + LA subset); `-- --list` to preview
 npm run test:file <filepath>   # single Angular spec; package tests use package scripts
@@ -51,7 +55,7 @@ While iterating on app code, use `npm run test:affected` instead of a full `npm 
 
 For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e2e-scheduled.yml) (`grep` filters SuperSync; `webdav_grep` + `run_webdav` for WebDAV); focused local runs and provider-switch prerequisites are in [e2e/AGENTS.md](e2e/AGENTS.md) (they need both servers and both flags, else they silently skip). Skipped tests do not validate a fix.
 
-`tsc -p tsconfig.json --noEmit` validates nothing (root config has `files: []`); use the app/spec/Electron config or package checks ([why](docs/hardening-earns-its-place.md#the-three-failure-modes-worth-remembering)).
+`tsc -p tsconfig.json --noEmit` validates nothing (root config has `files: []`); use `npm run typecheck` or package checks ([why](docs/hardening-earns-its-place.md#the-three-failure-modes-worth-remembering)).
 
 ## Project rules
 
@@ -60,9 +64,11 @@ For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e
 - **Electron:** check `IS_ELECTRON` before using Electron-specific APIs.
 - **Templates & styling:** plain HTML, minimal CSS/classes, Angular Material sparingly ([styling guide](docs/styling-guide.md)). Never restyle Angular Material or shared `src/app/ui/` components for a one-off (local `.mat-*`, `.mdc-*`, `button[mat-*]` or component-internal overrides, re-declared theme styles); use existing inputs/classes/tokens/theme variables, or make the variant reusable in the shared style layer.
 - **State:** never mutate NgRx state — reducers return new objects. Prefer Signals to Observables.
+- **Code style:** no `any` (lint allows it; use proper types or `unknown`); standalone components, no new `NgModules`; bindings and `viewChild()`, not direct DOM access; no side effects in constructors; clean up subscriptions (`takeUntilDestroyed()` or async pipe).
 - **Tests:** add unit tests for new services and state logic.
 - **Service size:** ≤ 1200 physical lines per `*.service.ts` (specs exempt; ESLint `max-lines`). Split by responsibility before crossing; never grow grandfathered offenders — the per-file caps pinned in `eslint.config.js` may only go down.
-- **Agent-control files:** modify `AGENTS.md`, `CLAUDE.md`, `.agents/**` or `.codex/**` only when the user explicitly asks in the current task; keep it in a dedicated commit/PR that says how it changes agent behavior. Incident-derived rules here are invariant + enforcement + issue/doc pointer only (narrative goes to `docs/`; this file must stay skimmable); date cited statistics ("measured YYYY-MM").
+- **Agent-control files:** modify `AGENTS.md` or `CLAUDE.md` only when the user explicitly asks in the current task; keep it in a dedicated commit/PR that says how it changes agent behavior. Incident-derived rules here are invariant + enforcement + issue/doc pointer only (narrative goes to `docs/`; this file must stay skimmable); date cited statistics ("measured YYYY-MM").
+- **Issues & PRs:** one closing keyword per issue (`Fixes #1, fixes #2`; a list or "Related to" leaves issues open, e.g. #9551); create issues with a type (`gh issue create --type Bug|Feature|Task`).
 - **Hardening needs evidence:** grep for an observed instance before adding a guard; zero instances → record a gap instead. Allowlists only shrink (fix false positives or scope a justified disable). Verify a check can fail before trusting a pass. [Evidence](docs/hardening-earns-its-place.md).
 - **Does it earn its place?** Verify demand before judging implementation; decline a correct feature that adds unjustified complexity. [Review guide](docs/feature-review-guide.md).
 - **Code review:** assess maintenance cost, dependencies, scale and cross-client behavior; on every change touching persisted models, the sync wire or public/plugin APIs, check them explicitly, however small. [Long-term cost](docs/feature-review-guide.md#long-term-cost-of-a-change).
@@ -72,7 +78,7 @@ For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e
 
 These apply to all state-related work. **One user intent = one op; replayed/remote ops must not re-trigger effects.** Read [the contributor model](docs/sync-and-op-log/contributor-sync-model.md) before editing. Sync changes are high-risk: check replay determinism, concurrent/remote edits, vector-clock conflicts and data-loss modes; report material risks before marking work done.
 
-- **Released clients:** `master` auto-publishes to Play internal, Snap `edge` and `supersync:latest`. Prove release inclusion with `git tag --contains`; an unreproduced finding is not a false one. [Severity triage](docs/sync-and-op-log/sync-severity-triage.md).
+- **Released clients:** `master` auto-publishes to Play internal, Snap `edge` and `supersync:latest` (after green sync suites). Prove release inclusion with `git tag --contains`; an unreproduced finding is not a false one. [Severity triage](docs/sync-and-op-log/sync-severity-triage.md).
 - **Reproduce first:** every sync change starts from a reproducible failure with real data shapes, not a mocked seam. A sync bug fix needs an exact E2E reproduction written first (fails without the fix, passes with it); unit tests may supplement it. Only app-unreachable server internals or providers without an E2E harness may use the narrowest real-path test instead — say why in the PR. Question unreproducible hardening rather than adding guards.
 
 1. **Effects inject `LOCAL_ACTIONS`**, never `Actions` (`ALL_ACTIONS` only for the op-log capture effect; remote archive side effects → `ArchiveOperationHandler`). Lint: `no-actions-in-effects`. → `src/app/util/local-actions.token.ts`.
@@ -80,26 +86,16 @@ These apply to all state-related work. **One user intent = one op; replayed/remo
 3. **Multi-entity change = meta-reducer**, not an effect fan-out (one reducer pass = one op). → `src/app/root-store/meta/task-shared-meta-reducers/`.
 4. **Logical clock:** "what day is this?" goes through `DateService` (`getLogicalTodayDate`, `isToday`, `todayStr`). Pure reducers/selectors take `startOfNextDayDiffMs` as an arg and call `isTodayWithOffset` for replay determinism. At service boundaries use `getStartOfNextDayDiffMs()` (the raw field is `private`).
 5. **`TODAY_TAG` (`'TODAY'`) is virtual** — never in `task.tagIds`; membership comes from `task.dueWithTime`/`task.dueDay`, `TODAY_TAG.taskIds` only orders. → `ARCHITECTURE-DECISIONS.md` Decision #2.
-6. **Bulk dispatch loop:** needs no `setTimeout(0)` yield: capture is synchronous and writes are ordered under the op-log lock (measured 2026-10, single tab: 50–500 dispatches without yields lost no ops, #10441). Prefer one meta-reducer action (rule 3); if a follow-up depends on the loop's ops, await `OperationWriteFlushService.flushPendingWrites()` (never while holding the op-log lock). Leave existing yields in place. → [atomicity rule](docs/sync-and-op-log/contributor-sync-model.md#the-atomicity-rule--one-replay-atomic-transition-one-op).
+6. **Bulk dispatch loop:** needs no `setTimeout(0)` yield (capture is synchronous, writes are ordered under the op-log lock, #10441); leave existing yields in place. Prefer one meta-reducer action (rule 3); if a follow-up depends on the loop's ops, await `OperationWriteFlushService.flushPendingWrites()` (never while holding the op-log lock). → [atomicity rule](docs/sync-and-op-log/contributor-sync-model.md#the-atomicity-rule--one-replay-atomic-transition-one-op).
 7. **`SYNC_IMPORT` / `BACKUP_IMPORT`** replace state and intentionally drop concurrent ops (CONCURRENT or LESS_THAN by vector clock) — by design, not a bug. → `SyncImportFilterService`.
 8. **Vector clocks:** `MAX_VECTOR_CLOCK_SIZE = 20`; the server prunes after conflict detection, before storage. → `docs/sync-and-op-log/vector-clocks.md`.
 9. **Logging:** `Log.log({ id: task.id })`, never `Log.log(task)` or a title — log history is exportable; never log user content.
 10. **Don't bump `CURRENT_SCHEMA_VERSION` by default.** A bump does not protect released clients; new semantics must degrade gracefully (`LwwUpdatePayload` / inert markers); incompatible semantics cannot ship behind a bump alone, and compatible changes do not justify one. [Bump policy](docs/sync-and-op-log/operation-log-architecture.md#bump-policy--a-bump-does-not-protect-the-released-fleet).
 11. **New persisted fields must be optional (`?`) with a runtime default** — on-disk data lacks them; don't assume a heal. If [frozen-state.spec.ts](src/app/op-log/validation/frozen-state.spec.ts) fails, fix the model, never the fixture. [Rules](docs/sync-and-op-log/persisted-model-fields.md), #9125, #9124.
-12. **Conflict fixes take generic paths** (field patch, derived membership, admission sets) over per-action logic (admitting an action that meets a set's documented contract is fine; if none fits, make the smallest safe change and say why in the PR), and prove convergence and content preservation in both conflict directions with an E2E. Removing a safety stop alone is not a fix (#10264). → [conflict resolution](docs/sync-and-op-log/contributor-sync-model.md#conflict-resolution--stay-on-generic-paths).
-13. **No new denormalized lists or undeclared cross-entity writes** — store the fact on the child and derive membership (`ARCHITECTURE-DECISIONS.md` Decision #2). True multi-entity transitions still follow rule 3. → same section.
-14. **No new crossing may reach the fail-closed stop** (`UnsupportedMultiEntityConflictError`, ending in the whole-dataset dialog). A PR adding or changing an action that declares several entity ids names its resolution path and covers it with an E2E; without one, reshape it (one declared entity, fact on the child) instead of compensating. → same section.
-15. **A sync fix needs evidence of harm** — it lands only for a user report, a regression on unreleased master (revert first unless that brings back a released bug), or data loss, a sync stop or permanent content divergence on a path released clients or default settings take. Other findings from audits, reviews or fuzzing become issues with a reproduction, not PRs. → [fix intake](docs/sync-and-op-log/contributor-sync-model.md#fix-intake--evidence-before-a-fix).
-16. **At most five open sync PRs; each gets a fresh-context review-and-improve subagent pass before ready**: it sees only the branch, diff, tracker and [`feature-review-guide.md`](docs/feature-review-guide.md), runs the tests and fixes what makes sense; findings go fixed/not fixed in the PR body's "Review" section, not PR comments. Further work waits as a draft PR or issue. An agent session never approves its own sync PR. → [fix intake](docs/sync-and-op-log/contributor-sync-model.md#fix-intake--evidence-before-a-fix).
+12. **Conflict fixes take generic paths** (field patch, derived membership, admission sets); per-action logic only if none fits, as the smallest safe change, with the reason in the PR. Prove convergence and content preservation in both conflict directions with an E2E. Removing a safety stop alone is not a fix (#10264). → [conflict resolution](docs/sync-and-op-log/contributor-sync-model.md#conflict-resolution--stay-on-generic-paths).
+13. **No new denormalized lists or undeclared cross-entity writes** — store the fact on the child and derive membership (true multi-entity transitions still follow rule 3). → same section.
+14. **No new crossing may reach the fail-closed stop** (`UnsupportedMultiEntityConflictError`); an added or changed multi-entity action names its resolution path and covers it with an E2E, or is reshaped (one declared entity, fact on the child). → same section.
+15. **A sync fix needs evidence of harm** (user report, unreleased-master regression (revert first unless that revives a released bug), or reproduced data loss / sync stop / permanent divergence on a released path); other findings become issues. → [fix intake](docs/sync-and-op-log/contributor-sync-model.md#fix-intake--evidence-before-a-fix).
+16. **Sync PR flow:** at most five open (more waits as a draft PR or issue). Before ready, a fresh-context review-and-improve subagent sees only the branch, diff, tracker and [`feature-review-guide.md`](docs/feature-review-guide.md); findings go fixed/not fixed in the PR body's "Review" section, not PR comments. An agent never approves its own sync PR. → same section.
 
 Rules 12–16 are review-enforced.
-
-## Anti-patterns
-
-| Avoid                        | Do instead                               |
-| ---------------------------- | ---------------------------------------- |
-| `any` type                   | proper types, `unknown` if truly unknown |
-| Direct DOM access            | Angular bindings, `viewChild()`          |
-| Side effects in constructors | `async` pipe or `toSignal`               |
-| Subscribing without cleanup  | `takeUntilDestroyed()` or async pipe     |
-| `NgModules` for new code     | standalone components                    |

@@ -16,6 +16,7 @@ import { JIRA_TYPE } from '../issue.const';
 import { IssueProvider } from '../issue.model';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { IS_ONLINE$ } from '../../../util/is-online.token';
 
 describe('PollToBacklogEffects', () => {
   let effects: PollToBacklogEffects;
@@ -27,6 +28,7 @@ describe('PollToBacklogEffects', () => {
   let isInSyncWindow: boolean;
   let isInitialSyncDone: boolean;
   let isActiveProject$: BehaviorSubject<boolean>;
+  let isOnline$: BehaviorSubject<boolean>;
 
   const createMockIssueProvider = (
     overrides: Partial<IssueProvider> = {},
@@ -64,6 +66,7 @@ describe('PollToBacklogEffects', () => {
 
     isInSyncWindow = false;
     isInitialSyncDone = true;
+    isOnline$ = new BehaviorSubject<boolean>(true);
 
     TestBed.configureTestingModule({
       providers: [
@@ -89,6 +92,7 @@ describe('PollToBacklogEffects', () => {
           provide: SnackService,
           useValue: snackServiceSpy,
         },
+        { provide: IS_ONLINE$, useValue: isOnline$ },
       ],
     });
 
@@ -383,6 +387,36 @@ describe('PollToBacklogEffects', () => {
       expect(
         issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
       ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1', true);
+    }));
+
+    it('should skip polls while offline and poll once the connection is back', fakeAsync(() => {
+      store.overrideSelector(selectEnabledIssueProviders, [
+        createMockIssueProvider({ id: 'jira-1', pollingMode: 'always' }),
+      ]);
+      store.refreshState();
+      actions$ = new Subject<any>().asObservable();
+      isOnline$.next(false);
+
+      const sub = effects.pollNewIssuesToBacklogAlways$.subscribe();
+      tick(10001);
+      tick(300000);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).not.toHaveBeenCalled();
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
+
+      isOnline$.next(true);
+      tick(7999);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).not.toHaveBeenCalled();
+      tick(1);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledTimes(1);
+
+      sub.unsubscribe();
+      discardPeriodicTasks();
     }));
 
     it('should NOT poll always-mode providers without isAutoAddToBacklog', fakeAsync(() => {

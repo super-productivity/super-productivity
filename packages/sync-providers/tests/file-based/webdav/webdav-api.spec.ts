@@ -201,6 +201,20 @@ describe('WebdavApi', () => {
       expect(r.rev).toBe(await md5HashWasm('hello world'));
     });
 
+    // RFC 7617 §2.1 worked example: user "test", password "123£" as UTF-8.
+    it('sends non-ASCII Basic credentials as UTF-8', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(okResponse('hello world'));
+      await makeApi(adapter, NOOP_SYNC_LOGGER, {
+        ...cfg,
+        userName: 'test',
+        password: '123£',
+      }).download({ path: 'op-1.json' });
+      expect(adapter.request.mock.calls[0]?.[0].headers.Authorization).toBe(
+        'Basic dGVzdDoxMjPCow==',
+      );
+    });
+
     it('uses a strong ETag as the download revision', async () => {
       const adapter = makeAdapter();
       adapter.request.mockResolvedValue(
@@ -985,6 +999,21 @@ describe('WebdavApi', () => {
       adapter.request.mockResolvedValue(okResponse(sampleListing, 207));
       const r = await makeApi(adapter).testConnection(cfg);
       expect(r.success).toBe(true);
+    });
+
+    // `printf 'e2e-euro:pw-€-e2e' | base64`; `btoa` on the raw string throws.
+    it('sends credentials beyond Latin-1 as UTF-8', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValue(okResponse(sampleListing, 207));
+      const r = await makeApi(adapter).testConnection({
+        ...cfg,
+        userName: 'e2e-euro',
+        password: 'pw-€-e2e',
+      });
+      expect(r.success).toBe(true);
+      expect(adapter.request.mock.calls[0]?.[0].headers.Authorization).toBe(
+        'Basic ZTJlLWV1cm86cHct4oKsLWUyZQ==',
+      );
     });
 
     // Regression: issue #7617. The probe must hit the WebDAV base ROOT,

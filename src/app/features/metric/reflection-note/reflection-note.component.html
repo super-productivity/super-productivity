@@ -1,7 +1,10 @@
 <header class="reflection-header">
   <div class="reflection-header__titles">
     <div class="reflection-header__title">
-      {{ T.F.METRIC.REFLECTION.TITLE | translate }}
+      {{
+        (isWeek() ? T.F.METRIC.REFLECTION.TITLE_WEEK : T.F.METRIC.REFLECTION.TITLE)
+          | translate
+      }}
     </div>
     <!--    <div class="reflection-header__subline">-->
     <!--      {{ T.F.METRIC.REFLECTION.SUBLINE | translate }}-->
@@ -23,7 +26,9 @@
     matInput
     cdkTextareaAutosize
     #autosize="cdkTextareaAutosize"
-    [placeholder]="placeholder()"
+    [placeholder]="
+      isWeek() ? (T.F.METRIC.REFLECTION.PLACEHOLDER_WEEK | translate) : placeholder()
+    "
     [ngModel]="inputText()"
     (ngModelChange)="onReflectionChange($event)"
     cdkAutosizeMinRows="3"

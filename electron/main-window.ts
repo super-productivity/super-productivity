@@ -27,6 +27,7 @@ import {
   showTaskWidget,
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
+import { getStartMinimizedMode } from './start-minimized';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
 import { createMenuTemplate } from './menu';
 import { loadSimpleStoreAll } from './simple-store';
@@ -38,6 +39,11 @@ import {
   setWasMaximizedBeforeHide,
 } from './window-maximized-state';
 import {
+  getWasFullScreen,
+  initWasFullScreen,
+  setWasFullScreen,
+} from './window-full-screen-state';
+import {
   clampBoundsToDisplay,
   initRestoreBounds,
   isSampleableBounds,
@@ -47,6 +53,7 @@ import {
 import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
+import { isAllowedSessionPermission } from './session-permissions';
 import { applyJiraImageAuth } from './jira-image-auth';
 
 // Long enough to outlast a resize or move gesture, so a drag records one
@@ -145,12 +152,14 @@ export const createWindow = async ({
   quitApp,
   app,
   customUrl,
+  isStartMinimized = false,
 }: {
   IS_DEV: boolean;
   ICONS_FOLDER: string;
   quitApp: () => void;
   app: App;
   customUrl?: string;
+  isStartMinimized?: boolean;
 }): Promise<BrowserWindow> => {
   // make sure the main window isn't already created
   if (mainWin) {
@@ -166,6 +175,11 @@ export const createWindow = async ({
   const mainWindowState = windowStateKeeper({
     defaultWidth: 800,
     defaultHeight: 800,
+    // maximize() shows a hidden window, so a start-minimized launch must not
+    // restore it here. showOrFocus() re-maximizes on first show.
+    maximize: !isStartMinimized,
+    // Our own flag owns full screen, see window-full-screen-state.ts.
+    fullScreen: false,
   });
 
   const simpleStore = await loadSimpleStoreAll();
@@ -328,15 +342,13 @@ export const createWindow = async ({
   });
 
   // Deny unnecessary permissions (webcam, microphone, geolocation, etc.)
-  // The app only needs notifications for desktop reminders
-  const allowedPermissions = ['notifications'];
   mainWin.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback) => {
-      callback(allowedPermissions.includes(permission));
+      callback(isAllowedSessionPermission(permission));
     },
   );
   mainWin.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
-    return allowedPermissions.includes(permission);
+    return isAllowedSessionPermission(permission);
   });
 
   mainWindowState.manage(mainWin);
@@ -358,6 +370,17 @@ export const createWindow = async ({
       : persistedWasMaximized === true;
   initWasMaximizedBeforeHide(wasMaximized);
 
+  // Full screen is owned the same way. The first launch with this flag adopts
+  // what the library restored before.
+  const persistedWasFullScreen = simpleStore[SimpleStoreKey.WINDOW_WAS_FULL_SCREEN];
+  const wasFullScreen =
+    persistedWasFullScreen === undefined
+      ? mainWindowState.isFullScreen === true
+      : persistedWasFullScreen === true;
+  // Save an adopted value straight away: until then the library would still
+  // be the only record, and it saves false for a window closed while hidden.
+  initWasFullScreen(wasFullScreen, { isPersist: persistedWasFullScreen === undefined });
+
   // #10058: the library gets the un-maximized geometry wrong the same two ways
   // it gets the flag wrong, so our own copy owns it. Applied before the
   // maximize below, so un-maximizing lands on these bounds and not on the
@@ -377,16 +400,20 @@ export const createWindow = async ({
       )
     : null;
   initRestoreBounds(restoreBounds);
-  // manage() above restores full screen (electron-window-state `config.fullScreen`
-  // defaults true), and a full-screen window reports isMaximized() === false, so
-  // this has to exclude it the same way isSampleableBounds() does. The persisted
-  // flag rather than the live getter, because setFullScreen() is async on macOS.
-  if (restoreBounds && !mainWin.isMaximized() && !mainWindowState.isFullScreen) {
+  // Full screen is entered below, after this, so leaving it lands on these
+  // bounds.
+  if (restoreBounds && !mainWin.isMaximized()) {
     mainWin.setBounds(restoreBounds);
   }
 
-  if (wasMaximized && !mainWin.isMaximized()) {
+  if (wasMaximized && !mainWin.isMaximized() && !isStartMinimized) {
     mainWin.maximize();
+  }
+
+  // setFullScreen() shows a hidden window too, so a start-minimized launch
+  // leaves it to the first show (showOrFocus()) or restore (below).
+  if (wasFullScreen && !isStartMinimized) {
+    mainWin.setFullScreen(true);
   }
 
   const url = customUrl
@@ -501,6 +528,33 @@ export const createWindow = async ({
 
   // show gracefully
   mainWin.once('ready-to-show', () => {
+    if (isStartMinimized) {
+      const mode = getStartMinimizedMode({ hasTray: !!ensureIndicator(), isMac: IS_MAC });
+      log('Start minimized: main window', mode === 'hide' ? 'stays hidden' : 'minimized');
+      if (mode === 'minimize') {
+        // Minimizing a window that was never shown leaves it without a taskbar
+        // entry on some platforms, so map it first without taking focus.
+        mainWin.showInactive();
+        mainWin.minimize();
+        // createWindow() skipped the full-screen and #7276 maximize restore,
+        // and a taskbar click is an OS restore that never goes through
+        // showOrFocus(), so re-apply them on the first restore. Not before
+        // minimizing: maximize() on a hidden window activates it on Windows
+        // (SC_MAXIMIZE), stealing focus at login.
+        // Same order as showOrFocus(): maximize, then full screen, so leaving
+        // full screen lands on the maximized window.
+        mainWin.once('restore', () => {
+          if (getWasMaximizedBeforeHide() && !mainWin.isMaximized()) {
+            mainWin.maximize();
+          }
+          if (getWasFullScreen() && !mainWin.isFullScreen()) {
+            mainWin.setFullScreen(true);
+          }
+        });
+      }
+      return;
+    }
+
     mainWin.show();
 
     // Workaround for Windows phantom focus bug (electron#20464):
@@ -552,9 +606,20 @@ export const createWindow = async ({
 
   // Notify renderer of fullscreen state changes (used for app border visibility)
   mainWin.on('enter-full-screen', () => {
+    setWasFullScreen(true);
     mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
   });
   mainWin.on('leave-full-screen', () => {
+    // Same guard as unmaximize: leaving full screen while hidden or minimized
+    // is not the user leaving it.
+    if (
+      isUserUnmaximize({
+        isVisible: mainWin.isVisible(),
+        isMinimized: mainWin.isMinimized(),
+      })
+    ) {
+      setWasFullScreen(false);
+    }
     mainWin.webContents.send(IPC.LEAVE_FULL_SCREEN);
   });
   mainWin.webContents.on('did-finish-load', () => {
@@ -829,7 +894,9 @@ const appCloseHandler = (app: App): void => {
 
       event.preventDefault();
 
-      if (ids.length > 0) {
+      // A gone renderer (killed, oom, ...) never answers, so waiting for it
+      // would leave no way to quit.
+      if (ids.length > 0 && !mainWin.webContents.isCrashed()) {
         log('Actions to wait for ', ids);
         mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
       } else {

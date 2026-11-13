@@ -35,6 +35,7 @@ export enum LS {
   CHECK_STRAY_PERSISTENCE_BACKUP = 'SUP_CHECK_STRAY_PERSISTENCE_BACKUP',
   IS_PROJECT_LIST_EXPANDED = 'SUP_IS_PROJECT_LIST_EXPANDED',
   IS_TAG_LIST_EXPANDED = 'SUP_IS_TAG_LIST_EXPANDED',
+  IS_VIEW_LIST_EXPANDED = 'SUP_IS_VIEW_LIST_EXPANDED',
 
   LAST_NOTE_BANNER_DAY = 'SUP_LAST_NOTE_BANNER_DAY',
 
@@ -51,6 +52,15 @@ export enum LS {
   // don't all hit SuperSync at the same second. Device-local on purpose: the
   // point is that it differs between devices.
   DUE_DATE_NOTIFICATION_OFFSET_MS = 'SUP_DUE_DATE_NOTIFICATION_OFFSET_MS',
+  // Notification ids each mobile reminder effect has armed natively. Native
+  // alarms outlive the app, so the next run needs these to cancel alarms for
+  // tasks completed or deleted (e.g. via sync) while it was closed.
+  MOBILE_ARMED_REMINDER_IDS = 'SUP_MOBILE_ARMED_REMINDER_IDS',
+  MOBILE_ARMED_REPEAT_REMINDER_IDS = 'SUP_MOBILE_ARMED_REPEAT_REMINDER_IDS',
+  MOBILE_ARMED_DUE_DATE_IDS = 'SUP_MOBILE_ARMED_DUE_DATE_IDS',
+  MOBILE_ARMED_DEADLINE_IDS = 'SUP_MOBILE_ARMED_DEADLINE_IDS',
+  // Epoch ms the "iOS limits reminders" notice was last shown (device-local).
+  IOS_REMINDER_LIMIT_NOTICE_AT = 'SUP_IOS_REMINDER_LIMIT_NOTICE_AT',
 
   // Epoch ms until which the "encrypt your SuperSync account" migration banner
   // stays hidden. Set when the user picks "Later" (or opens the flow), so — unlike
@@ -66,6 +76,9 @@ export enum LS {
   CALENDER_EVENTS_LAST_SKIP_DAY = 'SUP_CALENDER_EVENTS_LAST_SKIP_DAY',
   HIDDEN_CALENDAR_EVENT_IDS = 'SUP_HIDDEN_CALENDAR_EVENT_IDS',
   HIDDEN_CALENDAR_PROVIDER_IDS = 'SUP_HIDDEN_CALENDAR_PROVIDER_IDS',
+  // Ids of calendar providers whose last fetch failed, kept across restarts so a
+  // broken calendar is reported once and not on every app start. Device-local.
+  CAL_PROVIDER_FAILING_IDS = 'SUP_CAL_PROVIDER_FAILING_IDS',
 
   ISSUE_SEARCH_CACHE = 'SUP_ISSUE_SEARCH_CACHE',
 
@@ -113,12 +126,24 @@ export enum LS {
   NAV_SIDEBAR_WIDTH = 'SUP_NAV_SIDEBAR_WIDTH',
   RIGHT_PANEL_WIDTH = 'SUP_RIGHT_PANEL_WIDTH',
 
+  // Colors and bars of the last rendered frame, painted by the launch screen in
+  // index.html before any JS runs (see launch-frame.ts). Device-local.
+  LAUNCH_FRAME = 'SUP_LAUNCH_FRAME',
+  // How long the last start took until the boot splash faded (ms since
+  // navigation start). The launch screen skips its tip after a quick one.
+  // Device-local.
+  LAST_BOOT_MS = 'SUP_LAST_BOOT_MS',
+
   // Destination of the phone bottom nav's second slot. Device-local, never
   // synced: the bar only exists on narrow screens.
   BOTTOM_NAV_SLOT = 'SUP_BOTTOM_NAV_SLOT',
 
   // Task view customizer
   TASK_VIEW_CUSTOMIZER_BY_CONTEXT = 'SUP_TASK_VIEW_CUSTOMIZER_BY_CONTEXT',
+
+  // Tracked work sessions not yet added to the calendar. Device-local, never
+  // synced: only the device that tracked the time adds the event.
+  WORK_SESSION_LOG = 'SUP_WORK_SESSION_LOG',
 }
 
 // Prefix for device-local, never-synced note drafts (see LocalDraftService).
