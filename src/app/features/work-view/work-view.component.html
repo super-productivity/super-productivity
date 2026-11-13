@@ -165,9 +165,37 @@
                   [isExpanded]="
                     !customizerService.collapsedGroupIds().includes(group.key)
                   "
-                  (isExpandedChange)="customizerService.toggleGroupExpansion(group.key)"
+                  (isExpandedChange)="onGroupExpandedChange(group.key)"
                   [isGroup]="true"
                 >
+                  @if (group.newTaskPrefill) {
+                    <!-- One root element, so the block is projected into the header. -->
+                    <ng-container actions>
+                      @let groupAddLabel =
+                        T.F.BOARDS.V.ADD_TASK_TO
+                          | translate
+                            : { title: group.key | scheduledDateGroup: todayStr() };
+                      <button
+                        mat-icon-button
+                        [attr.aria-label]="groupAddLabel"
+                        [matTooltip]="groupAddLabel"
+                        (click)="openGroupAddTask(group.key); $event.preventDefault()"
+                      >
+                        <mat-icon>add</mat-icon>
+                      </button>
+                    </ng-container>
+                  }
+                  @if (group.newTaskPrefill && inlineAddKey() === 'g:' + group.key) {
+                    <add-task-bar
+                      class="inline-add-task-bar"
+                      [viewPrefill]="group.newTaskPrefill"
+                      [additionalFields]="{
+                        projectId: group.newTaskPrefill.fields.projectId,
+                      }"
+                      (closed)="closeInlineAdd('g:' + group.key)"
+                      (done)="closeInlineAdd('g:' + group.key)"
+                    ></add-task-bar>
+                  }
                   <task-list
                     [tasks]="group.tasks"
                     listId="PARENT"
@@ -212,12 +240,20 @@
                       "
                       [isIconBefore]="true"
                       [isExpanded]="section.isExpanded"
-                      (isExpandedChange)="
-                        sectionService.updateSection(section.id, { isExpanded: $event })
-                      "
+                      (isExpandedChange)="onSectionExpandedChange(section, $event)"
                       [isTitleDragHandle]="true"
                     >
                       <ng-container actions>
+                        @let sectionAddLabel =
+                          T.F.BOARDS.V.ADD_TASK_TO | translate: { title: section.title };
+                        <button
+                          mat-icon-button
+                          [attr.aria-label]="sectionAddLabel"
+                          [matTooltip]="sectionAddLabel"
+                          (click)="openSectionAddTask(section); $event.preventDefault()"
+                        >
+                          <mat-icon>add</mat-icon>
+                        </button>
                         <button
                           mat-icon-button
                           [matMenuTriggerFor]="sectionMenu"
@@ -244,6 +280,14 @@
                         </mat-menu>
                       </ng-container>
 
+                      @if (inlineAddKey() === 's:' + section.id) {
+                        <add-task-bar
+                          class="inline-add-task-bar"
+                          (afterTaskAdd)="addToSection(section, $event)"
+                          (closed)="closeInlineAdd('s:' + section.id)"
+                          (done)="closeInlineAdd('s:' + section.id)"
+                        ></add-task-bar>
+                      }
                       <task-list
                         [tasks]="bySection.dict[section.id]"
                         [listId]="'PARENT'"
