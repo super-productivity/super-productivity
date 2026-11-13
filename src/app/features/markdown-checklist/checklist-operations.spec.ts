@@ -116,7 +116,9 @@ describe('checklist-operations', () => {
 });
 
 describe('checklist edits around fenced code examples', () => {
-  for (const { name, prefixes } of [
+  // `items` lists the prefix lines that marked renders as checkboxes;
+  // `editorItems` lists the ones CodeMirror shows, where the two differ.
+  for (const { name, prefixes, items = [], editorItems = items } of [
     {
       name: 'fence indentation relative to its container',
       prefixes: [
@@ -148,8 +150,29 @@ describe('checklist edits around fenced code examples', () => {
         ['- parent', '  - ```', '    - [x] source', ''],
       ],
     },
+    {
+      // marked keeps a closing tag after a list item inside that item, so the
+      // items below it still render. CodeMirror starts an HTML block at the
+      // tag instead, so its editor shows no checkbox for b.
+      name: 'closing tags that marked keeps inside a list item',
+      prefixes: [
+        ['- [ ] a', '</details>', '- [ ] b', '', '- [ ] c', '', '```', 'code', '```'],
+        ['- [ ] a', '</div>', '- [ ] b', '', '- [ ] c', '', '```', 'code', '```'],
+      ],
+      items: [0, 2, 4],
+      editorItems: [0, 4],
+    },
+    {
+      name: 'a closing tag and a fence in one HTML block',
+      prefixes: [
+        ['- [ ] a', '</details>', '- [ ] b', '```', '- [x] source', '```', ''],
+        ['- [ ] a', '</div>', '- [ ] b', '```', '- [x] source', '```', ''],
+      ],
+      items: [0, 2],
+      editorItems: [0],
+    },
   ]) {
-    it(`matches both renderers for ${name} and preserves source`, () => {
+    it(`matches the rendered checkboxes for ${name} and preserves source`, () => {
       marked.setOptions(marked.getDefaults());
       marked.setOptions(markedOptionsFactory());
       const results = prefixes.flatMap((prefix) =>
@@ -157,6 +180,13 @@ describe('checklist edits around fenced code examples', () => {
           const lines = [...prefix, '- [x] done', '- [ ] todo'];
           const notes = lines.join(ending);
           const html = marked.parse(notes) as string;
+          // The preview toggles by the index of the clicked `.checkbox-wrapper`.
+          const renderedLabels = Array.from(
+            new DOMParser()
+              .parseFromString(html, 'text/html')
+              .querySelectorAll('.checkbox-wrapper .checkbox-label'),
+            (label) => (label.textContent ?? '').trim().split('\n')[0],
+          );
           const editorIndices: number[] = [];
           // CodeMirror's document normalizes CRLF before invoking its parser.
           const editorSource = notes.replace(/\r\n/g, '\n');
@@ -169,33 +199,43 @@ describe('checklist edits around fenced code examples', () => {
           });
           const actual = {
             notes,
-            renderedLabels: Array.from(
-              html.matchAll(/class="checkbox-label">(.*?)<\/span>/g),
-              (match) => match[1].trim(),
-            ),
+            renderedLabels,
             editorIndices,
             indices: getChecklistItemLineIndices(notes.split('\n')),
             cleared: removeCheckedChecklistItems(notes),
             checked: setAllChecklistItemsChecked(notes, true),
             unchecked: setAllChecklistItemsChecked(notes, false),
-            toggled: toggleChecklistItemAtIndex(notes, 1),
+            toggled: renderedLabels.map((_, n) => toggleChecklistItemAtIndex(notes, n)),
             progress: getChecklistProgress(notes),
             converted: markdownToChecklist(notes),
           };
+          const itemLines = [...items, prefix.length, prefix.length + 1];
+          const label = (index: number): string => lines[index].slice('- [ ] '.length);
+          const isDone = (index: number): boolean => lines[index].startsWith('- [x]');
+          const check = (line: string): string => line.replace('- [ ]', '- [x]');
+          const uncheck = (line: string): string => line.replace('- [x]', '- [ ]');
+          const edit = (indices: number[], change: (line: string) => string): string =>
+            lines
+              .map((line, i) => (indices.includes(i) ? change(line) : line))
+              .join(ending);
           const expected = {
             notes,
-            renderedLabels: ['done', 'todo'],
-            editorIndices: [prefix.length, prefix.length + 1],
-            indices: [prefix.length, prefix.length + 1],
-            cleared: notes.replace(`- [x] done${ending}`, ''),
-            checked: notes.replace('- [ ] todo', '- [x] todo'),
-            unchecked: notes.replace('- [x] done', '- [ ] done'),
-            toggled: notes.replace('- [ ] todo', '- [x] todo'),
-            progress: { done: 1, total: 2 },
-            converted: [
-              { text: 'done', isChecked: true },
-              { text: 'todo', isChecked: false },
-            ],
+            renderedLabels: itemLines.map(label),
+            editorIndices: [...editorItems, prefix.length, prefix.length + 1],
+            indices: itemLines,
+            cleared: lines
+              .filter((_, i) => !itemLines.includes(i) || !isDone(i))
+              .join(ending),
+            checked: edit(itemLines, check),
+            unchecked: edit(itemLines, uncheck),
+            toggled: itemLines.map((index) =>
+              edit([index], isDone(index) ? uncheck : check),
+            ),
+            progress: { done: itemLines.filter(isDone).length, total: itemLines.length },
+            converted: itemLines.map((index) => ({
+              text: label(index),
+              isChecked: isDone(index),
+            })),
           };
           return { actual, expected };
         }),

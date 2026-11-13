@@ -19,6 +19,7 @@ import { GFM, parser } from '@lezer/markdown';
 const CHECKLIST_ITEM_RE = /^\s*- \[[ xX]\]\s+\S/;
 const CHECKED_ITEM_RE = /^\s*- \[[xX]\]\s+\S/;
 const FENCE_PARSER = parser.configure(GFM);
+const FENCE_LINE_RE = /^ {0,3}(?:```|~~~)/m;
 
 export const isChecklistItemLine = (line: string): boolean =>
   CHECKLIST_ITEM_RE.test(line);
@@ -50,11 +51,25 @@ export const getChecklistItemLineIndices = (lines: string[]): number[] => {
   // Lezer receives normalized lines, as it does in CodeMirror. Keep the original
   // strings for editing, and use the normalized lengths for parser offsets.
   const parserLines = lines.map((line) => line.replace(/\r$/, ''));
+  const source = parserLines.join('\n');
   const fences: { from: number; to: number }[] = [];
-  FENCE_PARSER.parse(parserLines.join('\n')).iterate({
+  FENCE_PARSER.parse(source).iterate({
     enter: ({ name, from, to }) => {
-      if (name === 'FencedCode' || name === 'CodeBlock' || name === 'HTMLBlock') {
+      if (name === 'FencedCode' || name === 'CodeBlock') {
         fences.push({ from, to });
+        return false;
+      }
+      if (name === 'HTMLBlock') {
+        // Lezer starts an HTML block at a closing tag right after a list item,
+        // where marked keeps the line in the item and still renders the items
+        // below it. Skip an HTML block only from its first fence line on: that
+        // still covers a fence inside <pre> or <div>, and items above the fence
+        // keep the plain line scan, so a code block elsewhere in the notes
+        // cannot shift which item a preview click hits.
+        const fenceLine = source.slice(from, to).search(FENCE_LINE_RE);
+        if (fenceLine !== -1) {
+          fences.push({ from: from + fenceLine, to });
+        }
         return false;
       }
       return true;
