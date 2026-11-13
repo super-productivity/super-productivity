@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { translationText } from '../../utils/i18n-strings';
 import { flushPendingWrites } from '../../utils/waits';
 import type { Page } from '@playwright/test';
 
@@ -29,9 +30,17 @@ const readSchedule = async (
     return result;
   }, id);
 
+// "Task planned for <strong>{{date}}</strong>{{extra}}": the text before the date.
+const PLANNED_FOR_TEXT = translationText('F.PLANNER.S.TASK_PLANNED_FOR').split(
+  '<strong>',
+)[0];
+
+// snackDate is the en-GB short date (playwright.config pins the locale). With
+// the 04:00 start of next day, June 16 is the calendar date but logical
+// tomorrow, so the snack must show the date and not "Today".
 for (const scenario of [
-  { offset: '00:00', expected: '2026-06-17' },
-  { offset: '04:00', expected: '2026-06-16' },
+  { offset: '00:00', expected: '2026-06-17', snackDate: '17/06/2026' },
+  { offset: '04:00', expected: '2026-06-16', snackDate: '16/06/2026' },
 ]) {
   test(`reminder tomorrow respects ${scenario.offset} day start`, async ({
     page,
@@ -108,6 +117,9 @@ for (const scenario of [
       .click();
     await page.getByRole('menuitem', { name: 'Reschedule for tomorrow' }).click();
     await expect(dialog).toBeHidden();
+    await expect(
+      page.locator('snack-custom', { hasText: PLANNED_FOR_TEXT }).locator('strong'),
+    ).toHaveText(scenario.snackDate);
     await flushPendingWrites(page);
     expect
       .soft(await readSchedule(page, id))
