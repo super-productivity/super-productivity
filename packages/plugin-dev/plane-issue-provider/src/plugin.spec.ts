@@ -717,6 +717,9 @@ describe('parseWorkspaceUrl()', () => {
       'https://plane.example.com/acme/projects/1f2e3d4c/issues/',
       'https://plane.example.com/acme/browse/ENG-12/',
       'https://plane.example.com/acme/settings/projects/1f2e3d4c/members/',
+      'https://plane.example.com/acme/workspace-views/all-issues/',
+      'https://plane.example.com/acme/notifications/',
+      'https://plane.example.com/acme/profile/0a1b2c3d/',
     ]) {
       expect(parseWorkspaceUrl(url)).toEqual({
         host: 'https://plane.example.com',

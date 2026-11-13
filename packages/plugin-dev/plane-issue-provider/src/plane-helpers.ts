@@ -129,10 +129,21 @@ const WORKSPACE_URL_EXAMPLE = 'https://app.plane.so/<workspace>/';
 
 /**
  * Plane web-app routes that sit right after the workspace slug. A URL copied from
- * inside a workspace (a project, a work item, settings) is cut at the first one, so it
- * works as well as the bare workspace address.
+ * inside a workspace (a project, a work item, a view, settings) is cut at the first
+ * one, so it works as well as the bare workspace address.
  */
-const WORKSPACE_SUB_ROUTES = new Set(['projects', 'browse', 'settings']);
+const WORKSPACE_SUB_ROUTES = new Set([
+  'active-cycles',
+  'analytics',
+  'browse',
+  'drafts',
+  'notifications',
+  'profile',
+  'projects',
+  'settings',
+  'stickies',
+  'workspace-views',
+]);
 
 /**
  * Splits a workspace URL copied from the browser into host and workspace slug. Plane's
