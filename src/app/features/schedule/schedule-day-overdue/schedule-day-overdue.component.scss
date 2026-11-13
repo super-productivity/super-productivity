@@ -1,0 +1,9 @@
+:host {
+  display: block;
+}
+
+// A long list must not push the day's grid out of the panel.
+.tasks {
+  max-height: 30vh;
+  overflow-y: auto;
+}

@@ -7,10 +7,10 @@ import { combineLatest, firstValueFrom, Observable } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 import {
+  selectAllTasksWithDueTime,
   selectTasksDueForDay,
-  selectTasksWithDueTimeForRange,
+  selectTasksWithDueTimeForDay,
 } from '../tasks/store/task.selectors';
-import { getDateRangeForDay } from '../../util/get-date-range-for-day';
 import { first, map, switchMap, withLatestFrom } from 'rxjs/operators';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
@@ -19,6 +19,7 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
 import { selectTasksForPlannerDay } from '../planner/store/planner.selectors';
 import { TaskLog } from '../../core/log';
+import { isTodayWithOffset } from '../../util/is-today.util';
 
 @Injectable({
   providedIn: 'root',
@@ -45,8 +46,8 @@ export class AddTasksForTomorrowService {
   private _dueWithTimeForTomorrow$: Observable<TaskWithDueTime[]> =
     this._tomorrowDate$.pipe(
       switchMap((dt) =>
-        this._store.select(selectTasksWithDueTimeForRange, {
-          ...getDateRangeForDay(dt.getTime()),
+        this._store.select(selectTasksWithDueTimeForDay, {
+          day: getDbDateStr(dt),
         }),
       ),
     );
@@ -181,9 +182,20 @@ export class AddTasksForTomorrowService {
     // Get tasks due for today
     const [dueWithTime, dueWithDay] = await firstValueFrom(
       combineLatest([
-        this._store.select(selectTasksWithDueTimeForRange, {
-          ...getDateRangeForDay(todayDate.getTime()),
-        }),
+        // Config can change during the awaits above. Use the same captured
+        // day/offset for selection and dispatch, or planning can erase a time
+        // that only belonged to this day under the new offset.
+        this._store
+          .select(selectAllTasksWithDueTime)
+          .pipe(
+            map((tasks) =>
+              tasks.filter(
+                (task) =>
+                  !!task.dueWithTime &&
+                  isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs),
+              ),
+            ),
+          ),
         this._store.select(selectTasksDueForDay, { day: getDbDateStr(todayDate) }),
       ]).pipe(first()),
     );

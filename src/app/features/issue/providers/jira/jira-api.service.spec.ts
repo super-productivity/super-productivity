@@ -263,6 +263,35 @@ describe('JiraApiService', () => {
     });
   });
 
+  describe('_makeRequestInit authorization header', () => {
+    let service: JiraApiService;
+
+    beforeEach(() => {
+      service = setupService(new Subject<boolean>());
+    });
+
+    const authorizationFor = (cfg: JiraCfg): string =>
+      (service as any)._makeRequestInit({ pathname: 'myself' }, cfg).headers
+        .authorization;
+
+    it('keeps the header for ASCII credentials', () => {
+      expect(authorizationFor(baseCfg)).toBe('Basic ' + btoa('user:pass'));
+    });
+
+    it('encodes non-ASCII credentials as UTF-8', () => {
+      // printf 'user:pw-€' | base64
+      expect(authorizationFor({ ...baseCfg, password: 'pw-€' })).toBe(
+        'Basic dXNlcjpwdy3igqw=',
+      );
+    });
+
+    it('still sends a personal access token as Bearer', () => {
+      expect(authorizationFor({ ...baseCfg, usePAT: true, password: 'token' })).toBe(
+        'Bearer token',
+      );
+    });
+  });
+
   describe('_sendRequestToExecutor$ fetch fallback path', () => {
     let service: JiraApiService;
     let fetchSpy: jasmine.Spy;

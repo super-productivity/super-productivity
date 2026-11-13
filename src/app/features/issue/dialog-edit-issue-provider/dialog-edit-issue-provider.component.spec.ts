@@ -6,7 +6,7 @@ import { Store } from '@ngrx/store';
 import { OAuthFlowConfig } from '@super-productivity/plugin-api';
 import { firstValueFrom, of, Subject } from 'rxjs';
 import { DialogEditIssueProviderComponent } from './dialog-edit-issue-provider.component';
-import { ICAL_TYPE } from '../issue.const';
+import { CALDAV_TYPE, ICAL_TYPE } from '../issue.const';
 import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { RegisteredPluginIssueProvider } from '../../../plugins/issue-provider/plugin-issue-provider.model';
@@ -246,6 +246,19 @@ describe('DialogEditIssueProviderComponent', () => {
   afterEach(async () => {
     fixture?.destroy();
     await Promise.all(tokenStoreKeys.map((key) => deleteOAuthTokens(key)));
+  });
+
+  describe('auto import default for a new provider (#8275)', () => {
+    it('is on for CalDAV, but inert until a default project is chosen', async () => {
+      await setup({ data: { issueProviderKey: CALDAV_TYPE } });
+
+      expect(component.model.isAutoAddToBacklog).toBe(true);
+      expect(component.model.defaultProjectId).toBeNull();
+    });
+
+    it('stays off for other built-in providers', () => {
+      expect(component.model.isAutoAddToBacklog).toBe(false);
+    });
   });
 
   describe('formlyModelChange (#8777 infinite rebuild-loop guard)', () => {

@@ -363,7 +363,8 @@ describe('MobileBottomNavComponent', () => {
       expect(document.activeElement).toBe(slotBtn());
     });
 
-    it('stores a picked destination and navigates to it afterwards', async () => {
+    // #11604: picking used to only rebind the slot, leaving the view unchanged.
+    it('stores a picked destination and navigates to it', async () => {
       const cmp = await renderSlot();
 
       cmp.openSlotMenu();
@@ -387,10 +388,32 @@ describe('MobileBottomNavComponent', () => {
 
       expect(localStorage.getItem(LS.BOTTOM_NAV_SLOT)).toBe('inbox');
       expect(cmp.slot()?.id).toBe('inbox');
-      slotBtn()?.click();
       expect(navigateByUrl).toHaveBeenCalledOnceWith(
         `/project/${INBOX_PROJECT.id}/tasks`,
       );
+    });
+
+    it('runs a picked plugin entry', async () => {
+      const onClick = jasmine.createSpy('onClick');
+      const cmp = await renderSlot({}, [
+        { pluginId: 'p1', label: 'Doc Mode', icon: 'description', onClick },
+      ]);
+
+      cmp.openSlotMenu();
+      fixture.detectChanges();
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '.mobile-bottom-nav-slot-menu [role="menuitemradio"]',
+        ),
+      ]
+        .find((el) => el.textContent?.includes('Doc Mode'))
+        ?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(cmp.slot()?.id).toBe('plugin:p1:Doc Mode');
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(navigateByUrl).not.toHaveBeenCalled();
     });
   });
 });

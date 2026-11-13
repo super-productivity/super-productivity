@@ -59,6 +59,8 @@ export enum LS {
   MOBILE_ARMED_REPEAT_REMINDER_IDS = 'SUP_MOBILE_ARMED_REPEAT_REMINDER_IDS',
   MOBILE_ARMED_DUE_DATE_IDS = 'SUP_MOBILE_ARMED_DUE_DATE_IDS',
   MOBILE_ARMED_DEADLINE_IDS = 'SUP_MOBILE_ARMED_DEADLINE_IDS',
+  // Epoch ms the "iOS limits reminders" notice was last shown (device-local).
+  IOS_REMINDER_LIMIT_NOTICE_AT = 'SUP_IOS_REMINDER_LIMIT_NOTICE_AT',
 
   // Epoch ms until which the "encrypt your SuperSync account" migration banner
   // stays hidden. Set when the user picks "Later" (or opens the flow), so — unlike
@@ -74,6 +76,9 @@ export enum LS {
   CALENDER_EVENTS_LAST_SKIP_DAY = 'SUP_CALENDER_EVENTS_LAST_SKIP_DAY',
   HIDDEN_CALENDAR_EVENT_IDS = 'SUP_HIDDEN_CALENDAR_EVENT_IDS',
   HIDDEN_CALENDAR_PROVIDER_IDS = 'SUP_HIDDEN_CALENDAR_PROVIDER_IDS',
+  // Ids of calendar providers whose last fetch failed, kept across restarts so a
+  // broken calendar is reported once and not on every app start. Device-local.
+  CAL_PROVIDER_FAILING_IDS = 'SUP_CAL_PROVIDER_FAILING_IDS',
 
   ISSUE_SEARCH_CACHE = 'SUP_ISSUE_SEARCH_CACHE',
 

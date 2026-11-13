@@ -3,20 +3,34 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogEditTaskAttachmentComponent } from './dialog-edit-task-attachment.component';
 import { TaskAttachment } from '../task-attachment.model';
+import { provideMockStore } from '@ngrx/store/testing';
+import { selectTaskEntities } from '../../store/task.selectors';
+import { Task } from '../../task.model';
 
 describe('DialogEditTaskAttachmentComponent', () => {
   let component: DialogEditTaskAttachmentComponent;
   let fixture: ComponentFixture<DialogEditTaskAttachmentComponent>;
   let dialogRef: jasmine.SpyObj<MatDialogRef<DialogEditTaskAttachmentComponent>>;
 
-  const setup = (attachment?: Partial<TaskAttachment>): void => {
+  const TASK_ENTITIES = {
+    repeating: { id: 'repeating', repeatCfgId: 'cfg1' } as Task,
+    regular: { id: 'regular' } as Task,
+  };
+
+  const setup = (attachment?: Partial<TaskAttachment>, taskId?: string): void => {
     dialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
 
     TestBed.configureTestingModule({
       imports: [DialogEditTaskAttachmentComponent, TranslateModule.forRoot()],
       providers: [
         { provide: MatDialogRef, useValue: dialogRef },
-        { provide: MAT_DIALOG_DATA, useValue: { attachment: attachment ?? {} } },
+        {
+          provide: MAT_DIALOG_DATA,
+          useValue: { attachment: attachment ?? {}, taskId },
+        },
+        provideMockStore({
+          selectors: [{ selector: selectTaskEntities, value: TASK_ENTITIES }],
+        }),
       ],
     });
 
@@ -24,6 +38,47 @@ describe('DialogEditTaskAttachmentComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
   };
+
+  describe('repeat instance hint', () => {
+    const hintEl = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('.callout');
+
+    it('shows when adding to an instance of a repeating task', () => {
+      setup(undefined, 'repeating');
+
+      expect(component.isShowRepeatInstanceHint()).toBe(true);
+      expect(hintEl()?.textContent).toContain(
+        'F.ATTACHMENT.DIALOG_EDIT.REPEAT_INSTANCE_HINT',
+      );
+    });
+
+    it('shows for a dropped attachment, which arrives pre-filled but without id', () => {
+      setup({ path: 'https://example.com', type: 'LINK' }, 'repeating');
+
+      expect(component.isShowRepeatInstanceHint()).toBe(true);
+    });
+
+    it('hides when adding to a task that does not repeat', () => {
+      setup(undefined, 'regular');
+
+      expect(component.isShowRepeatInstanceHint()).toBe(false);
+      expect(hintEl()).toBeNull();
+    });
+
+    it('hides when editing an existing attachment of a repeating task', () => {
+      setup({ id: 'a1', path: 'https://example.com', type: 'LINK' }, 'repeating');
+
+      expect(component.isShowRepeatInstanceHint()).toBe(false);
+      expect(hintEl()).toBeNull();
+    });
+
+    it('hides when no task id is passed', () => {
+      setup();
+
+      expect(component.isShowRepeatInstanceHint()).toBe(false);
+      expect(hintEl()).toBeNull();
+    });
+  });
 
   describe('submit() URL scheme prepending', () => {
     it('prepends http:// for a bare hostname (www.google.com)', () => {

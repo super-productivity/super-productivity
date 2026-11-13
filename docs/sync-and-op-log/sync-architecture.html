@@ -1503,10 +1503,15 @@
                 </tr>
                 <tr>
                   <td>A loop dispatching many operations</td>
-                  <td>Yield once after the loop</td>
                   <td>
-                    The asynchronous capture pipeline must observe each intermediate
-                    state.
+                    Prefer one meta-reducer action; a loop needs no yield. If a follow-up
+                    depends on its ops, await
+                    <code>OperationWriteFlushService.flushPendingWrites()</code>
+                  </td>
+                  <td>
+                    Dispatch, reducers and op capture are synchronous, and op-log writes
+                    take their vector clock in dispatch order under the operation-log lock
+                    (#10441).
                   </td>
                 </tr>
               </tbody>
@@ -2698,7 +2703,8 @@
               </li>
               <li>
                 <a href="../../ARCHITECTURE-DECISIONS.md"
-                  >ADR #4: upload conflict safety via the lastSeq row lock under RepeatableRead</a
+                  >ADR #4: upload conflict safety via the lastSeq row lock under
+                  RepeatableRead</a
                 >
               </li>
             </ul>

@@ -20,10 +20,14 @@ jobs:
   # PRs that only touch docs/** or Markdown skip the build, test and E2E jobs
   # (Documentation Links covers them). The skip lives here rather than in
   # paths-ignore so CI Gate still reports and can stay a required check.
+  # The lockfile and dependency checks ride along: as separate jobs they each
+  # waited minutes for a GitHub-hosted runner to do seconds of work. The
+  # output is written first, and the code jobs below use !cancelled(), so a
+  # failing dependency check still lets lint and tests report.
   changes:
-    name: Detect code changes
+    name: Detect code changes and check dependencies
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     outputs:
       code: ${{ steps.detect.outputs.code }}
     steps:
@@ -64,18 +68,10 @@ jobs:
           echo "→ code=${code}"
           echo "code=${code}" >> "$GITHUB_OUTPUT"
 
-  # Verify package-lock.json only uses the official npm registry.
-  # Prevents contributors using mirror registries from rewriting all resolved URLs.
-  check-lockfile-registry:
-    name: Check package-lock.json registry
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-        with:
-          persist-credentials: false
+      # Verify package-lock.json only uses the official npm registry.
+      # Prevents contributors using mirror registries from rewriting all resolved URLs.
       - name: Reject non-standard registry URLs
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         run: |
           # The plugin-dev workspace has its own lockfile, installed by release builds.
           for LOCKFILE in package-lock.json packages/plugin-dev/package-lock.json; do
@@ -92,6 +88,7 @@ jobs:
       # npm reads no parent .npmrc inside packages/plugin-dev (its own npm
       # project), so it carries a copy; keep the settings identical.
       - name: Check plugin-dev .npmrc mirrors the root one
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         run: |
           # Compare settings only: skip comments (# or ;) and blank lines.
           settings() { grep -Ev '^[[:space:]]*([#;]|$)' "$1" | sed 's/[[:space:]]*=[[:space:]]*/=/'; }
@@ -100,26 +97,17 @@ jobs:
             exit 1
           fi
 
-  # This job will scan dependency manifest files
-  # surfacing known-vulnerable versions of the packages declared or updated.
-  # Only runs on pull_request events as the action requires base/head refs
-  dependency-vulnerability-review:
-    name: Dependency Vulnerability Review
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: 'Checkout Repository'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-        with:
-          persist-credentials: false
+      # Scans dependency manifest files, surfacing known-vulnerable versions of
+      # the packages declared or updated. The action needs PR base/head refs.
       # work around for npm installs from git+https://github.com/johannesjo/J2M.git
       - name: Reconfigure git to use HTTP authentication
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         run: >
           git config --global url."https://github.com/".insteadOf
           ssh://git@github.com/
 
       - name: 'Dependency Review'
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
 
   # Lint, unit tests, E2E and PWA/Lighthouse run in parallel instead of in one
@@ -127,7 +115,7 @@ jobs:
   lint:
     name: Lint
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -146,7 +134,7 @@ jobs:
   unit-tests:
     name: Unit Tests (${{ matrix.suite }} ${{ matrix.shard }})
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -171,7 +159,7 @@ jobs:
   unit-tests-tooling:
     name: Unit Tests (tooling and packages)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -193,7 +181,7 @@ jobs:
   e2e-build:
     name: Build E2E Frontend
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     # Owner PRs run E2E on sponsored Blacksmith runners for faster feedback; everything else
     # stays on GitHub. Repo variable USE_BLACKSMITH is the kill switch (unset = GitHub only);
     # unset it if these jobs sit queued (app uninstalled or sponsorship ended).
@@ -222,6 +210,9 @@ jobs:
   e2e:
     name: E2E ${{ matrix.shard }}/4
     needs: e2e-build
+    # Explicit: the implicit success() also checks `changes`, whose dependency
+    # checks may fail without blocking the E2E run.
+    if: ${{ !cancelled() && needs.e2e-build.result == 'success' }}
     runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 40
     strategy:
@@ -241,9 +232,9 @@ jobs:
           name: ci-e2e-build-${{ github.run_id }}
           path: .tmp/angular-dist
       - name: Test E2E
-        # `e2e`, not `e2e:ci`: that alias calls `npm run e2e` without `--`, so
-        # npm would swallow the --shard flag and every shard would run everything.
-        run: npm run e2e -- --project=chromium --shard=${{ matrix.shard }}/4
+        uses: ./.github/actions/e2e-shard
+        with:
+          shard: ${{ matrix.shard }}
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -256,6 +247,9 @@ jobs:
   e2e-webkit-smoke:
     name: E2E WebKit Smoke
     needs: e2e-build
+    # Explicit: the implicit success() also checks `changes`, whose dependency
+    # checks may fail without blocking the E2E run.
+    if: ${{ !cancelled() && needs.e2e-build.result == 'success' }}
     runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
@@ -290,7 +284,7 @@ jobs:
   pwa-lighthouse:
     name: PWA & Lighthouse
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
@@ -355,7 +349,7 @@ jobs:
 
   # Single stable check to mark required in branch protection, so the split
   # and sharded jobs above can change without editing the protection rules.
-  # Skipped jobs (PR-only checks on release runs, code jobs on docs-only PRs)
+  # Skipped jobs (code jobs on docs-only PRs)
   # count as passing.
   # always(), not !cancelled(): a skipped required check would count as passing.
   ci-gate:
@@ -363,8 +357,6 @@ jobs:
     if: ${{ always() }}
     needs:
       - changes
-      - check-lockfile-registry
-      - dependency-vulnerability-review
       - lint
       - unit-tests
       - unit-tests-tooling
