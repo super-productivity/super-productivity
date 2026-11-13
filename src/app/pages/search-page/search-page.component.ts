@@ -251,12 +251,16 @@ export class SearchPageComponent implements OnInit {
       const parent = task.parentId ? taskMap.get(task.parentId) : undefined;
       const tagId = resolveDisplayTagIds(task, parent)[0];
       const taskNotes = task.notes || '';
+      const attachmentUrls = (task.attachments || [])
+        .filter((attachment) => attachment.type === 'LINK')
+        .map((attachment) => attachment.path || '')
+        .join('\0');
 
       return {
         id: task.id,
         title: task.title,
         taskNotes,
-        searchText: `${task.title}\0${taskNotes}`.toLowerCase(),
+        searchText: `${task.title}\0${taskNotes}\0${attachmentUrls}`.toLowerCase(),
         projectId: task.projectId || null,
         parentId: task.parentId || null,
         parentTitle: parent?.title ?? null,
