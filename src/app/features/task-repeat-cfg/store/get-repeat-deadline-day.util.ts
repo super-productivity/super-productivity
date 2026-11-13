@@ -17,6 +17,15 @@ export const getRepeatDeadlineDay = (
   return getDbDateStr(date);
 };
 
+export const getTaskDeadlineDay = (
+  task: { deadlineDay?: string | null; deadlineWithTime?: number | null },
+  startOfNextDayDiffMs: number,
+): string | undefined =>
+  task.deadlineDay ??
+  (task.deadlineWithTime
+    ? getDbDateStr(task.deadlineWithTime - startOfNextDayDiffMs)
+    : undefined);
+
 export const getDeadlineOffsetDays = (
   startDay: string,
   deadlineDay: string | null | undefined,

@@ -46,7 +46,10 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { formatMonthDay } from '../../../util/format-month-day.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { getDeadlineOffsetDays } from '../store/get-repeat-deadline-day.util';
+import {
+  getDeadlineOffsetDays,
+  getTaskDeadlineDay,
+} from '../store/get-repeat-deadline-day.util';
 import { first } from 'rxjs/operators';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { getDefaultSkipOverdue } from './get-default-skip-overdue';
@@ -693,11 +696,7 @@ export class DialogEditTaskRepeatCfgComponent {
         (this._data.task.dueWithTime
           ? getDbDateStr(this._data.task.dueWithTime - startOfNextDayDiffMs)
           : this._dateService.todayStr());
-      const deadlineDay =
-        this._data.task.deadlineDay ??
-        (this._data.task.deadlineWithTime
-          ? getDbDateStr(this._data.task.deadlineWithTime - startOfNextDayDiffMs)
-          : undefined);
+      const deadlineDay = getTaskDeadlineDay(this._data.task, startOfNextDayDiffMs);
       return withFallBehind({
         ...DEFAULT_TASK_REPEAT_CFG,
         // New configs open on the "Daily" quick setting, where collapsing empty

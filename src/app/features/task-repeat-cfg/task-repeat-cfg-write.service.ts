@@ -21,6 +21,10 @@ import { getResumeCursorChanges } from './dialog-edit-task-repeat-cfg/get-resume
 import { getTaskRepeatCfgChanges } from './dialog-edit-task-repeat-cfg/get-task-repeat-cfg-changes';
 import { TaskRepeatCfgService } from './task-repeat-cfg.service';
 import {
+  getDeadlineOffsetDays,
+  getTaskDeadlineDay,
+} from './store/get-repeat-deadline-day.util';
+import {
   DEFAULT_TASK_REPEAT_CFG,
   RepeatCycleOption,
   RepeatQuickSetting,
@@ -346,14 +350,16 @@ export class TaskRepeatCfgWriteService {
     const startTime = task.dueWithTime
       ? clockStringFromDate(task.dueWithTime)
       : undefined;
+    const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
+    const startDate =
+      task.dueDay ??
+      (task.dueWithTime
+        ? // the logical day, so a late-night time keeps its night (#3378)
+          getDbDateStr(task.dueWithTime - startOfNextDayDiffMs)
+        : this._dateService.todayStr());
     return {
       ...DEFAULT_TASK_REPEAT_CFG,
-      startDate:
-        task.dueDay ??
-        (task.dueWithTime
-          ? // the logical day, so a late-night time keeps its night (#3378)
-            getDbDateStr(task.dueWithTime - this._dateService.getStartOfNextDayDiffMs())
-          : this._dateService.todayStr()),
+      startDate,
       startTime,
       remindAt: startTime
         ? (this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
@@ -365,6 +371,10 @@ export class TaskRepeatCfgWriteService {
       tagIds: unique(task.tagIds),
       defaultEstimate: task.timeEstimate,
       priority: getTaskPriority(task.priority),
+      deadlineOffsetDays: getDeadlineOffsetDays(
+        startDate,
+        getTaskDeadlineDay(task, startOfNextDayDiffMs),
+      ),
     };
   }
 
