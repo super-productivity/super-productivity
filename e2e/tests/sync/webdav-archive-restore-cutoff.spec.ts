@@ -362,7 +362,9 @@ test('@webdav keeps an archived owner in the primary while young moves to old', 
   const folder = generateSyncFolderName('archive-flush-cutoff');
   const remoteUrl = `${WEBDAV_CONFIG_TEMPLATE.baseUrl}${folder}/DEV/sync-data.json`;
   await createSyncFolder(request, folder);
-  const client = await setupSyncClient(browser, baseURL);
+  // Install the clock before app timers exist. A late setSystemTime installs
+  // timer mocks that cannot cancel intervals created with native timer IDs.
+  const client = await setupSyncClient(browser, baseURL, [], undefined, true);
   try {
     const { page } = client;
     const work = new WorkViewPage(page);

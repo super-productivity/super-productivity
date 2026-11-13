@@ -140,6 +140,7 @@ export const createWebDavFolder = async (
  * @param baseURL - Base URL for the app
  * @param acceptedConfirms - Exact extra confirmations the test deliberately triggers
  * @param initScript - Extra init script run before the app boots, e.g. a native bridge stub
+ * @param installClock - Install test timers before the app creates native timers
  * @returns Object with context and page
  */
 export const setupSyncClient = async (
@@ -147,6 +148,7 @@ export const setupSyncClient = async (
   baseURL: string | undefined,
   acceptedConfirms: readonly RegExp[] = [],
   initScript?: () => void,
+  installClock = false,
 ): Promise<{ context: BrowserContext; page: Page }> => {
   // A context created here does not inherit the config's user agent; the app
   // needs PLAYWRIGHT in it to start with every app feature on (as in the
@@ -156,6 +158,9 @@ export const setupSyncClient = async (
     userAgent: 'PLAYWRIGHT WEBDAV-SYNC-CLIENT',
   });
   const page = await context.newPage();
+  if (installClock) {
+    await page.clock.install();
+  }
   const pageErrors = attachPageErrorCollector(page, 'WebDAV sync client');
   installDevErrorDialogHandler(page, 'WebDAV sync client');
   guardContextCloseWithRuntimeErrorCheck(context, pageErrors, 'WebDAV sync client');

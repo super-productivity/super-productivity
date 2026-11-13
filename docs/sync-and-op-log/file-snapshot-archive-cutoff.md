@@ -84,3 +84,10 @@ the scenario then restores the task and inspects the published primary. It must
 fail without the common cutoff and pass with it. The second scenario verifies
 owner preservation during a young-to-old move; that scenario passing does not
 itself establish a separate archive-move bug.
+
+Сценарий переноса young → old устанавливает часы Playwright до загрузки приложения.
+Затем он меняет системное время без выполнения таймеров за 22 дня. Поздняя установка
+часов заменяет глобальные функции таймеров, когда нативные интервалы уже работают.
+Последующая отмена может оставить нативный callback, который вызывает закрытое
+действие RxJS. Проверка runtime-ошибок остаётся включённой: правильный порядок
+установки часов исключает смешение таймеров, а не скрывает ошибки сценария.
