@@ -38,7 +38,10 @@ import { selectAllDoneIds } from '../../../features/tasks/store/task.selectors';
 import { Store } from '@ngrx/store';
 import { TranslatePipe } from '@ngx-translate/core';
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
-import { MenuTreeKind } from '../../../features/menu-tree/store/menu-tree.model';
+import {
+  MenuTreeKind,
+  MenuTreeViewNode,
+} from '../../../features/menu-tree/store/menu-tree.model';
 import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
 
 @Component({
@@ -107,6 +110,8 @@ export class NavItemComponent {
 
   folderId = input<string | null>(null);
   treeKind = input<MenuTreeKind>(MenuTreeKind.PROJECT);
+  // Children of a folder row, used to sum up the open tasks of everything inside
+  folderChildren = input<MenuTreeViewNode[]>([]);
   // Variant styling to integrate into magic-side-nav without deep selectors
   showMoreButton = input<boolean>(true);
 
@@ -144,6 +149,29 @@ export class NavItemComponent {
       (tid) => !allDoneTaskIds.includes(tid),
     ).length;
     return undoneTaskCount;
+  });
+
+  nrOfOpenTasksInFolder = computed<number>(() => {
+    const taskIds = new Set<string>();
+    const collect = (nodes: MenuTreeViewNode[]): void => {
+      for (const node of nodes) {
+        if (node.k === MenuTreeKind.FOLDER) {
+          collect(node.children);
+        } else {
+          const wc = node.k === MenuTreeKind.PROJECT ? node.project : node.tag;
+          wc.taskIds.forEach((tid) => taskIds.add(tid));
+        }
+      }
+    };
+    collect(this.folderChildren());
+    if (taskIds.size === 0) return 0;
+
+    const allDoneTaskIds = new Set(this._allDoneTaskIds());
+    let count = 0;
+    taskIds.forEach((tid) => {
+      if (!allDoneTaskIds.has(tid)) count++;
+    });
+    return count;
   });
 
   workContextHasTasks = computed<boolean>(() => {
