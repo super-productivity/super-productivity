@@ -1,6 +1,7 @@
 import {
   addNote,
   moveNoteToOtherProject,
+  updateNote,
 } from '../../../../features/note/store/note.actions';
 import { Note } from '../../../../features/note/note.model';
 import { DEFAULT_PROJECT } from '../../../../features/project/project.const';
@@ -200,6 +201,75 @@ describe('note moved into a concurrently deleted project (#10744)', () => {
         projectIds: [INBOX],
       };
       expect({ A: await lists(a), B: await lists(b) }).toEqual({
+        A: expected,
+        B: expected,
+      });
+    }, 60_000);
+  }
+
+  // #11656: the deleter also edits the note, so the edit and the move both
+  // declare it and one wins by last-write-wins. The winner's full note must
+  // land with a project that exists and lists it, on both devices.
+  const editMoved = (): Promise<void> =>
+    harness.dispatch(
+      updateNote({ note: { id: 'moved', changes: { content: 'edited' } } }),
+    );
+
+  const owner = (device: FuzzDevice): Promise<unknown> =>
+    view(device).then(({ item, listedIn }) => ({ projectId: item?.projectId, listedIn }));
+
+  const crossEditAndMove = async (opts: {
+    later: 'edit' | 'move';
+    first: 'deleter' | 'mover';
+    target: string;
+  }): Promise<void> => {
+    const edit = (): Promise<void> =>
+      harness.as(a, async () => {
+        await editMoved();
+        if (opts.target === DOOMED) await deleteDoomed();
+      });
+    const move = (): Promise<void> => harness.as(b, () => moveTo(opts.target));
+    const [earlier, later] = opts.later === 'move' ? [edit, move] : [move, edit];
+    harness.tick();
+    await earlier();
+    harness.tick();
+    await later();
+    await syncBoth(opts.first);
+  };
+
+  for (const later of ['move', 'edit'] as const) {
+    for (const first of ['deleter', 'mover'] as const) {
+      it(`keeps an edited note moved into the deleted project in the Inbox / ${later} later, ${first} syncs first (#11656)`, async () => {
+        await seed([DOOMED]);
+        await crossEditAndMove({ later, first, target: DOOMED });
+        const expected = { projectId: INBOX, listedIn: [INBOX] };
+        expect({ A: await owner(a), B: await owner(b) }).toEqual({
+          A: expected,
+          B: expected,
+        });
+        // A winning move re-homes the note last, as the mover's retargeted
+        // move does. A winning edit never re-homes on the deleter, so its
+        // Inbox keeps the note's old position (order only, accepted).
+        if (later === 'move') {
+          expect((await view(a)).inbox).toEqual(['sibling', 'moved']);
+          expect((await view(b)).inbox).toEqual(['sibling', 'moved']);
+        }
+      }, 60_000);
+    }
+  }
+
+  // Only orders where the later write syncs second: that device uploads the
+  // winner as a full-note LWW Update. When the later write syncs first, the
+  // other device applies that partial op over its own losing change, so the
+  // devices can still disagree on the loser's fields (separate, see #11656).
+  for (const later of ['move', 'edit'] as const) {
+    const first = later === 'move' ? 'deleter' : 'mover';
+    it(`keeps an edited note listed in its winning project / ${later} later, ${first} syncs first (#11656)`, async () => {
+      await seed([KEPT]);
+      await crossEditAndMove({ later, first, target: KEPT });
+      const winner = later === 'move' ? KEPT : INBOX;
+      const expected = { projectId: winner, listedIn: [winner] };
+      expect({ A: await owner(a), B: await owner(b) }).toEqual({
         A: expected,
         B: expected,
       });

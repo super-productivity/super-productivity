@@ -33,6 +33,7 @@ import { DEFAULT_TAG_COLOR } from './work-context.const';
 import { getDefaultWorkContextTheme } from './work-context-default-theme.util';
 import { TagService } from '../tag/tag.service';
 import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import {
   hasTasksToWorkOn,
@@ -48,6 +49,7 @@ import {
   selectTasksWithSubTasksByIdsFactory,
   TaskWithSubTasksCache,
 } from '../tasks/store/task.selectors';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import {
   getEndOfTodayTime,
   isInLaterTodayWindow,

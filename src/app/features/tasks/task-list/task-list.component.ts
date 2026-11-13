@@ -476,6 +476,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
+    if (this.multiDrag.isCancelled()) {
+      return;
+    }
+
     const isGroupLeaderAtSamePosition =
       this._isListGroupDrag() &&
       ev.previousContainer === ev.container &&
