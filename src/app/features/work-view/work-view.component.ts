@@ -53,6 +53,11 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import { groupTasksBySection } from '../section/section.util';
+import { WorkContextType } from '../work-context/work-context.model';
+import {
+  AddTaskBarComponent,
+  TaskAddEvent,
+} from '../tasks/add-task-bar/add-task-bar.component';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -155,6 +160,7 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     PluginIndexComponent,
     PlainspaceClaimPoolComponent,
     PlannerCalendarEventComponent,
+    AddTaskBarComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
@@ -377,6 +383,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     groupTasksBySection(this.undoneTasks(), this.sections()),
   );
 
+  /**
+   * The section (`s:<id>`) or group (`g:<key>`) whose header "+" opened its
+   * inline add bar; one at a time. Local UI state, never persisted.
+   */
+  inlineAddKey = signal<string | null>(null);
+
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
   );
@@ -556,6 +568,87 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     }
     this._subs.unsubscribe();
     this.layoutService.isWorkViewScrolled.set(false);
+  }
+
+  openSectionAddTask(section: Section): void {
+    if (!section.isExpanded) {
+      this.sectionService.updateSection(section.id, { isExpanded: true });
+    }
+    this.inlineAddKey.set('s:' + section.id);
+  }
+
+  openGroupAddTask(key: string): void {
+    if (this.customizerService.collapsedGroupIds().includes(key)) {
+      this.customizerService.toggleGroupExpansion(key);
+    }
+    this.inlineAddKey.set('g:' + key);
+  }
+
+  /** Moves the task the section's add bar created (or picked) into the section. */
+  async addToSection(
+    section: Section,
+    { taskId, isAddToBottom }: TaskAddEvent,
+  ): Promise<void> {
+    const sectionId = section.id;
+    // The bar's chips (project, date, backlog toggle) can send the task out of
+    // the section's list; a section entry for it would be stale.
+    if (!(await this._isShownInSectionContext(section, taskId))) {
+      return;
+    }
+    const sourceSectionId =
+      this.sections().find((s) => s.taskIds.includes(taskId))?.id ?? null;
+    if (sourceSectionId === sectionId) {
+      return;
+    }
+    const sectionTasks = this.undoneTasksBySection().dict[sectionId] ?? [];
+    const afterTaskId = isAddToBottom ? (sectionTasks.at(-1)?.id ?? null) : null;
+    this.sectionService.addTaskToSection(sectionId, taskId, afterTaskId, sourceSectionId);
+  }
+
+  /**
+   * Closes only the given bar: clicking another header's "+" while a bar is open
+   * makes the old bar's click-outside `done` fire after the new key is set.
+   */
+  closeInlineAdd(key: string): void {
+    if (this.inlineAddKey() === key) {
+      this.inlineAddKey.set(null);
+    }
+  }
+
+  /** A collapsed section or group drops its add bar, so it doesn't come back on expand. */
+  onSectionExpandedChange(section: Section, isExpanded: boolean): void {
+    this.sectionService.updateSection(section.id, { isExpanded });
+    if (!isExpanded) {
+      this.closeInlineAdd('s:' + section.id);
+    }
+  }
+
+  onGroupExpandedChange(key: string): void {
+    this.customizerService.toggleGroupExpansion(key);
+    this.closeInlineAdd('g:' + key);
+  }
+
+  private async _isShownInSectionContext(
+    section: Section,
+    taskId: string,
+  ): Promise<boolean> {
+    const task = await firstValueFrom(this.taskService.getByIdOnce$(taskId));
+    if (!task) {
+      return false;
+    }
+    if (section.contextType === WorkContextType.PROJECT) {
+      const project = await firstValueFrom(
+        this._projectService.getByIdOnce$(section.contextId),
+      );
+      return (
+        task.projectId === section.contextId && !project?.backlogTaskIds.includes(taskId)
+      );
+    }
+    // TODAY is the only tag with sections; its membership is the due date.
+    return (
+      task.dueDay === this._dateService.todayStr() ||
+      (!!task.dueWithTime && this._dateService.isToday(task.dueWithTime))
+    );
   }
 
   deleteSection(id: string): void {
