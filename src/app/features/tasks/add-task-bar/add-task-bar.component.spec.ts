@@ -602,15 +602,6 @@ describe('AddTaskBarComponent', () => {
   });
 
   describe('addTask', () => {
-    it('preserves the visible draft when the cached clean title is older', async () => {
-      component.stateService.updateCleanText('Earlier draft');
-      component.stateService.updateInputTxt('Earlier draft with final words');
-      await component.addTask();
-      expect(mockTaskService.add.calls.mostRecent().args[0]).toBe(
-        'Earlier draft with final words',
-      );
-    });
-
     it('should not add a task when the visible input is empty', async () => {
       component.stateService.updateCleanText('Stale task');
       component.stateService.updateInputTxt('   ');
@@ -618,6 +609,95 @@ describe('AddTaskBarComponent', () => {
       await component.addTask();
 
       expect(mockTaskService.add).not.toHaveBeenCalled();
+    });
+
+    describe('while the parse of the submitted draft is pending', () => {
+      const addedTitles = (): (string | null)[] =>
+        mockTaskService.add.calls.allArgs().map(([title]) => title);
+
+      beforeEach(() => {
+        mockTaskService.add.and.returnValue('task-1');
+      });
+
+      it('creates the task from that parse, not from an earlier draft', async () => {
+        component.stateService.updateInputTxt('Fix login');
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(component.stateService.state().cleanText).toBe('Fix login');
+
+        // Enter lands before inputTxt$ hands the edited draft to the parser
+        component.stateService.updateInputTxt('Fix login bug p1');
+        await component.addTask();
+
+        expect(addedTitles()).toEqual(['Fix login bug']);
+        const taskData = mockTaskService.add.calls.mostRecent()
+          .args[2] as Partial<TaskCopy>;
+        expect(taskData.priority).toBe(3);
+      });
+
+      it('creates one task when Enter is pressed twice', async () => {
+        component.stateService.updateInputTxt('Buy milk p1');
+        await Promise.all([component.addTask(), component.addTask()]);
+
+        expect(addedTitles()).toEqual(['Buy milk']);
+      });
+
+      it('gives the repeat template the cleaned title', async () => {
+        const addRepeatCfgSpy = spyOn(
+          TestBed.inject(TaskRepeatCfgService),
+          'addTaskRepeatCfgToTask',
+        );
+        component.stateService.updateRepeatSetting({
+          type: 'PRESET',
+          quickSetting: 'DAILY',
+        });
+        component.stateService.updateInputTxt('Standup p1');
+        await component.addTask();
+
+        expect(addedTitles()).toEqual(['Standup']);
+        const repeatCfg = addRepeatCfgSpy.calls.mostRecent().args[2];
+        expect(repeatCfg.title).toBe('Standup');
+        expect(repeatCfg.priority).toBe(3);
+      });
+
+      it('drops the submit when the draft is edited, and takes the next Enter', async () => {
+        component.stateService.updateInputTxt('Draft');
+        const submit = component.addTask();
+        component.stateService.updateInputTxt('Draft edited');
+        await submit;
+
+        expect(mockTaskService.add).not.toHaveBeenCalled();
+        expect(component.stateService.inputTxt()).toBe('Draft edited');
+
+        await component.addTask();
+        expect(addedTitles()).toEqual(['Draft edited']);
+      });
+
+      it('drops the submit when the bar is closed', async () => {
+        component.stateService.updateInputTxt('Draft');
+        const submit = component.addTask();
+        fixture.destroy();
+        await submit;
+
+        expect(mockTaskService.add).not.toHaveBeenCalled();
+      });
+
+      it("lets the edited draft's submit take over and wait for its own parse", async () => {
+        component.stateService.updateInputTxt('Draft');
+        // Starts the parse of "Draft"
+        fixture.detectChanges();
+        const dropped = component.addTask();
+        component.stateService.updateInputTxt('Draft edited');
+        const takenOver = component.addTask();
+        // Resolves once the parse of "Draft" lands, while "Draft edited" waits
+        await dropped;
+        expect(mockTaskService.add).not.toHaveBeenCalled();
+
+        const duplicate = component.addTask();
+        await Promise.all([takenOver, duplicate]);
+
+        expect(addedTitles()).toEqual(['Draft edited']);
+      });
     });
 
     it('should keep the active tag selected for subsequent tasks in tag context', async () => {
@@ -652,8 +732,8 @@ describe('AddTaskBarComponent', () => {
       mockTaskService.add.and.returnValue('task-1');
 
       component.stateService.updateInputTxt('Fix login bug p1');
-      fixture.detectChanges();
-      await fixture.whenStable();
+      component.stateService.updateCleanText('Fix login bug');
+      component.stateService.updatePriority(3);
       await component.addTask();
 
       const [title, , taskData] = mockTaskService.add.calls.mostRecent().args as [
@@ -1120,9 +1200,10 @@ describe('AddTaskBarComponent', () => {
   describe('onSubmitBtnClick', () => {
     it('should add the task and refocus the input for rapid entry', async () => {
       mockTaskService.add.and.returnValue('task-1');
-      const focusSpy = spyOn(component, 'focusInput');
       component.stateService.updateInputTxt('Buy milk');
-      component.stateService.updateCleanText('Buy milk');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const focusSpy = spyOn(component, 'focusInput');
 
       component.onSubmitBtnClick();
       // Wait for the addTask promise (and its .finally) to settle.
@@ -1145,10 +1226,11 @@ describe('AddTaskBarComponent', () => {
 
     it('should NOT refocus for CUSTOM repeat (it opens a dialog)', async () => {
       mockTaskService.add.and.returnValue('task-1');
-      const focusSpy = spyOn(component, 'focusInput');
       component.stateService.updateInputTxt('Buy milk');
-      component.stateService.updateCleanText('Buy milk');
       component.stateService.updateRepeatSetting({ type: 'DIALOG' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const focusSpy = spyOn(component, 'focusInput');
 
       component.onSubmitBtnClick();
       await Promise.resolve();
@@ -1577,9 +1659,11 @@ describe('AddTaskBarComponent', () => {
   describe('IME handling (Integration)', () => {
     let inputEl: HTMLTextAreaElement;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       component.stateService.updateInputTxt('New Task');
       fixture.detectChanges();
+      // Let the parse of the draft land, so Enter submits without waiting
+      await fixture.whenStable();
       inputEl = fixture.debugElement.nativeElement.querySelector('.main-input');
     });
 
