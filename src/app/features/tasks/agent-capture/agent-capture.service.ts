@@ -222,6 +222,7 @@ export class AgentCaptureService {
         this._globalConfig.cfg()?.reminder.defaultTaskRemindOption ??
         DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
       todayStr: this._dateService.todayStr(),
+      startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
       assertUnchanged: (context) => {
         // The epoch bumps only after a provider swap completes; the identity
         // check covers the moment in between.

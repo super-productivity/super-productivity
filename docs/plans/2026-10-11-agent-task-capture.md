@@ -85,6 +85,17 @@ The local `create_task` of #10251 takes the same optional fields with the
 same validation (#10833); invalid input is rejected, not dropped, and a timed
 one-off is likewise scheduled in its one `addTask`.
 
+Also added, on both tools: optional `deadlineDate` (`YYYY-MM-DD`),
+`deadlineTime` (`HH:MM`, needs `deadlineDate`) and `estimateMinutes` (whole
+minutes, 1–10080). Same rules as the due fields: optional v1 payload fields
+that released apps ignore, resolved in the importing device's time zone
+into `deadlineDay` or `deadlineWithTime` and `timeEstimate` inside the one
+`addTask` (the add-task bar's own way of setting a deadline at creation, so
+no `setDeadline` op), with the `addTask` auto-plan fields so a deadline of
+today plans the task for today. A deadline is refused with `repeat` (a
+repeat config has no deadline; the hosted import drops it), and the retry
+window keys on all three.
+
 ## Flow
 
 1. Settings → SuperSync → **"Let AI assistants add tasks"** (off by default).
