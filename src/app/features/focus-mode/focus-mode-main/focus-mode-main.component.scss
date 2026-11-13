@@ -216,8 +216,8 @@
   height: var(--s8);
   // Smoothly cross-fade out when the launch starts (see .is-launching below).
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+    opacity var(--transition-duration-m) ease,
+    transform var(--transition-duration-m) ease;
 
   mat-icon {
     font-size: 36px;

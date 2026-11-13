@@ -139,6 +139,13 @@
             !!window.matchMedia &&
             window.matchMedia('(prefers-color-scheme: dark)').matches);
 
+        // LS.LAST_BOOT_MS (boot-splash.ts): the last start was quick, so this
+        // one likely is too; a tip would not stay up long enough to be read.
+        var lastBootMs = parseInt(get('SUP_LAST_BOOT_MS'), 10);
+        if (!isNaN(lastBootMs) && lastBootMs < 2000) {
+          root.setAttribute('data-sp-quick-boot', '');
+        }
+
         // Mirrors MagicSideNavComponent: 190–400px, default 260, collapsed 56.
         var width = parseInt(get('SUP_NAV_SIDEBAR_WIDTH'), 10);
         width = isNaN(width) ? 260 : Math.max(190, Math.min(400, width));
@@ -263,9 +270,8 @@
         -webkit-app-region: no-drag;
       }
 
-      /* The content area, where the page will appear. The logo and tip are
-         shifted back by half the nav (--sp-shift), so they sit centred in the
-         window. */
+      /* The content area, where the page will appear. The tip is shifted back
+         by half the nav (--sp-shift), so it sits centred in the window. */
       .app-loading {
         --sp-shift: calc(var(--sp-nav-w) / -2);
         position: absolute;
@@ -282,7 +288,7 @@
       }
 
       @media (max-width: 599px) {
-        /* Above where the bottom bar will be, so the logo does not move. */
+        /* Above where the bottom bar will be. */
         .app-loading,
         [data-sp-rtl] .app-loading {
           --sp-shift: 0px;
@@ -297,9 +303,13 @@
         }
       }
 
+      /* Centred on the window, not the content area: that is where the Android
+         system splash draws the same icon (android/.../drawable/ic_splash.xml),
+         whatever the bar and inset sizes, so the hand-off cannot make it jump;
+         and it stays put when the bottom bar is uncovered. */
       .app-loading .logo {
-        position: absolute;
-        left: calc(50% + var(--sp-shift));
+        position: fixed;
+        left: 50%;
         top: 50%;
         width: 72px;
         height: 72px;
@@ -311,9 +321,9 @@
       }
 
       .app-loading .spinner-pulse {
-        position: absolute;
+        position: fixed;
         top: 50%;
-        left: calc(50% + var(--sp-shift));
+        left: 50%;
         width: 112px;
         height: 112px;
         margin: -56px 0 0 -56px;
@@ -324,7 +334,9 @@
       }
 
       /* Quiet but readable. The short delay only skips near-instant starts,
-         where a tip would flash; slow starts get almost the whole load to read it. */
+         where a tip would flash; slow starts get almost the whole load to read it.
+         Not shown at all when the last start was quick (data-sp-quick-boot):
+         the splash would be gone before it could be read. */
       .productivity-tip {
         position: absolute;
         left: calc(50% + var(--sp-shift));
@@ -352,6 +364,10 @@
           'Helvetica Neue',
           sans-serif;
         margin: 0 !important;
+      }
+
+      [data-sp-quick-boot] .productivity-tip {
+        display: none;
       }
 
       @keyframes sp-fade-in {

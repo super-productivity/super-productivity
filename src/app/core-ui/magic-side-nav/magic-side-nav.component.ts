@@ -47,6 +47,7 @@ import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { EdgeSwipeOpenDetector } from './edge-swipe-open';
 
 // 56px = 24px icon + 16px (var(--s2)) padding on each side, so the left-aligned
 // nav icons sit centered in the collapsed rail.
@@ -63,7 +64,7 @@ const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
 
 /**
  * The element at a point, looking through tooltips: one shown by a button the
- * drag passed over (e.g. "Show/hide projects") can sit on the nav item a task
+ * drag passed over (e.g. "Show/hide in sidebar") can sit on the nav item a task
  * is dropped on.
  */
 const elementUnderTooltips = (point: { x: number; y: number }): Element | null =>
@@ -110,6 +111,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private _multiDrag = inject(TaskMultiDragService);
   private _externalDragService = inject(ScheduleExternalDragService);
   private _pointerUpSubscription: Subscription | null = null;
+  private _removeEdgeSwipeListeners: (() => void) | null = null;
 
   // Use service's computed signal directly
   readonly config = this._sideNavConfigService.navConfig;
@@ -318,6 +320,9 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       this._pointerUpSubscription.unsubscribe();
       this._pointerUpSubscription = null;
     }
+
+    this._removeEdgeSwipeListeners?.();
+    this._removeEdgeSwipeListeners = null;
   }
 
   ngAfterViewInit(): void {
@@ -325,6 +330,37 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
     this._pointerUpSubscription = this._dragDropRegistry.pointerUp.subscribe((event) => {
       this._handlePointerUp(event);
     });
+    this._initEdgeSwipeOpen();
+  }
+
+  /**
+   * Swiping left from the right screen edge opens the mobile drawer, which
+   * slides in from that edge (#4464). Passive capture listeners: they only
+   * observe, and claim the touchstart before a task's swipe-block sees it.
+   */
+  private _initEdgeSwipeOpen(): void {
+    const detector = new EdgeSwipeOpenDetector({
+      getViewportWidth: () => window.innerWidth,
+      isEnabled: () => this.isMobile() && !this.showMobileMenuOverlay(),
+      onOpen: () => {
+        if (!this.showMobileMenuOverlay()) this.toggleMobileNav();
+      },
+    });
+    const opts: AddEventListenerOptions = { capture: true, passive: true };
+    const listeners: [keyof DocumentEventMap, (e: TouchEvent) => void][] = [
+      ['touchstart', detector.onTouchStart],
+      ['touchmove', detector.onTouchMove],
+      ['touchend', detector.onTouchEnd],
+      ['touchcancel', detector.onTouchCancel],
+    ];
+    for (const [type, fn] of listeners) {
+      document.addEventListener(type, fn as EventListener, opts);
+    }
+    this._removeEdgeSwipeListeners = () => {
+      for (const [type, fn] of listeners) {
+        document.removeEventListener(type, fn as EventListener, opts);
+      }
+    };
   }
 
   onNavKeyDown(event: KeyboardEvent): void {

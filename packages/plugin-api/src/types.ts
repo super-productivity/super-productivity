@@ -722,13 +722,14 @@ export interface PluginAPI {
 
   // teardown signal — register a callback the host invokes when the plugin is
   // disabled, reloaded, or uninstalled. Code-based plugins run directly in the
-  // renderer, so timers/listeners they create survive unload unless cleared
-  // here (clearInterval, removeEventListener, speechSynthesis.cancel, …).
-  // The returned promise is NOT awaited — do synchronous cleanup before any
-  // await. In iframe plugins this is a no-op: the iframe is unmounted on
-  // unload and takes its timers with it. Registering again replaces the
-  // previous callback. Optional so older plugin API typings remain assignable;
-  // the host always provides it.
+  // renderer: the host stops plain setTimeout/setInterval timers and ignores
+  // API calls after unload, but listeners etc. survive unless cleared here
+  // (removeEventListener, speechSynthesis.cancel, …). The returned promise is
+  // NOT awaited — do cleanup and API calls before any await. In iframe
+  // plugins this is a no-op: the iframe is unmounted on unload and takes its
+  // timers with it. Registering again replaces the previous callback.
+  // Optional so older plugin API typings remain assignable; the host always
+  // provides it.
   onUnload?(fn: () => void | Promise<void>): void;
 
   // cross-process communication

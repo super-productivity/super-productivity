@@ -49,7 +49,7 @@ class SuperSyncBackgroundProviderTest {
                 .put("latestSeq", 101)
                 .put("hasMore", remaining.size > 100)
             val result = provider.parseResponse(response.toString())
-            cancellations.addAll(result.taskIdsToCancel)
+            cancellations.addAll(result.reminderIdsToCancel)
             cursor = result.latestSeq
             hasMore = result.hasMore
         } while (hasMore && cursors.size < 3)
@@ -88,7 +88,7 @@ class SuperSyncBackgroundProviderTest {
         assertEquals(4102444200000L, schedReminder.remindAt)
 
         // op-3 (dismissReminderOnly) cancels via the plaintext envelope
-        assertEquals(setOf("task-dismiss-1"), result.taskIdsToCancel)
+        assertEquals(setOf("task-dismiss-1"), result.reminderIdsToCancel)
         assertEquals(103L, result.latestSeq)
         assertEquals(false, result.hasMore)
     }
@@ -98,7 +98,7 @@ class SuperSyncBackgroundProviderTest {
         val result = SuperSyncBackgroundProvider(null).parseResponse(ENCRYPTED_DOWNLOAD_RESPONSE)
 
         assertTrue(result.remindersToSchedule.isEmpty())
-        assertEquals(setOf("task-dismiss-1"), result.taskIdsToCancel)
+        assertEquals(setOf("task-dismiss-1"), result.reminderIdsToCancel)
         assertEquals(103L, result.latestSeq)
     }
 
@@ -109,7 +109,7 @@ class SuperSyncBackgroundProviderTest {
         val result = provider.parseResponse(ENCRYPTED_DOWNLOAD_RESPONSE)
 
         assertTrue(result.remindersToSchedule.isEmpty())
-        assertEquals(setOf("task-dismiss-1"), result.taskIdsToCancel)
+        assertEquals(setOf("task-dismiss-1"), result.reminderIdsToCancel)
     }
 
     @Test
@@ -338,7 +338,8 @@ class SuperSyncBackgroundProviderTest {
         val reminder = result.remindersToSchedule.single()
         assertEquals("task-lww-1", reminder.taskId)
         assertEquals("Winner", reminder.title)
-        assertEquals(setOf("task-lww-2"), result.taskIdsToCancel)
+        // A replace snapshot clears every reminder it does not carry
+        assertEquals(setOf("task-lww-1_deadline", "task-lww-1_dueday", "task-lww-2", "task-lww-2_deadline", "task-lww-2_dueday"), result.reminderIdsToCancel)
     }
 
     @Test
@@ -355,7 +356,7 @@ class SuperSyncBackgroundProviderTest {
         )
 
         assertTrue(result.remindersToSchedule.isEmpty())
-        assertEquals(setOf("task-lww-3"), result.taskIdsToCancel)
+        assertEquals(setOf("task-lww-3"), result.reminderIdsToCancel)
     }
 
     @Test
@@ -376,8 +377,8 @@ class SuperSyncBackgroundProviderTest {
         assertEquals("task-tp-1", reminder.taskId)
         assertEquals(4102444200000L, reminder.remindAt)
         assertEquals(false, reminder.isDeadline)
-        // The worker cancels first (clearing a stale deadline alarm), then reschedules
-        assertEquals(setOf("task-tp-1"), result.taskIdsToCancel)
+        // Only the stale deadline and due-day alarms are cancelled; the task alarm is rescheduled
+        assertEquals(setOf("task-tp-1_deadline", "task-tp-1_dueday"), result.reminderIdsToCancel)
         // At fire time the task alarm at that time is current, a deadline alarm is stale
         assertFalse(result.isAlarmStale("task-tp-1", 4102444200000L, "TASK"))
         assertTrue(result.isAlarmStale("task-tp-1", 4102444100000L, "TASK"))
@@ -399,7 +400,93 @@ class SuperSyncBackgroundProviderTest {
 
         assertEquals(4102444200000L, result.remindersToSchedule.single().remindAt)
         assertTrue(result.taskIdsToCancel.isEmpty())
+        assertTrue(result.reminderIdsToCancel.isEmpty())
         assertFalse(result.isAlarmStale("task-dr-1", 4102444200000L, "TASK"))
+    }
+
+    // #10618: an op clearing one reminder kind must not cancel the task's other alarms
+    @Test
+    fun `dismissing the reminder keeps the deadline and due-day alarms`() {
+        val result = parse(
+            op(
+                1, "[Task Shared] dismissReminderOnly", "UPD", "task-k-1",
+                """{"actionPayload": {"id": "task-k-1"}, "entityChanges": []}"""
+            )
+        )
+
+        assertTrue(result.taskIdsToCancel.isEmpty())
+        assertEquals(setOf("task-k-1"), result.reminderIdsToCancel)
+        assertTrue(result.isAlarmStale("task-k-1", 4102444200000L, "TASK"))
+        assertFalse(result.isAlarmStale("task-k-1", 4102444300000L, "DEADLINE"))
+        assertFalse(result.isAlarmStale("task-k-1", 4102444300000L, "DUE_DATE"))
+    }
+
+    @Test
+    fun `unscheduling cancels the task and due-day alarms but keeps the deadline`() {
+        val result = parse(
+            op(
+                1, "[Task Shared] unscheduleTask", "UPD", "task-k-2",
+                """{"actionPayload": {"id": "task-k-2"}, "entityChanges": []}"""
+            )
+        )
+
+        assertTrue(result.taskIdsToCancel.isEmpty())
+        assertEquals(setOf("task-k-2", "task-k-2_dueday"), result.reminderIdsToCancel)
+        assertFalse(result.isAlarmStale("task-k-2", 4102444300000L, "DEADLINE"))
+        assertTrue(result.isAlarmStale("task-k-2", 4102444300000L, "DUE_DATE"))
+    }
+
+    @Test
+    fun `an LWW update clearing the due day cancels the due-day alarm only then`() {
+        val result = parse(
+            op(
+                1, "[TASK] LWW Update", "UPD", "task-k-5",
+                """{"actionPayload": {"id": "task-k-5", "title": "No day"}, "entityChanges": [], "lwwUpdateMode": "replace"}"""
+            ),
+            op(
+                2, "[TASK] LWW Update", "UPD", "task-k-6",
+                """{"actionPayload": {"id": "task-k-6", "title": "Same day", "dueDay": "2100-01-01"}, "entityChanges": [], "lwwUpdateMode": "replace"}"""
+            )
+        )
+
+        assertTrue(result.isAlarmStale("task-k-5", 4102444300000L, "DUE_DATE"))
+        assertFalse(result.isAlarmStale("task-k-6", 4102444300000L, "DUE_DATE"))
+    }
+
+    @Test
+    fun `clearing or removing the deadline keeps the task's own alarms`() {
+        for (action in listOf("clearDeadlineReminder", "removeDeadline")) {
+            val result = parse(
+                op(
+                    1, "[Task Shared] $action", "UPD", "task-k-3",
+                    """{"actionPayload": {"taskId": "task-k-3"}, "entityChanges": []}"""
+                )
+            )
+
+            assertTrue(action, result.taskIdsToCancel.isEmpty())
+            assertEquals(action, setOf("task-k-3_deadline"), result.reminderIdsToCancel)
+            assertFalse(action, result.isAlarmStale("task-k-3", 4102444200000L, "TASK"))
+            assertFalse(action, result.isAlarmStale("task-k-3", 4102444200000L, "DUE_DATE"))
+            assertTrue(action, result.isAlarmStale("task-k-3", 4102444300000L, "DEADLINE"))
+        }
+    }
+
+    @Test
+    fun `clearing one reminder field keeps the other kind's alarm and reminder`() {
+        val result = parse(
+            op(
+                1, "[Task Shared] updateTask", "UPD", "task-k-4",
+                """{"actionPayload": {"task": {"id": "task-k-4", "changes": {"deadlineRemindAt": 4102444300000}}}, "entityChanges": []}"""
+            ),
+            op(
+                2, "[Task Shared] updateTask", "UPD", "task-k-4",
+                """{"actionPayload": {"task": {"id": "task-k-4", "changes": {"remindAt": null}}}, "entityChanges": []}"""
+            )
+        )
+
+        assertEquals(4102444300000L, result.remindersToSchedule.single { it.isDeadline }.remindAt)
+        assertEquals(setOf("task-k-4"), result.reminderIdsToCancel)
+        assertFalse(result.isAlarmStale("task-k-4", 4102444300000L, "DEADLINE"))
     }
 
     @Test

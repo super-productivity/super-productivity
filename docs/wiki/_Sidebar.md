@@ -16,6 +16,7 @@
 - [[2.05-Manage-Scheduled-Tasks]]
 - [[2.06-Manage-Repeating-Tasks]]
 - [[2.07-Manage-Task-Integrations]]
+- [[2.24-Set-Up-CalDAV]]
 - [[2.08-Choose-Sync-Backend]]
 - [[2.09-Configure-Sync-Backend]]
 - [[2.19-Sync-Proton-Drive-via-rclone]]
