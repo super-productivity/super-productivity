@@ -48,10 +48,10 @@ The `.env` file contains secrets and environment-specific values that should not
    const googleToken = ENV.GOOGLE_DRIVE_TOKEN;
 
    // Or using utility functions (with type safety)
-   import { getEnv, getEnvOrDefault } from './app/util/env';
+   import { getEnv, getEnvOptional } from './app/util/env';
 
    const googleToken = getEnv('GOOGLE_DRIVE_TOKEN');
-   const dropboxKey = getEnvOrDefault('DROPBOX_API_KEY', 'default-key');
+   const dropboxKey = getEnvOptional('DROPBOX_API_KEY') ?? 'default-key';
    ```
 
 ## Running the Application

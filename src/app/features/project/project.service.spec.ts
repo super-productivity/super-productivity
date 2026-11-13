@@ -5,7 +5,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { Task, TaskState } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
-import { Store, StoreModule } from '@ngrx/store';
+import { Action, Store, StoreModule } from '@ngrx/store';
 import { createProject } from './project.test-helper';
 import { EMPTY, of } from 'rxjs';
 import { createTask } from '../tasks/task.test-helper';
@@ -30,9 +30,19 @@ import { selectMenuTreeProjectTree } from '../menu-tree/store/menu-tree.selector
 import { MenuTreeKind } from '../menu-tree/store/menu-tree.model';
 import { menuTreeFeatureKey } from '../menu-tree/store/menu-tree.reducer';
 import { TaskTimeSyncService } from '../tasks/task-time-sync.service';
-import { updateTaskRepeatCfg } from '../task-repeat-cfg/store/task-repeat-cfg.actions';
-import { selectTaskRepeatCfgByIdAllowUndefined } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
-import { DEFAULT_TASK_REPEAT_CFG } from '../task-repeat-cfg/task-repeat-cfg.model';
+import {
+  selectAllTaskRepeatCfgs,
+  selectTaskRepeatCfgByIdAllowUndefined,
+} from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfg,
+} from '../task-repeat-cfg/task-repeat-cfg.model';
+import {
+  updateTaskRepeatCfg,
+  upsertTaskRepeatCfg,
+} from '../task-repeat-cfg/store/task-repeat-cfg.actions';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 
 describe('ProjectService', () => {
   let service: ProjectService;
@@ -240,6 +250,7 @@ describe('ProjectService', () => {
     store.overrideSelector(selectTaskFeatureState, initialTaskState);
     store.overrideSelector(selectNoteFeatureState, initialNoteState);
     store.overrideSelector(selectSectionFeatureState, initialSectionState);
+    store.overrideSelector(selectAllTaskRepeatCfgs, []);
   });
 
   afterEach(() => {
@@ -381,6 +392,139 @@ describe('ProjectService', () => {
   describe('duplicateProject', () => {
     beforeEach(() => {
       spyOn(service, 'add').and.callFake(() => 'new-project-id');
+    });
+
+    it('should copy project recurrences with independent ids and preserve their schedule history', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'original-repeat',
+        projectId: 'project-1',
+        title: 'Every three days',
+        repeatCycle: 'DAILY',
+        repeatEvery: 3,
+        startDate: '2025-01-01',
+        lastTaskCreationDay: '2026-01-04',
+        deletedInstanceDates: ['2026-01-01'],
+        subTaskTemplates: [{ title: 'Recurring subtask', notes: 'Keep this' }],
+      };
+      store.overrideSelector(selectAllTaskRepeatCfgs, [cfg]);
+      spyOn(service, 'getByIdOnce$').and.returnValue(
+        of(createProject({ id: 'project-1' })),
+      );
+      const dispatch = spyOn(store, 'dispatch') as jasmine.Spy<(action: Action) => void>;
+
+      await service.duplicateProject('project-1');
+
+      const copies = dispatch.calls
+        .allArgs()
+        .map(([action]) => action)
+        .filter((action) => action.type === upsertTaskRepeatCfg.type) as ReturnType<
+        typeof upsertTaskRepeatCfg
+      >[];
+      expect(copies.length).toBe(1);
+      const copy = copies[0]?.taskRepeatCfg;
+      expect(copy?.id).not.toBe(cfg.id);
+      expect(copy).toEqual({
+        ...cfg,
+        id: jasmine.any(String),
+        projectId: 'new-project-id',
+      });
+      expect(JSON.parse(JSON.stringify(copies[0])).meta).toEqual({
+        isPersistent: true,
+        entityType: 'TASK_REPEAT_CFG',
+        entityId: copy?.id,
+        opType: 'CRT',
+      });
+      expect(cfg.projectId).toBe('project-1');
+    });
+
+    it('should link copied regular and backlog instances to one copied config', async () => {
+      const cfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'original-repeat',
+        projectId: 'project-1',
+      };
+      store.overrideSelector(selectAllTaskRepeatCfgs, [cfg]);
+      const first = createTask({
+        id: 'task-1',
+        projectId: 'project-1',
+        repeatCfgId: cfg.id,
+        created: new Date(2026, 0, 4, 12).getTime(),
+      });
+      const second = createTask({
+        id: 'task-2',
+        projectId: 'project-1',
+        repeatCfgId: cfg.id,
+        created: new Date(2026, 0, 1, 12).getTime(),
+      });
+      store.overrideSelector(selectTaskFeatureState, {
+        ...initialTaskState,
+        entities: { [first.id]: first, [second.id]: second },
+      });
+      spyOn(service, 'getByIdOnce$').and.returnValue(
+        of(
+          createProject({
+            id: 'project-1',
+            taskIds: ['task-1'],
+            backlogTaskIds: ['task-2'],
+          }),
+        ),
+      );
+      const dispatch = spyOn(store, 'dispatch') as jasmine.Spy<(action: Action) => void>;
+
+      await service.duplicateProject('project-1');
+
+      const actions = dispatch.calls.allArgs().map(([action]) => action);
+      const configs = actions.filter(
+        (action) => action.type === upsertTaskRepeatCfg.type,
+      ) as ReturnType<typeof upsertTaskRepeatCfg>[];
+      expect(configs.length).toBe(1);
+      const updates = actions.filter(
+        (action) => action.type === TaskSharedActions.updateTask.type,
+      ) as ReturnType<typeof TaskSharedActions.updateTask>[];
+      expect(updates.map((action) => action.task)).toEqual([
+        {
+          id: 'new-task-1',
+          changes: { repeatCfgId: configs[0]?.taskRepeatCfg.id, created: first.created },
+        },
+        {
+          id: 'new-task-2',
+          changes: { repeatCfgId: configs[0]?.taskRepeatCfg.id, created: second.created },
+        },
+      ]);
+    });
+
+    it('should copy paused recurrences without instances and exclude other projects', async () => {
+      const paused: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'paused-repeat',
+        projectId: 'project-1',
+        isPaused: true,
+      };
+      store.overrideSelector(selectAllTaskRepeatCfgs, [
+        paused,
+        { ...paused, id: 'other-repeat', projectId: 'project-2' },
+        { ...paused, id: 'tag-repeat', projectId: null },
+      ]);
+      spyOn(service, 'getByIdOnce$').and.returnValue(
+        of(createProject({ id: 'project-1' })),
+      );
+      const dispatch = spyOn(store, 'dispatch') as jasmine.Spy<(action: Action) => void>;
+
+      await service.duplicateProject('project-1');
+
+      const copies = dispatch.calls
+        .allArgs()
+        .map(([action]) => action)
+        .filter((action) => action.type === upsertTaskRepeatCfg.type) as ReturnType<
+        typeof upsertTaskRepeatCfg
+      >[];
+      expect(copies.length).toBe(1);
+      expect(copies[0]?.taskRepeatCfg).toEqual({
+        ...paused,
+        id: jasmine.any(String),
+        projectId: 'new-project-id',
+      });
     });
 
     it('should throw an error if no template project id is given', async () => {
