@@ -138,6 +138,27 @@ describe('checklist edits around fenced code examples', () => {
         ['\t```', '\t- [x] source', '\t```'],
         ['<pre>', '```', '- [x] source', '```', '</pre>', ''],
         ['<div>', '```', '- [x] source', '```', '</div>', ''],
+        [
+          '- parent',
+          '    <div>',
+          '    ```',
+          '    - [x] source',
+          '    ```',
+          '    </div>',
+          '',
+        ],
+        [
+          '- a',
+          '  - b',
+          '    <pre>',
+          '    ```',
+          '    - [x] source',
+          '    ```',
+          '    </pre>',
+          '',
+        ],
+        ['- parent', '\t<div>', '\t```', '\t- [x] source', '\t```', '\t</div>', ''],
+        ['> <div>', '> ```', '> - [x] source', '> ```', '> </div>', ''],
       ],
     },
     {
@@ -163,12 +184,28 @@ describe('checklist edits around fenced code examples', () => {
       editorItems: [0, 4],
     },
     {
+      name: 'closing tags after a nested list item',
+      prefixes: [
+        ['- a', '  - [ ] b', '  </div>', '  - [ ] c', '', '```', 'code', '```'],
+        ['1. a', '   - [ ] b', '   </details>', '   - [ ] c', '', '```', 'code', '```'],
+      ],
+      items: [1, 3],
+      editorItems: [1],
+    },
+    {
       name: 'a closing tag and a fence in one HTML block',
       prefixes: [
         ['- [ ] a', '</details>', '- [ ] b', '```', '- [x] source', '```', ''],
         ['- [ ] a', '</div>', '- [ ] b', '```', '- [x] source', '```', ''],
+        ['- [ ] a', '</div>', '- [ ] b', '    ```', '    - [x] source', '    ```', ''],
       ],
       items: [0, 2],
+      editorItems: [0],
+    },
+    {
+      name: 'items below a closed fence in that HTML block',
+      prefixes: [['- [ ] a', '</div>', '- [ ] b', '```', 'code', '```', '- [ ] c', '']],
+      items: [0, 2, 6],
       editorItems: [0],
     },
   ]) {
@@ -185,7 +222,11 @@ describe('checklist edits around fenced code examples', () => {
             new DOMParser()
               .parseFromString(html, 'text/html')
               .querySelectorAll('.checkbox-wrapper .checkbox-label'),
-            (label) => (label.textContent ?? '').trim().split('\n')[0],
+            (label) => {
+              // A code block inside the item renders inside its label.
+              label.querySelectorAll('pre').forEach((pre) => pre.remove());
+              return (label.textContent ?? '').trim().split('\n')[0];
+            },
           );
           const editorIndices: number[] = [];
           // CodeMirror's document normalizes CRLF before invoking its parser.
@@ -210,8 +251,9 @@ describe('checklist edits around fenced code examples', () => {
             converted: markdownToChecklist(notes),
           };
           const itemLines = [...items, prefix.length, prefix.length + 1];
-          const label = (index: number): string => lines[index].slice('- [ ] '.length);
-          const isDone = (index: number): boolean => lines[index].startsWith('- [x]');
+          const label = (index: number): string =>
+            lines[index].replace(/^.*?- \[[ x]\] /, '');
+          const isDone = (index: number): boolean => lines[index].includes('- [x]');
           const check = (line: string): string => line.replace('- [ ]', '- [x]');
           const uncheck = (line: string): string => line.replace('- [x]', '- [ ]');
           const edit = (indices: number[], change: (line: string) => string): string =>

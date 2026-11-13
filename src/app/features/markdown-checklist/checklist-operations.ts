@@ -19,7 +19,8 @@ import { GFM, parser } from '@lezer/markdown';
 const CHECKLIST_ITEM_RE = /^\s*- \[[ xX]\]\s+\S/;
 const CHECKED_ITEM_RE = /^\s*- \[[xX]\]\s+\S/;
 const FENCE_PARSER = parser.configure(GFM);
-const FENCE_LINE_RE = /^ {0,3}(?:```|~~~)/m;
+// The HTML lines that end a list item in marked (its `htmlBeginRegex`).
+const MARKED_ITEM_ENDING_HTML_RE = /^<(?:[a-z].*>|!--)/i;
 
 export const isChecklistItemLine = (line: string): boolean =>
   CHECKLIST_ITEM_RE.test(line);
@@ -46,35 +47,56 @@ export const getChecklistItemLineIndices = (lines: string[]): number[] => {
   }
 
   // Container indentation and the end of a list item determine fence lifetime.
-  // Let Lezer resolve that grammar, including code and HTML blocks containing
+  // Let Lezer resolve that grammar and skip code and HTML blocks, which can hold
   // fence-like text, but retain the existing item syntax outside those blocks.
   // Lezer receives normalized lines, as it does in CodeMirror. Keep the original
   // strings for editing, and use the normalized lengths for parser offsets.
   const parserLines = lines.map((line) => line.replace(/\r$/, ''));
-  const source = parserLines.join('\n');
-  const fences: { from: number; to: number }[] = [];
-  FENCE_PARSER.parse(source).iterate({
-    enter: ({ name, from, to }) => {
-      if (name === 'FencedCode' || name === 'CodeBlock') {
-        fences.push({ from, to });
-        return false;
-      }
-      if (name === 'HTMLBlock') {
-        // Lezer starts an HTML block at a closing tag right after a list item,
-        // where marked keeps the line in the item and still renders the items
-        // below it. Skip an HTML block only from its first fence line on: that
-        // still covers a fence inside <pre> or <div>, and items above the fence
-        // keep the plain line scan, so a code block elsewhere in the notes
-        // cannot shift which item a preview click hits.
-        const fenceLine = source.slice(from, to).search(FENCE_LINE_RE);
-        if (fenceLine !== -1) {
-          fences.push({ from: from + fenceLine, to });
+  let source = parserLines.join('\n');
+  let fences: { from: number; to: number }[];
+  let lazyHtmlStarts: number[];
+  do {
+    fences = [];
+    lazyHtmlStarts = [];
+    // Line breaks that end a list item's text, the item's last block.
+    const listTextBreaks = new Set<number>();
+    FENCE_PARSER.parse(source).iterate({
+      enter: ({ name, from, to, node }) => {
+        if (name === 'ListItem') {
+          const last = node.lastChild;
+          const lineBreak = last ? source.indexOf('\n', last.to) : -1;
+          if ((last?.name === 'Task' || last?.name === 'Paragraph') && lineBreak !== -1) {
+            listTextBreaks.add(lineBreak);
+          }
+          return true;
+        }
+        if (name !== 'FencedCode' && name !== 'CodeBlock' && name !== 'HTMLBlock') {
+          return true;
+        }
+        // marked ends a list item only at an HTML line that opens a tag or a
+        // comment. Any other HTML line right after the item's text, such as a
+        // closing tag, stays in the item as lazy continuation, and marked
+        // renders the lines below it as markdown again. Lezer follows CommonMark
+        // and starts an HTML block there that runs to the next blank line.
+        if (
+          name === 'HTMLBlock' &&
+          listTextBreaks.has(source.lastIndexOf('\n', from - 1)) &&
+          !MARKED_ITEM_ENDING_HTML_RE.test(source.slice(from, to))
+        ) {
+          lazyHtmlStarts.push(from);
+        } else {
+          fences.push({ from, to });
         }
         return false;
-      }
-      return true;
-    },
-  });
+      },
+    });
+    // Mask the "<" so Lezer continues the item's text there, as marked does,
+    // and parse again: the lines below may hold more such tags. Each pass
+    // masks at least one "<", and offsets stay the same.
+    for (const at of lazyHtmlStarts) {
+      source = `${source.slice(0, at)}x${source.slice(at + 1)}`;
+    }
+  } while (lazyHtmlStarts.length > 0);
   let lineIndex = 0;
   let lineStart = 0;
   let fenceIndex = 0;
