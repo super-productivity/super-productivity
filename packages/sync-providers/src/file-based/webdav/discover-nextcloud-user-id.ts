@@ -4,6 +4,7 @@ import type { WebFetchFactory } from '../../platform/web-fetch-factory';
 import type { NativeHttpExecutor } from '../../http/native-http-retry';
 import { AuthFailSPError } from '../../errors';
 import { errorMeta } from '../../log/error-meta';
+import { toBasicAuthHeader } from './basic-auth-header';
 import { WebDavHttpAdapter } from './webdav-http-adapter';
 import { WebDavHttpHeader, WebDavHttpMethod, WebDavHttpStatus } from './webdav.const';
 import { NextcloudProvider } from './nextcloud';
@@ -68,12 +69,14 @@ export const discoverNextcloudUserId = async (
   });
 
   try {
-    const auth = btoa(`${NextcloudProvider.getAuthUserName(cfg)}:${cfg.password}`);
     const response = await httpAdapter.request({
       url: _buildOcsUserUrl(cfg.serverUrl),
       method: WebDavHttpMethod.GET,
       headers: {
-        [WebDavHttpHeader.AUTHORIZATION]: `Basic ${auth}`,
+        [WebDavHttpHeader.AUTHORIZATION]: toBasicAuthHeader(
+          NextcloudProvider.getAuthUserName(cfg),
+          cfg.password,
+        ),
         [OCS_API_REQUEST_HEADER]: 'true',
         Accept: 'application/json',
       },

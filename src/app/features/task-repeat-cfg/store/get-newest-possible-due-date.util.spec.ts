@@ -1019,6 +1019,29 @@ describe('getNewestPossibleDueDate()', () => {
       },
     );
   });
+
+  // #11266: completed on May 1, then the start date is moved on May 11.
+  describe('YEARLY after completion with a moved start date (#11266)', () => {
+    const today = dateStrToUtcDate('2026-05-11');
+    const afterCompletion = (startDate: string): TaskRepeatCfg =>
+      dummyRepeatable('ID1', {
+        repeatCycle: 'YEARLY',
+        repeatFromCompletionDate: true,
+        waitForCompletion: true,
+        startDate,
+        lastTaskCreationDay: '2026-05-01',
+      });
+
+    it('should return a start date moved past the last completion', () => {
+      expect(getNewestPossibleDueDate(afterCompletion('2026-05-11'), today)).toEqual(
+        new Date(2026, 4, 11, 12),
+      );
+    });
+
+    it('should ignore a start date moved before the last completion', () => {
+      expect(getNewestPossibleDueDate(afterCompletion('2026-04-20'), today)).toBeNull();
+    });
+  });
 });
 
 describe('getNewestPossibleDueDate with repeatUntilDay (#10091)', () => {

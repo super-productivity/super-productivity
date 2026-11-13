@@ -13,4 +13,5 @@ module.exports = {
   'require-frontier-report-on-ops-append': require('./rules/require-frontier-report-on-ops-append'),
   'require-text-locale': require('./rules/require-text-locale'),
   'no-user-content-in-logs': require('./rules/no-user-content-in-logs'),
+  'no-sibling-feature-ui': require('./rules/no-sibling-feature-ui'),
 };

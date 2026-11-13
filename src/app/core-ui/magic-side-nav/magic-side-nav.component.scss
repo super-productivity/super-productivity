@@ -360,7 +360,7 @@
   width: 4px;
   cursor: col-resize;
   z-index: 1003; // Above the nav-sidenav
-  transition: background-color 0.2s ease;
+  transition: background-color var(--transition-duration-m) ease;
 
   &.position-left {
     right: -2px;

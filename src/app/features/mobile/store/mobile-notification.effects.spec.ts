@@ -1283,7 +1283,53 @@ describe('MobileNotificationEffects', () => {
       );
     }));
 
-    it('caps pre-scheduled reminders, keeping the soonest-firing (iOS 64-pending limit)', fakeAsync(() => {
+    describe('on iOS', () => {
+      beforeEach(() => {
+        platformService.isAndroid.and.returnValue(false);
+        platformService.isIOS.and.returnValue(true);
+      });
+
+      it('offers a daily config 60 days ahead, for the reminder budget to fill its free slots', fakeAsync(() => {
+        store.overrideSelector(selectActiveTaskRepeatCfgs, [mkDailyCfg()]);
+        subscribeRepeatReminders();
+
+        tick(REPEAT_SETTLE_MS + 1);
+
+        // Today's instance exists already, so the occurrences are days 1 to 60.
+        expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(60);
+        for (const offset of [1, 15, 60]) {
+          expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              notificationId: generateNotificationId(
+                getRepeatableTaskId('cfgDaily', dayStr(offset)),
+              ),
+              triggerAtMs: triggerFor(offset, '09:00'),
+            }),
+          );
+        }
+      }));
+
+      it('offers no more than the budget holds, soonest first', fakeAsync(() => {
+        // Two daily configs: 60 slots cover 30 days of both.
+        store.overrideSelector(selectActiveTaskRepeatCfgs, [
+          mkDailyCfg({ id: 'early', startTime: '09:00' }),
+          mkDailyCfg({ id: 'late', startTime: '10:00' }),
+        ]);
+        subscribeRepeatReminders();
+
+        tick(REPEAT_SETTLE_MS + 1);
+
+        expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(60);
+        expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
+          jasmine.objectContaining({ triggerAtMs: triggerFor(30, '10:00') }),
+        );
+        expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ triggerAtMs: triggerFor(31, '09:00') }),
+        );
+      }));
+    });
+
+    it('caps pre-scheduled reminders on Android, keeping the soonest-firing', fakeAsync(() => {
       // More configs than the cap (REPEAT_MAX_SCHEDULED = 32 in the effect),
       // each due tomorrow at a distinct clock time 30 min apart (00:00 → 19:30).
       const cfgs = Array.from({ length: 40 }, (_, i) => {

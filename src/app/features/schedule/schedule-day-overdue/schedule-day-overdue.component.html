@@ -1,0 +1,30 @@
+<collapsible
+  class="task-section"
+  [title]="T.G.OVERDUE | translate"
+  [count]="tasks().length"
+  [isIconBefore]="true"
+  [(isExpanded)]="isExpanded"
+>
+  <!-- The collapsible only hides its content: without this, a card would be
+       created for every task while the list is still collapsed. -->
+  @if (isExpanded()) {
+    <div
+      class="tasks"
+      cdkDropList
+      [cdkDropListSortingDisabled]="true"
+      [cdkDropListEnterPredicate]="rejectDrop"
+      (cdkDropListDropped)="onDropped()"
+    >
+      @for (task of tasks(); track task.id) {
+        <planner-task
+          cdkDrag
+          [cdkDragData]="task"
+          [cdkDragStartDelay]="dragDelayForTouch()"
+          (cdkDragStarted)="onDragStarted(task, $event)"
+          (cdkDragEnded)="onDragEnded()"
+          [task]="task"
+        ></planner-task>
+      }
+    </div>
+  }
+</collapsible>

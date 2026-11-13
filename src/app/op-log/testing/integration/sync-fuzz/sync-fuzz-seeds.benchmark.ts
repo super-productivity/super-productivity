@@ -16,7 +16,8 @@ import { keepKarmaAlive, shrinkTrace } from './sync-fuzz-shrink';
  * Each seed runs STEPS random steps of one intent mix on three devices. A
  * seed fails on a failure signature that no pinned trace explains
  * (sync-fuzz-pinned-traces.json): a pin explains its primary signature, and
- * its other signatures only in a run that also shows its primary. The first
+ * its other signatures only in a run that also shows its primary; a pin that
+ * moves a task explains only a run that moves one. The first
  * seed of each new signature is
  * then shrunk by delta debugging and printed, in its own spec, with its replay
  * results and a dump of the server log and every device's op log. Pin a trace
@@ -36,16 +37,29 @@ const IGNORE_PINNED = false;
 /** Traces to replay with a full dump, e.g. while triaging a pin. */
 const DEBUG_TRACES: [string, FuzzStep[]][] = [];
 
-const PINS = pinnedTraces as unknown as { primary?: string; signatures: string[] }[];
+const PINS = pinnedTraces as unknown as {
+  primary?: string;
+  signatures: string[];
+  steps: FuzzStep[];
+}[];
 
-/** The failures of a run that no pin explains. */
-const newFailures = (failures: FuzzFailure[]): FuzzFailure[] => {
+const movesTasks = (steps: readonly FuzzStep[]): boolean =>
+  steps.some((s) => s.a?.[0] === 'moveTask');
+
+/**
+ * The failures of a run that no pin explains. A pin that moves a task
+ * explains only a run that moves one: the move pins' primaries (a time loss,
+ * a REPAIR, a lost task) are signatures the other mixes show for other
+ * reasons, and would otherwise stop being reported there.
+ */
+const newFailures = ({ failures, steps }: FuzzResult): FuzzFailure[] => {
   if (IGNORE_PINNED) return failures;
   const shown = new Set(failures.map((f) => f.signature));
+  const moved = movesTasks(steps);
   const explained = new Set(
-    PINS.filter((pin) => pin.primary && shown.has(pin.primary)).flatMap(
-      (pin) => pin.signatures,
-    ),
+    PINS.filter(
+      (pin) => pin.primary && shown.has(pin.primary) && (moved || !movesTasks(pin.steps)),
+    ).flatMap((pin) => pin.signatures),
   );
   return failures.filter((f) => !explained.has(f.signature));
 };
@@ -68,7 +82,7 @@ const runSweep = (): Promise<Sweep> =>
         keepKarmaAlive(seed);
         const result = await runFuzz({ seed, stepCount: STEPS, weights });
         results.set(`${profile} ${seed}`, result);
-        for (const { signature } of newFailures(result.failures)) {
+        for (const { signature } of newFailures(result)) {
           const seen = firstSeen.find((f) => f.signature === signature);
           if (seen) seen.count++;
           else {
@@ -96,7 +110,7 @@ describe('sync fuzz random seeds', () => {
     for (let seed = FIRST_SEED; seed < FIRST_SEED + SEED_COUNT; seed++) {
       it(`${profile} seed ${seed} fails only as the pinned traces do`, async () => {
         const result = (await runSweep()).results.get(`${profile} ${seed}`)!;
-        expect(newFailures(result.failures))
+        expect(newFailures(result))
           .withContext(`seed=${seed} trace=${JSON.stringify(result.steps)}`)
           .toEqual([]);
       }, 900_000);
@@ -110,7 +124,7 @@ describe('sync fuzz random seeds', () => {
       const { signature, seed, steps, count } = found;
       const isSame = (result: FuzzResult): boolean =>
         result.failures.some((f) => f.signature === signature);
-      const minimal = await shrinkTrace(steps, isSame, SHRINK_RUNS);
+      const minimal = await shrinkTrace(steps, isSame, { maxRuns: SHRINK_RUNS });
       const replays: string[] = [];
       for (let replay = 0; replay < 3; replay++) {
         replays.push(isSame(await runFuzz({ steps: minimal })) ? 'fail' : 'pass');

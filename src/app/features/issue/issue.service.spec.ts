@@ -1,4 +1,5 @@
-import { TestBed } from '@angular/core/testing';
+import { Injector } from '@angular/core';
+import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { IssueService } from './issue.service';
 import { TaskService } from '../tasks/task.service';
@@ -22,7 +23,6 @@ import { PlainspaceCommonInterfacesService } from './providers/plainspace/plains
 import { PlainspaceApiService } from './providers/plainspace/plainspace-api.service';
 import { SnackParams } from '../../core/snack/snack.model';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
-import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
@@ -30,7 +30,9 @@ import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
-import { IssueProvider } from './issue.model';
+import { IssueData, IssueProvider } from './issue.model';
+import { TagService } from '../tag/tag.service';
+import { AddTaskBarIssueSearchService } from '../tasks/add-task-bar/add-task-bar-issue-search.service';
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { Action } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
@@ -190,7 +192,6 @@ describe('IssueService', () => {
         { provide: GlobalProgressBarService, useValue: globalProgressBarServiceSpy },
         { provide: NavigateToTaskService, useValue: navigateToTaskServiceSpy },
         { provide: JiraCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: GitlabCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: CaldavCommonInterfacesService, useValue: mockCommonInterfaceService },
         {
           provide: OpenProjectCommonInterfacesService,
@@ -213,6 +214,97 @@ describe('IssueService', () => {
       ],
     });
     service = TestBed.inject(IssueService);
+  });
+
+  describe('addTaskFromIssue - concurrent imports', () => {
+    const options = {
+      issueDataReduced: { id: 'JIRA-1', title: 'Synthetic issue' },
+      issueProviderId: 'provider-1',
+      issueProviderKey: 'JIRA' as const,
+    };
+
+    beforeEach(() => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      service.ISSUE_SERVICE_MAP['JIRA'].getAddTaskData = () => ({
+        title: 'Synthetic issue',
+      });
+    });
+
+    it('imports only once when the same issue is requested before archive lookup resolves', async () => {
+      const results = await Promise.all([
+        service.addTaskFromIssue(options),
+        service.addTaskFromIssue(options),
+      ]);
+      expect(taskServiceSpy.add).toHaveBeenCalledTimes(1);
+      expect(results).toEqual(['new-task-id', undefined]);
+    });
+
+    it('returns a pending background import ID to only the first foreground issue selection', fakeAsync(() => {
+      const injector = Injector.create({
+        parent: TestBed.inject(Injector),
+        providers: [AddTaskBarIssueSearchService, { provide: TagService, useValue: {} }],
+      });
+      const issueSearch = injector.get(AddTaskBarIssueSearchService);
+      const suggestion = {
+        title: options.issueDataReduced.title,
+        issueData: options.issueDataReduced as IssueData,
+        issueType: options.issueProviderKey,
+        issueProviderId: options.issueProviderId,
+        projectId: 'project-1',
+      };
+      let releaseBackgroundLookup!: () => void;
+      const backgroundLookup = new Promise<null>((resolve) => {
+        releaseBackgroundLookup = () => resolve(null);
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.returnValues(
+        backgroundLookup,
+        Promise.resolve(null),
+        Promise.resolve(null),
+      );
+
+      const backgroundImport = service.addTaskFromIssue({
+        ...options,
+        isAutoImport: true,
+        isAddToBacklog: true,
+      });
+      let results: (string | undefined)[] = [];
+      Promise.all([
+        backgroundImport,
+        issueSearch.addTaskFromExistingTaskOrIssue(suggestion, false, true),
+        issueSearch.addTaskFromExistingTaskOrIssue(suggestion, false, true),
+      ]).then((ids) => (results = ids));
+      flushMicrotasks();
+
+      // Both foreground lookups saw no task while the background owns the import.
+      expect(taskServiceSpy.checkForTaskWithIssueEverywhere).toHaveBeenCalledTimes(3);
+      expect(taskServiceSpy.add).not.toHaveBeenCalled();
+      releaseBackgroundLookup();
+      flushMicrotasks();
+
+      expect(taskServiceSpy.add).toHaveBeenCalledTimes(1);
+      expect(taskServiceSpy.add.calls.mostRecent().args[1]).toBeTrue();
+      // The Planner caller needs this ID to plan its selected day and emit
+      // afterTaskAdd. A duplicate selection must not emit a second completion.
+      expect(results).toEqual(['new-task-id', 'new-task-id', undefined]);
+      injector.destroy();
+    }));
+
+    it('keeps separate provider configurations independent', async () => {
+      await Promise.all([
+        service.addTaskFromIssue(options),
+        service.addTaskFromIssue({ ...options, issueProviderId: 'provider-2' }),
+      ]);
+      expect(taskServiceSpy.add).toHaveBeenCalledTimes(2);
+    });
+
+    it('allows a retry after a failed lookup', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.rejectWith(new Error('lookup'));
+      await expectAsync(service.addTaskFromIssue(options)).toBeRejected();
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      await expectAsync(service.addTaskFromIssue(options)).toBeResolvedTo('new-task-id');
+      expect(taskServiceSpy.add).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('addTaskFromIssue - ICAL task already exists', () => {

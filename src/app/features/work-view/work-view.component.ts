@@ -24,7 +24,7 @@ import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.comp
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   animationFrameScheduler,
   firstValueFrom,
@@ -48,6 +48,7 @@ import {
   CustomizedUndoneTasks,
   TaskViewCustomizerService,
 } from '../task-view-customizer/task-view-customizer.service';
+import { DEFAULT_OPTIONS } from '../task-view-customizer/types';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
@@ -167,6 +168,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   customizerService = inject(TaskViewCustomizerService);
   workContextService = inject(WorkContextService);
   private _activatedRoute = inject(ActivatedRoute);
+  private _router = inject(Router);
   private _projectService = inject(ProjectService);
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
@@ -611,6 +613,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       translateParams: {
         nr: doneTasks.length,
       },
+      // archived tasks leave every list; History is where they can be viewed and restored
+      actionStr: T.MH.HISTORY,
+      actionFn: () => this._router.navigate(['/active/history']),
     });
   }
 
@@ -747,6 +752,16 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Skip the first attempt: the customized list trails `undoneTasks` by an
+    // animation frame, so right after a route change the two can disagree.
+    if (
+      retriesLeft < WorkViewComponent._FOCUS_ITEM_MAX_RETRIES &&
+      this._isTaskHiddenByFilter(taskId)
+    ) {
+      this._offerToClearFilterFor(taskId);
+      return;
+    }
+
     if (retriesLeft <= 0) {
       // Give up for good: leaving the id pending would let the `splitTopEl`
       // setter replay the whole loop on every later context change, re-opening
@@ -767,6 +782,59 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       this._pendingFocusItemTimeout = undefined;
       this._focusItemInWorkViewWhenReady(taskId, retriesLeft - 1);
     }, WorkViewComponent._FOCUS_ITEM_RETRY_DELAY);
+  }
+
+  /**
+   * A filtered-out task has no row in any container, so no amount of expanding
+   * or retrying can reveal it. Panels outside the undone list ignore the
+   * filter, so a task listed there is still reachable. (#11482)
+   */
+  private _isTaskHiddenByFilter(taskId: string): boolean {
+    const customized = this.customizedUndoneTasks();
+    return (
+      // A plugin embed replaces the undone list: clearing the filter can't help.
+      !this.pluginEmbedId() &&
+      !!this.customizerService.selectedFilter().type &&
+      customized !== INITIAL_CUSTOMIZED_UNDONE_TASKS &&
+      this._hasTaskInList(this.undoneTasks(), taskId) &&
+      !this._hasTaskInList(customized.list, taskId) &&
+      !this._hasTaskInList(this.doneTasks(), taskId) &&
+      // Global lists, but their panels render on Today only.
+      !(this.isShowOverduePanel() && this._hasTaskInList(this.overdueTasks(), taskId)) &&
+      !(this.isOnTodayList() && this._hasTaskInList(this.laterTodayTasks(), taskId))
+    );
+  }
+
+  /**
+   * Keeps the user's filter and says why the reveal stopped, instead of
+   * expiring silently; clearing the filter is their call. (#11482)
+   */
+  private _offerToClearFilterFor(taskId: string): void {
+    const isFromSearch = this._isPendingFocusItemFromSearch;
+    const contextId = this.workContextService.activeWorkContextId;
+    this._pendingFocusItemTaskId = null;
+    this._isPendingFocusItemFromSearch = false;
+    recordSearchNavDebug('workView:hiddenByFilter', { taskId });
+    this._snackService.open({
+      msg: T.GLOBAL_SNACK.NAVIGATE_TO_TASK_FILTERED,
+      actionStr: T.GLOBAL_SNACK.NAVIGATE_TO_TASK_FILTERED_BTN,
+      actionFn: (): void => {
+        // The snack outlives the view: never reset another context's filter or
+        // cancel a reveal the user started since.
+        if (
+          this._destroyRef.destroyed ||
+          this.workContextService.activeWorkContextId !== contextId ||
+          (this._pendingFocusItemTaskId !== null &&
+            this._pendingFocusItemTaskId !== taskId)
+        ) {
+          return;
+        }
+        this.customizerService.setFilter(DEFAULT_OPTIONS.filter);
+        this._pendingFocusItemTaskId = taskId;
+        this._isPendingFocusItemFromSearch = isFromSearch;
+        this._focusItemInWorkViewWhenReady(taskId);
+      },
+    });
   }
 
   /**
