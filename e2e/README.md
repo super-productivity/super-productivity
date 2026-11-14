@@ -84,21 +84,29 @@ npm run e2e:webdav
 
 Some SuperSync specs run unmodified published app bundles next to the current
 build. They skip unless `COMPAT_OLD_ASSETS` (and `COMPAT_NEW_ASSETS` for the
-upgrade spec) point at extracted bundles. The scheduled workflow's
+upgrade spec) point at extracted bundles. The mixed v19.1.0/v19.2.0 fleet specs
+(#10916) instead read both bundles from `COMPAT_RELEASED_ROOT`, the fetch
+script's output folder. The scheduled workflow's
 `E2E Tests (Released Clients)` job runs them on every nightly and sync-path push
 (and on manual dispatch unless `run_released_clients` is unchecked) and fails on
-any skipped test. It selects specs by the `@supersync released` title tag, so keep
-that tag on new released-client suites; the upgrade spec runs through its own
-config. Locally, use the same digest-pinned bundles from
+any skipped test. It selects specs by the `@supersync released` and
+`@webdav released` title tags, so keep one of them on new released-client
+suites; the upgrade spec runs through its own config. Locally, use the same digest-pinned bundles from
 [the fetch script](../scripts/fetch-released-client-assets.sh):
 
 ```bash
-./scripts/fetch-released-client-assets.sh .tmp/released-clients v19.1.0 v19.0.1 v18.14.0
+./scripts/fetch-released-client-assets.sh .tmp/released-clients v19.2.0 v19.1.0 v19.0.1 v18.14.0
 
 # v19.1.0 clients against the current build
 COMPAT_OLD_ASSETS=$PWD/.tmp/released-clients/v19.1.0 npm run e2e:supersync:file \
   e2e/tests/sync/supersync-reorder-conflict-wedge.spec.ts \
   e2e/tests/sync/supersync-issue-provider-reorder-conflict.spec.ts -- --grep "@supersync released"
+
+# v19.1.0 desktop beside a v19.2.0 phone (#10916)
+COMPAT_RELEASED_ROOT=$PWD/.tmp/released-clients npm run e2e:webdav:file \
+  e2e/tests/sync/webdav-released-mixed-version-10916.spec.ts
+COMPAT_RELEASED_ROOT=$PWD/.tmp/released-clients npm run e2e:supersync:file \
+  e2e/tests/sync/supersync-released-mixed-version-10916.spec.ts
 
 # v18.14.0 -> v19.0.1 upgrade (#9962); needs SuperSync already running on 1901, e.g.
 #   docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync && ./scripts/wait-for-supersync.sh
