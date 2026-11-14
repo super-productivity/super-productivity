@@ -280,6 +280,11 @@ export type SyncConfig = Readonly<{
 }>;
 
 export type ScheduleConfig = Readonly<{
+  /**
+   * Hide the locale's weekend days in the Planner. A weekend day that holds work
+   * (or is today) stays visible. Optional: added after the first release.
+   */
+  isHideWeekends?: boolean;
   isWorkStartEndEnabled: boolean;
   workStart: string;
   workEnd: string;

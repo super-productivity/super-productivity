@@ -3021,6 +3021,8 @@
       "L_IS_WORK_START_END_ENABLED": "Limit unscheduled task flow to specific work times",
       "L_LUNCH_BREAK_END": "Lunch break end",
       "L_LUNCH_BREAK_START": "Lunch break start",
+      "IS_HIDE_WEEKENDS_DESCRIPTION": "Hide Saturday and Sunday (or your locale's weekend days) in the Planner. A weekend day that has something planned, and today, stay visible.",
+      "L_IS_HIDE_WEEKENDS": "Hide weekends in the Planner",
       "L_UNTIMED_TASK_PLACEMENT": "Tasks without a time",
       "L_WORK_END": "Work Day End",
       "L_WORK_START": "Work Day Start",

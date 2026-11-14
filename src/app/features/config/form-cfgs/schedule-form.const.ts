@@ -58,6 +58,14 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
       },
     },
     {
+      key: 'isHideWeekends',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.SCHEDULE.L_IS_HIDE_WEEKENDS,
+        description: T.GCF.SCHEDULE.IS_HIDE_WEEKENDS_DESCRIPTION,
+      },
+    },
+    {
       key: 'isLunchBreakEnabled',
       type: 'checkbox',
       templateOptions: {

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { PlannerService } from './planner.service';
 import { DateService } from '../../core/date/date.service';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of, BehaviorSubject, ReplaySubject } from 'rxjs';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
@@ -22,7 +23,36 @@ import { selectStartOfNextDayDiffMs } from '../../root-store/app-state/app-state
 import { findSpringForwardSunday } from '../tasks/dst.test-helper';
 
 describe('PlannerService', () => {
+  describe('includedWeekDays$', () => {
+    it('should offer every day of the week by default', (done) => {
+      service.includedWeekDays$.pipe(first()).subscribe((days) => {
+        expect(days).toEqual([0, 1, 2, 3, 4, 5, 6]);
+        done();
+      });
+    });
+
+    it('should drop the locale weekend days when they are hidden', (done) => {
+      mockStore.overrideSelector(selectTimelineConfig, {
+        isHideWeekends: true,
+        isWorkStartEndEnabled: false,
+        workStart: '09:00',
+        workEnd: '17:00',
+        isLunchBreakEnabled: false,
+        lunchBreakStart: '12:00',
+        lunchBreakEnd: '13:00',
+      } as never);
+      mockStore.refreshState();
+      service.includedWeekDays$
+        .pipe(first((days: number[]) => days.length < 7))
+        .subscribe((days) => {
+          expect(days).toEqual([1, 2, 3, 4, 5]);
+          done();
+        });
+    });
+  });
+
   let service: PlannerService;
+  let mockStore: MockStore;
   let dateService: DateService;
   let todayDateStrSubject: BehaviorSubject<string>;
   let mockDaysSubject: ReplaySubject<PlannerDay[]>;
@@ -61,6 +91,7 @@ describe('PlannerService', () => {
             {
               selector: selectTimelineConfig,
               value: {
+                isHideWeekends: false,
                 isWorkStartEndEnabled: false,
                 workStart: '09:00',
                 workEnd: '17:00',
@@ -83,6 +114,10 @@ describe('PlannerService', () => {
         {
           provide: LayoutService,
           useValue: { isXs: isXsSignal },
+        },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: () => 'en-us' },
         },
         {
           provide: PlannerService,
@@ -123,6 +158,7 @@ describe('PlannerService', () => {
 
     dateService = TestBed.inject(DateService);
     service = TestBed.inject(PlannerService);
+    mockStore = TestBed.inject(MockStore);
   });
 
   afterEach(() => {
