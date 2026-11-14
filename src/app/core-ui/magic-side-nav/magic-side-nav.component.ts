@@ -298,7 +298,20 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
         filter((event): event is NavigationStart => event instanceof NavigationStart),
         takeUntilDestroyed(this._destroyRef),
       )
-      .subscribe(() => {
+      .subscribe((event) => {
+        if (!this.isMobile()) return;
+        const navigation = this._router.currentNavigation();
+        if (
+          event.navigationTrigger === 'imperative' &&
+          navigation &&
+          window.history.state?.[HISTORY_STATE.MOBILE_NAVIGATION] !== undefined
+        ) {
+          // Replace the drawer's temporary entry instead of backing out of navigation.
+          navigation.extras.replaceUrl = true;
+          const state = { ...window.history.state };
+          delete state[HISTORY_STATE.MOBILE_NAVIGATION];
+          window.history.replaceState(state, '');
+        }
         if (this.isMobile() && this.showMobileMenuOverlay()) {
           this.showMobileMenuOverlay.set(false);
         }

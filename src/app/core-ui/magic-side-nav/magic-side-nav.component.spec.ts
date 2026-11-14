@@ -2,12 +2,13 @@ import { TaskMultiDragService } from '../../features/tasks/task-multi-drag.servi
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { Router } from '@angular/router';
+import { NavigationStart, Router } from '@angular/router';
 import { DragDropRegistry } from '@angular/cdk/drag-drop';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { By } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
-import { EMPTY, of } from 'rxjs';
+import { EMPTY, of, Subject } from 'rxjs';
+import { HISTORY_STATE } from '../../app.constants';
 
 import { MagicSideNavComponent } from './magic-side-nav.component';
 import { MagicNavConfigService } from './magic-nav-config.service';
@@ -22,6 +23,10 @@ describe('MagicSideNavComponent', () => {
   let isXs: ReturnType<typeof signal<boolean>>;
   let isMobileSideNavOpen: ReturnType<typeof signal<boolean>>;
   let browserMatches: boolean;
+  let routerEvents: Subject<NavigationStart>;
+  let currentNavigation: ReturnType<
+    typeof signal<{ extras: { replaceUrl?: boolean } } | null>
+  >;
   let navConfigServiceMock: {
     navConfig: ReturnType<typeof signal<NavConfig>>;
     areInitialTreesReady: ReturnType<typeof signal<boolean>>;
@@ -46,6 +51,8 @@ describe('MagicSideNavComponent', () => {
     isXs = signal(false);
     isMobileSideNavOpen = signal(false);
     browserMatches = false;
+    routerEvents = new Subject<NavigationStart>();
+    currentNavigation = signal<{ extras: { replaceUrl?: boolean } } | null>(null);
     navConfigServiceMock = {
       navConfig: signal(navConfig),
       areInitialTreesReady: signal(false),
@@ -99,7 +106,7 @@ describe('MagicSideNavComponent', () => {
           provide: DataInitStateService,
           useValue: { isAllDataLoadedInitially$: of(false) },
         },
-        { provide: Router, useValue: { events: EMPTY } },
+        { provide: Router, useValue: { events: routerEvents, currentNavigation } },
         { provide: DragDropRegistry, useValue: { pointerUp: EMPTY } },
         {
           provide: ScheduleExternalDragService,
@@ -116,6 +123,32 @@ describe('MagicSideNavComponent', () => {
 
   afterEach(() => {
     fixture?.destroy();
+  });
+
+  it('consumes the temporary drawer entry without backing out of a route navigation', () => {
+    isXs.set(true);
+    let historyState: Record<string, unknown> = {};
+    spyOnProperty(window.history, 'state', 'get').and.callFake(() => historyState);
+    spyOn(window.history, 'pushState').and.callFake((state) => {
+      historyState = state;
+    });
+    spyOn(window.history, 'replaceState').and.callFake((state) => {
+      historyState = state;
+    });
+    const back = spyOn(window.history, 'back');
+    fixture = TestBed.createComponent(MagicSideNavComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.toggleMobileNav();
+    fixture.detectChanges();
+    expect(historyState[HISTORY_STATE.MOBILE_NAVIGATION]).toBe(true);
+    const navigation = { extras: { replaceUrl: false } };
+    currentNavigation.set(navigation);
+    routerEvents.next(new NavigationStart(1, '/scheduled-list', 'imperative'));
+    fixture.detectChanges();
+    expect(back).not.toHaveBeenCalled();
+    expect(navigation.extras.replaceUrl).toBe(true);
+    expect(historyState[HISTORY_STATE.MOBILE_NAVIGATION]).toBeUndefined();
+    expect(fixture.componentInstance.showMobileMenuOverlay()).toBe(false);
   });
 
   it('uses the shared layout breakpoint signal as its mobile source of truth', () => {

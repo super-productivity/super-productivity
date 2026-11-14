@@ -443,6 +443,14 @@ export class MagicNavConfigService {
       });
     }
 
+    items.push({
+      type: 'route',
+      id: 'recurring-tasks',
+      label: T.WW.RECURRING_TASKS,
+      icon: NAV_SECTION_ICON.RECURRING_TASKS,
+      route: '/scheduled-list',
+    });
+
     if (this.isHabitsEnabled()) {
       items.push({
         type: 'route',

@@ -36,8 +36,7 @@ test('opens the overview of all recurring tasks from a project panel', async ({
   const title = `${testPrefix}-recurring`;
   await createRecurringTaskAndOpenProject({ page, workViewPage, taskPage }, title);
 
-  // The overview has no side-nav entry; it is reached from the recurring panel.
-  await expect(page.locator('magic-side-nav a[href="#/scheduled-list"]')).toHaveCount(0);
+  await expect(page.locator('magic-side-nav a[href="#/scheduled-list"]')).toBeVisible();
 
   await page.getByRole('button', { name: 'All recurring tasks', exact: true }).click();
 
