@@ -1,3 +1,4 @@
+import { TextDirectionDirective } from '../../../ui/text-direction/text-direction.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -51,6 +52,7 @@ import { isPathSafeToOpen } from '../../../../../electron/shared-with-frontend/i
   styleUrls: ['./note.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    TextDirectionDirective,
     EnlargeImgDirective,
     LongPressDirective,
     MarkdownComponent,

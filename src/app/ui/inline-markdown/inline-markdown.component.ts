@@ -1,3 +1,4 @@
+import { TextDirectionDirective } from '../text-direction/text-direction.directive';
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
@@ -58,6 +59,7 @@ const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [fadeInAnimation],
   imports: [
+    TextDirectionDirective,
     FormsModule,
     MatIconButton,
     MatTooltip,
