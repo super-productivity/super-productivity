@@ -1,169 +1,830 @@
+/* The app sends its resolved theme colors, so this file holds no palette.
+   Spacing follows a 4px grid. */
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html,
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Open Sans', sans-serif;
+  height: 100%;
+}
+
+body {
+  font-family:
+    'Segoe UI Variable Text',
+    'Segoe UI',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Open Sans',
+    sans-serif;
   overflow: hidden;
   background: transparent;
   user-select: none;
   -webkit-context-menu: none;
-  --scale: 1;
   --opacity: 0.95;
 }
 
-body,
-body * {
-  pointer-events: auto;
+button {
+  appearance: none;
+  flex: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
 
-/* ── Main container ── */
-#task-widget-container {
-  display: flex;
-  align-items: center;
+button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.symbols {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* ── Theme and state ── */
+#widget {
+  --surface: #242424;
+  --text: #e6e6e6;
+  --text-muted: rgba(235, 235, 235, 0.65);
+  --border: rgba(255, 255, 255, 0.12);
+  --primary: #6495ed;
+  --focus: #ff4081;
+  --warning: #ff9800;
+  --project: var(--primary);
+  --disc-track: color-mix(in srgb, var(--text) 12%, transparent);
+  --button: color-mix(in srgb, var(--text) 10%, transparent);
+  --button-hover: color-mix(in srgb, var(--text) 18%, transparent);
+  --warning-text: var(--warning);
+  --focus-text: var(--focus);
+  --c: var(--primary);
+  --time: var(--text);
+  --status: var(--text-muted);
+  /* The app's --ani-standard-timing, so the widget moves like the rest of it. */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --morph: 0.3s;
+  --width: 324px;
+  position: relative;
   width: 100%;
-  height: 100vh;
-  padding: calc(4px * var(--scale));
-  background-color: rgba(255, 255, 255, var(--opacity));
-  border-radius: calc(8px * var(--scale));
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  height: 100%;
+  color: var(--text);
+}
+
+/* Bright warning and accent colors need more ink to be readable on a light surface. */
+#widget[data-theme='light'] {
+  --warning-text: color-mix(in srgb, var(--warning) 52%, var(--text));
+  --focus-text: color-mix(in srgb, var(--focus) 70%, var(--text));
+}
+
+#widget[data-state='paused'],
+#widget[data-state='idle'] {
+  --c: var(--text-muted);
+}
+
+#widget[data-state='paused'] {
+  --time: var(--text-muted);
+}
+
+#widget[data-state='over'] {
+  --c: var(--warning);
+  --time: var(--warning-text);
+  --status: var(--warning-text);
+}
+
+#widget[data-state='focus'] {
+  --c: var(--focus);
+  --time: var(--focus-text);
+  --status: var(--focus-text);
+  --disc-track: color-mix(in srgb, var(--focus) 18%, transparent);
+}
+
+/* ── The shape ──
+   One element that morphs between capsule, bar, panel and pill. The window never
+   changes size, so the whole change is a smooth CSS transition. */
+#shape {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--width);
+  height: 56px;
+  overflow: clip;
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--surface) calc(var(--opacity) * 100%), transparent);
   transition:
-    background-color 0.3s,
-    color 0.3s;
+    left var(--morph) var(--ease),
+    top var(--morph) var(--ease),
+    width var(--morph) var(--ease),
+    height var(--morph) var(--ease),
+    border-radius var(--morph) var(--ease),
+    transform var(--morph) var(--ease);
   -webkit-app-region: drag;
 }
 
-@media (prefers-color-scheme: dark) {
-  #task-widget-container {
-    background-color: rgba(32, 32, 32, var(--opacity));
-    color: #e0e0e0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  }
+/* Drag is inherited, even by pseudo-elements, and drag areas apply in document
+   order. So anything always on screen must come before the buttons, or it covers
+   them with drag and they stop clicking. Setting app-region to none does not help:
+   it cuts a hole instead. */
+#shape::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--border);
+  pointer-events: none;
 }
 
-/* ── Content area ── */
-#content {
-  flex: 1;
-  padding: 0 calc(8px * var(--scale));
-  min-width: 0;
+[data-dock='none'][data-open='true'] #shape {
+  height: 100px;
+}
+
+[data-dock='none'][data-state='idle'] #shape {
+  height: 56px;
+}
+
+[data-dock='right'] #shape {
+  left: calc(100% - 52px);
+  width: 52px;
+  height: 116px;
+  border-radius: 26px 0 0 26px;
+}
+
+[data-dock='left'] #shape {
+  width: 52px;
+  height: 116px;
+  border-radius: 0 26px 26px 0;
+}
+
+[data-dock='right'][data-state='idle'] #shape,
+[data-dock='left'][data-state='idle'] #shape {
+  height: 96px;
+}
+
+[data-dock='right'][data-open='true'] #shape {
+  left: 12px;
+  width: calc(var(--width) - 12px);
+}
+
+[data-dock='left'][data-open='true'] #shape {
+  width: calc(var(--width) - 12px);
+}
+
+[data-dock='top'] #shape {
+  width: calc(var(--time-width, 96px) + 64px);
+  border-radius: 0 0 28px 28px;
+}
+
+[data-dock='top'][data-state='idle'] #shape {
+  width: 98px;
+}
+
+[data-dock='top'][data-open='true'] #shape {
+  width: var(--width);
+  height: 100px;
+}
+
+/* The outline stops at the screen edge. */
+[data-dock='right'] #shape::before {
+  right: -2px;
+}
+
+[data-dock='left'] #shape::before {
+  left: -2px;
+}
+
+[data-dock='top'] #shape::before {
+  top: -2px;
+}
+
+/* ── Faces ──
+   Each layout is drawn once and cross-fades, so text never reflows mid-morph. */
+.face {
+  position: absolute;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease,
+    visibility 0s linear 0.12s;
+}
+
+[data-dock='none'] .face-capsule,
+[data-dock='top'] .face-capsule,
+[data-dock='left'] .face-bar,
+[data-dock='right'] .face-bar,
+[data-dock='left'][data-open='true'] .face-panel,
+[data-dock='right'][data-open='true'] .face-panel {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 0.2s ease 0.08s,
+    visibility 0s;
+}
+
+/* Only the buttons you can see are cut out of the drag area. */
+[data-dock='none'] .face-capsule button,
+[data-dock='top'] .face-capsule button,
+[data-dock='left'] .face-bar button,
+[data-dock='right'] .face-bar button,
+[data-dock='left'][data-open='true'] .face-panel button,
+[data-dock='right'][data-open='true'] .face-panel button {
+  -webkit-app-region: no-drag;
+}
+
+/* ── Disc ── */
+.disc {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.disc::before,
+.wedge {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  mask: radial-gradient(closest-side, transparent 54.5%, #000 56%);
+}
+
+.disc::before {
+  background: var(--disc-track);
+}
+
+.wedge {
+  background: conic-gradient(
+    var(--c) 0 calc(var(--r, 0) * 360deg),
+    transparent calc(var(--r, 0) * 360deg + 0.7deg) 359.3deg,
+    var(--c) 360deg
+  );
+}
+
+[data-base='none'] .disc::before,
+[data-base='idle'] .disc::before {
+  display: none;
+}
+
+[data-base='none'] .wedge,
+[data-base='idle'] .wedge {
+  mask: none;
+  background: none;
+  box-shadow: inset 0 0 0 3px var(--c);
+}
+
+[data-state='over'] .disc::before,
+[data-state='over'] .wedge {
+  mask: none;
+}
+
+.hub {
+  position: absolute;
+  inset: 9px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--text);
+  transition: background-color 0.12s;
 }
 
-#task-title {
-  font-size: calc(20px * var(--scale));
+.disc:hover .hub {
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+}
+
+[data-state='over'] .hub {
+  color: #1c2126;
+}
+
+[data-state='over'] .disc:hover .hub {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.hub svg {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+}
+
+.ico-play,
+[data-running='false'] .ico-pause {
+  display: none;
+}
+
+[data-running='false'] .ico-play {
+  display: block;
+}
+
+/* ── Shared text ── */
+.ttl {
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #333;
 }
 
-@media (prefers-color-scheme: dark) {
-  #task-title {
-    color: #e0e0e0;
-  }
-}
-
-#time-display {
-  font-size: calc(20px * var(--scale));
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: #666;
-  margin-left: auto;
-  padding-left: calc(8px * var(--scale));
+.prj {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
-@media (prefers-color-scheme: dark) {
-  #time-display {
-    color: #aaa;
-  }
+/* The dot takes the same width as the status icon, so both labels line up. */
+.prj i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-inline: 3px;
+  border-radius: 50%;
+  background: var(--project);
 }
 
-/* ── Mode-specific colors ── */
-.mode-pomodoro #time-display {
-  color: #dc3545;
-}
-.mode-focus #time-display {
-  color: #007bff;
-}
-.mode-task #time-display {
-  color: #28a745;
+/* A focus session without a task has no project to show. */
+.prj:has(span:empty) {
+  display: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  .mode-pomodoro #time-display {
-    color: #ff6b7a;
-  }
-  .mode-focus #time-display {
-    color: #5cb3ff;
-  }
-  .mode-task #time-display {
-    color: #5dd66f;
-  }
+.main:has(.prj span:empty) {
+  top: 18px;
 }
 
-/* ── Show-main button ── */
-#show-main {
-  width: calc(32px * var(--scale));
-  height: calc(32px * var(--scale));
-  min-width: 20px;
-  min-height: 20px;
-  border: none;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-  cursor: pointer;
-  color: #666;
-  font-size: calc(12px * var(--scale));
-  transition: all 0.2s;
+.prj span,
+.words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--status);
+}
+
+.st,
+.icon-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--button);
+  color: var(--text);
+  transition: background-color 0.12s;
+}
+
+.icon-btn:hover {
+  background: var(--button-hover);
+}
+
+.icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+[data-action='done'] svg {
+  stroke-width: 2;
+}
+
+[data-state='idle'] [data-action='done'],
+[data-state='idle'] .prj,
+[data-state='idle'] .rt,
+[data-state='idle'] .ts,
+[data-state='idle'] .status {
+  display: none;
+}
+
+/* ── Capsule face ──
+   Keeps its full width while the shape shrinks around it, so the time never
+   slides across the title. Only the pill folds, because its time moves in. */
+.face-capsule {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--width);
+}
+
+[data-dock='right'] .face-capsule {
+  left: auto;
+  right: 0;
+}
+
+[data-dock='top'] .face-capsule {
+  width: 100%;
+}
+
+.face-capsule .disc {
+  left: 8px;
+  top: 8px;
+}
+
+.main {
+  position: absolute;
+  left: 60px;
+  top: 8px;
+  width: calc(var(--width) - 74px - var(--time-width, 96px));
+  /* Waits for the pill to make room, so the time never crosses the title. */
+  transition: opacity 0.14s ease 0.16s;
+}
+
+.main .prj {
+  margin-top: 4px;
+}
+
+[data-state='idle'] .main {
+  top: 18px;
+  width: calc(var(--width) - 124px);
+}
+
+/* The time is the button for the details. It stays small on purpose: the rest
+   of the widget is what you drag it by. */
+.rt,
+.ts {
+  border-radius: 8px;
+  transition: background-color 0.12s;
+}
+
+.rt:hover,
+.ts:hover {
+  background: var(--button);
+}
+
+.rt {
+  position: absolute;
+  right: 10px;
+  top: 14px;
+  height: 28px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time {
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--time);
+  /* Centers on the digits themselves, so they line up with the icon and disc. */
+  text-box: trim-both cap alphabetic;
+}
+
+.idle-open {
+  display: none;
+  position: absolute;
+  left: calc(var(--width) - 44px);
+  top: 14px;
+  transition: opacity 0.14s ease 0.16s;
+}
+
+[data-state='idle'] .idle-open {
+  display: flex;
+}
+
+.more {
+  position: absolute;
+  left: 60px;
+  top: 58px;
+  width: calc(var(--width) - 76px);
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease,
+    visibility 0s linear 0.12s;
+}
+
+.more .status {
+  flex: 1;
+}
+
+[data-open='true'] .more {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 0.2s ease 0.1s,
+    visibility 0s;
+}
+
+[data-state='idle'] .more {
+  display: none;
+}
+
+/* In the pill the title folds away and the time sits right after the disc. */
+[data-dock='top'][data-open='false'] .main {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.06s linear;
+}
+
+/* With nothing running, Open sits right after the disc. */
+[data-dock='top'][data-state='idle'] .idle-open {
+  left: 56px;
+}
+
+/* ── Bar face ── */
+.face-bar {
+  top: 0;
+  bottom: 0;
+  width: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10px;
+}
+
+[data-dock='right'] .face-bar {
+  right: 0;
+}
+
+[data-dock='left'] .face-bar {
+  left: 0;
+}
+
+.face-bar .disc {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+
+.face-bar .hub {
+  inset: 7px;
+}
+
+.face-bar .hub svg {
+  width: 9px;
+  height: 9px;
+}
+
+/* A set width and a curved bottom keep the hover background an even 8px from the
+   bar, even in its rounded corner. */
+.ts {
+  margin-top: 6px;
+  padding: 4px 6px;
+  min-width: 36px;
+  border-radius: 8px 8px 16px 16px;
+}
+
+.ts .st {
+  display: block;
+  margin: 0 auto 4px;
+}
+
+/* With nothing running there is no time to click, so Open sits on the bar. */
+.bar-open {
+  display: none;
+  margin-top: 12px;
+}
+
+[data-state='idle'] .bar-open {
+  display: flex;
+}
+
+.ts b {
+  position: relative;
+  display: block;
+  width: fit-content;
+  margin-inline: auto;
+  font-size: 15px;
+  line-height: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--time);
+}
+
+/* The sign hangs outside the digits, so both lines stay centered under the disc. */
+.sign {
+  position: absolute;
+  right: 100%;
+  margin-right: 1px;
+  font-size: 12px;
+  font-style: normal;
+}
+
+/* ── Panel face ── */
+.face-panel {
+  top: 0;
+  bottom: 0;
+  width: calc(var(--width) - 64px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+[data-dock='right'] .face-panel {
+  right: 52px;
+  padding: 0 4px 0 14px;
+}
+
+[data-dock='left'] .face-panel {
+  left: 52px;
+  flex-direction: row-reverse;
+  padding: 0 14px 0 4px;
+}
+
+/* Done lines up with the disc and Open with the time. */
+.btns {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.txt {
+  flex: 1;
+  min-width: 0;
+}
+
+.txt .prj,
+.txt .status {
+  margin-top: 4px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+}
+
+[data-state='over'] .status,
+[data-state='focus'] .status {
+  color: var(--status);
+}
+
+/* ── Width ──
+   Each end of the capsule sets its width. They come after the faces in the
+   document, so they stay cut out of the drag area, and they stop short of the
+   disc and the time. The mark shows only when the cursor is on one. */
+.resize {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
   -webkit-app-region: no-drag;
-  flex-shrink: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  #show-main {
-    background: rgba(255, 255, 255, 0.1);
-    color: #aaa;
-  }
+[data-dock='none'][data-resizable='true'] .resize {
+  display: block;
 }
 
-#show-main:hover {
-  background: rgba(0, 0, 0, 0.1);
-  transform: scale(1.1);
+.resize[data-side='left'] {
+  left: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  #show-main:hover {
-    background: rgba(255, 255, 255, 0.2);
-  }
+.resize[data-side='right'] {
+  right: 0;
 }
 
-#show-main:active {
-  transform: scale(0.95);
+.resize::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 20px;
+  margin-top: -10px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.12s;
 }
 
-/* ── Responsive width breakpoints ── */
-.size-tiny #task-title {
+.resize[data-side='left']::after {
+  left: 3px;
+}
+
+.resize[data-side='right']::after {
+  right: 3px;
+}
+
+.resize:hover::after,
+.resize:active::after {
+  opacity: 1;
+}
+
+[data-resizing='true'] #shape {
+  transition: none;
+}
+
+/* ── Being dragged toward an edge ──
+   The corners facing the edge flatten as it gets closer, to meet the hint. */
+#shape::after {
+  content: '';
+  position: absolute;
+  background: var(--primary);
+  opacity: var(--near, 0);
+  pointer-events: none;
+}
+
+[data-near='none'] #shape::after {
   display: none;
 }
 
-.size-tiny #show-main {
+[data-near='left'] #shape,
+[data-near='right'] #shape,
+[data-near='top'] #shape {
+  --near-radius: calc(28px * (1 - var(--near, 0)));
+  transition: border-radius 0.08s linear;
+}
+
+[data-near='left'] #shape {
+  border-radius: var(--near-radius) 28px 28px var(--near-radius);
+}
+
+[data-near='right'] #shape {
+  border-radius: 28px var(--near-radius) var(--near-radius) 28px;
+}
+
+[data-near='top'] #shape {
+  border-radius: var(--near-radius) var(--near-radius) 28px 28px;
+}
+
+[data-near='left'] #shape::after,
+[data-near='right'] #shape::after {
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+
+[data-near='left'] #shape::after {
+  left: 0;
+}
+
+[data-near='right'] #shape::after {
+  right: 0;
+}
+
+[data-near='top'] #shape::after {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+[data-locked='true'] #shape::before {
+  box-shadow: inset 0 0 0 1.5px var(--primary);
+}
+
+/* macOS keeps a solid window, so the window is the shape and the OS rounds it. */
+[data-solid='true'] {
+  background: var(--surface);
+}
+
+#widget[data-solid='true'] #shape {
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  transition: none;
+}
+
+[data-solid='true'] #shape::before {
   display: none;
 }
 
-.size-tiny #task-widget-container {
-  justify-content: center;
-}
-
-.size-tiny #content {
-  padding: 0 calc(4px * var(--scale));
-  justify-content: center;
-}
-
-.size-tiny #time-display {
-  margin-left: 0;
-  padding-left: 0;
+@media (prefers-reduced-motion: reduce) {
+  #shape,
+  .face,
+  .main,
+  .idle-open,
+  .more {
+    transition: none;
+  }
 }
