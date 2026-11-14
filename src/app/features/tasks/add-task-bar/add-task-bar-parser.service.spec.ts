@@ -112,6 +112,65 @@ describe('AddTaskBarParserService', () => {
       mockStateService.updateDeadlineRemindOption.calls.reset();
     });
 
+    it('reports a text as parsed only once its own parse has landed', async () => {
+      const input = 'Draft #urgent';
+      const parse = service.parseAndUpdateText(
+        input,
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+      expect(service.isParsed(input)).toBe(false);
+      await parse;
+      expect(service.isParsed(input)).toBe(true);
+      expect(service.isParsed(`${input} suffix`)).toBe(false);
+    });
+
+    it('does not report a superseded parse as landed', async () => {
+      const landed = service.nextParseLanded();
+      const superseded = service.parseAndUpdateText(
+        'Draft',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+      const latest = service.parseAndUpdateText(
+        'Draft suffix',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+      await Promise.all([superseded, latest]);
+      await expectAsync(landed).toBeResolvedTo(true);
+      expect(service.isParsed('Draft')).toBe(false);
+      expect(service.isParsed('Draft suffix')).toBe(true);
+      expect(mockStateService.updateCleanText).toHaveBeenCalledOnceWith('Draft suffix');
+    });
+
+    it('tells a waiting submit when the bar goes away', async () => {
+      const landed = service.nextParseLanded();
+      service.ngOnDestroy();
+      await expectAsync(landed).toBeResolvedTo(false);
+    });
+
+    it('lands a parse that throws as one without syntax', async () => {
+      const input = 'Draft +Project';
+      // Stands in for a date-parser chunk that fails to load
+      const throwingProjects = [null as unknown as Project];
+      await service.parseAndUpdateText(
+        input,
+        mockConfig,
+        throwingProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+      expect(service.isParsed(input)).toBe(true);
+      expect(mockStateService.updateCleanText).toHaveBeenCalledOnceWith(input);
+    });
+
     it('should handle empty text', async () => {
       await service.parseAndUpdateText('', null, [], [], null as any);
       expect(mockStateService.updateCleanText).not.toHaveBeenCalled();
