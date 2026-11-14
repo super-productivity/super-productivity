@@ -7,7 +7,10 @@ import {
   selectTaskEntities,
   SnapshotStructureEntry,
 } from '../../tasks/store/task.selectors';
-import { selectProjectFeatureState } from '../../project/store/project.selectors';
+import {
+  selectProjectFeatureState,
+  selectUnarchivedVisibleProjects,
+} from '../../project/store/project.selectors';
 import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
@@ -15,6 +18,7 @@ import {
 import {
   AndroidWidgetCurrentTask,
   AndroidWidgetData,
+  AndroidWidgetProject,
   AndroidWidgetTask,
 } from '../android-widget.model';
 import { Task } from '../../tasks/task.model';
@@ -177,15 +181,34 @@ const orderTodayTasksLikeTodayScreen = (
   ];
 };
 
+/** Rows a project widget can show; matches the native list's MAX_TASKS. */
+const MAX_WIDGET_PROJECT_TASKS = 20;
+
 /**
- * Projects today's tasks into the exact `widget_data` blob shape, so downstream
+ * Done tasks per project kept for the native tap grace (see selectAndroidWidgetData).
+ * Covers several checkbox taps within the five seconds; more would only be
+ * filtered out natively on every push.
+ */
+const MAX_WIDGET_PROJECT_DONE_TASKS = 5;
+
+/**
+ * Projects today's tasks, plus the tasks of every project a widget can be
+ * pointed at (#9518), into the exact `widget_data` blob shape, so downstream
  * consumers get referential stability from the selector memoization and cheap
  * change detection via JSON comparison in WidgetDataService.
+ *
+ * A project list holds up to 20 open tasks in the project's own order (list, then
+ * backlog), plus its few most recently done tasks in their place. Native shows a
+ * done task only for five seconds after the widget's own checkbox tap on it, by
+ * local tap time (WidgetData.PROJECT_DONE_TASK_GRACE_MS). Such a task is among the
+ * newest done, so keeping those lets the row stay checked through the push that
+ * applies the tap. Done tasks never count against the 20 open rows.
  */
 export const selectAndroidWidgetData = createSelector(
   selectTodayTaskIds,
   selectTaskEntities,
   selectProjectFeatureState,
+  selectUnarchivedVisibleProjects,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
   selectCurrentTaskId,
@@ -195,6 +218,7 @@ export const selectAndroidWidgetData = createSelector(
     todayTaskIds,
     taskEntities,
     projectState,
+    visibleProjects,
     dayStr,
     startOfNextDayDiffMs,
     currentTaskId,
@@ -203,12 +227,7 @@ export const selectAndroidWidgetData = createSelector(
   ): AndroidWidgetData => {
     const tasks: AndroidWidgetTask[] = [];
     const projectColors: { [projectId: string]: string } = {};
-
-    for (const task of orderTodayTasksLikeTodayScreen(todayTaskIds, taskEntities, {
-      laterTodayStructure,
-      todaySections: sectionsByContextId.get(TODAY_TAG.id) ?? [],
-      endOfTodayTime: getEndOfTodayTime(dayStr, startOfNextDayDiffMs),
-    })) {
+    const toWidgetTask = (task: Task): AndroidWidgetTask => {
       const widgetTask: AndroidWidgetTask = {
         id: task.id,
         title: task.title,
@@ -221,8 +240,48 @@ export const selectAndroidWidgetData = createSelector(
           projectColors[task.projectId] = color;
         }
       }
-      tasks.push(widgetTask);
+      return widgetTask;
+    };
+
+    for (const task of orderTodayTasksLikeTodayScreen(todayTaskIds, taskEntities, {
+      laterTodayStructure,
+      todaySections: sectionsByContextId.get(TODAY_TAG.id) ?? [],
+      endOfTodayTime: getEndOfTodayTime(dayStr, startOfNextDayDiffMs),
+    })) {
+      tasks.push(toWidgetTask(task));
     }
+
+    const projects: AndroidWidgetProject[] = visibleProjects.map((project) => {
+      const listed: Task[] = [];
+      const done: Task[] = [];
+      let openCount = 0;
+      for (const taskId of [
+        ...(project.taskIds || []),
+        ...(project.backlogTaskIds || []),
+      ]) {
+        const task = taskEntities[taskId];
+        if (!task) {
+          continue;
+        }
+        if (task.isDone) {
+          done.push(task);
+          listed.push(task);
+        } else if (openCount < MAX_WIDGET_PROJECT_TASKS) {
+          openCount++;
+          listed.push(task);
+        }
+      }
+      const recentlyDone = new Set(
+        sortDoneTasksByDoneDate(done).slice(0, MAX_WIDGET_PROJECT_DONE_TASKS),
+      );
+      return {
+        id: project.id,
+        title: project.title,
+        tasks: listed
+          .filter((task) => !task.isDone || recentlyDone.has(task))
+          .map(toWidgetTask),
+      };
+    });
 
     return {
       v: 1,
@@ -231,6 +290,7 @@ export const selectAndroidWidgetData = createSelector(
       tasks,
       projectColors,
       currentTask: buildLocalCurrentTask(currentTaskId, taskEntities),
+      projects,
     };
   },
 );

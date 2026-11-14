@@ -287,6 +287,15 @@
         android:resource="@xml/appwidget_info" />
     </receiver>
 
+    <activity
+      android:name=".widget.TaskListWidgetConfigureActivity"
+      android:exported="true"
+      android:theme="@style/AppTheme.WidgetConfigure">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+      </intent-filter>
+    </activity>
+
     <service
       android:name=".widget.TaskListWidgetService"
       android:exported="false"

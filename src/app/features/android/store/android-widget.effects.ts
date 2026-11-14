@@ -8,6 +8,7 @@ import {
   debounceTime,
   filter,
   first,
+  map,
   pairwise,
   startWith,
   switchMap,
@@ -27,6 +28,9 @@ import { selectAndroidWidgetData } from './android-widget.selectors';
 import { selectTaskEntities } from '../../tasks/store/task.selectors';
 import { Dictionary } from '@ngrx/entity';
 import { Task } from '../../tasks/task.model';
+import { selectProjectById } from '../../project/store/project.selectors';
+import { Project } from '../../project/project.model';
+import { Router } from '@angular/router';
 
 /**
  * Decides which queued widget checkbox taps become setDone()/setUnDone() calls.
@@ -57,6 +61,11 @@ export const getTaskDoneChangesToApply = (
     .map(([id, isDone]) => ({ id, isDone: isDone as boolean }));
 };
 
+export const getWidgetProjectRoute = (
+  projectId: string,
+  project: Project | undefined,
+): string | null => (project ? `project/${projectId}/tasks` : null);
+
 @Injectable()
 export class AndroidWidgetEffects {
   private _store = inject(Store);
@@ -67,6 +76,7 @@ export class AndroidWidgetEffects {
   private _snackService = inject(SnackService);
   private _hydrationState = inject(HydrationStateService);
   private _dataInitState = inject(DataInitStateService);
+  private _router = inject(Router);
 
   // The selector emission is only a change trigger; pushCurrent() re-reads the
   // store at push time (fresher than debounce-stale data) and dedupes itself.
@@ -145,6 +155,43 @@ export class AndroidWidgetEffects {
             ),
           ),
           tap((taskEntities) => this._drainDoneQueue(taskEntities)),
+        ),
+      { dispatch: false },
+    );
+
+  drainWidgetProjectOpenQueue$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        androidInterface.onWidgetProjectOpenDrainRequest$.pipe(
+          tap(() => {
+            const projectId = androidInterface.getWidgetProjectToOpen?.();
+            if (projectId) {
+              androidInterface.onWidgetProjectOpen$.next(projectId);
+            }
+          }),
+        ),
+      { dispatch: false },
+    );
+
+  openWidgetProject$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        androidInterface.onWidgetProjectOpen$.pipe(
+          concatMap((projectId) =>
+            this._dataInitState.isAllDataLoadedInitially$.pipe(
+              first(),
+              switchMap(() =>
+                this._store.select(selectProjectById, { id: projectId }).pipe(
+                  first(),
+                  map((project) => getWidgetProjectRoute(projectId, project)),
+                ),
+              ),
+            ),
+          ),
+          filter((route): route is string => route !== null),
+          tap((route) => this._router.navigate([route])),
         ),
       { dispatch: false },
     );
