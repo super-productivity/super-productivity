@@ -5,6 +5,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { getLastDeletePayload } from '../../../root-store/meta/undo-task-delete.meta-reducer';
 import { select, Store } from '@ngrx/store';
 import {
+  concatMap,
   delay,
   distinctUntilChanged,
   filter,
@@ -222,15 +223,22 @@ export class TaskUiEffects {
         // A bulk "mark done" plays the sound once itself.
         filter(() => !this._taskMultiSelectService.isBulkFeedbackSuppressed()),
         withLatestFrom(
-          this._workContextService.flatDoneTodayNr$,
           this._globalConfigService.sound$,
           this._store$.select(selectTaskEntities),
         ),
-        filter(([{ task }, , soundCfg, entities]) => {
+        filter(([{ task }, soundCfg, entities]) => {
           const doneTask = entities[task.id as string];
           return !!soundCfg.doneSound && !(doneTask && isWontDoTask(doneTask));
         }),
-        tap(([, doneToday, soundCfg]) => playDoneSound(soundCfg, doneToday)),
+        // Read the count on demand: holding flatDoneTodayNr$ via withLatestFrom
+        // kept it subscribed, re-scanning every task each time-tracking tick.
+        concatMap(([, soundCfg]) =>
+          this._workContextService.flatDoneTodayNr$.pipe(
+            first(),
+            map((doneToday) => ({ soundCfg, doneToday })),
+          ),
+        ),
+        tap(({ soundCfg, doneToday }) => playDoneSound(soundCfg, doneToday)),
       ),
     { dispatch: false },
   );
