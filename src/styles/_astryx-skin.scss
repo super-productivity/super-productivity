@@ -1,0 +1,394 @@
+// -----------------------------------------------------------------------------
+// Astryx skin for Super Productivity — distilled
+//
+// The app is Angular + Angular Material; Astryx (@astryxdesign/core) is React 19
+// + StyleX, so its components cannot be mounted here. What ports is the design
+// language: the Neutral theme's tokens (`src/styles/astryx_tokens.css`, taken
+// verbatim from `@astryxdesign/theme-neutral@0.7.14`) remapped onto this app's
+// own token layer, plus the smallest possible pass over the chrome.
+//
+// Rules this file keeps, in order:
+//   1. Tone separates, lines do not. One hairline survives, where two flat
+//      surfaces of equal value meet: nav against work, column against column.
+//   2. Nothing carries a shadow unless it floats over content.
+//   3. One type scale, one weight step, one accent. Ink is grey; emphasis is a
+//      darker grey, never a hue.
+//   4. Controls are ghost until one of them is the primary action.
+//
+// `light-dark()` in the token file resolves against `color-scheme`, and this app
+// switches modes with `body.isDarkTheme`, so the scheme is pinned there.
+// -----------------------------------------------------------------------------
+
+body {
+  color-scheme: light;
+}
+
+body.isDarkTheme {
+  color-scheme: dark;
+}
+
+body,
+body.isDarkTheme {
+  // ---- type: one family, a full step smaller than the app ships --------------
+  --font-primary-stack: var(--font-family-body);
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-md: 13px;
+  --font-size-lg: 14px;
+  --font-size-xl: 16px;
+  --font-size-2xl: 19px;
+  --font-size-3xl: 23px;
+  --planner-font-size: 12px;
+  --planner-font-size-mobile: 12px;
+
+  // ---- ink: grey, not black --------------------------------------------------
+  --ink-strong: var(--color-text-primary);
+  --ink: light-dark(#3a3a3a, #b0b0b0);
+  --ink-muted: light-dark(#6f6f6f, #8a8a8a);
+
+  // ---- surfaces: two tones, flat --------------------------------------------
+  --surface-0: var(--color-background-body);
+  --surface-1: var(--color-background-card);
+  --surface-2: var(--color-background-card);
+  --surface-3: var(--color-background-card);
+  --surface-4: var(--color-background-popover);
+  --bg-overlay: var(--color-background-body);
+
+  // ---- lines: hairline only where tone cannot separate ----------------------
+  --separator: var(--color-border);
+  --divider: var(--color-border);
+  --extra-border-color: transparent;
+  --card-border-color: transparent;
+
+  // ---- accent + elevation ---------------------------------------------------
+  --brand: var(--color-accent);
+  --focus-ring: var(--color-accent);
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --card-border-radius: var(--radius-lg);
+  --shadow-1: none;
+  --shadow-2: var(--shadow-low);
+  --shadow-3: var(--shadow-med);
+
+  font-family: var(--font-family-body);
+  font-size: 13px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+
+  // Legacy aliases still read by components that predate the token families.
+  --card-bg: var(--color-background-card);
+  --text-color: var(--ink);
+  --text-color-muted: var(--ink-muted);
+  --text-color-inverse: var(--color-background-body);
+  --color-success: var(--color-text-success, var(--color-text-primary));
+  --color-danger: var(--color-text-error, var(--color-text-primary));
+}
+
+// Material's ladder, flattened onto the neutral accent: Astryx Neutral has no
+// product hue, so a blue primary button has nowhere to come from.
+body,
+body.isDarkTheme {
+  --palette-primary-50: var(--color-background-muted);
+  --palette-primary-100: var(--color-background-gray);
+  --palette-primary-200: var(--color-border-emphasized);
+  --palette-primary-300: var(--color-border-emphasized);
+  --palette-primary-400: var(--color-text-secondary);
+  --palette-primary-500: var(--color-accent);
+  --palette-primary-600: var(--color-accent);
+  --palette-primary-700: var(--color-accent);
+  --palette-primary-800: var(--color-accent);
+  --palette-primary-900: var(--color-accent);
+  --palette-primary-contrast-400: var(--color-background-body);
+  --palette-primary-contrast-500: var(--color-background-body);
+  --palette-primary-contrast-600: var(--color-background-body);
+  --palette-primary-contrast-700: var(--color-background-body);
+  --c-primary: var(--color-accent);
+  --c-primary-500: var(--color-accent);
+  --c-accent: var(--color-accent);
+  --mdc-theme-primary: var(--color-accent);
+  --mdc-theme-on-primary: var(--color-background-body);
+  --mat-sys-primary: var(--color-accent);
+  --mat-sys-on-primary: var(--color-background-body);
+  --mat-sys-primary-container: var(--color-background-gray);
+  --mat-sys-on-primary-container: var(--color-text-primary);
+}
+
+// -----------------------------------------------------------------------------
+// Chrome
+// -----------------------------------------------------------------------------
+
+body {
+  // Nav: tone separates it from the work. No border, no shadow, no rule.
+  .nav-sidenav {
+    background: var(--color-background-card);
+    border: 0;
+    box-shadow: none;
+  }
+
+  .nav-item {
+    border-radius: var(--radius-md);
+    margin-inline: 2px;
+    font-size: 12.5px;
+    color: var(--ink);
+
+    &:hover {
+      background: var(--color-background-muted);
+    }
+
+    &.is-active,
+    &.active {
+      background: var(--color-background-gray);
+      color: var(--color-text-primary);
+      font-weight: var(--font-weight-medium);
+
+      * {
+        color: inherit;
+      }
+    }
+  }
+
+  .nav-separator {
+    background: transparent;
+    height: 0;
+  }
+
+  // Rows: flat, one hover tone, no card inside the list.
+  task .box {
+    border-radius: var(--radius-md);
+
+    &:hover {
+      background: var(--color-background-muted);
+    }
+  }
+
+  task .title {
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  // Planner / schedule: columns separated by one hairline, nothing else.
+  planner-day {
+    border-inline-end: 1px solid var(--color-border);
+
+    &:last-child {
+      border-inline-end: 0;
+    }
+
+    header {
+      font-family: var(--font-family-body);
+      font-weight: var(--font-weight-medium);
+      font-size: 12px;
+      color: var(--ink-muted);
+      text-transform: none;
+    }
+  }
+
+  .schedule-day {
+    border-color: var(--color-border);
+    font-size: 12px;
+  }
+
+  // Controls: ghost by default, one filled primary action.
+  .mat-mdc-unelevated-button,
+  .mat-mdc-raised-button,
+  .mat-mdc-outlined-button,
+  .mat-mdc-button {
+    border-radius: var(--radius-md);
+    font-size: 12.5px;
+    font-weight: var(--font-weight-medium);
+    letter-spacing: 0;
+  }
+
+  .mat-mdc-outlined-button {
+    border-color: var(--color-border-emphasized);
+  }
+
+  .mat-mdc-icon-button {
+    border-radius: var(--radius-full);
+    color: var(--ink-muted);
+  }
+
+  .mat-mdc-text-field-wrapper,
+  .mat-mdc-form-field .mdc-text-field--filled {
+    border-radius: var(--radius-md);
+    background: var(--color-background-muted);
+    font-size: 13px;
+  }
+
+  // Floating surfaces are the only things allowed to carry elevation.
+  .mat-mdc-menu-panel,
+  .mat-mdc-select-panel,
+  .mat-mdc-dialog-surface {
+    border-radius: var(--radius-lg);
+    border: 0;
+    box-shadow: var(--shadow-med);
+    background: var(--color-background-popover);
+  }
+
+  // Cards stay flat: a settings group is a label plus rows, not a slab.
+  .mat-mdc-card {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .mat-mdc-chip {
+    border-radius: var(--radius-full);
+    background: var(--color-background-muted);
+    font-size: 11.5px;
+  }
+
+  tag {
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+
+  // Headings carry hierarchy by weight and size alone.
+  h1,
+  h2,
+  h3,
+  .page-title {
+    font-family: var(--font-family-body);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.01em;
+    color: var(--ink-strong);
+  }
+
+  h1,
+  .page-title {
+    font-size: 19px;
+  }
+
+  h2 {
+    font-size: 15px;
+  }
+
+  h3 {
+    font-size: 13px;
+  }
+
+  // Tooltips: inverted ink chip, no border, no shadow.
+  .mat-mdc-tooltip .mdc-tooltip__surface,
+  .mat-mdc-tooltip-surface {
+    border-radius: var(--radius-sm);
+    background: var(--color-text-primary);
+    color: var(--color-background-body);
+    font-size: 11px;
+    font-weight: var(--font-weight-medium);
+    box-shadow: none;
+  }
+
+  .mat-mdc-snack-bar-container .mdc-snackbar__surface,
+  .mat-snack-bar-container {
+    border-radius: var(--radius-lg);
+    background: var(--color-text-primary);
+    color: var(--color-background-body);
+    border: 0;
+    box-shadow: var(--shadow-med);
+  }
+
+  .mat-mdc-dialog-title,
+  .mat-mdc-dialog-container h2 {
+    font-size: 16px;
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0;
+  }
+
+  .mat-mdc-dialog-actions {
+    border-top: 0;
+  }
+
+  // Mobile chrome: tone, not a rule.
+  .mobile-bottom-nav {
+    background: var(--color-background-card);
+    border-top: 1px solid var(--color-border);
+    box-shadow: none;
+
+    .nav-button.is-active,
+    .nav-button.active {
+      color: var(--color-text-primary);
+      background: var(--color-background-gray);
+      border-radius: var(--radius-md);
+    }
+  }
+
+  .hint-chip,
+  quick-tour-card .card {
+    background: var(--color-background-popover);
+    color: var(--ink);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-low);
+    font-size: 12px;
+  }
+
+  .add-task-bar,
+  .add-task-bar-panel,
+  add-task-bar .input-wrapper {
+    border-radius: var(--radius-lg);
+  }
+
+  // Focus: one 2px ink ring on borderless controls; a text field keeps its own
+  // 1px accent hairline, so the ring never stacks on top of a border.
+  :where(a, button, [role='button'], [role='tab'], [role='menuitem'], summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [contenteditable]:focus-visible {
+    outline: none;
+  }
+
+  .mat-mdc-form-field.mat-focused {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--color-accent) !important;
+      border-width: 1px !important;
+    }
+
+    .mdc-line-ripple::before,
+    .mdc-line-ripple::after {
+      border-bottom-width: 1px;
+    }
+  }
+
+  // Slide toggle: Material paints its own MDC layer, so the ladder misses it.
+  .mat-mdc-slide-toggle {
+    .mdc-switch__track::before,
+    .mdc-switch__track::after {
+      border-color: var(--color-border-emphasized);
+    }
+
+    .mdc-switch--selected .mdc-switch__track::before,
+    .mdc-switch--selected .mdc-switch__track::after {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+    }
+
+    .mdc-switch--selected .mdc-switch__handle::after {
+      background: var(--color-background-body);
+    }
+
+    .mdc-switch--unselected .mdc-switch__handle::after {
+      background: var(--color-icon-secondary);
+    }
+  }
+
+  // Browser surfaces belong to the palette too.
+  ::selection {
+    background: var(--color-background-gray);
+    color: var(--color-text-primary);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-emphasized) transparent;
+  }
+}
