@@ -20,6 +20,8 @@ export interface AssistantAccessState {
   hasCredential: boolean;
   /** Whether the shared loopback listener is up. */
   isListening: boolean;
+  /** The port of the shared listener. */
+  port: number;
   error?: 'PORT_IN_USE' | 'PERMISSION_DENIED' | 'UNKNOWN';
 }
 

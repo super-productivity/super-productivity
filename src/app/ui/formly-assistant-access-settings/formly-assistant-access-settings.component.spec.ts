@@ -22,6 +22,7 @@ describe('FormlyAssistantAccessSettingsComponent', () => {
     scopes: [],
     hasCredential: false,
     isListening: true,
+    port: 3876,
     ...overrides,
   });
 
@@ -143,6 +144,23 @@ describe('FormlyAssistantAccessSettingsComponent', () => {
     });
   });
 
+  it('uses the port main reports in the setup snippets', async () => {
+    // The default until the state arrives.
+    expect(component.url()).toBe('http://127.0.0.1:3876/mcp');
+
+    setEa({
+      getAssistantAccessState: jasmine.createSpy().and.resolveTo(state({ port: 3877 })),
+    });
+    fixture.detectChanges();
+    await settle();
+
+    expect(component.url()).toBe('http://127.0.0.1:3877/mcp');
+    expect(component.claudeCodeSnippet()).toContain('http://127.0.0.1:3877/mcp --header');
+    expect(JSON.parse(component.jsonSnippet()).mcpServers['super-productivity'].url).toBe(
+      'http://127.0.0.1:3877/mcp',
+    );
+  });
+
   it('reports a change that could not be saved', async () => {
     setEa({
       setAssistantAccessEnabled: jasmine.createSpy().and.rejectWith(new Error('EACCES')),
@@ -204,8 +222,14 @@ describe('FormlyAssistantAccessSettingsComponent', () => {
   });
 
   it('links the Claude Desktop extension from the setup section', async () => {
-    const extensionLink = async (channel: string): Promise<HTMLAnchorElement | null> => {
-      setEa({ getDistChannel: () => channel });
+    const extensionLink = async (
+      channel: string,
+      port = 3876,
+    ): Promise<HTMLAnchorElement | null> => {
+      setEa({
+        getDistChannel: () => channel,
+        getAssistantAccessState: jasmine.createSpy().and.resolveTo(state({ port })),
+      });
       // The channel is read once, when the component is created.
       fixture = TestBed.createComponent(FormlyAssistantAccessSettingsComponent);
       fixture.componentInstance.field = { props: {}, templateOptions: {} } as never;
@@ -220,6 +244,28 @@ describe('FormlyAssistantAccessSettingsComponent', () => {
     expect(link?.target).toBe('_blank');
     expect(link?.textContent).toContain(T.GCF.MISC.ASSISTANT_ACCESS_SETUP_CLAUDE_DESKTOP);
     expect(await extensionLink('linux-native')).toBeNull();
+    // The extension only reaches the default port.
+    expect(await extensionLink('mac-dmg', 3877)).toBeNull();
+  });
+
+  it('shows no setup snippets before main has reported the state', async () => {
+    setEa({ getAssistantAccessState: () => new Promise(() => undefined) });
+    fixture.detectChanges();
+    await settle();
+
+    expect(component.state()).toBeNull();
+    expect(fixture.nativeElement.querySelector('.snippet')).toBeNull();
+  });
+
+  it('shows no setup snippets when the state could not be read', async () => {
+    setEa({
+      getAssistantAccessState: jasmine.createSpy().and.rejectWith(new Error('IPC')),
+    });
+    fixture.detectChanges();
+    await settle();
+
+    expect(component.state()).toBeNull();
+    expect(fixture.nativeElement.querySelector('.snippet')).toBeNull();
   });
 
   it('does not throw when the Electron bridge is unavailable', async () => {
