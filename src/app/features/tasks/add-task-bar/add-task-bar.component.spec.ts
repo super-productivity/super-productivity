@@ -285,6 +285,32 @@ describe('AddTaskBarComponent', () => {
     component = fixture.componentInstance;
   });
 
+  describe('draft images', () => {
+    it('includes draft images in the task creation and clears them after saving', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      const attachment = {
+        id: 'image-1',
+        type: 'IMG' as const,
+        path: 'indexeddb://image-1',
+      };
+      spyOn(component.draftImages, 'attachments').and.returnValue([attachment]);
+      const remove = spyOn(component.draftImages, 'remove');
+      component.stateService.updateInputTxt('Task with image');
+      await component.addTask();
+      expect(mockTaskService.add.calls.mostRecent().args[2]?.attachments).toContain(
+        attachment,
+      );
+      expect(remove).toHaveBeenCalledWith('image-1');
+    });
+
+    it('does not submit while a draft image is still saving', async () => {
+      spyOn(component.draftImages, 'isLoading').and.returnValue(true);
+      component.stateService.updateInputTxt('Task with pending image');
+      await component.addTask();
+      expect(mockTaskService.add).not.toHaveBeenCalled();
+    });
+  });
+
   describe('highlightSegments', () => {
     it('splits the input by the ranges parsed from that exact text', () => {
       component.stateService.updateInputTxt('Buy milk #shop');
@@ -1539,6 +1565,16 @@ describe('AddTaskBarComponent', () => {
   describe('document click handling', () => {
     beforeEach(() => {
       fixture.detectChanges();
+    });
+
+    it('keeps the draft open when clicking the image preview overlay', () => {
+      const overlay = document.createElement('div');
+      overlay.className = 'enlarged-image-wrapper';
+      const image = document.createElement('img');
+      overlay.appendChild(image);
+      const done = spyOn(component.done, 'emit');
+      component.onDocumentClick({ target: image } as unknown as MouseEvent);
+      expect(done).not.toHaveBeenCalled();
     });
 
     it('should emit done when clicking outside and no dialog is open', () => {

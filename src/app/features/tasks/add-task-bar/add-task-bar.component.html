@@ -75,7 +75,7 @@
           class="e2e-add-task-submit add-task-submit-btn"
           (click)="onSubmitBtnClick()"
           type="submit"
-          [disabled]="!isSubmitVisible()"
+          [disabled]="!isSubmitVisible() || draftImages.isLoading()"
           [attr.aria-label]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK | translate"
           [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK | translate"
           matTooltipPosition="above"
@@ -102,6 +102,41 @@
       }
     </div>
   </div>
+
+  @if (!isSearchMode() && draftImages.images().length) {
+    <div class="draft-images">
+      @for (image of draftImages.images(); track image.id) {
+        <div class="draft-image">
+          <button
+            class="draft-image-preview"
+            type="button"
+            [disabled]="image.isLoading"
+            [matTooltip]="image.title"
+            [attr.aria-label]="image.title"
+            [enlargeImg]="image.preview"
+          >
+            @if (image.preview) {
+              <img
+                [src]="image.preview"
+                [alt]="image.title"
+              />
+            } @else {
+              <span role="status">{{ T.G.PROCESSING | translate }}</span>
+            }
+          </button>
+          <button
+            class="draft-image-remove"
+            type="button"
+            [attr.aria-label]="T.G.REMOVE | translate"
+            [matTooltip]="T.G.REMOVE | translate"
+            (click)="draftImages.remove(image.id)"
+          >
+            ×
+          </button>
+        </div>
+      }
+    </div>
+  }
 
   <!-- Add-to-top/bottom and search toggles. They are prepended to the actions
        row (create mode) or the search info row so they scroll together with the
