@@ -122,3 +122,38 @@ describe('CalDAV display name (#9144)', () => {
     expect(getIssueProviderInitials(caldavProvider())).toBe('DA');
   });
 });
+describe('iCal display name', () => {
+  const icalProvider = (overrides: Record<string, unknown> = {}): IssueProvider =>
+    ({
+      id: 'ip-1',
+      issueProviderKey: 'ICAL',
+      icalUrl: 'https://calendar.google.com/calendar/ical/secret/basic.ics',
+      ...overrides,
+    }) as unknown as IssueProvider;
+
+  it('prefers the user-entered name over the host', () => {
+    expect(getIssueProviderTooltip(icalProvider({ name: 'Work' }))).toBe('Work');
+  });
+
+  it('falls back to the host when name is empty', () => {
+    expect(getIssueProviderTooltip(icalProvider({ name: '' }))).toBe(
+      'calendar.google.com',
+    );
+  });
+
+  it('derives initials from the name when present', () => {
+    expect(getIssueProviderInitials(icalProvider({ name: 'Work' }))).toBe('WO');
+  });
+
+  it('keeps the google initial when no name is set', () => {
+    expect(getIssueProviderInitials(icalProvider())).toBe('G');
+  });
+
+  it('ignores a whitespace-only name and trims padding', () => {
+    expect(getIssueProviderTooltip(icalProvider({ name: '  ' }))).toBe(
+      'calendar.google.com',
+    );
+    expect(getIssueProviderInitials(icalProvider({ name: '  ' }))).toBe('G');
+    expect(getIssueProviderInitials(icalProvider({ name: ' Work' }))).toBe('WO');
+  });
+});
