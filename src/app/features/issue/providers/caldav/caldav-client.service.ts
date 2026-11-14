@@ -2,8 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { CaldavCfg } from './caldav.model';
 // @ts-ignore
 import type DavClient from '@nextcloud/cdav-library';
-// @ts-ignore
-import type Calendar from 'cdav-library/models/calendar';
 import { loadIcalModule } from '../../../schedule/ical/ical-lazy-loader';
 
 import { from, Observable, throwError } from 'rxjs';
@@ -23,45 +21,83 @@ import { toBasicAuthHeader } from '../../../../util/to-basic-auth-header';
 // Loaded on first use to keep the library out of the initial bundle.
 // @ts-ignore
 const loadCdavLibrary = (): Promise<any> => import('@nextcloud/cdav-library');
+// Transitive dep of @nextcloud/cdav-library@2.x (xhrProvider was removed).
+// @ts-ignore
+const loadNextcloudAxios = (): Promise<any> => import('@nextcloud/axios');
 
-/** Subset of the XMLHttpRequest surface that @nextcloud/cdav-library v1.5.3 actually uses. */
-interface XhrLike {
-  open(method: string, url: string): void;
-  send(body?: string | null): void;
-  setRequestHeader(name: string, value: string): void;
-  getResponseHeader(name: string): string | null;
-  getAllResponseHeaders(): string;
-  addEventListener(type: string, listener: (...args: unknown[]) => void): void;
-  removeEventListener(type: string, listener: (...args: unknown[]) => void): void;
-  abort(): void;
-  status: number;
-  statusText: string;
-  responseText: string;
-  response: string;
-  readyState: number;
-  onload: ((event: unknown) => void) | null;
-  onerror: ((event: unknown) => void) | null;
-  onabort: ((event: unknown) => void) | null;
-  onreadystatechange: ((event: unknown) => void) | null;
+/** Minimal calendar surface used by this service (cdav-library no longer deep-exports models). */
+interface CalendarLike {
+  url: string;
+  displayname?: string;
+  readOnly?: boolean;
+  calendarQuery: (query: unknown[]) => Promise<CalDavTaskData[]>;
+  createObject: (
+    name: string,
+    headers: Record<string, string>,
+    data: string,
+  ) => Promise<unknown>;
 }
 
 interface ClientCache {
   client: DavClient;
-  calendars: Map<string, Calendar>;
+  calendars: Map<string, CalendarLike>;
 }
 
 interface CalendarHomeLike {
   displayname?: string;
   url: string;
-  findAllCalendars: () => Promise<Calendar[]>;
+  findAllCalendars: () => Promise<CalendarLike[]>;
 }
+
+/** Loose axios shapes we touch; avoid depending on axios types at the app root. */
+interface AxiosHeaderBag {
+  dav?: string;
+  get?: (name: string) => string | undefined;
+  set?: (name: string, value: string) => void;
+  [name: string]: unknown;
+}
+
+interface AxiosRequestConfigLike {
+  url?: string;
+  method?: string;
+  headers?: AxiosHeaderBag | Record<string, unknown>;
+  data?: unknown;
+  signal?: AbortSignal;
+}
+
+interface AxiosResponseLike {
+  data: unknown;
+  status: number;
+  statusText: string;
+  headers: AxiosHeaderBag;
+  config: AxiosRequestConfigLike;
+  request: unknown;
+}
+
+interface AxiosInstanceLike {
+  defaults: { adapter?: unknown };
+  request: (config: AxiosRequestConfigLike) => Promise<AxiosResponseLike>;
+}
+
+interface DavRequestLike {
+  request: (
+    method: string,
+    url: string,
+    headers?: Record<string, unknown>,
+    body?: string | null,
+    abortSignal?: AbortSignal | null,
+  ) => Promise<{ body: unknown; status: number; headers: AxiosHeaderBag }>;
+}
+
+/** Enough of a DAV feature list for connect() when a proxy omits the DAV header. */
+const FALLBACK_DAV_HEADER = '1, calendar-access';
 
 interface CalDavTaskData {
   data: string;
   url: string;
   etag: string;
-  update?: () => Promise<void>;
-  delete?: (headers?: Record<string, string>) => Promise<void>;
+  update?: () => Promise<unknown>;
+  delete?: (headers?: Record<string, string>) => Promise<unknown>;
 }
 
 @Injectable({
@@ -114,10 +150,10 @@ export class CaldavClientService {
   }
 
   private static _findMatchingCalendar(
-    calendars: Calendar[],
+    calendars: CalendarLike[],
     resource: string,
     calendarHome: CalendarHomeLike,
-  ): Calendar | undefined {
+  ): CalendarLike | undefined {
     const concreteCalendars = calendars.filter(
       (item) => !CaldavClientService._isSameCalDavPath(item.url, calendarHome.url),
     );
@@ -134,7 +170,7 @@ export class CaldavClientService {
   }
 
   private static async _getAllTodos(
-    calendar: Calendar,
+    calendar: CalendarLike,
     filterOpen: boolean,
   ): Promise<CalDavTaskData[]> {
     const { namespaces: NS } = await loadCdavLibrary();
@@ -174,7 +210,7 @@ export class CaldavClientService {
    * (Vikunja, #11182), so taking the first result reads or writes another task.
    */
   private static async _findTaskByUid(
-    calendar: Calendar,
+    calendar: CalendarLike,
     taskUid: string,
   ): Promise<CalDavTaskData[]> {
     const { namespaces: NS } = await loadCdavLibrary();
@@ -296,13 +332,6 @@ export class CaldavClientService {
     return hash;
   }
 
-  private static _getResponseHeaderWithDavFallback(
-    name: string,
-    value: string | null,
-  ): string | null {
-    return value === null && name.toLowerCase() === 'dav' ? '' : value;
-  }
-
   async _get_client(cfg: CaldavCfg): Promise<ClientCache> {
     this._checkSettings(cfg);
 
@@ -311,17 +340,23 @@ export class CaldavClientService {
     if (this._clientCache.has(client_key)) {
       return this._clientCache.get(client_key) as ClientCache;
     } else {
+      await this._prepareHttpTransport();
       const { default: DavClient } = await loadCdavLibrary();
-      const client = new DavClient(
-        {
-          rootUrl: cfg.caldavUrl,
+      // v2 removed xhrProvider; auth goes through defaultHeaders, native HTTP
+      // through a custom @nextcloud/axios adapter installed above.
+      const client = new DavClient({
+        rootUrl: cfg.caldavUrl,
+        defaultHeaders: {
+          Authorization: toBasicAuthHeader(cfg.username, cfg.password),
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'X-Requested-With': 'SuperProductivity',
         },
-        this._getXhrProvider(cfg),
-      );
+      });
+      this._ensureDavHeaderFallback(client);
 
       await client
         .connect({ enableCalDAV: true })
-        .catch((err) => this._handleNetErr(err));
+        .catch((err: unknown) => this._handleNetErr(err));
 
       const cache = {
         client,
@@ -333,17 +368,18 @@ export class CaldavClientService {
     }
   }
 
-  async _getCalendar(cfg: CaldavCfg): Promise<Calendar> {
+  async _getCalendar(cfg: CaldavCfg): Promise<CalendarLike> {
     const clientCache = await this._get_client(cfg);
     const resource = cfg.resourceName as string;
 
     if (clientCache.calendars.has(resource)) {
-      return clientCache.calendars.get(resource);
+      return clientCache.calendars.get(resource)!;
     }
 
     let lastCalendarHomeError: unknown;
 
-    for (const calendarHome of clientCache.client.calendarHomes as CalendarHomeLike[]) {
+    for (const calendarHome of clientCache.client
+      .calendarHomes as unknown as CalendarHomeLike[]) {
       const calendars = await calendarHome.findAllCalendars().catch((err: unknown) => {
         lastCalendarHomeError = err;
         return null;
@@ -461,166 +497,115 @@ export class CaldavClientService {
     return WebDavHttp.request(options);
   }
 
-  private _getXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
-    if (this.isNativePlatform) {
-      return this._getNativeXhrProvider(cfg);
+  /**
+   * cdav-library@2 uses @nextcloud/axios (no xhrProvider). On native WebViews,
+   * browser HTTP is CORS-blocked, so point that shared axios instance at
+   * Capacitor WebDavHttp instead.
+   */
+  private async _prepareHttpTransport(): Promise<void> {
+    if (!this.isNativePlatform) {
+      return;
     }
-
-    // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-    function xhrProvider(): XMLHttpRequest {
-      const xhr = new XMLHttpRequest();
-      const oldOpen = xhr.open;
-      const oldGetResponseHeader = xhr.getResponseHeader;
-
-      // override open() method to add headers
-
-      xhr.open = function (): void {
-        // @ts-ignore
-        // eslint-disable-next-line prefer-rest-params
-        const result = oldOpen.apply(this, arguments);
-        // @ts-ignore
-        xhr.setRequestHeader('X-Requested-With', 'SuperProductivity');
-        xhr.setRequestHeader(
-          'Authorization',
-          toBasicAuthHeader(cfg.username, cfg.password),
-        );
-        return result;
-      };
-      xhr.getResponseHeader = function (
-        this: XMLHttpRequest,
-        name: string,
-      ): string | null {
-        return CaldavClientService._getResponseHeaderWithDavFallback(
-          name,
-          oldGetResponseHeader.call(this, name),
-        );
-      };
-      return xhr;
-    }
-
-    return xhrProvider;
+    const axiosMod = await loadNextcloudAxios();
+    const axios = axiosMod.default as AxiosInstanceLike;
+    axios.defaults.adapter = this._createNativeAxiosAdapter();
   }
 
-  // On native platforms (Android WebView, iOS WKWebView), XHR is blocked by
-  // CORS. We use the native WebDavHttp Capacitor plugin (OkHttp / URLSession)
-  // which bypasses the WebView's CORS restrictions.
-  private _getNativeXhrProvider(cfg: CaldavCfg): () => XMLHttpRequest {
-    return (): XMLHttpRequest => {
-      const headers: Record<string, string> = {
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        'X-Requested-With': 'SuperProductivity',
-        Authorization: toBasicAuthHeader(cfg.username, cfg.password),
-      };
-      let method = 'GET';
-      let url = '';
-      let aborted = false;
-      const responseHeaders: Record<string, string> = {};
-      const eventListeners = new Map<string, ((...args: unknown[]) => void)[]>();
+  /**
+   * v2.x throws if the OPTIONS DAV header is missing/empty. Proxies and some
+   * native HTTP stacks omit it; synthesize a minimal feature list so connect()
+   * can proceed (advertisedFeatures is not used for control flow).
+   */
+  private _ensureDavHeaderFallback(client: DavClient): void {
+    const request = (client as unknown as { _request: DavRequestLike })._request;
+    const originalRequest = request.request.bind(request);
+    request.request = async (
+      method: string,
+      url: string,
+      headers: Record<string, unknown> = {},
+      body: string | null = null,
+      abortSignal: AbortSignal | null = null,
+    ) => {
+      const response = await originalRequest(method, url, headers, body, abortSignal);
+      CaldavClientService._applyDavHeaderFallback(response.headers);
+      return response;
+    };
+  }
 
-      const fakeXhr: XhrLike = {
-        status: 0,
+  private static _applyDavHeaderFallback(headers: AxiosHeaderBag): void {
+    const existing =
+      (typeof headers.get === 'function' ? headers.get('dav') : undefined) ??
+      (typeof headers.dav === 'string' ? headers.dav : undefined);
+    if (typeof existing === 'string' && existing.trim() !== '') {
+      return;
+    }
+    if (typeof headers.set === 'function') {
+      headers.set('dav', FALLBACK_DAV_HEADER);
+      return;
+    }
+    headers.dav = FALLBACK_DAV_HEADER;
+  }
+
+  private static _stringifyHeaders(
+    headers: AxiosHeaderBag | Record<string, unknown> | undefined,
+  ): Record<string, string> {
+    const out: Record<string, string> = {};
+    if (!headers) {
+      return out;
+    }
+    for (const [name, value] of Object.entries(headers)) {
+      if (value == null || typeof value === 'function') {
+        continue;
+      }
+      // Coerce like a real XHR: cdav-library still passes numeric Depth, and the
+      // iOS plugin drops all headers if any value is not a string (#11232).
+      out[name] = String(value);
+    }
+    return out;
+  }
+
+  private _createNativeAxiosAdapter(): (
+    config: AxiosRequestConfigLike,
+  ) => Promise<AxiosResponseLike> {
+    return async (config: AxiosRequestConfigLike): Promise<AxiosResponseLike> => {
+      if (config.signal?.aborted) {
+        const abortErr = new Error('Request aborted');
+        abortErr.name = 'CanceledError';
+        throw abortErr;
+      }
+      const url = config.url;
+      if (!url) {
+        throw new Error('CalDAV native adapter: missing request URL');
+      }
+      const headers = CaldavClientService._stringifyHeaders(config.headers);
+      const data =
+        config.data == null
+          ? undefined
+          : typeof config.data === 'string'
+            ? config.data
+            : String(config.data);
+
+      const res = await this._webDavRequest({
+        url,
+        method: (config.method || 'GET').toUpperCase(),
+        headers,
+        data,
+      });
+
+      const responseHeaders: AxiosHeaderBag = {};
+      for (const [k, v] of Object.entries(res.headers || {})) {
+        responseHeaders[k.toLowerCase()] = v;
+      }
+      CaldavClientService._applyDavHeaderFallback(responseHeaders);
+
+      return {
+        data: res.data || '',
+        status: res.status,
         statusText: '',
-        responseText: '',
-        response: '',
-        readyState: 0,
-        onload: null,
-        onerror: null,
-        onabort: null,
-        onreadystatechange: null,
-
-        open: (m: string, u: string): void => {
-          method = m;
-          url = u;
-          fakeXhr.readyState = 1;
-        },
-
-        setRequestHeader: (name: string, value: string): void => {
-          // Coerce like a real XHR: cdav-library passes numeric Depth values, and
-          // the iOS plugin drops all headers if any value is not a string (#11232).
-          headers[name] = String(value);
-        },
-
-        send: (body?: string | null): void => {
-          this._webDavRequest({
-            url,
-            method,
-            headers,
-            data: body ?? undefined,
-          }).then(
-            (res) => {
-              if (aborted) return;
-              fakeXhr.status = res.status;
-              fakeXhr.statusText = '';
-              fakeXhr.responseText = res.data || '';
-              fakeXhr.response = res.data || '';
-              fakeXhr.readyState = 4;
-              if (res.headers) {
-                for (const [k, v] of Object.entries(res.headers)) {
-                  responseHeaders[k.toLowerCase()] = v;
-                }
-              }
-              const event = { target: fakeXhr, type: 'load' };
-              // cdav-library v1.5.3 uses onreadystatechange exclusively; fire it
-              // first so its readyState === 4 check passes, then fire onload for
-              // any other consumers.
-              fakeXhr.onreadystatechange?.(event);
-              fakeXhr.onload?.(event);
-              [...(eventListeners.get('load') ?? [])].forEach((fn) => fn(event));
-            },
-            (err: unknown) => {
-              if (aborted) return;
-              fakeXhr.readyState = 4;
-              const event = { target: fakeXhr, type: 'error', error: err };
-              fakeXhr.onreadystatechange?.(event);
-              fakeXhr.onerror?.(event);
-              [...(eventListeners.get('error') ?? [])].forEach((fn) => fn(event));
-            },
-          );
-        },
-
-        getResponseHeader: (name: string): string | null => {
-          return CaldavClientService._getResponseHeaderWithDavFallback(
-            name,
-            responseHeaders[name.toLowerCase()] ?? null,
-          );
-        },
-
-        getAllResponseHeaders: (): string => {
-          return Object.entries(responseHeaders)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join('\r\n');
-        },
-
-        addEventListener: (
-          type: string,
-          callback: (...args: unknown[]) => void,
-        ): void => {
-          if (!eventListeners.has(type)) {
-            eventListeners.set(type, []);
-          }
-          eventListeners.get(type)!.push(callback);
-        },
-
-        removeEventListener: (
-          type: string,
-          callback: (...args: unknown[]) => void,
-        ): void => {
-          const listeners = eventListeners.get(type);
-          if (listeners) {
-            const idx = listeners.indexOf(callback);
-            if (idx !== -1) listeners.splice(idx, 1);
-          }
-        },
-
-        abort: (): void => {
-          aborted = true;
-          const event = { target: fakeXhr, type: 'abort' };
-          fakeXhr.onabort?.(event);
-          [...(eventListeners.get('abort') ?? [])].forEach((fn) => fn(event));
-        },
+        headers: responseHeaders,
+        config,
+        request: {},
       };
-
-      return fakeXhr as unknown as XMLHttpRequest;
     };
   }
 
