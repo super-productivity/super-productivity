@@ -102,6 +102,8 @@ import {
 import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 import { isWontDoTask } from '../util/is-wont-do-task';
+import { PluginTaskHistoryService } from '../../../plugins/plugin-task-history.service';
+import { PluginIndexComponent } from '../../../plugins/ui/plugin-index/plugin-index.component';
 
 @Component({
   selector: 'task-detail-panel',
@@ -115,6 +117,7 @@ import { isWontDoTask } from '../util/is-wont-do-task';
     fadeAnimation,
   ],
   imports: [
+    PluginIndexComponent,
     TaskTitleComponent,
     TaskDetailItemComponent,
     MatIcon,
@@ -144,6 +147,15 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   // Services
   attachmentService = inject(TaskAttachmentService);
   taskService = inject(TaskService);
+  private readonly _pluginTaskDetailBlocks = inject(PluginTaskHistoryService).blocks;
+  readonly pluginTaskDetailBlocks = computed(() => {
+    const taskId = this.task().id;
+    return this._pluginTaskDetailBlocks().map((block) => ({
+      ...block,
+      taskId,
+      key: `${taskId}:${block.pluginId}:${block.id}`,
+    }));
+  });
   layoutService = inject(LayoutService);
 
   private _clipboardImageService = inject(ClipboardImageService);
