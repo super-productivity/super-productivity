@@ -225,8 +225,77 @@ export const sendSyncImportExistsReply = (
   });
 };
 
+type StorageQuotaCheck = { allowed: boolean; currentUsage: number; quota: number };
+
 /**
- * Check storage quota, recalculate if stale, and auto-cleanup if needed.
+ * Check the cached quota and, on a miss, reconcile the counter once and
+ * re-check. Shared by both quota gates so their reconcile-before-reject
+ * behavior cannot drift apart.
+ */
+const checkStorageQuotaWithReconcile = async (
+  userId: number,
+  storageDeltaBytes: number,
+): Promise<StorageQuotaCheck> => {
+  const syncService = getSyncService();
+  const quotaCheck = await syncService.checkStorageQuota(userId, storageDeltaBytes);
+  if (quotaCheck.allowed) return quotaCheck;
+
+  // Cache miss path only — reconcile once before rejecting or resorting to
+  // destructive cleanup. Safe to run the slow scan here because this branch
+  // only fires for users actually near quota (rare). The DoS came from running
+  // this on every upload success, not on quota misses. Also guards against
+  // pre-deploy stale counters where the old code's pg_column_size SUM left an
+  // inflated value.
+  Logger.info(
+    `[user:${userId}] Quota cache miss (cached: ${quotaCheck.currentUsage}/${quotaCheck.quota}). Reconciling...`,
+  );
+  try {
+    await syncService.updateStorageUsage(userId);
+    const reconciledCheck = await syncService.checkStorageQuota(
+      userId,
+      storageDeltaBytes,
+    );
+    if (reconciledCheck.allowed) {
+      Logger.info(
+        `[user:${userId}] Quota OK after reconcile: ${reconciledCheck.currentUsage}/${reconciledCheck.quota}`,
+      );
+    }
+    return reconciledCheck;
+  } catch (err) {
+    Logger.warn(`[user:${userId}] Reconcile failed: ${errorMessage(err)}`);
+    return quotaCheck;
+  }
+};
+
+/**
+ * Non-destructive quota gate: reconciles a stale counter once, then rejects
+ * with 413 if still over quota. Never deletes restore points or ops — use it
+ * for cheap early checks; `enforceStorageQuota` is the destructive variant.
+ * @returns `true` if quota is OK (caller can proceed), `false` if reply was sent with 413 error.
+ */
+export async function rejectIfOverStorageQuota(
+  userId: number,
+  storageDeltaBytes: number,
+  reply: FastifyReply,
+): Promise<boolean> {
+  const quotaCheck = await checkStorageQuotaWithReconcile(userId, storageDeltaBytes);
+  if (quotaCheck.allowed) return true;
+
+  Logger.warn(
+    `[user:${userId}] Storage quota exceeded: ${quotaCheck.currentUsage}/${quotaCheck.quota} bytes. Rejecting without cleanup.`,
+  );
+  sendQuotaExceededReply(reply, {
+    storageUsedBytes: quotaCheck.currentUsage,
+    storageQuotaBytes: quotaCheck.quota,
+    autoCleanupAttempted: false,
+  });
+  return false;
+}
+
+/**
+ * Check storage quota, reconcile a stale counter once, and if still over
+ * quota run DESTRUCTIVE auto-cleanup (deletes old restore points and ops) to
+ * make room. Use `rejectIfOverStorageQuota` where deleting data is not wanted.
  * @returns `true` if quota is OK (caller can proceed), `false` if reply was sent with 413 error.
  */
 export async function enforceStorageQuota(
@@ -235,31 +304,8 @@ export async function enforceStorageQuota(
   reply: FastifyReply,
 ): Promise<boolean> {
   const syncService = getSyncService();
-  let quotaCheck = await syncService.checkStorageQuota(userId, storageDeltaBytes);
+  const quotaCheck = await checkStorageQuotaWithReconcile(userId, storageDeltaBytes);
   if (quotaCheck.allowed) return true;
-
-  // Cache miss path only — reconcile once before resorting to destructive
-  // cleanup. Safe to run the slow scan here because this branch only fires for
-  // users actually near quota (rare). The DoS came from running this on every
-  // upload success, not on quota misses. Also guards against pre-deploy stale
-  // counters where the old code's pg_column_size SUM left an inflated value.
-  Logger.info(
-    `[user:${userId}] Quota cache miss (cached: ${quotaCheck.currentUsage}/${quotaCheck.quota}). Reconciling before cleanup...`,
-  );
-  try {
-    await syncService.updateStorageUsage(userId);
-    quotaCheck = await syncService.checkStorageQuota(userId, storageDeltaBytes);
-    if (quotaCheck.allowed) {
-      Logger.info(
-        `[user:${userId}] Quota OK after reconcile: ${quotaCheck.currentUsage}/${quotaCheck.quota}`,
-      );
-      return true;
-    }
-  } catch (err) {
-    Logger.warn(
-      `[user:${userId}] Reconcile failed, proceeding with cleanup: ${errorMessage(err)}`,
-    );
-  }
 
   Logger.warn(
     `[user:${userId}] Storage quota exceeded: ${quotaCheck.currentUsage}/${quotaCheck.quota} bytes. Attempting auto-cleanup...`,
