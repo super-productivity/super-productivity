@@ -185,6 +185,34 @@ describe('shortSyntax', () => {
   });
 
   describe('should work for time short syntax', () => {
+    const LOGICAL_TODAY = '2026-03-14';
+
+    it('should key time spent by the passed logical today', async () => {
+      const t = {
+        ...TASK,
+        title: 'Fun title 10m/1h',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        [],
+        undefined,
+        'combine',
+        false,
+        undefined,
+        LOGICAL_TODAY,
+      );
+      expect(r?.taskChanges.timeSpentOnDay).toEqual({ [LOGICAL_TODAY]: 600000 });
+    });
+
+    it('should key parseTimeSpentChanges by the passed logical today', () => {
+      expect(
+        parseTimeSpentChanges({ title: 'Fun title 10m/1h' }, LOGICAL_TODAY)
+          .timeSpentOnDay,
+      ).toEqual({ [LOGICAL_TODAY]: 600000 });
+    });
+
     it('', async () => {
       const t = {
         ...TASK,
