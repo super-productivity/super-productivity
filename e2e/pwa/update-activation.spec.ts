@@ -1,3 +1,4 @@
+import { reloadControlledDocument } from './controlled-reload';
 import type { APIRequestContext } from '@playwright/test';
 import { expect, test } from '../fixtures/test.fixture';
 import { expectNoGlobalError, expectTaskVisible } from '../utils/assertions';
@@ -51,29 +52,7 @@ test.describe('Production PWA update activation', () => {
     const manifestRequestsBeforeControlledReload = await getManifestRequestCount(
       page.request,
     );
-    const controlledDocumentMarker = 'PWA_E2E_CONTROLLED_DOCUMENT';
-    let didStartControlledDocument = false;
-    await page.addInitScript((marker) => console.info(marker), controlledDocumentMarker);
-    const initialUpdateCheck = page.waitForEvent('console', {
-      predicate: (message) => {
-        if (message.text() === controlledDocumentMarker) {
-          didStartControlledDocument = true;
-          return false;
-        }
-        return (
-          didStartControlledDocument &&
-          message
-            .text()
-            .includes('___________isServiceWorkerUpdateAvailable____________ false')
-        );
-      },
-      timeout: 30000,
-    });
-    // Bypass this one navigation so it becomes controlled without scheduling
-    // Angular's separate navigation-driven idle update check.
-    await page.goto('/?ngsw-bypass=true', { waitUntil: 'domcontentloaded' });
-    await waitForAppReady(page);
-    await initialUpdateCheck;
+    await reloadControlledDocument(page);
     await expect
       .poll(() =>
         page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? null),
