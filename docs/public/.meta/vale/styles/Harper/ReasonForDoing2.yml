@@ -1,0 +1,22 @@
+---
+# Hand-written from Harper's ReasonForDoing -- the singular, which Harper does
+# not exempt after `for`. See ReasonForDoing.yml.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use 'for' instead of 'of' with 'reason' and progressive verbs."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "for"
+tokens:
+  - pattern: 'reason'
+  - pattern: 'of'
+    target: true
+  - upos: VERB

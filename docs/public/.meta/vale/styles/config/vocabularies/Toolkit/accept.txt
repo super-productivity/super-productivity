@@ -1,0 +1,17 @@
+Diátaxis
+GitHub
+Vale
+config
+diataxis
+errata-ai
+hoc
+libc
+lychee
+musl
+npm
+pipx
+styleset
+stylesets
+subcommand
+toolkit
+vale-cli

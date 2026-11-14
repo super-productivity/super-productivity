@@ -1,0 +1,24 @@
+---
+# Generated from Harper's TrueToWord rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Normalizes phrasing around `true to <possessive>` so it follows the conventional `true to one's word`.
+extends: substitution
+message: "Replace the plural `words` with the idiomatic singular form when someone stays true to a promise."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "true(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+her(?!\\s*\\n\\s*\\n)\\s+words(?!['\\x{2019}]s\\b)": "true to her word"
+  "true(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+his(?!\\s*\\n\\s*\\n)\\s+words(?!['\\x{2019}]s\\b)": "true to his word"
+  "true(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+its(?!\\s*\\n\\s*\\n)\\s+words(?!['\\x{2019}]s\\b)": "true to its word"
+  "true(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+my(?!\\s*\\n\\s*\\n)\\s+words(?!['\\x{2019}]s\\b)": "true to my word"
+  "true(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+one's(?!\\s*\\n\\s*\\n)\\s+words(?!['\\x{2019}]s\\b)": "true to one's word"
+  "true(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+our(?!\\s*\\n\\s*\\n)\\s+words(?!['\\x{2019}]s\\b)": "true to our word"
+  "true(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+their(?!\\s*\\n\\s*\\n)\\s+words(?!['\\x{2019}]s\\b)": "true to their word"
+  "true(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+your(?!\\s*\\n\\s*\\n)\\s+words(?!['\\x{2019}]s\\b)": "true to your word"

@@ -1,0 +1,21 @@
+# Alt text is read in one pass, with no way to skim or go back. Past about
+# 125 characters, the detail belongs in the body or a caption.
+# https://www.w3.org/WAI/tutorials/images/complex/
+extends: metric
+message: "Alt text of %s characters. Keep it under 125, and put the detail in the body or a caption."
+link: https://www.w3.org/WAI/tutorials/images/complex/
+level: suggestion
+scope: alt
+formula: characters
+condition: "> 125"
+
+tests:
+  - name: fires
+    input: |
+      ![A bar chart showing quarterly sales from the first quarter of 2024 through the fourth quarter of 2025, with revenue rising steadily from two million to nearly five million dollars](chart.png)
+    want: |
+      1:1:A11y.AltLength:Alt text of 149.00 characters. Keep it under 125, and put the detail in the body or a caption.
+  - name: clean
+    input: |
+      ![A bar chart of sales by quarter, rising from two to five million](chart.png)
+    want: ""

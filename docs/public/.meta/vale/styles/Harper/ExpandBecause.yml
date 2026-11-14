@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ExpandBecause rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Expands the informal abbreviation `cuz` to the full word `because` for formality.
+extends: existence
+message: "Use `because` instead of informal `cuz`"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "because"
+tokens:
+  - "cuz(?!['\\x{2019}]s\\b)"

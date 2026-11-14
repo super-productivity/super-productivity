@@ -1,0 +1,21 @@
+---
+# Generated from Harper's Haphazard rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the eggcorn `half hazard` to `haphazard`, which properly means lacking organization or being random.
+extends: existence
+message: "Use `haphazard` for randomness or lack of organization."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "haphazard"
+tokens:
+  - "half(?!\\s*\\n\\s*\\n)\\s+hazard(?!['\\x{2019}]s\\b)"
+  - "half-hazard(?!['\\x{2019}]s\\b)"
+  - "halfhazard(?!['\\x{2019}]s\\b)"

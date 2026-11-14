@@ -1,0 +1,21 @@
+---
+# Generated from Harper's LetToDo linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reports the problem without a fix: Harper builds this correction in
+# code, from the text it matched, which the rule itself does not record.
+#
+# Corrects extraneous `to` after `let`.
+extends: sequence
+message: "The word `to` should not be used with `let` in this way."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'let''s|lets|let'
+  - pattern: 'every|some|any|no'
+  - pattern: 'body|one'
+  - pattern: 'to'

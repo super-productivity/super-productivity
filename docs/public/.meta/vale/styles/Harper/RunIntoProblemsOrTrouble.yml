@@ -1,0 +1,24 @@
+---
+# Hand-written from Harper's RunIntoProblemsOrTrouble: you run into problems, or
+# into trouble -- `problem` is plural here and `trouble` is not counted.
+#
+# The generated rule was two swaps built from its tests' punctuation --
+# `troubles!` and `troubles\]` -- so it fired only before an exclamation mark or
+# a closing bracket. 11 missed findings.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Did you mean %s?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:run|ran|running|runs)\s+into\s+)further\s+troubles\b': "further trouble"
+  '(?<=\b(?:run|ran|running|runs)\s+into\s+)a\s+trouble\b': "trouble"
+  '(?<=\b(?:run|ran|running|runs)\s+into\s+)troubles\b': "trouble"
+  '(?<=\b(?:run|ran|running|runs)\s+into\s+)problem\b': "problems"

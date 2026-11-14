@@ -1,0 +1,20 @@
+---
+# Hand-written from Harper's InTimeFromNow: `in three years from now` says it
+# twice.
+#
+# The generated rule keyed on punctuation. Harper's expression is `in`, an
+# optional hedge, a duration, then `from now`.
+#
+# Reported without a fix: Harper drops `in` or drops `from now`, and choosing
+# between them is the writer's.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Avoid redundancy by using either `in [period of time]` or `[period of time] from now`, but not both together."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '\bin\s+(?:(?:about|almost|approximately|around|circa|exactly|just|maybe|nearly|only|perhaps|precisely|probably|roughly)\s+)?(?:[0-9]+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)\s+(?:second|seconds|minute|minutes|hour|hours|day|days|week|weeks|fortnight|fortnights|month|months|year|years|decade|decades|century|centuries)\s+from\s+now\b'

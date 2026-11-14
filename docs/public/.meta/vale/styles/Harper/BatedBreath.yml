@@ -1,0 +1,19 @@
+---
+# Generated from Harper's BatedBreath rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Changes `baited breath` to the correct `bated breath`.
+extends: existence
+message: "Did you mean `bated breath`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "bated breath"
+tokens:
+  - "baited(?!\\s*\\n\\s*\\n)\\s+breath(?!['\\x{2019}]s\\b)"

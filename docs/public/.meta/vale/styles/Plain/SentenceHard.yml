@@ -1,0 +1,23 @@
+# The hard cap: a sentence this long is a confirmed readability problem.
+# The soft limit in Sentence.yml is the same check at 25 words, as a
+# suggestion. Ubuntu's explanation pages use sentences of up to about 50
+# words, so the cap sits at 50 and stays a warning.
+# https://www.w3.org/WAI/WCAG22/Understanding/reading-level
+extends: occurrence
+message: "This sentence is %d words. The hard cap is 50; split it."
+link: https://www.w3.org/WAI/WCAG22/Understanding/reading-level
+level: warning
+scope: sentence
+max: 50
+token: '\b\w+\b'
+
+tests:
+  - name: fires
+    input: |
+      When you have finished the installation and confirmed that the service starts, open the settings page, choose the account you want to connect, and then paste the token you copied earlier into the field at the bottom of the page after you have checked that the connection is secure and the account is active.
+    want: |
+      1:1:Plain.SentenceHard:This sentence is 54 words. The hard cap is 50; split it.
+  - name: clean
+    input: |
+      When the service starts, open the settings page. Paste the token into the field.
+    want: ""

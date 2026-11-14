@@ -1,0 +1,28 @@
+# Reference doesn't walk the reader anywhere. "In this section we will",
+# "let's", and "now" narrate; reference lists.
+# https://diataxis.fr/reference/#the-language-of-reference
+extends: existence
+message: "'%s' narrates. Reference states; a tutorial walks."
+link: https://diataxis.fr/reference/#the-language-of-reference
+level: warning
+ignorecase: true
+tokens:
+  - in this section,? we
+  - "let's"
+  - "now,? (?:we|you)(?:'ll| will)?"
+  - as we saw
+  - next,? (?:we|you)(?:'ll| will)
+
+tests:
+  - name: fires
+    input: |
+      In this section we will look at the flags. Let's start with --port.
+
+    want: |
+      1:1:Reference.Walkthrough:'In this section we' narrates. Reference states; a tutorial walks.
+      1:44:Reference.Walkthrough:'Let's' narrates. Reference states; a tutorial walks.
+  - name: clean
+    input: |
+      The flags are listed below. --port sets the port.
+
+    want: ""

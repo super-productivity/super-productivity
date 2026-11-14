@@ -1,0 +1,31 @@
+---
+# Hand-written companion to SoonToBe and SoonToBe2: the noun read as a verb.
+#
+# `soon to be boss`, `soon to be in-laws`: after `be`, Vale's tagger takes the
+# noun for a verb, so neither the `NN` slot of SoonToBe.yml nor the adjective
+# slot of SoonToBe2.yml reaches it.
+#
+# Asking for a bare verb there is safe because `to be` does not take one. What
+# follows `soon to be` is a noun or an adjective in every real sentence, and a
+# `VB` in that position is a mis-tag rather than a verb.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use hyphens when `soon to be` modifies a noun."
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "soon-to-be"
+tokens:
+  - pattern: 'soon'
+    target: true
+  - pattern: 'to'
+    target: true
+  - pattern: 'be'
+    target: true
+  - tag: '^VBP?$'

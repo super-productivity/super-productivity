@@ -1,0 +1,22 @@
+# Alt text that is the file name: what an editor fills in by default, and
+# what a screen reader would have read anyway.
+extends: existence
+message: "Alt text '%s' is a file name. Describe the image."
+link: https://webaim.org/techniques/alttext/
+level: warning
+scope: alt
+nonword: true
+raw:
+  - '(?i)^\s*(?:(?:IMG|DSC|DSCN|DCIM|Screen ?Shot|Screenshot)[ _-]?\d\S*|\S+\.(?:png|jpe?g|gif|svg|webp|bmp|tiff?|avif))\s*$'
+
+tests:
+  - name: fires
+    input: |
+      ![IMG_2031.jpg](a.jpg) and ![chart.png](chart.png)
+    want: |
+      1:3:A11y.AltFileName:Alt text 'IMG_2031.jpg' is a file name. Describe the image.
+      1:30:A11y.AltFileName:Alt text 'chart.png' is a file name. Describe the image.
+  - name: clean
+    input: |
+      ![A bar chart of sales by quarter](chart.png)
+    want: ""

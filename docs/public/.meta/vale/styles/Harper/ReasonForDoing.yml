@@ -1,0 +1,30 @@
+---
+# Hand-written from Harper's ReasonForDoing: `reason of doing` wants `for`.
+#
+# Harper leaves the plural alone when `for` already precedes it -- "for reasons
+# of making this robust" is ordinary English. The singular is not exempt, so it
+# keeps its own rule and this one carries the negated slot.
+#
+# A negated token needs a token to reject, so a sentence opening on `Reasons`
+# is not reached. That is a recall gap, not a precision one.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use 'for' instead of 'of' with 'reason' and progressive verbs."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "for"
+tokens:
+  - pattern: 'for'
+    negate: true
+  - pattern: 'reasons'
+  - pattern: 'of'
+    target: true
+  - upos: VERB

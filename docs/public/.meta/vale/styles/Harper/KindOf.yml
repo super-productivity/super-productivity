@@ -1,0 +1,20 @@
+---
+# Generated from Harper's KindOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `kinda of` to `kind of`.
+extends: existence
+message: "`Kinda` already means `kind of`, so `kinda of` is redundant."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "kind of"
+    - "kinda"
+tokens:
+  - "kinda(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"

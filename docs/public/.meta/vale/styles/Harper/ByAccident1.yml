@@ -1,0 +1,21 @@
+---
+# Generated from Harper's ByAccident linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean `by accident`?"
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "by"
+tokens:
+  - pattern: 'on'
+    target: true
+  - pattern: 'complete|literal|happy|sheer|total|mere|pure'
+  - pattern: 'accident'

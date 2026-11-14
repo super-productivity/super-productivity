@@ -1,0 +1,23 @@
+---
+# Hand-written companion to TheMy: the other order.
+#
+# Harper's linter is a FirstMatchOf over two sequences -- `the` then a
+# possessive, and a possessive then `the`. TheMy.yml is the second. The first
+# was missing, and it is the common one: "the his last name", "the our paper",
+# "the their component" are all in the corpus and none of them was reported.
+#
+# The possessive is matched lowercase only. Harper has a test that "the My
+# Projects personal page" must not lint, because a capitalized possessive is
+# usually part of a name rather than a determiner. `the` itself is matched
+# either way, as Harper's own `The my` test expects.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use either the definite article 'the' or the possessive. Using both together is ungrammatical in English."
+level: warning
+model: harper
+tokens:
+  - pattern: '[Tt]he'
+  - pattern: 'my|your|his|her|its|our|their'

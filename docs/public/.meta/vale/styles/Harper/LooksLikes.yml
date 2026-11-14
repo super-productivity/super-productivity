@@ -1,0 +1,29 @@
+---
+# Hand-written from Harper's LooksLikes: `looks likes` doubles the s.
+#
+# The generated rule matched the verb, the space and `likes` together and
+# replaced all three, so it rewrote the spacing it matched: "Looks  likes the
+# worst scenario" came back with one space where the writer had typed two, and
+# `make verify` caught it as a mismatch against Harper's own output.
+#
+# Matching only `likes`, with the verb in a lookbehind, leaves whatever
+# whitespace the writer used alone.
+#
+# The lookbehind is horizontal whitespace only. Harper allows a single newline
+# between the two words but not a blank line, and forbidding newlines outright
+# is the nearer of the two mistakes: a `looks` ending one paragraph and a
+# `likes` opening the next are not the same phrase.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Drop the extra `s` in `likes` when it immediately follows a form of `look`."
+level: error
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:looks|looked|looking)[^\S\n]{1,10})likes\b(?![\u2019'']s\b)': "like"

@@ -1,0 +1,20 @@
+---
+# Hand-written from Harper's AWaysToGo -- the half where what follows the
+# phrase is what licenses it. See AWaysToGo.yml.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "This idiom requires the word `a`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bhaving(?=\s+ways\s+to\s+go\b(?:\s*[.?!,;:]|\s*$|\s+(?:before|but|though|in\s+order\s+to|to\s+be)\b))': "having a"
+  '\bhave(?=\s+ways\s+to\s+go\b(?:\s*[.?!,;:]|\s*$|\s+(?:before|but|though|in\s+order\s+to|to\s+be)\b))': "have a"
+  '\bhas(?=\s+ways\s+to\s+go\b(?:\s*[.?!,;:]|\s*$|\s+(?:before|but|though|in\s+order\s+to|to\s+be)\b))': "has a"
+  '\bhad(?=\s+ways\s+to\s+go\b(?:\s*[.?!,;:]|\s*$|\s+(?:before|but|though|in\s+order\s+to|to\s+be)\b))': "had a"

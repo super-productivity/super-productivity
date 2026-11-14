@@ -1,0 +1,52 @@
+---
+# Hand-written from Harper's WereWhere: `were` is the past of `be`; `where` asks
+# about a place.
+#
+# The confusion runs both ways, and both directions were missed -- 14 findings,
+# on "Do you remember were I left the keys?", "Go were they tell you", and
+# "you where going in the right direction".
+#
+# Both words are far too common to correct on their own, so each pattern below
+# needs the grammar around it to rule the other reading out:
+#
+#   * `were` after a verb that takes an indirect question, and before a subject:
+#     "remember were I left" -- `be` cannot follow `remember` like that.
+#   * `where` before a participle, after a subject pronoun: "you where going" --
+#     a place cannot be the auxiliary of a progressive.
+#
+# Tags are deliberately not used. `model: harper` only overlays a lexicon on
+# prose's perceptron, and the perceptron reads the surrounding words -- which
+# here are the misspelling itself. See the note in ThenThan.yml.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+# Harper has no sentence-initial direction: "Where they going to the party?"
+# is a match it never makes, so the `^Where ... going` swap this rule used to
+# carry only ever produced findings of its own.
+#
+#
+# The predicate list after `where` is wider than Harper's own examples need,
+# and it is fenced by the verbs that legitimately take a where-clause: "I asked
+# you where the file is" has `you where` in it and is correct, so `ask`, `tell`,
+# `show`, `know` and their kin in front rule the match out.
+#
+# The last swap is the inverted question, "Where you able to make forward
+# progress here?", which no amount of widening the first one reaches: there the
+# pronoun follows `where` rather than preceding it. Its list is adjectives
+# only: with the progressives in it the rule flagged "Where they going to the
+# party?", which Harper reports under no rule at all.
+extends: substitution
+message: "Did you mean %s?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:remember|remembers|remembered|know|knows|knew|see|sees|saw|ask|asks|asked|tell|tells|told|wonder|wonders|wondered|show|shows|showed|find|finds|found|forget|forgets|forgot|understand|understands|understood|explain|explains|explained|check|checks|checked|guess|guessed|decide|decided|matter|matters)\s)were\b(?=\s+(?:I|you|he|she|it|we|they|the|a|an|my|your|his|her|its|their|our|this|that|these|those)\b)': "where"
+  '(?<=\b(?:go|goes|going|went|gone|look|looks|looked|looking|stay|stays|stayed|put|puts|sit|sits|stand|stands)\s)were\b(?=\s+(?:I|you|he|she|it|we|they|the|a|an|my|your|his|her|its|their|our|this|that|these|those)\b)': "where"
+  '(?<=\b(?:you|we|they|there|these|those|who|people|things)\s)where\b(?=\s+\w+ing\b)': "were"
+  '(?<!\b(?:ask|asks|asked|asking|tell|tells|told|telling|show|shows|showed|shown|showing|know|knows|knew|known|knowing|see|sees|saw|seen|seeing|wonder|wonders|wondered|wondering|remember|remembers|remembered|explain|explains|explained|find|finds|found|check|checks|checked|guess|guesses|guessed|decide|decides|decided|forget|forgets|forgot|matter|matters)\s)(?<=\b(?:you|we|they|there|these|those|who)\s)where\b(?=\s+(?:able|unable|not|never|already|all|both|still|just|only|right|wrong|happy|sad|sure|unsure|correct|incorrect|aware|unaware|almost|very|quite|really|so|too|more|less|better|worse|supposed|told|asked|given|taken|made|used|glad|angry|upset|busy|late|early|close|good|bad|fine|okay|ok)\b|\s+\w+ed\b)': "were"
+  '\bwhere\b(?=\s+(?:you|we|they|i|he|she|it)\s+(?:able|unable|supposed|aware|right|wrong|sure)\b)': "were"

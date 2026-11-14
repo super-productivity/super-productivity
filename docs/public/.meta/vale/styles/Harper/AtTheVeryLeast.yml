@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AtTheVeryLeast rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `in the very least` to `at the very least`.
+extends: existence
+message: "Did you mean `at the very least`?"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "at the very least"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+very(?!\\s*\\n\\s*\\n)\\s+least(?!['\\x{2019}]s\\b)"

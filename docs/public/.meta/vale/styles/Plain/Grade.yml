@@ -1,0 +1,23 @@
+# WCAG 3.1.5: text reads at a lower secondary level, or a simpler version
+# exists. Graded a paragraph at a time, by Flesch-Kincaid, so the alert lands
+# on the paragraph that earned it. The quadrant sections use their own
+# readability styles; tools and README use this default.
+# https://www.w3.org/WAI/WCAG22/Understanding/reading-level
+extends: metric
+message: "This paragraph reads at grade %s. The reading target for this content type is lower; shorter sentences and plainer words bring it down."
+link: https://www.w3.org/WAI/WCAG22/Understanding/reading-level
+level: suggestion
+scope: paragraph
+formula: round(flesch_kincaid, 1)
+condition: "> 9"
+
+tests:
+  - name: fires
+    input: |
+      Notwithstanding the aforementioned considerations, the organization's interdepartmental reorganization initiative necessitated comprehensive reevaluation of institutional methodologies and jurisdictional responsibilities.
+    want: |
+      1:1:Plain.Grade:This paragraph reads at grade 39.90. The reading target for this content type is lower; shorter sentences and plainer words bring it down.
+  - name: clean
+    input: |
+      We changed how the teams work. Each team now owns one part of the product.
+    want: ""

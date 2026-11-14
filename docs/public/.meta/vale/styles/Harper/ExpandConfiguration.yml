@@ -1,0 +1,25 @@
+---
+# Hand-written from Harper's ExpandConfiguration: prose spells the word out.
+#
+# The generated rule relied on Vale's own word boundaries, which put no break
+# after an underscore, so `DISABLE_LOCAL_CONFIG` and `addons_config` went
+# unreported -- and an identifier is exactly where the abbreviation turns up.
+# Asking for a non-letter on each side catches those and still leaves
+# `configured` alone.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Prose usually spells this out."
+level: suggestion
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<![A-Za-z])configs(?![A-Za-z])': "configurations"
+  '(?<![A-Za-z])confs(?![A-Za-z])': "configurations"
+  '(?<![A-Za-z])config(?![A-Za-z])': "configuration"
+  '(?<![A-Za-z])conf(?![A-Za-z])': "configuration"

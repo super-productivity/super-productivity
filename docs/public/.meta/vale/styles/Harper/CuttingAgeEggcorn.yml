@@ -1,0 +1,21 @@
+---
+# Generated from Harper's CuttingAgeEggcorn rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the eggcorn `cutting age` or `cutting-age` to `cutting-edge` or `cutting edge`.
+extends: existence
+message: "Did you mean `cutting-edge` (adjective before a noun) or `cutting edge` (in other positions)?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "cutting-edge"
+    - "cutting edge"
+tokens:
+  - "cutting(?!\\s*\\n\\s*\\n)\\s+age(?!['\\x{2019}]s\\b)"
+  - "cutting-age(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,49 @@
+---
+# Generated from Harper's TheyreToTheir rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `they're` when the intended meaning is `their`.
+extends: substitution
+message: "Did you mean `their`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "they're(?!\\s*\\n\\s*\\n)\\s+ability(?!['\\x{2019}]s\\b)": "their ability"
+  "they're(?!\\s*\\n\\s*\\n)\\s+ancestral(?!\\s*\\n\\s*\\n)\\s+lands(?!['\\x{2019}]s\\b)": "their ancestral lands"
+  "they're(?!\\s*\\n\\s*\\n)\\s+answer(?!['\\x{2019}]s\\b)": "their answer"
+  "they're(?!\\s*\\n\\s*\\n)\\s+apartment(?!['\\x{2019}]s\\b)": "their apartment"
+  "they're(?!\\s*\\n\\s*\\n)\\s+backpacks(?!['\\x{2019}]s\\b)": "their backpacks"
+  "they're(?!\\s*\\n\\s*\\n)\\s+backup(?!['\\x{2019}]s\\b)": "their backup"
+  "they're(?!\\s*\\n\\s*\\n)\\s+coats(?!['\\x{2019}]s\\b)": "their coats"
+  "they're(?!\\s*\\n\\s*\\n)\\s+connected(?!\\s*\\n\\s*\\n)\\s+notes(?!['\\x{2019}]s\\b)": "their connected notes"
+  "they're(?!\\s*\\n\\s*\\n)\\s+dog(?!['\\x{2019}]s\\b)": "their dog"
+  "they're(?!\\s*\\n\\s*\\n)\\s+evidence(?!['\\x{2019}]s\\b)": "their evidence"
+  "they're(?!\\s*\\n\\s*\\n)\\s+garden(?!['\\x{2019}]s\\b)": "their garden"
+  "they're(?!\\s*\\n\\s*\\n)\\s+hearing(?!['\\x{2019}]s\\b)": "their hearing"
+  "they're(?!\\s*\\n\\s*\\n)\\s+house(?!['\\x{2019}]s\\b)": "their house"
+  "they're(?!\\s*\\n\\s*\\n)\\s+ladder(?!['\\x{2019}]s\\b)": "their ladder"
+  "they're(?!\\s*\\n\\s*\\n)\\s+laughter(?!['\\x{2019}]s\\b)": "their laughter"
+  "they're(?!\\s*\\n\\s*\\n)\\s+maps(?!['\\x{2019}]s\\b)": "their maps"
+  "they're(?!\\s*\\n\\s*\\n)\\s+mittens(?!['\\x{2019}]s\\b)": "their mittens"
+  "they're(?!\\s*\\n\\s*\\n)\\s+most(?!\\s*\\n\\s*\\n)\\s+recently(?!\\s*\\n\\s*\\n)\\s+accessed(?!\\s*\\n\\s*\\n)\\s+projects(?!['\\x{2019}]s\\b)": "their most recently accessed projects"
+  "they're(?!\\s*\\n\\s*\\n)\\s+needs(?!['\\x{2019}]s\\b)": "their needs"
+  "they're(?!\\s*\\n\\s*\\n)\\s+new(?!['\\x{2019}]s\\b)": "their new"
+  "they're(?!\\s*\\n\\s*\\n)\\s+own(?!\\s*\\n\\s*\\n)\\s+data(?!\\s*\\n\\s*\\n)\\s+infrastructure(?!['\\x{2019}]s\\b)": "their own data infrastructure"
+  "they're(?!\\s*\\n\\s*\\n)\\s+past(?!['\\x{2019}]s\\b)": "their past"
+  "they're(?!\\s*\\n\\s*\\n)\\s+patience(?!['\\x{2019}]s\\b)": "their patience"
+  "they're(?!\\s*\\n\\s*\\n)\\s+pawn(?!['\\x{2019}]s\\b)": "their pawn"
+  "they're(?!\\s*\\n\\s*\\n)\\s+potential(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)": "their potential to"
+  "they're(?!\\s*\\n\\s*\\n)\\s+problems(?!['\\x{2019}]s\\b)": "their problems"
+  "they're(?!\\s*\\n\\s*\\n)\\s+proposal(?!['\\x{2019}]s\\b)": "their proposal"
+  "they're(?!\\s*\\n\\s*\\n)\\s+relatively(?!\\s*\\n\\s*\\n)\\s+low(?!\\s*\\n\\s*\\n)\\s+density(?!['\\x{2019}]s\\b)": "their relatively low density"
+  "they're(?!\\s*\\n\\s*\\n)\\s+return(?!['\\x{2019}]s\\b)": "their return"
+  "they're(?!\\s*\\n\\s*\\n)\\s+server(?!['\\x{2019}]s\\b)": "their server"
+  "they're(?!\\s*\\n\\s*\\n)\\s+sketches(?!['\\x{2019}]s\\b)": "their sketches"
+  "they're(?!\\s*\\n\\s*\\n)\\s+team(?!['\\x{2019}]s\\b)": "their team"
+  "they're(?!\\s*\\n\\s*\\n)\\s+understanding(?!['\\x{2019}]s\\b)": "their understanding"

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's PedalToTheMetal rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the eggcorn `pedal to the medal` to the standard idiom `pedal to the metal`, meaning to accelerate at full speed.
+extends: existence
+message: "Use the idiom `pedal to the metal`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "pedal to the metal"
+tokens:
+  - "pedal(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+medal(?!['\\x{2019}]s\\b)"

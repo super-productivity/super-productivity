@@ -1,0 +1,29 @@
+# A tutorial explains the minimum. The learner is doing, not reading about
+# why; the why has a page of its own.
+# https://diataxis.fr/tutorials/#the-language-of-tutorials
+extends: existence
+message: "'%s' opens an explanation. Keep it to the step; link to the explanation instead."
+link: https://diataxis.fr/tutorials/#the-language-of-tutorials
+level: suggestion
+ignorecase: true
+tokens:
+  - the reason (?:for|is|this)
+  - this is because
+  - in general
+  - in theory
+  - under the hood
+  - technically
+  - it is worth understanding
+
+tests:
+  - name: fires
+    input: |
+      Run the server. This is because the port is bound at start.
+
+    want: |
+      1:17:Tutorial.Explanation:'This is because' opens an explanation. Keep it to the step; link to the explanation instead.
+  - name: clean
+    input: |
+      Run the server.
+
+    want: ""

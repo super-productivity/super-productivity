@@ -1,0 +1,19 @@
+---
+# Generated from Harper's InAHurry rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `in hurry` to `in a hurry`.
+extends: existence
+message: "The correct idiom is `in a hurry`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "in a hurry"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+hurry(?!['\\x{2019}]s\\b)"

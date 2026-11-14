@@ -1,0 +1,19 @@
+---
+# Generated from Harper's WaveFunction rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Identifies the mistake of merging `wave` and `function` into one word. In quantum mechanics, a `wave function` (written as two words) describes the mathematical function that represents the quantum state of a particle or system. Correct usage is crucial for clear and accurate scientific communication.
+extends: existence
+message: "Did you mean `wave function`?"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "wave function"
+tokens:
+  - "wavefunction(?!['\\x{2019}]s\\b)"

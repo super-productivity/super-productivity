@@ -1,0 +1,44 @@
+# WCAG 1.3.1: headings are a structure, and screen reader users move through
+# it by level. A section that opens with an h4 directly inside an h2's
+# section has skipped h3, and the outline has a hole in it. Each selector is
+# one skip: a section whose heading is two or more levels below its parent's.
+# https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships
+extends: existence
+message: "This heading skips a level. Screen reader users navigate by heading level; use the next one down."
+link: https://www.w3.org/WAI/tutorials/page-structure/headings/
+level: error
+scope:
+  - 'doc(section:has(> h1) > section:has(> h3))'
+  - 'doc(section:has(> h1) > section:has(> h4))'
+  - 'doc(section:has(> h1) > section:has(> h5))'
+  - 'doc(section:has(> h1) > section:has(> h6))'
+  - 'doc(section:has(> h2) > section:has(> h4))'
+  - 'doc(section:has(> h2) > section:has(> h5))'
+  - 'doc(section:has(> h2) > section:has(> h6))'
+  - 'doc(section:has(> h3) > section:has(> h5))'
+  - 'doc(section:has(> h3) > section:has(> h6))'
+  - 'doc(section:has(> h4) > section:has(> h6))'
+nonword: true
+raw:
+  - '^\S'
+
+tests:
+  - name: fires
+    input: |
+      # Title
+
+      ### Skipped
+
+      Body.
+    want: |
+      3:5:A11y.HeadingSkip:This heading skips a level. Screen reader users navigate by heading level; use the next one down.
+  - name: clean
+    input: |
+      # Title
+
+      ## Two
+
+      ### Three
+
+      Body.
+    want: ""

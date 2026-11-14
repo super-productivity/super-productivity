@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's Addicting: the traditional adjective is
+# `addictive`.
+#
+# The generated rule keyed on the punctuation that happened to follow.
+#
+# Harper matches `addicting` at the end of a sentence, before a semicolon, or
+# before a word that is not a pronoun -- the pronoun case being the one where
+# it is a verb ("it keeps addicting me"). Only the first two are ported, which
+# is what the corpus needs; the third would need a tag the regex cannot see.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "When used as an adjective, `addictive` is the traditional and more f form."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+  params:
+    - "addictive"
+tokens:
+  - '\baddicting\b(?=\s*(?:[.!?;,)"]|$))'

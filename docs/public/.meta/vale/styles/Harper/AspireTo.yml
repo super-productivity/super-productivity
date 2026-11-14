@@ -1,0 +1,24 @@
+---
+# Generated from Harper's AspireTo linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+# `ignorecase` is off deliberately. Harper does not match a capitalised
+# `Aspire`, and the corpus is full of .NET Aspire -- ".NET Aspire for AWS"
+# and the like were 4 false positives, every one a product name. Verified
+# against harper-cli: it reports `aspire for` and leaves `Aspire for` alone.
+extends: sequence
+message: "Use `aspire to` instead of `aspire for`."
+level: warning
+ignorecase: false
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "to"
+tokens:
+  - pattern: 'aspiring|aspired|aspires|aspire'
+  - pattern: 'for'
+    target: true

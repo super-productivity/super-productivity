@@ -1,0 +1,34 @@
+# Explanation answers why. A page that never says "because" or "the
+# reason" may be describing rather than explaining.
+# https://diataxis.fr/explanation/#the-language-of-explanation
+extends: occurrence
+message: "Explanation answers why. Nothing here names a cause, a reason, or a result."
+link: https://diataxis.fr/explanation/#the-language-of-explanation
+level: suggestion
+scope: summary
+token: "(?i)\\b(?:because|the reason|in order to|this is why|which is why|so that|the trade-?offs?|historically|since|therefore|thus|as a result|consequently|for this reason|due to|leads? to|results? in|explains? why)\\b"
+min: 1
+
+tests:
+  - name: fires
+    input: |
+      # Caching
+
+      The build is cached by layer. The page is served from the cache.
+
+    want: |
+      3:1:Explanation.Why:Explanation answers why. Nothing here names a cause, a reason, or a result.
+  - name: clean
+    input: |
+      # Caching
+
+      The build is cached by layer, because a layer rarely changes.
+
+    want: ""
+  - name: clean extended
+    input: |
+      # Caching
+
+      The cache is fast; therefore, the page loads quickly.
+
+    want: ""

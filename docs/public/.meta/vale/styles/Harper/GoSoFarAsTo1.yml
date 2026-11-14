@@ -1,0 +1,24 @@
+---
+# Generated from Harper's GoSoFarAsTo linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reports the problem without a fix: Harper builds this correction in
+# code, from the text it matched, which the rule itself does not record.
+#
+# Flags 'go so far to' when it should be 'go so far as to' to express going
+# beyond expectations
+extends: sequence
+message: "If this is intended to express going beyond what's expected, the standard idiom is `go so far as to`"
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'going|goes|gone|went|go'
+  - pattern: 'so'
+  - pattern: 'far'
+  - pattern: 'to'
+  - upos: ADV
+  - pattern: '\S+'

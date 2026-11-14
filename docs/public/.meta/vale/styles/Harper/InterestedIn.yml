@@ -1,0 +1,21 @@
+---
+# Hand-written from Harper's InterestedIn: "interested" followed by a
+# preposition other than the ones that are idiomatic after it.
+#
+# The look-behind keeps `interested` out of the match, so the fix replaces
+# only the preposition and the alert points at it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Use `interested in`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "in"
+tokens:
+  - '(?<=\binterested\s+)(?:about|at|by|of|on|with)\b'

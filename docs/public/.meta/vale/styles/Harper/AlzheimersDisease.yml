@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AlzheimersDisease rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes the common misnomer `old-timers' disease`, ensuring the correct medical term `Alzheimer’s disease` is used.
+extends: existence
+message: "Use the correct medical term."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "Alzheimer’s disease"
+tokens:
+  - "old-timers'(?!\\s*\\n\\s*\\n)\\s+disease(?!['\\x{2019}]s\\b)"

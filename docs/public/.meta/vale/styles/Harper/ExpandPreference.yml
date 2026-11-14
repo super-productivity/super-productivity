@@ -1,0 +1,18 @@
+---
+# Generated from Harper's ExpandPreference rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Expands the abbreviation `prefs` to the full word `preferences` for clarity.
+extends: substitution
+message: "Use %[1]s instead of %[2]s"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "pref(?!['\\x{2019}]s\\b)": "preference"
+  "prefs(?!['\\x{2019}]s\\b)": "preferences"

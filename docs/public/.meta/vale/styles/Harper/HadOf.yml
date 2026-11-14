@@ -1,0 +1,20 @@
+---
+# Generated from Harper's HadOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags the unnecessary use of `of` after `had` and suggests the correct forms.
+extends: existence
+message: "Did you mean `had have` or `had've`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "had have"
+    - "had've"
+tokens:
+  - "had(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"

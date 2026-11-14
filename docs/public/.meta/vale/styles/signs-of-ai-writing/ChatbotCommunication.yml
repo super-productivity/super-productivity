@@ -1,0 +1,21 @@
+extends: existence
+message: "Chatbot communication pattern detected: '%s'"
+level: error
+link: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#G15_criteria
+tokens:
+  - 'I hope this helps'
+  - 'Of course!'
+  - 'Certainly!'
+  - "You're absolutely right"
+  - 'Would you like me to'
+  - 'Is there anything else'
+  - 'Let me know if you'
+  - 'More detailed breakdown'
+  - 'Here is a (draft|Wikipedia|detailed) article'
+  - 'As an AI (language )?model'
+  - "I'm sorry, I can't"
+  - 'Would you like it expanded'
+  - 'This fictional article'
+  - 'This Wikipedia-style article'
+  - 'Final important tip'
+  - 'Feel free to ask'

@@ -1,0 +1,20 @@
+---
+# Generated from Harper's WorstCaseScenario rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `worst-case scenario` when the hyphen is missing or `worse` is used instead of `worst`.
+extends: existence
+message: "Hyphenate `worst-case`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "worst-case scenario"
+tokens:
+  - "worst(?!\\s*\\n\\s*\\n)\\s+case(?!\\s*\\n\\s*\\n)\\s+scenario(?!['\\x{2019}]s\\b)"
+  - "worst-case-scenario(?!['\\x{2019}]s\\b)"

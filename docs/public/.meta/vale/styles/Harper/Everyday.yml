@@ -1,0 +1,30 @@
+---
+# Hand-written from Harper's Everyday, the `everyday` half:
+#   "everyday" followed by anything that is not a noun or a progressive verb
+#
+# `everyday` is an adjective, so it has to modify a noun. Followed by a
+# pronoun, a verb, or a full stop it is standing in for the adverbial `every
+# day` -- "I do this everyday." -- and that is the mistake. The generated rule
+# had learned only the words from the examples and flagged every `every day`
+# in the corpus.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "You probably mean the adverb `every day` here."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "every day"
+tokens:
+  - pattern: 'everyday'
+    target: true
+  # Punctuation is a token of its own, so this covers `everyday?` and
+  # `everyday.` as well as `everyday I`.
+  - tag: 'NNP?S?|VBG'
+    negate: true

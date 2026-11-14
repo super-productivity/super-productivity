@@ -1,0 +1,19 @@
+---
+# Generated from Harper's RedundantThat rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# There is rarely a situation where `that that` cannot be condensed into a single token.
+extends: existence
+message: "Consider whether the second `that` adds meaning in this context."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "that"
+tokens:
+  - "that(?!\\s*\\n\\s*\\n)\\s+that(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,20 @@
+---
+# Generated from Harper's LikeAsIf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects redundant `like as if` to `like` or `as if`.
+extends: existence
+message: "Avoid redundancy. Use either `like` or `as if`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "like"
+    - "as if"
+tokens:
+  - "like(?!\\s*\\n\\s*\\n)\\s+as(?!\\s*\\n\\s*\\n)\\s+if(?!['\\x{2019}]s\\b)"

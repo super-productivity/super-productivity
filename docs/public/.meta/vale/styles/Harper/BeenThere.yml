@@ -1,0 +1,19 @@
+---
+# Generated from Harper's BeenThere rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the misspelling `bee there` to the proper phrase `been there`.
+extends: existence
+message: "Did you mean `been there`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "been there"
+tokens:
+  - "bee(?!\\s*\\n\\s*\\n)\\s+there(?!['\\x{2019}]s\\b)"

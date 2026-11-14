@@ -1,0 +1,35 @@
+---
+# Generated from Harper's ExitedExcitedContextPhrases rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Changes `exited` to `excited` when the sentence indicates enthusiasm or anticipation.
+extends: existence
+message: "This word choice looks off for this meaning."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "excited"
+nonword: true
+tokens:
+  - "(?<=\\b(?:being)(?!\\s*\\n\\s*\\n)\\s+(?:extremely|really|quite|super|very|so)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:been)(?!\\s*\\n\\s*\\n)\\s+(?:extremely|really|quite|super|very|so)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:were)(?!\\s*\\n\\s*\\n)\\s+(?:extremely|really|quite|super|very|so)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:are)(?!\\s*\\n\\s*\\n)\\s+(?:extremely|really|quite|super|very|so)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:was)(?!\\s*\\n\\s*\\n)\\s+(?:extremely|really|quite|super|very|so)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:am)(?!\\s*\\n\\s*\\n)\\s+(?:extremely|really|quite|super|very|so)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:be)(?!\\s*\\n\\s*\\n)\\s+(?:extremely|really|quite|super|very|so)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:is)(?!\\s*\\n\\s*\\n)\\s+(?:extremely|really|quite|super|very|so)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:being)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:been)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:were)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:are)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:was)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:am)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:be)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"
+  - "(?<=\\b(?:is)(?!\\s*\\n\\s*\\n)\\s+)(?:exited)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|that|for|to)\\b)"

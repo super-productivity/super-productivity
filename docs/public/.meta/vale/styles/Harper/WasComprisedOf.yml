@@ -1,0 +1,19 @@
+---
+# Generated from Harper's WasComprisedOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Rewrites the fixed phrase `was comprised of` to a more widely accepted form.
+extends: existence
+message: "Many style guides treat this wording as nonstandard; consider a clearer construction."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "consisted of"
+tokens:
+  - "was(?!\\s*\\n\\s*\\n)\\s+comprised(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"

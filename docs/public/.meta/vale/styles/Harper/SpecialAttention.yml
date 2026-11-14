@@ -1,0 +1,19 @@
+---
+# Generated from Harper's SpecialAttention rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Changes `spacial attention` to `special attention`.
+extends: existence
+message: "Did you mean `special attention`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "special attention"
+tokens:
+  - "spacial(?!\\s*\\n\\s*\\n)\\s+attention(?!['\\x{2019}]s\\b)"

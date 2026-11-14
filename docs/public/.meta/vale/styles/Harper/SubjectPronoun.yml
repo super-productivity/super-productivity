@@ -1,0 +1,29 @@
+---
+# Generated from Harper's SubjectPronoun linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+#
+# Fixes sentences that start with `me and X` by putting the proper noun
+# first and using `I`.
+extends: substitution
+message: "Put the other person first and use `I` in this compound subject."
+level: warning
+ignorecase: true
+action:
+  name: replace
+swap:
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+alex": "Alex and I"
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+avery": "Avery and I"
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+blake": "Blake and I"
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+cameron": "Cameron and I"
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+jamie": "Jamie and I"
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+jordan": "Jordan and I"
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+kayla": "Kayla and I"
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+madison": "Madison and I"
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+riley": "Riley and I"
+  "me(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+taylor": "Taylor and I"

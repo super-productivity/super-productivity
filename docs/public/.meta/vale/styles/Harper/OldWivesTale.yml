@@ -1,0 +1,19 @@
+---
+# Generated from Harper's OldWivesTale rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `old wise tale` to `old wives' tale`, preserving the phrase’s meaning as an unfounded traditional belief.
+extends: existence
+message: "Use the correct phrase for a superstition or myth."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "old wives' tale"
+tokens:
+  - "old(?!\\s*\\n\\s*\\n)\\s+wise(?!\\s*\\n\\s*\\n)\\s+tale(?!['\\x{2019}]s\\b)"

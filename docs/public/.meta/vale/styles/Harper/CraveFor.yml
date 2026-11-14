@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's CraveFor: `crave` is transitive -- `crave coffee`,
+# not `crave for coffee`.
+#
+# The generated rule carried the punctuation of its own test sentences into the
+# pattern: `craves\s+for\.` and `craving\s+for\.` only ever matched when a
+# literal period followed. 11 missed findings, every one of them mid-sentence.
+#
+# Harper matches two shapes: a plain form of `crave` before `for`, and a
+# progressive `craving for` that needs a form of `be` in front of it. The
+# progressive arm excludes `being`, which Harper spells out with a `but_not`.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "The verb `crave` should not be followed by `for`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bcrave\s+for\b': "crave"
+  '\bcraved\s+for\b': "craved"
+  '\bcraves\s+for\b': "craves"
+  "(?<=\\b(?:am|is|are|was|were|be|been|i'm|we're|you're|he's|she's|it's|they're)\\s)craving\\s+for\\b": "craving"
