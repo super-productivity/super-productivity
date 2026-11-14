@@ -1,4 +1,4 @@
-import { ChildProcessWithoutNullStreams, exec, spawn } from 'child_process';
+import { ChildProcessWithoutNullStreams, exec, execFile, spawn } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
 import { createInterface } from 'readline';
@@ -8,12 +8,29 @@ import electronLog from 'electron-log/main';
 import { CONFIG } from './CONFIG';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const log = electronLog.scope('IdleTimeHandler');
 const WAYLAND_IDLE_HELPER_READY_TIMEOUT_MS = 3000;
 const WAYLAND_IDLE_HELPER_KILL_TIMEOUT_MS = 500;
 const WAYLAND_IDLE_HELPER_FAILURE_THRESHOLD = 3;
 const WAYLAND_IDLE_NOTIFY_RETRY_INTERVAL_MS = 60_000;
 const WAYLAND_IDLE_NOTIFY_DEMOTION_COOLDOWN_MS = 5 * 60_000;
+const GDBUS_IDLE_ARGS = [
+  'call',
+  '--session',
+  '--dest',
+  'org.gnome.Mutter.IdleMonitor',
+  '--object-path',
+  '/org/gnome/Mutter/IdleMonitor/Core',
+  '--method',
+  'org.gnome.Mutter.IdleMonitor.GetIdletime',
+];
+const DBUS_SEND_IDLE_ARGS = [
+  '--print-reply',
+  '--dest=org.gnome.Mutter.IdleMonitor',
+  '/org/gnome/Mutter/IdleMonitor/Core',
+  'org.gnome.Mutter.IdleMonitor.GetIdletime',
+];
 
 type IdleDetectionMethod =
   | 'powerMonitor'
@@ -50,6 +67,7 @@ export class IdleTimeHandler {
   private _waylandIdleNotifyPromotionPromise: Promise<void> | null = null;
   private _lastWaylandIdleNotifyRetryMs: number = 0;
   private _lastWaylandIdleNotifyDemotionMs: number = 0;
+  private _isGdbusMissing: boolean = false;
   private readonly _waylandHelperTimeoutMs = CONFIG.MIN_IDLE_TIME;
   private readonly _resetWaylandIdleAfterResume = (): void => {
     this._waylandIdleSinceMs = null;
@@ -340,26 +358,9 @@ export class IdleTimeHandler {
       log.debug('Attempting GNOME idle detection inside snap environment');
     }
 
-    let command =
-      'gdbus call --session --dest org.gnome.Mutter.IdleMonitor --object-path /org/gnome/Mutter/IdleMonitor/Core --method org.gnome.Mutter.IdleMonitor.GetIdletime';
-
+    let stdout: string | null;
     try {
-      await execAsync('which gdbus', { timeout: 1000 });
-    } catch {
-      if (isSnap) {
-        log.warn(
-          'gdbus unavailable in snap environment, skipping dbus-send fallback to avoid libdbus mismatch',
-        );
-        return null;
-      }
-      command =
-        'dbus-send --print-reply --dest=org.gnome.Mutter.IdleMonitor /org/gnome/Mutter/IdleMonitor/Core org.gnome.Mutter.IdleMonitor.GetIdletime';
-    }
-
-    let stdout: string;
-    try {
-      const result = await execAsync(command, { timeout: 5000 });
-      stdout = result.stdout;
+      stdout = await this._queryGnomeIdleMonitor(isSnap);
     } catch (error) {
       if (isSnap) {
         log.warn('gdbus idle monitor failed in snap environment', error);
@@ -367,16 +368,51 @@ export class IdleTimeHandler {
       }
       throw error;
     }
+    if (stdout === null) {
+      return null;
+    }
 
-    const match = stdout.match(/uint64\s+(\d+)|(?:\(uint64\s+)?(\d+)(?:,\))?/);
+    // gdbus prints `(uint64 8,)`; dbus-send prints a `time=<epoch>` header line
+    // before `uint64 8`, so only a number tagged uint64 is the idle time.
+    const match = stdout.match(/uint64\s+(\d+)/);
     if (match) {
-      const idleMs = parseInt(match[1] || match[2], 10);
+      const idleMs = parseInt(match[1], 10);
       if (idleMs >= 0 && idleMs < Number.MAX_SAFE_INTEGER) {
         return idleMs;
       }
     }
 
     return null;
+  }
+
+  // Runs on every idle poll, so it spawns the binary directly (no shell, no
+  // `which` probe) and remembers a missing gdbus: one process per poll.
+  private async _queryGnomeIdleMonitor(isSnap: boolean): Promise<string | null> {
+    if (!this._isGdbusMissing) {
+      try {
+        const { stdout } = await execFileAsync('gdbus', GDBUS_IDLE_ARGS, {
+          timeout: 5000,
+        });
+        return stdout;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+        this._isGdbusMissing = true;
+        log.info('gdbus not found, using dbus-send for GNOME idle time');
+      }
+    }
+
+    if (isSnap) {
+      log.warn(
+        'gdbus unavailable in snap environment, skipping dbus-send fallback to avoid libdbus mismatch',
+      );
+      return null;
+    }
+    const { stdout } = await execFileAsync('dbus-send', DBUS_SEND_IDLE_ARGS, {
+      timeout: 5000,
+    });
+    return stdout;
   }
 
   private async _ensureWaylandIdleHelperStarted(): Promise<boolean> {
