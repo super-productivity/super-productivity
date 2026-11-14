@@ -187,21 +187,25 @@ export class MagicNavConfigService {
         action: () => this._toggleProjectsExpanded(),
         additionalButtons: [
           {
-            id: 'project-visibility',
-            icon: 'visibility',
-            tooltip: T.F.PROJECT_FOLDER.TOOLTIP_VISIBILITY,
-          },
-          {
-            id: 'add-project-folder',
-            icon: 'create_new_folder',
-            tooltip: T.F.PROJECT_FOLDER.TOOLTIP_CREATE,
-            action: () => this._openCreateProjectFolder(),
-          },
-          {
             id: 'add-project',
             icon: 'add',
             tooltip: T.MH.CREATE_PROJECT,
             action: () => this._openCreateProject(),
+          },
+        ],
+        // The nav list appends the project visibility list.
+        contextMenuItems: [
+          {
+            id: 'add-project-folder',
+            icon: 'create_new_folder',
+            label: T.F.PROJECT_FOLDER.TOOLTIP_CREATE,
+            action: () => this._openCreateProjectFolder(),
+          },
+          {
+            id: 'sort-projects',
+            icon: 'sort_by_alpha',
+            label: T.F.PROJECT_FOLDER.SORT,
+            action: () => this._sortProjectTree(),
           },
         ],
       },
@@ -223,16 +227,24 @@ export class MagicNavConfigService {
         action: () => this._toggleTagsExpanded(),
         additionalButtons: [
           {
-            id: 'add-tag-folder',
-            icon: 'create_new_folder',
-            tooltip: T.F.TAG_FOLDER.TOOLTIP_CREATE,
-            action: () => this._openCreateTagFolder(),
-          },
-          {
             id: 'add-tag',
             icon: 'add',
             tooltip: T.MH.CREATE_TAG,
             action: () => this._createNewTag(),
+          },
+        ],
+        contextMenuItems: [
+          {
+            id: 'add-tag-folder',
+            icon: 'create_new_folder',
+            label: T.F.TAG_FOLDER.TOOLTIP_CREATE,
+            action: () => this._openCreateTagFolder(),
+          },
+          {
+            id: 'sort-tags',
+            icon: 'sort_by_alpha',
+            label: T.F.TAG_FOLDER.SORT,
+            action: () => this._sortTagTree(),
           },
         ],
       },
@@ -596,6 +608,41 @@ export class MagicNavConfigService {
         }
         this._menuTreeService.createTagFolder(trimmed);
       });
+  }
+
+  private _sortProjectTree(): void {
+    this._openSortUndoSnack(
+      this._menuTreeService.sortProjectTreeByName(),
+      T.F.PROJECT_FOLDER.S.SORTED,
+      T.F.PROJECT_FOLDER.S.SORT_UNDO_STALE,
+    );
+  }
+
+  private _sortTagTree(): void {
+    this._openSortUndoSnack(
+      this._menuTreeService.sortTagTreeByName(),
+      T.F.TAG_FOLDER.S.SORTED,
+      T.F.TAG_FOLDER.S.SORT_UNDO_STALE,
+    );
+  }
+
+  private _openSortUndoSnack(
+    undo: (() => boolean) | null,
+    msg: string,
+    staleUndoMsg: string,
+  ): void {
+    if (!undo) {
+      return;
+    }
+    this._snackService.open({
+      msg,
+      actionStr: T.G.UNDO,
+      actionFn: () => {
+        if (!undo()) {
+          this._snackService.open(staleUndoMsg);
+        }
+      },
+    });
   }
 
   private _createNewTag(): void {
