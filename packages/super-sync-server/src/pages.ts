@@ -70,10 +70,8 @@ export async function pageRoutes(fastify: FastifyInstance) {
         const passkeyDetails =
           preview.kind === 'passkey'
             ? `
-              <p>Passkey fingerprint: <code>${escapeHtml(preview.credentialFingerprint ?? '')}</code></p>
-              <p>Passkey created: ${escapeHtml(preview.credentialCreatedAt?.toISOString() ?? '')}</p>
-              <p>Transports: ${escapeHtml(preview.transports ?? 'unspecified')}</p>
-              <p><strong>Only confirm if you created a passkey at that time.</strong>
+              <p>Registration code: <strong class="code">${escapeHtml(preview.matchCode ?? '')}</strong></p>
+              <p><strong>Only confirm if this code matches the one shown where you registered your passkey.</strong>
               If you did not request this verification, do not confirm — start a new registration instead.</p>`
             : '<p>This link verifies your email address without a passkey.</p>';
 
@@ -90,6 +88,7 @@ export async function pageRoutes(fastify: FastifyInstance) {
               button:disabled { background: #475569; cursor: not-allowed; }
               .error { color: #ef4444; margin-top: 1rem; display: none; }
               .success { color: #10b981; margin-top: 1rem; display: none; }
+              .code { font-family: monospace; font-size: 1.5rem; letter-spacing: 0.15em; color: #fbbf24; }
               a { color: #3b82f6; text-decoration: none; margin-top: 1rem; display: inline-block; }
             </style>
           </head>

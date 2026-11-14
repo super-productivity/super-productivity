@@ -78,6 +78,7 @@ vi.mock('../src/auth', async (importOriginal) => {
 // Import mocked modules to get references
 import { prisma } from '../src/db';
 import { sendLoginMagicLinkEmail, sendVerificationEmail } from '../src/email';
+import { matchCodeForCredentialId } from '../src/match-code';
 import { Prisma } from '@prisma/client';
 
 // Import module under test
@@ -414,16 +415,16 @@ describe('Magic Link Registration', () => {
     });
 
     it('should preview the passkey a link authorizes, without activating it (#9032)', async () => {
-      const createdAt = new Date('2026-11-08T12:00:00.000Z');
+      const credentialId = Buffer.from('owner-credential');
       mockPrisma.pendingPasskeyRegistration.findUnique.mockResolvedValue({
         userId: 1,
         verificationToken: 'pending-token',
         verificationTokenExpiresAt: BigInt(Date.now() + 60_000),
-        credentialId: Buffer.from('owner-credential'),
+        credentialId,
         publicKey: Buffer.from('owner-public-key'),
         counter: 0n,
         transports: '["internal"]',
-        createdAt,
+        createdAt: new Date(),
         user: { email: testEmail },
       });
 
@@ -431,9 +432,9 @@ describe('Magic Link Registration', () => {
 
       expect(preview?.kind).toBe('passkey');
       expect(preview?.email).toBe(testEmail);
-      expect(preview?.credentialCreatedAt).toEqual(createdAt);
-      expect(preview?.transports).toBe('["internal"]');
-      expect(preview?.credentialFingerprint).toMatch(/^[0-9a-f]{16}$/);
+      // Same derived code the register response showed for this credential.
+      expect(preview?.matchCode).toBe(matchCodeForCredentialId(credentialId));
+      expect(preview?.matchCode).toMatch(/^[2-9A-HJKMNP-Z]{3}-[2-9A-HJKMNP-Z]{3}$/);
       expect(mockPrisma.passkey.create).not.toHaveBeenCalled();
       expect(mockPrisma.passkey.deleteMany).not.toHaveBeenCalled();
     });
@@ -467,7 +468,7 @@ describe('Magic Link Registration', () => {
 
       expect(preview?.kind).toBe('magic-link');
       expect(preview?.email).toBe(testEmail);
-      expect(preview?.credentialFingerprint).toBeUndefined();
+      expect(preview?.matchCode).toBeUndefined();
     });
 
     it('should reject an unknown token without touching any account', async () => {

@@ -389,10 +389,7 @@ describe('Email Verification Page', () => {
         return {
           kind: 'passkey',
           email: 'me@example.com',
-          credentialFingerprint: '0123456789abcdef',
-          credentialCreatedAt: new Date('2026-11-08T12:00:00.000Z'),
-          transports: '["internal"]',
-          expiresAt: BigInt(Date.now() + 60_000),
+          matchCode: 'AB2-DEF',
         };
       }),
       verifyEmail: vi.fn().mockImplementation(async () => {
@@ -417,8 +414,8 @@ describe('Email Verification Page', () => {
     expect(previewCalled).toBe(true);
     expect(verifyEmailCalled).toBe(false);
     expect(response.body).toContain('Verify your SuperSync account');
-    expect(response.body).toContain('0123456789abcdef');
-    expect(response.body).toContain('Only confirm if you created a passkey');
+    expect(response.body).toContain('AB2-DEF');
+    expect(response.body).toContain('Only confirm if this code matches');
     expect(response.body).not.toContain('Email Verified!');
   });
 

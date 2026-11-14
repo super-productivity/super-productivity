@@ -2,7 +2,8 @@ import { prisma } from './db';
 import * as jwt from 'jsonwebtoken';
 const { JsonWebTokenError, TokenExpiredError } = jwt;
 import { Logger } from './logger';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes } from 'crypto';
+import { matchCodeForCredentialId } from './match-code';
 import { sendLoginMagicLinkEmail, sendVerificationEmail } from './email';
 import { loadConfigFromEnv, isConsentRequired } from './config';
 import { Prisma } from '@prisma/client';
@@ -145,10 +146,8 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
 export interface VerificationPreview {
   kind: 'passkey' | 'magic-link';
   email: string;
-  credentialFingerprint?: string;
-  credentialCreatedAt?: Date;
-  transports?: string | null;
-  expiresAt: bigint;
+  /** Same short code the register response showed, for eyeball comparison. */
+  matchCode?: string;
 }
 
 export const getVerificationPreview = async (
@@ -166,13 +165,7 @@ export const getVerificationPreview = async (
     return {
       kind: 'passkey',
       email: pendingPasskey.user.email,
-      credentialFingerprint: createHash('sha256')
-        .update(pendingPasskey.credentialId)
-        .digest('hex')
-        .slice(0, 16),
-      credentialCreatedAt: pendingPasskey.createdAt,
-      transports: pendingPasskey.transports,
-      expiresAt: pendingPasskey.verificationTokenExpiresAt,
+      matchCode: matchCodeForCredentialId(pendingPasskey.credentialId),
     };
   }
 
@@ -191,7 +184,6 @@ export const getVerificationPreview = async (
   return {
     kind: 'magic-link',
     email: user.email,
-    expiresAt: user.verificationTokenExpiresAt ?? BigInt(Date.now()),
   };
 };
 

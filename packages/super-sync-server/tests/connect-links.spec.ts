@@ -48,7 +48,6 @@ describe('sign-in request in login and sign-up links', () => {
     mocks.getVerificationPreview.mockResolvedValue({
       kind: 'magic-link',
       email: 'me@example.com',
-      expiresAt: BigInt(Date.now() + 60_000),
     });
     mocks.sendMail.mockResolvedValue({ messageId: 'm1' });
     app = Fastify();
