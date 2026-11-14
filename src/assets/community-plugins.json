@@ -306,5 +306,18 @@
       "downloadUrl": "https://github.com/ptrckmgl/sp-gamify/releases/download/v1.1.0/sp-gamify.zip",
       "sha256": "a9386db9a7021afb4dbf953c0627990a56c4d0e38dd85b275d1173b13ca7e7d6"
     }
+  },
+  {
+    "name": "Milestone",
+    "shortDescription": "Countdowns, anniversaries, birthdays and festivals, with optional lunar calendar conversion, festival presets and cross-device sync.",
+    "url": "https://github.com/calmpunct/sp-milestone",
+    "author": "calmpunct",
+    "authorUrl": "https://github.com/calmpunct",
+    "id": "milestone",
+    "release": {
+      "version": "1.5.0",
+      "downloadUrl": "https://github.com/calmpunct/sp-milestone/releases/download/v1.5.0/sp-milestone-v1.5.0.zip",
+      "sha256": "e2ae688b29509f4ee6f9b07d5ea2a259e4c52624aeea6f3a3f0c3b041bfde958"
+    }
   }
 ]
