@@ -9,6 +9,7 @@ import {
 } from './ipc-handlers';
 import { initClipboardImageHandlers } from './clipboard-image-handler';
 import { initLocalRestApi } from './local-rest-api';
+import { initTaskListWidget } from './task-list-widget/task-list-widget';
 
 export const initIpcInterfaces = (): void => {
   // Initialize plugin node executor (registers IPC handlers)
@@ -26,4 +27,5 @@ export const initIpcInterfaces = (): void => {
   initGlobalShortcutsIpc();
   initClipboardImageHandlers();
   initLocalRestApi();
+  initTaskListWidget();
 };
