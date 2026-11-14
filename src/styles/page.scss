@@ -85,8 +85,17 @@ html {
   // safe areas instead of painting Default-theme strips around custom themes.
   background: transparent;
 
-  button,
-  a {
+  // Reset inherited no-drag at the page boundary; the wrapper's region covers
+  // clipped route content, including buttons and links. Escaping overlays that
+  // overlap a drag area need their own no-drag region.
+  // This reduced post-layout region collection from ~100 ms to ~7 ms with
+  // 5,000 Today tasks (Linux, Electron 44.7.2, measured 2026-10).
+  // Use `initial`: in that Electron version, `none` preserves inherited no-drag.
+  .route-wrapper > * {
+    -webkit-app-region: initial;
+  }
+
+  :is(button, a):not(.route-wrapper *) {
     -webkit-app-region: no-drag !important;
   }
 
