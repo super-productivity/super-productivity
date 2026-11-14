@@ -51,6 +51,7 @@ import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confir
 import { T } from '../../../t.const';
 import { DateService } from '../../../core/date/date.service';
 import { ipcIdleTime$ } from '../../../core/ipc-events';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { selectIsSessionRunning } from '../../focus-mode/store/focus-mode.selectors';
 import {
   completeFocusSession,
@@ -73,6 +74,7 @@ export class IdleEffects {
   private _store = inject(Store);
   private _uiHelperService = inject(UiHelperService);
   private _dateService = inject(DateService);
+  private _trackingIntervalService = inject(GlobalTrackingIntervalService);
 
   private _dataInitStateService = inject(DataInitStateService);
   private _hydrationStateService = inject(HydrationStateService);
@@ -154,7 +156,14 @@ export class IdleEffects {
                     return of(resetIdle());
                   }
                   const idleTime = idleTimeInMs as number;
-                  return idleTime >= minIdleTime ? of(triggerIdle({ idleTime })) : EMPTY;
+                  if (!(idleTime >= minIdleTime)) {
+                    return EMPTY;
+                  }
+                  // Resume IPC can arrive before the first post-sleep interval.
+                  // Account for that elapsed time before idle entry subtracts it,
+                  // or the subtraction erases work recorded before sleeping.
+                  this._trackingIntervalService.triggerWakeUpTick();
+                  return of(triggerIdle({ idleTime }));
                 }),
               ),
       ),
