@@ -50,14 +50,12 @@ From the root directory, compile the Android project using the following command
 You can install the compiled Android application using either Android Studio or npm scripts.
 
 - **Using Android Studio:**
-
   1. Open Android Studio.
   2. Select `Open an existing project`.
   3. Navigate to the `android` directory within the cloned repository.
   4. Follow the prompts to build and run the application on your device or emulator.
 
 - **Using NPM Scripts:**
-
   - **For Testing Installation:**
 
     ```bash
