@@ -46,6 +46,7 @@ import {
   createBaseState,
   createMockTask as createReducerTask,
 } from '../../root-store/meta/task-shared-meta-reducers/test-utils';
+import { ISSUE_PROVIDER_FEATURE_KEY } from './store/issue-provider.reducer';
 
 describe('IssueService', () => {
   let service: IssueService;
@@ -1307,8 +1308,20 @@ describe('IssueService', () => {
       const action = dispatched[0];
       expect(action.type).toBe(TaskSharedActions.restoreTask.type);
       const reducer = createCombinedTaskSharedMetaReducer((state) => state);
+      // createBaseState() omits the issueProvider slice; the app always registers
+      // it. Seed the provider so normalizeRestoredTask keeps a valid link.
+      const stateWithProvider = createBaseState();
+      stateWithProvider[ISSUE_PROVIDER_FEATURE_KEY] = {
+        ids: [PROVIDER_ID],
+        entities: {
+          [PROVIDER_ID]: {
+            id: PROVIDER_ID,
+            issueProviderKey: 'PLAINSPACE',
+          } as IssueProvider,
+        },
+      };
       return [action, JSON.parse(JSON.stringify(action))].map((restoreAction) =>
-        reducer(createBaseState(), restoreAction),
+        reducer(stateWithProvider, restoreAction),
       );
     };
 

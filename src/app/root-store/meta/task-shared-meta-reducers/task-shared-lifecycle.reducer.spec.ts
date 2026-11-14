@@ -9,6 +9,8 @@ import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { Action, ActionReducer } from '@ngrx/store';
 import { INBOX_PROJECT } from '../../../features/project/project.const';
 import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { ISSUE_PROVIDER_FEATURE_KEY } from '../../../features/issue/store/issue-provider.reducer';
+import { IssueProvider } from '../../../features/issue/issue.model';
 import {
   createBaseState,
   createMockProject,
@@ -41,6 +43,51 @@ describe('taskSharedLifecycleMetaReducer', () => {
     metaReducer = taskSharedLifecycleMetaReducer(mockReducer);
     baseState = createBaseState();
   });
+
+  for (const hasProvider of [false, true]) {
+    it(`should ${hasProvider ? 'preserve valid' : 'clear stale'} issue links when restoring a parent and subtask`, () => {
+      const issueFields = {
+        issueProviderId: 'provider',
+        issueId: 'issue-1',
+        issueType: 'JIRA' as const,
+        issueWasUpdated: true,
+        issueLastUpdated: 123,
+        issueAttachmentNr: 2,
+        issueTimeTracked: { user: 100 },
+        issuePoints: 3,
+        issueLastSyncedValues: { title: 'Synced title' },
+      };
+      baseState[ISSUE_PROVIDER_FEATURE_KEY] = {
+        ids: hasProvider ? ['provider'] : [],
+        entities: hasProvider ? { provider: { id: 'provider' } as IssueProvider } : {},
+      };
+      const parent = createMockTask({
+        ...issueFields,
+        id: 'parent',
+        subTaskIds: ['child'],
+      });
+      const child = createMockTask({
+        ...issueFields,
+        id: 'child',
+        parentId: parent.id,
+      });
+      const result = metaReducer(
+        baseState,
+        TaskSharedActions.restoreTask({ task: parent, subTasks: [child] }),
+      ) as RootState;
+
+      for (const id of [parent.id, child.id]) {
+        const restored = result[TASK_FEATURE_NAME].entities[id]!;
+        for (const key of Object.keys(issueFields) as (keyof typeof issueFields)[]) {
+          expect(restored[key])
+            .withContext(`${id}.${key}`)
+            .toEqual(hasProvider ? issueFields[key] : undefined);
+        }
+      }
+      expect(parent.issueProviderId).toBe('provider');
+      expect(child.issueProviderId).toBe('provider');
+    });
+  }
 
   describe('moveToArchive action', () => {
     // Helper to create archive action with tasks

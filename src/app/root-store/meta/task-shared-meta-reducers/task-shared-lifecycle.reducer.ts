@@ -15,6 +15,8 @@ import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../../features/project/project.const';
 import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { ISSUE_PROVIDER_FEATURE_KEY } from '../../../features/issue/store/issue-provider.reducer';
+import { UNLINKED_ISSUE_FIELDS } from '../../../features/tasks/task-issue-fields';
 import { unique } from '../../../util/unique';
 import {
   ActionHandlerMap,
@@ -53,7 +55,7 @@ const handleMoveToArchive = (state: RootState, tasks: TaskWithSubTasks[]): RootS
 
 /**
  * Normalizes stale references on a task being restored from archive.
- * Archives may have refs to deleted projects/tags/repeatCfgs (see #6270).
+ * Archives may have refs to deleted projects/tags/repeatCfgs/providers (see #6270).
  * We clean these up during restore so the active task passes validation.
  */
 const normalizeRestoredTask = <T extends TaskEntity | Task>(
@@ -82,7 +84,13 @@ const normalizeRestoredTask = <T extends TaskEntity | Task>(
       ? src['repeatCfgId']
       : undefined;
 
-  return { ...t, projectId, tagIds, repeatCfgId } as T;
+  const issueFields =
+    src['issueProviderId'] &&
+    !state[ISSUE_PROVIDER_FEATURE_KEY]?.entities[src['issueProviderId'] as string]
+      ? UNLINKED_ISSUE_FIELDS
+      : {};
+
+  return { ...t, projectId, tagIds, repeatCfgId, ...issueFields } as T;
 };
 
 const handleRestoreTask = (
