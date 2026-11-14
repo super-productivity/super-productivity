@@ -9,10 +9,37 @@ export const ASSISTANT_ACCESS_PATH = '/mcp';
 export const ASSISTANT_ACCESS_SCOPES = [
   'tasks:read',
   'tasks:read_notes',
+  'tasks:read_archive',
   'tasks:capture',
+  'tasks:edit',
+  'tasks:delete',
+  'notes:read',
+  'notes:edit',
+  'counters:read',
+  'counters:edit',
 ] as const;
 
 export type AssistantAccessScope = (typeof ASSISTANT_ACCESS_SCOPES)[number];
+
+/**
+ * A scope that is only granted together with another one. Task notes and the
+ * archive are reached through a task read, and every write answers with what
+ * it changed, so it needs the matching read. Capture stands alone: it only adds.
+ */
+const SCOPE_REQUIREMENTS: readonly [AssistantAccessScope, AssistantAccessScope][] = [
+  ['tasks:read_notes', 'tasks:read'],
+  ['tasks:read_archive', 'tasks:read'],
+  ['tasks:edit', 'tasks:read'],
+  ['tasks:delete', 'tasks:read'],
+  ['notes:edit', 'notes:read'],
+  ['counters:edit', 'counters:read'],
+];
+
+/** The scope that has to be granted for this one to be, if any. */
+export const getRequiredScope = (
+  scope: AssistantAccessScope,
+): AssistantAccessScope | undefined =>
+  SCOPE_REQUIREMENTS.find(([dependent]) => dependent === scope)?.[1];
 
 export interface AssistantAccessState {
   isEnabled: boolean;

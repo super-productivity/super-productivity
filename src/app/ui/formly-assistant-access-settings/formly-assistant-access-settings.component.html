@@ -34,27 +34,15 @@
     <h3 class="sub-section-heading">
       {{ T.GCF.MISC.ASSISTANT_ACCESS_PERMISSIONS | translate }}
     </h3>
-    <mat-checkbox
-      class="scope"
-      [checked]="hasScope('tasks:read')"
-      [disabled]="isBusy()"
-      (change)="setScope('tasks:read', $event.checked, $event.source)"
-      >{{ T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_READ | translate }}</mat-checkbox
-    >
-    <mat-checkbox
-      class="scope"
-      [checked]="hasScope('tasks:read_notes')"
-      [disabled]="isBusy() || !hasScope('tasks:read')"
-      (change)="setScope('tasks:read_notes', $event.checked, $event.source)"
-      >{{ T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_READ_NOTES | translate }}</mat-checkbox
-    >
-    <mat-checkbox
-      class="scope"
-      [checked]="hasScope('tasks:capture')"
-      [disabled]="isBusy()"
-      (change)="setScope('tasks:capture', $event.checked, $event.source)"
-      >{{ T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_CAPTURE | translate }}</mat-checkbox
-    >
+    @for (option of scopeOptions; track option.scope) {
+      <mat-checkbox
+        class="scope"
+        [checked]="hasScope(option.scope)"
+        [disabled]="isBusy() || !canGrant(option.scope)"
+        (change)="setScope(option.scope, $event.checked, $event.source)"
+        >{{ option.label | translate }}</mat-checkbox
+      >
+    }
 
     <h3 class="sub-section-heading">
       {{ T.GCF.MISC.ASSISTANT_ACCESS_KEY | translate }}

@@ -22,10 +22,25 @@ import {
   ASSISTANT_ACCESS_PATH,
   AssistantAccessScope,
   AssistantAccessState,
+  getRequiredScope,
 } from '../../../../electron/shared-with-frontend/assistant-access.model';
 import { ElectronDistChannel } from '../../../../electron/shared-with-frontend/get-dist-channel';
 
 const KEY_PLACEHOLDER = '<ACCESS_KEY>';
+
+/** The permission checkboxes, in the order shown. */
+const SCOPE_OPTIONS: { scope: AssistantAccessScope; label: string }[] = [
+  { scope: 'tasks:read', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_READ },
+  { scope: 'tasks:read_notes', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_READ_NOTES },
+  { scope: 'tasks:read_archive', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_READ_ARCHIVE },
+  { scope: 'tasks:capture', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_CAPTURE },
+  { scope: 'tasks:edit', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_EDIT },
+  { scope: 'tasks:delete', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_DELETE },
+  { scope: 'notes:read', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_NOTES_READ },
+  { scope: 'notes:edit', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_NOTES_EDIT },
+  { scope: 'counters:read', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_COUNTERS_READ },
+  { scope: 'counters:edit', label: T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_COUNTERS_EDIT },
+];
 
 /** Release asset uploaded by the tag build (tools/mcpb/README.md). */
 export const CLAUDE_DESKTOP_EXTENSION_URL =
@@ -67,6 +82,7 @@ export class FormlyAssistantAccessSettingsComponent
   readonly url = `http://${LOCAL_REST_API_HOST}:${LOCAL_REST_API_PORT}${ASSISTANT_ACCESS_PATH}`;
   readonly port = LOCAL_REST_API_PORT;
   readonly claudeDesktopExtensionUrl = CLAUDE_DESKTOP_EXTENSION_URL;
+  readonly scopeOptions = SCOPE_OPTIONS;
   readonly isClaudeDesktopOffered = canUseClaudeDesktopExtension(
     window.ea?.getDistChannel?.(),
   );
@@ -78,6 +94,11 @@ export class FormlyAssistantAccessSettingsComponent
   readonly isEnabled = computed(() => !!this.state()?.isEnabled);
   readonly hasScope = (scope: AssistantAccessScope): boolean =>
     !!this.state()?.scopes.includes(scope);
+  /** A dependent permission can only be granted with the one it needs. */
+  readonly canGrant = (scope: AssistantAccessScope): boolean => {
+    const required = getRequiredScope(scope);
+    return required === undefined || this.hasScope(required);
+  };
 
   readonly claudeCodeSnippet = computed(
     () =>
@@ -127,14 +148,10 @@ export class FormlyAssistantAccessSettingsComponent
     source?: MatCheckbox,
   ): Promise<void> {
     const current = this.state()?.scopes ?? [];
+    // Revoking a permission also revokes the ones that need it.
     const next = isGranted
       ? [...current, scope]
-      : current.filter(
-          (s) =>
-            s !== scope &&
-            // Notes are only reachable through a task read.
-            !(scope === 'tasks:read' && s === 'tasks:read_notes'),
-        );
+      : current.filter((s) => s !== scope && getRequiredScope(s) !== scope);
     await this._run((ea) => ea.setAssistantAccessScopes(next));
     if (source) {
       source.checked = this.hasScope(scope);
