@@ -286,6 +286,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     },
     { equal: fastArrayCompare },
   );
+  overdueGroups = computed(() =>
+    this.customizerService.groupTasksBySelectedGroup(this.overdueTasks()),
+  );
+  laterTodayGroups = computed(() =>
+    this.customizerService.groupTasksBySelectedGroup(this.laterTodayTasks()),
+  );
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
     this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),

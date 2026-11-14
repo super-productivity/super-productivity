@@ -286,6 +286,21 @@ export class TaskViewCustomizerService {
     return sanitized;
   }
 
+  /** Groups tasks by the selected grouping only (no filter/sort); null if ungrouped. */
+  groupTasksBySelectedGroup(tasks: TaskWithSubTasks[]): CustomizedTaskGroup[] | null {
+    const group = this.selectedGroup();
+    if (!group.type || !tasks.length) {
+      return null;
+    }
+    const grouped = this.applyGrouping(tasks, group.type);
+    return this._orderGroupKeys(grouped, group.type).map((key) => ({
+      key,
+      tasks: grouped[key],
+      tagId: null,
+      newTaskPrefill: null,
+    }));
+  }
+
   customizeUndoneTasks(
     undoneTasks$: Observable<TaskWithSubTasks[]>,
   ): Observable<CustomizedUndoneTasks> {

@@ -1054,6 +1054,21 @@ describe('TaskViewCustomizerService', () => {
     });
   });
 
+  describe('groupTasksBySelectedGroup (overdue / later today panels)', () => {
+    it('returns null without a grouping', () => {
+      service.setGroup({ type: null, label: 'None' });
+      expect(service.groupTasksBySelectedGroup(mockTasks)).toBeNull();
+    });
+
+    it('groups all tasks without dropping any', () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      const groups = service.groupTasksBySelectedGroup(mockTasks)!;
+      expect(groups.map((g) => g.key)).toEqual(['Tag A', 'Tag B', 'No tag']);
+      const grouped = new Set(groups.flatMap((g) => g.tasks));
+      expect(mockTasks.every((t) => grouped.has(t))).toBe(true);
+    });
+  });
+
   describe('precomputed groups', () => {
     const nextFrame = (): Promise<void> =>
       new Promise((resolve) => requestAnimationFrame(() => resolve()));

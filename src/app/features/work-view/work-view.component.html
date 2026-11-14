@@ -341,12 +341,26 @@
                 </div>
 
                 <div>
-                  <task-list
-                    [tasks]="overdueTasks()"
-                    [isSortingDisabled]="true"
-                    listId="PARENT"
-                    listModelId="OVERDUE"
-                  ></task-list>
+                  @if (overdueGroups(); as groups) {
+                    @for (group of groups; track group.key) {
+                      <h4 class="sub-group-title">
+                        {{ group.key | scheduledDateGroup: todayStr() }}
+                      </h4>
+                      <task-list
+                        [tasks]="group.tasks"
+                        [isSortingDisabled]="true"
+                        listId="PARENT"
+                        listModelId="OVERDUE"
+                      ></task-list>
+                    }
+                  } @else {
+                    <task-list
+                      [tasks]="overdueTasks()"
+                      [isSortingDisabled]="true"
+                      listId="PARENT"
+                      listModelId="OVERDUE"
+                    ></task-list>
+                  }
                 </div>
               </collapsible>
             </section>
@@ -373,12 +387,26 @@
                 [isIconBefore]="true"
                 [isGroup]="true"
               >
-                <task-list
-                  [tasks]="laterTodayTasks()"
-                  [isSortingDisabled]="true"
-                  listId="PARENT"
-                  listModelId="LATER_TODAY"
-                ></task-list>
+                @if (laterTodayGroups(); as groups) {
+                  @for (group of groups; track group.key) {
+                    <h4 class="sub-group-title">
+                      {{ group.key | scheduledDateGroup: todayStr() }}
+                    </h4>
+                    <task-list
+                      [tasks]="group.tasks"
+                      [isSortingDisabled]="true"
+                      listId="PARENT"
+                      listModelId="LATER_TODAY"
+                    ></task-list>
+                  }
+                } @else {
+                  <task-list
+                    [tasks]="laterTodayTasks()"
+                    [isSortingDisabled]="true"
+                    listId="PARENT"
+                    listModelId="LATER_TODAY"
+                  ></task-list>
+                }
                 @if (laterTodayCalendarEvents().length) {
                   <div class="later-today-cal-events">
                     @for (calEv of laterTodayCalendarEvents(); track calEv.id) {
