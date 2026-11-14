@@ -419,6 +419,28 @@ export class MenuTreeService {
     return cloned;
   }
 
+  private _insertNodeAfter(
+    tree: MenuTreeTreeNode[],
+    node: MenuTreeProjectNode | MenuTreeTagNode,
+    siblingId: string,
+  ): MenuTreeTreeNode[] | null {
+    const index = tree.findIndex((n) => n.k === node.k && n.id === siblingId);
+    if (index !== -1) {
+      return [...tree.slice(0, index + 1), node, ...tree.slice(index + 1)];
+    }
+    for (let i = 0; i < tree.length; i++) {
+      const folder = tree[i];
+      if (folder.k !== MenuTreeKind.FOLDER) {
+        continue;
+      }
+      const children = this._insertNodeAfter(folder.children, node, siblingId);
+      if (children) {
+        return tree.map((n, j) => (j === i ? { ...folder, children } : n));
+      }
+    }
+    return null;
+  }
+
   private _removeItemFromTree(
     tree: MenuTreeTreeNode[],
     itemId: string,
@@ -514,6 +536,22 @@ export class MenuTreeService {
         folderId,
       ),
     );
+  }
+
+  /**
+   * Insert a project directly after a sibling project, inside the sibling's folder.
+   * If the sibling is not in the stored tree, both already render at the end of the
+   * list, so nothing is persisted.
+   */
+  addProjectAfter(projectId: string, siblingProjectId: string): void {
+    const nextTree = this._insertNodeAfter(
+      this.projectTree(),
+      { k: MenuTreeKind.PROJECT, id: projectId },
+      siblingProjectId,
+    );
+    if (nextTree) {
+      this.setProjectTree(nextTree);
+    }
   }
 
   addTagToFolder(tagId: string, folderId: string | null): void {
