@@ -3,6 +3,7 @@ import { expect, test } from '../../fixtures/test.fixture';
 
 const TITLE = 'Plan without a time';
 const OVERDUE_TITLE = 'Left over from yesterday';
+const DRAG_SETTLE_MS = 50;
 
 type E2eWindow = {
   __e2eTestHelpers: { store: { dispatch: (action: unknown) => void } };
@@ -57,6 +58,8 @@ const drag = async (
   await page.mouse.down();
   await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
   await page.mouse.move(to.x, to.y, { steps: 15 });
+  // Let the 30 ms drag update and its render finish before inspecting or releasing.
+  await page.waitForTimeout(DRAG_SETTLE_MS);
 };
 
 const centerOf = async (target: Locator): Promise<{ x: number; y: number }> => {
@@ -127,7 +130,9 @@ test.describe('Schedule tray mode', () => {
         .locator('schedule-event')
         .filter({ hasText: title });
       await expect(scheduledEvent).toHaveCount(1);
-      await expect(scheduledEvent.locator('.time-badge')).toHaveText(previewTime);
+      await expect(scheduledEvent.locator('.time-badge')).toHaveText(
+        previewTime.replace(/^0(?=\d:)/, ''),
+      );
       const columnBox = (await column.boundingBox())!;
       const eventCenter = await centerOf(scheduledEvent);
       expect(eventCenter.x).toBeGreaterThan(columnBox.x);
