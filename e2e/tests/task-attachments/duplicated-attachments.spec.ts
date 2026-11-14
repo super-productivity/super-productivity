@@ -77,7 +77,7 @@ test('duplicate attachment edits and deletion stay scoped to the copied task', a
   await page.keyboard.press('Escape');
   await page.locator(`[id="${originalId}"]`).focus();
   await page.keyboard.press('Control+d');
-  const copy = page.locator('task').filter({ hasText: '(copy)' });
+  const copy = page.locator(`task:not([id="${originalId}"])`);
   await expect(copy).toHaveCount(1);
   const copyId = await copy.getAttribute('id');
   await expect
@@ -144,12 +144,13 @@ test('duplicating a family preserves parent and child attachments after reload',
     await page.keyboard.press('l');
     await saveAttachment(page, `https://attachment.example.test/${path}`);
   }
+  const parentId = await parent.getAttribute('data-task-id');
   await parent.press('Control+d');
-  await expect(page.locator('task').filter({ hasText: '(copy)' })).toHaveCount(1);
+  await expect(page.locator('.task-list-inner[data-id="UNDONE"] > task')).toHaveCount(2);
   await flushPendingWrites(page);
   await page.reload();
   await workViewPage.waitForTaskList();
-  const attachments = await page.evaluate(() => {
+  const attachments = await page.evaluate((originalId) => {
     let state: RootState | undefined;
     (
       window as Window & { __e2eTestHelpers: { store: Store<RootState> } }
@@ -157,8 +158,8 @@ test('duplicating a family preserves parent and child attachments after reload',
       .subscribe((s) => (state = s))
       .unsubscribe();
     const roots = Object.values(state!.tasks.entities).filter((t) => t && !t.parentId);
-    const original = roots.find((t) => !t!.title.includes('(copy)'))!;
-    const copy = roots.find((t) => t!.title.includes('(copy)'))!;
+    const original = roots.find((t) => t!.id === originalId)!;
+    const copy = roots.find((t) => t!.id !== originalId)!;
     return {
       original: original.attachments,
       copy: copy.attachments,
@@ -166,7 +167,7 @@ test('duplicating a family preserves parent and child attachments after reload',
       copiedChild: state!.tasks.entities[copy.subTaskIds[0]]!.attachments,
       count: state!.tasks.ids.length,
     };
-  });
+  }, parentId);
   expect(attachments.count).toBe(4);
   expect(attachments.original).toHaveLength(1);
   expect(attachments.child).toHaveLength(1);
