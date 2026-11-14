@@ -7,6 +7,9 @@ import { T } from '../../../t.const';
 import { IS_ELECTRON, IS_GNOME_WAYLAND } from '../../../app.constants';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { isUpdateCheckPossible } from '../../../core/update-check/is-update-check-possible.util';
+import { LOGIN_ITEM_CHANNELS } from '../../../../../electron/shared-with-frontend/get-dist-channel';
+
+const distChannel = window.ea?.getDistChannel?.();
 
 export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
   title: T.GCF.MISC.TITLE,
@@ -48,6 +51,15 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         label: T.GCF.MISC.IS_MINIMIZE_TO_TRAY,
       },
     },
+    ...((distChannel && LOGIN_ITEM_CHANNELS.includes(distChannel)
+      ? [
+          {
+            // Keyless: this device's OS login item, read and written over IPC,
+            // never in the synced misc config.
+            type: 'login-item-setting',
+          },
+        ]
+      : []) as LimitedFormlyFieldConfig<MiscConfig>[]),
     ...((IS_ELECTRON
       ? [
           {
