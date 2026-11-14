@@ -151,6 +151,29 @@ describe('humanizeTimestamp', () => {
       const date = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       expect(humanizeTimestamp(date, mockTranslateService)).toBe('in 7 days');
     });
+
+    it('should handle a year in future', () => {
+      const date = new Date(now.getTime() + 400 * 24 * 60 * 60 * 1000);
+      expect(humanizeTimestamp(date, mockTranslateService)).toBe('in a year');
+    });
+
+    it('should round future relative times toward zero like past ones', () => {
+      const cases: [number, string, string][] = [
+        [3 * 60 * 60 * 1000, '3 hours ago', 'in 3 hours'],
+        [10 * 24 * 60 * 60 * 1000, '10 days ago', 'in 10 days'],
+        [60 * 24 * 60 * 60 * 1000, '2 months ago', 'in 2 months'],
+        [400 * 24 * 60 * 60 * 1000, 'a year ago', 'in a year'],
+        [800 * 24 * 60 * 60 * 1000, '2 years ago', 'in 2 years'],
+      ];
+      for (const [ms, pastExpected, futureExpected] of cases) {
+        expect(
+          humanizeTimestamp(new Date(now.getTime() - ms), mockTranslateService),
+        ).toBe(pastExpected);
+        expect(
+          humanizeTimestamp(new Date(now.getTime() + ms), mockTranslateService),
+        ).toBe(futureExpected);
+      }
+    });
   });
 
   it('should handle timestamps', () => {
