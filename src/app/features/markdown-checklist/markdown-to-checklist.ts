@@ -1,11 +1,10 @@
 import { MarkdownChecklistTask } from './markdown-checklist.model';
-import { isCheckedItemLine, isChecklistItemLine } from './checklist-operations';
+import { getChecklistItemLineIndices, isCheckedItemLine } from './checklist-operations';
 
-export const markdownToChecklist = (text: string): MarkdownChecklistTask[] =>
-  text
-    .split('\n')
-    .filter((line) => isChecklistItemLine(line))
-    .map((line) => ({
-      text: line.trim().replace(/^- \[[ xX]\] ?/, ''),
-      isChecked: isCheckedItemLine(line),
-    }));
+export const markdownToChecklist = (text: string): MarkdownChecklistTask[] => {
+  const lines = text.split('\n');
+  return getChecklistItemLineIndices(lines).map((index) => ({
+    text: lines[index].trim().replace(/^- \[[ xX]\] ?/, ''),
+    isChecked: isCheckedItemLine(lines[index]),
+  }));
+};
