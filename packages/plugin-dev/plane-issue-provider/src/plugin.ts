@@ -104,6 +104,54 @@ const fetchProjectIdentifier = async (
   return project?.identifier || '';
 };
 
+/** Relations getById() and getByIds() expand, so state, project key and assignees have names. */
+const DETAIL_EXPAND = 'state,assignees,project';
+
+/**
+ * The work items with these ids, read from the project list 100 at a time. A refresh
+ * covers every imported task at once; one request per task would pass Plane's rate
+ * limit (60 a minute per key by default) at about 60 tasks.
+ */
+const fetchWorkItemsByIds = async (
+  cfg: PlaneConfig,
+  http: PluginHttp,
+  issueIds: string[],
+): Promise<PlaneWorkItem[]> => {
+  const wanted = new Set(issueIds);
+  const found: PlaneWorkItem[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < LIST_MAX_PAGES && wanted.size; page++) {
+    const params: Record<string, string> = {
+      per_page: String(LIST_PAGE_SIZE),
+      order_by: LIST_ORDER_BY,
+      expand: DETAIL_EXPAND,
+    };
+    if (cursor) {
+      params['cursor'] = cursor;
+    }
+    const res = await http.get<PlaneListResponse>(`${projectRoot(cfg)}/work-items/`, {
+      params,
+    });
+    for (const item of res?.results || []) {
+      if (wanted.delete(item.id)) {
+        found.push(item);
+      }
+    }
+    if (!res?.next_page_results || !res.next_cursor) {
+      return found;
+    }
+    cursor = res.next_cursor;
+  }
+  if (wanted.size) {
+    // Tasks from another project, deleted items, or a project past the page cap. The
+    // host skips ids missing from the result, so these tasks just keep their last data.
+    console.warn(
+      `[plane-issue-provider] ${wanted.size} work item(s) not found in the project list`,
+    );
+  }
+  return found;
+};
+
 /**
  * Every open work item in the configured project. Plane's public API has no state filter
  * (the endpoint that takes one is Plane Cloud only), so the filtering happens here.
@@ -227,9 +275,19 @@ PluginAPI.registerIssueProvider({
     const cfg = asConfig(config);
     const item = await http.get<PlaneWorkItem>(
       `${projectRoot(cfg)}/work-items/${encodeURIComponent(issueId)}/`,
-      { params: { expand: 'state,assignees,project' } },
+      { params: { expand: DETAIL_EXPAND } },
     );
     return mapWorkItem(item, cfg);
+  },
+
+  async getByIds(
+    issueIds: string[],
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<PluginIssue[]> {
+    const cfg = asConfig(config);
+    const items = await fetchWorkItemsByIds(cfg, http, issueIds);
+    return items.map((item) => mapWorkItem(item, cfg));
   },
 
   // Browse URLs need project identifier + sequence; fall back to getById().url.

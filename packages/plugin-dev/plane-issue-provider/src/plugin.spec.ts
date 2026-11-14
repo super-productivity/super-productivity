@@ -1252,3 +1252,50 @@ describe('done-state field mapping', () => {
     });
   });
 });
+
+describe('getByIds()', () => {
+  const item = (i: number): Record<string, unknown> => ({
+    id: `id-${i}`,
+    name: `Item ${i}`,
+    sequence_id: i + 1,
+    project: { identifier: 'ENG' },
+    state: { id: 's1', name: 'Todo', group: 'unstarted' },
+    assignees: [{ display_name: 'Ada' }],
+  });
+
+  // Regression: 141 imported tasks refreshed one request each passed Plane's default
+  // rate limit (60 a minute per key), so most refreshes and the next Load Options
+  // click failed with 429.
+  it('refreshes 141 tasks in 2 list requests, not 141 single ones', async () => {
+    const api = fakePlaneApi({ items: Array.from({ length: 300 }, (_, i) => item(i)) });
+    const ids = Array.from({ length: 141 }, (_, i) => `id-${i}`);
+
+    const issues = await definition.getByIds!(ids, BACKLOG_CFG, api.http);
+
+    expect(issues.map((i) => i.id).sort()).toEqual([...ids].sort());
+    expect(api.workItemRequests.length).toBe(2);
+    expect(api.workItemRequests.every((r) => !r.url.match(/work-items\/id-/))).toBe(true);
+  });
+
+  it('maps rows like getById: key in the title, state and assignee by name', async () => {
+    const api = fakePlaneApi({ items: [item(6)] });
+
+    const [issue] = await definition.getByIds!(['id-6'], BACKLOG_CFG, api.http);
+
+    expect(issue.title).toBe('ENG-7 Item 6');
+    expect(issue.state).toBe('Todo');
+    expect(issue.assignee).toBe('Ada');
+    expect(api.workItemRequests[0].params['expand']).toBe('state,assignees,project');
+    // No `fields` projection: the panel needs the description too.
+    expect(api.workItemRequests[0].params['fields']).toBeUndefined();
+  });
+
+  // The host skips ids missing from the result; they are not treated as deleted.
+  it('leaves out ids the project does not have', async () => {
+    const api = fakePlaneApi({ items: [item(0)] });
+
+    const issues = await definition.getByIds!(['id-0', 'gone'], BACKLOG_CFG, api.http);
+
+    expect(issues.map((i) => i.id)).toEqual(['id-0']);
+  });
+});
