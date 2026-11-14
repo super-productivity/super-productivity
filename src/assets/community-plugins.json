@@ -1,5 +1,18 @@
 [
   {
+    "name": "Recipe Book",
+    "shortDescription": "Family recipe library with recipe import, cook mode, meal planning, and shopping lists.",
+    "url": "https://codeberg.org/bradyinfinity/super-productivity-recipe-book",
+    "author": "bradyinfinity",
+    "authorUrl": "https://codeberg.org/bradyinfinity",
+    "id": "recipe-book",
+    "release": {
+      "version": "1.1.0",
+      "downloadUrl": "https://codeberg.org/bradyinfinity/super-productivity-recipe-book/releases/download/v1.1.0/recipe-book-v1.1.0.zip",
+      "sha256": "97ede8910c4c19a5d39824a350f1ec11102d8d13db4eb0a5a1ac3c4d95e75b38"
+    }
+  },
+  {
     "name": "Task Colors",
     "shortDescription": "Choose colors for tasks and subtasks, or apply them automatically by priority. Includes a configurable palette, bulk application and recovery; requires Super Productivity 19.3.1.",
     "url": "https://github.com/Zombiehamser/sp-task-color-plugin",
