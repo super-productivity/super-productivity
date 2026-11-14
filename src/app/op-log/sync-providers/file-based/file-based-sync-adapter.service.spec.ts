@@ -244,24 +244,36 @@ describe('FileBasedSyncAdapterService', () => {
       });
     });
 
-    it('creates v2 from an absent setting and reuses discovery for later polls', async () => {
+    it('creates v3 from an absent setting and reuses discovery for later polls', async () => {
       expect(DEFAULT_GLOBAL_CONFIG.sync.isUseSplitSyncFiles).toBeUndefined();
       await adapter.downloadOps(0);
       await adapter.uploadOps([createMockSyncOp()], 'client1');
-      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
-      expect(files.has(C.OPS_FILE)).toBeFalse();
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!)).toEqual(
+        jasmine.objectContaining({ version: 3, format: 'split' }),
+      );
+      expect(files.has(C.OPS_FILE)).toBeTrue();
       const created = mockProvider.uploadFile.calls
         .allArgs()
         .find(([path]) => path === C.SYNC_FILE)!;
-      // Conditional create: a concurrent creator wins instead of being overwritten.
+      // Conditional create: a concurrent v2 creator wins instead of being overwritten.
       expect(created.slice(2)).toEqual([null, false]);
       await adapter.downloadOps(0);
       mockProvider.getFileRev.calls.reset();
       await adapter.downloadOps(0);
-      // Only the v2 reader's split-marker probe remains once discovery is cached.
-      expect(mockProvider.getFileRev.calls.allArgs().map(([path]) => path)).toEqual([
-        C.OPS_FILE,
-      ]);
+      // Discovery is cached: later polls no longer probe the v2 files.
+      const probed = mockProvider.getFileRev.calls.allArgs().map(([path]) => path);
+      expect(probed).not.toContain(C.SYNC_FILE);
+      expect(probed).not.toContain(C.BACKUP_FILE);
+    });
+
+    it('keeps a folder v2 when only the backup of an interrupted write is left', async () => {
+      // The Android folder bridge deletes before it creates, so an interrupted
+      // write leaves the backup without its primary.
+      files.set(C.BACKUP_FILE, addPrefix(createMockSyncData()));
+      await adapter.downloadOps(0);
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
+      expect(files.has(C.OPS_FILE)).toBeFalse();
     });
 
     it('honors explicit v2 after auto-detecting a split folder', async () => {
@@ -280,6 +292,19 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockProvider.uploadFile).not.toHaveBeenCalled();
     });
 
+    it('starts v3 in an empty folder after a switch away from a v2 folder', async () => {
+      files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
+      await adapter.downloadOps(0);
+      service.invalidateAllTargets();
+      files.clear();
+      // The remembered v2 format belongs to the old target.
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!)).toEqual(
+        jasmine.objectContaining({ version: 3, format: 'split' }),
+      );
+      expect(files.has(C.OPS_FILE)).toBeTrue();
+    });
+
     it('retains v2 and its snapshot when the setting is absent', async () => {
       files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
       const result = await adapter.downloadOps(0);
@@ -296,7 +321,10 @@ describe('FileBasedSyncAdapterService', () => {
       splitSyncEnabled = undefined;
       await adapter.downloadOps(0);
       service.invalidateAllTargets();
-      files.clear();
+      files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
+      files.delete(C.OPS_FILE);
+      const result = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq!(result.latestSeq);
       await adapter.uploadOps([createMockSyncOp()], 'client1');
       expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
       expect(files.has(C.OPS_FILE)).toBeFalse();
@@ -342,8 +370,10 @@ describe('FileBasedSyncAdapterService', () => {
         return { dataStr, rev: path + '-rev' };
       });
       await adapter.uploadOps([createMockSyncOp()], 'client1');
-      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
-      expect(files.has(C.OPS_FILE)).toBeFalse();
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!)).toEqual(
+        jasmine.objectContaining({ version: 3, format: 'split' }),
+      );
+      expect(files.has(C.OPS_FILE)).toBeTrue();
     });
 
     it('does not overwrite v2 that appears after empty-folder discovery', async () => {
@@ -403,7 +433,7 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockProvider.uploadFile).not.toHaveBeenCalled();
     });
 
-    it('reports a legacy folder on normal syncs but lets force overwrite write v2', async () => {
+    it('reports a legacy folder on normal syncs but lets force overwrite write v3', async () => {
       files.set(C.LEGACY_META_FILE, '{"lastUpdate":1}');
       await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(
         LegacySyncFormatDetectedError,
@@ -423,12 +453,53 @@ describe('FileBasedSyncAdapterService', () => {
         'import-op',
       );
       expect(result.accepted).toBeTrue();
-      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
-      expect(files.has(C.OPS_FILE)).toBeFalse();
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!)).toEqual(
+        jasmine.objectContaining({ version: 3, format: 'split' }),
+      );
+      expect(files.has(C.OPS_FILE)).toBeTrue();
       expect((await adapter.downloadOps(0)).snapshotState).toBeDefined();
     });
 
-    it('seeds an empty folder as v2 through the snapshot path', async () => {
+    const seedBySnapshot = (): Promise<{ accepted: boolean }> =>
+      adapter.uploadSnapshot!(
+        { tasks: [] },
+        'client1',
+        'initial',
+        { client1: 1 },
+        1,
+        false,
+        'import-op',
+        false,
+        'SYNC_IMPORT',
+        'SERVER_MIGRATION',
+      );
+
+    it('does not tombstone v2 that appears before a snapshot seed', async () => {
+      const legacy = addPrefix(createMockSyncData());
+      mockProvider.uploadFile.and.callFake(
+        async (
+          path: string,
+          data: string,
+          revToMatch: string | null,
+          isForce: boolean,
+        ) => {
+          // A v2 writer creates its file after discovery saw an empty folder.
+          if (path === C.BACKUP_FILE) files.set(C.SYNC_FILE, legacy);
+          if (!isForce && revToMatch === null && files.has(path)) {
+            throw new UploadRevToMatchMismatchAPIError(path);
+          }
+          files.set(path, data);
+          return { rev: path + '-rev' };
+        },
+      );
+      await expectAsync(seedBySnapshot()).toBeRejectedWithError(
+        UploadRevToMatchMismatchAPIError,
+      );
+      expect(files.get(C.SYNC_FILE)).toBe(legacy);
+      expect([...files.keys()].sort()).toEqual([C.BACKUP_FILE, C.SYNC_FILE].sort());
+    });
+
+    it('seeds an empty folder as v3 through the snapshot path', async () => {
       // A synced device moving to an empty folder uploads a SERVER_MIGRATION
       // SYNC_IMPORT here, not through uploadOps.
       const result = await adapter.uploadSnapshot!(
@@ -444,8 +515,19 @@ describe('FileBasedSyncAdapterService', () => {
         'SERVER_MIGRATION',
       );
       expect(result.accepted).toBeTrue();
-      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
-      expect([...files.keys()].sort()).toEqual([C.BACKUP_FILE, C.SYNC_FILE].sort());
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!)).toEqual(
+        jasmine.objectContaining({ version: 3, format: 'split' }),
+      );
+      expect(files.has(C.OPS_FILE)).toBeTrue();
+      // The v2 name is reserved create-only before any split file is published.
+      const writes = mockProvider.uploadFile.calls
+        .allArgs()
+        .map(([path, , revToMatch, isForce]) => [path, revToMatch, isForce]);
+      expect(writes.slice(0, 2)).toEqual([
+        [C.BACKUP_FILE, null, true],
+        [C.SYNC_FILE, null, false],
+      ]);
+      expect(writes.filter(([path]) => path === C.SYNC_FILE).length).toBe(1);
     });
 
     // Surgical sync claims sync-data.json with a create-only tombstone before it

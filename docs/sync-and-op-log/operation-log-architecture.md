@@ -772,8 +772,8 @@ records only the durable format boundary and its owners.
 
 | Format                                      | Remote files                                                                                          | Normal op-bearing sync                                                                                                                                                      |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **v2 monolith (default)**                   | `sync-data.json` plus recovery backup                                                                 | Downloads the changed monolith, merges its retained ops, rebuilds current state plus both archive partitions, and conditionally rewrites the complete monolith.             |
-| **v3 split files (opt-in “Surgical sync”)** | `sync-ops.json`, referenced snapshot generation, compatibility state/backup files, and a v2 tombstone | Conditionally rewrites the bounded ops commit point. A full state/archive snapshot is written only for initial bootstrap, compaction, migration, force-upload, or recovery. |
+| **v2 monolith (existing folders)**          | `sync-data.json` plus recovery backup                                                                 | Downloads the changed monolith, merges its retained ops, rebuilds current state plus both archive partitions, and conditionally rewrites the complete monolith.             |
+| **v3 split files (new folders, or opt-in)** | `sync-ops.json`, referenced snapshot generation, compatibility state/backup files, and a v2 tombstone | Conditionally rewrites the bounded ops commit point. A full state/archive snapshot is written only for initial bootstrap, compaction, migration, force-upload, or recovery. |
 
 Both formats carry a vector clock, schema version, synthetic `syncVersion`, and
 a bounded `recentOps` buffer. That common adapter and envelope do not themselves
@@ -804,9 +804,19 @@ later cycle downloads before retrying. The best-effort backends cannot broadly
 guarantee that every simultaneous write race will abort.
 
 With no saved format preference, discovery joins existing v2/v3 files, and an
-empty folder gets `EMPTY_FOLDER_SYNC_FORMAT` in `file-based-sync-format.ts`: v2,
-as in v19.1. The v3 empty-folder default (#10289) stays off until its snapshot,
-interrupted-write and legacy-overwrite follow-ups land. Discovery ignores v16
+empty folder gets `EMPTY_FOLDER_SYNC_FORMAT` in `file-based-sync-format.ts`: v3.
+A v2 backup without its primary counts as v2, not as empty: the Android folder
+bridge deletes a file before it re-creates it, so an interrupted write leaves
+exactly that. A client that creates v3 in an empty folder first claims the v2
+name with a create-only tombstone, on the ops path and on the snapshot path (a
+synced device moving to the folder). A v2 file created in between wins that
+write, and the next cycle joins it as v2 and asks before replacing anything.
+Two limits remain. The backup rule keeps the folder's format, not its data:
+the v2 reader treats a missing primary as a fresh start and never reads the
+backup. And the claim cannot stop a forced writer: a v2 snapshot upload
+(force overwrite, "Use Local") writes its backup and primary regardless, so
+one landing during a v3 seed can still leave a v2 primary next to split
+files, which v2 clients then report as an upgraded folder. Discovery ignores v16
 `__meta_` files; the v2/v3 readers still stop normal syncs with
 `LegacySyncFormatDetectedError`, and a confirmed force overwrite writes the
 empty-folder format. Saved `isUseSplitSyncFiles: false` keeps v2 behavior;
