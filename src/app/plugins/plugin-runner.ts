@@ -7,6 +7,7 @@ import { PluginI18nService } from './plugin-i18n.service';
 import { SnackService } from '../core/snack/snack.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLog } from '../core/log';
+import { ExecBeforeCloseService } from '../core/electron/exec-before-close.service';
 import { withUnknownMemberWarning } from './util/unknown-plugin-api-member.util';
 import { withRevocableApi } from './util/revocable-plugin-api.util';
 import { createPluginTimers } from './util/plugin-timers.util';
@@ -24,6 +25,7 @@ export class PluginRunner {
   private _pluginI18nService = inject(PluginI18nService);
   private _snackService = inject(SnackService);
   private _cleanupService = inject(PluginCleanupService);
+  private _beforeCloseService = inject(ExecBeforeCloseService);
 
   private _loadedPlugins = new Map<string, PluginInstance>();
   private _pluginApis = new Map<string, PluginAPI>();
@@ -64,6 +66,13 @@ export class PluginRunner {
               this._unloadCallbacks.set(manifest.id, fn);
             }
           },
+          onBeforeAppClose: (fn) =>
+            this._pluginApis.get(manifest.id) === pluginAPI &&
+            this._beforeCloseService.registerPluginFinalizer(
+              manifest.id,
+              'background',
+              fn,
+            ),
         },
       );
 
@@ -130,6 +139,8 @@ export class PluginRunner {
           });
         }
       } catch (error) {
+        // Let onUnload finish its synchronous cleanup before revoking the API.
+        this.triggerUnload(manifest.id);
         // a failed plugin stays registered with an error and may never reach
         // unloadPlugin (e.g. failed upload, then uninstall) — stop it now
         this._runtimeDisposers.get(manifest.id)?.();
@@ -284,11 +295,13 @@ export class PluginRunner {
    * translations are still registered.
    */
   triggerUnload(pluginId: string): void {
+    this._readyCallbacks.delete(pluginId);
     const unloadFn = this._unloadCallbacks.get(pluginId);
     this._unloadCallbacks.delete(pluginId);
     // drop the API reference first so re-registration from inside the callback
     // (or any later stale call) is ignored by the registration guard
     this._pluginApis.delete(pluginId);
+    this._beforeCloseService.unregisterPluginFinalizers(pluginId);
     if (unloadFn) {
       void (async () => unloadFn())().catch((e) =>
         PluginLog.err(`Plugin ${pluginId} onUnload callback failed:`, e),
