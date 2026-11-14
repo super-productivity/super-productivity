@@ -130,7 +130,7 @@ describe('parseMarkdown', () => {
       title: 'This also becomes a note',
       parentId: 'child1',
       isSubtask: true,
-      notes: 'Even deeper nesting',
+      notes: '- Even deeper nesting',
     });
   });
 
@@ -563,10 +563,10 @@ More text`;
       expect(result.tasks[0].title).toBe('Unchecked with space');
       expect(result.tasks[0].completed).toBe(false);
       // Non-matching lines become notes on the previous task
-      expect(result.tasks[0].notes).toBe('[] Unchecked without space');
+      expect(result.tasks[0].notes).toBe('- [] Unchecked without space');
       expect(result.tasks[1].title).toBe('Checked lowercase');
       expect(result.tasks[1].completed).toBe(true);
-      expect(result.tasks[1].notes).toBe('[X] Checked uppercase');
+      expect(result.tasks[1].notes).toBe('- [X] Checked uppercase');
     });
 
     it('should handle tasks with trailing whitespace', () => {
