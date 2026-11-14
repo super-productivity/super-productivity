@@ -22,6 +22,7 @@ import { initLauncherShortcuts } from './launcher-shortcuts';
 import { CONFIG } from './CONFIG';
 import { lazySetInterval } from './shared-with-frontend/lazy-set-interval';
 import { initIndicator } from './indicator';
+import { initMenuBarPanel } from './menu-bar-panel';
 import { quitApp, showOrFocus } from './various-shared';
 import { closeWinAndQuit, createWindow, getIsAppReady } from './main-window';
 import { IdleTimeHandler } from './idle-time-handler';
@@ -55,6 +56,7 @@ let customUrl: string;
 let isDisableTray = false;
 let forceDarkTray = false;
 let isStartMinimized = false;
+let isShowDock = false;
 
 if (IS_DEV) {
   log('Starting in DEV Mode!!!');
@@ -135,6 +137,11 @@ export const startApp = (): void => {
       log('Start minimized');
     }
 
+    if (val && val.includes('--show-dock')) {
+      isShowDock = true;
+      log('Keep the Dock icon visible');
+    }
+
     if (val && val.includes('--user-data-dir=')) {
       const customUserDir = val
         .replace('--user-data-dir=', '')
@@ -153,6 +160,17 @@ export const startApp = (): void => {
       isShowDevTools = true;
     }
   });
+
+  // macOS menu bar mode: the app lives in the menu bar only (no Dock icon, no
+  // Cmd+Tab entry) and starts without showing the main window. `--show-dock`
+  // and `--disable-tray` opt out so automated screenshot runs and tray-less
+  // launches keep a way back into the app.
+  const isMenuBarOnly =
+    IS_MAC && !isDisableTray && !isShowDock && process.env.SP_SCREENSHOT_MODE !== '1';
+  if (isMenuBarOnly) {
+    isStartMinimized = true;
+    log('Menu bar only mode: hiding the Dock icon and starting minimized');
+  }
 
   // On snap, main.ts already moved userData to the common dir, before the
   // single-instance lock (#11049).
@@ -479,6 +497,16 @@ export const startApp = (): void => {
   // ----------------
   // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
   function createIndicator(): void {
+    if (IS_MAC) {
+      initMenuBarPanel({
+        showApp: () => showApp(),
+        getMainWindow: () => mainWin ?? null,
+        hideDock: isMenuBarOnly,
+        // `--show-dock` and the screenshot pipeline pin the Dock icon for this
+        // launch, even after the renderer reports its persisted preference.
+        lockDockVisible: isShowDock || process.env.SP_SCREENSHOT_MODE === '1',
+      });
+    }
     initIndicator({
       app,
       showApp,

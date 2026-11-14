@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:;"
+    />
+    <title>Super Productivity — Today</title>
+    <link
+      rel="stylesheet"
+      href="menu-bar-panel.css"
+    />
+  </head>
+  <body>
+    <div
+      class="panel"
+      id="panel"
+    >
+      <header class="header">
+        <div class="heading">
+          <span
+            class="mark"
+            aria-hidden="true"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+            >
+              <path
+                d="M5 3.5h10a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 15V5A1.5 1.5 0 0 1 5 3.5Z"
+                stroke="currentColor"
+                stroke-width="1.4"
+              />
+              <path
+                d="m6.75 10 2.1 2.1 4.4-4.4"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+          <div class="heading-text">
+            <h1>Today</h1>
+            <p id="today-label"></p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button
+            class="icon-button"
+            id="open-app"
+            type="button"
+            title="Open Super Productivity"
+            aria-label="Open Super Productivity"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M8 4.5H5.5A1.5 1.5 0 0 0 4 6v8.5A1.5 1.5 0 0 0 5.5 16H14a1.5 1.5 0 0 0 1.5-1.5V12"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+              <path
+                d="M11.5 4.5H16m0 0V9m0-4.5-6 6"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <section
+        class="current-card"
+        id="current-card"
+        hidden
+      >
+        <button
+          class="play-button"
+          id="current-toggle"
+          type="button"
+          aria-label="Pause current task"
+        >
+          <svg
+            class="icon-pause"
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden="true"
+          >
+            <rect
+              x="5.5"
+              y="5"
+              width="3"
+              height="10"
+              rx="1"
+              fill="currentColor"
+            />
+            <rect
+              x="11.5"
+              y="5"
+              width="3"
+              height="10"
+              rx="1"
+              fill="currentColor"
+            />
+          </svg>
+          <svg
+            class="icon-play"
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M7 4.9c0-.8.9-1.3 1.6-.9l7 4.6c.6.4.6 1.4 0 1.8l-7 4.6c-.7.4-1.6-.1-1.6-.9V4.9Z"
+              fill="currentColor"
+            />
+          </svg>
+        </button>
+        <div class="current-copy">
+          <p class="current-eyebrow">Tracking now</p>
+          <p
+            class="current-title"
+            id="current-title"
+          ></p>
+        </div>
+        <span
+          class="current-time"
+          id="current-time"
+        ></span>
+      </section>
+
+      <div class="list-heading">
+        <span>My day</span>
+        <span
+          class="count"
+          id="task-count"
+        ></span>
+      </div>
+
+      <main
+        class="task-list"
+        id="task-list"
+        aria-label="Today's tasks"
+      >
+        <p
+          class="empty-state"
+          id="empty-state"
+          hidden
+        >
+          <span class="empty-title">Nothing planned for today</span>
+          <span class="empty-hint">Add a task below to get started.</span>
+        </p>
+      </main>
+
+      <footer class="footer">
+        <form
+          class="add-form"
+          id="add-form"
+        >
+          <input
+            id="add-input"
+            class="add-input"
+            type="text"
+            maxlength="300"
+            placeholder="Add a task for today…"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Add a task for today"
+          />
+          <button
+            class="add-button"
+            id="add-button"
+            type="submit"
+            aria-label="Add task"
+            disabled
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M10 4.5v11M4.5 10h11"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </form>
+        <button
+          class="open-hint"
+          id="open-hint"
+          type="button"
+        >
+          Open Super Productivity
+        </button>
+      </footer>
+    </div>
+    <script src="menu-bar-panel-renderer.js"></script>
+  </body>
+</html>

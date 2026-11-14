@@ -371,6 +371,14 @@ export type TaskWidgetConfig = Readonly<{
   opacity?: number;
 }>;
 
+/**
+ * macOS menu bar behaviour that is per-instance, not synced: whether the app
+ * keeps a Dock icon (and its running dot) or lives in the menu bar only.
+ */
+export type MenuBarConfig = Readonly<{
+  showDockIcon?: boolean;
+}>;
+
 export type FocusModeLocalConfig = Readonly<{
   isLoopBreakEndAlarm?: boolean;
   isNotifyOnSessionEnd?: boolean;
@@ -417,15 +425,16 @@ export type GlobalConfigState = Readonly<{
 
 export type GlobalConfigSectionKey = keyof GlobalConfigState | 'EMPTY';
 
-// 'taskWidget' isn't on GlobalConfigState (it's per-instance, see above), but
-// the form layer still uses this key in form configs and the config-page save
-// handler. Kept separate from `GlobalConfigSectionKey` so it cannot leak into
-// `updateGlobalConfigSection` action payloads (which would create phantom ops
-// in the sync log).
+// 'taskWidget' and 'menuBar' aren't on GlobalConfigState (they're per-instance,
+// see above), but the form layer still uses these keys in form configs and the
+// config-page save handler. Kept separate from `GlobalConfigSectionKey` so they
+// cannot leak into `updateGlobalConfigSection` action payloads (which would
+// create phantom ops in the sync log).
 export type GlobalConfigFormSectionKey =
   | GlobalConfigSectionKey
   | 'taskWidget'
-  | 'focusModeLocal';
+  | 'focusModeLocal'
+  | 'menuBar';
 
 export type GlobalSectionConfig =
   | MiscConfig
@@ -438,6 +447,7 @@ export type GlobalSectionConfig =
   | DailySummaryNote
   | SyncConfig
   | ClipboardImagesConfig
+  | MenuBarConfig
   | TaskWidgetConfig
   | FocusModeLocalConfig;
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
@@ -477,6 +487,8 @@ export interface ConfigFormSection<FormModel> {
   actions?: ConfigSectionAction[];
   isElectronOnly?: boolean;
   isHideForAndroidApp?: boolean;
+  /** Section only applies to the macOS desktop build (e.g. menu bar/Dock). */
+  isMacOnly?: boolean;
 }
 
 export interface GenericConfigFormSection extends Omit<

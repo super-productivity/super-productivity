@@ -17,6 +17,11 @@ import {
   updateTaskWidgetTask,
 } from './task-widget/task-widget';
 import { getWin } from './main-window';
+import {
+  destroyMenuBarPanel,
+  toggleMenuBarPanel,
+  updateMenuBarPanel,
+} from './menu-bar-panel';
 
 type IndicatorConfig = {
   showApp: () => void;
@@ -143,11 +148,24 @@ const createTray = (): Tray => {
   const trayIconPath = DIR + `stopped${suf}`;
   const trayIcon = getTrayImage(trayIconPath);
   const nextTray = new Tray(trayIcon);
-  nextTray.setContextMenu(createContextMenu());
 
-  nextTray.on('click', () => {
-    indicatorConfig?.showApp();
-  });
+  if (IS_MAC) {
+    // Left click opens the DropNote-style menu bar panel. The task list menu
+    // stays on right click so it is still reachable while the panel is closed.
+    nextTray.on('click', () => {
+      if (!toggleMenuBarPanel(nextTray.getBounds())) {
+        indicatorConfig?.showApp();
+      }
+    });
+    nextTray.on('right-click', () => {
+      nextTray.popUpContextMenu(createContextMenu(_lastMsg));
+    });
+  } else {
+    nextTray.setContextMenu(createContextMenu());
+    nextTray.on('click', () => {
+      indicatorConfig?.showApp();
+    });
+  }
 
   return nextTray;
 };
@@ -163,6 +181,7 @@ function initAppListeners(app: App): void {
     if (tray) {
       destroyTray();
     }
+    destroyMenuBarPanel();
   });
 }
 
@@ -225,7 +244,7 @@ function initListeners(): void {
         todayTasksStr !== _lastTodayTasksStr;
 
       if (isMenuChanged) {
-        tray.setContextMenu(createContextMenu(menuMsg));
+        setTrayContextMenu(tray, menuMsg);
         _lastMsg = menuMsg;
         _lastIsRunning = _isRunning;
         _lastCurrentTaskId = _currentTaskId;
@@ -266,6 +285,21 @@ function initListeners(): void {
       _lastIsFocusModeEnabled = isFocusModeEnabled;
       _lastCurrentFocusSessionTime = currentFocusSessionTime;
       _lastFocusModeMode = focusModeMode;
+
+      updateMenuBarPanel({
+        currentTask: currentTask
+          ? {
+              id: currentTask.id,
+              title: currentTask.title,
+              timeEstimate: currentTask.timeEstimate,
+              timeSpent: currentTask.timeSpent,
+            }
+          : null,
+        isRunning: !!currentTask,
+        isFocusModeEnabled: !!isFocusModeEnabled,
+        focusSessionTime: currentFocusSessionTime || 0,
+        focusModeMode,
+      });
 
       updateTaskWidgetTask(
         currentTask,
@@ -314,7 +348,7 @@ function initListeners(): void {
           todayTasksStr !== _lastTodayTasksStr;
 
         if (isMenuChanged) {
-          tray.setContextMenu(createContextMenu(menuMsg));
+          setTrayContextMenu(tray, menuMsg);
           _lastMsg = menuMsg;
           _lastIsRunning = _isRunning;
           _lastCurrentTaskId = _currentTaskId;
@@ -359,12 +393,20 @@ function initListeners(): void {
 
   ipcMain.on(IPC.TODAY_TASKS_UPDATED, (ev: IpcMainEvent, tasks: any[]) => {
     _todayTasks = tasks;
+    updateMenuBarPanel({
+      todayTasks: (_todayTasks || []).map(({ id, title, timeEstimate, timeSpent }) => ({
+        id,
+        title,
+        timeEstimate,
+        timeSpent,
+      })),
+    });
     if (tray) {
       const todayTasksStr = JSON.stringify(
         (_todayTasks || []).map((t) => ({ id: t.id, title: t.title })),
       );
       if (todayTasksStr !== _lastTodayTasksStr) {
-        tray.setContextMenu(createContextMenu(_lastMsg));
+        setTrayContextMenu(tray, _lastMsg);
         _lastTodayTasksStr = todayTasksStr;
       }
     }
@@ -380,6 +422,16 @@ function initListeners(): void {
   // });
 }
 
+// macOS opens the menu bar panel on left click, so the tray must not own a
+// context menu there (Electron shows it on the same click). Other platforms keep
+// their existing menu-on-click behavior.
+const setTrayContextMenu = (tr: Tray, msg?: string): void => {
+  if (IS_MAC) {
+    return;
+  }
+  tr.setContextMenu(createContextMenu(msg));
+};
+
 const syncTray = (tr: Tray): void => {
   const menuMsg = _lastCurrentTask
     ? createIndicatorMessage(
@@ -393,7 +445,7 @@ const syncTray = (tr: Tray): void => {
       )
     : _lastMsg;
 
-  tr.setContextMenu(createContextMenu(menuMsg));
+  setTrayContextMenu(tr, menuMsg);
 
   const isTrayShowCurrentTask = getIsTrayShowCurrentTask();
   const isTrayShowCurrentCountdown = getIsTrayShowCurrentCountdown();

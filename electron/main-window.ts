@@ -19,6 +19,7 @@ import { getApiUserAgent, isGitLabApiUrl } from './api-user-agent';
 import { readFileSync, watch } from 'fs';
 import { error, log } from 'electron-log/main';
 import { IS_MAC, IS_LINUX, IS_GNOME_WAYLAND } from './common.const';
+import { getIsMenuBarOnly } from './menu-bar-panel';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
@@ -942,7 +943,9 @@ const appMinimizeHandler = (app: App): void => {
       } else {
         // For regular minimize (not to tray), also show task widget
         showTaskWidget();
-        if (IS_MAC) {
+        // In menu bar only mode the Dock icon stays hidden; bringing it back
+        // here would reintroduce the Dock dot the mode exists to remove.
+        if (IS_MAC && !getIsMenuBarOnly()) {
           app.dock?.show();
         }
       }

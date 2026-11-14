@@ -14,10 +14,12 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { getChangedConfigFields } from '../../features/config/get-changed-config-fields.util';
 import { NEW_INSTALL_CONFIG_SECTION_KEYS } from '../../features/config/new-install-config.const';
 import { TaskWidgetSettingsService } from '../../features/config/task-widget-settings.service';
+import { MenuBarSettingsService } from '../../features/config/menu-bar-settings.service';
 import { FocusModeLocalSettingsService } from '../../features/config/focus-mode-local-settings.service';
 import {
   FocusModeLocalConfig,
   TaskWidgetConfig,
+  MenuBarConfig,
 } from '../../features/config/global-config.model';
 import {
   GLOBAL_GENERAL_FORM_CONFIG,
@@ -148,6 +150,7 @@ export class ConfigPageComponent implements OnInit {
   readonly configService = inject(GlobalConfigService);
   readonly syncSettingsService = inject(SyncConfigService);
   readonly taskWidgetSettingsService = inject(TaskWidgetSettingsService);
+  readonly menuBarSettingsService = inject(MenuBarSettingsService);
   readonly focusModeLocalSettingsService = inject(FocusModeLocalSettingsService);
 
   T: typeof T = T;
@@ -426,6 +429,12 @@ export class ConfigPageComponent implements OnInit {
       return;
     }
 
+    // menuBar is per-instance (not synced) — handled by a dedicated service
+    if (formSectionKey === 'menuBar') {
+      this.menuBarSettingsService.update(config as Partial<MenuBarConfig>);
+      return;
+    }
+
     // focusModeLocal is per-instance (not synced) — handled by a dedicated service
     if (formSectionKey === 'focusModeLocal') {
       const localCfg = config as Partial<FocusModeLocalConfig>;
@@ -553,6 +562,9 @@ export class ConfigPageComponent implements OnInit {
     }
     if (sectionKey === 'focusModeLocal') {
       return this.focusModeLocalSettingsService.settings() as GlobalSectionConfig;
+    }
+    if (sectionKey === 'menuBar') {
+      return this.menuBarSettingsService.settings() as GlobalSectionConfig;
     }
     return (this.globalCfg as unknown as Record<string, GlobalSectionConfig>)[sectionKey];
   }

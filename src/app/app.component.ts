@@ -20,6 +20,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ShortcutService } from './core-ui/shortcut/shortcut.service';
 import { GlobalConfigService } from './features/config/global-config.service';
 import { TaskWidgetSettingsService } from './features/config/task-widget-settings.service';
+import { MenuBarSettingsService } from './features/config/menu-bar-settings.service';
 import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
@@ -180,6 +181,8 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   // localStorage and pushes them to the Electron main process at app boot,
   // before the user opens the (lazy-loaded) Settings page.
   private _taskWidgetSettingsService = inject(TaskWidgetSettingsService);
+  // Same eager-load contract for the macOS menu bar's Dock-icon preference.
+  private _menuBarSettingsService = inject(MenuBarSettingsService);
   private _keyboardLayoutService = inject(KeyboardLayoutService);
   private _dataInitStateService = inject(DataInitStateService);
   private _materialIconsLoaderService = inject(MaterialIconsLoaderService);
