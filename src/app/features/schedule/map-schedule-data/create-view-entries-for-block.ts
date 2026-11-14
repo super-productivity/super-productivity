@@ -41,7 +41,7 @@ export const createViewEntriesForBlock = (
           ...calendarEvent,
           icon: 'event',
         },
-        duration: calendarEvent.duration,
+        duration: entry.end - entry.start,
       });
     } else if (entry.type === BlockedBlockType.LunchBreak) {
       viewEntriesForBock.push({
