@@ -7,11 +7,12 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { BehaviorSubject, of } from 'rxjs';
 import { WorkContext, WorkContextType } from '../work-context/work-context.model';
 import { TODAY_TAG } from '../tag/tag.const';
-import { SimpleMetrics } from './metric.model';
+import { LineChartData, SimpleMetrics } from './metric.model';
 import { signal } from '@angular/core';
 import { T } from '../../t.const';
 import { INBOX_PROJECT } from '../project/project.const';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 describe('MetricComponent', () => {
   let component: MetricComponent;
@@ -20,6 +21,7 @@ describe('MetricComponent', () => {
   let allTasksMetricsService: jasmine.SpyObj<AllTasksMetricsService>;
   let workContextService: jasmine.SpyObj<WorkContextService>;
   let activeWorkContext$: BehaviorSubject<WorkContext | null>;
+  let focusSessionMetrics$: BehaviorSubject<LineChartData | null>;
 
   const createMockWorkContext = (
     id: string,
@@ -66,6 +68,7 @@ describe('MetricComponent', () => {
 
   beforeEach(() => {
     activeWorkContext$ = new BehaviorSubject<WorkContext | null>(null);
+    focusSessionMetrics$ = new BehaviorSubject<LineChartData | null>(null);
 
     // Create writable signals that can be updated
     projectMetricsSignal = signal<SimpleMetrics | undefined>(undefined);
@@ -91,12 +94,12 @@ describe('MetricComponent', () => {
     // Default return values for MetricService
     metricServiceSpy.getSimpleClickCounterMetrics$.and.returnValue(of(null));
     metricServiceSpy.getSimpleCounterStopwatchMetrics$.and.returnValue(of(null));
-    metricServiceSpy.getFocusSessionMetrics$.and.returnValue(of(null));
+    metricServiceSpy.getFocusSessionMetrics$.and.returnValue(focusSessionMetrics$);
     metricServiceSpy.getEvaluationMetrics$.and.returnValue(of(null));
     metricServiceSpy.hasData.and.returnValue(false);
 
     TestBed.configureTestingModule({
-      imports: [MetricComponent],
+      imports: [MetricComponent, TranslateModule.forRoot()],
       providers: [
         { provide: MetricService, useValue: metricServiceSpy },
         { provide: ProjectMetricsService, useValue: projectMetricsServiceSpy },
@@ -104,7 +107,15 @@ describe('MetricComponent', () => {
         { provide: WorkContextService, useValue: workContextServiceSpy },
         {
           provide: DateTimeFormatService,
-          useValue: { currentLocale: signal('en-US') },
+          useValue: {
+            currentLocale: signal('de-DE'),
+            formatDate: (date: Date, locale: string) =>
+              date.toLocaleDateString(locale, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              }),
+          },
         },
       ],
     }).overrideComponent(MetricComponent, {
@@ -369,6 +380,24 @@ describe('MetricComponent', () => {
 
       expect(payload).toBeDefined();
       expect(payload.text).toContain('50'); // completed tasks
+    });
+  });
+
+  describe('chart localization', () => {
+    it('should format day labels by locale and translate series labels', () => {
+      TestBed.inject(TranslateService).setTranslation('en', {
+        F: { METRIC: { CMP: { CHART_FOCUS_SESSIONS: 'Fokus-Sitzungen' } } },
+      });
+      TestBed.inject(TranslateService).use('en');
+      focusSessionMetrics$.next({
+        labels: ['2026-10-25'],
+        datasets: [{ data: [3], label: T.F.METRIC.CMP.CHART_FOCUS_SESSIONS }],
+      });
+
+      const chart = component.focusSessionData();
+
+      expect(chart?.labels).toEqual(['25.10.2026']);
+      expect(chart?.datasets[0].label).toBe('Fokus-Sitzungen');
     });
   });
 });

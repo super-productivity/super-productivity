@@ -59,7 +59,7 @@
               mat-icon-button
               type="button"
               [attr.aria-label]="T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_A_COPY_URL | translate"
-              (click)="copy(url, 'URL')"
+              (click)="copy(url, T.F.SHARE.COPIED.URL)"
             >
               <mat-icon>content_copy</mat-icon>
             </button>
@@ -98,7 +98,7 @@
               mat-icon-button
               type="button"
               [attr.aria-label]="T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_A_COPY_CODE | translate"
-              (click)="copy(connection.code, 'Code')"
+              (click)="copy(connection.code, T.F.SHARE.COPIED.CODE)"
             >
               <mat-icon>content_copy</mat-icon>
             </button>
@@ -256,7 +256,7 @@
                   [attr.aria-label]="
                     T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_A_COPY_TOKEN | translate
                   "
-                  (click)="copy(token, 'Token')"
+                  (click)="copy(token, T.F.SHARE.COPIED.TOKEN)"
                 >
                   <mat-icon>content_copy</mat-icon>
                 </button>
@@ -290,7 +290,7 @@
                     [attr.aria-label]="
                       T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_A_COPY_SETUP | translate
                     "
-                    (click)="copy(setupCommand(), 'Command')"
+                    (click)="copy(setupCommand(), T.F.SHARE.COPIED.COMMAND)"
                   >
                     <mat-icon>content_copy</mat-icon>
                   </button>

@@ -26,7 +26,7 @@ import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { MatRadioButton, MatRadioChange, MatRadioGroup } from '@angular/material/radio';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { ChartLazyLoaderService } from '../chart-lazy-loader.service';
 import { ShareService } from '../../../core/share/share.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -82,6 +82,7 @@ export class LazyChartComponent implements OnDestroy {
   private readonly chartLoaderService = inject(ChartLazyLoaderService);
   private readonly shareService = inject(ShareService);
   private readonly snackService = inject(SnackService);
+  private readonly translateService = inject(TranslateService);
 
   readonly type = input.required<ChartType>();
   readonly datasets = input<ChartData['datasets']>([]);
@@ -90,6 +91,7 @@ export class LazyChartComponent implements OnDestroy {
   readonly legend = input(true);
   readonly height = input('400px');
   readonly shareFileName = input('chart.png');
+  readonly shareTitle = input<string | undefined>(undefined);
   readonly enableTimeframeSelector = input(false);
 
   readonly chartClick = new EventEmitter<ChartClickEvent>();
@@ -198,16 +200,13 @@ export class LazyChartComponent implements OnDestroy {
       const result = await this.shareService.shareCanvasImage({
         canvas: this.chartInstance.canvas,
         filename: shareFile,
-        shareTitle: shareFile,
+        shareTitle: this.shareTitle() || shareFile,
         tagline: {
-          text: 'With the Super Productivity App',
+          text: this.translateService.instant(T.F.METRIC.CMP.CHART_SHARE_TAGLINE),
         },
       });
 
       if (result.success && result.target === 'download') {
-        const message = result.path
-          ? `Chart image saved to ${result.path}`
-          : 'Chart image saved to device storage';
         const canOpen = this.shareService.canOpenDownloadResult(result);
         const actionConfig = canOpen
           ? {
@@ -220,8 +219,10 @@ export class LazyChartComponent implements OnDestroy {
 
         this.snackService.open({
           type: 'SUCCESS',
-          msg: message,
-          isSkipTranslate: true,
+          msg: result.path
+            ? T.F.METRIC.CMP.CHART_SHARED_TO_PATH
+            : T.F.METRIC.CMP.CHART_SHARED_TO_DEVICE,
+          translateParams: result.path ? { path: result.path } : {},
           ...actionConfig,
         });
       }
