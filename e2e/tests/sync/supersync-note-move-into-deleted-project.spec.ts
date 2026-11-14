@@ -301,18 +301,21 @@ for (const deleterSyncsFirst of [true, false]) {
 const EDITED = 'Edited note';
 
 const editNote = (page: Page, id: string): Promise<void> =>
-  page.evaluate(async (noteId) => {
-    (
-      window as unknown as {
-        __e2eTestHelpers: { store: { dispatch: (a: unknown) => void } };
-      }
-    ).__e2eTestHelpers.store.dispatch({
-      type: '[Note] Update Note',
-      note: { id: noteId, changes: { content: EDITED } },
-      meta: { isPersistent: true, entityType: 'NOTE', entityId: noteId, opType: 'UPD' },
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }, id);
+  page.evaluate(
+    async ({ noteId, content }) => {
+      (
+        window as unknown as {
+          __e2eTestHelpers: { store: { dispatch: (a: unknown) => void } };
+        }
+      ).__e2eTestHelpers.store.dispatch({
+        type: '[Note] Update Note',
+        note: { id: noteId, changes: { content } },
+        meta: { isPersistent: true, entityType: 'NOTE', entityId: noteId, opType: 'UPD' },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    },
+    { noteId: id, content: EDITED },
+  );
 
 // #11656: one device edits the note while the other moves it, so both ops
 // declare it and the later one wins. The device that syncs second uploads the
