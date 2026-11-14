@@ -463,6 +463,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (fields.dueDay) {
       this.stateService.updateDate(fields.dueDay);
     }
+    if (fields.deadlineDay) {
+      this.stateService.updateDeadline(fields.deadlineDay);
+    }
   }
 
   private _setupDefaultDate(): void {

@@ -23,7 +23,12 @@ import { waitForAppReady } from '../../utils/waits';
 const INBOX = 'INBOX_PROJECT';
 
 interface NoteSnapshot {
-  note?: { id: string; projectId: string | null; isPinnedToToday: boolean };
+  note?: {
+    id: string;
+    projectId: string | null;
+    isPinnedToToday: boolean;
+    content: string;
+  };
   listedInProjects: string[];
   inTodayOrder: boolean;
   projectIds: string[];
@@ -35,7 +40,12 @@ const snapshot = (page: Page, noteId: string): Promise<NoteSnapshot> =>
       note: {
         entities: Record<
           string,
-          { id: string; projectId: string | null; isPinnedToToday: boolean }
+          {
+            id: string;
+            projectId: string | null;
+            isPinnedToToday: boolean;
+            content: string;
+          }
         >;
         todayOrder: string[];
       };
@@ -57,6 +67,7 @@ const snapshot = (page: Page, noteId: string): Promise<NoteSnapshot> =>
         id: n.id,
         projectId: n.projectId,
         isPinnedToToday: n.isPinnedToToday,
+        content: n.content,
       },
       listedInProjects: state.projects.ids.filter((pid) =>
         state.projects.entities[pid].noteIds.includes(id),
@@ -281,6 +292,102 @@ for (const deleterSyncsFirst of [true, false]) {
       const freshState = await snapshot(fresh.page, noteId);
       expect(unreachable('Fresh', freshState)).toEqual([]);
       expect(freshState.note).toEqual(afterReload.note);
+    } finally {
+      for (const client of clients) await closeClient(client);
+    }
+  });
+}
+
+const EDITED = 'Edited note';
+
+const editNote = (page: Page, id: string): Promise<void> =>
+  // EDITED is passed in: the callback runs in the browser, not in Node.
+  page.evaluate(
+    async ({ noteId, content }) => {
+      (
+        window as unknown as {
+          __e2eTestHelpers: { store: { dispatch: (a: unknown) => void } };
+        }
+      ).__e2eTestHelpers.store.dispatch({
+        type: '[Note] Update Note',
+        note: { id: noteId, changes: { content } },
+        meta: { isPersistent: true, entityType: 'NOTE', entityId: noteId, opType: 'UPD' },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    },
+    { noteId: id, content: EDITED },
+  );
+
+// #11656: one device edits the note while the other moves it, so both ops
+// declare it and the later one wins. The device that syncs second uploads the
+// winning note in full. Its projectId must end up valid and listed, and both
+// devices must keep the same content, in both conflict directions: a winning
+// move into a project the editor deleted (re-homed to the Inbox), and a
+// winning edit that keeps the note in the Inbox the mover moved it out of.
+const EDIT_MOVE_CASES = [
+  { later: 'move', deleteTarget: true, content: 'Synthetic note' },
+  { later: 'edit', deleteTarget: false, content: EDITED },
+] as const;
+
+for (const { later, deleteTarget, content } of EDIT_MOVE_CASES) {
+  test(`@supersync note edited on one device and moved on the other converges in the Inbox / ${later} wins${deleteTarget ? ', target deleted' : ''}`, async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    const clients: SimulatedE2EClient[] = [];
+    try {
+      const config = getSuperSyncConfig(await createTestUser(testRunId));
+      const makeClient = async (name: string): Promise<SimulatedE2EClient> => {
+        const client = await createSimulatedClient(browser, baseURL!, name, testRunId);
+        clients.push(client);
+        await client.sync.setupSuperSync(config);
+        await blockAutoSync(client);
+        return client;
+      };
+      const noteId = `moved-${testRunId}`;
+      const projectTitle = `Target-${testRunId}`;
+
+      const editor = await makeClient('Editor');
+      await createProjectReliably(editor.page, projectTitle);
+      await seedNote(editor.page, noteId);
+      await sync(editor);
+      const mover = await makeClient('Mover');
+      await sync(mover);
+
+      const edit = async (): Promise<void> => {
+        await editNote(editor.page, noteId);
+        // The edit must be its own op, or there is no conflict to resolve.
+        await expect.poll(() => pendingCount(editor.page)).toBe(1);
+        if (deleteTarget) {
+          await new ProjectPage(editor.page).deleteProject(projectTitle);
+          await expect.poll(() => pendingCount(editor.page)).toBeGreaterThan(1);
+        }
+      };
+      const move = async (): Promise<void> => {
+        await moveNoteToProject(mover, noteId, projectTitle);
+        await expect.poll(() => pendingCount(mover.page)).toBe(1);
+      };
+      // The later write syncs second, so its device uploads the full winner.
+      const [earlier, laterWrite] = later === 'move' ? [edit, move] : [move, edit];
+      const [first, second] = later === 'move' ? [editor, mover] : [mover, editor];
+      await earlier();
+      await laterWrite();
+      for (let round = 0; round < 2; round++) {
+        await sync(first);
+        await sync(second);
+      }
+
+      const states = [
+        await snapshot(editor.page, noteId),
+        await snapshot(mover.page, noteId),
+      ];
+      expect([
+        ...unreachable('Editor', states[0]),
+        ...unreachable('Mover', states[1]),
+      ]).toEqual([]);
+      expect(states.map((s) => s.note?.projectId)).toEqual([INBOX, INBOX]);
+      expect(states.map((s) => s.note?.content)).toEqual([content, content]);
     } finally {
       for (const client of clients) await closeClient(client);
     }

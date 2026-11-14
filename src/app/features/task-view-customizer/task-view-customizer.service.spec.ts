@@ -1058,10 +1058,10 @@ describe('TaskViewCustomizerService', () => {
     const nextFrame = (): Promise<void> =>
       new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
-    const collect = (): { emissions: CustomizedUndoneTasks[] } => {
+    const collect = (tasks = mockTasks): { emissions: CustomizedUndoneTasks[] } => {
       const sink = { emissions: [] as CustomizedUndoneTasks[] };
       TestBed.runInInjectionContext(() =>
-        service.customizeUndoneTasks(of(mockTasks)),
+        service.customizeUndoneTasks(of(tasks)),
       ).subscribe((result) => sink.emissions.push(result));
       return sink;
     };
@@ -1076,11 +1076,83 @@ describe('TaskViewCustomizerService', () => {
       await nextFrame();
 
       const result = sink.emissions[sink.emissions.length - 1];
-      expect(result.groups).toEqual([
+      expect(
+        result.groups!.map(({ key, tasks, tagId }) => ({ key, tasks, tagId })),
+      ).toEqual([
         { key: 'Tag A', tasks: result.grouped!['Tag A'], tagId: 'Tag A' },
         { key: 'Tag B', tasks: result.grouped!['Tag B'], tagId: 'Tag B' },
         { key: 'No tag', tasks: result.grouped!['No tag'], tagId: NO_TAG_GROUP_ID },
       ]);
+    });
+
+    const newTaskFieldsByKey = (result: CustomizedUndoneTasks): [string, unknown][] =>
+      (result.groups ?? []).map((group) => [
+        group.key,
+        group.newTaskPrefill?.fields ?? null,
+      ]);
+
+    it('gives tag groups their tag as new task field, none for "No tag"', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+
+      expect(newTaskFieldsByKey(sink.emissions[sink.emissions.length - 1])).toEqual([
+        ['Tag A', { tagIds: ['Tag A'] }],
+        ['Tag B', { tagIds: ['Tag B'] }],
+        ['No tag', null],
+      ]);
+    });
+
+    it('flags a new task as hidden once its tag chip for the group is removed', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.tag, label: 'Tag' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+
+      const prefill =
+        sink.emissions[sink.emissions.length - 1].groups![0].newTaskPrefill!;
+      expect(prefill.isHidden({ tagIds: ['Tag A', 'Tag B'] })).toBeFalse();
+      expect(prefill.isHidden({ tagIds: ['Tag B'] })).toBeTrue();
+    });
+
+    it('gives project groups the project of the group as new task field', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.project, label: 'Project' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+
+      expect(newTaskFieldsByKey(sink.emissions[sink.emissions.length - 1])).toEqual([
+        ['No project', null],
+        ['Project A', { projectId: 'Project A' }],
+        ['Project B', { projectId: 'Project B' }],
+      ]);
+    });
+
+    it('gives scheduled date groups their day as new task due day', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.scheduledDate, label: 'Date' });
+      const sink = collect();
+      TestBed.tick();
+      await nextFrame();
+
+      expect(newTaskFieldsByKey(sink.emissions[sink.emissions.length - 1])).toEqual([
+        [todayStr, { dueDay: todayStr }],
+        [tomorrowStr, { dueDay: tomorrowStr }],
+      ]);
+    });
+
+    it('gives deadline groups their day as new task deadline, none without one', async () => {
+      service.setGroup({ type: GROUP_OPTION_TYPE.deadline, label: 'Deadline' });
+      const sink = collect([
+        { ...mockTasks[0], id: 'due', deadlineDay: todayStr },
+        { ...mockTasks[1], id: 'open' },
+      ]);
+      TestBed.tick();
+      await nextFrame();
+
+      const pairs = newTaskFieldsByKey(sink.emissions[sink.emissions.length - 1]);
+      expect(pairs).toContain([todayStr, { deadlineDay: todayStr }]);
+      expect(pairs.filter(([key]) => key !== todayStr).map(([, v]) => v)).toEqual([null]);
     });
 
     // `null`, not `undefined`: `TaskMultiDragService.canDrop` only treats
