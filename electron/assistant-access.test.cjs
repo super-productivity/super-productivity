@@ -588,7 +588,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
     };
   }
   if (request === 'electron-log/main') {
-    return { log: () => {}, warn: () => {} };
+    return { log: () => {}, debug: () => {}, warn: () => {} };
   }
   if (request.endsWith('main-window') || request.endsWith('main-window.ts')) {
     return {
