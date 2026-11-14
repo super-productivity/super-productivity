@@ -1,9 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
-import { Store } from '@ngrx/store';
+import { Action, Store } from '@ngrx/store';
 import { createEffect, ofType } from '@ngrx/effects';
-import { EMPTY, Observable, from } from 'rxjs';
+import { EMPTY, Observable, combineLatest, from } from 'rxjs';
 import {
   catchError,
   concatMap,
@@ -31,12 +31,28 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { getErrorTxt } from '../../../util/get-error-text';
 import { TimeBlockDeleteSidecarService } from './time-block-delete-sidecar.service';
 import { createTimeBlockContext, TimeBlockContext } from './time-block-context';
-import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
+import {
+  selectAllTasksWithDueTimeSorted,
+  selectAllUndoneTasksWithDueDay,
+} from '../../tasks/store/task.selectors';
+import { DateService } from '../../../core/date/date.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { T } from '../../../t.const';
 import { Log } from '../../../core/log';
 import { shouldScopePluginOAuth } from '../../../plugins/oauth/plugin-oauth-token-key.util';
 
-type TimeBlockOperation = 'upsert' | 'upsertIfScheduled' | 'delete';
+/**
+ * - `upsert` / `upsertIfScheduled`: write the task's current block, if it has one.
+ * - `resync` (a task's day changed): like `upsertIfScheduled`, and while all-day
+ *   blocks are on (`isAutoTimeBlockAllDay`) it deletes the block of a task left
+ *   with neither a time nor a day.
+ * - `delete`: remove the block (while all-day blocks are on, a task left with a
+ *   day gets its all-day block instead).
+ */
+type TimeBlockOperation = 'upsert' | 'upsertIfScheduled' | 'resync' | 'delete';
+
+/** Well-known plugin config key: also write tasks planned for a day (no time). */
+const ALL_DAY_CONFIG_KEY = 'isAutoTimeBlockAllDay';
 
 interface TimeBlockQueueRequest {
   taskId: string;
@@ -81,6 +97,7 @@ export class TimeBlockSyncEffects {
   private readonly _pluginHttpService = inject(PluginHttpService);
   private readonly _snackService = inject(SnackService);
   private readonly _deletesSidecar = inject(TimeBlockDeleteSidecarService);
+  private readonly _dateService = inject(DateService);
   private readonly _backfilledProviderIds = new Set<string>();
   private readonly _taskWriteQueues = new Map<string, TimeBlockTaskQueue>();
 
@@ -103,27 +120,28 @@ export class TimeBlockSyncEffects {
           TaskSharedActions.reScheduleTaskWithTime,
           TaskSharedActions.applyShortSyntax,
           TaskSharedActions.updateTask,
+          PlannerActions.planTaskForDay,
+          PlannerActions.moveBeforeTask,
+          PlannerActions.transferTask,
+          TaskSharedActions.planTasksForToday,
+          TaskSharedActions.addTask,
         ),
-        map((action): TimeBlockQueueRequest | null => {
-          if (action.type === TaskSharedActions.applyShortSyntax.type) {
-            const a = action as ReturnType<typeof TaskSharedActions.applyShortSyntax>;
-            return a.schedulingInfo?.dueWithTime
-              ? { taskId: a.task.id, operation: 'upsert' }
-              : null;
+        mergeMap((action): TimeBlockQueueRequest[] => {
+          if (action.type === TaskSharedActions.planTasksForToday.type) {
+            const a = action as ReturnType<typeof TaskSharedActions.planTasksForToday>;
+            return a.taskIds.map((taskId) => ({ taskId, operation: 'resync' }));
           }
-          if (action.type === TaskSharedActions.updateTask.type) {
-            const a = action as ReturnType<typeof TaskSharedActions.updateTask>;
-            const changes = a.task.changes;
-            const isRelevant =
-              'title' in changes || 'timeEstimate' in changes || 'isDone' in changes;
-            return isRelevant
-              ? { taskId: a.task.id as string, operation: 'upsertIfScheduled' }
-              : null;
+          if (action.type === TaskSharedActions.addTask.type) {
+            const a = action as ReturnType<typeof TaskSharedActions.addTask>;
+            // A new task with a time gets no block on add (unchanged); one created
+            // on a day (e.g. in Today) gets its all-day block.
+            return a.task.dueDay && !a.task.dueWithTime
+              ? [{ taskId: a.task.id, operation: 'resync' }]
+              : [];
           }
-          const a = action as ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>;
-          return { taskId: a.task.id, operation: 'upsert' };
+          const request = this._toQueueRequest(action);
+          return request ? [request] : [];
         }),
-        filter((request): request is TimeBlockQueueRequest => request !== null),
         concatMap((request) =>
           this._hasTimeBlockContext$().pipe(
             filter(Boolean),
@@ -176,8 +194,8 @@ export class TimeBlockSyncEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.deleteTask),
-        filter(({ task }) => !!task.dueWithTime),
-        concatMap(({ task }) => this._queueDeleteTimeBlock$(task.id)),
+        filter(({ task }) => !!task.dueWithTime || !!task.dueDay),
+        concatMap(({ task }) => this._queueDeleteTimeBlock$(task.id, !task.dueWithTime)),
       ),
     { dispatch: false },
   );
@@ -192,8 +210,9 @@ export class TimeBlockSyncEffects {
         ofType(TaskSharedActions.deleteTasks),
         concatMap(() => {
           const taskIds = this._deletesSidecar.consume();
-          if (!taskIds.length) return EMPTY;
-          return this._queueDeleteTimeBlocks$(taskIds);
+          const dayOnlyTaskIds = this._deletesSidecar.consumeDayOnly();
+          if (!taskIds.length && !dayOnlyTaskIds.length) return EMPTY;
+          return this._queueDeleteTimeBlocks$(taskIds, dayOnlyTaskIds);
         }),
       ),
     { dispatch: false },
@@ -211,7 +230,12 @@ export class TimeBlockSyncEffects {
         filter((action) => 'pluginConfig' in (action.issueProvider.changes ?? {})),
         concatMap((action) =>
           this._withTimeBlockContext$((ctx) => {
-            if (this._backfilledProviderIds.has(ctx.providerId)) return EMPTY;
+            const allDayBackfillKey = `${ctx.providerId}:allDay`;
+            const isTimedDone = this._backfilledProviderIds.has(ctx.providerId);
+            const isAllDayDue =
+              this._isAllDayEnabled(ctx) &&
+              !this._backfilledProviderIds.has(allDayBackfillKey);
+            if (isTimedDone && !isAllDayDue) return EMPTY;
 
             const syncRangeWeeks =
               parseInt(
@@ -221,15 +245,36 @@ export class TimeBlockSyncEffects {
             const now = Date.now();
             const rangeMs = syncRangeWeeks * 7 * 24 * 60 * 60 * 1000;
             const rangeEnd = now + rangeMs;
+            const todayStr = this._dateService.todayStr();
+            const rangeEndDay = getDbDateStr(rangeEnd);
 
-            return this._store.select(selectAllTasksWithDueTimeSorted).pipe(
+            return combineLatest([
+              this._store.select(selectAllTasksWithDueTimeSorted),
+              this._store.select(selectAllUndoneTasksWithDueDay),
+            ]).pipe(
               first(),
-              concatMap((tasks) => {
-                const tasksInRange = tasks.filter(
-                  (t) => t.dueWithTime >= now && t.dueWithTime <= rangeEnd,
-                );
-                if (!tasksInRange.length) {
+              concatMap(([timedTasks, dayTasks]) => {
+                const markDone = (): void => {
                   this._backfilledProviderIds.add(ctx.providerId);
+                  if (isAllDayDue) this._backfilledProviderIds.add(allDayBackfillKey);
+                };
+                const tasksInRange: { id: string }[] = [
+                  ...(isTimedDone
+                    ? []
+                    : timedTasks.filter(
+                        (t) => t.dueWithTime >= now && t.dueWithTime <= rangeEnd,
+                      )),
+                  ...(isAllDayDue
+                    ? dayTasks.filter(
+                        (t) =>
+                          !t.dueWithTime &&
+                          t.dueDay >= todayStr &&
+                          t.dueDay <= rangeEndDay,
+                      )
+                    : []),
+                ];
+                if (!tasksInRange.length) {
+                  markDone();
                   return EMPTY;
                 }
                 Log.log(
@@ -247,9 +292,7 @@ export class TimeBlockSyncEffects {
                     MAX_PARALLEL_TIME_BLOCK_HTTP,
                   ),
                   // Mark as backfilled only after all upserts complete successfully
-                  tap({
-                    complete: () => this._backfilledProviderIds.add(ctx.providerId),
-                  }),
+                  tap({ complete: markDone }),
                 );
               }),
             );
@@ -260,6 +303,43 @@ export class TimeBlockSyncEffects {
   );
 
   // --- Helpers ---
+
+  private _toQueueRequest(action: Action): TimeBlockQueueRequest | null {
+    if (action.type === TaskSharedActions.applyShortSyntax.type) {
+      const a = action as ReturnType<typeof TaskSharedActions.applyShortSyntax>;
+      if (a.schedulingInfo?.dueWithTime) {
+        return { taskId: a.task.id, operation: 'upsert' };
+      }
+      return a.schedulingInfo?.day ? { taskId: a.task.id, operation: 'resync' } : null;
+    }
+    if (action.type === TaskSharedActions.updateTask.type) {
+      const a = action as ReturnType<typeof TaskSharedActions.updateTask>;
+      const changes = a.task.changes;
+      if ('dueDay' in changes) {
+        return { taskId: a.task.id as string, operation: 'resync' };
+      }
+      const isRelevant =
+        'title' in changes || 'timeEstimate' in changes || 'isDone' in changes;
+      return isRelevant
+        ? { taskId: a.task.id as string, operation: 'upsertIfScheduled' }
+        : null;
+    }
+    if (action.type === PlannerActions.planTaskForDay.type) {
+      const a = action as ReturnType<typeof PlannerActions.planTaskForDay>;
+      return { taskId: a.task.id, operation: 'resync' };
+    }
+    if (action.type === PlannerActions.moveBeforeTask.type) {
+      const a = action as ReturnType<typeof PlannerActions.moveBeforeTask>;
+      return { taskId: a.fromTask.id, operation: 'resync' };
+    }
+    if (action.type === PlannerActions.transferTask.type) {
+      const a = action as ReturnType<typeof PlannerActions.transferTask>;
+      // A timed task's transfer is handled by deleteOnUnschedule$.
+      return a.task.dueWithTime ? null : { taskId: a.task.id, operation: 'resync' };
+    }
+    const a = action as ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>;
+    return { taskId: a.task.id, operation: 'upsert' };
+  }
 
   private _hasTimeBlockContext$(filterProviderId?: string): Observable<boolean> {
     return this._store.select(selectEnabledIssueProviders).pipe(
@@ -288,7 +368,13 @@ export class TimeBlockSyncEffects {
 
     const done = new Promise<void>((resolve) => queue.resolvers.push(resolve));
 
-    if (!(queue.pending?.type === 'delete' && operation.type === 'upsertIfScheduled')) {
+    // A pending delete already re-checks the task's day while all-day blocks are on.
+    if (
+      !(
+        queue.pending?.type === 'delete' &&
+        (operation.type === 'upsertIfScheduled' || operation.type === 'resync')
+      )
+    ) {
       queue.pending = operation;
     }
     if (queue.isRunning) {
@@ -327,9 +413,9 @@ export class TimeBlockSyncEffects {
   ): Promise<void> {
     return new Promise((resolve) => {
       const op$ =
-        operation.type === 'upsert' || operation.type === 'upsertIfScheduled'
-          ? this._upsertLatestTaskOnce$(taskId, operation.ctx)
-          : this._deleteTimeBlockOnce$(taskId, operation.ctx);
+        operation.type === 'delete'
+          ? this._deleteTimeBlockOnce$(taskId, operation.ctx)
+          : this._upsertLatestTaskOnce$(taskId, operation.type, operation.ctx);
       op$.pipe(catchError((err) => this._handleError(err))).subscribe({
         complete: resolve,
         error: () => resolve(),
@@ -339,23 +425,30 @@ export class TimeBlockSyncEffects {
 
   private _upsertLatestTaskOnce$(
     taskId: string,
+    type: Exclude<TimeBlockOperation, 'delete'>,
     queuedCtx?: TimeBlockContext,
   ): Observable<unknown> {
-    const runWithCtx = (ctx: TimeBlockContext): Observable<unknown> =>
+    const runWithCtx = (ctx: TimeBlockContext): Observable<unknown> => {
+      const isAllDay = this._isAllDayEnabled(ctx);
       // Re-read the latest task when the queued write actually starts. If
       // edits arrived while a previous HTTP write was in flight, this makes
       // the trailing write reflect the final settled state.
-      this._taskService
-        .getByIdOnce$(taskId)
-        .pipe(
-          concatMap((task) =>
-            task?.dueWithTime
-              ? from(this._upsertEvent(ctx, task, task.dueWithTime)).pipe(
-                  catchError((err) => this._handleError(err, ctx)),
-                )
-              : EMPTY,
-          ),
-        );
+      return this._taskService.getByIdOnce$(taskId).pipe(
+        concatMap((task) => {
+          if (task?.dueWithTime) {
+            return from(this._upsertEvent(ctx, task, task.dueWithTime)).pipe(
+              catchError((err) => this._handleError(err, ctx)),
+            );
+          }
+          if (isAllDay && task?.dueDay) {
+            return from(this._upsertAllDayEvent(ctx, task, task.dueDay)).pipe(
+              catchError((err) => this._handleError(err, ctx)),
+            );
+          }
+          return isAllDay && type === 'resync' ? this._deleteEvent$(taskId, ctx) : EMPTY;
+        }),
+      );
+    };
 
     return queuedCtx ? runWithCtx(queuedCtx) : this._withTimeBlockContext$(runWithCtx);
   }
@@ -365,29 +458,58 @@ export class TimeBlockSyncEffects {
     queuedCtx?: TimeBlockContext,
   ): Observable<unknown> {
     const runWithCtx = (ctx: TimeBlockContext): Observable<unknown> =>
-      from(ctx.definition.timeBlock!.deleteEvent(taskId, ctx.config, ctx.http)).pipe(
-        catchError((err) => this._handleError(err, ctx)),
-      );
+      this._isAllDayEnabled(ctx)
+        ? // Unscheduling can leave the task on a day (e.g. kept in Today) and a
+          // planner transfer moves it to one: write the all-day block instead.
+          this._taskService
+            .getByIdOnce$(taskId)
+            .pipe(
+              concatMap((task) =>
+                task && !task.dueWithTime && task.dueDay
+                  ? from(this._upsertAllDayEvent(ctx, task, task.dueDay)).pipe(
+                      catchError((err) => this._handleError(err, ctx)),
+                    )
+                  : this._deleteEvent$(taskId, ctx),
+              ),
+            )
+        : this._deleteEvent$(taskId, ctx);
 
     return queuedCtx ? runWithCtx(queuedCtx) : this._withTimeBlockContext$(runWithCtx);
   }
 
-  private _queueDeleteTimeBlock$(taskId: string): Observable<unknown> {
+  private _deleteEvent$(taskId: string, ctx: TimeBlockContext): Observable<unknown> {
+    return from(ctx.definition.timeBlock!.deleteEvent(taskId, ctx.config, ctx.http)).pipe(
+      catchError((err) => this._handleError(err, ctx)),
+    );
+  }
+
+  /** `isDayOnly`: the task had a day but no time, so it only has an all-day block. */
+  private _queueDeleteTimeBlock$(taskId: string, isDayOnly = false): Observable<unknown> {
     return this._withTimeBlockContext$((ctx) => {
+      if (isDayOnly && !this._isAllDayEnabled(ctx)) return EMPTY;
       void this._queueTimeBlockOperation(taskId, { type: 'delete', ctx });
       return EMPTY;
     });
   }
 
-  private _queueDeleteTimeBlocks$(taskIds: string[]): Observable<unknown> {
+  private _queueDeleteTimeBlocks$(
+    taskIds: string[],
+    dayOnlyTaskIds: string[] = [],
+  ): Observable<unknown> {
     return this._withTimeBlockContext$((ctx) =>
-      from(taskIds).pipe(
+      from([...taskIds, ...(this._isAllDayEnabled(ctx) ? dayOnlyTaskIds : [])]).pipe(
         mergeMap(
           (taskId) =>
             from(this._queueTimeBlockOperation(taskId, { type: 'delete', ctx })),
           MAX_PARALLEL_TIME_BLOCK_HTTP,
         ),
       ),
+    );
+  }
+
+  private _isAllDayEnabled(ctx: TimeBlockContext): boolean {
+    return (
+      !!ctx.config[ALL_DAY_CONFIG_KEY] && !!ctx.definition.timeBlock?.upsertAllDayEvent
     );
   }
 
@@ -437,6 +559,23 @@ export class TimeBlockSyncEffects {
         // A won't-do task wasn't completed, so its block gets no done marker.
         isDone: isCompletedTask(task),
       },
+      ctx.config,
+      ctx.http,
+    );
+  }
+
+  private async _upsertAllDayEvent(
+    ctx: TimeBlockContext,
+    task: Task,
+    dueDay: string,
+  ): Promise<void> {
+    // Same rule as timed blocks: an imported event already represents the task.
+    if (task.issueId && task.issueProviderId === ctx.providerId) {
+      return;
+    }
+    await ctx.definition.timeBlock!.upsertAllDayEvent!(
+      task.id,
+      { title: task.title, dueDay, isDone: isCompletedTask(task) },
       ctx.config,
       ctx.http,
     );

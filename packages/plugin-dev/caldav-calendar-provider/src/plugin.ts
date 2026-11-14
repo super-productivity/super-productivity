@@ -25,6 +25,7 @@ interface CaldavCalendarConfig {
   writeCalendarId?: string;
   syncRangeWeeks?: string;
   isAutoTimeBlock?: boolean;
+  isAutoTimeBlockAllDay?: boolean;
   timeBlockCalendarId?: string;
   isLogWorkSessions?: boolean;
   workSessionCalendarId?: string;
@@ -1330,6 +1331,14 @@ PluginAPI.registerIssueProvider({
       loadOptions: loadCalendars,
     },
     {
+      key: 'isAutoTimeBlockAllDay',
+      type: 'checkbox' as const,
+      label: 'Also add tasks planned for a day',
+      description:
+        'Tasks planned for a day without a time get an all-day event in the time block calendar.',
+      showIf: 'isAutoTimeBlock',
+    },
+    {
       key: 'isLogWorkSessions',
       type: 'checkbox' as const,
       label: 'Add tracked time to calendar',
@@ -1785,6 +1794,51 @@ PluginAPI.registerIssueProvider({
       // present (single idempotent write; no insert/patch double-write).
       await withTransientRetry(() =>
         http.put(eventUrl, icalData, {
+          headers: { 'Content-Type': 'text/calendar; charset=utf-8' },
+          responseType: 'text',
+        }),
+      );
+    },
+
+    async upsertAllDayEvent(
+      taskId: string,
+      eventData: {
+        title: string;
+        dueDay: string;
+        isDone: boolean;
+      },
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void> {
+      const cfg = config as unknown as CaldavCalendarConfig;
+      const calendarHref = getTimeBlockCalendarId(cfg);
+      if (!calendarHref) {
+        throw new Error(
+          'No write calendar configured. Please select a calendar in the CalDAV settings.',
+        );
+      }
+      // Same UID as the timed block, so the PUT replaces it when a task moves
+      // from a time to a day (and back).
+      const uid = taskIdToCaldavUid(taskId);
+      const summary = eventData.isDone ? `[DONE] ${eventData.title}` : eventData.title;
+      const startDate = new Date(eventData.dueDay + 'T00:00:00');
+      const endDate = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate() + 1,
+      );
+
+      const icalData = buildICalEvent({
+        uid,
+        summary,
+        dtstart: toIcalDate(startDate),
+        dtstartParam: 'VALUE=DATE',
+        dtend: toIcalDate(endDate),
+        dtendParam: 'VALUE=DATE',
+      });
+
+      await withTransientRetry(() =>
+        http.put(buildNewEventUrl(cfg, calendarHref, uid), icalData, {
           headers: { 'Content-Type': 'text/calendar; charset=utf-8' },
           responseType: 'text',
         }),
