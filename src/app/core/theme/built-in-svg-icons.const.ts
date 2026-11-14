@@ -17,6 +17,7 @@ export const BUILT_IN_SVG_ICONS: readonly (readonly [string, string])[] = [
   ['azure_devops', 'assets/icons/azure_devops.svg'],
   ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
   ['plainspace', 'assets/icons/plainspace.svg'],
+  ['plane', 'assets/icons/plane.svg'],
   // Header sync button states: one ring drawn at the header's icon size
   ['sync_ring', 'assets/icons/sync-ring.svg'],
   ['sync_done', 'assets/icons/sync-done.svg'],
