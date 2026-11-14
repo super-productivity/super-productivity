@@ -18,6 +18,7 @@ import { throwHandledError } from '../../../../util/throw-handled-error';
 import { IssueLog } from '../../../../core/log';
 import { Capacitor } from '@capacitor/core';
 import { WebDavHttp } from '../../../../op-log/sync-providers/file-based/webdav/capacitor-webdav-http';
+import { toBasicAuthHeader } from '../../../../util/to-basic-auth-header';
 
 // Loaded on first use to keep the library out of the initial bundle.
 // @ts-ignore
@@ -481,7 +482,7 @@ export class CaldavClientService {
         xhr.setRequestHeader('X-Requested-With', 'SuperProductivity');
         xhr.setRequestHeader(
           'Authorization',
-          'Basic ' + btoa(cfg.username + ':' + cfg.password),
+          toBasicAuthHeader(cfg.username, cfg.password),
         );
         return result;
       };
@@ -508,7 +509,7 @@ export class CaldavClientService {
       const headers: Record<string, string> = {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         'X-Requested-With': 'SuperProductivity',
-        Authorization: 'Basic ' + btoa(cfg.username + ':' + cfg.password),
+        Authorization: toBasicAuthHeader(cfg.username, cfg.password),
       };
       let method = 'GET';
       let url = '';

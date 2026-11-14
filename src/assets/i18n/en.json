@@ -1106,6 +1106,7 @@
       "EXACT_ALARM_HINT": "Reminders may be delayed because \"Alarms & reminders\" is turned off for this app in Android settings.",
       "EXACT_ALARM_OPEN_SETTINGS": "Open settings",
       "S_ACTIVE_TASK_DUE": "The task you are currently working on is now due!<br/> ({{title}})",
+      "S_IOS_LIMIT": "iOS limits how many reminders an app can set. Yours are set for the next {{days}} days. Later ones follow as you keep using the app.",
       "S_REMINDER_ERR": "Error for reminder interface"
     },
     "SCHEDULE": {
@@ -1695,7 +1696,7 @@
         "ERROR_REMOTE_FILE_LOCKED": "Remote sync file is locked by the server. This may resolve on the next sync attempt.",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "The sync server answered with a web page instead of your sync data (e.g. a login, proxy or error page). Your remote data is probably intact — check your server URL, credentials and network, then try again. If the problem persists, you can overwrite the remote via Sync Settings → Force Overwrite.",
         "ERROR_SYNC_VERSION_MISMATCH": "Remote sync data uses an incompatible format version. Ensure all devices run the same version of Super Productivity.",
-        "ERROR_UNTRUSTED_CERTIFICATE_ANDROID": "Sync failed: the server's certificate is not trusted on this device, has expired, or does not match the server address.\n\nFor a self-signed certificate or private CA, search Android Settings for \"CA certificate\" and install it there (not as a \"VPN & app user certificate\"). The certificate must list the server's address as a Subject Alternative Name.",
+        "ERROR_UNTRUSTED_CERTIFICATE_ANDROID": "Sync failed: the server's certificate is not trusted on this device, has expired, or does not match the server address.\n\nFor a self-signed certificate or private CA, search Android Settings for \"CA certificate\" and install it there (not as a \"VPN & app user certificate\"). The certificate must list the server's address as a Subject Alternative Name. <a href=\"https://github.com/super-productivity/super-productivity/wiki/2.25-Sync-WebDAV-with-a-Private-Certificate-on-Android\" target=\"_blank\" rel=\"noopener\">Step-by-step guide</a>",
         "WARN_CLIENT_ID_REGENERATED": "Sync device ID was invalid and has been regenerated. A sync conflict may occur on next sync.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error while syncing. Unable to read remote data. Maybe you enabled encryption and your local password does not match the one used to encrypt the remote data?",
         "FINISH_DAY_SYNC_ERROR": "Sync error while finishing day. Please try again.",

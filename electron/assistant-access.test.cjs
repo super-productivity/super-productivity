@@ -448,6 +448,63 @@ test('create_task rejects invalid dates and repeats before forwarding', async ()
   }
 });
 
+test('create_task forwards deadlineDate, deadlineTime and estimateMinutes', async () => {
+  const { forward, calls } = fakeForward({
+    '/assistant/capture': () => ({
+      status: 200,
+      body: { ok: true, data: { status: 'created', id: 'new1' } },
+    }),
+  });
+  const args = {
+    title: 'Lab report',
+    dueDate: '2026-11-04',
+    deadlineDate: '2026-11-06',
+    deadlineTime: '08:00',
+    estimateMinutes: 60,
+  };
+  const result = await tools.runTool(
+    'create_task',
+    args,
+    () => ['tasks:capture'],
+    forward,
+  );
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(calls[0].body, args);
+});
+
+test('create_task rejects invalid deadlines and estimates before forwarding', async () => {
+  const cases = [
+    [{ deadlineTime: '08:00' }, 'deadlineTime requires deadlineDate'],
+    [{ deadlineDate: '2026-02-30' }, 'deadlineDate must be a calendar day as YYYY-MM-DD'],
+    [
+      { deadlineDate: '2026-11-06', deadlineTime: '8:00' },
+      'deadlineTime must be a 24-hour time as HH:MM',
+    ],
+    [
+      { deadlineDate: '2026-11-06', repeat: { cycle: 'weekly' } },
+      'deadlineDate cannot be combined with repeat',
+    ],
+    [{ estimateMinutes: 0 }, 'estimateMinutes must be a whole number from 1 to 10080'],
+    [
+      { estimateMinutes: 10081 },
+      'estimateMinutes must be a whole number from 1 to 10080',
+    ],
+    [{ estimateMinutes: 2.5 }, 'estimateMinutes must be a whole number from 1 to 10080'],
+    [{ estimateMinutes: '30' }, 'estimateMinutes must be a whole number from 1 to 10080'],
+  ];
+  for (const [extra, message] of cases) {
+    const { forward, calls } = fakeForward();
+    const result = await tools.runTool(
+      'create_task',
+      { title: 'x', ...extra },
+      () => ['tasks:capture'],
+      forward,
+    );
+    assert.equal(result.content[0].text, `INVALID_ARGUMENTS: ${message}`, message);
+    assert.equal(calls.length, 0);
+  }
+});
+
 test('create_task never claims nothing happened when the outcome is unknown', async () => {
   const timeout = async () => {
     throw new tools.RendererTimeoutError();

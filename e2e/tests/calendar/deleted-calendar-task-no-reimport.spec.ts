@@ -112,13 +112,7 @@ test.describe('Calendar #5162', () => {
 
     // --- Restart the app: the poll effect re-runs its import pass immediately ---
     // Importing an event also writes it to the per-day skip list, which filters the
-    // Schedule *view* (not the import). Clear it so the chip assertion below can
-    // discriminate: with the fix the event renders as a chip; without it, the
-    // re-imported task filters the chip out.
-    await page.evaluate(() => {
-      localStorage.removeItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY');
-      localStorage.removeItem('SUP_CALENDER_EVENTS_LAST_SKIP_DAY');
-    });
+    // Schedule *view*. Deleting the task takes it off that list again (#10641).
     await page.reload();
     await workViewPage.waitForTaskList();
 

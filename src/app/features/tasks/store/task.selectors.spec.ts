@@ -260,7 +260,7 @@ describe('Task Selectors', () => {
     fromSelectors.selectAllTasksInActiveProjects.release();
     fromSelectors.selectOverdueTasks.release();
     fromSelectors.selectAllTasksWithDueTimeSorted.release();
-    fromSelectors.selectAllDoneIds.release();
+    fromSelectors.selectOpenTaskIds.release();
     selectTodayStr.release();
     selectStartOfNextDayDiffMs.release();
     selectProjectFeatureState.release();
@@ -1009,19 +1009,6 @@ describe('Task Selectors', () => {
       );
     });
 
-    it('should select tasks with due time for range', () => {
-      const start = Date.now();
-      const end = Date.now() + 7200000; // 2 hours
-      const allTasks = Object.values(mockTasks);
-      const params = { start, end };
-      const result = fromSelectors.selectTasksWithDueTimeForRange.projector(
-        allTasks,
-        params,
-      );
-      expect(result.length).toBe(1);
-      expect(result[0].id).toBe('task5');
-    });
-
     it('should select tasks with due time until', () => {
       const end = Date.now() + 7200000; // 2 hours
       const allTasks = Object.values(mockTasks);
@@ -1469,6 +1456,9 @@ describe('Task Selectors', () => {
     const ids = fromSelectors.selectOverdueTasks(archivedState as any).map((t) => t.id);
     expect(ids).not.toContain('overdueInArchived');
     expect(ids).toContain('task6');
+    expect(
+      fromSelectors.selectOpenTaskIds(archivedState as any).has('overdueInArchived'),
+    ).toBe(false);
   });
 
   // -------------------------------------------------------------------------
@@ -1754,9 +1744,9 @@ describe('Task Selectors', () => {
         );
       });
 
-      it('selectAllDoneIds is referentially stable', () => {
-        const r1 = fromSelectors.selectAllDoneIds(mockState);
-        expect(fromSelectors.selectAllDoneIds(bumpTimeSpent('task3'))).toBe(r1);
+      it('selectOpenTaskIds is referentially stable', () => {
+        const r1 = fromSelectors.selectOpenTaskIds(mockState);
+        expect(fromSelectors.selectOpenTaskIds(bumpTimeSpent('task3'))).toBe(r1);
       });
     });
 
@@ -1794,14 +1784,16 @@ describe('Task Selectors', () => {
         expect(r2.map((t) => t.id)).toContain('task4');
       });
 
-      it('selectAllDoneIds recomputes when a task is marked done or undone', () => {
-        const r1 = fromSelectors.selectAllDoneIds(mockState);
-        const r2 = fromSelectors.selectAllDoneIds(patchTask('task3', { isDone: true }));
+      it('selectOpenTaskIds recomputes when a task is marked done or undone', () => {
+        const r1 = fromSelectors.selectOpenTaskIds(mockState);
+        const r2 = fromSelectors.selectOpenTaskIds(patchTask('task3', { isDone: true }));
         expect(r2).not.toBe(r1);
-        expect(r2).toContain('task3');
+        expect(r2.has('task3')).toBe(false);
         expect(
-          fromSelectors.selectAllDoneIds(patchTask('task2', { isDone: false })),
-        ).not.toContain('task2');
+          fromSelectors
+            .selectOpenTaskIds(patchTask('task2', { isDone: false }))
+            .has('task2'),
+        ).toBe(true);
       });
 
       it('a member task with a non-scheduling change is served with its LIVE ref', () => {
@@ -1828,9 +1820,85 @@ describe('Task Selectors', () => {
         expect(result.map((t) => t.id)).toEqual(['task6']);
       });
 
-      it('selectAllDoneIds returns exactly the done tasks', () => {
-        expect(fromSelectors.selectAllDoneIds(mockState)).toEqual(['task2', 'subtask2']);
+      it('selectOpenTaskIds returns exactly the open tasks in active projects', () => {
+        expect(fromSelectors.selectOpenTaskIds(mockState)).toEqual(
+          new Set([
+            'task1',
+            'task3',
+            'task4',
+            'task5',
+            'task6',
+            'task7',
+            'task8',
+            'task9',
+            'subtask1',
+          ]),
+        );
       });
     });
+  });
+});
+
+describe('selectTasksWithDueTimeForDay', () => {
+  const timedTask = (id: string, date: string): Task => ({
+    ...DEFAULT_TASK,
+    id,
+    projectId: 'INBOX',
+    dueWithTime: new Date(date).getTime(),
+  });
+
+  it('excludes the previous logical night and includes the following early morning', () => {
+    const tasks = [
+      timedTask('previous-night', '2026-06-16T02:00:00'),
+      timedTask('boundary', '2026-06-16T04:00:00'),
+      timedTask('late-night', '2026-06-17T02:00:00'),
+      timedTask('tomorrow', '2026-06-17T04:00:00'),
+    ];
+    expect(
+      fromSelectors.selectTasksWithDueTimeForDay
+        .projector(tasks, 4 * 60 * 60 * 1000, { day: '2026-06-16' })
+        .map((task: Task) => task.id),
+    ).toEqual(['boundary', 'late-night']);
+  });
+
+  // Run by both the Berlin and Los Angeles timezone suites. Four elapsed
+  // hours after local midnight can be 05:00 at spring-forward or 03:00 at
+  // fall-back. This preserves the existing absolute-offset contract (#10718).
+  for (const day of ['2026-03-08', '2026-03-29', '2026-10-25', '2026-11-01']) {
+    it(`keeps the absolute-offset boundaries on ${day}`, () => {
+      const offsetMs = 4 * 60 * 60 * 1000;
+      const midnight = new Date(`${day}T00:00:00`);
+      const nextMidnight = new Date(midnight);
+      nextMidnight.setDate(nextMidnight.getDate() + 1);
+      const start = midnight.getTime() + offsetMs;
+      const end = nextMidnight.getTime() + offsetMs;
+      const tasks: Task[] = [
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'before', dueWithTime: start - 1 },
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'start', dueWithTime: start },
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'last', dueWithTime: end - 1 },
+        { ...DEFAULT_TASK, projectId: 'INBOX', id: 'next', dueWithTime: end },
+      ];
+
+      expect(
+        fromSelectors.selectTasksWithDueTimeForDay
+          .projector(tasks, offsetMs, { day })
+          .map((task: Task) => task.id),
+      ).toEqual(['start', 'last']);
+    });
+  }
+
+  it('keeps calendar-day membership at the default zero offset', () => {
+    const tasks = [
+      { ...DEFAULT_TASK, projectId: 'INBOX', id: 'untimed' },
+      { ...DEFAULT_TASK, projectId: 'INBOX', id: 'zero', dueWithTime: 0 },
+      timedTask('early', '2026-06-16T02:00:00'),
+      timedTask('late', '2026-06-16T23:59:59.999'),
+      timedTask('tomorrow', '2026-06-17T00:00:00'),
+    ];
+    expect(
+      fromSelectors.selectTasksWithDueTimeForDay
+        .projector(tasks, 0, { day: '2026-06-16' })
+        .map((task: Task) => task.id),
+    ).toEqual(['early', 'late']);
   });
 });

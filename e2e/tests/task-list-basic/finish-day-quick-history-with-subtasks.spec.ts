@@ -126,4 +126,72 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     await workViewPage.waitForTaskList();
     await expectRestoredHierarchy();
   });
+
+  // #11720: archiving a done parent used to mark its undone subtasks done, so
+  // restoring brought them back completed.
+  test('should restore an undone subtask of a done parent as undone', async ({
+    page,
+    dialogPage,
+    taskPage,
+    workViewPage,
+    testPrefix,
+  }) => {
+    test.setTimeout(90000);
+    await workViewPage.waitForTaskList();
+
+    const parentTitle = `${testPrefix}-Done Parent`;
+    const doneSubTitle = `${testPrefix}-Done Sub`;
+    const undoneSubTitle = `${testPrefix}-Undone Sub`;
+
+    await workViewPage.addTask(parentTitle);
+    const parentTask = taskPage.getTaskByText(parentTitle).first();
+    await workViewPage.addSubTask(parentTask, doneSubTitle);
+    await workViewPage.addSubTask(parentTask, undoneSubTitle);
+    await expect(taskPage.getSubTasks(parentTask)).toHaveCount(2);
+
+    const subTasks = taskPage.getSubTasks(parentTask);
+    await taskPage.markTaskAsDone(subTasks.filter({ hasText: doneSubTitle }));
+    await markTaskAsDone(parentTask);
+    await expect(parentTask).toHaveClass(/isDone/);
+    await expect(subTasks.filter({ hasText: doneSubTitle })).toHaveClass(/isDone/);
+    await expect(subTasks.filter({ hasText: undoneSubTitle })).not.toHaveClass(/isDone/);
+
+    await page.click(FINISH_DAY_BTN);
+    await page.waitForSelector(SAVE_AND_GO_HOME_BTN, { state: 'visible' });
+    await Promise.all([
+      page.waitForURL(/#\/tag\/TODAY\/tasks/, { timeout: 15000 }),
+      page.click(SAVE_AND_GO_HOME_BTN),
+    ]);
+    await expect(taskPage.getTaskByText(parentTitle)).toHaveCount(0);
+
+    await page.goto('/#/tag/TODAY/history');
+    const dayToggle = page.locator(HISTORY_DAY_TOGGLE).first();
+    await dayToggle.click();
+    await expect(dayToggle).toHaveAttribute('aria-expanded', 'true');
+    await page.getByRole('button', { name: 'Restore task from archive' }).first().click();
+    await dialogPage.waitForDialog();
+    await Promise.all([
+      page.waitForURL(/#\/tag\/TODAY\/tasks/, { timeout: 15000 }),
+      dialogPage.clickDialogButton('Do it!'),
+    ]);
+
+    const expectSubTaskStates = async (): Promise<void> => {
+      const restoredParent = taskPage.getTaskByText(parentTitle).first();
+      await expect(restoredParent).toBeVisible();
+      const restoredSubTasks = taskPage.getSubTasks(restoredParent);
+      await expect(restoredSubTasks).toHaveCount(2);
+      await expect(restoredSubTasks.filter({ hasText: doneSubTitle })).toHaveClass(
+        /isDone/,
+      );
+      await expect(restoredSubTasks.filter({ hasText: undoneSubTitle })).not.toHaveClass(
+        /isDone/,
+      );
+    };
+
+    await expectSubTaskStates();
+    await waitForStatePersistence(page);
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expectSubTaskStates();
+  });
 });

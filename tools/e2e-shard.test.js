@@ -24,7 +24,7 @@ test('parseArgs reads shard options and the --only list', () => {
       'sync/a.spec.ts sync/b.spec.ts',
     ]),
     {
-      grep: '@supersync',
+      filter: { flag: '--grep', pattern: '@supersync' },
       shards: 8,
       shard: 3,
       out: 'x.txt',
@@ -62,7 +62,27 @@ test('parseArgs rejects bad shard numbers and unknown flags', () => {
   );
   assert.throws(
     () => parseArgs(['--shards', '2', '--shard', '1', '--out', 'o']),
-    /--grep/,
+    /exactly one of --grep or --grep-invert/,
+  );
+  assert.throws(
+    () => parseArgs([...base, '--grep-invert', 'y', '--shards', '2', '--shard', '1']),
+    /exactly one of --grep or --grep-invert/,
+  );
+});
+
+test('parseArgs selects the regular suite by exclusion with --grep-invert', () => {
+  assert.deepEqual(
+    parseArgs([
+      '--grep-invert',
+      '@supersync|@webdav',
+      '--shards',
+      '4',
+      '--shard',
+      '2',
+      '--out',
+      'o',
+    ]).filter,
+    { flag: '--grep-invert', pattern: '@supersync|@webdav' },
   );
 });
 

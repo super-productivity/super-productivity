@@ -17,6 +17,8 @@ export class LanguageService {
   // I think a better approach is to add a field in every [lang].json file to specify the direction of the language
   private readonly _isRTL = signal<boolean>(false);
   readonly isLangRTL = this._isRTL.asReadonly();
+  private readonly _currentLanguage = signal<LanguageCode>(DEFAULT_LANGUAGE);
+  readonly currentLanguage = this._currentLanguage.asReadonly();
 
   /** Detect user system lanuage */
   detect(): LanguageCode {
@@ -65,6 +67,7 @@ export class LanguageService {
     // DateTimeFormatService owns the adapter locale so an explicit date/time
     // override keeps winning (#8565).
     this._dateTimeFormatService.setUiLanguage(lng);
+    this._currentLanguage.set(lng);
   }
 
   private _checkIsRTL(lng: LanguageCode): boolean {

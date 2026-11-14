@@ -211,6 +211,8 @@ export class TaskTitleComponent implements OnDestroy {
   // Enter/Escape to submit and blur
   handleKeyDown(ev: KeyboardEvent): void {
     ev.stopPropagation();
+    // Leave an Enter or Escape that confirms or cancels an IME candidate to the IME.
+    if (ev.isComposing || ev.keyCode === 229) return;
 
     let trigger: SubmitTrigger | null = null;
     if (ev.key === 'Escape') {
