@@ -9,6 +9,9 @@ import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { selectPlannerDayMap } from './store/planner.selectors';
 import { signal } from '@angular/core';
 import { PlannerDay } from './planner.model';
+import { TaskState } from '../tasks/task.model';
+import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
+import { PlannerActions } from './store/planner.actions';
 
 describe('PlannerComponent', () => {
   let fixture: ComponentFixture<PlannerComponent>;
@@ -17,6 +20,8 @@ describe('PlannerComponent', () => {
   let mockDateService: jasmine.SpyObj<DateService>;
   let mockLayoutService: { isXs: ReturnType<typeof signal<boolean>> };
   let days$: BehaviorSubject<PlannerDay[]>;
+  let todayDateStr$: BehaviorSubject<string>;
+  const taskIds = ['task-1', 'task-2'];
 
   const makePlannerDay = (dayDate: string, taskCount: number): PlannerDay => ({
     dayDate,
@@ -34,6 +39,7 @@ describe('PlannerComponent', () => {
 
   beforeEach(async () => {
     days$ = new BehaviorSubject<PlannerDay[]>([]);
+    todayDateStr$ = new BehaviorSubject<string>('2026-02-16');
 
     mockPlannerService = jasmine.createSpyObj('PlannerService', [
       'loadMoreDays',
@@ -56,11 +62,12 @@ describe('PlannerComponent', () => {
         { provide: PlannerService, useValue: mockPlannerService },
         { provide: DateService, useValue: mockDateService },
         { provide: LayoutService, useValue: mockLayoutService },
+        { provide: GlobalTrackingIntervalService, useValue: { todayDateStr$ } },
         provideMockStore({
           selectors: [
             {
               selector: selectTaskFeatureState,
-              value: { ids: ['task-1', 'task-2'], entities: {} },
+              value: { ids: taskIds, entities: {} },
             },
             {
               selector: selectPlannerDayMap,
@@ -75,6 +82,7 @@ describe('PlannerComponent', () => {
       })
       .compileComponents();
 
+    spyOn(TestBed.inject(MockStore), 'dispatch').and.callThrough();
     fixture = TestBed.createComponent(PlannerComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -86,6 +94,49 @@ describe('PlannerComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('planner cleanup dispatch', () => {
+    const cleanupCalls = (): number =>
+      (TestBed.inject(MockStore).dispatch as jasmine.Spy).calls
+        .allArgs()
+        .filter(
+          ([a]) => a.type === PlannerActions.cleanupOldAndUndefinedPlannerTasks.type,
+        ).length;
+
+    it('dispatches once on init', () => {
+      expect(cleanupCalls()).toBe(1);
+    });
+
+    // A tracked task replaces its entity every second; the ids array keeps its
+    // reference, so the cleanup must not re-run on every tick.
+    it('does not re-dispatch when only task entities change', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectTaskFeatureState, {
+        ids: taskIds,
+        entities: { task1: { id: 'task1' } },
+      } as unknown as TaskState);
+      store.refreshState();
+
+      expect(cleanupCalls()).toBe(1);
+    });
+
+    it('re-dispatches when task ids change', () => {
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(selectTaskFeatureState, {
+        ids: ['task-1'],
+        entities: {},
+      } as unknown as TaskState);
+      store.refreshState();
+
+      expect(cleanupCalls()).toBe(2);
+    });
+
+    it('re-dispatches when the logical day changes', () => {
+      todayDateStr$.next('2026-02-17');
+
+      expect(cleanupCalls()).toBe(2);
+    });
   });
 
   describe('daysWithTasks', () => {
