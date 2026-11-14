@@ -62,7 +62,9 @@ const LOCALE_LOADERS: Partial<Record<LanguageCode, () => Promise<ChronoLocale>>>
   [LanguageCode.fr]: () => import('chrono-node/fr'),
   // chrono's Italian parsers import the package root, so this one chunk pulls
   // in every locale — what all users loaded before locales were split
-  [LanguageCode.it]: () => import('chrono-node/it'),
+  [LanguageCode.it]: () => import('chrono-node/it').then((m) => ({
+    createCasualConfiguration: (littleEndian?: boolean) => m.configuration.createCasualConfiguration(),
+  })),
   [LanguageCode.ja]: () => import('chrono-node/ja'),
   [LanguageCode.nl]: () => import('chrono-node/nl'),
   [LanguageCode.pt]: () => import('chrono-node/pt'),
