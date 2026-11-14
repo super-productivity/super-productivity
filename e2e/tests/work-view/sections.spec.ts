@@ -491,6 +491,115 @@ test.describe('Sections', () => {
     await expect(right.locator('task')).toHaveCount(3);
   });
 
+  test('drops into a collapsed section and reorders across it', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await setupTestProject(workViewPage, projectPage);
+    await disableAnimations(page);
+
+    for (const title of ['Target', 'Source']) {
+      await openProjectContextMenu(page);
+      await clickAddSection(page);
+      await submitPromptDialog(page, title);
+    }
+
+    const target = sectionByTitle(page, 'Target');
+    const source = sectionByTitle(page, 'Source');
+    await expect(target).toBeVisible();
+    await expect(source).toBeVisible();
+
+    await workViewPage.addTask('Unsectioned');
+    const unsectioned = page
+      .locator('.no-section task')
+      .filter({ hasText: 'Unsectioned' });
+    await cdkDragTo(
+      page,
+      unsectioned.locator('done-toggle').first(),
+      source.locator('task-list'),
+    );
+    await expect(source.locator('task').filter({ hasText: 'Unsectioned' })).toBeVisible();
+
+    await workViewPage.addTask('From main');
+    const fromMain = page.locator('.no-section task').filter({ hasText: 'From main' });
+    await workViewPage.addTask('From source');
+    const fromSource = page
+      .locator('.no-section task')
+      .filter({ hasText: 'From source' });
+    await cdkDragTo(
+      page,
+      fromSource.locator('done-toggle').first(),
+      source.locator('task-list'),
+    );
+    await expect(source.locator('task').filter({ hasText: 'From source' })).toBeVisible();
+
+    await target.locator('.collapsible-header').click();
+    await expect(target.locator('.collapsible-panel')).toBeHidden();
+    const collapsedHeader = target.locator('.collapsible-header');
+
+    await cdkDragTo(page, fromMain.locator('done-toggle').first(), collapsedHeader);
+    await expect(target.locator('.collapsible-title')).toHaveText('Target (1)');
+    await cdkDragTo(
+      page,
+      source
+        .locator('task')
+        .filter({ hasText: 'From source' })
+        .locator('done-toggle')
+        .first(),
+      collapsedHeader,
+    );
+
+    await expect(target.locator('.collapsible-title')).toHaveText('Target (2)');
+    await expect(source.locator('task').filter({ hasText: 'From source' })).toHaveCount(
+      0,
+    );
+
+    await collapsedHeader.click();
+    await expect(target.locator('.collapsible-panel')).toBeVisible();
+    const targetTaskTitles = (await target.locator('task .task-title').allTextContents())
+      .map((title) => title.trim())
+      .filter(Boolean);
+    // The collapsed list renders no rows. Each drop is anchored after the
+    // section's last task, so the tasks land in drop order.
+    expect(targetTaskTitles).toEqual([
+      expect.stringContaining('From main'),
+      expect.stringContaining('From source'),
+    ]);
+    await collapsedHeader.click();
+    await expect(target.locator('.collapsible-panel')).toBeHidden();
+
+    // The menu trigger sits under the drop-target overlay. Opening it must
+    // not expand the section.
+    await target.hover();
+    await collapsedHeader.getByRole('button', { name: 'Section options' }).click();
+    const sectionMenu = page.getByRole('menu');
+    await expect(sectionMenu).not.toHaveClass(/mat-menu-panel-animating/);
+    await expect(sectionMenu.getByRole('menuitem', { name: 'Edit' })).toBeVisible();
+    await expect(sectionMenu.getByRole('menuitem', { name: 'Delete' })).toBeVisible();
+    await expect(target.locator('.collapsible-panel')).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(sectionMenu).toBeHidden();
+
+    // The collapsed header is also nested in the section reorder list. A
+    // section drag must pass through the task-list predicate and still reorder
+    // the outer list rather than entering the task path.
+    await cdkDragTo(page, source.locator('.collapsible-title'), collapsedHeader);
+    await expect(page.locator('.section-container').nth(0)).toContainText('Source');
+    await expect(page.locator('.section-container').nth(1)).toContainText('Target');
+
+    // The collapsed section's title is its cdkDragHandle. The overlay must
+    // not take the pointerdown, or this drag never starts.
+    await cdkDragTo(
+      page,
+      target.locator('.collapsible-title'),
+      source.locator('.collapsible-header'),
+    );
+    await expect(page.locator('.section-container').nth(0)).toContainText('Target');
+    await expect(page.locator('.section-container').nth(1)).toContainText('Source');
+    await expect(target.locator('.collapsible-panel')).toBeHidden();
+  });
+
   test('drags a task back out of a section into the main list', async ({
     page,
     workViewPage,
