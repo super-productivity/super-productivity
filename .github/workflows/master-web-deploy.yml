@@ -23,7 +23,7 @@ concurrency:
 jobs:
   deploy-master:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     environment: preview-deployments
 
     steps:
@@ -39,6 +39,7 @@ jobs:
         run: npm run env
 
       - name: Build Frontend for Web
+        id: build
         run: npm run buildFrontend:prodWeb
 
       - name: Deploy to Cloudflare Pages
@@ -47,3 +48,30 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist/browser --project-name=super-productivity-preview --branch=master
+
+      # Lighthouse budget check reuses the prodWeb build above so a second
+      # build is not needed. Catches bundle-size overruns on master before
+      # they surface as red checks on unrelated PRs (#11709).
+      - name: Add swap space for Lighthouse
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          sudo swapoff /swapfile 2>/dev/null || true
+          sudo rm -f /swapfile
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+      - name: Strip service worker artifacts for Lighthouse
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node ./tools/strip-service-worker-assets.js dist/browser
+
+      - name: Run Lighthouse CI
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
+        with:
+          configPath: './tools/lighthouse/.lighthouserc.json'
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+          runs: 1
+          budgetPath: './tools/lighthouse/budget.json'
