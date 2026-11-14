@@ -284,6 +284,14 @@ describe('TaskService', () => {
       expect(action.task.notes).toBe('Test notes');
     });
 
+    it('marks an explicit REST reminder on the creation action', () => {
+      service.add('New Task', false, { remindAt: 123 }, false, false, true);
+      const action = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof TaskSharedActions.addTask>;
+      expect(action.task.remindAt).toBe(123);
+      expect(action.isPreserveExplicitReminder).toBeTrue();
+    });
+
     it('should include auto-plan context when adding a task with a deadline today', () => {
       service.add('New Task', false, { deadlineDay: '2026-01-05' });
 
@@ -559,6 +567,14 @@ describe('TaskService', () => {
         }),
       );
       expect(id).toBeTruthy();
+    });
+
+    it('marks an explicit REST reminder on the subtask creation action', () => {
+      service.addSubTaskTo('parent-1', { title: 'Subtask', remindAt: 123 }, true);
+      const action = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof addSubTask>;
+      expect(action.task.remindAt).toBe(123);
+      expect(action.isPreserveExplicitReminder).toBeTrue();
     });
 
     it('should not focus the new subtask when it already has a title', () => {

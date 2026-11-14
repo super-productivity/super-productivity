@@ -1,3 +1,9 @@
+import { shortSyntaxSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/short-syntax-shared.reducer';
+import { Action } from '@ngrx/store';
+import { RootState } from '../../root-store/root-state';
+import { createCombinedTaskSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/test-helpers';
+import { createStateWithExistingTasks } from '../../root-store/meta/task-shared-meta-reducers/test-utils';
+import { TASK_FEATURE_NAME } from './store/task.reducer';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
@@ -11,6 +17,12 @@ import { IssueLog } from '../../core/log';
 import { LocalRestApiFeatureBridgeService } from './local-rest-api-feature-bridge.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { DateService } from '../../core/date/date.service';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { DEFAULT_DATE_INPUT_LOCALE } from '../../core/date-time-format/date-input-locale';
+import { GlobalConfigService } from '../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { selectTodayTagTaskIds } from '../tag/store/tag.reducer';
+import { getDbDateStr } from '../../util/get-db-date-str';
 import { Task, TaskWithSubTasks, TaskArchive } from './task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
@@ -33,6 +45,7 @@ describe('LocalRestApiTaskRoutesService', () => {
   let dispatchSpy: jasmine.Spy;
   const remoteSessionView = signal<RemoteSessionView | null>(null);
   let activeProjects: Project[];
+  let isDeadlineShortSyntaxEnabled: boolean;
 
   const createMockTask = (id: string, overrides: Partial<Task> = {}): Task =>
     ({
@@ -97,6 +110,7 @@ describe('LocalRestApiTaskRoutesService', () => {
 
   beforeEach(() => {
     activeProjects = [];
+    isDeadlineShortSyntaxEnabled = false;
     remoteSessionView.set(null);
 
     taskServiceMock = jasmine.createSpyObj(
@@ -179,6 +193,22 @@ describe('LocalRestApiTaskRoutesService', () => {
         { provide: ArchiveOperationHandler, useValue: archiveOperationHandlerMock },
         { provide: ProjectService, useValue: projectServiceMock },
         { provide: DateService, useValue: dateServiceMock },
+        {
+          provide: DateTimeFormatService,
+          useValue: { dateInputLocale: () => DEFAULT_DATE_INPUT_LOCALE },
+        },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({
+              ...DEFAULT_GLOBAL_CONFIG,
+              shortSyntax: {
+                ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
+                isEnableDeadline: isDeadlineShortSyntaxEnabled,
+              },
+            }),
+          },
+        },
         { provide: LocalRestApiFeatureBridgeService, useValue: featureBridgeMock },
         { provide: TrackingPresenceService, useValue: { remoteSessionView } },
         provideMockStore(),
@@ -550,6 +580,462 @@ describe('LocalRestApiTaskRoutesService', () => {
         expect(response.body.ok).toBe(true);
         expectTaskIds(response, ['task-1']);
         expect(taskServiceMock.getAllTasksEverywhere).toHaveBeenCalled();
+      });
+    });
+
+    describe('remindAt input', () => {
+      const overdueDueWithTime = new Date(2026, 4, 10, 12).getTime();
+
+      it('rejects overdue scheduled reminders auto-cleared by a today deadline on POST and PATCH', async () => {
+        const original = createMockTask('task-1', {
+          dueWithTime: overdueDueWithTime,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(original),
+        });
+        for (const [method, path, body] of [
+          [
+            'POST',
+            '/tasks',
+            {
+              title: 'Call',
+              dueWithTime: overdueDueWithTime,
+              deadlineDay: '2026-05-12',
+              remindAt: 123,
+            },
+          ],
+          ['PATCH', '/tasks/task-1', { deadlineDay: '2026-05-12', remindAt: 123 }],
+        ] as const) {
+          const response = await sendRequestAndWait(
+            createRequest(method, path, { body }),
+          );
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        }
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+        expect(featureBridgeMock.updateTaskWithDueTime).not.toHaveBeenCalled();
+        expect(dispatchSpy).not.toHaveBeenCalled();
+        expect(original.dueWithTime).toBe(overdueDueWithTime);
+      });
+
+      it('rejects a day-only POST title that would clear the explicit scheduled reminder', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Call @tomorrow',
+              dueWithTime: new Date(2026, 4, 13, 12).getTime(),
+              remindAt: 123,
+            },
+          }),
+        );
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+        expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('rejects a parsed today deadline that would clear an overdue scheduled reminder', async () => {
+        isDeadlineShortSyntaxEnabled = true;
+        dateServiceMock.todayStr.and.returnValue(getDbDateStr());
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Call !today',
+              dueWithTime: Date.now() - 172_800_000,
+              remindAt: 123,
+            },
+          }),
+        );
+        expect(response.status).toBe(400);
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('accepts an explicitly timed POST title with a reminder and an overdue deadline', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Call @tomorrow 15:00',
+              dueWithTime: overdueDueWithTime,
+              deadlineDay: '2026-05-12',
+              remindAt: 123,
+            },
+          }),
+        );
+        expect(response.status).toBe(201);
+        expect(taskServiceMock.add).toHaveBeenCalled();
+      });
+
+      it('preserves a literal @tomorrow title and an explicit scheduled reminder', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Call @tomorrow',
+              dueWithTime: new Date(2026, 4, 13, 12).getTime(),
+              remindAt: 123,
+              isIgnoreShortSyntax: true,
+            },
+          }),
+        );
+        expect(response.status).toBe(201);
+        expect(taskServiceMock.add).toHaveBeenCalledWith(
+          'Call @tomorrow',
+          false,
+          jasmine.objectContaining({ remindAt: 123 }),
+          false,
+          true,
+        );
+      });
+
+      it('skips overdue deadline auto-planning when a subtask parent is in Today', async () => {
+        const parent = createMockTask('parent', {
+          dueWithTime: new Date(2026, 4, 13, 12).getTime(),
+        });
+        const subtask = createMockTask('task-1', {
+          parentId: parent.id,
+          dueWithTime: overdueDueWithTime,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (id: string) => of(id === parent.id ? parent : subtask),
+        });
+        store.overrideSelector(selectTodayTagTaskIds, [parent.id]);
+        store.refreshState();
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineDay: '2026-05-12', remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(200);
+        expect(dispatchSpy).toHaveBeenCalled();
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', { remindAt: 123 });
+      });
+
+      for (const invalid of [null, '123', true, {}, []]) {
+        it(`rejects ${JSON.stringify(invalid)} on POST and PATCH before mutation`, async () => {
+          for (const [method, path, body] of [
+            ['POST', '/tasks', { title: 'Task', remindAt: invalid }],
+            ['PATCH', '/tasks/task-1', { remindAt: invalid }],
+          ] as const) {
+            const response = await sendRequestAndWait(
+              createRequest(method, path, { body }),
+            );
+            expect(response.status).toBe(400);
+          }
+          expect(taskServiceMock.add).not.toHaveBeenCalled();
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+          expect(dispatchSpy).not.toHaveBeenCalled();
+        });
+      }
+
+      it('rejects POST with a reminder but no scheduled time before mutation', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'Task', remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+        expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('rejects PATCH with a reminder but no effective scheduled time', async () => {
+        const original = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(original),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { remindAt: 123, deadlineDay: '2026-05-12' },
+          }),
+        );
+        expect(response.status).toBe(400);
+        expect(original.remindAt).toBeUndefined();
+        expect(original.deadlineDay).toBeUndefined();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+        expect(featureBridgeMock.updateTaskWithDueTime).not.toHaveBeenCalled();
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('rejects PATCH that clears the scheduled time and writes a reminder', async () => {
+        const original = createMockTask('task-1', { dueWithTime: 456 });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(original),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { dueWithTime: null, remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(400);
+        expect(original.dueWithTime).toBe(456);
+        expect(original.remindAt).toBeUndefined();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+        expect(featureBridgeMock.updateTaskWithDueTime).not.toHaveBeenCalled();
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      for (const invalidDue of [0, -1, 8_640_000_000_000_001]) {
+        it(`rejects invalid scheduled time ${invalidDue} with an explicit reminder`, async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'Task', dueWithTime: invalidDue, remindAt: 123 },
+            }),
+          );
+          expect(response.status).toBe(400);
+          expect(taskServiceMock.add).not.toHaveBeenCalled();
+          expect(dispatchSpy).not.toHaveBeenCalled();
+        });
+      }
+
+      it('keeps the explicit reminder after deadline auto-planning and serialized replay', async () => {
+        const initial = createStateWithExistingTasks(['task-1'], [], [], []);
+        initial[TASK_FEATURE_NAME].entities['task-1'] = createMockTask('task-1', {
+          projectId: 'project1',
+          dueWithTime: new Date(2026, 4, 12, 12).getTime(),
+          remindAt: new Date(2026, 4, 10, 11).getTime(),
+        });
+        let state: RootState = initial;
+        const actions: Action[] = [];
+        const reduce = createCombinedTaskSharedMetaReducer(
+          shortSyntaxSharedMetaReducer((current) => current),
+        );
+        dispatchSpy.and.callFake((action: Action) => {
+          actions.push(action);
+          state = reduce(state, action);
+        });
+        taskServiceMock.update.and.callFake((id, changes) => {
+          dispatchSpy(TaskSharedActions.updateTask({ task: { id, changes } }));
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (id: string) => of(state[TASK_FEATURE_NAME].entities[id]),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineDay: '2026-05-12', remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(200);
+        // This must not become applyShortSyntax: its full task snapshot breaks
+        // field-level conflict planning for concurrent edits.
+        expect(actions.map((action) => action.type)).toEqual([
+          TaskSharedActions.setDeadline.type,
+          TaskSharedActions.updateTask.type,
+        ]);
+        expect(state[TASK_FEATURE_NAME].entities['task-1']?.remindAt).toBe(123);
+        expect(state[TASK_FEATURE_NAME].entities['task-1']?.dueWithTime).toBe(
+          new Date(2026, 4, 12, 12).getTime(),
+        );
+        const replayed = actions.reduce(
+          (current, action) => reduce(current, JSON.parse(JSON.stringify(action))),
+          initial,
+        );
+        expect(replayed[TASK_FEATURE_NAME].entities['task-1']?.remindAt).toBe(123);
+      });
+
+      it('keeps title literal, deadline and reminder in a combined PATCH', async () => {
+        const dueWithTime = new Date(2026, 11, 3, 12).getTime();
+        const remindAt = 1_790_000_000_000;
+        const title = 'Call Anna @tomorrow 3pm';
+        const initial = createStateWithExistingTasks(['task-1'], [], [], []);
+        initial[TASK_FEATURE_NAME].entities['task-1'] = createMockTask('task-1', {
+          projectId: 'project1',
+          dueWithTime,
+        });
+        let state: RootState = initial;
+        const actions: Action[] = [];
+        const reduce = createCombinedTaskSharedMetaReducer(
+          shortSyntaxSharedMetaReducer((current) => current),
+        );
+        dispatchSpy.and.callFake((action: Action) => {
+          actions.push(action);
+          state = reduce(state, action);
+        });
+        taskServiceMock.update.and.callFake((id, changes) => {
+          dispatchSpy(TaskSharedActions.updateTask({ task: { id, changes } }));
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (id: string) => of(state[TASK_FEATURE_NAME].entities[id]),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { title, deadlineDay: '2026-12-01', remindAt },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(actions.map((action) => action.type)).toEqual([
+          TaskSharedActions.updateTask.type,
+          TaskSharedActions.setDeadline.type,
+          TaskSharedActions.updateTask.type,
+        ]);
+        expect(actions[0]).toEqual(
+          TaskSharedActions.updateTask({
+            task: { id: 'task-1', changes: { title } },
+            isIgnoreShortSyntax: true,
+          }),
+        );
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', { remindAt });
+        expect(state[TASK_FEATURE_NAME].entities['task-1']).toEqual(
+          jasmine.objectContaining({
+            title,
+            deadlineDay: '2026-12-01',
+            dueWithTime,
+            remindAt,
+          }),
+        );
+        const replayed = actions.reduce(
+          (current, action) => reduce(current, JSON.parse(JSON.stringify(action))),
+          initial,
+        );
+        expect(replayed[TASK_FEATURE_NAME].entities['task-1']).toEqual(
+          jasmine.objectContaining({
+            title,
+            deadlineDay: '2026-12-01',
+            dueWithTime,
+            remindAt,
+          }),
+        );
+      });
+
+      it('preserves a POST reminder when the requested deadline auto-plans', async () => {
+        const initial = createStateWithExistingTasks(['new-task-id'], [], [], []);
+        initial[TASK_FEATURE_NAME].entities['new-task-id'] = createMockTask(
+          'new-task-id',
+          {
+            projectId: 'project1',
+            dueWithTime: new Date(2026, 4, 12, 12).getTime(),
+            remindAt: 123,
+          },
+        );
+        let state: RootState = initial;
+        const actions: Action[] = [];
+        const reduce = createCombinedTaskSharedMetaReducer(
+          shortSyntaxSharedMetaReducer((current) => current),
+        );
+        dispatchSpy.and.callFake((action: Action) => {
+          actions.push(action);
+          state = reduce(state, action);
+        });
+        taskServiceMock.update.and.callFake((id, changes) => {
+          dispatchSpy(TaskSharedActions.updateTask({ task: { id, changes } }));
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (id: string) => of(state[TASK_FEATURE_NAME].entities[id]),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Task',
+              deadlineDay: '2026-05-12',
+              dueWithTime: new Date(2026, 4, 12, 12).getTime(),
+              remindAt: 123,
+            },
+          }),
+        );
+        expect(response.status).toBe(201);
+        expect(actions.map((action) => action.type)).toEqual([
+          TaskSharedActions.setDeadline.type,
+          TaskSharedActions.updateTask.type,
+        ]);
+        expect(state[TASK_FEATURE_NAME].entities['new-task-id']?.remindAt).toBe(123);
+        const replayed = actions.reduce(
+          (current, action) => reduce(current, JSON.parse(JSON.stringify(action))),
+          initial,
+        );
+        expect(replayed[TASK_FEATURE_NAME].entities['new-task-id']?.remindAt).toBe(123);
+      });
+
+      it('creates a scheduled task with an explicit reminder', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'Task', dueWithTime: 456, remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(201);
+        expect(taskServiceMock.add).toHaveBeenCalledWith(
+          'Task',
+          false,
+          {
+            title: 'Task',
+            dueWithTime: 456,
+            remindAt: 123,
+          },
+          false,
+          false,
+          true,
+        );
+      });
+
+      it('updates only the reminder when the task already has a scheduled time', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('task-1', { dueWithTime: 456 })),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(200);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', { remindAt: 123 });
+      });
+
+      it('accepts plannedAt as the scheduled time for a POST reminder', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'Task', plannedAt: 456, remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(201);
+        expect(taskServiceMock.add).toHaveBeenCalledWith(
+          'Task',
+          false,
+          { title: 'Task', dueWithTime: 456, remindAt: 123 },
+          false,
+          false,
+          true,
+        );
+      });
+
+      it('passes an explicit reminder with a changed due time without recalculation', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('task-1')),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { dueWithTime: 456, remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(200);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          dueWithTime: 456,
+          remindAt: 123,
+        });
+        expect(featureBridgeMock.updateTaskWithDueTime).not.toHaveBeenCalled();
+      });
+
+      it('maps plannedAt to dueWithTime for a PATCH reminder', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('task-1')),
+        });
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { plannedAt: 456, remindAt: 123 },
+          }),
+        );
+        expect(response.status).toBe(200);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          dueWithTime: 456,
+          remindAt: 123,
+        });
+        expect(featureBridgeMock.updateTaskWithDueTime).not.toHaveBeenCalled();
+        expect(dispatchSpy).not.toHaveBeenCalled();
       });
     });
 
