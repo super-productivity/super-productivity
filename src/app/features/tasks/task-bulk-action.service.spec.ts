@@ -4,6 +4,10 @@ import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { defer, Observable, of } from 'rxjs';
 import { TaskBulkActionService } from './task-bulk-action.service';
+import { TaskDuplicateService } from './task-duplicate.service';
+import { SectionService } from '../section/section.service';
+import { Section } from '../section/section.model';
+import { WorkContextType } from '../work-context/work-context.model';
 import { TaskService } from './task.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
@@ -20,6 +24,7 @@ import { IssueSyncStateService } from '../issue/two-way-sync/issue-sync-state.se
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { PlannerActions } from '../planner/store/planner.actions';
+import { selectPlannerState } from '../planner/store/planner.selectors';
 
 describe('TaskBulkActionService', () => {
   let service: TaskBulkActionService;
@@ -50,6 +55,11 @@ describe('TaskBulkActionService', () => {
   let dialogResult: unknown;
   let isConfirmBeforeDelete: boolean;
   let isEnableBacklog: boolean;
+  let duplicateService: jasmine.SpyObj<TaskDuplicateService>;
+  let sectionService: jasmine.SpyObj<SectionService>;
+  let sections: Section[];
+  let plannerDays: ReturnType<typeof signal<Record<string, string[]>>>;
+  let backlogTaskIds: string[];
 
   const t = (id: string, overrides: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -71,6 +81,16 @@ describe('TaskBulkActionService', () => {
     store.dispatch.calls.allArgs().map(([action]) => (action as { type: string }).type);
 
   beforeEach(() => {
+    sections = [];
+    plannerDays = signal<Record<string, string[]>>({});
+    backlogTaskIds = [];
+    duplicateService = jasmine.createSpyObj('TaskDuplicateService', ['duplicate']);
+    duplicateService.duplicate.and.callFake((task) => `copy-${task.id}`);
+    sectionService = jasmine.createSpyObj('SectionService', [
+      'getSectionsByContextId$',
+      'addTaskToSection',
+    ]);
+    sectionService.getSectionsByContextId$.and.callFake(() => of(sections));
     entities = signal<Record<string, Task>>({});
     selectedIds = signal<ReadonlySet<string>>(new Set());
     dialogResult = true;
@@ -91,7 +111,13 @@ describe('TaskBulkActionService', () => {
 
     store = {
       dispatch: jasmine.createSpy('dispatch'),
-      selectSignal: jasmine.createSpy('selectSignal').and.returnValue(entities),
+      selectSignal: jasmine
+        .createSpy('selectSignal')
+        .and.callFake((selector) =>
+          selector === selectPlannerState
+            ? computed(() => ({ days: plannerDays() }))
+            : entities,
+        ),
       select: jasmine
         .createSpy('select')
         .and.callFake((_sel: unknown, props: { id: string }) =>
@@ -134,6 +160,8 @@ describe('TaskBulkActionService', () => {
     TestBed.configureTestingModule({
       providers: [
         TaskBulkActionService,
+        { provide: TaskDuplicateService, useValue: duplicateService },
+        { provide: SectionService, useValue: sectionService },
         { provide: Store, useValue: store },
         { provide: TaskService, useValue: taskService },
         { provide: TaskMultiSelectService, useValue: multiSelect },
@@ -166,7 +194,15 @@ describe('TaskBulkActionService', () => {
           provide: WorkContextService,
           useValue: {
             flatDoneTodayNr$: of(0),
-            activeWorkContext$: defer(() => of({ isEnableBacklog })),
+            activeWorkContext$: defer(() =>
+              of({
+                id: 'p1',
+                type: WorkContextType.PROJECT,
+                taskIds: [],
+                backlogTaskIds,
+                isEnableBacklog,
+              }),
+            ),
           },
         },
         {
@@ -182,6 +218,111 @@ describe('TaskBulkActionService', () => {
       ],
     });
     service = TestBed.inject(TaskBulkActionService);
+  });
+
+  describe('duplicateSelected', () => {
+    it('moves a backlog copy out of the regular list and after its original', async () => {
+      backlogTaskIds = ['a'];
+      select([t('a')]);
+      await service.duplicateSelected();
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[Project] Move Task from regular to backlog',
+          taskId: 'copy-a',
+          afterTaskId: 'a',
+          workContextId: 'p1',
+        }),
+      );
+    });
+
+    it('keeps a future-day copy after its original in the Planner too', async () => {
+      const day = '2026-09-06';
+      plannerDays.set({ [day]: ['a', 'other'] });
+      select([t('a', { dueDay: day })]);
+      duplicateService.duplicate.and.callFake((task) => {
+        plannerDays.update((days) => ({
+          ...days,
+          [day]: [`copy-${task.id}`, ...days[day]],
+        }));
+        return `copy-${task.id}`;
+      });
+      await service.duplicateSelected();
+      expect(store.dispatch).toHaveBeenCalledWith(
+        PlannerActions.moveInList({ targetDay: day, fromIndex: 0, toIndex: 1 }),
+      );
+    });
+
+    it('duplicates every selected root with unchanged titles, keeps selection and places copies after originals', async () => {
+      select([t('a'), t('b')]);
+      await service.duplicateSelected();
+      expect(
+        duplicateService.duplicate.calls
+          .allArgs()
+          .map(([task, isBulk]) => [task.id, isBulk]),
+      ).toEqual([
+        ['a', true],
+        ['b', true],
+      ]);
+      expect(
+        store.dispatch.calls
+          .allArgs()
+          .map(([action]) => [action.taskId, action.afterTaskId]),
+      ).toEqual([
+        ['copy-a', 'a'],
+        ['copy-b', 'b'],
+      ]);
+      expect(multiSelect.clear).not.toHaveBeenCalled();
+      expect([...selectedIds()]).toEqual(['a', 'b']);
+    });
+
+    it('copies a selected parent and its child only once', async () => {
+      select([
+        t('parent', { subTaskIds: ['child'] }),
+        t('child', { parentId: 'parent' }),
+      ]);
+      await service.duplicateSelected();
+      expect(duplicateService.duplicate).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({
+          id: 'parent',
+          subTasks: [jasmine.objectContaining({ id: 'child' })],
+        }),
+        true,
+      );
+    });
+
+    it('puts a copied standalone subtask after its original under the same parent', async () => {
+      select([t('child', { parentId: 'parent' })]);
+      await service.duplicateSelected();
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          taskId: 'copy-child',
+          srcTaskId: 'parent',
+          targetTaskId: 'parent',
+          afterTaskId: 'child',
+        }),
+      );
+    });
+
+    it('places a copy in its original section', async () => {
+      sections = [
+        {
+          id: 'section',
+          contextId: 'p1',
+          contextType: WorkContextType.PROJECT,
+          title: 'Section',
+          taskIds: ['a'],
+        },
+      ];
+      select([t('a')]);
+      await service.duplicateSelected();
+      expect(sectionService.addTaskToSection).toHaveBeenCalledOnceWith(
+        'section',
+        'copy-a',
+        'a',
+        null,
+      );
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
   });
 
   describe('markDone', () => {

@@ -88,7 +88,7 @@ const openDesktopPanel = async (
   const taskId = await addOverdueTask(page, workViewPage);
   await page.locator('.e2e-toggle-schedule-day-panel').first().click();
   const dayPanel = page.locator('right-panel schedule-day-panel');
-  await expect(dayPanel.locator('schedule-week')).toBeVisible();
+  await expect(dayPanel.locator(`${CURRENT_PAGE} schedule-week`)).toBeVisible();
   return { dayPanel, taskId };
 };
 
@@ -172,7 +172,7 @@ test.describe('Schedule day panel on a touch phone: overdue tasks', () => {
     await page.getByRole('button', { name: 'Side Panel Menu' }).tap();
     await page.locator('.e2e-toggle-schedule-day-panel').tap();
     const dayPanel = page.locator('bottom-panel-container schedule-day-panel');
-    await expect(dayPanel.locator('schedule-week')).toBeVisible();
+    await expect(dayPanel.locator(`${CURRENT_PAGE} schedule-week`)).toBeVisible();
 
     const card = await expandOverdue(dayPanel, true);
     // Straight down onto the day's grid. The sheet has scrolled to the current
