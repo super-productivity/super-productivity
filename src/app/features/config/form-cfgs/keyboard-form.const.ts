@@ -49,6 +49,7 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
     kbField('addNewProject', T.GCF.KEYBOARD.ADD_NEW_PROJECT),
     kbField('addNewNote', T.GCF.KEYBOARD.ADD_NEW_NOTE),
     kbField('focusSideNav', T.GCF.KEYBOARD.TOGGLE_SIDE_NAV),
+    kbField('focusSideNavProjects', T.GCF.KEYBOARD.FOCUS_SIDE_NAV_PROJECTS),
     kbField('toggleSideNavMode', T.GCF.KEYBOARD.TOGGLE_SIDE_NAV_MODE),
     kbField('openProjectNotes', T.GCF.KEYBOARD.OPEN_PROJECT_NOTES),
     kbField(
