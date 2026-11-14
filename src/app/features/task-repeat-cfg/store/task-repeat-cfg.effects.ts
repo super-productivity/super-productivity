@@ -49,6 +49,7 @@ import {
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { clampPastTimedOccurrence } from './clamp-past-timed-occurrence.util';
 import { SCHEDULE_AFFECTING_FIELDS } from './schedule-affecting-fields.const';
+import { getRepeatDeadlineDay } from './get-repeat-deadline-day.util';
 
 @Injectable()
 export class TaskRepeatCfgEffects {
@@ -203,6 +204,13 @@ export class TaskRepeatCfgEffects {
         const isFirstOccurrenceToday_ = firstOccurrence
           ? this._dateService.isToday(firstOccurrence)
           : true;
+        // The task itself is the first occurrence, so it gets the cfg deadline
+        // too; a deadline with a time is left alone (#10983).
+        const deadlineDay = getRepeatDeadlineDay(taskRepeatCfg, firstOccurrenceStr);
+        const deadlineUpdate: Partial<TaskCopy> =
+          deadlineDay && !task.deadlineWithTime && task.deadlineDay !== deadlineDay
+            ? { deadlineDay }
+            : {};
 
         // Update repeat config with subtask templates AND the correct lastTaskCreationDay
         this._taskRepeatCfgService.updateTaskRepeatCfg(taskRepeatCfg.id, {
@@ -226,6 +234,7 @@ export class TaskRepeatCfgEffects {
           this._taskService.update(task.id, {
             created: firstOccurrence.getTime(),
             ...(isTimedTask ? {} : { dueDay: firstOccurrenceStr }),
+            ...deadlineUpdate,
           });
           // planTaskForDay (below) also sets dueDay redundantly, plus handles
           // planner days and TODAY_TAG removal
@@ -233,7 +242,7 @@ export class TaskRepeatCfgEffects {
           // TODAY FIRST OCCURRENCE:
           // Keep the stable occurrence identity aligned even if the task was
           // originally created before it became repeatable.
-          const update: Partial<TaskCopy> = {};
+          const update: Partial<TaskCopy> = { ...deadlineUpdate };
           if (firstOccurrence && getDbDateStr(task.created) !== firstOccurrenceStr) {
             update.created = firstOccurrence.getTime();
           }
