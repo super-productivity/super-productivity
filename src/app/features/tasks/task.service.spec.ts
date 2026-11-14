@@ -1022,6 +1022,50 @@ describe('TaskService', () => {
   });
 
   describe('batched time sync', () => {
+    it('flushes one task and four contexts synchronously, then ignores duplicate flushes', () => {
+      const task = createMockTask('task-1', { tagIds: ['tag-1', 'tag-2'] });
+      const stamps = { ['2026-01-05']: { s: 1000, e: 60000 } };
+      store.setState({
+        tasks: {
+          ids: [task.id],
+          entities: { [task.id]: task },
+          currentTaskId: task.id,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+        },
+        timeTracking: {
+          project: { ['test-project']: stamps },
+          tag: { TODAY: stamps, ['tag-1']: stamps, ['tag-2']: stamps },
+        },
+      });
+      store.refreshState();
+      tickSubject.next({ duration: 1000, date: '2026-01-05' });
+      const dispatch = store.dispatch as jasmine.Spy;
+      dispatch.calls.reset();
+
+      service.flushAccumulatedTimeSpent();
+
+      const actions = dispatch.calls.allArgs().map(([action]) => action);
+      expect(actions.map((action) => action.type)).toEqual([
+        '[TimeTracking] Sync time spent',
+        '[TimeTracking] Sync sessions',
+        '[TimeTracking] Sync sessions',
+        '[TimeTracking] Sync sessions',
+        '[TimeTracking] Sync sessions',
+      ]);
+      expect(actions.slice(1).map((action) => action.contextId)).toEqual([
+        'test-project',
+        'TODAY',
+        'tag-1',
+        'tag-2',
+      ]);
+      expect(
+        actions.slice(1).every((action) => action.data === stamps['2026-01-05']),
+      ).toBeTrue();
+      service.flushAccumulatedTimeSpent();
+      expect(dispatch).toHaveBeenCalledTimes(5);
+    });
     it('captures a delta-only operation when the accumulator flushes', () => {
       const task = createMockTask('task-1', {
         timeSpentOnDay: { ['2026-01-05']: 300000 },
