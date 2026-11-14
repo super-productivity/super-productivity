@@ -2791,6 +2791,11 @@
       "IS_ALWAYS_SHOW": "Always show task widget (even when main window is visible)",
       "OPACITY": "Task widget opacity"
     },
+    "MENU_BAR": {
+      "TITLE": "Menu Bar",
+      "SHOW_DOCK_ICON": "Show Dock icon (running dot)",
+      "SHOW_DOCK_ICON_DESCRIPTION": "Keep Super Productivity in the Dock while it runs, so the usual dot below the icon shows the app is open. Turn this off to live in the menu bar only."
+    },
     "IDLE": {
       "HELP": "<div><p>When idle time handling is enabled, a dialog will open after a specified amount of time to check if - and on which - task you want to track your time when you have been idle.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Enable idle time handling",

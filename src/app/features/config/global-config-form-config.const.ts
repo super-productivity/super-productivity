@@ -19,22 +19,26 @@ import { SHORT_SYNTAX_FORM_CFG } from './form-cfgs/short-syntax-form.const';
 import { CLIPBOARD_IMAGES_FORM } from './form-cfgs/clipboard-images-form.const';
 import { TASKS_SETTINGS_FORM_CFG } from './form-cfgs/tasks-settings-form.const';
 import { TASK_WIDGET_FORM_CFG } from './form-cfgs/task-widget-form.const';
+import { MENU_BAR_FORM_CFG } from './form-cfgs/menu-bar-form.const';
+import { IS_MAC } from '../../app.constants';
 
 const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
   return (
     (IS_ELECTRON || !cfg.isElectronOnly) &&
-    !(IS_ANDROID_WEB_VIEW && cfg.isHideForAndroidApp)
+    !(IS_ANDROID_WEB_VIEW && cfg.isHideForAndroidApp) &&
+    (!cfg.isMacOnly || IS_MAC)
   );
 };
 
 // Tab: General - Theme (specified separately in html), App Features, Language, Misc,
-// Task Widget, Keyboard, Clipboard Images. App Features leads so customizing the
+// Task Widget, Menu Bar (macOS), Keyboard, Clipboard Images. App Features leads so customizing the
 // app is the first thing the default tab offers.
 export const GLOBAL_GENERAL_FORM_CONFIG: ConfigFormConfig = [
   APP_FEATURES_FORM_CFG,
   LANGUAGE_SELECTION_FORM_FORM,
   MISC_SETTINGS_FORM_CFG,
   TASK_WIDGET_FORM_CFG,
+  MENU_BAR_FORM_CFG,
   KEYBOARD_SETTINGS_FORM_CFG,
   CLIPBOARD_IMAGES_FORM,
 ].filter(filterGlobalConfigForm);

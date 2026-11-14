@@ -10,6 +10,7 @@ import {
   GlobalConfigState,
   TakeABreakConfig,
   TaskWidgetConfig,
+  MenuBarConfig,
 } from '../src/app/features/config/global-config.model';
 import { KeyboardConfig } from './shared-with-frontend/keyboard-config.model';
 import { AppDataCompleteLegacy } from '../src/app/imex/sync/sync.model';
@@ -249,6 +250,8 @@ export interface ElectronAPI {
   sendSettingsUpdate(globalCfg: GlobalConfigState): void;
 
   updateTaskWidgetSettings(cfg: TaskWidgetConfig): void;
+
+  updateMenuBarSettings(cfg: MenuBarConfig): void;
 
   updateTitleBarDarkMode(isDarkMode: boolean): void;
 

@@ -28,6 +28,7 @@ import { HydrationStateService } from '../../../op-log/apply/hydration-state.ser
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { MiscConfig } from '../../config/global-config.model';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
+import { IPC } from '../../../../../electron/shared-with-frontend/ipc-events.const';
 
 /**
  * The OS progress bar (taskbar/dock) must only ever have one writer: a timed
@@ -44,6 +45,15 @@ describe('TaskElectronEffects', () => {
   let misc$: BehaviorSubject<Partial<MiscConfig>>;
   let inSyncWindow$: BehaviorSubject<boolean>;
   let initialSyncGateOpen$: BehaviorSubject<boolean>;
+  let eaHandlers: Map<string, (...args: unknown[]) => void>;
+  let taskServiceMock: {
+    setCurrentId: jasmine.Spy;
+    currentTaskId: jasmine.Spy;
+    toggleStartTask: jasmine.Spy;
+    setDone: jasmine.Spy;
+    add: jasmine.Spy;
+    scheduleForTodayById: jasmine.Spy;
+  };
 
   const task: Task = {
     ...DEFAULT_TASK,
@@ -71,8 +81,19 @@ describe('TaskElectronEffects', () => {
     misc$ = new BehaviorSubject<Partial<MiscConfig>>({ isShowDueTaskBadge: true });
     inSyncWindow$ = new BehaviorSubject(false);
     initialSyncGateOpen$ = new BehaviorSubject(true);
+    eaHandlers = new Map();
+    taskServiceMock = {
+      setCurrentId: jasmine.createSpy('setCurrentId'),
+      currentTaskId: jasmine.createSpy('currentTaskId').and.returnValue(task.id),
+      toggleStartTask: jasmine.createSpy('toggleStartTask'),
+      setDone: jasmine.createSpy('setDone'),
+      add: jasmine.createSpy('add').and.returnValue('T2'),
+      scheduleForTodayById: jasmine.createSpy('scheduleForTodayById'),
+    };
     (window as any).ea = {
-      on: () => {},
+      on: (channel: string, listener: (...args: unknown[]) => void) => {
+        eaHandlers.set(channel, listener);
+      },
       onSwitchTask: () => {},
       updateCurrentTask: () => {},
       updateTodayTasks: () => {},
@@ -119,7 +140,7 @@ describe('TaskElectronEffects', () => {
             isInitialSyncDoneSync: () => initialSyncGateOpen$.value,
           },
         },
-        { provide: TaskService, useValue: { setCurrentId: () => {} } },
+        { provide: TaskService, useValue: taskServiceMock },
         {
           provide: FocusModeService,
           useValue: {
@@ -137,6 +158,52 @@ describe('TaskElectronEffects', () => {
   afterEach(() => {
     store.resetSelectors();
     delete (window as any).ea;
+  });
+
+  describe('menu bar panel actions', () => {
+    it('starts a task that is not current', () => {
+      taskServiceMock.currentTaskId.and.returnValue('other');
+
+      eaHandlers.get(IPC.MENU_BAR_PANEL_TOGGLE_TASK)?.('T1');
+
+      expect(taskServiceMock.setCurrentId).toHaveBeenCalledWith('T1');
+      expect(taskServiceMock.toggleStartTask).not.toHaveBeenCalled();
+    });
+
+    it('toggles the current task off when it is clicked again', () => {
+      eaHandlers.get(IPC.MENU_BAR_PANEL_TOGGLE_TASK)?.('T1');
+
+      expect(taskServiceMock.toggleStartTask).toHaveBeenCalled();
+      expect(taskServiceMock.setCurrentId).not.toHaveBeenCalled();
+    });
+
+    it('completes the requested task', () => {
+      eaHandlers.get(IPC.MENU_BAR_PANEL_COMPLETE_TASK)?.('T2');
+
+      expect(taskServiceMock.setDone).toHaveBeenCalledWith('T2');
+    });
+
+    it('adds a trimmed task and schedules it for today', () => {
+      eaHandlers.get(IPC.MENU_BAR_PANEL_ADD_TASK)?.('  Write the report  ');
+
+      expect(taskServiceMock.add).toHaveBeenCalledWith(
+        'Write the report',
+        false,
+        {},
+        false,
+        true,
+      );
+      expect(taskServiceMock.scheduleForTodayById).toHaveBeenCalledWith('T2');
+    });
+
+    it('ignores empty titles and malformed payloads', () => {
+      eaHandlers.get(IPC.MENU_BAR_PANEL_ADD_TASK)?.('   ');
+      eaHandlers.get(IPC.MENU_BAR_PANEL_ADD_TASK)?.({ title: 'x' });
+      eaHandlers.get(IPC.MENU_BAR_PANEL_TOGGLE_TASK)?.('');
+
+      expect(taskServiceMock.add).not.toHaveBeenCalled();
+      expect(taskServiceMock.setCurrentId).not.toHaveBeenCalled();
+    });
   });
 
   describe('syncDueTaskBadge$', () => {

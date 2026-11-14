@@ -126,6 +126,33 @@ export class TaskElectronEffects {
     window.ea.onSwitchTask((taskId) => {
       this._taskService.setCurrentId(taskId);
     });
+
+    // macOS menu bar panel actions. The panel renderer only sends task ids and
+    // a title; every state change goes through TaskService here so it is the
+    // same dispatched action the in-app UI produces (and therefore syncs).
+    window.ea.on(IPC.MENU_BAR_PANEL_TOGGLE_TASK, (taskId: unknown) => {
+      if (typeof taskId !== 'string' || !taskId) return;
+      if (this._taskService.currentTaskId() === taskId) {
+        this._taskService.toggleStartTask();
+      } else {
+        this._taskService.setCurrentId(taskId);
+      }
+    });
+
+    window.ea.on(IPC.MENU_BAR_PANEL_COMPLETE_TASK, (taskId: unknown) => {
+      if (typeof taskId !== 'string' || !taskId) return;
+      this._taskService.setDone(taskId);
+    });
+
+    window.ea.on(IPC.MENU_BAR_PANEL_ADD_TASK, (title: unknown) => {
+      if (typeof title !== 'string') return;
+      const trimmedTitle = title.trim().slice(0, 300);
+      if (!trimmedTitle) return;
+      // Add into the active context, then pin it to Today so the panel's list
+      // and the main app's Today list agree on where a quick-added task landed.
+      const taskId = this._taskService.add(trimmedTitle, false, {}, false, true);
+      this._taskService.scheduleForTodayById(taskId);
+    });
   }
 
   syncTodayTasksToElectron$ = createEffect(
