@@ -343,15 +343,23 @@
                 <div>
                   @if (overdueGroups(); as groups) {
                     @for (group of groups; track group.key) {
-                      <h4 class="sub-group-title">
-                        {{ group.key | scheduledDateGroup: todayStr() }}
-                      </h4>
-                      <task-list
-                        [tasks]="group.tasks"
-                        [isSortingDisabled]="true"
-                        listId="PARENT"
-                        listModelId="OVERDUE"
-                      ></task-list>
+                      <collapsible
+                        class="task-section"
+                        [title]="group.key | scheduledDateGroup: todayStr()"
+                        [isIconBefore]="true"
+                        [isExpanded]="
+                          !customizerService.collapsedGroupIds().includes(group.key)
+                        "
+                        (isExpandedChange)="onGroupExpandedChange(group.key)"
+                        [isGroup]="true"
+                      >
+                        <task-list
+                          [tasks]="group.tasks"
+                          [isSortingDisabled]="true"
+                          listId="PARENT"
+                          listModelId="OVERDUE"
+                        ></task-list>
+                      </collapsible>
                     }
                   } @else {
                     <task-list
@@ -389,15 +397,23 @@
               >
                 @if (laterTodayGroups(); as groups) {
                   @for (group of groups; track group.key) {
-                    <h4 class="sub-group-title">
-                      {{ group.key | scheduledDateGroup: todayStr() }}
-                    </h4>
-                    <task-list
-                      [tasks]="group.tasks"
-                      [isSortingDisabled]="true"
-                      listId="PARENT"
-                      listModelId="LATER_TODAY"
-                    ></task-list>
+                    <collapsible
+                      class="task-section"
+                      [title]="group.key | scheduledDateGroup: todayStr()"
+                      [isIconBefore]="true"
+                      [isExpanded]="
+                        !customizerService.collapsedGroupIds().includes(group.key)
+                      "
+                      (isExpandedChange)="onGroupExpandedChange(group.key)"
+                      [isGroup]="true"
+                    >
+                      <task-list
+                        [tasks]="group.tasks"
+                        [isSortingDisabled]="true"
+                        listId="PARENT"
+                        listModelId="LATER_TODAY"
+                      ></task-list>
+                    </collapsible>
                   }
                 } @else {
                   <task-list

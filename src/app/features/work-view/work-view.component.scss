@@ -283,13 +283,6 @@ finish-day-btn,
   --mat-icon-button-icon-color: var(--text-color-muted);
 }
 
-.sub-group-title {
-  margin: var(--s) var(--s-half) 0;
-  font-size: 14px;
-  font-weight: 500;
-  opacity: 0.8;
-}
-
 // Read-only calendar event outlines below the Later Today task list.
 .later-today-cal-events {
   display: flex;
