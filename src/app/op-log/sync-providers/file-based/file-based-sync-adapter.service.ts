@@ -64,6 +64,7 @@ import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../../features/config/local-only-sync-settings.util';
 import { compactToSyncOp, syncOpToCompact } from './file-based-sync-op-codec.util';
+import { resolveFileState } from './captured-file-state';
 
 /**
  * Adapter that enables file-based sync providers (WebDAV, Dropbox, LocalFile)
@@ -543,20 +544,12 @@ export class FileBasedSyncAdapterService {
     }
   }
 
-  /**
-   * Creates an OperationSyncCapable adapter for a file-based provider.
-   *
-   * @param provider - The underlying file provider (WebDAV, Dropbox, etc.)
-   * @param encryptAndCompressCfg - Encryption/compression settings
-   * @param encryptKey - Optional encryption key
-   * @returns Object implementing OperationSyncCapable interface
-   */
+  /** Creates the app adapter; only v2 captures claim task/archive coherence. */
   createAdapter(
     provider: FileSyncProvider<SyncProviderId>,
     encryptAndCompressCfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): OperationSyncCapable<'fileSnapshotOps'> {
-    // Load persisted state before creating adapter
     this._loadPersistedState();
 
     const providerKey = this._getProviderKey(provider);
@@ -564,6 +557,14 @@ export class FileBasedSyncAdapterService {
     return {
       supportsOperationSync: true,
       providerMode: 'fileSnapshotOps',
+
+      requiresTaskArchiveSnapshot: () => {
+        const setting = this._injector
+          .get(GlobalConfigService, null)
+          ?.sync()?.isUseSplitSyncFiles;
+        // Unknown remote format stays conservative; discovery performs network I/O.
+        return !(setting ?? this._remoteFormats.get(providerKey) === 'v3');
+      },
 
       uploadOps: async (
         ops: SyncOperation[],
@@ -758,15 +759,12 @@ export class FileBasedSyncAdapterService {
       OpLog.warn(`FileBasedSyncAdapter: Trimmed ${recent.trimmedCount} old ops`);
     }
 
-    // Load archive data from IndexedDB to include in sync file
-    const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
-    const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
-
-    // Get current state from NgRx store - this keeps the snapshot up-to-date
-    const currentState = stripLocalOnlySyncSettingsFromAppData(
-      localStateSnapshot ?? this._stateSnapshotService.getStateSnapshotForOperationLog(),
-    );
-
+    const { state, archiveYoung, archiveOld, taskArchiveSnapshotVersion } =
+      await resolveFileState(
+        localStateSnapshot,
+        this._stateSnapshotService,
+        this._archiveDbAdapter,
+      );
     const newData: FileBasedSyncData = {
       version: FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
       syncVersion: newSyncVersion,
@@ -775,9 +773,10 @@ export class FileBasedSyncAdapterService {
       snapshotBaseClock: currentData?.snapshotBaseClock,
       lastModified: Date.now(),
       clientId,
-      state: currentState,
+      state: stripLocalOnlySyncSettingsFromAppData(state),
       archiveYoung,
       archiveOld,
+      taskArchiveSnapshotVersion,
       ...recent.fields,
     };
 
@@ -1860,7 +1859,6 @@ export class FileBasedSyncAdapterService {
     return null;
   }
 
-  /** Builds a full snapshot (`sync-state.json` payload). */
   private async _buildStateFileData(
     clientId: string,
     syncVersion: number,
@@ -1868,11 +1866,13 @@ export class FileBasedSyncAdapterService {
     schemaVersion: number,
     localStateSnapshot?: unknown,
   ): Promise<FileBasedStateFile> {
-    const state = stripLocalOnlySyncSettingsFromAppData(
-      localStateSnapshot ?? this._stateSnapshotService.getStateSnapshotForOperationLog(),
+    const captured = await resolveFileState(
+      localStateSnapshot,
+      this._stateSnapshotService,
+      this._archiveDbAdapter,
     );
-    const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
-    const archiveOld = await this._archiveDbAdapter.loadArchiveOld();
+    const { archiveYoung, archiveOld } = captured;
+    const state = stripLocalOnlySyncSettingsFromAppData(captured.state);
     return {
       version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
       syncVersion,

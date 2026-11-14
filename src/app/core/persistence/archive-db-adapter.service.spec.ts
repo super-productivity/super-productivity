@@ -12,9 +12,13 @@ describe('ArchiveDbAdapter', () => {
       'loadArchiveYoung',
       'saveArchiveYoung',
       'loadArchiveOld',
+      'hasArchiveYoung',
+      'hasArchiveOld',
       'saveArchiveOld',
       'saveArchivesAtomic',
     ]);
+    archiveStoreMock.hasArchiveYoung.and.resolveTo(false);
+    archiveStoreMock.hasArchiveOld.and.resolveTo(false);
 
     TestBed.configureTestingModule({
       providers: [
@@ -30,6 +34,58 @@ describe('ArchiveDbAdapter', () => {
   // `task: null`, or non-array `task.ids`) was being written verbatim by
   // SyncHydrationService and crashed every subsequent reader on `archive.task.entities`.
   // The adapter now normalizes these shapes at the read boundary.
+  describe('snapshot task integrity', () => {
+    it('does not reread populated archive rows just to confirm their existence', async () => {
+      const archive = {
+        task: { ids: [], entities: {} },
+        timeTracking: { project: {}, tag: {} },
+        lastTimeTrackingFlush: 0,
+      };
+      archiveStoreMock.loadArchiveYoung.and.resolveTo(archive);
+      archiveStoreMock.loadArchiveOld.and.resolveTo(archive);
+
+      const result = await adapter.loadArchivesForSnapshot();
+
+      expect(result.taskDataUnmodified).toBeTrue();
+      expect(archiveStoreMock.hasArchiveYoung).not.toHaveBeenCalled();
+      expect(archiveStoreMock.hasArchiveOld).not.toHaveBeenCalled();
+    });
+
+    it('does not equate an existing row without data with an absent archive', async () => {
+      archiveStoreMock.loadArchiveYoung.and.resolveTo(undefined);
+      archiveStoreMock.loadArchiveOld.and.resolveTo(undefined);
+      archiveStoreMock.hasArchiveYoung.and.resolveTo(true);
+      expect((await adapter.loadArchivesForSnapshot()).taskDataUnmodified).toBeFalse();
+    });
+    it('reports task-slice normalization even though the result is usable by the UI', async () => {
+      archiveStoreMock.loadArchiveYoung.and.resolveTo({
+        task: null,
+        timeTracking: { project: {}, tag: {} },
+      } as unknown as ArchiveModel);
+      archiveStoreMock.loadArchiveOld.and.resolveTo(undefined);
+      const result = await adapter.loadArchivesForSnapshot();
+      expect(result.archiveYoung!.task).toEqual({ ids: [], entities: {} });
+      expect(result.taskDataUnmodified).toBeFalse();
+    });
+
+    it('allows absent stores and time-tracking-only repair without inventing task absence', async () => {
+      const task = { ids: [], entities: {} };
+      archiveStoreMock.loadArchiveYoung.and.resolveTo({
+        task,
+      } as unknown as ArchiveModel);
+      archiveStoreMock.loadArchiveOld.and.resolveTo(undefined);
+      const result = await adapter.loadArchivesForSnapshot();
+      expect(result.archiveYoung!.task).toBe(task);
+      expect(result.taskDataUnmodified).toBeTrue();
+    });
+
+    it('does not treat a corrupt null store as a confirmed absent store', async () => {
+      archiveStoreMock.loadArchiveYoung.and.resolveTo(null as unknown as ArchiveModel);
+      archiveStoreMock.loadArchiveOld.and.resolveTo(undefined);
+      expect((await adapter.loadArchivesForSnapshot()).taskDataUnmodified).toBeFalse();
+    });
+  });
+
   describe('issue #7487 — normalize malformed archives', () => {
     it('returns undefined verbatim when nothing is stored', async () => {
       archiveStoreMock.loadArchiveYoung.and.resolveTo(undefined);

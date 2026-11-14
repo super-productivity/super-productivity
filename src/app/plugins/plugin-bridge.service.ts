@@ -91,6 +91,8 @@ import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
 import { PluginI18nService } from './plugin-i18n.service';
 import { pluginAssert } from './plugin-bridge-asserts';
+import { readPublishedPluginSnapshot } from './plugin-published-snapshot-reader';
+import { SyncProviderManager } from '../op-log/sync-providers/provider-manager.service';
 import {
   PluginBridgeContextService,
   PluginContextBoundMethods,
@@ -235,17 +237,14 @@ export class PluginBridgeService implements OnDestroy {
     // Initialize window focus tracking
     this._initWindowFocusTracking();
   }
-
-  /**
-   * Create bound methods for a specific plugin
-   * This ensures each plugin has its own set of methods with the pluginId already bound
-   */
+  /** Creates methods bound to the calling plugin ID. */
   createBoundMethods(
     pluginId: string,
     manifest?: PluginManifest,
   ): PluginContextBoundMethods & {
     persistDataSynced: (dataStr: string, key?: string) => Promise<void>;
     loadPersistedData: (key?: string) => Promise<string | null>;
+    readPublishedSnapshot: () => ReturnType<typeof readPublishedPluginSnapshot>;
     listSyncedDataKeys: (prefix?: string) => Promise<string[]>;
     getConfig: () => Promise<unknown>;
     downloadFile: (filename: string, data: string) => Promise<void>;
@@ -302,13 +301,14 @@ export class PluginBridgeService implements OnDestroy {
     log: ReturnType<typeof Log.withContext>;
   } {
     return {
-      // Data persistence
       persistDataSynced: (dataStr: string, key?: string) =>
         this._persistDataSynced(pluginId, dataStr, key),
       loadPersistedData: (key?: string) =>
         loadPluginPersistedData(this._pluginUserPersistenceService, pluginId, key),
       listSyncedDataKeys: (prefix?: string) =>
         listPluginDataKeys(this._store, pluginId, prefix),
+      readPublishedSnapshot: () =>
+        readPublishedPluginSnapshot(this._injector.get(SyncProviderManager), pluginId),
       getConfig: () => this._getConfig(pluginId),
       downloadFile: (filename: string, data: string) =>
         this._downloadFile(filename, data),

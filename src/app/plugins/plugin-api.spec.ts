@@ -18,6 +18,7 @@ describe('PluginAPI', () => {
   let reInitDataSpy: jasmine.Spy;
   let dispatchActionSpy: jasmine.Spy;
   let requestSpy: jasmine.Spy;
+  let readPublishedSnapshotSpy: jasmine.Spy;
   let triggerSyncSpy: jasmine.Spy;
   let listSyncedDataKeysSpy: jasmine.Spy;
   let getSelectedTaskSpy: jasmine.Spy;
@@ -44,6 +45,13 @@ describe('PluginAPI', () => {
     reInitDataSpy = jasmine.createSpy('reInitData').and.resolveTo();
     dispatchActionSpy = jasmine.createSpy('dispatchAction');
     requestSpy = jasmine.createSpy('request').and.resolveTo({ ok: true });
+    readPublishedSnapshotSpy = jasmine.createSpy('readPublishedSnapshot').and.resolveTo({
+      format: 'file-v2',
+      revision: 'r1',
+      clock: { fixture: 1 },
+      tasks: [],
+      pluginData: [],
+    });
     triggerSyncSpy = jasmine.createSpy('triggerSync').and.resolveTo();
     listSyncedDataKeysSpy = jasmine
       .createSpy('listSyncedDataKeys')
@@ -69,6 +77,7 @@ describe('PluginAPI', () => {
       showIndexHtmlAsView: showIndexHtmlAsViewSpy,
       dispatchAction: dispatchActionSpy,
       request: requestSpy,
+      readPublishedSnapshot: readPublishedSnapshotSpy,
       triggerSync: triggerSyncSpy,
       listSyncedDataKeys: listSyncedDataKeysSpy,
       getSelectedTask: getSelectedTaskSpy,
@@ -118,6 +127,18 @@ describe('PluginAPI', () => {
       } as PluginManifest,
       undefined,
     );
+  });
+
+  it('reads the published snapshot without accepting a different plugin namespace', async () => {
+    const publicAPI: Pick<PublicPluginAPI, 'readPublishedSnapshot'> = pluginAPI;
+    expect(await publicAPI.readPublishedSnapshot()).toEqual({
+      format: 'file-v2',
+      revision: 'r1',
+      clock: { fixture: 1 },
+      tasks: [],
+      pluginData: [],
+    });
+    expect(readPublishedSnapshotSpy).toHaveBeenCalledOnceWith();
   });
 
   it('exposes a public sync request that waits for the bound operation', async () => {
