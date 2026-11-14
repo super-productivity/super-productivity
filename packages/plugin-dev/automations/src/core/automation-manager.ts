@@ -63,6 +63,7 @@ export class AutomationManager {
     globalRegistry.registerCondition(Conditions.ConditionProjectIs);
     globalRegistry.registerCondition(Conditions.ConditionHasTag);
     globalRegistry.registerCondition(Conditions.ConditionWeekdayIs);
+    globalRegistry.registerCondition(Conditions.ConditionPriorityIs);
 
     // Actions
     globalRegistry.registerAction(Actions.ActionCreateTask);
@@ -70,6 +71,7 @@ export class AutomationManager {
     globalRegistry.registerAction(Actions.ActionAddTag);
     globalRegistry.registerAction(Actions.ActionRemoveTag);
     globalRegistry.registerAction(Actions.ActionMoveToProject);
+    globalRegistry.registerAction(Actions.ActionSetPriority);
     globalRegistry.registerAction(Actions.ActionDisplaySnack);
     globalRegistry.registerAction(Actions.ActionDisplayDialog);
     globalRegistry.registerAction(Actions.ActionWebhook);
