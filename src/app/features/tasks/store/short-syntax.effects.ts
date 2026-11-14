@@ -120,11 +120,12 @@ export class ShortSyntaxEffects {
         if (!task) {
           return EMPTY;
         }
-        const isReplaceTagIds = originalAction.type === TaskSharedActions.updateTask.type;
+        const taskHasEditedTitle =
+          originalAction.type === TaskSharedActions.updateTask.type;
         return from(
           // A title edit of a task whose title syncs both ways parses only the
           // words typed since the shared title; the rest stay text for everyone.
-          (isReplaceTagIds
+          (taskHasEditedTitle
             ? this._issueSharedTitleService.getSharedTitle(task)
             : Promise.resolve(undefined)
           )
@@ -137,7 +138,6 @@ export class ShortSyntaxEffects {
                 tags,
                 projects,
                 undefined,
-                isReplaceTagIds ? 'replace' : 'combine',
                 false,
                 this._dateTimeFormatService.dateInputLocale(),
               ),

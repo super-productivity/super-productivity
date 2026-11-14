@@ -52,6 +52,26 @@ const buildMentionConfig = (
       labelKey: 'title',
       triggerChar: '#',
     });
+
+    // Add #- tags as a separate trigger. Multiple trigger tags for
+    // a single MentionConfig would be nice if we end up doing more
+    // of this.
+    // It would also be nice to generate the tags from what's currently
+    // present in the input, but that makes a messy re-compose from
+    // state info.
+    mentions.push({
+      items: tagSuggestions.map(
+        (tag): MentionListItem => ({
+          title: tag.title,
+          id: tag.id,
+          icon: tag.icon || 'label',
+          color: tag.color || tag.theme?.primary || DEFAULT_TAG_COLOR,
+          isEmoji: !!tag.icon && isSingleEmoji(tag.icon),
+        }),
+      ),
+      labelKey: 'title',
+      triggerChar: '#-',
+    });
   }
   if (cfg.isEnableDue) {
     mentions.push({

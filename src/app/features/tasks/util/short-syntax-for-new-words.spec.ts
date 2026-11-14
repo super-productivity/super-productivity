@@ -18,7 +18,7 @@ describe('shortSyntaxForNewWords', () => {
     keptTitle: string | undefined,
     title: string,
   ): ReturnType<typeof shortSyntaxForNewWords> =>
-    shortSyntaxForNewWords(keptTitle, task(title), cfg, tags, [], undefined, 'replace');
+    shortSyntaxForNewWords(keptTitle, task(title), cfg, tags, [], undefined);
 
   it('leaves tags, dates and estimates of the kept title as text', async () => {
     expect(
