@@ -10,6 +10,8 @@ import {
 } from '../../../../features/note/store/note.actions';
 import { Note } from '../../../../features/note/note.model';
 import { Project } from '../../../../features/project/project.model';
+import { DEFAULT_PROJECT } from '../../../../features/project/project.const';
+import { addProject } from '../../../../features/project/store/project.actions';
 import { EMPTY_SIMPLE_COUNTER } from '../../../../features/simple-counter/simple-counter.const';
 import {
   SimpleCounter,
@@ -62,6 +64,9 @@ export type Intent =
   | ['editHabit', string, 'title' | 'isEnabled', string | boolean]
   | ['countHabit', string]
   | ['reorderHabits', number, number]
+  // A second project and task moves (MOVE_WEIGHTS and MOVE_SETUP only):
+  | ['addProject', string]
+  | ['moveTask', string, string]
   // State replacements (REPLACEMENT_WEIGHTS only):
   | ['forceUpload']
   | ['exportBackup', string]
@@ -118,6 +123,7 @@ export interface DeviceView {
   todayNoteIds: string[];
   habits: SimpleCounter[];
   timeTracking: TimeTrackingState;
+  projectIds: string[];
 }
 
 interface EntityStateLike<T> {
@@ -138,6 +144,7 @@ export const viewOf = (root: Record<string, unknown>): DeviceView => {
     todayNoteIds: note.todayOrder,
     habits: listOf(root['simpleCounter'] as EntityStateLike<SimpleCounter>),
     timeTracking: root['timeTracking'] as TimeTrackingState,
+    projectIds: projects.ids,
   };
 };
 
@@ -227,6 +234,28 @@ export const executeIntent = async (
           isBaseline: ctx !== 'T',
         },
       ];
+    }
+    case 'addProject': {
+      // DialogCreateProjectComponent: ProjectService.add.
+      const [, id] = intent;
+      if (view.projectIds.includes(id)) return undefined;
+      await run(addProject({ project: { ...DEFAULT_PROJECT, id, title: id } }));
+      return [];
+    }
+    case 'moveTask': {
+      // The task context menu's "Move to project": TaskService.moveToProject,
+      // which refuses a subtask. The payload is the full PRE-move task.
+      const [, id, targetProjectId] = intent;
+      const t = task(id);
+      if (!t || t.parentId || t.projectId === targetProjectId) return undefined;
+      if (!view.projectIds.includes(targetProjectId)) return undefined;
+      await run(
+        TaskSharedActions.moveToOtherProject({
+          task: { ...t, subTasks: [] },
+          targetProjectId,
+        }),
+      );
+      return [{ entity: `task:${id}`, field: 'projectId', value: targetProjectId }];
     }
     case 'renameTask': {
       const [, id, title] = intent;
@@ -599,6 +628,16 @@ export const generateIntent = (
       case 'deleteNote':
         if (n) return ['deleteNote', n.id];
         break;
+      case 'moveTask':
+        // The target is drawn here, not beside `t`, `n` and `h` above: a draw
+        // there would shift every other mix's traces.
+        if (t && !t.parentId) {
+          const target = pick(view.projectIds.filter((p) => p !== t.projectId));
+          if (target) return ['moveTask', t.id, target];
+        }
+        break;
+      case 'addProject':
+        break;
       case 'addHabit':
         return ['addHabit', nextId('h')];
       case 'editHabit':
@@ -640,4 +679,29 @@ export const SETUP_INTENTS: Intent[] = [
   ['addHabit', 'h1'],
   ['addHabit', 'h2'],
   ['addHabit', 'h3'],
+];
+
+/**
+ * Two more projects, which device A creates after SETUP_INTENTS, only in a run
+ * that moves tasks (a generated MOVE_WEIGHTS run, or a trace with a moveTask
+ * step): every other run keeps its setup, so its trace and clocks stay as
+ * they were.
+ */
+export const MOVE_SETUP: Intent[] = [
+  ['addProject', 'p1'],
+  ['addProject', 'p2'],
+];
+
+/**
+ * Task edits, tracking, adds and deletes crossing moves between three
+ * projects. A separate mix, so seeds of the other mixes keep their traces.
+ */
+export const MOVE_WEIGHTS: IntentWeights = [
+  ['renameTask', 3],
+  ['editTaskNotes', 2],
+  ['track', 4],
+  ['doneTask', 1],
+  ['addTask', 1],
+  ['deleteTask', 0.5],
+  ['moveTask', 4],
 ];

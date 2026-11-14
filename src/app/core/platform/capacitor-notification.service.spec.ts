@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { CapacitorNotificationService } from './capacitor-notification.service';
 import { CapacitorPlatformService } from './capacitor-platform.service';
+import { LocalNotificationsWeb } from '@capacitor/local-notifications/dist/esm/web';
 
 describe('CapacitorNotificationService', () => {
   let service: CapacitorNotificationService;
@@ -103,6 +104,56 @@ describe('CapacitorNotificationService', () => {
         body: 'Test body',
       });
       expect(result).toBe(false);
+    });
+
+    describe('when available', () => {
+      let scheduleSpy: jasmine.Spy;
+      const scheduleAt = new Date('2026-01-01T10:25:00.000Z');
+
+      beforeEach(() => {
+        spyOn(service, 'ensurePermissions').and.resolveTo(true);
+        scheduleSpy = spyOn(LocalNotificationsWeb.prototype, 'schedule').and.resolveTo({
+          notifications: [],
+        });
+        (
+          Object.getOwnPropertyDescriptor(platformServiceSpy, 'capabilities')
+            ?.get as jasmine.Spy
+        ).and.returnValue({ scheduledNotifications: true });
+      });
+
+      it('should default to the system sound and leave foreground presentation alone', async () => {
+        await service.schedule({ id: 7, title: 'T', body: 'B', scheduleAt });
+
+        expect(scheduleSpy).toHaveBeenCalledOnceWith({
+          notifications: [
+            {
+              id: 7,
+              title: 'T',
+              body: 'B',
+              extra: undefined,
+              sound: 'default',
+              foreground: undefined,
+              actionTypeId: undefined,
+              schedule: { at: scheduleAt, allowWhileIdle: true },
+            },
+          ],
+        });
+      });
+
+      it('should schedule silently and hidden in the foreground when asked', async () => {
+        await service.schedule({
+          id: 7,
+          title: 'T',
+          body: 'B',
+          scheduleAt,
+          sound: null,
+          isShownInForeground: false,
+        });
+
+        const [notification] = scheduleSpy.calls.mostRecent().args[0].notifications;
+        expect(notification.sound).toBeUndefined();
+        expect(notification.foreground).toBe(false);
+      });
     });
   });
 

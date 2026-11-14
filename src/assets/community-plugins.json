@@ -95,11 +95,16 @@
   },
   {
     "name": "Dashboard",
-    "shortDescription": "A lightweight dashboard plugin that visualizes time tracked, completed tasks, overdue items, and project/tag breakdowns within a user‑defined date range, with live time tracking and chart share/export. It ships as a self-contained HTML/JavaScript widget with no external dependencies and is styled to support light/dark themes.",
+    "shortDescription": "Time tracked, completed, overdue and late tasks, broken down by day, project and tag over any date range, plus a heatmap of your activity and habits. Share or print any view. English, Spanish and Simplified Chinese.",
     "url": "https://github.com/ahanel13/sp-dashboard",
     "author": "ahanel13",
     "authorUrl": "https://github.com/ahanel13",
-    "id": "sp-dashboard"
+    "id": "sp-dashboard",
+    "release": {
+      "version": "1.9.0",
+      "downloadUrl": "https://github.com/ahanel13/sp-dashboard/releases/download/v1.9.0/sp-dashboard.zip",
+      "sha256": "698d057da3235d4d3b549b8f202d3e07388b6670000a35fe9b74d7209ffb142d"
+    }
   },
   {
     "name": "Invoicer",
@@ -287,6 +292,19 @@
       "version": "0.0.1",
       "downloadUrl": "https://github.com/Jontata/deadlines-plugin/releases/download/v0.0.1/deadlines-plugin-0.0.1.zip",
       "sha256": "e7b147b25dbda9b232fff0bdb51b773a11a528d647e93bc34e2bf5e02d2ec6b7"
+    }
+  },
+  {
+    "name": "Gamify",
+    "shortDescription": "Earn XP and levels for tasks and habits, keep daily-goal and habit streaks, and lose XP for overdue tasks and missed habits.",
+    "url": "https://github.com/ptrckmgl/sp-gamify",
+    "author": "ptrckmgl",
+    "authorUrl": "https://github.com/ptrckmgl",
+    "id": "sp-gamify",
+    "release": {
+      "version": "1.1.0",
+      "downloadUrl": "https://github.com/ptrckmgl/sp-gamify/releases/download/v1.1.0/sp-gamify.zip",
+      "sha256": "a9386db9a7021afb4dbf953c0627990a56c4d0e38dd85b275d1173b13ca7e7d6"
     }
   }
 ]

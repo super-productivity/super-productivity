@@ -8,7 +8,9 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
 import {
   LatestCausalFullStateRow,
+  fullStateOpBetweenSql,
   latestCausalFullStateSql,
+  MAX_KEPT_REPAIR_PREFIX_OPS,
   Operation,
   ServerOperation,
   VectorClock,
@@ -92,6 +94,31 @@ const mapOperationRow = (row: OperationDownloadRow): ServerOperation => ({
 });
 
 /**
+ * Lowest retained server_seq of a user, or null without retained operations.
+ *
+ * NOTE: Prisma's `aggregate({ _min })` compiles to
+ * `SELECT MIN(x) FROM (SELECT x ... OFFSET 0) sub`. The OFFSET subquery is a
+ * planner optimization fence, so Postgres cannot use the (user_id, server_seq)
+ * index's first-row seek and instead scans every matching row — a per-user O(N)
+ * scan that, under load, ran for minutes and blew the 60s interactive-tx
+ * timeout. `findFirst` ordered by the indexed column compiles to
+ * `ORDER BY server_seq ASC LIMIT 1`: a guaranteed index seek returning the same
+ * minimum.
+ */
+const findMinSeq = async (
+  tx: Prisma.TransactionClient,
+  userId: number,
+  latestSeq: number,
+): Promise<number | null> => {
+  const minSeqRow = await tx.operation.findFirst({
+    where: { userId, serverSeq: { lte: latestSeq } },
+    orderBy: { serverSeq: 'asc' },
+    select: { serverSeq: true },
+  });
+  return minSeqRow?.serverSeq ?? null;
+};
+
+/**
  * Strict-or-undefined parser for the JSONB column. The data is written by
  * this server, so on any shape violation we return `undefined` to fall back
  * to the legacy `_computeSnapshotVectorClock` aggregate path rather than
@@ -121,7 +148,8 @@ export class OperationDownloadService {
    * OPTIMIZATION: When sinceSeq is before the latest full-state operation (SYNC_IMPORT,
    * BACKUP_IMPORT, REPAIR), we skip to that operation's sequence instead. This prevents
    * sending operations that will be filtered out by the client anyway, saving bandwidth
-   * and processing time.
+   * and processing time. One exception: a device that synced before still gets the
+   * retained ops before a causal REPAIR (see keepsRepairPrefix below).
    *
    * includeSnapshotMetadata controls only the expensive vector-clock aggregate; the
    * full-state fast-forward still applies so piggyback downloads can return the
@@ -180,6 +208,7 @@ export class OperationDownloadService {
           ? {
               serverSeq: latestFullStateRows[0].server_seq,
               clientId: latestFullStateRows[0].client_id,
+              isRepair: latestFullStateRows[0].op_type === 'REPAIR',
             }
           : null;
 
@@ -191,7 +220,42 @@ export class OperationDownloadService {
         let effectiveSinceSeq = sinceSeq;
         let shouldComputeSnapshotVectorClock = false;
 
-        if (latestSnapshotSeq !== undefined && sinceSeq < latestSnapshotSeq) {
+        // A device that holds unsynced edits drops an incoming causal REPAIR
+        // instead of applying it, because it has already applied every op the
+        // repair was built from. That only holds if it received those ops, so a
+        // device that synced before keeps getting them while they are retained.
+        // Imports replace state by design and keep the skip, as does a new device
+        // (sinceSeq 0), which has nothing to merge. Once the prefix is pruned the
+        // skip is all that is left.
+        // Another full-state op between the cursor and the REPAIR keeps the skip
+        // too. The client defers only the first full-state op of a batch, so an
+        // import or a legacy REPAIR there would put the import question to a
+        // device that today is moved past it, and a second causal REPAIR would
+        // discard the ops just sent. So does a stretch longer than the cap.
+        let minSeq: number | null = null;
+        let keepsRepairPrefix = false;
+        if (
+          latestFullStateOp?.isRepair &&
+          sinceSeq > 0 &&
+          sinceSeq < latestFullStateOp.serverSeq &&
+          latestFullStateOp.serverSeq - sinceSeq <= MAX_KEPT_REPAIR_PREFIX_OPS
+        ) {
+          minSeq = await findMinSeq(tx, userId, latestSeq);
+          keepsRepairPrefix =
+            minSeq !== null &&
+            minSeq <= sinceSeq + 1 &&
+            (
+              await tx.$queryRaw<{ server_seq: number }[]>(
+                fullStateOpBetweenSql(userId, sinceSeq, latestFullStateOp.serverSeq),
+              )
+            ).length === 0;
+        }
+
+        if (
+          latestSnapshotSeq !== undefined &&
+          sinceSeq < latestSnapshotSeq &&
+          !keepsRepairPrefix
+        ) {
           // Start from one before the snapshot so it's included in results
           effectiveSinceSeq = latestSnapshotSeq - 1;
           Logger.info(
@@ -215,24 +279,9 @@ export class OperationDownloadService {
           select: OPERATION_DOWNLOAD_SELECT,
         });
 
-        let minSeq: number | null = null;
-
-        if (sinceSeq > 0 || ops.length === 0) {
+        if (minSeq === null && (sinceSeq > 0 || ops.length === 0)) {
           // Also distinguish a reset from an empty page filtered by client ID.
-          // NOTE: Prisma's `aggregate({ _min })` compiles to
-          // `SELECT MIN(x) FROM (SELECT x ... OFFSET 0) sub`. The OFFSET
-          // subquery is a planner optimization fence, so Postgres cannot use
-          // the (user_id, server_seq) index's first-row seek and instead scans
-          // every matching row — a per-user O(N) scan that, under load, ran for
-          // minutes and blew the 60s interactive-tx timeout. `findFirst`
-          // ordered by the indexed column compiles to `ORDER BY server_seq ASC
-          // LIMIT 1`: a guaranteed index seek returning the same minimum.
-          const minSeqRow = await tx.operation.findFirst({
-            where: { userId, serverSeq: { lte: latestSeq } },
-            orderBy: { serverSeq: 'asc' },
-            select: { serverSeq: true },
-          });
-          minSeq = minSeqRow?.serverSeq ?? null;
+          minSeq = await findMinSeq(tx, userId, latestSeq);
         }
 
         // Reset retains the allocation counter to prevent sequence reuse, but

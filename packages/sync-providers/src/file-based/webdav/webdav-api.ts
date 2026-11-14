@@ -10,6 +10,7 @@ import {
 } from '../../errors';
 import { errorMeta } from '../../log/error-meta';
 import { computeContentRev } from '../content-rev';
+import { toBasicAuthHeader } from './basic-auth-header';
 import { WebDavHttpHeader, WebDavHttpMethod, WebDavHttpStatus } from './webdav.const';
 import type { WebDavHttpAdapter, WebDavHttpResponse } from './webdav-http-adapter';
 import { FileMeta, WebdavXmlParser } from './webdav-xml-parser';
@@ -568,9 +569,8 @@ export class WebdavApi {
     const fullPath = this._buildFullPath(cfg.baseUrl, cfg.syncFolderPath || '/');
 
     try {
-      const auth = btoa(`${cfg.userName}:${cfg.password}`);
       const headers = {
-        [WebDavHttpHeader.AUTHORIZATION]: `Basic ${auth}`,
+        [WebDavHttpHeader.AUTHORIZATION]: toBasicAuthHeader(cfg.userName, cfg.password),
         [WebDavHttpHeader.CONTENT_TYPE]: 'application/xml; charset=utf-8',
         [WebDavHttpHeader.DEPTH]: '0',
       };
@@ -804,4 +804,4 @@ export class WebdavApi {
 const getAuthorizationHeader = (cfg: WebdavPrivateCfg): string =>
   cfg.accessToken
     ? `Bearer ${cfg.accessToken}`
-    : `Basic ${btoa(`${cfg.userName}:${cfg.password}`)}`;
+    : toBasicAuthHeader(cfg.userName, cfg.password);
