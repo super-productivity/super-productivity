@@ -2739,6 +2739,45 @@ describe('LocalRestApiTaskRoutesService', () => {
     });
 
     describe('POST /tasks/:id/restore', () => {
+      it('rejects restoring a subtask alone without dispatching or changing the archive', async () => {
+        const subtask = createMockTask('sub-1', { parentId: 'parent-1' });
+        taskArchiveServiceMock.hasTask.and.resolveTo(true);
+        taskArchiveServiceMock.getById.and.resolveTo(subtask);
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks/sub-1/restore'),
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.ok).toBe(false);
+        expect(taskServiceMock.restoreTask).not.toHaveBeenCalled();
+        expect(taskArchiveServiceMock.load).not.toHaveBeenCalled();
+        expect(
+          archiveOperationHandlerMock.whenLocalOperationsSettled,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('restores a parent together with its archived subtasks', async () => {
+        const parent = createMockTask('parent-1', { subTaskIds: ['sub-1'] });
+        const subtask = createMockTask('sub-1', { parentId: parent.id });
+        taskArchiveServiceMock.hasTask.and.resolveTo(true);
+        taskArchiveServiceMock.getById.and.resolveTo(parent);
+        taskArchiveServiceMock.load.and.resolveTo({
+          ids: [parent.id, subtask.id],
+          entities: { [parent.id]: parent, [subtask.id]: subtask },
+        } as TaskArchive);
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(parent),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks/parent-1/restore'),
+        );
+
+        expect(response.status).toBe(200);
+        expect(taskServiceMock.restoreTask).toHaveBeenCalledOnceWith(parent, [subtask]);
+      });
+
       it('should restore an archived task', async () => {
         const archivedTask = createMockTask('archivedTask1', { isDone: true });
         (taskArchiveServiceMock as any).hasTask.and.returnValue(Promise.resolve(true));

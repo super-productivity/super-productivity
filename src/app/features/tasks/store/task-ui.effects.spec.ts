@@ -1,6 +1,6 @@
 import { PLAINSPACE_TYPE } from '../../issue/issue.const';
 import { TestBed } from '@angular/core/testing';
-import { of, Subject, take } from 'rxjs';
+import { defer, of, Subject, take } from 'rxjs';
 import { TaskUiEffects } from './task-ui.effects';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TaskService } from '../task.service';
@@ -23,7 +23,10 @@ import { Action } from '@ngrx/store';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DateService } from '../../../core/date/date.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
-import { selectUnplannedDeadlineTasksForToday } from './task.selectors';
+import {
+  selectTaskEntities,
+  selectUnplannedDeadlineTasksForToday,
+} from './task.selectors';
 import { Banner } from '../../../core/banner/banner.model';
 import { TaskMultiSelectService } from '../task-multi-select.service';
 
@@ -282,6 +285,79 @@ describe('TaskUiEffects', () => {
 
     afterEach(() => {
       localStorage.removeItem(LS.ONBOARDING_HINTS_DONE);
+    });
+  });
+
+  describe('taskDoneSound$', () => {
+    let doneCountSubscriptions: number;
+    let doneSound: string | null;
+
+    beforeEach(() => {
+      doneCountSubscriptions = 0;
+      doneSound = null;
+      actions$ = new Subject<Action>();
+      TestBed.configureTestingModule({
+        providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
+          TaskUiEffects,
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
+          provideMockStore({
+            initialState: {},
+            selectors: [{ selector: selectTaskEntities, value: {} }],
+          }),
+          { provide: SnackService, useValue: {} },
+          { provide: TaskService, useValue: {} },
+          { provide: NavigateToTaskService, useValue: {} },
+          { provide: LayoutService, useValue: {} },
+          {
+            provide: WorkContextService,
+            useValue: {
+              flatDoneTodayNr$: defer(() => {
+                doneCountSubscriptions++;
+                return of(3);
+              }),
+            },
+          },
+          { provide: NotifyService, useValue: {} },
+          { provide: BannerService, useValue: {} },
+          {
+            provide: GlobalConfigService,
+            useValue: { sound$: defer(() => of({ doneSound, volume: 0 })) },
+          },
+          { provide: Router, useValue: {} },
+        ],
+      });
+      effects = TestBed.inject(TaskUiEffects);
+    });
+
+    // The count scans every task; holding it subscribed re-ran that scan on
+    // every time-tracking tick even though only a done action reads it.
+    it('does not subscribe to the done count unless a sound will play', () => {
+      const sub = effects.taskDoneSound$.subscribe();
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-123', changes: { isDone: true } },
+        }),
+      );
+
+      expect(doneCountSubscriptions).toBe(0);
+      sub.unsubscribe();
+    });
+
+    it('reads the done count once per done action when a sound plays', () => {
+      doneSound = 'ding.mp3';
+      const sub = effects.taskDoneSound$.subscribe();
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-123', changes: { isDone: true } },
+        }),
+      );
+
+      expect(doneCountSubscriptions).toBe(1);
+      sub.unsubscribe();
     });
   });
 

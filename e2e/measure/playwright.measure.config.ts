@@ -60,6 +60,14 @@ export default defineConfig({
       },
     },
     {
+      // Desktop layout, for harnesses that measure the desktop UI (tracking-tick).
+      name: 'measure-chromium-desktop',
+      use: {
+        browserName: 'chromium' as const,
+        contextOptions: { viewport: { width: 1440, height: 900 }, locale: 'en-GB' },
+      },
+    },
+    {
       name: 'measure-chromium',
       use: {
         browserName: 'chromium' as const,
@@ -67,19 +75,27 @@ export default defineConfig({
       },
     },
   ],
-  webServer: process.env.E2E_BASE_URL
-    ? undefined
-    : {
-        command: 'npm run startFrontend:e2e',
+  // MEASURE_STATIC_DIR serves a prebuilt dev+optimized build instead of `ng serve`.
+  webServer: process.env.MEASURE_STATIC_DIR
+    ? {
+        command: `npx http-server "${process.env.MEASURE_STATIC_DIR}" -p 4242 -s`,
         url: 'http://localhost:4242',
-        // Never reuse: attaching to a stray server on :4242 would file the
-        // numbers under the wrong build, which is the one thing a measurement
-        // harness must not do.
         reuseExistingServer: false,
-        timeout: 4 * 60 * 1000,
-        stdout: 'ignore',
-        stderr: 'pipe',
-      },
+        timeout: 60 * 1000,
+      }
+    : process.env.E2E_BASE_URL
+      ? undefined
+      : {
+          command: 'npm run startFrontend:e2e',
+          url: 'http://localhost:4242',
+          // Never reuse: attaching to a stray server on :4242 would file the
+          // numbers under the wrong build, which is the one thing a measurement
+          // harness must not do.
+          reuseExistingServer: false,
+          timeout: 4 * 60 * 1000,
+          stdout: 'ignore',
+          stderr: 'pipe',
+        },
   outputDir: path.join(REPO_ROOT, '.tmp', 'e2e-measure-results'),
   timeout: 300 * 1000,
   expect: { timeout: 30 * 1000 },

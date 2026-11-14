@@ -301,6 +301,7 @@ for (const deleterSyncsFirst of [true, false]) {
 const EDITED = 'Edited note';
 
 const editNote = (page: Page, id: string): Promise<void> =>
+  // EDITED is passed in: the callback runs in the browser, not in Node.
   page.evaluate(
     async ({ noteId, content }) => {
       (

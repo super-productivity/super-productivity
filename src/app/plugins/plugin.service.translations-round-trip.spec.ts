@@ -138,7 +138,10 @@ describe('PluginService uploaded translations round-trip', () => {
         { provide: PluginSecurityService, useValue: pluginSecurity },
         { provide: PluginMetaPersistenceService, useValue: pluginMetaPersistence },
         { provide: TranslateService, useValue: translateService },
-        { provide: GlobalThemeService, useValue: { darkMode: () => 'light' } },
+        {
+          provide: GlobalThemeService,
+          useValue: { darkMode: () => 'light', isDarkTheme: () => false },
+        },
         {
           provide: PluginHooksService,
           useValue: jasmine.createSpyObj<PluginHooksService>('PluginHooksService', [
