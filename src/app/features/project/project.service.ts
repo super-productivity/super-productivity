@@ -62,9 +62,15 @@ import { MenuTreeService } from '../menu-tree/menu-tree.service';
 import { selectMenuTreeProjectTree } from '../menu-tree/store/menu-tree.selectors';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskTimeSyncService } from '../tasks/task-time-sync.service';
-import { selectAllTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import {
+  selectAllTaskRepeatCfgs,
+  selectTaskRepeatCfgByIdAllowUndefined,
+} from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
-import { upsertTaskRepeatCfg } from '../task-repeat-cfg/store/task-repeat-cfg.actions';
+import {
+  updateTaskRepeatCfg,
+  upsertTaskRepeatCfg,
+} from '../task-repeat-cfg/store/task-repeat-cfg.actions';
 import { PersistentActionMeta } from '../../op-log/core/persistent-action.interface';
 import { OpType } from '../../op-log/core/operation.types';
 
@@ -247,12 +253,16 @@ export class ProjectService {
   /**
    * Carry unfinished work forward into the Inbox before completing a project.
    * Uses the normal per-task move action so every downstream effect (issue
-   * sync, reminders, repeat-cfg) and per-entity conflict detection fires
-   * naturally. Done tasks are explicitly re-opened (setUnDone) so carried-over
+   * sync, reminders) and per-entity conflict detection fires naturally.
+   * A repeat config owned by the completing project moves to the Inbox with
+   * its task: completion would suspend it, and deletion would delete it.
+   * Configs owned by other projects and done instances stay where they are.
+   * Done tasks are explicitly re-opened (setUnDone) so carried-over
    * work is actionable again in the Inbox — the move itself keeps isDone.
    * The trailing flush is the bulk-dispatch guard (sync-model Rule #6).
    */
   async moveTasksToInbox(tasks: Task[]): Promise<void> {
+    const movedRepeatCfgIds = new Set<string>();
     for (const task of tasks) {
       const withSubTasks = await firstValueFrom(
         this._taskService.getByIdWithSubTaskData$(task.id),
@@ -260,6 +270,27 @@ export class ProjectService {
       // Skip tasks that vanished from the store mid-loop (#9946).
       if (!withSubTasks) {
         continue;
+      }
+      if (withSubTasks.repeatCfgId && !movedRepeatCfgIds.has(withSubTasks.repeatCfgId)) {
+        const repeatCfg = await firstValueFrom(
+          this._store$.select(selectTaskRepeatCfgByIdAllowUndefined, {
+            id: withSubTasks.repeatCfgId,
+          }),
+        );
+        // Board moves can leave the recurrence owned by another active project.
+        // The input task retains the project being completed.
+        if (repeatCfg?.projectId === task.projectId) {
+          this._store$.dispatch(
+            updateTaskRepeatCfg({
+              taskRepeatCfg: {
+                id: withSubTasks.repeatCfgId,
+                changes: { projectId: INBOX_PROJECT.id },
+              },
+              isAskToUpdateAllTaskInstances: false,
+            }),
+          );
+          movedRepeatCfgIds.add(withSubTasks.repeatCfgId);
+        }
       }
       this._taskService.moveToProject(withSubTasks, INBOX_PROJECT.id);
       if (task.isDone) {
