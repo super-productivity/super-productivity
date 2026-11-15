@@ -7,6 +7,8 @@ import { Task, TaskWithSubTasks } from './task.model';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { ArchiveOperationHandler } from '../../op-log/apply/archive-operation-handler.service';
 import { ProjectService } from '../project/project.service';
+import { Project } from '../project/project.model';
+import { selectAllTagIds } from '../tag/store/tag.reducer';
 import { TODAY_TAG } from '../tag/tag.const';
 import { DateService } from '../../core/date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
@@ -708,6 +710,32 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       return createSuccessResponse(requestId, 201, createdSubTask);
     }
 
+    // Without these checks the task would point at a project or tag that does
+    // not exist, a state the app's own validation reports as broken data.
+    if (hasOwn(additionalFields, 'projectId')) {
+      const projectId = additionalFields.projectId;
+      if (typeof projectId !== 'string' || !projectId.trim()) {
+        return createErrorResponse(
+          requestId,
+          400,
+          'INVALID_INPUT',
+          'projectId must be a non-empty string',
+        );
+      }
+      if (!this._findActiveProject(projectId)) {
+        return createErrorResponse(
+          requestId,
+          404,
+          'PROJECT_NOT_FOUND',
+          'Project not found or archived',
+        );
+      }
+    }
+    const missingTagId = await this._findMissingTagId(additionalFields.tagIds);
+    if (missingTagId) {
+      return this._tagNotFound(requestId, missingTagId);
+    }
+
     const taskId = isIgnoreShortSyntax
       ? this._taskService.add(title, false, additionalFields, false, true)
       : this._taskService.add(title, false, additionalFields);
@@ -717,6 +745,35 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
     const createdTask = await this._getTaskById(taskId);
 
     return createSuccessResponse(requestId, 201, createdTask);
+  }
+
+  /**
+   * The active project with this id. list() only contains unarchived projects,
+   * and matching by iteration (not entity-map lookup) keeps prototype-property
+   * names like 'constructor' from resolving to a truthy non-project.
+   */
+  private _findActiveProject(projectId: string): Project | undefined {
+    return this._projectService
+      .list()
+      .find((project) => project.id === projectId && !project.isArchived);
+  }
+
+  /** The first of `tagIds` that is no tag and not already on the task. */
+  private async _findMissingTagId(
+    tagIds: string[] | undefined,
+    currentTagIds: string[] = [],
+  ): Promise<string | undefined> {
+    if (!tagIds?.length) {
+      return undefined;
+    }
+    const existing = new Set<string | number>(
+      await firstValueFrom(this._store.select(selectAllTagIds)),
+    );
+    return tagIds.find((id) => !existing.has(id) && !currentTagIds.includes(id));
+  }
+
+  private _tagNotFound(requestId: string, tagId: string): LocalRestApiResponsePayload {
+    return createErrorResponse(requestId, 404, 'TAG_NOT_FOUND', `Tag ${tagId} not found`);
   }
 
   private async _handleTaskRoutes(
@@ -835,6 +892,13 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
         }
         const changes = mapLegacyPlannedAt(writableFields);
 
+        // Tags the task already has may be echoed back (GET→PATCH round trip);
+        // only a newly added tag has to exist.
+        const missingTagId = await this._findMissingTagId(changes.tagIds, task.tagIds);
+        if (missingTagId) {
+          return this._tagNotFound(requestId, missingTagId);
+        }
+
         let isMoveOnly = false;
         if (hasOwn(changes, 'projectId')) {
           const targetProjectId = changes.projectId;
@@ -859,13 +923,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
           }
 
           if (isProjectChange) {
-            // list() only contains unarchived projects, and matching by iteration
-            // (not entity-map lookup) keeps prototype-property names like
-            // 'constructor' from resolving to a truthy non-project.
-            const targetProject = this._projectService
-              .list()
-              .find((project) => project.id === targetProjectId && !project.isArchived);
-            if (!targetProject) {
+            if (!this._findActiveProject(targetProjectId)) {
               return createErrorResponse(
                 requestId,
                 404,
