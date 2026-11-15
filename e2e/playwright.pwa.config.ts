@@ -14,7 +14,18 @@ export default defineConfig({
     ...baseConfig.use,
     baseURL: PWA_BASE_URL,
   },
-  projects: baseConfig.projects?.filter((project) => project.name === 'chromium'),
+  projects: baseConfig.projects
+    ?.filter((project) => project.name === 'chromium')
+    .map((project) => ({
+      ...project,
+      use: {
+        ...project.use,
+        launchOptions: {
+          ...project.use?.launchOptions,
+          args: [...(project.use?.launchOptions?.args || []), '--js-flags=--expose-gc'],
+        },
+      },
+    })),
   webServer: {
     command: 'npm run serveFrontend:e2e:pwa',
     url: PWA_BASE_URL,
