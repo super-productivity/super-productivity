@@ -42,6 +42,10 @@ export interface AndroidInterface {
   // Absent on APKs whose snooze/tap events don't carry the reminder type.
   supportsTypedReminderActions?(): boolean;
 
+  // Legacy online mode only: hands over to the bundled offline app and
+  // restarts into it. Absent on APKs that predate it (#8832).
+  switchToOfflineMode?(): boolean;
+
   // Absent on APKs that predate it; call via util/haptic-feedback.ts.
   performHapticFeedback?(type: 'confirm' | 'threshold' | 'longPress'): void;
 

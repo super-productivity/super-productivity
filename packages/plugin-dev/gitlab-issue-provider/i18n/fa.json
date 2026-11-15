@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "مسیر کامل یا نام کاربری / پروژه",
+    "PROJECT_HINT": "به عنوان مثال johannesjo/فوق بهره وری",
+    "TOKEN": "توکن دسترسی",
+    "HOW_TO_GET_TOKEN": "چگونه یک توکن دریافت کنیم؟",
+    "SCOPE": "محدوده",
+    "SCOPE_ALL": "همه",
+    "SCOPE_CREATED": "ایجاد شده توسط من",
+    "SCOPE_ASSIGNED": "به من اختصاص داده شده است",
+    "GITLAB_BASE_URL": "URL پایه GitLab سفارشی",
+    "FILTER_USER": "نام کاربری (مثلا برای فیلتر کردن تغییراتی که خودتان انجام دادید)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "فیلتر سفارشی",
+    "FILTER_DESCRIPTION": "به https://docs.gitlab.com/ee/api/issues.html#list-issues مراجعه کنید. چندگانه را می توان با و ترکیب کرد",
+    "SUBMIT_TIMELOGS": "تایم لاگ ها را به Gitlab ارسال کنید",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "پس از کلیک بر روی روز پایان، گفتگوی ردیابی زمان را نشان دهید"
+  },
+  "DISPLAY": {
+    "SUMMARY": "خلاصه",
+    "STATE": "وضعیت",
+    "ASSIGNEE": "مسئول",
+    "LABELS": "برچسب ها",
+    "DESCRIPTION": "توضیحات"
+  },
+  "FORM_HELP": "<p> در اینجا می توانید SuperProductivity را تنظیم کنید تا لیست GitLab باز (یا نسخه آنلاین آن یا یک نمونه خود میزبان) را برای یک پروژه خاص در پانل ایجاد کار در نمای برنامه ریزی روزانه تنظیم کنید. آنها به عنوان پیشنهادات ذکر شده اند و پیوندی به موضوع و همچنین اطلاعات بیشتر در مورد آن را ارائه می دهند. </p> <p> علاوه بر این می توانید به طور خودکار همه موارد باز را به بک گراند وظیفه خود اضافه کنید و همگام سازی کنید. </p>"
+}

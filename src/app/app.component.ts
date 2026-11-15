@@ -24,6 +24,7 @@ import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
 import { IS_MAC } from './util/is-mac';
+import { handleHomeEndInTextField } from './util/handle-home-end-in-text-field';
 import { expandAnimation } from './ui/animations/expand.ani';
 import { warpRouteAnimation } from './ui/animations/warp-route';
 import { firstValueFrom, Subscription } from 'rxjs';
@@ -39,7 +40,8 @@ import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
 import { ActivatedRoute, RouterOutlet } from '@angular/router';
-import { first, take } from 'rxjs/operators';
+import { first, map, take } from 'rxjs/operators';
+import { BreakpointObserver } from '@angular/cdk/layout';
 
 import { recordSearchNavDebug } from './util/search-nav-debug';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
@@ -80,6 +82,7 @@ import { getDroppedUrl } from './core/drop-paste-input/drop-paste-input';
 import { readableUrl } from './util/readable-url';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
+import { CertTrustService } from './features/issue/cert-trust.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { AppUriTaskActionsService } from './features/tasks/app-uri-actions/app-uri-task-actions.service';
 import { IosShareService } from './features/tasks/ios-share/ios-share.service';
@@ -170,6 +173,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _ngZone = inject(NgZone);
   private _document = inject(DOCUMENT, { optional: true });
   private _startupService = inject(StartupService);
+  private _certTrustService = inject(CertTrustService);
   // Injected for side-effect: creates example tasks on first run
   private _exampleTasksService = inject(ExampleTasksService);
   // Injected for side-effect: loads per-instance task widget settings from
@@ -218,10 +222,21 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return this._isDisableAnimations();
   }
 
-  private _isDisableAnimations = computed(() => {
-    const misc = this._globalConfigService.misc();
-    return misc?.isDisableAnimations ?? false;
-  });
+  // The OS setting turns off motion like the in-app setting does. Material
+  // components follow it on their own; the rest of the Angular animations
+  // (route changes, expand, slide-ins) only stop through this binding.
+  private _isReducedMotion = toSignal(
+    inject(BreakpointObserver)
+      .observe('(prefers-reduced-motion: reduce)')
+      .pipe(map((state) => state.matches)),
+    { requireSync: true },
+  );
+
+  private _isDisableAnimations = computed(
+    () =>
+      this._isReducedMotion() ||
+      (this._globalConfigService.misc()?.isDisableAnimations ?? false),
+  );
 
   // Experimental: vertical action strip on the right edge instead of the
   // horizontal top header. Switches the DOM layout live (see template).
@@ -252,6 +267,8 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _subs: Subscription = new Subscription();
 
   constructor() {
+    // Claim the one-shot certificate-trust API before plugins load (#11097)
+    this._certTrustService.init();
     this._startupService.init();
     // Once the shell has rendered, uncover the phone bottom bar; once data is
     // loaded too, fade the boot splash out, and end the entrance when its
@@ -567,6 +584,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         });
       };
 
+      // Capture phase: fields like the task title stop keydown propagation.
+      const onKeyDownCapture = (ev: KeyboardEvent): void => {
+        handleHomeEndInTextField(ev);
+      };
+
       // Keep the launch screen's frame current: theme or layout changes made in
       // this session show from the next launch on. Hidden covers mobile
       // backgrounding, pagehide a closing window.
@@ -580,6 +602,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       doc.addEventListener('dragover', onDragOver, { passive: false });
       doc.addEventListener('drop', onDrop, { passive: false });
       doc.addEventListener('keydown', onKeyDown);
+      if (IS_MAC) {
+        doc.addEventListener('keydown', onKeyDownCapture, true);
+      }
       doc.addEventListener('visibilitychange', onVisibilityChange);
       window.addEventListener('pagehide', onPageHide);
 
@@ -587,6 +612,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         doc.removeEventListener('dragover', onDragOver);
         doc.removeEventListener('drop', onDrop);
         doc.removeEventListener('keydown', onKeyDown);
+        doc.removeEventListener('keydown', onKeyDownCapture, true);
         doc.removeEventListener('visibilitychange', onVisibilityChange);
         window.removeEventListener('pagehide', onPageHide);
       });

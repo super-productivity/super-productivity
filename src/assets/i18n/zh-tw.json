@@ -424,52 +424,6 @@
         "WRITE_A_COMMENT": "撰寫評論"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "預填的時長包含過去幾天的未追蹤資料。",
-        "T_ALREADY_TRACKED": "已追蹤",
-        "T_TITLE": "標題",
-        "T_TO_BE_SUBMITTED": "待提交",
-        "TITLE": "提交議題花費時間到 GitLab",
-        "TOTAL_MSG": "您將總共提交 <em>{{totalTimeToSubmit}}</em> 今日工作時間到 <em>{{nrOfTasksToSubmit}}</em> 個不同的議題。"
-      },
-      "FORM": {
-        "FILTER": "自訂過濾器",
-        "FILTER_DESCRIPTION": "參見 https://docs.gitlab.com/ee/api/issues.html#list-issues。多個條件可用 & 組合",
-        "FILTER_USER": "篩選使用者名稱",
-        "GITLAB_BASE_URL": "自訂 GitLab 基礎網址（選填）",
-        "PROJECT": "使用者名稱/專案",
-        "PROJECT_HINT": "例如：super-productivity/super-productivity",
-        "SCOPE": "範圍",
-        "SCOPE_ALL": "全部",
-        "SCOPE_ASSIGNED": "指派給我",
-        "SCOPE_CREATED": "由我建立",
-        "SOURCE": "來源",
-        "SOURCE_GLOBAL": "全部",
-        "SOURCE_GROUP": "群組",
-        "SOURCE_PROJECT": "專案",
-        "SUBMIT_TIMELOGS": "提交時間記錄到 GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "點擊完成今天後顯示時間追蹤對話方塊",
-        "TOKEN": "存取權杖"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定專案的開放 GitLab（線上版本或自架實例）議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動匯入所有開放議題。</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "指派人",
-        "AT": "在",
-        "DESCRIPTION": "描述",
-        "LABELS": "標籤",
-        "MARK_AS_CHECKED": "標記更新為已檢查",
-        "PROJECT": "專案",
-        "STATUS": "狀態",
-        "SUMMARY": "摘要",
-        "WRITE_A_COMMENT": "撰寫評論"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab：未知錯誤 {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "此整合可能無法在您的瀏覽器中運作。請下載 Super Productivity 的桌面版或 Android 版！",
       "DEFAULT": {

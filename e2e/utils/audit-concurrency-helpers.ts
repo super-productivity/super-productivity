@@ -292,19 +292,28 @@ export const syncWithHeldUpload = async <T>(
 /**
  * Move a task in the list with Ctrl+Shift+Arrow. A centre click enters title
  * editing, where the shortcut never fires, so the task host is focused instead
- * (pattern: webdav-sync-today-tag.spec.ts).
+ * (pattern: webdav-sync-today-tag.spec.ts). Each press waits for the move to
+ * land: back-to-back presses dropped one in CI (run 42253979119), likely while
+ * the moved task is re-rendered and refocused. `times` must be achievable — a
+ * move past the list edge times out.
  */
 export const moveTaskWithKeyboard = async (
   task: Locator,
   direction: 'up' | 'down',
   times: number,
 ): Promise<void> => {
+  const position = (): Promise<number> =>
+    task.evaluate((el) => Array.from(document.querySelectorAll('task')).indexOf(el));
   await task.focus();
   await expect(task).toBeFocused();
   for (let i = 0; i < times; i++) {
+    const before = await position();
     await task.press(
       direction === 'up' ? 'Control+Shift+ArrowUp' : 'Control+Shift+ArrowDown',
     );
+    await expect
+      .poll(position, { message: `keyboard move ${i + 1}/${times} did not land` })
+      .toBe(direction === 'up' ? before - 1 : before + 1);
   }
 };
 

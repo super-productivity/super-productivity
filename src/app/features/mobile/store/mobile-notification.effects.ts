@@ -15,6 +15,7 @@ import {
 } from '../../tasks/store/task.selectors';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
 import { CapacitorPlatformService } from '../../../core/platform/capacitor-platform.service';
+import { IOS_REMINDER_BUDGET } from '../../../core/platform/ios-reminder-budget';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { ReminderConfig } from '../../config/global-config.model';
 import {
@@ -44,17 +45,20 @@ const DELAY_SCHEDULE = 5000;
 // window. See #7850.
 const REPEAT_LOOKAHEAD_DAYS = 14;
 
-// Upper bound on how many recurring reminders we pre-schedule in one pass.
-// iOS caps pending local notifications at 64 GLOBALLY (across every reminder
-// effect), silently dropping the rest, and it keeps the soonest-firing ones;
-// Android allows ~500 alarms per app. Over the cap we keep every config's next
-// occurrence before any config's second (then soonest first), so a weekly
-// config is never crowded out by daily ones, and leave headroom for the
-// live/due-date effects. Truncation is logged, never silent.
-// shortcut: one cap for both platforms, so with many timed daily configs the
-// app-closed coverage shrinks to 32 / configs days (e.g. 5 configs → ~6 days)
-// — raise it on Android only if users report gaps.
+// Android: upper bound on how many recurring reminders we pre-schedule in one
+// pass (Android allows ~500 alarms per app). Over the cap we keep every
+// config's next occurrence before any config's second (then soonest first), so
+// a weekly config is never crowded out by daily ones. Truncation is logged,
+// never silent.
+// shortcut: with many timed daily configs the app-closed coverage shrinks to
+// 32 / configs days (e.g. 5 configs → ~6 days) — raise it if users report gaps.
 const REPEAT_MAX_SCHEDULED = 32;
+
+// iOS holds 64 pending notifications per app, so one budget picks what is
+// armed there, soonest first across every reminder effect (see
+// ios-reminder-budget.ts). Recurring reminders are offered far enough ahead to
+// fill its free slots: a daily config alone fills the budget in this many days.
+const IOS_REPEAT_LOOKAHEAD_DAYS = IOS_REMINDER_BUDGET;
 
 // Settle window for the recurring-reminder scheduler. Instance creation
 // dispatches addTask → updateTaskRepeatCfg → scheduleTaskWithTime back-to-back,
@@ -625,7 +629,10 @@ export class MobileNotificationEffects {
     const baseDay = new Date(now);
     baseDay.setHours(12, 0, 0, 0);
 
-    for (let dayOffset = 0; dayOffset <= REPEAT_LOOKAHEAD_DAYS; dayOffset++) {
+    const isIOS = this._platformService.isIOS();
+    const lookaheadDays = isIOS ? IOS_REPEAT_LOOKAHEAD_DAYS : REPEAT_LOOKAHEAD_DAYS;
+
+    for (let dayOffset = 0; dayOffset <= lookaheadDays; dayOffset++) {
       const day = new Date(baseDay);
       day.setDate(baseDay.getDate() + dayOffset);
       const dayMs = day.getTime();
@@ -664,6 +671,14 @@ export class MobileNotificationEffects {
           rank,
         });
       }
+    }
+
+    if (isIOS) {
+      // Soonest first, as the budget picks them; it cannot arm more than its size.
+      return result
+        .sort((a, b) => a.triggerAtMs - b.triggerAtMs)
+        .slice(0, IOS_REMINDER_BUDGET)
+        .map(({ taskId, triggerAtMs, title }) => ({ taskId, triggerAtMs, title }));
     }
 
     // Over the cap, keep each config's nearer occurrences first, soonest first

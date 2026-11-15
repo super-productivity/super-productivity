@@ -10,6 +10,7 @@
       }
     ],
     "expectCancel": [],
+    "expectCancelReminders": [],
     "op": {
       "actionType": "[Task Shared] scheduleTaskWithTime",
       "opType": "UPD",
@@ -49,6 +50,7 @@
       }
     ],
     "expectCancel": [],
+    "expectCancelReminders": [],
     "op": {
       "actionType": "[Task Shared] applyShortSyntax",
       "opType": "UPD",
@@ -87,6 +89,7 @@
     "name": "shortSyntaxDayOnly",
     "expectSchedule": [],
     "expectCancel": [],
+    "expectCancelReminders": [],
     "op": {
       "actionType": "[Task Shared] applyShortSyntax",
       "opType": "UPD",
@@ -136,6 +139,7 @@
       }
     ],
     "expectCancel": [],
+    "expectCancelReminders": [],
     "op": {
       "actionType": "[Task Shared] updateTask",
       "opType": "UPD",
@@ -159,6 +163,7 @@
     "name": "updateTaskDone",
     "expectSchedule": [],
     "expectCancel": ["task-done"],
+    "expectCancelReminders": [],
     "op": {
       "actionType": "[Task Shared] updateTask",
       "opType": "UPD",
@@ -181,6 +186,7 @@
     "name": "updateTasksBulkDone",
     "expectSchedule": [],
     "expectCancel": ["task-bulk-1", "task-bulk-2"],
+    "expectCancelReminders": [],
     "op": {
       "actionType": "[Task Shared] updateTasks",
       "opType": "UPD",
@@ -219,6 +225,7 @@
       }
     ],
     "expectCancel": [],
+    "expectCancelReminders": [],
     "op": {
       "actionType": "[Task Shared] addTask",
       "opType": "CRT",
@@ -261,6 +268,7 @@
       }
     ],
     "expectCancel": [],
+    "expectCancelReminders": ["task-lww_deadline", "task-lww_dueday"],
     "op": {
       "actionType": "[TASK] LWW Update",
       "opType": "UPD",
@@ -290,7 +298,12 @@
   {
     "name": "lwwReplaceWithoutReminder",
     "expectSchedule": [],
-    "expectCancel": ["task-lww-none"],
+    "expectCancel": [],
+    "expectCancelReminders": [
+      "task-lww-none",
+      "task-lww-none_deadline",
+      "task-lww-none_dueday"
+    ],
     "op": {
       "actionType": "[TASK] LWW Update",
       "opType": "UPD",
@@ -325,7 +338,8 @@
         "title": "Tracked"
       }
     ],
-    "expectCancel": ["task-lww-tp"],
+    "expectCancel": [],
+    "expectCancelReminders": ["task-lww-tp_deadline", "task-lww-tp_dueday"],
     "op": {
       "actionType": "[TASK] LWW Update",
       "opType": "UPD",
@@ -373,6 +387,35 @@
           "reminderId",
           "modified"
         ]
+      }
+    }
+  },
+  {
+    "name": "dismissReminderOnly",
+    "expectSchedule": [],
+    "expectCancel": [],
+    "expectCancelReminders": ["task-dismiss"],
+    "op": {
+      "actionType": "[Task Shared] dismissReminderOnly",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-dismiss",
+      "payload": { "actionPayload": { "id": "task-dismiss" }, "entityChanges": [] }
+    }
+  },
+  {
+    "name": "clearDeadlineReminder",
+    "expectSchedule": [],
+    "expectCancel": [],
+    "expectCancelReminders": ["task-clear-deadline_deadline"],
+    "op": {
+      "actionType": "[Task Shared] clearDeadlineReminder",
+      "opType": "UPD",
+      "entityType": "TASK",
+      "entityId": "task-clear-deadline",
+      "payload": {
+        "actionPayload": { "taskId": "task-clear-deadline" },
+        "entityChanges": []
       }
     }
   }

@@ -431,52 +431,6 @@
         "WRITE_A_COMMENT": "Escrever um comentário"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "A duração preenchida contém dados não registrados de dias anteriores.",
-        "T_ALREADY_TRACKED": "Já Registrado",
-        "T_TITLE": "Título",
-        "T_TO_BE_SUBMITTED": "A ser enviado",
-        "TITLE": "Enviar Tempo Trabalhado em Issues para o GitLab",
-        "TOTAL_MSG": "Você enviará <em>{{totalTimeToSubmit}}</em> de tempo de trabalho hoje no total para <em>{{nrOfTasksToSubmit}}</em> issues diferentes."
-      },
-      "FORM": {
-        "FILTER": "Filtro Personalizado",
-        "FILTER_DESCRIPTION": "Consulte https://docs.gitlab.com/ee/api/issues.html#list-issues. Múltiplos podem ser combinados com &",
-        "FILTER_USER": "Filtrar nome de usuário",
-        "GITLAB_BASE_URL": "URL base personalizada do GitLab (opcional)",
-        "PROJECT": "nome de usuário/projeto",
-        "PROJECT_HINT": "ex: super-productivity/super-productivity",
-        "SCOPE": "Escopo",
-        "SCOPE_ALL": "Todos",
-        "SCOPE_ASSIGNED": "Atribuído a mim",
-        "SCOPE_CREATED": "Criado por mim",
-        "SOURCE": "Fonte",
-        "SOURCE_GLOBAL": "Todos",
-        "SOURCE_GROUP": "Grupo",
-        "SOURCE_PROJECT": "Projeto",
-        "SUBMIT_TIMELOGS": "Enviar registros de tempo para o GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Mostrar diálogo de controle de tempo após clicar em \"Encerrar o Dia\"",
-        "TOKEN": "Token de Acesso"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Aqui você pode configurar o Super Productivity para listar issues abertas do GitLab (seja a versão online ou uma instância auto-hospedada) para um projeto específico no painel de criação de tarefas na visualização de planejador. Elas serão listadas como sugestões e fornecerão um link para a issue, bem como mais informações sobre ela.</p><p>Além disso, você pode importar automaticamente todas as issues abertas.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Responsável",
-        "AT": "em",
-        "DESCRIPTION": "Descrição",
-        "LABELS": "Etiquetas",
-        "MARK_AS_CHECKED": "Marcar atualizações como verificadas",
-        "PROJECT": "Projeto",
-        "STATUS": "Status",
-        "SUMMARY": "Resumo",
-        "WRITE_A_COMMENT": "Escrever um comentário"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Erro desconhecido {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Esta integração provavelmente não funcionará no seu navegador. Por favor, baixe a versão para desktop ou Android do Super Productivity!",
       "DEFAULT": {

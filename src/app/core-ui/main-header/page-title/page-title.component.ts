@@ -380,11 +380,11 @@ import { LayoutService } from '../../layout/layout.service';
       .task-filter-btn {
         position: relative;
         color: var(--text-color-muted);
-        transition: all 0.2s ease;
+        transition: all var(--transition-duration-m) ease;
         overflow: visible !important;
 
         .mat-icon {
-          transition: transform 0.2s ease;
+          transition: transform var(--transition-duration-m) ease;
           display: block;
         }
 

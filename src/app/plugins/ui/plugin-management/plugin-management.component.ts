@@ -8,7 +8,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
 import { PluginService } from '../../plugin.service';
-import { PluginInstance, PluginManifest } from '../../plugin-api.model';
+import { PluginInstance } from '../../plugin-api.model';
 import { PluginMetaPersistenceService } from '../../plugin-meta-persistence.service';
 import { PluginCacheService } from '../../plugin-cache.service';
 import { PluginConfigService } from '../../plugin-config.service';
@@ -28,6 +28,8 @@ import { MatChip, MatChipSet } from '@angular/material/chips';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatError } from '@angular/material/form-field';
 import { MatDialog } from '@angular/material/dialog';
+import { openBuildPluginDialog } from '../dialog-build-plugin/open-build-plugin-dialog';
+import { confirmPluginInstall } from '../confirm-plugin-install';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { PluginIconComponent } from '../plugin-icon/plugin-icon.component';
@@ -53,11 +55,7 @@ import {
   BUNDLED_PLUGIN_IDS,
   DEV_ONLY_BUNDLED_PLUGIN_IDS,
 } from '../../bundled-plugins.const';
-import {
-  isDataSharingChanged,
-  renderDataSharingHtml,
-} from '../../util/plugin-data-sharing.util';
-import { readZipManifest } from '../../util/read-zip-manifest.util';
+import { renderDataSharingHtml } from '../../util/plugin-data-sharing.util';
 import { environment } from '../../../../environments/environment';
 import { Capacitor } from '@capacitor/core';
 import {
@@ -567,32 +565,12 @@ export class PluginManagementComponent {
     }
   }
 
-  /** Resolves true only for the OK button; Cancel, Esc and backdrop resolve false. */
-  // Uploaded code is unreviewed, so the full risk list is shown here, right before it
-  // is installed, instead of above every plugin on the page.
-  private async _confirmInstall(file: Blob): Promise<boolean> {
-    const t = (key: string): string => escapeHtml(this._translateService.instant(key));
-    const manifest = await readZipManifest(file);
-    const risks = [
-      T.PLUGINS.RISK_DATA_ACCESS,
-      T.PLUGINS.RISK_MALICIOUS_CODE,
-      T.PLUGINS.RISK_SYSTEM_ACCESS,
-      T.PLUGINS.RISK_PERFORMANCE,
-    ];
-    const message =
-      `<p>${t(T.PLUGINS.SECURITY_WARNING)}</p>` +
-      `<ul>${risks.map((risk) => `<li>${t(risk)}</li>`).join('')}</ul>` +
-      `<p>${t(T.PLUGINS.RECOMMENDATION)}</p>` +
-      (manifest ? this._dataSharingHtml(manifest) : '');
-    const result = await firstValueFrom(
-      this._dialog
-        .open(DialogConfirmComponent, {
-          restoreFocus: true,
-          data: { message, okTxt: T.PLUGINS.INSTALL_PLUGIN },
-        })
-        .afterClosed(),
-    );
-    return result === true;
+  private _confirmInstall(file: Blob): Promise<boolean> {
+    return confirmPluginInstall(file, {
+      matDialog: this._dialog,
+      translateService: this._translateService,
+      pluginStates: this._pluginService.pluginStates(),
+    });
   }
 
   private async _confirmInDialog(
@@ -667,18 +645,6 @@ export class PluginManagementComponent {
     );
   }
 
-  private _dataSharingHtml(manifest: PluginManifest): string {
-    const installed = this._pluginService.pluginStates().get(manifest.id)?.manifest;
-    return renderDataSharingHtml(
-      manifest,
-      {
-        isBundled: false,
-        isChanged: isDataSharingChanged(installed, manifest),
-      },
-      (key, params) => this._translateService.instant(key, params),
-    );
-  }
-
   /** Declared permissions not described by getApiAccess (nothing checks them). */
   getOtherPermissions(plugin: PluginInstance): string[] {
     const described = new Set(this.getApiAccess(plugin).map((a) => a.permission));
@@ -731,6 +697,10 @@ export class PluginManagementComponent {
 
   openPluginConfig(plugin: PluginInstance): void {
     this._pluginBridge.invokeConfigHandler(plugin.manifest.id);
+  }
+
+  openBuildPluginDialog(): Promise<void> {
+    return openBuildPluginDialog(this._dialog);
   }
 
   async openConfigDialog(plugin: PluginInstance): Promise<void> {

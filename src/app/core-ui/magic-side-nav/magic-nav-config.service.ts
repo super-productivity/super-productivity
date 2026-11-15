@@ -40,6 +40,7 @@ import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
 import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
+import { openBuildPluginDialog } from '../../plugins/ui/dialog-build-plugin/open-build-plugin-dialog';
 
 @Injectable({
   providedIn: 'root',
@@ -189,7 +190,6 @@ export class MagicNavConfigService {
             id: 'project-visibility',
             icon: 'visibility',
             tooltip: T.F.PROJECT_FOLDER.TOOLTIP_VISIBILITY,
-            action: () => this._openProjectVisibilityMenu(),
           },
           {
             id: 'add-project-folder',
@@ -315,6 +315,13 @@ export class MagicNavConfigService {
             label: T.MH.HM.REDDIT_COMMUNITY,
             icon: 'forum',
             href: 'https://www.reddit.com/r/superProductivity/',
+          },
+          {
+            type: 'action',
+            id: 'help-build-plugin',
+            label: T.MH.HM.BUILD_PLUGIN,
+            icon: 'extension',
+            action: () => openBuildPluginDialog(this._matDialog),
           },
           {
             type: 'action',
@@ -623,11 +630,6 @@ export class MagicNavConfigService {
 
   private _startTour(tourId: TourId): void {
     void this._shepherdService.show(tourId);
-  }
-
-  private _openProjectVisibilityMenu(): void {
-    // Project visibility is handled by the nav-list component's additional buttons
-    // This method is called but the actual menu is rendered in the template
   }
 
   toggleProjectVisibility(projectId: string): void {

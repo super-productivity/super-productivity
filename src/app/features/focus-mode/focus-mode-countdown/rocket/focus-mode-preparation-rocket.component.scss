@@ -76,7 +76,7 @@ $rocket-pulse-values: 0, 1, 2, 3, 4, 5;
   fill: url('#rocket-flame-gradient');
   transform-origin: 30px 108px;
   animation: flame-flicker 0.28s infinite alternate;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--transition-duration-m) ease;
 }
 
 @keyframes flame-flicker {

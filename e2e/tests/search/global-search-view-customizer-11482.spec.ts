@@ -18,6 +18,17 @@ const sortByName = async (page: Page): Promise<void> => {
   await page.keyboard.press('Escape');
 };
 
+// The URL switches to /search once the page's DOM exists, but before its first change
+// detection binds `[formControl]`; a fill in that gap is wiped by the control's initial
+// `writeValue('')`. The page focuses the input only after init, so wait for that.
+const searchFor = async (page: Page, term: string): Promise<void> => {
+  await page.keyboard.press('Shift+F');
+  await expect(page).toHaveURL(/\/#\/search$/);
+  const input = page.locator('search-page .search-field input');
+  await expect(input).toBeFocused();
+  await input.fill(term);
+};
+
 test.describe('Global Search — customized view (#11482)', () => {
   test('reveals and focuses a task while the view is sorted', async ({
     page,
@@ -42,9 +53,7 @@ test.describe('Global Search — customized view (#11482)', () => {
     const taskRow = page.locator(`task[data-task-id="${taskId}"]`);
     await expect(taskRow).toBeVisible();
 
-    await page.keyboard.press('Shift+F');
-    await expect(page).toHaveURL(/\/#\/search$/);
-    await page.locator('search-page .search-field input').fill(taskName);
+    await searchFor(page, taskName);
     const result = page
       .locator('search-page mat-list-item')
       .filter({ hasText: taskName });
@@ -95,9 +104,7 @@ test.describe('Global Search — customized view (#11482)', () => {
     const taskRow = page.locator(`task[data-task-id="${taskId}"]`);
     await expect(taskRow).toHaveCount(0);
 
-    await page.keyboard.press('Shift+F');
-    await expect(page).toHaveURL(/\/#\/search$/);
-    await page.locator('search-page .search-field input').fill(taskName);
+    await searchFor(page, taskName);
     const result = page
       .locator('search-page mat-list-item')
       .filter({ hasText: taskName });
@@ -145,9 +152,7 @@ test.describe('Global Search — customized view (#11482)', () => {
     await parentEl.locator('.toggle-sub-tasks-btn').first().click();
     await expect(subTaskRow).toHaveCount(0);
 
-    await page.keyboard.press('Shift+F');
-    await expect(page).toHaveURL(/\/#\/search$/);
-    await page.locator('search-page .search-field input').fill(subTaskName);
+    await searchFor(page, subTaskName);
     const result = page
       .locator('search-page mat-list-item')
       .filter({ hasText: subTaskName });
@@ -192,9 +197,7 @@ test.describe('Global Search — customized view (#11482)', () => {
     await workViewPage.waitForTaskList();
     await expect(taskRow).toHaveCount(0);
 
-    await page.keyboard.press('Shift+F');
-    await expect(page).toHaveURL(/\/#\/search$/);
-    await page.locator('search-page .search-field input').fill(taskName);
+    await searchFor(page, taskName);
     const result = page
       .locator('search-page mat-list-item')
       .filter({ hasText: taskName });

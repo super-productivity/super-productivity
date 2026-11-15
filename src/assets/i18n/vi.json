@@ -437,52 +437,6 @@
         "WRITE_A_COMMENT": "Viết bình luận"
       }
     },
-    "GITLAB": {
-      "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "Thời lượng được điền sẵn chứa dữ liệu chưa theo dõi từ các ngày trước.",
-        "T_ALREADY_TRACKED": "Đã theo dõi",
-        "T_TITLE": "Tiêu đề",
-        "T_TO_BE_SUBMITTED": "Cần gửi",
-        "TITLE": "Gửi thời gian làm việc cho sự cố lên GitLab",
-        "TOTAL_MSG": "Bạn sẽ gửi tổng cộng <em>{{totalTimeToSubmit}}</em> thời gian làm việc hôm nay cho <em>{{nrOfTasksToSubmit}}</em> sự cố khác nhau."
-      },
-      "FORM": {
-        "FILTER": "Bộ lọc tùy chỉnh",
-        "FILTER_DESCRIPTION": "Xem https://docs.gitlab.com/ee/api/issues.html#list-issues. Nhiều bộ lọc có thể kết hợp với &",
-        "FILTER_USER": "Tên người dùng lọc",
-        "GITLAB_BASE_URL": "URL cơ sở GitLab tùy chỉnh (tùy chọn)",
-        "PROJECT": "tên người dùng/dự án",
-        "PROJECT_HINT": "ví dụ: super-productivity/super-productivity",
-        "SCOPE": "Phạm vi",
-        "SCOPE_ALL": "Tất cả",
-        "SCOPE_ASSIGNED": "Được giao cho tôi",
-        "SCOPE_CREATED": "Do tôi tạo",
-        "SOURCE": "Nguồn",
-        "SOURCE_GLOBAL": "Tất cả",
-        "SOURCE_GROUP": "Nhóm",
-        "SOURCE_PROJECT": "Dự án",
-        "SUBMIT_TIMELOGS": "Gửi nhật ký thời gian lên GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Hiển thị hộp thoại theo dõi thời gian sau khi nhấp vào \"Kết thúc ngày\"",
-        "TOKEN": "Token truy cập"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Tại đây bạn có thể cấu hình Super Productivity để liệt kê các sự cố GitLab mở cho một dự án cụ thể trong bảng tạo công việc ở chế độ xem lên kế hoạch hàng ngày. Chúng sẽ được liệt kê làm gợi ý và cung cấp liên kết đến sự cố cũng như thêm thông tin về nó.</p><p>Ngoài ra, bạn có thể tự động nhập tất cả sự cố mở.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Người được giao",
-        "AT": "lúc",
-        "DESCRIPTION": "Mô tả",
-        "LABELS": "Nhãn",
-        "MARK_AS_CHECKED": "Đánh dấu cập nhật đã kiểm tra",
-        "PROJECT": "Dự án",
-        "STATUS": "Trạng thái",
-        "SUMMARY": "Tóm tắt",
-        "WRITE_A_COMMENT": "Viết bình luận"
-      },
-      "S": {
-        "ERR_UNKNOWN": "GitLab: Lỗi không xác định {{statusCode}} {{errorMsg}}"
-      }
-    },
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Tích hợp này có thể sẽ không hoạt động trong trình duyệt web của bạn. Vui lòng tải xuống phiên bản máy tính hoặc Android của Super Productivity!",
       "DEFAULT": {

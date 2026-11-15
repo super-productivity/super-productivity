@@ -22,6 +22,7 @@ import {
 } from '../../issue/issue.const';
 import { BuiltInIssueProviderKey } from '../../issue/issue.model';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-repeat-info-text.util';
 import { TranslateService } from '@ngx-translate/core';
 import { TagListStateService } from './tag-list-state.service';

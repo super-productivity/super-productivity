@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "Full sti eller brukernavn / prosjekt",
+    "PROJECT_HINT": "f.eks. johannesjo/superproduktivitet",
+    "TOKEN": "Tilgangstoken",
+    "HOW_TO_GET_TOKEN": "Hvordan får man et token?",
+    "SCOPE": "Omfang",
+    "SCOPE_ALL": "Alle",
+    "SCOPE_CREATED": "Opprettet av meg",
+    "SCOPE_ASSIGNED": "Tildelt meg",
+    "GITLAB_BASE_URL": "Egendefinert GitLab-base-URL (valgfritt)",
+    "FILTER_USER": "Brukernavn (f.eks. For å filtrere ut endringer selv)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Tilpasset filter",
+    "FILTER_DESCRIPTION": "Se https://docs.gitlab.com/ee/api/issues.html#list-issues. Flere kan kombineres av &.",
+    "SUBMIT_TIMELOGS": "Send inn tidslogger til Gitlab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Vis tidsregistreringsdialogen etter at du har klikket på sluttdagen"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammendrag",
+    "STATE": "Status",
+    "ASSIGNEE": "Oppdragsgiver",
+    "LABELS": "Etiketter",
+    "DESCRIPTION": "Beskrivelse"
+  },
+  "FORM_HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne GitLab-problemer (enten den online-versjonen eller en selvstyrt forekomst) for et bestemt prosjekt i oppgavelagerpanelet i den daglige planvisningen. De vil bli oppført som forslag og vil gi en lenke til problemet, samt mer informasjon om det.</p><p> I tillegg kan du automatisk legge til og synkronisere alle åpne problemer i oppgaven din.</p>"
+}
