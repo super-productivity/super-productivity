@@ -7,7 +7,9 @@ import { DragDropRegistry } from '@angular/cdk/drag-drop';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { By } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
-import { EMPTY, of } from 'rxjs';
+import { EMPTY, of, Subject } from 'rxjs';
+import { TaskMoveToProjectService } from '../../features/tasks/task-move-to-project.service';
+import { DEFAULT_TASK, TaskWithSubTasks } from '../../features/tasks/task.model';
 
 import { MagicSideNavComponent } from './magic-side-nav.component';
 import { MagicNavConfigService } from './magic-nav-config.service';
@@ -22,6 +24,11 @@ describe('MagicSideNavComponent', () => {
   let isXs: ReturnType<typeof signal<boolean>>;
   let isMobileSideNavOpen: ReturnType<typeof signal<boolean>>;
   let browserMatches: boolean;
+  let pointerUp: Subject<MouseEvent | TouchEvent>;
+  let dragEnded: Subject<void>;
+  let activeTask: ReturnType<typeof signal<TaskWithSubTasks | null>>;
+  let moveToProject: jasmine.Spy;
+  let setCancelNextDrop: jasmine.Spy;
   let navConfigServiceMock: {
     navConfig: ReturnType<typeof signal<NavConfig>>;
     areInitialTreesReady: ReturnType<typeof signal<boolean>>;
@@ -46,6 +53,11 @@ describe('MagicSideNavComponent', () => {
     isXs = signal(false);
     isMobileSideNavOpen = signal(false);
     browserMatches = false;
+    pointerUp = new Subject();
+    dragEnded = new Subject();
+    activeTask = signal<TaskWithSubTasks | null>(null);
+    moveToProject = jasmine.createSpy('moveToProject').and.resolveTo(true);
+    setCancelNextDrop = jasmine.createSpy('setCancelNextDrop');
     navConfigServiceMock = {
       navConfig: signal(navConfig),
       areInitialTreesReady: signal(false),
@@ -90,9 +102,14 @@ describe('MagicSideNavComponent', () => {
           },
         },
         {
+          provide: TaskMoveToProjectService,
+          useValue: { moveToProject },
+        },
+        {
           provide: TaskService,
           useValue: {
             focusFirstTaskIfVisible: jasmine.createSpy('focusFirstTaskIfVisible'),
+            moveToProject: jasmine.createSpy('directMoveToProject'),
           },
         },
         {
@@ -100,14 +117,14 @@ describe('MagicSideNavComponent', () => {
           useValue: { isAllDataLoadedInitially$: of(false) },
         },
         { provide: Router, useValue: { events: EMPTY } },
-        { provide: DragDropRegistry, useValue: { pointerUp: EMPTY } },
+        { provide: DragDropRegistry, useValue: { pointerUp } },
         {
           provide: ScheduleExternalDragService,
           useValue: {
-            activeTask: signal(null),
-            activeDragRef: signal(null),
+            activeTask,
+            activeDragRef: () => ({ ended: dragEnded }),
             setActiveTask: jasmine.createSpy('setActiveTask'),
-            setCancelNextDrop: jasmine.createSpy('setCancelNextDrop'),
+            setCancelNextDrop,
           },
         },
       ],
@@ -116,6 +133,81 @@ describe('MagicSideNavComponent', () => {
 
   afterEach(() => {
     fixture?.destroy();
+  });
+
+  describe('dropping a task on a sidebar project', () => {
+    for (const repeatCfgId of [undefined, 'repeat-cfg']) {
+      it(`uses the shared move flow after dragging ends (repeatCfgId=${repeatCfgId})`, () => {
+        const task: TaskWithSubTasks = {
+          ...DEFAULT_TASK,
+          id: 'task',
+          projectId: 'source',
+          repeatCfgId,
+          subTasks: [],
+        };
+        activeTask.set(task);
+        const navItem = document.createElement('nav-item');
+        navItem.setAttribute('data-project-id', 'target');
+        spyOn(document, 'elementsFromPoint').and.returnValue([navItem]);
+        fixture = TestBed.createComponent(MagicSideNavComponent);
+        fixture.detectChanges();
+
+        pointerUp.next(new MouseEvent('mouseup', { clientX: 10, clientY: 10 }));
+
+        expect(setCancelNextDrop).toHaveBeenCalledOnceWith(true);
+        expect(moveToProject).not.toHaveBeenCalled();
+        dragEnded.next();
+        expect(moveToProject).toHaveBeenCalledOnceWith(task, 'target');
+        dragEnded.next();
+        expect(moveToProject).toHaveBeenCalledTimes(1);
+        expect(TestBed.inject(TaskService).moveToProject).not.toHaveBeenCalled();
+      });
+    }
+  });
+
+  for (const repeatCfgId of [undefined, 'repeat-cfg']) {
+    it(`ignores a subtask dropped on a project (repeatCfgId=${repeatCfgId})`, () => {
+      activeTask.set({
+        ...DEFAULT_TASK,
+        id: 'subtask',
+        projectId: 'source',
+        parentId: 'parent',
+        repeatCfgId,
+        subTasks: [],
+      });
+      const navItem = document.createElement('nav-item');
+      navItem.setAttribute('data-project-id', 'target');
+      spyOn(document, 'elementsFromPoint').and.returnValue([navItem]);
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+      fixture.detectChanges();
+
+      pointerUp.next(new MouseEvent('mouseup', { clientX: 10, clientY: 10 }));
+      dragEnded.next();
+
+      expect(moveToProject).not.toHaveBeenCalled();
+      expect(setCancelNextDrop).not.toHaveBeenCalled();
+    });
+  }
+
+  it('continues to ignore recurring tasks dropped on tags', () => {
+    activeTask.set({
+      ...DEFAULT_TASK,
+      id: 'task',
+      projectId: 'source',
+      repeatCfgId: 'repeat-cfg',
+      subTasks: [],
+    });
+    const navItem = document.createElement('nav-item');
+    navItem.setAttribute('data-tag-id', 'tag');
+    spyOn(document, 'elementsFromPoint').and.returnValue([navItem]);
+    fixture = TestBed.createComponent(MagicSideNavComponent);
+    fixture.detectChanges();
+
+    pointerUp.next(new MouseEvent('mouseup', { clientX: 10, clientY: 10 }));
+    dragEnded.next();
+
+    expect(moveToProject).not.toHaveBeenCalled();
+    expect(setCancelNextDrop).not.toHaveBeenCalled();
   });
 
   it('uses the shared layout breakpoint signal as its mobile source of truth', () => {
