@@ -323,10 +323,11 @@ export class NavigateToTaskService {
     // WorkViewComponent off the `focusItem` query param, which only the
     // route-change branch sets.
     //
-    // (The backlog is a separate, pre-existing gap on BOTH branches: `isInBacklog`
-    // opens the split, but `#splitBottomEl` is a sibling of `#splitTopEl`, and both
-    // reveal loops require the row to live inside their container. A backlog task
-    // therefore becomes visible but is never scrolled to or focused.)
+    // (The backlog works on the route-change branch: `isInBacklog` opens the split
+    // and LayoutService's loop, which is not bound to `#splitTopEl`, scrolls to and
+    // focuses the row — pinned by `global-search-backlog.spec.ts`. This branch
+    // never opens the split, so a task in a CLOSED backlog has no row and ends in
+    // the snack below.)
     //
     // This is NOT the reported bug: global search runs from `/search`, so it never
     // matches the same-context check above and always routes. The cost lands on the

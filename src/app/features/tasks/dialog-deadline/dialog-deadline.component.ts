@@ -14,6 +14,7 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { Task, TaskReminderOption, TaskReminderOptionId } from '../task.model';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-alarm-hint.component';
 import { T } from 'src/app/t.const';
 import { Store } from '@ngrx/store';

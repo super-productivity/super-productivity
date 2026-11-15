@@ -894,6 +894,43 @@
     "rejections": []
   },
   {
+    "class": "note-order-stop",
+    "ref": "#11661: a pending note order meets the whole-note row of a conflict the device lost",
+    "name": "a note order made after losing a note conflict stops the reordering device",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["editNote", "n2", "isLock", true]
+      },
+      {
+        "d": "B",
+        "s": 1,
+        "k": "L"
+      },
+      {
+        "d": "C",
+        "a": ["editNote", "n2", "content", "C15"],
+        "r": 1
+      },
+      {
+        "d": "C",
+        "s": 1,
+        "c": 1,
+        "k": "L"
+      },
+      {
+        "d": "B",
+        "a": ["reorderNotes", "P", 2, 7]
+      }
+    ],
+    "primary": "stop:SYNC_MULTI_ENTITY_UNSUPPORTED side=local actionType=[Note] Update Note Order",
+    "signatures": [
+      "field-reverted:note.isLock",
+      "stop:SYNC_MULTI_ENTITY_UNSUPPORTED side=local actionType=[Note] Update Note Order"
+    ],
+    "rejections": []
+  },
+  {
     "class": "note-recreate-appended",
     "ref": "kept by design: #10380's recreate appends the note to its project and Today lists, order only (decided on #10393); its #10420 stop is fixed",
     "name": "a note pinned beside a pending note order after a remote delete comes back in Today, appended on the other devices",
@@ -1680,6 +1717,283 @@
       {
         "d": "A",
         "a": ["editTaskNotes", "t1", "A24"]
+      }
+    ],
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "coverage",
+    "ref": "coverage trace: a task move with no concurrent edit converges, and each project lists its own tasks",
+    "name": "an uncontested move to a second project converges",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["moveTask", "t3", "p1"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "move-crossing-edit",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "a move and a later rename on another device both survive",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["moveTask", "t2", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t2", "A14"]
+      }
+    ],
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "move-crossing-edit",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "a move and a later time delta on another device both survive",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["moveTask", "t1", "p1"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      }
+    ],
+    "signatures": [],
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
+  },
+  {
+    "class": "move-crossing-edit",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "tracked time and a later move on another device both survive",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["track", "t2", 1000]
+      },
+      {
+        "d": "B",
+        "a": ["moveTask", "t2", "p2"]
+      }
+    ],
+    "signatures": [],
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
+  },
+  {
+    "class": "move-crossing-repair",
+    "ref": "fixed by #11687 for #11686 (regression pin)",
+    "name": "a move and a delete crossing a time delta leave no dead id in a project list",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["moveTask", "t1", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t1", 3000]
+      },
+      {
+        "d": "B",
+        "a": ["deleteTask", "t1"]
+      }
+    ],
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "move-crossing-repair",
+    "ref": "fixed by #11687 for #11686 (regression pin)",
+    "name": "two moves crossing deletes need no REPAIR and keep a task added later",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["moveTask", "t2", "p1"]
+      },
+      {
+        "d": "C",
+        "a": ["deleteTask", "t2"]
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t2", "p1"]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t2", 3000],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["addTask", "t11", "P"]
+      },
+      {
+        "d": "C",
+        "a": ["deleteTask", "t2"]
+      },
+      {
+        "d": "B",
+        "s": 1
+      }
+    ],
+    "signatures": [],
+    "rejections": [
+      "CONFLICT_CONCURRENT [TASK] LWW Update",
+      "CONFLICT_CONCURRENT [Task Shared] deleteTask"
+    ]
+  },
+  {
+    "class": "concurrent-moves",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "the newer of two concurrent moves wins beside a third device notes edit",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["moveTask", "t3", "p2"]
+      },
+      {
+        "d": "B",
+        "a": ["moveTask", "t3", "p1"]
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t3", "A26"]
+      }
+    ],
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "concurrent-moves",
+    "ref": "fixed by #11687 for #11685 (regression pin)",
+    "name": "the newer of two concurrent moves wins beside time deltas and a notes edit",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["moveTask", "t1", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t1", 1000]
+      },
+      {
+        "d": "B",
+        "a": ["editTaskNotes", "t1", "B11"]
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t1", "p1"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t1", 3000]
+      }
+    ],
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "unlisted-task",
+    "ref": "#11686 (harness only, untriaged)",
+    "name": "a task added beside a delete-versus-delta crossing is in no project list on its own device",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B1"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 5000],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t2", "p1"]
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A23"]
+      },
+      {
+        "d": "C",
+        "a": ["addTask", "t13", "P"]
+      }
+    ],
+    "primary": "membership:unlisted-in-own-project",
+    "signatures": [
+      "divergence:.project.entities.*.taskIds.*",
+      "divergence:.task.ids.*",
+      "membership:unlisted-in-own-project",
+      "restart-changed:.task.ids.*"
+    ],
+    "rejections": [
+      "CONFLICT_CONCURRENT [TASK] LWW Update",
+      "CONFLICT_CONCURRENT [Task Shared] deleteTask",
+      "CONFLICT_CONCURRENT [TimeTracking] Sync time spent"
+    ]
+  },
+  {
+    "class": "force-upload-skip",
+    "ref": "fixed by #11681 (regression pin)",
+    "name": "the first change after a force upload reaches a device that compacted after a later remote op",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["forceUpload"]
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t2", "Y"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "s": 1,
+        "c": 1
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t3", "X"]
       }
     ],
     "signatures": [],

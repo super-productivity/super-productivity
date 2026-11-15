@@ -51,6 +51,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { getTaskRepeatInfoText } from './get-task-repeat-info-text.util';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { MatIconButton } from '@angular/material/button';
@@ -64,18 +65,23 @@ import { MatIcon } from '@angular/material/icon';
 import { TaskListComponent } from '../task-list/task-list.component';
 import { MatButton } from '@angular/material/button';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueHeaderComponent } from '../../issue/issue-header/issue-header.component';
 import { MatProgressBar } from '@angular/material/progress-bar';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueContentComponent } from '../../issue/issue-content/issue-content.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueSyncStateComponent } from '../../issue/issue-sync-state/issue-sync-state.component';
 import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
 import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-markdown.component';
 import { TaskAttachmentListComponent } from '../task-attachment/task-attachment-list/task-attachment-list.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagEditComponent } from '../../tag/tag-edit/tag-edit.component';
 import { DialogSelectDateTimeComponent } from '../dialog-select-date-time/dialog-select-date-time.component';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
@@ -666,7 +672,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   addAttachment(): void {
     this._matDialog
       .open(DialogEditTaskAttachmentComponent, {
-        data: {},
+        data: { taskId: this.task().id },
       })
       .afterClosed()
       .subscribe((result) => {

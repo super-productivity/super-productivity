@@ -503,6 +503,41 @@ test('no shipped locale value contains an escaped slash or a bare <a> tag', () =
   assert.deepEqual(offenders, []);
 });
 
+test('no locale text of the add-task bar promises to search the archive', () => {
+  // The bar only searches live tasks and issues. Translations kept an old hint
+  // saying it also searched the archive, which users reported as a broken search.
+  const root = join(__dirname, '..', 'src');
+  const i18nDirectory = join(root, 'assets', 'i18n');
+  const template = readFileSync(
+    join(root, 'app/features/tasks/add-task-bar/add-task-bar.component.html'),
+    'utf8',
+  );
+  const shownKeys = [
+    ...new Set(
+      [...template.matchAll(/T\.(F\.TASK\.ADD_TASK_BAR\.\w+)/g)].map((match) => match[1]),
+    ),
+  ];
+  // \b keeps "Searching" from matching the Latin-script stems
+  const archiveWord =
+    /\b(?:arch[iíw]|arkiv|arkisto|arhiv|arquiv|arşiv|arsip)|архив|архів|أرشف|آرشیو|归档|封存|アーカイブ|보관|lưu trữ/iu;
+  const english = JSON.parse(readFileSync(join(i18nDirectory, 'en.json'), 'utf8'));
+  const offenders = readdirSync(i18nDirectory)
+    .filter((file) => file.endsWith('.json'))
+    .sort()
+    .flatMap((file) => {
+      const locale = JSON.parse(readFileSync(join(i18nDirectory, file), 'utf8'));
+      // a key the locale lacks is shown in English
+      const shownText = (key) =>
+        getValueAtPath(locale, key) ?? getValueAtPath(english, key);
+      return shownKeys
+        .filter((key) => archiveWord.test(shownText(key)))
+        .map((key) => `${file}: ${key}`);
+    });
+
+  assert.ok(shownKeys.length > 0, 'no add-task bar keys found in the template');
+  assert.deepEqual(offenders, []);
+});
+
 test('inspectTranslationDirectory compares every locale with deterministic order and totals', () => {
   const directory = mkdtempSync(join(tmpdir(), 'test-lng-files-'));
 

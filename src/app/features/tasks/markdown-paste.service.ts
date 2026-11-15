@@ -34,6 +34,7 @@ export class MarkdownPasteService {
     selectedTaskId: string | null = null,
     selectedTaskTitle?: string,
     isSelectedTaskSubTask?: boolean,
+    parentTaskPlacement = { isAddToBacklog: false, isAddToBottom: true },
   ): Promise<void> {
     // Special handling for sub-tasks - add to notes instead of creating sub-tasks
     if (selectedTaskId && isSelectedTaskSubTask) {
@@ -99,15 +100,19 @@ export class MarkdownPasteService {
         }
 
         // Create parent tasks with sub-tasks
-        for (const mainTask of structure.mainTasks) {
+        // Prepending reverses insertion order; preserve the clipboard's order.
+        const mainTasks = parentTaskPlacement.isAddToBottom
+          ? structure.mainTasks
+          : [...structure.mainTasks].reverse();
+        for (const mainTask of mainTasks) {
           const parentTaskId = this._taskService.add(
             mainTask.title,
-            false,
+            parentTaskPlacement.isAddToBacklog,
             {
               isDone: mainTask.isCompleted,
               notes: mainTask.notes,
             },
-            true,
+            parentTaskPlacement.isAddToBottom,
           );
 
           // Create sub-tasks if any
@@ -175,16 +180,19 @@ export class MarkdownPasteService {
         this._store.dispatch(addSubTask({ task: subTask, parentId: selectedTaskId }));
       }
     } else {
-      // Create as parent tasks (simple list without nesting)
-      for (const parsedTask of parsedTasks) {
+      // Create as parent tasks (simple list without nesting).
+      const mainTasks = parentTaskPlacement.isAddToBottom
+        ? parsedTasks
+        : [...parsedTasks].reverse();
+      for (const parsedTask of mainTasks) {
         this._taskService.add(
           parsedTask.title,
-          false,
+          parentTaskPlacement.isAddToBacklog,
           {
             isDone: parsedTask.isCompleted,
             notes: parsedTask.notes,
           },
-          true,
+          parentTaskPlacement.isAddToBottom,
         );
       }
     }

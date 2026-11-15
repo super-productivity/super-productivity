@@ -286,6 +286,12 @@ export type ScheduleConfig = Readonly<{
   isLunchBreakEnabled: boolean;
   lunchBreakStart: string;
   lunchBreakEnd: string;
+  /**
+   * Where tasks planned for a day without a time go on the Schedule.
+   * Missing = 'auto' (placed in the grid). Keep this at two values: a client
+   * that only knows these two fails validation on a third.
+   */
+  untimedTaskPlacement?: 'auto' | 'tray';
 }>;
 
 export type ReminderConfig = Readonly<{

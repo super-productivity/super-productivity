@@ -24,6 +24,7 @@ import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
 import { IS_MAC } from './util/is-mac';
+import { handleHomeEndInTextField } from './util/handle-home-end-in-text-field';
 import { expandAnimation } from './ui/animations/expand.ani';
 import { warpRouteAnimation } from './ui/animations/warp-route';
 import { firstValueFrom, Subscription } from 'rxjs';
@@ -583,6 +584,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         });
       };
 
+      // Capture phase: fields like the task title stop keydown propagation.
+      const onKeyDownCapture = (ev: KeyboardEvent): void => {
+        handleHomeEndInTextField(ev);
+      };
+
       // Keep the launch screen's frame current: theme or layout changes made in
       // this session show from the next launch on. Hidden covers mobile
       // backgrounding, pagehide a closing window.
@@ -596,6 +602,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       doc.addEventListener('dragover', onDragOver, { passive: false });
       doc.addEventListener('drop', onDrop, { passive: false });
       doc.addEventListener('keydown', onKeyDown);
+      if (IS_MAC) {
+        doc.addEventListener('keydown', onKeyDownCapture, true);
+      }
       doc.addEventListener('visibilitychange', onVisibilityChange);
       window.addEventListener('pagehide', onPageHide);
 
@@ -603,6 +612,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         doc.removeEventListener('dragover', onDragOver);
         doc.removeEventListener('drop', onDrop);
         doc.removeEventListener('keydown', onKeyDown);
+        doc.removeEventListener('keydown', onKeyDownCapture, true);
         doc.removeEventListener('visibilitychange', onVisibilityChange);
         window.removeEventListener('pagehide', onPageHide);
       });
