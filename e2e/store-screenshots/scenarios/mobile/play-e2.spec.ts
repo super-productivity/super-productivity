@@ -45,7 +45,12 @@ const shoot = async (page: Page, file: string, caption: string): Promise<void> =
       border: '0',
       width: 'auto',
       height: 'auto',
+      // Near-opaque behind the text so app headings don't ghost through it.
+      background:
+        'linear-gradient(to bottom, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.95) 70%, rgba(0,0,0,0) 100%)',
     });
+    // Even out two-line captions instead of leaving a one-word last line.
+    (el.firstElementChild as HTMLElement).style.textWrap = 'balance';
     el.showPopover();
   });
   await page.mouse.move(0, 0);
@@ -238,6 +243,10 @@ test.describe('@screenshot play-e2', () => {
     // Phones hide tab label text (icon only), so match the tab by its icon.
     await page.getByRole('tab').filter({ hasText: 'cloud_sync' }).click();
     await page.locator('.sync-summary').waitFor({ state: 'visible' });
+    // The footer shows a web-build version string that would date the image.
+    await page.locator('.version-footer').evaluate((el: HTMLElement) => {
+      el.style.display = 'none';
+    });
     await shoot(page, '08-sync', CAPTIONS.privacy);
   });
 });
