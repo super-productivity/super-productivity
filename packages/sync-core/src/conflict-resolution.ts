@@ -20,7 +20,9 @@ export type LwwConflictResolutionReason =
   | 'remote-delete-wins'
   | 'local-delete-wins'
   | 'local-timestamp'
-  | 'remote-timestamp-or-tie';
+  | 'remote-timestamp-or-tie'
+  | 'local-duplicate-create'
+  | 'remote-duplicate-create';
 
 const DEFAULT_MAX_DEEP_EQUAL_DEPTH = 50;
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -437,6 +439,36 @@ const winningClientId = (
 ): string => ops.find((op) => op.timestamp === maxTimestamp)?.clientId ?? '';
 
 /**
+ * Both devices created the same id (deterministic ids, e.g. a repeat instance
+ * `rpt_<cfgId>_<day>`) without seeing each other (#11645). A side whose only
+ * ops on the entity are that create holds no user edit, so the side that also
+ * edited wins, whatever the timestamps: otherwise a device that opens hours
+ * later wipes the other's tracked time with its blank copy. Undefined when
+ * this rule does not decide (not both created, or neither or both edited);
+ * timestamp LWW decides then. Symmetric, so both devices pick the same side.
+ * `localOps`/`remoteOps` hold all of a side's conflicting ops for the entity,
+ * across conflicts (commuting ops applied outside conflicts are absent). A delete
+ * counts as an edit, so a deleted instance does not come back as a blank copy.
+ * Archive and delete-wins are decided before this rule; they are edits too, so
+ * both rules always agree on the side.
+ *
+ * shortcut: any non-Create op counts as an edit, even one writing only noise
+ * fields; a create-only side with automatic follow-up ops falls back to
+ * timestamps. Count only non-noise ops (host hook) if a report shows that.
+ */
+const editedSideOfDuplicateCreate = (
+  localOps: readonly Operation<string>[],
+  remoteOps: readonly Operation<string>[],
+): LwwConflictResolutionWinner | undefined => {
+  const isCreate = (op: Operation<string>): boolean => op.opType === OpType.Create;
+  if (!localOps.some(isCreate) || !remoteOps.some(isCreate)) return undefined;
+  const localEdited = !localOps.every(isCreate);
+  const remoteEdited = !remoteOps.every(isCreate);
+  if (localEdited === remoteEdited) return undefined;
+  return localEdited ? 'local' : 'remote';
+};
+
+/**
  * Whether replaying `op` would re-create its entity after a delete: a Create,
  * or an LWW Update (the host's LWW reducer re-creates an absent entity). The
  * action-type suffix also covers released clients, whose LWW Updates carry no
@@ -592,6 +624,22 @@ export const planLwwConflictResolutions = <
         winner: 'local',
         reason: 'local-delete-wins',
         localWinOperationKind: 'delete-win',
+      };
+    }
+
+    const duplicateCreateWinner = editedSideOfDuplicateCreate(
+      [...(localOpsByEntity.get(entityKey)?.values() ?? [])],
+      [...(remoteOpsByEntity.get(entityKey)?.values() ?? [])],
+    );
+    if (duplicateCreateWinner === 'remote') {
+      return { conflict, winner: 'remote', reason: 'remote-duplicate-create' };
+    }
+    if (duplicateCreateWinner === 'local') {
+      return {
+        conflict,
+        winner: 'local',
+        reason: 'local-duplicate-create',
+        localWinOperationKind: 'update',
       };
     }
 
