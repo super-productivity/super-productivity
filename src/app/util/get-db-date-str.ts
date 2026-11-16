@@ -14,6 +14,12 @@ export const getDbDateStr = (date: Date | number | string = new Date()): string 
   return `${year}-${month}-${day}`;
 };
 
+/** Day key of the logical day `timestamp` falls on, given the user's start-of-day offset. */
+export const getDbDateStrWithOffset = (
+  timestamp: number,
+  startOfNextDayDiffMs: number,
+): string => getDbDateStr(new Date(timestamp - startOfNextDayDiffMs));
+
 export const isDBDateStr = (str: string): boolean => {
   if (str.length !== 10 || str[4] !== '-' || str[7] !== '-') return false;
   for (let i = 0; i < 10; i++) {
