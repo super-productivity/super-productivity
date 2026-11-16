@@ -252,8 +252,8 @@ export class IssueService {
     return service.issueLink(issueId, issueProviderId);
   }
 
-  getPollInterval(providerKey: IssueProviderKey): number {
-    return this._getPollInterval(providerKey);
+  getPollInterval(providerKey: IssueProviderKey, provider?: IssueProvider): number {
+    return this._getPollInterval(providerKey, provider);
   }
 
   getMappedAttachments(
@@ -1051,11 +1051,14 @@ export class IssueService {
     return ISSUE_STR_MAP[key] ?? DEFAULT_ISSUE_STRS;
   }
 
-  private _getPollInterval(key: IssueProviderKey): number {
+  private _getPollInterval(key: IssueProviderKey, provider?: IssueProvider): number {
     if (this._pluginRegistry.hasProvider(key)) {
       return this._pluginRegistry.getPollIntervalMs(key);
     }
     const service = this.ISSUE_SERVICE_MAP[key];
+    if (provider && service?.getPollIntervalForCfg) {
+      return service.getPollIntervalForCfg(provider as IssueIntegrationCfg);
+    }
     return service?.pollInterval ?? 0;
   }
 

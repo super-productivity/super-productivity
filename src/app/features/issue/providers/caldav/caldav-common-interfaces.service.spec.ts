@@ -113,6 +113,13 @@ describe('CaldavCommonInterfacesService', () => {
       };
       expect(service.pollInterval).toBe(3 * 60 * 1000);
     });
+
+    it("reads a given provider's interval before anything is cached (#11815)", () => {
+      expect(service.getPollIntervalForCfg({ ...BASE_CFG, pollIntervalMinutes: 2 })).toBe(
+        2 * 60 * 1000,
+      );
+      expect(service.getPollIntervalForCfg({ ...BASE_CFG })).toBe(CALDAV_POLL_INTERVAL);
+    });
   });
 
   describe('getAddTaskData - DTSTART mapping', () => {
