@@ -195,7 +195,8 @@
     "vite-plugin:build": "cd packages/vite-plugin && npm run build",
     "plugins:build": "npm run plugin-api:build && npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
     "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent",
-    "plugin-starter:check": "node tools/check-plugin-starter.js"
+    "plugin-starter:check": "node tools/check-plugin-starter.js",
+    "screenshots:capture:play-e2": "SP_SCREENSHOTS_PLAY_E2=1 npx playwright test --config e2e/playwright.store-screenshots.config.ts --project=androidPhone --grep play-e2"
   },
   "dependencies": {
     "@capacitor/browser": "^8.0.5",
