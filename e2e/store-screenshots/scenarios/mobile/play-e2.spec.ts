@@ -5,6 +5,8 @@
  *
  * Output: dist/screenshots/play-e2/en/NN-<name>.png (written directly, not via
  * screenshotMaster, so build-store-assets never mixes these into play/phone).
+ * The regular build's cleanDerivedOutput() deletes this folder, so upload the
+ * set before running `npm run screenshots`, or re-capture afterwards.
  *
  * Spec and captions: marketing repo, docs/aso/super-productivity.md ("E2").
  *
