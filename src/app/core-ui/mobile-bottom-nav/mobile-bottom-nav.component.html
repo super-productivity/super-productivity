@@ -52,16 +52,18 @@
       ></span>
     </button>
   }
-  <button
-    mat-fab
-    class="add-task-button"
-    [class.smaller]="hasProjectBacklog()"
-    color="primary"
-    (click)="showAddTaskBar()"
-    [attr.aria-label]="T.GCF.KEYBOARD.GLOBAL_ADD_TASK | translate"
-  >
-    <mat-icon>add</mat-icon>
-  </button>
+  @if (isShowAddTaskButton()) {
+    <button
+      mat-fab
+      class="add-task-button"
+      [class.smaller]="hasProjectBacklog()"
+      color="primary"
+      (click)="showAddTaskBar()"
+      [attr.aria-label]="T.GCF.KEYBOARD.GLOBAL_ADD_TASK | translate"
+    >
+      <mat-icon>add</mat-icon>
+    </button>
+  }
 
   @if (sidePanelItemCount() === 1) {
     <!-- A menu with a single entry is just an extra tap: show the entry itself. -->
