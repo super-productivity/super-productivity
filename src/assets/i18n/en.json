@@ -2944,6 +2944,7 @@
       "IS_DARK_MODE": "Dark Mode",
       "IS_DISABLE_ANIMATIONS": "Disable all animations",
       "IS_DISABLE_CELEBRATION": "Disable celebration in daily summary",
+      "IS_HIDE_NAV_TASK_COUNT": "Hide task count badges in the sidebar",
       "IS_LOCAL_REST_API_ENABLED": "Enable local REST API (desktop only)",
       "IS_LOCAL_REST_API_ENABLED_HINT": "Allows local scripts to control the running app via http://127.0.0.1:3876. Requests require the access token shown below; keep it private and regenerate it if it may have been exposed. Any application running as you on this computer can read the token and modify your tasks. This setting applies to this computer only and is not synced.",
       "LOCAL_REST_API_TOKEN": "Access Token",
