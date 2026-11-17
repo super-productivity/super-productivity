@@ -175,12 +175,12 @@ export class ConflictResolutionPlannerService {
       } else if (plan.winner === 'local') {
         OpLog.normal(
           `ConflictResolutionService: LWW resolved ${plan.conflict.entityType}:${plan.conflict.entityId} as LOCAL ` +
-            `(local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
+            `(${plan.reason}, local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
         );
       } else {
         OpLog.normal(
           `ConflictResolutionService: LWW resolved ${plan.conflict.entityType}:${plan.conflict.entityId} as REMOTE ` +
-            `(local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
+            `(${plan.reason}, local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
         );
       }
     }
