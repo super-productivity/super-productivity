@@ -40,6 +40,11 @@ import { reportBulkReplayReducerFailure } from '../apply/bulk-replay-failure-col
 import { reportLoadAllDataReducerFailure } from '../apply/load-all-data-failure-guard.meta-reducer';
 import { Action } from '@ngrx/store';
 import { T } from '../../t.const';
+import {
+  globalConfigReducer,
+  initialGlobalConfigState,
+} from '../../features/config/store/global-config.reducer';
+import { bulkOperationsMetaReducer } from '../apply/bulk-hydration.meta-reducer';
 
 describe('OperationLogHydratorService', () => {
   let service: OperationLogHydratorService;
@@ -833,6 +838,74 @@ describe('OperationLogHydratorService', () => {
     });
 
     describe('full state operations optimization', () => {
+      for (const importClientId of ['test-client', 'other-client']) {
+        it(`keeps the provider selected before a full-state op from ${importClientId}`, async () => {
+          const previousConfig = {
+            ...initialGlobalConfigState,
+            sync: {
+              ...initialGlobalConfigState.sync,
+              syncProvider: SyncProviderId.SuperSync,
+            },
+          };
+          const selectedSync = {
+            ...previousConfig.sync,
+            syncProvider: SyncProviderId.WebDAV,
+            isEnabled: true,
+            isEncryptionEnabled: true,
+            isManualSyncOnly: true,
+            syncInterval: 123456,
+          };
+          const importedConfig = {
+            ...previousConfig,
+            sync:
+              importClientId === 'test-client'
+                ? selectedSync
+                : { ...previousConfig.sync, syncProvider: SyncProviderId.Dropbox },
+          };
+          const configOp = createMockOperation('provider-change', OpType.Update, {
+            actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,
+            entityType: 'GLOBAL_CONFIG',
+            entityId: 'sync',
+            clientId: 'test-client',
+            payload: {
+              actionPayload: {
+                sectionKey: 'sync',
+                sectionCfg: selectedSync,
+              },
+              entityChanges: [],
+            },
+          });
+          const fullStateOp = createMockOperation('provider-import', OpType.SyncImport, {
+            entityType: 'ALL',
+            clientId: importClientId,
+            payload: { appDataComplete: { ...mockState, globalConfig: importedConfig } },
+          });
+          mockOpLogStore.loadStateCache.and.resolveTo(
+            createMockSnapshot({
+              state: { ...mockState, globalConfig: previousConfig },
+              lastAppliedOpSeq: 5,
+            }),
+          );
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+            createMockEntry(6, configOp),
+            createMockEntry(7, fullStateOp),
+          ]);
+          const reducer = bulkOperationsMetaReducer(globalConfigReducer);
+          let config = initialGlobalConfigState;
+          mockStore.dispatch.and.callFake(((action: Action): void => {
+            config = reducer(config, action);
+          }) as Store['dispatch']);
+
+          await service.hydrateStore();
+
+          expect(config.sync.syncProvider).toBe(SyncProviderId.WebDAV);
+          expect(config.sync.isEnabled).toBe(true);
+          expect(config.sync.isEncryptionEnabled).toBe(true);
+          expect(config.sync.isManualSyncOnly).toBe(true);
+          expect(config.sync.syncInterval).toBe(123456);
+        });
+      }
+
       it('should not direct-load a full-state op while an earlier replay row is pending', async () => {
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
         const pendingOp = createMockOperation('pending-op');
