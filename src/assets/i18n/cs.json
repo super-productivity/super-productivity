@@ -1249,7 +1249,7 @@
         "NEVER": "Nikdy",
         "OVERWRITE_WARNING": "VAROVÁNÍ: Data {{targetName}} obsahují přibližně {{targetChanges}} změn, zatímco data {{sourceName}} mají pouze {{sourceChanges}} změn. Opravdu chcete přepsat data {{targetName}} verzí {{sourceName}}? Tuto akci nelze vrátit zpět.",
         "OVERWRITE_WARNING_UNKNOWN": "VAROVÁNÍ: Toto zařízení nedokáže určit, kolik nesynchronizovaných změn obsahují data {{targetName}} (nemá záznam o předchozí synchronizaci). Přepsáním dat {{targetName}} verzí {{sourceName}} mohou být změny zahozeny. Opravdu chcete pokračovat?",
-        "OWN_UPLOADS_MISSING": "Ve synchronizovaných datech chybí změny, které toto zařízení již synchronizovalo. Jiné zařízení mohlo uložit data přes starší kopii, nebo ve složce synchronizace chybí aktualizace. Ponechat místní je obnoví; Ponechat vzdálené je zahodí.",
+        "OWN_UPLOADS_MISSING": "Ve synchronizovaných datech chybí změny, které toto zařízení již synchronizovalo. Jiné zařízení mohlo uložit data přes starší kopii, nebo ve složce synchronizace chybí aktualizace. Ponechat lokální je obnoví; Ponechat vzdálené je zahodí.",
         "REMOTE": "Vzdálené",
         "RESULT": "Výsledek",
         "TEXT": "<p>Aktualizace ze vzdáleného serveru. Zdá se, že byla změněna jak lokální, tak vzdálená data.</p>",
