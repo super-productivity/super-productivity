@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Opsional: tips memulai",
-      "NOTES": "Tidak ada yang wajib di sini. Hapus tugas ini kapan saja.\n\n- **Hari ini dan Kotak masuk**: Hari ini menampilkan apa yang direncanakan untuk hari ini. Tugas tanpa proyek sendiri tetap berada di Kotak masuk. Satu tugas bisa muncul di kedua daftar.\n- **Proyek**: kelompokkan tugas berdasarkan topik dengan **+** di samping **Proyek** pada bilah samping.\n- **Sinkronisasi**: simpan data Anda di beberapa perangkat melalui **Pengaturan → Sinkronisasi & Cadangan**.\n- **Pindahan dari Todoist atau TickTick?** Impor tugas Anda melalui **Pengaturan → Sinkronisasi & Cadangan → Impor/Ekspor**.\n- **Tur**: **Bantuan → Tur singkat** di menu bilah samping memandu Anda memahami dasar-dasarnya dengan tugas Anda sendiri, dan **Bantuan → Cara** menunjukkan sintaks singkat dan navigasi keyboard langkah demi langkah. Tutup tur kapan saja.\n- **Sesuaikan sendiri**: pilih tema atau mode gelap, lalu aktifkan atau nonaktifkan fitur seperti papan, jadwal, kebiasaan, mode fokus, atau integrasi di **Pengaturan → Umum**. Plugin menambahkan lebih banyak lagi."
+      "NOTES": "Tidak ada yang wajib di sini. Hapus tugas ini kapan saja.\n\n- **Hari ini dan Kotak masuk**: Hari ini menampilkan apa yang direncanakan untuk hari ini. Tugas tanpa proyek sendiri tetap berada di Kotak masuk. Satu tugas bisa muncul di kedua daftar.\n- **Proyek**: kelompokkan tugas berdasarkan topik dengan **+** di samping **Proyek** pada bilah samping.\n- **Sinkronisasi**: simpan data Anda di beberapa perangkat melalui **Pengaturan → Sinkronisasi & Cadangan**.\n- **Pindahan dari Todoist atau TickTick?** Impor tugas Anda melalui **Pengaturan → Sinkronisasi & Cadangan → Impor/Ekspor**.\n- **Tur**: **Bantuan → Tur singkat** di menu bilah samping memandu Anda memahami dasar-dasarnya dengan tugas Anda sendiri, dan **Bantuan → Cara** menunjukkan sintaks singkat dan navigasi keyboard langkah demi langkah. Tutup tur kapan saja.\n- **Sesuaikan sendiri**: pilih tema atau mode gelap, lalu aktifkan atau nonaktifkan fitur seperti tampilan, jadwal, kebiasaan, mode fokus, atau integrasi di **Pengaturan → Umum**. Plugin menambahkan lebih banyak lagi."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Belum Selesai"
       },
       "V": {
-        "ADD_NEW_BOARD": "Tambahkan papan baru",
+        "ADD_NEW_BOARD": "Buat tampilan",
         "ADD_TASK_TO": "Tambah tugas ke {{title}}",
-        "CONFIRM_DELETE": "Apakah Anda benar-benar ingin menghapus papan ini?",
+        "CONFIRM_DELETE": "Apakah Anda benar-benar ingin menghapus tampilan ini?",
         "CREATE_NEW_TAG_BTN": "Buat tag",
         "CREATE_NEW_TAGS_BTN": "Buat tag",
-        "EDIT_BOARD": "Edit papan",
+        "EDIT_BOARD": "Edit tampilan",
         "EDIT_COLUMN": "Edit kolom",
         "EMPTY_VIEW_ADD": "Tambah tugas",
         "EMPTY_VIEW_HINT": "Tugas muncul di sini setelah cocok dengan aturan tampilan. Tambahkan satu, atau ubah aturannya.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Sebagian filter daftar tidak dapat digabungkan dengan proyek atau tag-nya dalam tampilan dan dihilangkan.",
         "HINT_GROUPING_NOT_SAVED": "Pengelompokan ini tidak disimpan: hanya pengelompokan berdasarkan tag yang menjadi bagian dari tampilan.",
         "MISSING_TAGS_MSG": "Tampilan ini menggunakan tag yang belum ada: {{tags}}",
-        "NO_PANELS_BTN": "Konfigurasi Papan",
-        "NO_PANELS_MSG": "Papan ini tidak memiliki panel yang dikonfigurasi. Tambahkan beberapa panel.",
+        "NO_PANELS_BTN": "Konfigurasi tampilan",
+        "NO_PANELS_MSG": "Tampilan ini belum memiliki bagian. Tambahkan satu untuk menampilkan tugas.",
         "NO_TASKS_IN_VIEW": "Tidak ada tugas yang cocok dengan tampilan ini",
         "NO_VIEWS_BTN": "Buat tampilan",
         "NO_VIEWS_MSG": "Belum ada tampilan. Tampilan menunjukkan tugas dari semua proyek Anda yang cocok dengan aturannya, dalam satu kolom atau lebih.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Papan",
+      "BOARDS": "Tampilan",
       "BOARDS_HINT": "Tampilan tersimpan di menu samping. Masing-masing menampilkan tugas dari semua proyek berdasarkan tag, proyek, tanggal jatuh tempo, atau status selesai, dalam satu kolom atau lebih, seperti papan Kanban.",
       "DONATE_PAGE": "Halaman Donasi",
       "DONATE_PAGE_HINT": "Menampilkan entri menu dengan cara-cara untuk mendukung pengembangan aplikasi.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Wallpaper",
       "WALLPAPER_BUTTON": "Atur wallpaper…",
       "WALLPAPER_DIALOG_TITLE": "Wallpaper global",
-      "WALLPAPER_HINT": "Ditampilkan pada halaman tanpa latar belakang sendiri (Perencana, Jadwal, Papan, Pengaturan…). Tag dan proyek dengan gambar sendiri akan menggantikannya."
+      "WALLPAPER_HINT": "Ditampilkan pada halaman tanpa latar belakang sendiri (Perencana, Jadwal, Tampilan, Pengaturan…). Tag dan proyek dengan gambar sendiri akan menggantikannya."
     },
     "POMODORO": {
       "BREAK_DURATION": "Durasi istirahat pendek",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Tambah Tugas Baru",
     "ADD_SECTION": "Tambah bagian",
-    "BOARDS": "Papan",
+    "BOARDS": "Tampilan",
     "COPY_TASK_LIST_MARKDOWN": "Salin ke Clipboard",
     "CREATE_PROJECT": "Buat Proyek",
     "CREATE_TAG": "Buat Tag",

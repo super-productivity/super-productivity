@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "İsteğe bağlı: Başlangıç ipuçları",
-      "NOTES": "Buradaki hiçbir şey zorunlu değildir. Bu görevi dilediğiniz zaman silebilirsiniz.\n\n- **Bugün ve Gelen kutusu**: Bugün, bugün için planlananları gösterir. Kendi projesi olmayan görevler Gelen kutusu içinde kalır. Bir görev her iki listede de görünebilir.\n- **Projeler**: Kenar çubuğundaki **Projeler** seçeneğinin yanında bulunan **+** simgesini kullanarak görevleri konuya göre gruplandırın.\n- **Eşitleme**: Verilerinizi **Ayarlar → Senkronizasyon ve Yedek** bölümünden birden fazla cihazda tutun.\n- **Todoist veya TickTick'ten mi geliyorsunuz?** Görevlerinizi **Ayarlar → Senkronizasyon ve Yedek → İçe Aktar/Dışa Aktar** bölümünden içe aktarın.\n- **Turlar**: Kenar çubuğu menüsündeki **Yardım → Hızlı tur** temel bilgileri kendi göreviniz üzerinde adım adım gösterir, **Yardım → Nasıl yapılır** ise kısa sözdizimini ve klavye gezinmesini gösterir. Bir turu dilediğiniz zaman kapatabilirsiniz.\n- **Kendinize göre kişiselleştirin**: Bir tema veya karanlık mod seçin ve panolar, zamanlama, alışkanlıklar, odak modu veya entegrasyonlar gibi özellikleri **Ayarlar → Genel** bölümünden açıp kapatın. Eklentiler çok daha fazlasını ekler."
+      "NOTES": "Buradaki hiçbir şey zorunlu değildir. Bu görevi dilediğiniz zaman silebilirsiniz.\n\n- **Bugün ve Gelen kutusu**: Bugün, bugün için planlananları gösterir. Kendi projesi olmayan görevler Gelen kutusu içinde kalır. Bir görev her iki listede de görünebilir.\n- **Projeler**: Kenar çubuğundaki **Projeler** seçeneğinin yanında bulunan **+** simgesini kullanarak görevleri konuya göre gruplandırın.\n- **Eşitleme**: Verilerinizi **Ayarlar → Senkronizasyon ve Yedek** bölümünden birden fazla cihazda tutun.\n- **Todoist veya TickTick'ten mi geliyorsunuz?** Görevlerinizi **Ayarlar → Senkronizasyon ve Yedek → İçe Aktar/Dışa Aktar** bölümünden içe aktarın.\n- **Turlar**: Kenar çubuğu menüsündeki **Yardım → Hızlı tur** temel bilgileri kendi göreviniz üzerinde adım adım gösterir, **Yardım → Nasıl yapılır** ise kısa sözdizimini ve klavye gezinmesini gösterir. Bir turu dilediğiniz zaman kapatabilirsiniz.\n- **Kendinize göre kişiselleştirin**: Bir tema veya karanlık mod seçin ve görünümler, zamanlama, alışkanlıklar, odak modu veya entegrasyonlar gibi özellikleri **Ayarlar → Genel** bölümünden açıp kapatın. Eklentiler çok daha fazlasını ekler."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Tamamlanmadı"
       },
       "V": {
-        "ADD_NEW_BOARD": "Yeni pano ekle",
+        "ADD_NEW_BOARD": "Görünüm oluştur",
         "ADD_TASK_TO": "{{title}} öğesine görev ekle",
-        "CONFIRM_DELETE": "Bu panoyu gerçekten silmek istiyor musunuz?",
+        "CONFIRM_DELETE": "Bu görünümü gerçekten silmek istiyor musunuz?",
         "CREATE_NEW_TAG_BTN": "Etiket oluştur",
         "CREATE_NEW_TAGS_BTN": "Etiketler Oluştur",
-        "EDIT_BOARD": "Panoyı Düzenle",
+        "EDIT_BOARD": "Görünümü düzenle",
         "EDIT_COLUMN": "Sütunu düzenle",
         "EMPTY_VIEW_ADD": "Görev ekle",
         "EMPTY_VIEW_HINT": "Görevler, görünümün kurallarıyla eşleştiklerinde burada görünür. Bir görev ekle veya kuralları değiştir.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Listenin filtresinin bir kısmı, bir görünümde projesi veya etiketiyle birleştirilemediği için dışarıda bırakıldı.",
         "HINT_GROUPING_NOT_SAVED": "Bu gruplama kaydedilmedi: yalnızca etikete göre gruplama bir görünümün bölümlerine dönüşür.",
         "MISSING_TAGS_MSG": "Bu görünüm henüz var olmayan etiketler kullanıyor: {{tags}}",
-        "NO_PANELS_BTN": "Panoyı Yapılandır",
-        "NO_PANELS_MSG": "Bu panoda yapılandırılmış panel yok. Buna bazı paneller ekleyin.",
+        "NO_PANELS_BTN": "Görünümü yapılandır",
+        "NO_PANELS_MSG": "Bu görünümde henüz bölüm yok. Görevleri göstermek için bir bölüm ekleyin.",
         "NO_TASKS_IN_VIEW": "Bu görünümle eşleşen görev yok",
         "NO_VIEWS_BTN": "Görünüm oluştur",
         "NO_VIEWS_MSG": "Henüz görünüm yok. Bir görünüm, tüm projelerindeki kurallarıyla eşleşen görevleri bir veya daha fazla sütunda gösterir.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Panolar",
+      "BOARDS": "Görünümler",
       "BOARDS_HINT": "Yan menüde kayıtlı görünümler. Her biri tüm projelerdeki görevleri etikete, projeye, son tarihe veya tamamlanma durumuna göre, bir Kanban panosu gibi bir veya daha fazla sütunda gösterir.",
       "DONATE_PAGE": "Bağış Sayfası",
       "DONATE_PAGE_HINT": "Uygulamanın geliştirilmesini desteklemenin yollarını içeren bir menü girişi gösterir.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Duvar Kâğıdı",
       "WALLPAPER_BUTTON": "Duvar kâğıdı ayarla…",
       "WALLPAPER_DIALOG_TITLE": "Genel duvar kâğıdı",
-      "WALLPAPER_HINT": "Kendi arka planı olmayan sayfalarda gösterilir (Planlayıcı, Zaman Çizelgesi, Panolar, Ayarlar…). Kendi görseli olan etiketler ve projeler bunun yerine geçer."
+      "WALLPAPER_HINT": "Kendi arka planı olmayan sayfalarda gösterilir (Planlayıcı, Zaman Çizelgesi, Görünümler, Ayarlar…). Kendi görseli olan etiketler ve projeler bunun yerine geçer."
     },
     "POMODORO": {
       "BREAK_DURATION": "Kısa molaların süresi",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Yeni Görev ekle",
     "ADD_SECTION": "Bölüm ekle",
-    "BOARDS": "Panolar",
+    "BOARDS": "Görünümler",
     "COPY_TASK_LIST_MARKDOWN": "Panoya Kopyala",
     "CREATE_PROJECT": "Proje Yarat",
     "CREATE_TAG": "Etiket Oluştur",

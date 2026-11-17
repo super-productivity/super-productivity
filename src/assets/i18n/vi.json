@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Tùy chọn: mẹo bắt đầu",
-      "NOTES": "Không có gì ở đây là bắt buộc. Hãy xóa công việc này bất cứ lúc nào bạn muốn.\n\n- **Hôm nay và Hộp thư đến**: Hôm nay hiển thị những gì được lên kế hoạch cho hôm nay. Các công việc không thuộc dự án riêng của bạn sẽ nằm trong Hộp thư đến. Một công việc có thể xuất hiện ở cả hai danh sách.\n- **Dự án**: nhóm công việc theo chủ đề bằng dấu **+** bên cạnh **Dự án** trong thanh bên.\n- **Đồng bộ**: giữ dữ liệu của bạn trên nhiều thiết bị tại **Cài đặt → Đồng bộ & Sao lưu**.\n- **Chuyển từ Todoist hoặc TickTick sang?** Nhập công việc của bạn tại **Cài đặt → Đồng bộ & Sao lưu → Nhập/Xuất**.\n- **Tham quan**: **Trợ giúp → Tham quan nhanh** trong menu thanh bên hướng dẫn bạn những điều cơ bản ngay trên công việc của chính bạn, còn **Trợ giúp → Cách** cho thấy từng bước cú pháp ngắn và cách điều hướng bằng bàn phím. Bạn có thể đóng phần tham quan bất cứ lúc nào.\n- **Biến nó thành của bạn**: chọn giao diện hoặc chế độ tối, rồi bật hoặc tắt các tính năng như bảng, lên lịch, thói quen, chế độ tập trung hay tích hợp tại **Cài đặt → Chung**. Plugin còn bổ sung nhiều hơn nữa."
+      "NOTES": "Không có gì ở đây là bắt buộc. Hãy xóa công việc này bất cứ lúc nào bạn muốn.\n\n- **Hôm nay và Hộp thư đến**: Hôm nay hiển thị những gì được lên kế hoạch cho hôm nay. Các công việc không thuộc dự án riêng của bạn sẽ nằm trong Hộp thư đến. Một công việc có thể xuất hiện ở cả hai danh sách.\n- **Dự án**: nhóm công việc theo chủ đề bằng dấu **+** bên cạnh **Dự án** trong thanh bên.\n- **Đồng bộ**: giữ dữ liệu của bạn trên nhiều thiết bị tại **Cài đặt → Đồng bộ & Sao lưu**.\n- **Chuyển từ Todoist hoặc TickTick sang?** Nhập công việc của bạn tại **Cài đặt → Đồng bộ & Sao lưu → Nhập/Xuất**.\n- **Tham quan**: **Trợ giúp → Tham quan nhanh** trong menu thanh bên hướng dẫn bạn những điều cơ bản ngay trên công việc của chính bạn, còn **Trợ giúp → Cách** cho thấy từng bước cú pháp ngắn và cách điều hướng bằng bàn phím. Bạn có thể đóng phần tham quan bất cứ lúc nào.\n- **Biến nó thành của bạn**: chọn giao diện hoặc chế độ tối, rồi bật hoặc tắt các tính năng như chế độ xem, lên lịch, thói quen, chế độ tập trung hay tích hợp tại **Cài đặt → Chung**. Plugin còn bổ sung nhiều hơn nữa."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Chưa hoàn thành"
       },
       "V": {
-        "ADD_NEW_BOARD": "Thêm bảng mới",
+        "ADD_NEW_BOARD": "Tạo chế độ xem",
         "ADD_TASK_TO": "Thêm công việc vào {{title}}",
-        "CONFIRM_DELETE": "Bạn có chắc muốn xóa bảng này không?",
+        "CONFIRM_DELETE": "Bạn có chắc muốn xóa chế độ xem này không?",
         "CREATE_NEW_TAG_BTN": "Tạo nhãn",
         "CREATE_NEW_TAGS_BTN": "Tạo nhãn",
-        "EDIT_BOARD": "Chỉnh sửa bảng",
+        "EDIT_BOARD": "Chỉnh sửa chế độ xem",
         "EDIT_COLUMN": "Sửa cột",
         "EMPTY_VIEW_ADD": "Thêm công việc",
         "EMPTY_VIEW_HINT": "Công việc sẽ xuất hiện ở đây khi khớp với quy tắc của chế độ xem. Hãy thêm một công việc hoặc thay đổi quy tắc.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Một phần bộ lọc của danh sách không thể kết hợp với dự án hoặc nhãn của nó trong chế độ xem nên đã bị bỏ qua.",
         "HINT_GROUPING_NOT_SAVED": "Cách nhóm này không được lưu: chỉ nhóm theo nhãn mới trở thành các phần của chế độ xem.",
         "MISSING_TAGS_MSG": "Chế độ xem này dùng các nhãn chưa tồn tại: {{tags}}",
-        "NO_PANELS_BTN": "Cấu hình bảng",
-        "NO_PANELS_MSG": "Bảng này chưa có bảng con nào. Hãy thêm bảng con vào đây.",
+        "NO_PANELS_BTN": "Cấu hình chế độ xem",
+        "NO_PANELS_MSG": "Chế độ xem này chưa có phần nào. Hãy thêm một phần để hiển thị công việc.",
         "NO_TASKS_IN_VIEW": "Không có công việc nào khớp với chế độ xem này",
         "NO_VIEWS_BTN": "Tạo chế độ xem",
         "NO_VIEWS_MSG": "Chưa có chế độ xem nào. Một chế độ xem hiển thị các công việc từ tất cả dự án khớp với quy tắc của nó, trong một hoặc nhiều cột.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Bảng",
+      "BOARDS": "Chế độ xem",
       "BOARDS_HINT": "Các chế độ xem đã lưu trong menu bên. Mỗi chế độ xem hiển thị công việc từ tất cả dự án theo nhãn, dự án, ngày đến hạn hoặc trạng thái hoàn thành, trong một hoặc nhiều cột, giống như bảng Kanban.",
       "DONATE_PAGE": "Trang quyên góp",
       "DONATE_PAGE_HINT": "Hiển thị một mục menu với các cách ủng hộ việc phát triển ứng dụng.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Hình nền",
       "WALLPAPER_BUTTON": "Đặt hình nền…",
       "WALLPAPER_DIALOG_TITLE": "Hình nền chung",
-      "WALLPAPER_HINT": "Hiển thị trên các trang không có nền riêng (Kế hoạch, Lịch trình, Bảng, Cài đặt…). Nhãn và dự án có ảnh riêng sẽ ghi đè hình nền này."
+      "WALLPAPER_HINT": "Hiển thị trên các trang không có nền riêng (Kế hoạch, Lịch trình, Chế độ xem, Cài đặt…). Nhãn và dự án có ảnh riêng sẽ ghi đè hình nền này."
     },
     "POMODORO": {
       "BREAK_DURATION": "Thời gian nghỉ ngắn",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Thêm công việc mới",
     "ADD_SECTION": "Thêm mục",
-    "BOARDS": "Bảng",
+    "BOARDS": "Chế độ xem",
     "COPY_TASK_LIST_MARKDOWN": "Sao chép vào bảng tạm",
     "CREATE_PROJECT": "Tạo dự án",
     "CREATE_TAG": "Tạo nhãn",
