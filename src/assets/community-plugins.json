@@ -315,9 +315,9 @@
     "authorUrl": "https://github.com/nkte-X",
     "id": "liquid-glass-ui",
     "release": {
-      "version": "1.0.0",
-      "downloadUrl": "https://github.com/nkte-X/sp-liquid-glass-ui/releases/download/v1.0.0/liquid-glass-ui-1.0.0.zip",
-      "sha256": "7ba31889e7a054199e25f46bc6623dc4497c8cf0b40e6f6f770dc27de8f24212"
+      "version": "1.1.0",
+      "downloadUrl": "https://github.com/nkte-X/sp-liquid-glass-ui/releases/download/v1.1.0/liquid-glass-ui-1.1.0.zip",
+      "sha256": "54674668aab97b0ed328e9570610ac495e827c8f412ee07fc3422e74bf03c42d"
     }
   }
 ]
