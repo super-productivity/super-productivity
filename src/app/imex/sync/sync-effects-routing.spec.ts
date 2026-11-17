@@ -35,6 +35,7 @@ describe('SyncEffects routing (Task 3)', () => {
   let remoteBacklogRemains$: Subject<void>;
   let schedulerRequest: jasmine.Spy;
   let sync: jasmine.Spy;
+  let syncCfg$: BehaviorSubject<{ isManualSyncOnly?: boolean }>;
   let subs: { unsubscribe: () => void }[];
 
   const flush = async (): Promise<void> => {
@@ -49,6 +50,9 @@ describe('SyncEffects routing (Task 3)', () => {
     remoteBacklogRemains$ = new Subject<void>();
     schedulerRequest = jasmine.createSpy('request');
     sync = jasmine.createSpy('sync').and.resolveTo('InSync');
+    syncCfg$ = new BehaviorSubject<{ isManualSyncOnly?: boolean }>({
+      isManualSyncOnly: false,
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -69,6 +73,7 @@ describe('SyncEffects routing (Task 3)', () => {
             isEnabledAndReady$: new BehaviorSubject(true),
             syncInterval$: new BehaviorSubject(10000),
             syncProviderId$: new BehaviorSubject(SyncProviderId.WebDAV),
+            syncCfg$,
           },
         },
         {
@@ -299,6 +304,51 @@ describe('SyncEffects routing (Task 3)', () => {
 
       expect(sync).not.toHaveBeenCalled();
       expect(setDone).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sync before quit scheduling (#11831)', () => {
+    let execBeforeClose: jasmine.SpyObj<ExecBeforeCloseService>;
+    let onBeforeClose$: Subject<string[]>;
+
+    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+    beforeEach(() => {
+      execBeforeClose = TestBed.inject(
+        ExecBeforeCloseService,
+      ) as jasmine.SpyObj<ExecBeforeCloseService>;
+      onBeforeClose$ = execBeforeClose.onBeforeClose$ as Subject<string[]>;
+    });
+
+    it('does not hold the quit or sync when "Only sync manually" is on', async () => {
+      syncCfg$.next({ isManualSyncOnly: true });
+      subs.push(effects._syncBeforeQuit$().subscribe());
+
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+
+      expect(execBeforeClose.schedule).not.toHaveBeenCalled();
+      expect(execBeforeClose.unschedule).toHaveBeenCalledWith(SYNC_BEFORE_CLOSE_ID);
+      expect(sync).not.toHaveBeenCalled();
+    });
+
+    it('follows the setting when it is toggled while the app runs', async () => {
+      subs.push(effects._syncBeforeQuit$().subscribe());
+      expect(execBeforeClose.schedule).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+
+      syncCfg$.next({ isManualSyncOnly: true });
+      expect(execBeforeClose.unschedule).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      expect(sync).not.toHaveBeenCalled();
+
+      syncCfg$.next({ isManualSyncOnly: false });
+      expect(execBeforeClose.schedule).toHaveBeenCalledTimes(2);
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
     });
   });
 });

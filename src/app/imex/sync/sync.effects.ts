@@ -69,24 +69,39 @@ export class SyncEffects {
           // behavioural tests. `defer` hands over a fresh instance per
           // construction; the subscribed behaviour is unchanged.
           defer(() => EMPTY)
-        : this._dataInitStateService.isAllDataLoadedInitially$.pipe(
-            concatMap(() => this._syncWrapperService.isEnabledAndReady$),
-            distinctUntilChanged(),
-            tap((isEnabled) =>
-              isEnabled
-                ? this._execBeforeCloseService.schedule(SYNC_BEFORE_CLOSE_ID)
-                : this._execBeforeCloseService.unschedule(SYNC_BEFORE_CLOSE_ID),
-            ),
-            switchMap((isEnabled) =>
-              isEnabled
-                ? this._syncBeforeQuitOnRequest$(
-                    this._execBeforeCloseService.onBeforeClose$,
-                  )
-                : EMPTY,
-            ),
-          ),
+        : this._syncBeforeQuit$(),
     { dispatch: false },
   );
+
+  /**
+   * Holds the quit for a sync while sync is enabled and automatic. Kept out of
+   * the Electron-only effect above so specs can drive it.
+   */
+  _syncBeforeQuit$(): Observable<void> {
+    return this._dataInitStateService.isAllDataLoadedInitially$.pipe(
+      concatMap(() =>
+        combineLatest([
+          this._syncWrapperService.isEnabledAndReady$,
+          this._syncWrapperService.syncCfg$,
+        ]),
+      ),
+      // "Only sync manually" means no automatic sync, quit included (#11831).
+      // Unscheduling the id, rather than skipping on request, keeps the quit
+      // from waiting on it at all.
+      map(([isReady, cfg]) => isReady && !cfg.isManualSyncOnly),
+      distinctUntilChanged(),
+      tap((isEnabled) =>
+        isEnabled
+          ? this._execBeforeCloseService.schedule(SYNC_BEFORE_CLOSE_ID)
+          : this._execBeforeCloseService.unschedule(SYNC_BEFORE_CLOSE_ID),
+      ),
+      switchMap((isEnabled) =>
+        isEnabled
+          ? this._syncBeforeQuitOnRequest$(this._execBeforeCloseService.onBeforeClose$)
+          : EMPTY,
+      ),
+    );
+  }
 
   /**
    * Runs the sync before close for each quit request carrying its id. Kept out
