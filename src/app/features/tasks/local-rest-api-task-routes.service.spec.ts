@@ -2752,7 +2752,7 @@ describe('LocalRestApiTaskRoutesService', () => {
 
         expect(response.status).toBe(400);
         expect(response.body.ok).toBe(false);
-        expect(taskServiceMock.restoreTask).not.toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.restoreTask).not.toHaveBeenCalled();
         expect(taskArchiveServiceMock.load).not.toHaveBeenCalled();
         expect(
           archiveOperationHandlerMock.whenLocalOperationsSettled,
@@ -2777,7 +2777,9 @@ describe('LocalRestApiTaskRoutesService', () => {
         );
 
         expect(response.status).toBe(200);
-        expect(taskServiceMock.restoreTask).toHaveBeenCalledOnceWith(parent, [subtask]);
+        expect(taskArchiveOrchestratorMock.restoreTask).toHaveBeenCalledOnceWith(parent, [
+          subtask,
+        ]);
       });
 
       it('should restore an archived task', async () => {
