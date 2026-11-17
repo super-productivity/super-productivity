@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Opcional: dicas para começar",
-      "NOTES": "Nada aqui é obrigatório. Elimine esta tarefa quando quiser.\n\n- **Hoje e Caixa de entrada**: Hoje mostra o que está planeado para hoje. As tarefas sem um projeto seu ficam na Caixa de entrada. Uma tarefa pode aparecer nas duas listas.\n- **Projetos**: agrupe tarefas por assunto com o **+** junto a **Projetos** na barra lateral.\n- **Sincronização**: mantenha os seus dados em vários dispositivos em **Configurações → Sincronização e cópia de segurança**.\n- **Vem do Todoist ou do TickTick?** Importe as suas tarefas em **Configurações → Sincronização e cópia de segurança → Importar/Exportar**.\n- **Visitas**: **Ajuda → Visita rápida** no menu da barra lateral apresenta o essencial com a sua própria tarefa, e **Ajuda → Como fazer** mostra passo a passo a sintaxe curta e a navegação pelo teclado. Feche uma visita quando quiser.\n- **Personalize**: escolha um tema ou o modo escuro e ative ou desative funcionalidades como quadros, horário, hábitos, modo de foco ou integrações em **Configurações → Geral**. Os plugins acrescentam ainda mais."
+      "NOTES": "Nada aqui é obrigatório. Elimine esta tarefa quando quiser.\n\n- **Hoje e Caixa de entrada**: Hoje mostra o que está planeado para hoje. As tarefas sem um projeto seu ficam na Caixa de entrada. Uma tarefa pode aparecer nas duas listas.\n- **Projetos**: agrupe tarefas por assunto com o **+** junto a **Projetos** na barra lateral.\n- **Sincronização**: mantenha os seus dados em vários dispositivos em **Configurações → Sincronização e cópia de segurança**.\n- **Vem do Todoist ou do TickTick?** Importe as suas tarefas em **Configurações → Sincronização e cópia de segurança → Importar/Exportar**.\n- **Visitas**: **Ajuda → Visita rápida** no menu da barra lateral apresenta o essencial com a sua própria tarefa, e **Ajuda → Como fazer** mostra passo a passo a sintaxe curta e a navegação pelo teclado. Feche uma visita quando quiser.\n- **Personalize**: escolha um tema ou o modo escuro e ative ou desative funcionalidades como vistas, horário, hábitos, modo de foco ou integrações em **Configurações → Geral**. Os plugins acrescentam ainda mais."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Não concluído"
       },
       "V": {
-        "ADD_NEW_BOARD": "Adicionar novo quadro",
+        "ADD_NEW_BOARD": "Adicionar nova vista",
         "ADD_TASK_TO": "Adicionar tarefa a {{title}}",
-        "CONFIRM_DELETE": "Tem certeza de que deseja excluir este quadro?",
+        "CONFIRM_DELETE": "Tem certeza de que deseja excluir esta vista?",
         "CREATE_NEW_TAG_BTN": "Criar Tag",
         "CREATE_NEW_TAGS_BTN": "Criar Tags",
-        "EDIT_BOARD": "Editar quadro",
+        "EDIT_BOARD": "Editar vista",
         "EDIT_COLUMN": "Editar coluna",
         "EMPTY_VIEW_ADD": "Adicionar tarefa",
         "EMPTY_VIEW_HINT": "As tarefas aparecem aqui quando correspondem às regras da vista. Adicione uma ou altere as regras.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Parte do filtro da lista não pode ser combinada com o respetivo projeto ou etiqueta numa vista e foi deixada de fora.",
         "HINT_GROUPING_NOT_SAVED": "Este agrupamento não é guardado: só o agrupamento por etiqueta se torna em secções de uma vista.",
         "MISSING_TAGS_MSG": "Esta vista usa etiquetas que ainda não existem: {{tags}}",
-        "NO_PANELS_BTN": "Configurar Quadro",
-        "NO_PANELS_MSG": "Este quadro não tem painéis configurados. Adicione alguns painéis a ele.",
+        "NO_PANELS_BTN": "Configurar Vista",
+        "NO_PANELS_MSG": "Esta vista ainda não tem secções. Adicione uma para mostrar tarefas.",
         "NO_TASKS_IN_VIEW": "Nenhuma tarefa corresponde a esta vista",
         "NO_VIEWS_BTN": "Criar vista",
         "NO_VIEWS_MSG": "Ainda não há vistas. Uma vista mostra as tarefas de todos os seus projetos que correspondem às suas regras, numa ou mais colunas.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Placas",
+      "BOARDS": "Vistas",
       "BOARDS_HINT": "Vistas guardadas no menu lateral. Cada uma mostra tarefas de todos os projetos por etiqueta, projeto, data de vencimento ou estado de conclusão, numa ou mais colunas, como um quadro Kanban.",
       "DONATE_PAGE": "Página de Doações",
       "DONATE_PAGE_HINT": "Mostra uma entrada no menu com formas de apoiar o desenvolvimento da aplicação.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Papel de parede",
       "WALLPAPER_BUTTON": "Definir papel de parede…",
       "WALLPAPER_DIALOG_TITLE": "Papel de parede global",
-      "WALLPAPER_HINT": "Mostrado em páginas sem fundo próprio (Planeador, Agenda, Quadros, Definições…). As etiquetas e projetos com imagem própria sobrepõem-se a este fundo."
+      "WALLPAPER_HINT": "Mostrado em páginas sem fundo próprio (Planeador, Agenda, Vistas, Definições…). As etiquetas e projetos com imagem própria sobrepõem-se a este fundo."
     },
     "POMODORO": {
       "BREAK_DURATION": "Duração de pausas curtas",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Adicionar nova tarefa",
     "ADD_SECTION": "Adicionar secção",
-    "BOARDS": "Placas",
+    "BOARDS": "Vistas",
     "COPY_TASK_LIST_MARKDOWN": "Copiar para a área de transferência",
     "CREATE_PROJECT": "Criar Projeto",
     "CREATE_TAG": "Criar tag",

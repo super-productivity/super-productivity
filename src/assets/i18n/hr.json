@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Neobavezno: savjeti za početak",
-      "NOTES": "Ništa ovdje nije obavezno. Izbriši ovaj zadatak kad god želiš.\n\n- **Danas i Ulazni pretinac**: Danas prikazuje što je planirano za danas. Zadaci bez vlastitog projekta ostaju u pretincu Ulazni pretinac. Zadatak se može pojaviti na oba popisa.\n- **Projekti**: grupiraj zadatke po temi pomoću **+** pored **Projekti** u bočnoj traci.\n- **Sinkronizacija**: čuvaj svoje podatke na više uređaja u **Postavke → Sinkronizacija i sigurnosne kopije**.\n- **Dolaziš iz Todoista ili TickTicka?** Uvezi svoje zadatke u **Postavke → Sinkronizacija i sigurnosne kopije → Uvoz/izvoz**.\n- **Ture**: **Pomoć → Brza tura** u izborniku bočne trake provest će te kroz osnove na tvom vlastitom zadatku, a **Pomoć → Kako** korak po korak prikazuje kratku sintaksu i navigaciju tipkovnicom. Zatvori turu kad god želiš.\n- **Prilagodi po svom**: odaberi temu ili tamni način i uključi ili isključi značajke poput ploča, termina, navika, modusa fokusa ili integracija u **Postavke → Općenito**. Dodaci donose još više."
+      "NOTES": "Ništa ovdje nije obavezno. Izbriši ovaj zadatak kad god želiš.\n\n- **Danas i Ulazni pretinac**: Danas prikazuje što je planirano za danas. Zadaci bez vlastitog projekta ostaju u pretincu Ulazni pretinac. Zadatak se može pojaviti na oba popisa.\n- **Projekti**: grupiraj zadatke po temi pomoću **+** pored **Projekti** u bočnoj traci.\n- **Sinkronizacija**: čuvaj svoje podatke na više uređaja u **Postavke → Sinkronizacija i sigurnosne kopije**.\n- **Dolaziš iz Todoista ili TickTicka?** Uvezi svoje zadatke u **Postavke → Sinkronizacija i sigurnosne kopije → Uvoz/izvoz**.\n- **Ture**: **Pomoć → Brza tura** u izborniku bočne trake provest će te kroz osnove na tvom vlastitom zadatku, a **Pomoć → Kako** korak po korak prikazuje kratku sintaksu i navigaciju tipkovnicom. Zatvori turu kad god želiš.\n- **Prilagodi po svom**: odaberi temu ili tamni način i uključi ili isključi značajke poput prikaza, termina, navika, modusa fokusa ili integracija u **Postavke → Općenito**. Dodaci donose još više."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Nezavršeno"
       },
       "V": {
-        "ADD_NEW_BOARD": "Dodaj novu ploču",
+        "ADD_NEW_BOARD": "Dodaj novi prikaz",
         "ADD_TASK_TO": "Dodaj zadatak u {{title}}",
-        "CONFIRM_DELETE": "Stvarno želiš izbrisati ovu ploču?",
+        "CONFIRM_DELETE": "Stvarno želiš izbrisati ovaj prikaz?",
         "CREATE_NEW_TAG_BTN": "Stvori oznaku",
         "CREATE_NEW_TAGS_BTN": "Stvori oznake",
-        "EDIT_BOARD": "Uredi ploču",
+        "EDIT_BOARD": "Uredi prikaz",
         "EDIT_COLUMN": "Uredi stupac",
         "EMPTY_VIEW_ADD": "Dodaj zadatak",
         "EMPTY_VIEW_HINT": "Zadaci se ovdje pojavljuju kad odgovaraju pravilima prikaza. Dodaj jedan ili promijeni pravila.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Dio filtra popisa ne može se u prikazu kombinirati s njegovim projektom ili oznakom pa je izostavljen.",
         "HINT_GROUPING_NOT_SAVED": "Ovo grupiranje se ne sprema: samo grupiranje po oznaci postaje odjeljci prikaza.",
         "MISSING_TAGS_MSG": "Ovaj prikaz koristi oznake koje još ne postoje: {{tags}}",
-        "NO_PANELS_BTN": "Podesi ploču",
-        "NO_PANELS_MSG": "Ova ploča nema podešene ploče. Dodaj ih.",
+        "NO_PANELS_BTN": "Podesi prikaz",
+        "NO_PANELS_MSG": "Ovaj prikaz još nema odjeljaka. Dodaj jedan za prikaz zadataka.",
         "NO_TASKS_IN_VIEW": "Nijedan zadatak ne odgovara ovom prikazu",
         "NO_VIEWS_BTN": "Stvori prikaz",
         "NO_VIEWS_MSG": "Još nema prikaza. Prikaz pokazuje zadatke iz svih tvojih projekata koji odgovaraju njegovim pravilima, u jednom ili više stupaca.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Ploče",
+      "BOARDS": "Prikazi",
       "BOARDS_HINT": "Spremljeni prikazi u bočnom izborniku. Svaki prikazuje zadatke iz svih projekata po oznaci, projektu, roku ili statusu završenosti, u jednom ili više stupaca, poput Kanban ploče.",
       "DONATE_PAGE": "Stranica za donacije",
       "DONATE_PAGE_HINT": "Prikazuje stavku izbornika s načinima podrške razvoju aplikacije.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Pozadinska slika",
       "WALLPAPER_BUTTON": "Postavi pozadinsku sliku…",
       "WALLPAPER_DIALOG_TITLE": "Globalna pozadinska slika",
-      "WALLPAPER_HINT": "Prikazuje se na stranicama bez vlastite pozadine (Planer, Raspored, Ploče, Postavke…). Oznake i projekti s vlastitom slikom imaju prednost."
+      "WALLPAPER_HINT": "Prikazuje se na stranicama bez vlastite pozadine (Planer, Raspored, Prikazi, Postavke…). Oznake i projekti s vlastitom slikom imaju prednost."
     },
     "POMODORO": {
       "BREAK_DURATION": "Trajanje kratke pauze",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Dodaj novi zadatak",
     "ADD_SECTION": "Dodaj odjeljak",
-    "BOARDS": "Ploče",
+    "BOARDS": "Prikazi",
     "COPY_TASK_LIST_MARKDOWN": "Kopiraj u međuspremnik",
     "CREATE_PROJECT": "Stvori projekt",
     "CREATE_TAG": "Stvori oznaku",

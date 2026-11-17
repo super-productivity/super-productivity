@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Facultatif : conseils pour bien démarrer",
-      "NOTES": "Rien ici n’est obligatoire. Supprimez cette tâche quand vous voulez.\n\n- **Aujourd'hui et Boîte de réception** : Aujourd'hui affiche ce qui est prévu pour aujourd’hui. Les tâches sans projet à vous restent dans Boîte de réception. Une tâche peut apparaître dans les deux listes.\n- **Projets** : regroupez les tâches par thème avec le **+** à côté de **Projets** dans la barre latérale.\n- **Synchronisation** : gardez vos données sur plusieurs appareils dans **Réglages → Synchronisation & sauvegarde**.\n- **Vous venez de Todoist ou TickTick ?** Importez vos tâches dans **Réglages → Synchronisation & sauvegarde → Import / Export**.\n- **Visites** : **Aide → Visite rapide** dans le menu de la barre latérale vous guide à travers les bases sur votre propre tâche, et **Aide → Tutoriel** montre pas à pas la syntaxe courte et la navigation au clavier. Fermez une visite quand vous voulez.\n- **Personnalisez** : choisissez un thème ou le mode sombre, et activez ou désactivez des fonctions comme les tableaux, le planning, les habitudes, le mode concentration ou les intégrations dans **Réglages → Général**. Les plugins en ajoutent encore plus."
+      "NOTES": "Rien ici n’est obligatoire. Supprimez cette tâche quand vous voulez.\n\n- **Aujourd'hui et Boîte de réception** : Aujourd'hui affiche ce qui est prévu pour aujourd’hui. Les tâches sans projet à vous restent dans Boîte de réception. Une tâche peut apparaître dans les deux listes.\n- **Projets** : regroupez les tâches par thème avec le **+** à côté de **Projets** dans la barre latérale.\n- **Synchronisation** : gardez vos données sur plusieurs appareils dans **Réglages → Synchronisation & sauvegarde**.\n- **Vous venez de Todoist ou TickTick ?** Importez vos tâches dans **Réglages → Synchronisation & sauvegarde → Import / Export**.\n- **Visites** : **Aide → Visite rapide** dans le menu de la barre latérale vous guide à travers les bases sur votre propre tâche, et **Aide → Tutoriel** montre pas à pas la syntaxe courte et la navigation au clavier. Fermez une visite quand vous voulez.\n- **Personnalisez** : choisissez un thème ou le mode sombre, et activez ou désactivez des fonctions comme les vues, le planning, les habitudes, le mode concentration ou les intégrations dans **Réglages → Général**. Les plugins en ajoutent encore plus."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Non terminé"
       },
       "V": {
-        "ADD_NEW_BOARD": "Ajouter un nouveau tableau",
+        "ADD_NEW_BOARD": "Ajouter une nouvelle vue",
         "ADD_TASK_TO": "Ajouter une tâche à {{title}}",
-        "CONFIRM_DELETE": "Voulez-vous vraiment supprimer ce tableau ?",
+        "CONFIRM_DELETE": "Voulez-vous vraiment supprimer cette vue ?",
         "CREATE_NEW_TAG_BTN": "Créer un tag",
         "CREATE_NEW_TAGS_BTN": "Créer des tags",
-        "EDIT_BOARD": "Modifier le tableau",
+        "EDIT_BOARD": "Modifier la vue",
         "EDIT_COLUMN": "Modifier la colonne",
         "EMPTY_VIEW_ADD": "Ajouter une tâche",
         "EMPTY_VIEW_HINT": "Les tâches apparaissent ici dès qu'elles correspondent aux règles de la vue. Ajoutez-en une ou modifiez les règles.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Une partie du filtre de la liste ne peut pas être combinée avec son projet ou sa balise dans une vue et a été ignorée.",
         "HINT_GROUPING_NOT_SAVED": "Ce regroupement n'est pas enregistré : seul le regroupement par balise devient des sections d'une vue.",
         "MISSING_TAGS_MSG": "Cette vue utilise des balises qui n'existent pas encore : {{tags}}",
-        "NO_PANELS_BTN": "Configurer le tableau",
-        "NO_PANELS_MSG": "Ce tableau n'a pas de panneaux configurés. Ajoutez-y des panneaux.",
+        "NO_PANELS_BTN": "Configurer la vue",
+        "NO_PANELS_MSG": "Cette vue n’a pas encore de sections. Ajoutez-en une pour afficher des tâches.",
         "NO_TASKS_IN_VIEW": "Aucune tâche ne correspond à cette vue",
         "NO_VIEWS_BTN": "Créer une vue",
         "NO_VIEWS_MSG": "Aucune vue pour l'instant. Une vue affiche les tâches de tous vos projets qui correspondent à ses règles, dans une ou plusieurs colonnes.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Tableaux",
+      "BOARDS": "Vues",
       "BOARDS_HINT": "Des vues enregistrées dans le menu latéral. Chacune affiche les tâches de tous les projets par balise, projet, date d'échéance ou statut terminé, dans une ou plusieurs colonnes, comme un tableau Kanban.",
       "DONATE_PAGE": "Page de don",
       "DONATE_PAGE_HINT": "Affiche une entrée de menu avec des moyens de soutenir le développement de l'application.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Fond d'écran",
       "WALLPAPER_BUTTON": "Définir le fond d'écran…",
       "WALLPAPER_DIALOG_TITLE": "Fond d'écran général",
-      "WALLPAPER_HINT": "Affiché sur les pages sans arrière-plan propre (Planificateur, Emploi du temps, Tableaux, Paramètres…). Les images propres aux balises et aux projets ont priorité."
+      "WALLPAPER_HINT": "Affiché sur les pages sans arrière-plan propre (Planificateur, Emploi du temps, Vues, Paramètres…). Les images propres aux balises et aux projets ont priorité."
     },
     "POMODORO": {
       "BREAK_DURATION": "Durée des pauses courtes",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Ajouter une nouvelle tâche",
     "ADD_SECTION": "Ajouter une section",
-    "BOARDS": "Tableaux",
+    "BOARDS": "Vues",
     "COPY_TASK_LIST_MARKDOWN": "Copier dans le presse-papiers",
     "CREATE_PROJECT": "Créer un projet",
     "CREATE_TAG": "Créer une balise",

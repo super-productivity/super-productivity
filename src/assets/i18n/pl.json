@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Opcjonalnie: wskazówki na start",
-      "NOTES": "Nic tutaj nie jest obowiązkowe. Usuń to zadanie, kiedy chcesz.\n\n- **Dzisiaj i Skrzynka odbiorcza**: widok „Dzisiaj” pokazuje to, co zaplanowano na dziś. Zadania bez własnego projektu zostają w widoku „Skrzynka odbiorcza”. Zadanie może pojawić się na obu listach.\n- **Projekty**: grupuj zadania tematycznie za pomocą **+** obok **Projekty** na pasku bocznym.\n- **Synchronizacja**: trzymaj dane na kilku urządzeniach w **Ustawienia → Synchronizacja i kopia zapasowa**.\n- **Przychodzisz z Todoista lub TickTicka?** Zaimportuj swoje zadania w **Ustawienia → Synchronizacja i kopia zapasowa → Import/eksport**.\n- **Przewodniki**: **Pomoc → Krótki przewodnik** w menu paska bocznego przeprowadzi Cię przez podstawy na Twoim własnym zadaniu, a **Pomoc → Poradnik** pokazuje krok po kroku krótką składnię i nawigację klawiaturą. Zamknij przewodnik, kiedy chcesz.\n- **Dopasuj do siebie**: wybierz motyw lub tryb ciemny i włączaj lub wyłączaj funkcje, takie jak tablice, harmonogram, nawyki, tryb skupienia czy integracje, w **Ustawienia → Ogólne**. Wtyczki dodają jeszcze więcej."
+      "NOTES": "Nic tutaj nie jest obowiązkowe. Usuń to zadanie, kiedy chcesz.\n\n- **Dzisiaj i Skrzynka odbiorcza**: widok „Dzisiaj” pokazuje to, co zaplanowano na dziś. Zadania bez własnego projektu zostają w widoku „Skrzynka odbiorcza”. Zadanie może pojawić się na obu listach.\n- **Projekty**: grupuj zadania tematycznie za pomocą **+** obok **Projekty** na pasku bocznym.\n- **Synchronizacja**: trzymaj dane na kilku urządzeniach w **Ustawienia → Synchronizacja i kopia zapasowa**.\n- **Przychodzisz z Todoista lub TickTicka?** Zaimportuj swoje zadania w **Ustawienia → Synchronizacja i kopia zapasowa → Import/eksport**.\n- **Przewodniki**: **Pomoc → Krótki przewodnik** w menu paska bocznego przeprowadzi Cię przez podstawy na Twoim własnym zadaniu, a **Pomoc → Poradnik** pokazuje krok po kroku krótką składnię i nawigację klawiaturą. Zamknij przewodnik, kiedy chcesz.\n- **Dopasuj do siebie**: wybierz motyw lub tryb ciemny i włączaj lub wyłączaj funkcje, takie jak widoki, harmonogram, nawyki, tryb skupienia czy integracje, w **Ustawienia → Ogólne**. Wtyczki dodają jeszcze więcej."
     }
   },
   "F": {
@@ -230,31 +230,31 @@
         "TASK_DONE_STATE_UNDONE": "Niezrobione"
       },
       "V": {
-        "ADD_NEW_BOARD": "Dodaj nową tablicę",
+        "ADD_NEW_BOARD": "Dodaj nowy widok",
         "ADD_TASK_TO": "Dodaj zadanie do: {{title}}",
-        "CONFIRM_DELETE": "Czy na pewno chcesz usunąć tę tablicę?",
+        "CONFIRM_DELETE": "Czy na pewno chcesz usunąć ten widok?",
         "CREATE_NEW_TAG_BTN": "Utwórz tag",
         "CREATE_NEW_TAGS_BTN": "Utwórz tagi",
-        "EDIT_BOARD": "Edytuj tablicę",
+        "EDIT_BOARD": "Edytuj widok",
         "EDIT_COLUMN": "Edytuj kolumnę",
         "EMPTY_VIEW_ADD": "Dodaj zadanie",
-        "EMPTY_VIEW_HINT": "Zadania pojawią się tutaj, gdy będą pasować do reguł tablicy. Dodaj zadanie lub zmień reguły.",
+        "EMPTY_VIEW_HINT": "Zadania pojawią się tutaj, gdy będą pasować do reguł widoku. Dodaj zadanie lub zmień reguły.",
         "HINT_FILTER_NOT_ONLY_TODAY": "Pokazuje wszystkie otwarte zadania pasujące do filtra, nie tylko dzisiejsze. Dodaj regułę daty planowanej, aby zawęzić wyniki.",
-        "HINT_FILTER_PART_NOT_SAVED": "Części filtra listy nie można połączyć z jej projektem lub tagiem na tablicy, więc została pominięta.",
-        "HINT_GROUPING_NOT_SAVED": "To grupowanie nie zostanie zapisane: sekcjami tablicy staje się tylko grupowanie według tagu.",
-        "MISSING_TAGS_MSG": "Ta tablica używa tagów, które jeszcze nie istnieją: {{tags}}",
-        "NO_PANELS_BTN": "Skonfiguruj tablicę",
-        "NO_PANELS_MSG": "Ta tablica nie ma skonfigurowanych paneli. Dodaj kilka paneli.",
-        "NO_TASKS_IN_VIEW": "Żadne zadania nie pasują do tej tablicy",
-        "NO_VIEWS_BTN": "Utwórz tablicę",
-        "NO_VIEWS_MSG": "Nie ma jeszcze tablic. Tablica pokazuje zadania ze wszystkich Twoich projektów pasujące do jej reguł, w jednej lub kilku kolumnach.",
-        "SAVE_AS_VIEW": "Zapisz jako tablicę…",
+        "HINT_FILTER_PART_NOT_SAVED": "Części filtra listy nie można połączyć z jej projektem lub tagiem w widoku, więc została pominięta.",
+        "HINT_GROUPING_NOT_SAVED": "To grupowanie nie zostanie zapisane: sekcjami widoku staje się tylko grupowanie według tagu.",
+        "MISSING_TAGS_MSG": "Ten widok używa tagów, które jeszcze nie istnieją: {{tags}}",
+        "NO_PANELS_BTN": "Skonfiguruj widok",
+        "NO_PANELS_MSG": "Ten widok nie ma jeszcze sekcji. Dodaj sekcję, aby wyświetlić zadania.",
+        "NO_TASKS_IN_VIEW": "Żadne zadania nie pasują do tego widoku",
+        "NO_VIEWS_BTN": "Utwórz widok",
+        "NO_VIEWS_MSG": "Nie ma jeszcze widoków. Widok pokazuje zadania ze wszystkich Twoich projektów pasujące do jego reguł, w jednej lub kilku kolumnach.",
+        "SAVE_AS_VIEW": "Zapisz jako widok…",
         "SECTION_OTHER": "Inne",
         "SHOW_ALL": "Pokaż wszystkie ({{count}})",
         "SHOW_AS_BOARD": "Pokaż jako Kanban",
         "SHOW_AS_LIST": "Pokaż jako listę",
         "S_CANT_MOVE_HERE": "Żadna zmiana nie sprawi, że to zadanie będzie pasować do reguł kolumny, więc nie można go tu przenieść",
-        "VIEW_CREATED": "Utworzono tablicę „{{title}}”"
+        "VIEW_CREATED": "Utworzono widok „{{title}}”"
       }
     },
     "CALDAV": {
@@ -2680,8 +2680,8 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Tablice",
-      "BOARDS_HINT": "Zapisane tablice w menu bocznym. Każda pokazuje zadania ze wszystkich projektów według tagu, projektu, terminu lub stanu ukończenia, w jednej lub kilku kolumnach, jak tablica Kanban.",
+      "BOARDS": "Widoki",
+      "BOARDS_HINT": "Zapisane widoki w menu bocznym. Każdy pokazuje zadania ze wszystkich projektów według tagu, projektu, terminu lub stanu ukończenia, w jednej lub kilku kolumnach, jak tablica Kanban.",
       "DONATE_PAGE": "Strona darowizn",
       "DONATE_PAGE_HINT": "Pokazuje pozycję menu ze sposobami wsparcia rozwoju aplikacji.",
       "EXTEND_WITH_PLUGINS": "Więcej funkcji znajdziesz we wtyczkach",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Tapeta",
       "WALLPAPER_BUTTON": "Ustaw tapetę…",
       "WALLPAPER_DIALOG_TITLE": "Tapeta globalna",
-      "WALLPAPER_HINT": "Wyświetlana na stronach bez własnego tła (Planer, Harmonogram, Tablice, Ustawienia…). Tagi i projekty z własnym obrazem mają nad nią pierwszeństwo."
+      "WALLPAPER_HINT": "Wyświetlana na stronach bez własnego tła (Planer, Harmonogram, Widoki, Ustawienia…). Tagi i projekty z własnym obrazem mają nad nią pierwszeństwo."
     },
     "POMODORO": {
       "BREAK_DURATION": "Czas krótkiej przerwy",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Dodaj nowe zadanie",
     "ADD_SECTION": "Dodaj sekcję",
-    "BOARDS": "Tablice",
+    "BOARDS": "Widoki",
     "COPY_TASK_LIST_MARKDOWN": "Kopiuj do schowka",
     "CREATE_PROJECT": "Stwórz projekt",
     "CREATE_TAG": "Stwórz tag",

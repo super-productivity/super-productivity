@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Optional: Tipps für den Einstieg",
-      "NOTES": "Nichts hier ist Pflicht. Lösche diese Aufgabe, wann du willst.\n\n- **Heute und Eingang**: Heute zeigt, was für heute geplant ist. Aufgaben ohne eigenes Projekt bleiben im Eingang. Eine Aufgabe kann in beiden Listen erscheinen.\n- **Projekte**: Gruppiere Aufgaben nach Thema mit dem **+** neben **Projekte** in der Seitenleiste.\n- **Sync**: Halte deine Daten auf mehreren Geräten aktuell unter **Einstellungen → Sync & Backup**.\n- **Du kommst von Todoist oder TickTick?** Importiere deine Aufgaben unter **Einstellungen → Sync & Backup → Import Export**.\n- **Touren**: **Hilfe → Kurztour** im Seitenleistenmenü führt dich an deiner eigenen Aufgabe durch die Grundlagen, und **Hilfe → Anleitung** zeigt dir Kurzsyntax und Tastaturnavigation Schritt für Schritt. Schließe eine Tour, wann du willst.\n- **Mach es zu deinem**: Wähle ein Theme oder den Dunkelmodus und schalte Funktionen wie Boards, Zeitplan, Gewohnheiten, Fokus-Modus oder Integrationen unter **Einstellungen → Allgemein** ein oder aus. Plugins bringen noch mehr."
+      "NOTES": "Nichts hier ist Pflicht. Lösche diese Aufgabe, wann du willst.\n\n- **Heute und Eingang**: Heute zeigt, was für heute geplant ist. Aufgaben ohne eigenes Projekt bleiben im Eingang. Eine Aufgabe kann in beiden Listen erscheinen.\n- **Projekte**: Gruppiere Aufgaben nach Thema mit dem **+** neben **Projekte** in der Seitenleiste.\n- **Sync**: Halte deine Daten auf mehreren Geräten aktuell unter **Einstellungen → Sync & Backup**.\n- **Du kommst von Todoist oder TickTick?** Importiere deine Aufgaben unter **Einstellungen → Sync & Backup → Import Export**.\n- **Touren**: **Hilfe → Kurztour** im Seitenleistenmenü führt dich an deiner eigenen Aufgabe durch die Grundlagen, und **Hilfe → Anleitung** zeigt dir Kurzsyntax und Tastaturnavigation Schritt für Schritt. Schließe eine Tour, wann du willst.\n- **Mach es zu deinem**: Wähle ein Theme oder den Dunkelmodus und schalte Funktionen wie Ansichten, Zeitplan, Gewohnheiten, Fokus-Modus oder Integrationen unter **Einstellungen → Allgemein** ein oder aus. Plugins bringen noch mehr."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Unerledigt"
       },
       "V": {
-        "ADD_NEW_BOARD": "Neues Board hinzufügen",
+        "ADD_NEW_BOARD": "Neue Ansicht hinzufügen",
         "ADD_TASK_TO": "Aufgabe zu {{title}} hinzufügen",
-        "CONFIRM_DELETE": "Möchtest du dieses Board wirklich löschen?",
+        "CONFIRM_DELETE": "Möchtest du diese Ansicht wirklich löschen?",
         "CREATE_NEW_TAG_BTN": "Tag erstellen",
         "CREATE_NEW_TAGS_BTN": "Tags erstellen",
-        "EDIT_BOARD": "Board bearbeiten",
+        "EDIT_BOARD": "Ansicht bearbeiten",
         "EDIT_COLUMN": "Spalte bearbeiten",
         "EMPTY_VIEW_ADD": "Aufgabe hinzufügen",
         "EMPTY_VIEW_HINT": "Aufgaben erscheinen hier, sobald sie den Regeln der Ansicht entsprechen. Füge eine hinzu oder ändere die Regeln.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Ein Teil des Listenfilters lässt sich in einer Ansicht nicht mit dem Projekt oder Tag kombinieren und wurde weggelassen.",
         "HINT_GROUPING_NOT_SAVED": "Diese Gruppierung wird nicht gespeichert: Nur die Gruppierung nach Tag wird zu Abschnitten einer Ansicht.",
         "MISSING_TAGS_MSG": "Diese Ansicht verwendet Tags, die noch nicht existieren: {{tags}}",
-        "NO_PANELS_BTN": "Board konfigurieren",
-        "NO_PANELS_MSG": "Dieses Board hat keine konfigurierten Panels. Füge einige Panels hinzu.",
+        "NO_PANELS_BTN": "Ansicht konfigurieren",
+        "NO_PANELS_MSG": "Diese Ansicht hat noch keine Abschnitte. Füge einen hinzu, um Aufgaben anzuzeigen.",
         "NO_TASKS_IN_VIEW": "Keine Aufgaben entsprechen dieser Ansicht",
         "NO_VIEWS_BTN": "Ansicht erstellen",
         "NO_VIEWS_MSG": "Noch keine Ansichten. Eine Ansicht zeigt Aufgaben aus all deinen Projekten, die ihren Regeln entsprechen, in einer oder mehreren Spalten.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Boards",
+      "BOARDS": "Ansichten",
       "BOARDS_HINT": "Gespeicherte Ansichten im Seitenmenü. Jede zeigt Aufgaben aus allen Projekten nach Tag, Projekt, Fälligkeitsdatum oder Erledigt-Status, in einer oder mehreren Spalten, wie ein Kanban-Board.",
       "DONATE_PAGE": "Spenden-Seite",
       "DONATE_PAGE_HINT": "Zeigt einen Menüeintrag mit Möglichkeiten, die Entwicklung der App zu unterstützen.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Hintergrundbild",
       "WALLPAPER_BUTTON": "Hintergrundbild festlegen…",
       "WALLPAPER_DIALOG_TITLE": "Globales Hintergrundbild",
-      "WALLPAPER_HINT": "Wird auf Seiten ohne eigenen Hintergrund angezeigt (Planer, Zeitplan, Boards, Einstellungen …). Tags und Projekte mit eigenem Bild überschreiben es."
+      "WALLPAPER_HINT": "Wird auf Seiten ohne eigenen Hintergrund angezeigt (Planer, Zeitplan, Ansichten, Einstellungen …). Tags und Projekte mit eigenem Bild überschreiben es."
     },
     "POMODORO": {
       "BREAK_DURATION": "Dauer der kurzen Pausen",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Neue Aufgabe hinzufügen",
     "ADD_SECTION": "Abschnitt hinzufügen",
-    "BOARDS": "Boards",
+    "BOARDS": "Ansichten",
     "COPY_TASK_LIST_MARKDOWN": "In die Zwischenablage kopieren",
     "CREATE_PROJECT": "Projekt erstellen",
     "CREATE_TAG": "Tag erstellen",

@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Valinnainen: vinkkejä alkuun",
-      "NOTES": "Mikään täällä ei ole pakollista. Poista tämä tehtävä milloin haluat.\n\n- **Tänään ja Saapuneet**: Tänään-näkymä näyttää tälle päivälle suunnitellut tehtävät. Tehtävät, joilla ei ole omaa projektia, pysyvät kohdassa Saapuneet. Tehtävä voi näkyä molemmissa listoissa.\n- **Projektit**: ryhmittele tehtävät aiheen mukaan sivupalkin **Projektit**-kohdan vieressä olevalla **+**-painikkeella.\n- **Synkronointi**: pidä tietosi usealla laitteella kohdassa **Asetukset → Synkronointi ja varmuuskopiot**.\n- **Tuletko Todoististä tai TickTickistä?** Tuo tehtäväsi kohdassa **Asetukset → Synkronointi ja varmuuskopiot → Tuonti/Vienti**.\n- **Esittelyt**: sivupalkin valikon **Ohje → Pikaesittely** käy perusteet läpi omalla tehtävälläsi, ja **Ohje → Ohje** näyttää lyhyen syntaksin ja näppäimistöohjauksen vaihe vaiheelta. Sulje esittely milloin haluat.\n- **Tee siitä omasi**: valitse teema tai tumma tila ja ota ominaisuudet, kuten taulut, aikataulu, tavat, keskittymismoodi tai integraatiot, käyttöön tai pois käytöstä kohdassa **Asetukset → Yleinen**. Lisäosat tuovat vielä lisää."
+      "NOTES": "Mikään täällä ei ole pakollista. Poista tämä tehtävä milloin haluat.\n\n- **Tänään ja Saapuneet**: Tänään-näkymä näyttää tälle päivälle suunnitellut tehtävät. Tehtävät, joilla ei ole omaa projektia, pysyvät kohdassa Saapuneet. Tehtävä voi näkyä molemmissa listoissa.\n- **Projektit**: ryhmittele tehtävät aiheen mukaan sivupalkin **Projektit**-kohdan vieressä olevalla **+**-painikkeella.\n- **Synkronointi**: pidä tietosi usealla laitteella kohdassa **Asetukset → Synkronointi ja varmuuskopiot**.\n- **Tuletko Todoististä tai TickTickistä?** Tuo tehtäväsi kohdassa **Asetukset → Synkronointi ja varmuuskopiot → Tuonti/Vienti**.\n- **Esittelyt**: sivupalkin valikon **Ohje → Pikaesittely** käy perusteet läpi omalla tehtävälläsi, ja **Ohje → Ohje** näyttää lyhyen syntaksin ja näppäimistöohjauksen vaihe vaiheelta. Sulje esittely milloin haluat.\n- **Tee siitä omasi**: valitse teema tai tumma tila ja ota ominaisuudet, kuten näkymät, aikataulu, tavat, keskittymismoodi tai integraatiot, käyttöön tai pois käytöstä kohdassa **Asetukset → Yleinen**. Lisäosat tuovat vielä lisää."
     }
   },
   "F": {
@@ -230,31 +230,31 @@
         "TASK_DONE_STATE_UNDONE": "Kesken"
       },
       "V": {
-        "ADD_NEW_BOARD": "Lisää uusi taulu",
+        "ADD_NEW_BOARD": "Lisää uusi näkymä",
         "ADD_TASK_TO": "Lisää tehtävä kohteeseen {{title}}",
-        "CONFIRM_DELETE": "Haluatko varmasti poistaa tämän taulun?",
+        "CONFIRM_DELETE": "Haluatko varmasti poistaa tämän näkymän?",
         "CREATE_NEW_TAG_BTN": "Luo tunniste",
         "CREATE_NEW_TAGS_BTN": "Luo tunnisteet",
-        "EDIT_BOARD": "Muokkaa taulua",
+        "EDIT_BOARD": "Muokkaa näkymää",
         "EDIT_COLUMN": "Muokkaa saraketta",
         "EMPTY_VIEW_ADD": "Lisää tehtävä",
-        "EMPTY_VIEW_HINT": "Tehtävät näkyvät täällä, kun ne vastaavat taulun sääntöjä. Lisää tehtävä tai muuta sääntöjä.",
+        "EMPTY_VIEW_HINT": "Tehtävät näkyvät täällä, kun ne vastaavat näkymän sääntöjä. Lisää tehtävä tai muuta sääntöjä.",
         "HINT_FILTER_NOT_ONLY_TODAY": "Näyttää kaikki suodatinta vastaavat avoimet tehtävät, ei vain tämän päivän. Rajaa lisäämällä suunnitellun päivämäärän sääntö.",
-        "HINT_FILTER_PART_NOT_SAVED": "Osaa listan suodattimesta ei voi yhdistää sen projektiin tai tunnisteeseen taulussa, joten se jätettiin pois.",
-        "HINT_GROUPING_NOT_SAVED": "Tätä ryhmittelyä ei tallenneta: vain tunnisteen mukaan ryhmittelystä tulee taulun osioita.",
-        "MISSING_TAGS_MSG": "Tämä taulu käyttää tunnisteita, joita ei vielä ole olemassa: {{tags}}",
-        "NO_PANELS_BTN": "Määritä taulu",
-        "NO_PANELS_MSG": "Taululta puuttuu määritettyjä paneeleja. Lisää siihen paneeleja.",
-        "NO_TASKS_IN_VIEW": "Mikään tehtävä ei vastaa tätä taulua",
-        "NO_VIEWS_BTN": "Luo taulu",
-        "NO_VIEWS_MSG": "Ei vielä tauluja. Taulu näyttää kaikista projekteistasi tehtävät, jotka vastaavat sen sääntöjä, yhdessä tai useammassa sarakkeessa.",
-        "SAVE_AS_VIEW": "Tallenna tauluksi…",
+        "HINT_FILTER_PART_NOT_SAVED": "Osaa listan suodattimesta ei voi yhdistää sen projektiin tai tunnisteeseen näkymässä, joten se jätettiin pois.",
+        "HINT_GROUPING_NOT_SAVED": "Tätä ryhmittelyä ei tallenneta: vain tunnisteen mukaan ryhmittelystä tulee näkymän osioita.",
+        "MISSING_TAGS_MSG": "Tämä näkymä käyttää tunnisteita, joita ei vielä ole olemassa: {{tags}}",
+        "NO_PANELS_BTN": "Määritä näkymä",
+        "NO_PANELS_MSG": "Näkymässä ei ole vielä osioita. Lisää osio, niin tehtävät näkyvät.",
+        "NO_TASKS_IN_VIEW": "Mikään tehtävä ei vastaa tätä näkymää",
+        "NO_VIEWS_BTN": "Luo näkymä",
+        "NO_VIEWS_MSG": "Ei vielä näkymiä. Näkymä näyttää kaikista projekteistasi tehtävät, jotka vastaavat sen sääntöjä, yhdessä tai useammassa sarakkeessa.",
+        "SAVE_AS_VIEW": "Tallenna näkymäksi…",
         "SECTION_OTHER": "Muut",
         "SHOW_ALL": "Näytä kaikki ({{count}})",
         "SHOW_AS_BOARD": "Näytä Kanban-näkymänä",
         "SHOW_AS_LIST": "Näytä listana",
         "S_CANT_MOVE_HERE": "Mikään muutos ei saa tätä tehtävää vastaamaan sarakkeen sääntöjä, joten sitä ei voi siirtää tänne",
-        "VIEW_CREATED": "Taulu \"{{title}}\" luotu"
+        "VIEW_CREATED": "Näkymä \"{{title}}\" luotu"
       }
     },
     "CALDAV": {
@@ -2680,8 +2680,8 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Laudat",
-      "BOARDS_HINT": "Tallennetut taulut sivuvalikossa. Jokainen näyttää tehtävät kaikista projekteista tunnisteen, projektin, eräpäivän tai valmiustilan mukaan yhdessä tai useammassa sarakkeessa, kuten Kanban-taulu.",
+      "BOARDS": "Näkymät",
+      "BOARDS_HINT": "Tallennetut näkymät sivuvalikossa. Jokainen näyttää tehtävät kaikista projekteista tunnisteen, projektin, eräpäivän tai valmiustilan mukaan yhdessä tai useammassa sarakkeessa, kuten Kanban-taulu.",
       "DONATE_PAGE": "Lahjoitussivu",
       "DONATE_PAGE_HINT": "Näyttää valikkokohdan, jossa on tapoja tukea sovelluksen kehitystä.",
       "EXTEND_WITH_PLUGINS": "Löydä lisää ominaisuuksia laajennuksista",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Taustakuva",
       "WALLPAPER_BUTTON": "Aseta taustakuva…",
       "WALLPAPER_DIALOG_TITLE": "Yleinen taustakuva",
-      "WALLPAPER_HINT": "Näytetään sivuilla, joilla ei ole omaa taustaa (Suunnittelija, Aikataulu, Taulut, Asetukset…). Tunnisteiden ja projektien omat kuvat ohittavat sen."
+      "WALLPAPER_HINT": "Näytetään sivuilla, joilla ei ole omaa taustaa (Suunnittelija, Aikataulu, Näkymät, Asetukset…). Tunnisteiden ja projektien omat kuvat ohittavat sen."
     },
     "POMODORO": {
       "BREAK_DURATION": "Lyhyiden taukojen kesto",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Lisää uusi tehtävä",
     "ADD_SECTION": "Lisää osio",
-    "BOARDS": "Taulut",
+    "BOARDS": "Näkymät",
     "COPY_TASK_LIST_MARKDOWN": "Kopioi leikepöydälle",
     "CREATE_PROJECT": "Luo projekti",
     "CREATE_TAG": "Luo tunniste",

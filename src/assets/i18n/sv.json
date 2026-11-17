@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Valfritt: tips för att komma igång",
-      "NOTES": "Inget här är obligatoriskt. Ta bort den här uppgiften när du vill.\n\n- **Idag och Inkorgen**: Idag visar det som är planerat för idag. Uppgifter utan ett eget projekt ligger kvar i Inkorgen. En uppgift kan synas i båda listorna.\n- **Projekt**: gruppera uppgifter efter ämne med **+** bredvid **Projekt** i sidofältet.\n- **Synk**: ha dina data på flera enheter under **Inställningar → Synk och säkerhetskopia**.\n- **Kommer du från Todoist eller TickTick?** Importera dina uppgifter under **Inställningar → Synk och säkerhetskopia → Importera/exportera**.\n- **Turer**: **Hjälp → Snabbtur** i sidofältsmenyn går igenom grunderna med din egen uppgift, och **Hjälp → Guide** visar kort syntax och tangentbordsnavigering steg för steg. Stäng en tur när du vill.\n- **Gör det till ditt**: välj ett tema eller mörkt läge och slå på eller av funktioner som tavlor, schema, vanor, fokusläge eller integrationer under **Inställningar → Allmänt**. Tillägg ger ännu mer."
+      "NOTES": "Inget här är obligatoriskt. Ta bort den här uppgiften när du vill.\n\n- **Idag och Inkorgen**: Idag visar det som är planerat för idag. Uppgifter utan ett eget projekt ligger kvar i Inkorgen. En uppgift kan synas i båda listorna.\n- **Projekt**: gruppera uppgifter efter ämne med **+** bredvid **Projekt** i sidofältet.\n- **Synk**: ha dina data på flera enheter under **Inställningar → Synk och säkerhetskopia**.\n- **Kommer du från Todoist eller TickTick?** Importera dina uppgifter under **Inställningar → Synk och säkerhetskopia → Importera/exportera**.\n- **Turer**: **Hjälp → Snabbtur** i sidofältsmenyn går igenom grunderna med din egen uppgift, och **Hjälp → Guide** visar kort syntax och tangentbordsnavigering steg för steg. Stäng en tur när du vill.\n- **Gör det till ditt**: välj ett tema eller mörkt läge och slå på eller av funktioner som vyer, schema, vanor, fokusläge eller integrationer under **Inställningar → Allmänt**. Tillägg ger ännu mer."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Ogjord"
       },
       "V": {
-        "ADD_NEW_BOARD": "Lägg till ny tavla",
+        "ADD_NEW_BOARD": "Lägg till ny vy",
         "ADD_TASK_TO": "Lägg till uppgift i {{title}}",
-        "CONFIRM_DELETE": "Vill du verkligen radera denna tavla?",
+        "CONFIRM_DELETE": "Vill du verkligen radera denna vy?",
         "CREATE_NEW_TAG_BTN": "Skapa tagg",
         "CREATE_NEW_TAGS_BTN": "Skapa taggar",
-        "EDIT_BOARD": "Redigera tavla",
+        "EDIT_BOARD": "Redigera vy",
         "EDIT_COLUMN": "Redigera kolumn",
         "EMPTY_VIEW_ADD": "Lägg till uppgift",
         "EMPTY_VIEW_HINT": "Uppgifter visas här när de matchar vyns regler. Lägg till en, eller ändra reglerna.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "En del av listans filter kan inte kombineras med dess projekt eller tagg i en vy och utelämnades.",
         "HINT_GROUPING_NOT_SAVED": "Den här grupperingen sparas inte: bara gruppering efter tagg blir sektioner i en vy.",
         "MISSING_TAGS_MSG": "Den här vyn använder taggar som inte finns än: {{tags}}",
-        "NO_PANELS_BTN": "Konfigurera tavla",
-        "NO_PANELS_MSG": "Denna tavla har inga konfigurerade paneler. Lägg till några paneler på den.",
+        "NO_PANELS_BTN": "Konfigurera vy",
+        "NO_PANELS_MSG": "Den här vyn har inga sektioner än. Lägg till en för att visa uppgifter.",
         "NO_TASKS_IN_VIEW": "Inga uppgifter matchar den här vyn",
         "NO_VIEWS_BTN": "Skapa vy",
         "NO_VIEWS_MSG": "Inga vyer än. En vy visar uppgifter från alla dina projekt som matchar dess regler, i en eller flera kolumner.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Tavlor",
+      "BOARDS": "Vyer",
       "BOARDS_HINT": "Sparade vyer i sidomenyn. Varje vy visar uppgifter från alla projekt efter tagg, projekt, förfallodatum eller klar-status, i en eller flera kolumner, som en Kanban-tavla.",
       "DONATE_PAGE": "Donationssida",
       "DONATE_PAGE_HINT": "Visar ett menyalternativ med sätt att stödja utvecklingen av appen.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Bakgrundsbild",
       "WALLPAPER_BUTTON": "Ange bakgrundsbild…",
       "WALLPAPER_DIALOG_TITLE": "Global bakgrundsbild",
-      "WALLPAPER_HINT": "Visas på sidor utan egen bakgrund (Planerare, Schema, Tavlor, Inställningar…). Taggar och projekt med en egen bild åsidosätter den."
+      "WALLPAPER_HINT": "Visas på sidor utan egen bakgrund (Planerare, Schema, Vyer, Inställningar…). Taggar och projekt med en egen bild åsidosätter den."
     },
     "POMODORO": {
       "BREAK_DURATION": "Varaktighet för korta raster",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Lägg till ny uppgift",
     "ADD_SECTION": "Lägg till sektion",
-    "BOARDS": "Tavlor",
+    "BOARDS": "Vyer",
     "COPY_TASK_LIST_MARKDOWN": "Kopiera till urklipp",
     "CREATE_PROJECT": "Skapa projekt",
     "CREATE_TAG": "Skapa tagg",

@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Valgfritt: tips for å komme i gang",
-      "NOTES": "Ingenting her er obligatorisk. Slett denne oppgaven når du vil.\n\n- **I dag og Innboks**: I dag viser hva som er planlagt for i dag. Oppgaver uten et eget prosjekt blir liggende i Innboks. En oppgave kan vises i begge listene.\n- **Prosjekter**: grupper oppgaver etter tema med **+** ved siden av **Prosjekter** i sidemenyen.\n- **Synk**: ha dataene dine på flere enheter under **Innstillinger → Synk og sikkerhetskopi**.\n- **Kommer du fra Todoist eller TickTick?** Importer oppgavene dine under **Innstillinger → Synk og sikkerhetskopi → Import Eksport**.\n- **Turer**: **Hjelp → Hurtigtur** i sidemenyen viser deg det grunnleggende på din egen oppgave, og **Hjelp → Slik gjør du det** viser kort syntaks og tastaturnavigasjon steg for steg. Lukk en tur når du vil.\n- **Gjør det til ditt**: velg et tema eller mørk modus, og slå funksjoner som brett, tidsplan, vaner, fokusmodus eller integrasjoner av og på under **Innstillinger → Generell**. Plugins gir enda mer."
+      "NOTES": "Ingenting her er obligatorisk. Slett denne oppgaven når du vil.\n\n- **I dag og Innboks**: I dag viser hva som er planlagt for i dag. Oppgaver uten et eget prosjekt blir liggende i Innboks. En oppgave kan vises i begge listene.\n- **Prosjekter**: grupper oppgaver etter tema med **+** ved siden av **Prosjekter** i sidemenyen.\n- **Synk**: ha dataene dine på flere enheter under **Innstillinger → Synk og sikkerhetskopi**.\n- **Kommer du fra Todoist eller TickTick?** Importer oppgavene dine under **Innstillinger → Synk og sikkerhetskopi → Import Eksport**.\n- **Turer**: **Hjelp → Hurtigtur** i sidemenyen viser deg det grunnleggende på din egen oppgave, og **Hjelp → Slik gjør du det** viser kort syntaks og tastaturnavigasjon steg for steg. Lukk en tur når du vil.\n- **Gjør det til ditt**: velg et tema eller mørk modus, og slå funksjoner som visninger, tidsplan, vaner, fokusmodus eller integrasjoner av og på under **Innstillinger → Generell**. Plugins gir enda mer."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Ikke gjort"
       },
       "V": {
-        "ADD_NEW_BOARD": "Legg til ny tavle",
+        "ADD_NEW_BOARD": "Legg til ny visning",
         "ADD_TASK_TO": "Legg til oppgave i {{title}}",
-        "CONFIRM_DELETE": "Vil du virkelig slette denne tavlen?",
+        "CONFIRM_DELETE": "Vil du virkelig slette denne visningen?",
         "CREATE_NEW_TAG_BTN": "Opprett merke",
         "CREATE_NEW_TAGS_BTN": "Opprett merker",
-        "EDIT_BOARD": "Rediger tavle",
+        "EDIT_BOARD": "Rediger visning",
         "EDIT_COLUMN": "Rediger kolonne",
         "EMPTY_VIEW_ADD": "Legg til oppgave",
         "EMPTY_VIEW_HINT": "Oppgaver vises her når de samsvarer med visningens regler. Legg til en, eller endre reglene.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "En del av listens filter kan ikke kombineres med prosjektet eller merket i en visning og ble utelatt.",
         "HINT_GROUPING_NOT_SAVED": "Denne grupperingen lagres ikke: bare gruppering etter merke blir seksjoner i en visning.",
         "MISSING_TAGS_MSG": "Denne visningen bruker merker som ikke finnes ennå: {{tags}}",
-        "NO_PANELS_BTN": "Konfigurer tavle",
-        "NO_PANELS_MSG": "Denne tavlen har ingen konfigurerte paneler. Legg til noen paneler.",
+        "NO_PANELS_BTN": "Konfigurer visning",
+        "NO_PANELS_MSG": "Denne visningen har ingen seksjoner ennå. Legg til én for å vise oppgaver.",
         "NO_TASKS_IN_VIEW": "Ingen oppgaver samsvarer med denne visningen",
         "NO_VIEWS_BTN": "Opprett visning",
         "NO_VIEWS_MSG": "Ingen visninger ennå. En visning viser oppgaver fra alle prosjektene dine som samsvarer med reglene, i én eller flere kolonner.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Brett",
+      "BOARDS": "Visninger",
       "BOARDS_HINT": "Lagrede visninger i sidemenyen. Hver visning viser oppgaver fra alle prosjekter etter merke, prosjekt, forfallsdato eller ferdigstatus, i én eller flere kolonner, som en Kanban-tavle.",
       "DONATE_PAGE": "Donasjonsside",
       "DONATE_PAGE_HINT": "Viser et menyvalg med måter å støtte utviklingen av appen på.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Bakgrunnsbilde",
       "WALLPAPER_BUTTON": "Angi bakgrunnsbilde …",
       "WALLPAPER_DIALOG_TITLE": "Globalt bakgrunnsbilde",
-      "WALLPAPER_HINT": "Vises på sider uten egen bakgrunn (Planlegger, Tidsplan, Tavler, Innstillinger …). Merker og prosjekter med eget bilde overstyrer det."
+      "WALLPAPER_HINT": "Vises på sider uten egen bakgrunn (Planlegger, Tidsplan, Visninger, Innstillinger …). Merker og prosjekter med eget bilde overstyrer det."
     },
     "POMODORO": {
       "BREAK_DURATION": "Varighet av korte pauser",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Legg til ny oppgave",
     "ADD_SECTION": "Legg til seksjon",
-    "BOARDS": "Brett",
+    "BOARDS": "Visninger",
     "COPY_TASK_LIST_MARKDOWN": "Kopier til utklippstavle",
     "CREATE_PROJECT": "Lag prosjekt",
     "CREATE_TAG": "Opprett tag",

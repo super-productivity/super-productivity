@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Opcional: consejos para empezar",
-      "NOTES": "Nada de esto es obligatorio. Borra esta tarea cuando quieras.\n\n- **Hoy y Bandeja de entrada**: Hoy muestra lo planificado para hoy. Las tareas sin un proyecto propio se quedan en Bandeja de entrada. Una tarea puede aparecer en ambas listas.\n- **Proyectos**: agrupa las tareas por tema con el **+** junto a **Proyectos** en la barra lateral.\n- **Sincronización**: mantén tus datos en varios dispositivos en **Ajustes → Sincronización y respaldo**.\n- **¿Vienes de Todoist o TickTick?** Importa tus tareas en **Ajustes → Sincronización y respaldo → Importar/Exportar**.\n- **Tours**: **Ayuda → Tour rápido** en el menú de la barra lateral te guía por lo básico con tu propia tarea, y **Ayuda → Tutorial** muestra paso a paso la sintaxis corta y la navegación con teclado. Cierra un tour cuando quieras.\n- **Hazlo tuyo**: elige un tema o el modo oscuro y activa o desactiva funciones como tableros, cronograma, hábitos, modo concentración o integraciones en **Ajustes → General**. Los plugins añaden aún más."
+      "NOTES": "Nada de esto es obligatorio. Borra esta tarea cuando quieras.\n\n- **Hoy y Bandeja de entrada**: Hoy muestra lo planificado para hoy. Las tareas sin un proyecto propio se quedan en Bandeja de entrada. Una tarea puede aparecer en ambas listas.\n- **Proyectos**: agrupa las tareas por tema con el **+** junto a **Proyectos** en la barra lateral.\n- **Sincronización**: mantén tus datos en varios dispositivos en **Ajustes → Sincronización y respaldo**.\n- **¿Vienes de Todoist o TickTick?** Importa tus tareas en **Ajustes → Sincronización y respaldo → Importar/Exportar**.\n- **Tours**: **Ayuda → Tour rápido** en el menú de la barra lateral te guía por lo básico con tu propia tarea, y **Ayuda → Tutorial** muestra paso a paso la sintaxis corta y la navegación con teclado. Cierra un tour cuando quieras.\n- **Hazlo tuyo**: elige un tema o el modo oscuro y activa o desactiva funciones como vistas, cronograma, hábitos, modo concentración o integraciones en **Ajustes → General**. Los plugins añaden aún más."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "No hecho"
       },
       "V": {
-        "ADD_NEW_BOARD": "Añadir nuevo tablero",
+        "ADD_NEW_BOARD": "Añadir nueva vista",
         "ADD_TASK_TO": "Añadir tarea a {{title}}",
-        "CONFIRM_DELETE": "¿Realmente quieres eliminar este tablero?",
+        "CONFIRM_DELETE": "¿Realmente quieres eliminar esta vista?",
         "CREATE_NEW_TAG_BTN": "Crear etiqueta",
         "CREATE_NEW_TAGS_BTN": "Crear etiquetas",
-        "EDIT_BOARD": "Editar tablero",
+        "EDIT_BOARD": "Editar vista",
         "EDIT_COLUMN": "Editar columna",
         "EMPTY_VIEW_ADD": "Añadir tarea",
         "EMPTY_VIEW_HINT": "Las tareas aparecen aquí en cuanto coinciden con las reglas de la vista. Añade una o cambia las reglas.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Una parte del filtro de la lista no se puede combinar con su proyecto o etiqueta en una vista y se ha omitido.",
         "HINT_GROUPING_NOT_SAVED": "Esta agrupación no se guarda: solo la agrupación por etiqueta se convierte en secciones de una vista.",
         "MISSING_TAGS_MSG": "Esta vista usa etiquetas que aún no existen: {{tags}}",
-        "NO_PANELS_BTN": "Configurar tablero",
-        "NO_PANELS_MSG": "Este tablero no tiene paneles configurados. Añádele algunos.",
+        "NO_PANELS_BTN": "Configurar vista",
+        "NO_PANELS_MSG": "Esta vista aún no tiene secciones. Añade una para mostrar tareas.",
         "NO_TASKS_IN_VIEW": "Ninguna tarea coincide con esta vista",
         "NO_VIEWS_BTN": "Crear vista",
         "NO_VIEWS_MSG": "Aún no hay vistas. Una vista muestra las tareas de todos tus proyectos que coinciden con sus reglas, en una o varias columnas.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Tableros",
+      "BOARDS": "Vistas",
       "BOARDS_HINT": "Vistas guardadas en el menú lateral. Cada una muestra tareas de todos los proyectos por etiqueta, proyecto, fecha de vencimiento o estado de finalización, en una o varias columnas, como un tablero Kanban.",
       "DONATE_PAGE": "Página de donaciones",
       "DONATE_PAGE_HINT": "Muestra una entrada de menú con formas de apoyar el desarrollo de la app.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Fondo de pantalla",
       "WALLPAPER_BUTTON": "Establecer fondo de pantalla…",
       "WALLPAPER_DIALOG_TITLE": "Fondo de pantalla global",
-      "WALLPAPER_HINT": "Se muestra en las páginas que no tienen un fondo propio (Planificador, Cronograma, Tableros, Ajustes…). Las etiquetas y los proyectos con imagen propia lo reemplazan."
+      "WALLPAPER_HINT": "Se muestra en las páginas que no tienen un fondo propio (Planificador, Cronograma, Vistas, Ajustes…). Las etiquetas y los proyectos con imagen propia lo reemplazan."
     },
     "POMODORO": {
       "BREAK_DURATION": "Duración de descansos cortos",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Añadir nueva Tarea",
     "ADD_SECTION": "Añadir sección",
-    "BOARDS": "Tableros",
+    "BOARDS": "Vistas",
     "COPY_TASK_LIST_MARKDOWN": "Copiar al Portapapeles",
     "CREATE_PROJECT": "Crear Proyecto",
     "CREATE_TAG": "Crear Etiqueta",

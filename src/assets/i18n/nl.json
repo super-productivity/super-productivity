@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Optioneel: tips om te beginnen",
-      "NOTES": "Niets hier is verplicht. Verwijder deze taak wanneer je wilt.\n\n- **Vandaag en Postvak IN**: Vandaag toont wat voor vandaag gepland staat. Taken zonder eigen project blijven in Postvak IN. Een taak kan in beide lijsten staan.\n- **Projecten**: groepeer taken per onderwerp met de **+** naast **Projecten** in de zijbalk.\n- **Synchronisatie**: houd je gegevens op meerdere apparaten bij via **Instellingen → Synchronisatie en backup**.\n- **Kom je van Todoist of TickTick?** Importeer je taken via **Instellingen → Synchronisatie en backup → Importeren / exporteren**.\n- **Rondleidingen**: **Help → Snelle rondleiding** in het zijbalkmenu loopt met je eigen taak de basis door, en **Help → Uitleg** toont stap voor stap de korte syntaxis en toetsenbordnavigatie. Sluit een rondleiding wanneer je wilt.\n- **Maak het van jou**: kies een thema of donkere modus en zet functies zoals borden, agenda, gewoonten, focusmodus of integraties aan of uit via **Instellingen → Algemeen**. Plugins voegen nog meer toe."
+      "NOTES": "Niets hier is verplicht. Verwijder deze taak wanneer je wilt.\n\n- **Vandaag en Postvak IN**: Vandaag toont wat voor vandaag gepland staat. Taken zonder eigen project blijven in Postvak IN. Een taak kan in beide lijsten staan.\n- **Projecten**: groepeer taken per onderwerp met de **+** naast **Projecten** in de zijbalk.\n- **Synchronisatie**: houd je gegevens op meerdere apparaten bij via **Instellingen → Synchronisatie en backup**.\n- **Kom je van Todoist of TickTick?** Importeer je taken via **Instellingen → Synchronisatie en backup → Importeren / exporteren**.\n- **Rondleidingen**: **Help → Snelle rondleiding** in het zijbalkmenu loopt met je eigen taak de basis door, en **Help → Uitleg** toont stap voor stap de korte syntaxis en toetsenbordnavigatie. Sluit een rondleiding wanneer je wilt.\n- **Maak het van jou**: kies een thema of donkere modus en zet functies zoals weergaven, agenda, gewoonten, focusmodus of integraties aan of uit via **Instellingen → Algemeen**. Plugins voegen nog meer toe."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Ongedaan"
       },
       "V": {
-        "ADD_NEW_BOARD": "Voeg nieuw bord toe",
+        "ADD_NEW_BOARD": "Voeg nieuwe weergave toe",
         "ADD_TASK_TO": "Taak toevoegen aan {{title}}",
-        "CONFIRM_DELETE": "Wilt u dit bord echt verwijderen?",
+        "CONFIRM_DELETE": "Wilt u deze weergave echt verwijderen?",
         "CREATE_NEW_TAG_BTN": "Tag Aanmaken",
         "CREATE_NEW_TAGS_BTN": "Tags Aanmaken",
-        "EDIT_BOARD": "Bord bewerken",
+        "EDIT_BOARD": "Weergave bewerken",
         "EDIT_COLUMN": "Kolom bewerken",
         "EMPTY_VIEW_ADD": "Taak toevoegen",
         "EMPTY_VIEW_HINT": "Taken verschijnen hier zodra ze aan de regels van de weergave voldoen. Voeg er een toe, of pas de regels aan.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Een deel van het filter van de lijst kan in een weergave niet met het project of de tag worden gecombineerd en is weggelaten.",
         "HINT_GROUPING_NOT_SAVED": "Deze groepering wordt niet opgeslagen: alleen groeperen op tag wordt omgezet in secties van een weergave.",
         "MISSING_TAGS_MSG": "Deze weergave gebruikt tags die nog niet bestaan: {{tags}}",
-        "NO_PANELS_BTN": "Bord Configureren",
-        "NO_PANELS_MSG": "Dit bord heeft geen geconfigureerde panelen. Voeg enkele panelen toe.",
+        "NO_PANELS_BTN": "Weergave Configureren",
+        "NO_PANELS_MSG": "Deze weergave heeft nog geen secties. Voeg er een toe om taken te tonen.",
         "NO_TASKS_IN_VIEW": "Geen taken die aan deze weergave voldoen",
         "NO_VIEWS_BTN": "Weergave maken",
         "NO_VIEWS_MSG": "Nog geen weergaven. Een weergave toont taken uit al je projecten die aan de regels voldoen, in een of meer kolommen.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Borden",
+      "BOARDS": "Weergaven",
       "BOARDS_HINT": "Opgeslagen weergaven in het zijmenu. Elke weergave toont taken uit alle projecten op tag, project, vervaldatum of status, in een of meer kolommen, zoals een kanbanbord.",
       "DONATE_PAGE": "Doneerpagina",
       "DONATE_PAGE_HINT": "Toont een menu-item met manieren om de ontwikkeling van de app te steunen.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Achtergrond",
       "WALLPAPER_BUTTON": "Achtergrond instellen…",
       "WALLPAPER_DIALOG_TITLE": "Algemene achtergrond",
-      "WALLPAPER_HINT": "Wordt getoond op pagina's zonder eigen achtergrond (Planner, Planning, Borden, Instellingen…). Tags en projecten met een eigen afbeelding hebben voorrang."
+      "WALLPAPER_HINT": "Wordt getoond op pagina's zonder eigen achtergrond (Planner, Planning, Weergaven, Instellingen…). Tags en projecten met een eigen afbeelding hebben voorrang."
     },
     "POMODORO": {
       "BREAK_DURATION": "Duur van korte pauzes",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Voeg nieuwe taak toe",
     "ADD_SECTION": "Sectie toevoegen",
-    "BOARDS": "Borden",
+    "BOARDS": "Weergaven",
     "COPY_TASK_LIST_MARKDOWN": "Kopiëren naar klembord",
     "CREATE_PROJECT": "Project maken",
     "CREATE_TAG": "Tag maken",

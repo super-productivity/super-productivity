@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Facoltativo: consigli per iniziare",
-      "NOTES": "Niente qui è obbligatorio. Elimina questa attività quando vuoi.\n\n- **Oggi e Inbox**: Oggi mostra ciò che è pianificato per oggi. Le attività senza un progetto tuo restano in Inbox. Un'attività può comparire in entrambi gli elenchi.\n- **Progetti**: raggruppa le attività per argomento con il **+** accanto a **Progetti** nella barra laterale.\n- **Sincronizzazione**: tieni i tuoi dati su più dispositivi in **Impostazioni → Sincronizzazione e backup**.\n- **Vieni da Todoist o TickTick?** Importa le tue attività in **Impostazioni → Sincronizzazione e backup → Importa/Esporta**.\n- **Tour**: **Aiuto → Tour rapido** nel menu della barra laterale ti accompagna tra le basi sulla tua attività, e **Aiuto → Come fare** mostra passo per passo la sintassi breve e la navigazione da tastiera. Chiudi un tour quando vuoi.\n- **Rendilo tuo**: scegli un tema o la modalità scura e attiva o disattiva funzioni come bacheche, programma, abitudini, modalità di concentrazione o integrazioni in **Impostazioni → Generale**. I plugin aggiungono ancora di più."
+      "NOTES": "Niente qui è obbligatorio. Elimina questa attività quando vuoi.\n\n- **Oggi e Inbox**: Oggi mostra ciò che è pianificato per oggi. Le attività senza un progetto tuo restano in Inbox. Un'attività può comparire in entrambi gli elenchi.\n- **Progetti**: raggruppa le attività per argomento con il **+** accanto a **Progetti** nella barra laterale.\n- **Sincronizzazione**: tieni i tuoi dati su più dispositivi in **Impostazioni → Sincronizzazione e backup**.\n- **Vieni da Todoist o TickTick?** Importa le tue attività in **Impostazioni → Sincronizzazione e backup → Importa/Esporta**.\n- **Tour**: **Aiuto → Tour rapido** nel menu della barra laterale ti accompagna tra le basi sulla tua attività, e **Aiuto → Come fare** mostra passo per passo la sintassi breve e la navigazione da tastiera. Chiudi un tour quando vuoi.\n- **Rendilo tuo**: scegli un tema o la modalità scura e attiva o disattiva funzioni come viste, programma, abitudini, modalità di concentrazione o integrazioni in **Impostazioni → Generale**. I plugin aggiungono ancora di più."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Non completato"
       },
       "V": {
-        "ADD_NEW_BOARD": "Aggiungi nuova scheda",
+        "ADD_NEW_BOARD": "Aggiungi nuova vista",
         "ADD_TASK_TO": "Aggiungi attività a {{title}}",
-        "CONFIRM_DELETE": "Confermi l'eliminazione di questa scheda?",
+        "CONFIRM_DELETE": "Confermi l'eliminazione di questa vista?",
         "CREATE_NEW_TAG_BTN": "Crea nuova etichetta",
         "CREATE_NEW_TAGS_BTN": "Crea nuove etichette",
-        "EDIT_BOARD": "Modifica scheda",
+        "EDIT_BOARD": "Modifica vista",
         "EDIT_COLUMN": "Modifica colonna",
         "EMPTY_VIEW_ADD": "Aggiungi attività",
         "EMPTY_VIEW_HINT": "Le attività compaiono qui quando corrispondono alle regole della vista. Aggiungine una o modifica le regole.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Una parte del filtro dell'elenco non può essere combinata con il suo progetto o la sua etichetta in una vista ed è stata tralasciata.",
         "HINT_GROUPING_NOT_SAVED": "Questo raggruppamento non viene salvato: solo il raggruppamento per etichetta diventa sezioni di una vista.",
         "MISSING_TAGS_MSG": "Questa vista usa etichette che non esistono ancora: {{tags}}",
-        "NO_PANELS_BTN": "Configura scheda",
-        "NO_PANELS_MSG": "Questa scheda non ha pannelli configurati. Aggiungi alcuni pannelli.",
+        "NO_PANELS_BTN": "Configura vista",
+        "NO_PANELS_MSG": "Questa vista non ha ancora sezioni. Aggiungine una per mostrare le attività.",
         "NO_TASKS_IN_VIEW": "Nessuna attività corrisponde a questa vista",
         "NO_VIEWS_BTN": "Crea vista",
         "NO_VIEWS_MSG": "Nessuna vista ancora. Una vista mostra le attività di tutti i tuoi progetti che corrispondono alle sue regole, in una o più colonne.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Bacheche",
+      "BOARDS": "Viste",
       "BOARDS_HINT": "Viste salvate nel menu laterale. Ognuna mostra le attività di tutti i progetti per etichetta, progetto, data di scadenza o stato di completamento, in una o più colonne, come una bacheca Kanban.",
       "DONATE_PAGE": "Pagina delle donazioni",
       "DONATE_PAGE_HINT": "Mostra una voce di menu con i modi per sostenere lo sviluppo dell'app.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Sfondo",
       "WALLPAPER_BUTTON": "Imposta sfondo…",
       "WALLPAPER_DIALOG_TITLE": "Sfondo globale",
-      "WALLPAPER_HINT": "Mostrato nelle pagine senza uno sfondo proprio (Planner, Pianificazione, Bacheche, Impostazioni…). Le etichette e i progetti con una propria immagine hanno la precedenza."
+      "WALLPAPER_HINT": "Mostrato nelle pagine senza uno sfondo proprio (Planner, Pianificazione, Viste, Impostazioni…). Le etichette e i progetti con una propria immagine hanno la precedenza."
     },
     "POMODORO": {
       "BREAK_DURATION": "Durata delle pause brevi",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Aggiungi nuova attività",
     "ADD_SECTION": "Aggiungi sezione",
-    "BOARDS": "Schede",
+    "BOARDS": "Viste",
     "COPY_TASK_LIST_MARKDOWN": "Copia negli appunti",
     "CREATE_PROJECT": "Crea progetto",
     "CREATE_TAG": "Crea etichetta",

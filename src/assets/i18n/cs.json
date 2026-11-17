@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Nepovinné: tipy pro začátek",
-      "NOTES": "Nic z toho není povinné. Tento úkol můžete kdykoli smazat.\n\n- **Dnes a Příchozí**: Dnes ukazuje, co je naplánováno na dnes. Úkoly bez vlastního projektu zůstávají v části Příchozí. Úkol se může objevit v obou seznamech.\n- **Projekty**: seskupujte úkoly podle tématu pomocí **+** vedle položky **Projekty** v postranním panelu.\n- **Synchronizace**: mějte svá data na více zařízeních v **Nastavení → Synchronizace a záloha**.\n- **Přicházíte z Todoistu nebo TickTicku?** Importujte své úkoly v **Nastavení → Synchronizace a záloha → Import/Export**.\n- **Prohlídky**: **Nápověda → Rychlá prohlídka** v menu postranního panelu vás provede základy na vašem vlastním úkolu a **Nápověda → Návod** krok za krokem ukáže krátkou syntaxi a ovládání klávesnicí. Prohlídku můžete kdykoli zavřít.\n- **Přizpůsobte si to**: vyberte motiv nebo tmavý režim a funkce jako nástěnky, časovou osu, návyky, režim zaměření nebo integrace zapínejte a vypínejte v **Nastavení → Obecné**. Pluginy přidávají ještě víc."
+      "NOTES": "Nic z toho není povinné. Tento úkol můžete kdykoli smazat.\n\n- **Dnes a Příchozí**: Dnes ukazuje, co je naplánováno na dnes. Úkoly bez vlastního projektu zůstávají v části Příchozí. Úkol se může objevit v obou seznamech.\n- **Projekty**: seskupujte úkoly podle tématu pomocí **+** vedle položky **Projekty** v postranním panelu.\n- **Synchronizace**: mějte svá data na více zařízeních v **Nastavení → Synchronizace a záloha**.\n- **Přicházíte z Todoistu nebo TickTicku?** Importujte své úkoly v **Nastavení → Synchronizace a záloha → Import/Export**.\n- **Prohlídky**: **Nápověda → Rychlá prohlídka** v menu postranního panelu vás provede základy na vašem vlastním úkolu a **Nápověda → Návod** krok za krokem ukáže krátkou syntaxi a ovládání klávesnicí. Prohlídku můžete kdykoli zavřít.\n- **Přizpůsobte si to**: vyberte motiv nebo tmavý režim a funkce jako zobrazení, časovou osu, návyky, režim zaměření nebo integrace zapínejte a vypínejte v **Nastavení → Obecné**. Pluginy přidávají ještě víc."
     }
   },
   "F": {
@@ -230,31 +230,31 @@
         "TASK_DONE_STATE_UNDONE": "Nedokončeno"
       },
       "V": {
-        "ADD_NEW_BOARD": "Přidat novou nástěnku",
+        "ADD_NEW_BOARD": "Přidat nové zobrazení",
         "ADD_TASK_TO": "Přidat úkol do {{title}}",
-        "CONFIRM_DELETE": "Opravdu chcete tuto nástěnku smazat?",
+        "CONFIRM_DELETE": "Opravdu chcete toto zobrazení smazat?",
         "CREATE_NEW_TAG_BTN": "Vytvořit štítek",
         "CREATE_NEW_TAGS_BTN": "Vytvořit štítky",
-        "EDIT_BOARD": "Upravit nástěnku",
+        "EDIT_BOARD": "Upravit zobrazení",
         "EDIT_COLUMN": "Upravit sloupec",
         "EMPTY_VIEW_ADD": "Přidat úkol",
-        "EMPTY_VIEW_HINT": "Úkoly se zde zobrazí, jakmile budou odpovídat pravidlům nástěnky. Přidejte úkol nebo změňte pravidla.",
+        "EMPTY_VIEW_HINT": "Úkoly se zde zobrazí, jakmile budou odpovídat pravidlům zobrazení. Přidejte úkol nebo změňte pravidla.",
         "HINT_FILTER_NOT_ONLY_TODAY": "Zobrazuje všechny otevřené úkoly odpovídající filtru, nejen dnešní. Pro zúžení přidejte pravidlo plánovaného data.",
-        "HINT_FILTER_PART_NOT_SAVED": "Část filtru seznamu nelze na nástěnce zkombinovat s jeho projektem nebo štítkem, a proto byla vynechána.",
-        "HINT_GROUPING_NOT_SAVED": "Toto seskupení se neuloží: sekcemi nástěnky se stává jen seskupení podle štítku.",
-        "MISSING_TAGS_MSG": "Tato nástěnka používá štítky, které zatím neexistují: {{tags}}",
-        "NO_PANELS_BTN": "Konfigurovat nástěnku",
-        "NO_PANELS_MSG": "Tato nástěnka nemá nakonfigurované žádné panely. Přidejte do ní nějaké panely.",
-        "NO_TASKS_IN_VIEW": "Této nástěnce neodpovídají žádné úkoly",
-        "NO_VIEWS_BTN": "Vytvořit nástěnku",
-        "NO_VIEWS_MSG": "Zatím žádné nástěnky. Nástěnka zobrazuje úkoly ze všech vašich projektů, které odpovídají jejím pravidlům, v jednom nebo více sloupcích.",
-        "SAVE_AS_VIEW": "Uložit jako nástěnku…",
+        "HINT_FILTER_PART_NOT_SAVED": "Část filtru seznamu nelze v zobrazení zkombinovat s jeho projektem nebo štítkem, a proto byla vynechána.",
+        "HINT_GROUPING_NOT_SAVED": "Toto seskupení se neuloží: sekcemi zobrazení se stává jen seskupení podle štítku.",
+        "MISSING_TAGS_MSG": "Toto zobrazení používá štítky, které zatím neexistují: {{tags}}",
+        "NO_PANELS_BTN": "Konfigurovat zobrazení",
+        "NO_PANELS_MSG": "Toto zobrazení zatím nemá žádné sekce. Přidejte sekci, aby se zobrazily úkoly.",
+        "NO_TASKS_IN_VIEW": "Tomuto zobrazení neodpovídají žádné úkoly",
+        "NO_VIEWS_BTN": "Vytvořit zobrazení",
+        "NO_VIEWS_MSG": "Zatím žádná zobrazení. Zobrazení ukazuje úkoly ze všech vašich projektů, které odpovídají jeho pravidlům, v jednom nebo více sloupcích.",
+        "SAVE_AS_VIEW": "Uložit jako zobrazení…",
         "SECTION_OTHER": "Ostatní",
         "SHOW_ALL": "Zobrazit vše ({{count}})",
         "SHOW_AS_BOARD": "Zobrazit jako Kanban",
         "SHOW_AS_LIST": "Zobrazit jako seznam",
         "S_CANT_MOVE_HERE": "Žádná změna neuvede tento úkol do souladu s pravidly sloupce, proto jej sem nelze přesunout",
-        "VIEW_CREATED": "Nástěnka „{{title}}“ vytvořena"
+        "VIEW_CREATED": "Zobrazení „{{title}}“ vytvořeno"
       }
     },
     "CALDAV": {
@@ -2680,8 +2680,8 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Nástěnky",
-      "BOARDS_HINT": "Uložené nástěnky v postranní nabídce. Každá zobrazuje úkoly ze všech projektů podle štítku, projektu, termínu nebo stavu dokončení v jednom nebo více sloupcích, jako Kanban nástěnka.",
+      "BOARDS": "Zobrazení",
+      "BOARDS_HINT": "Uložená zobrazení v postranní nabídce. Každé zobrazuje úkoly ze všech projektů podle štítku, projektu, termínu nebo stavu dokončení v jednom nebo více sloupcích, jako Kanban nástěnka.",
       "DONATE_PAGE": "Stránka pro přispění",
       "DONATE_PAGE_HINT": "Zobrazí položku nabídky se způsoby, jak podpořit vývoj aplikace.",
       "EXTEND_WITH_PLUGINS": "Další funkce najdete v pluginech",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Tapeta",
       "WALLPAPER_BUTTON": "Nastavit tapetu…",
       "WALLPAPER_DIALOG_TITLE": "Globální tapeta",
-      "WALLPAPER_HINT": "Zobrazuje se na stránkách bez vlastního pozadí (Plánovač, Časová osa, Nástěnky, Nastavení…). Štítky a projekty s vlastním obrázkem mají před tapetou přednost."
+      "WALLPAPER_HINT": "Zobrazuje se na stránkách bez vlastního pozadí (Plánovač, Časová osa, Zobrazení, Nastavení…). Štítky a projekty s vlastním obrázkem mají před tapetou přednost."
     },
     "POMODORO": {
       "BREAK_DURATION": "Délka krátkých přestávek",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Přidat nový úkol",
     "ADD_SECTION": "Přidat sekci",
-    "BOARDS": "Nástěnky",
+    "BOARDS": "Zobrazení",
     "COPY_TASK_LIST_MARKDOWN": "Kopírovat do schránky",
     "CREATE_PROJECT": "Vytvořit projekt",
     "CREATE_TAG": "Vytvořit štítek",

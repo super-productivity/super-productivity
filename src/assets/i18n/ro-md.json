@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Opțional: sfaturi pentru început",
-      "NOTES": "Nimic de aici nu este obligatoriu. Șterge această sarcină oricînd vrei.\n\n- **Azi și Intrări**: Azi arată ce este planificat pentru azi. Sarcinile fără un proiect propriu rămîn în Intrări. O sarcină poate apărea în ambele liste.\n- **Proiecte**: grupează sarcinile pe teme cu **+** de lîngă **Proiecte** din bara laterală.\n- **Sincronizare**: păstrează-ți datele pe mai multe dispozitive la **Setări → Sincronizare și backup**.\n- **Vii din Todoist sau TickTick?** Importă-ți sarcinile la **Setări → Sincronizare și backup → Importare/Exportare**.\n- **Tururi**: **Ajutor → Tur rapid** din meniul barei laterale îți arată elementele de bază pe propria ta sarcină, iar **Ajutor → Cum să** îți arată pas cu pas sintaxa scurtă și navigarea cu tastatura. Închide un tur oricînd vrei.\n- **Fă-l al tău**: alege o temă sau modul întunecat și activează sau dezactivează funcții precum table, orar, obiceiuri, mod concentrare sau integrări la **Setări → General**. Plugin-urile adaugă și mai multe."
+      "NOTES": "Nimic de aici nu este obligatoriu. Șterge această sarcină oricînd vrei.\n\n- **Azi și Intrări**: Azi arată ce este planificat pentru azi. Sarcinile fără un proiect propriu rămîn în Intrări. O sarcină poate apărea în ambele liste.\n- **Proiecte**: grupează sarcinile pe teme cu **+** de lîngă **Proiecte** din bara laterală.\n- **Sincronizare**: păstrează-ți datele pe mai multe dispozitive la **Setări → Sincronizare și backup**.\n- **Vii din Todoist sau TickTick?** Importă-ți sarcinile la **Setări → Sincronizare și backup → Importare/Exportare**.\n- **Tururi**: **Ajutor → Tur rapid** din meniul barei laterale îți arată elementele de bază pe propria ta sarcină, iar **Ajutor → Cum să** îți arată pas cu pas sintaxa scurtă și navigarea cu tastatura. Închide un tur oricînd vrei.\n- **Fă-l al tău**: alege o temă sau modul întunecat și activează sau dezactivează funcții precum vizualizări, orar, obiceiuri, mod concentrare sau integrări la **Setări → General**. Plugin-urile adaugă și mai multe."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Nefinalizate"
       },
       "V": {
-        "ADD_NEW_BOARD": "Adaugă o nouă tablă",
+        "ADD_NEW_BOARD": "Adaugă o nouă vizualizare",
         "ADD_TASK_TO": "Adaugă sarcină în {{title}}",
-        "CONFIRM_DELETE": "Ești sigur că vrei să ștergi această tablă?",
+        "CONFIRM_DELETE": "Ești sigur că vrei să ștergi această vizualizare?",
         "CREATE_NEW_TAG_BTN": "Creează etichetă",
         "CREATE_NEW_TAGS_BTN": "Creează etichete",
-        "EDIT_BOARD": "Editează tablă",
+        "EDIT_BOARD": "Editează vizualizarea",
         "EDIT_COLUMN": "Editează coloana",
         "EMPTY_VIEW_ADD": "Adaugă sarcină",
         "EMPTY_VIEW_HINT": "Sarcinile apar aici după ce se potrivesc cu regulile vizualizării. Adaugă una sau schimbă regulile.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "O parte din filtrul listei nu poate fi combinată cu proiectul sau eticheta sa într-o vizualizare și a fost omisă.",
         "HINT_GROUPING_NOT_SAVED": "Această grupare nu este salvată: doar gruparea după etichetă devine secțiuni ale unei vizualizări.",
         "MISSING_TAGS_MSG": "Această vizualizare folosește etichete care încă nu există: {{tags}}",
-        "NO_PANELS_BTN": "Configurează tabla",
-        "NO_PANELS_MSG": "Această tablă nu are panouri configurate. Adaugă cîteva panouri.",
+        "NO_PANELS_BTN": "Configurează vizualizarea",
+        "NO_PANELS_MSG": "Această vizualizare nu are încă secțiuni. Adaugă una pentru a afișa sarcini.",
         "NO_TASKS_IN_VIEW": "Nicio sarcină nu se potrivește cu această vizualizare",
         "NO_VIEWS_BTN": "Creează vizualizare",
         "NO_VIEWS_MSG": "Încă nu există vizualizări. O vizualizare arată sarcinile din toate proiectele tale care se potrivesc cu regulile ei, într-una sau mai multe coloane.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Table",
+      "BOARDS": "Vizualizări",
       "BOARDS_HINT": "Vizualizări salvate în meniul lateral. Fiecare arată sarcini din toate proiectele după etichetă, proiect, scadență sau stare de finalizare, într-una sau mai multe coloane, ca o tablă Kanban.",
       "DONATE_PAGE": "Pagină de donații",
       "DONATE_PAGE_HINT": "Afișează o intrare în meniu cu modalități de a susține dezvoltarea aplicației.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Imagine de fundal",
       "WALLPAPER_BUTTON": "Setează imaginea de fundal…",
       "WALLPAPER_DIALOG_TITLE": "Imagine de fundal globală",
-      "WALLPAPER_HINT": "Afișată pe paginile fără fundal propriu (Planificator, Orar, Table, Setări…). Etichetele și proiectele cu imagine proprie au prioritate."
+      "WALLPAPER_HINT": "Afișată pe paginile fără fundal propriu (Planificator, Orar, Vizualizări, Setări…). Etichetele și proiectele cu imagine proprie au prioritate."
     },
     "POMODORO": {
       "BREAK_DURATION": "Durată pauză scurtă",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Adaugă o nouă sarcină",
     "ADD_SECTION": "Adaugă secțiune",
-    "BOARDS": "Table",
+    "BOARDS": "Vizualizări",
     "COPY_TASK_LIST_MARKDOWN": "Copiază în Clipboard",
     "CREATE_PROJECT": "Creează proiect",
     "CREATE_TAG": "Creează etichetă",

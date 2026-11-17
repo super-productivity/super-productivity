@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "Voliteľné: tipy na začiatok",
-      "NOTES": "Nič z toho tu nie je povinné. Túto úlohu môžete kedykoľvek odstrániť.\n\n- **Dnes a Doručená pošta**: Dnes zobrazuje, čo je naplánované na dnes. Úlohy bez vlastného projektu zostávajú v časti Doručená pošta. Úloha sa môže zobraziť v oboch zoznamoch.\n- **Projekty**: zoskupujte úlohy podľa témy pomocou **+** vedľa položky **Projekty** v bočnom paneli.\n- **Synchronizácia**: majte svoje dáta na viacerých zariadeniach v **Nastavenia → Synchronizácia a záloha**.\n- **Prichádzate z Todoistu alebo TickTicku?** Importujte svoje úlohy v **Nastavenia → Synchronizácia a záloha → Import/Export**.\n- **Prehliadky**: **Pomoc → Rýchla prehliadka** v ponuke bočného panela vás prevedie základmi na vašej vlastnej úlohe a **Pomoc → Ako na to** krok za krokom ukáže krátku syntax a ovládanie klávesnicou. Prehliadku môžete kedykoľvek zavrieť.\n- **Prispôsobte si to**: vyberte motív alebo tmavý režim a funkcie ako tabule, plán, návyky, režim zamerania či integrácie zapínajte a vypínajte v **Nastavenia → Všeobecné**. Pluginy pridávajú ešte viac."
+      "NOTES": "Nič z toho tu nie je povinné. Túto úlohu môžete kedykoľvek odstrániť.\n\n- **Dnes a Doručená pošta**: Dnes zobrazuje, čo je naplánované na dnes. Úlohy bez vlastného projektu zostávajú v časti Doručená pošta. Úloha sa môže zobraziť v oboch zoznamoch.\n- **Projekty**: zoskupujte úlohy podľa témy pomocou **+** vedľa položky **Projekty** v bočnom paneli.\n- **Synchronizácia**: majte svoje dáta na viacerých zariadeniach v **Nastavenia → Synchronizácia a záloha**.\n- **Prichádzate z Todoistu alebo TickTicku?** Importujte svoje úlohy v **Nastavenia → Synchronizácia a záloha → Import/Export**.\n- **Prehliadky**: **Pomoc → Rýchla prehliadka** v ponuke bočného panela vás prevedie základmi na vašej vlastnej úlohe a **Pomoc → Ako na to** krok za krokom ukáže krátku syntax a ovládanie klávesnicou. Prehliadku môžete kedykoľvek zavrieť.\n- **Prispôsobte si to**: vyberte motív alebo tmavý režim a funkcie ako zobrazenia, plán, návyky, režim zamerania či integrácie zapínajte a vypínajte v **Nastavenia → Všeobecné**. Pluginy pridávajú ešte viac."
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "Nezrealizované"
       },
       "V": {
-        "ADD_NEW_BOARD": "Pridať novú tabuľu",
+        "ADD_NEW_BOARD": "Pridať nové zobrazenie",
         "ADD_TASK_TO": "Pridať úlohu do {{title}}",
-        "CONFIRM_DELETE": "Naozaj chcete odstrániť túto tabuľu?",
+        "CONFIRM_DELETE": "Naozaj chcete odstrániť toto zobrazenie?",
         "CREATE_NEW_TAG_BTN": "Vytvoriť značku",
         "CREATE_NEW_TAGS_BTN": "Vytvoriť značky",
-        "EDIT_BOARD": "Upraviť tabuľu",
+        "EDIT_BOARD": "Upraviť zobrazenie",
         "EDIT_COLUMN": "Upraviť stĺpec",
         "EMPTY_VIEW_ADD": "Pridať úlohu",
         "EMPTY_VIEW_HINT": "Úlohy sa tu zobrazia, keď budú zodpovedať pravidlám zobrazenia. Pridajte nejakú alebo zmeňte pravidlá.",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "Časť filtra zoznamu sa v zobrazení nedá skombinovať s jeho projektom alebo značkou, a preto bola vynechaná.",
         "HINT_GROUPING_NOT_SAVED": "Toto zoskupenie sa neuloží: sekciami zobrazenia sa stáva iba zoskupenie podľa značky.",
         "MISSING_TAGS_MSG": "Toto zobrazenie používa značky, ktoré zatiaľ neexistujú: {{tags}}",
-        "NO_PANELS_BTN": "Konfigurovať tabuľu",
-        "NO_PANELS_MSG": "Táto tabuľa nemá nakonfigurované panely. Pridajte niektoré panely.",
+        "NO_PANELS_BTN": "Konfigurovať zobrazenie",
+        "NO_PANELS_MSG": "Toto zobrazenie zatiaľ nemá žiadne sekcie. Pridajte sekciu, aby sa zobrazili úlohy.",
         "NO_TASKS_IN_VIEW": "Tomuto zobrazeniu nezodpovedajú žiadne úlohy",
         "NO_VIEWS_BTN": "Vytvoriť zobrazenie",
         "NO_VIEWS_MSG": "Zatiaľ žiadne zobrazenia. Zobrazenie ukazuje úlohy zo všetkých vašich projektov, ktoré zodpovedajú jeho pravidlám, v jednom alebo viacerých stĺpcoch.",
@@ -2680,7 +2680,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "Tabule",
+      "BOARDS": "Zobrazenia",
       "BOARDS_HINT": "Uložené zobrazenia v bočnom menu. Každé ukazuje úlohy zo všetkých projektov podľa značky, projektu, termínu alebo stavu dokončenia, v jednom alebo viacerých stĺpcoch, ako tabuľa Kanban.",
       "DONATE_PAGE": "Stránka darovania",
       "DONATE_PAGE_HINT": "Zobrazí položku menu so spôsobmi, ako podporiť vývoj aplikácie.",
@@ -3021,7 +3021,7 @@
       "WALLPAPER": "Tapeta",
       "WALLPAPER_BUTTON": "Nastaviť tapetu…",
       "WALLPAPER_DIALOG_TITLE": "Globálna tapeta",
-      "WALLPAPER_HINT": "Zobrazuje sa na stránkach bez vlastného pozadia (Plánovač, Plán, Tabule, Nastavenia…). Značky a projekty s vlastným obrázkom ju nahradia."
+      "WALLPAPER_HINT": "Zobrazuje sa na stránkach bez vlastného pozadia (Plánovač, Plán, Zobrazenia, Nastavenia…). Značky a projekty s vlastným obrázkom ju nahradia."
     },
     "POMODORO": {
       "BREAK_DURATION": "Dĺžka krátkych prestávok",
@@ -3195,7 +3195,7 @@
   "MH": {
     "ADD_NEW_TASK": "Pridať novú úlohu",
     "ADD_SECTION": "Pridať sekciu",
-    "BOARDS": "Tabule",
+    "BOARDS": "Zobrazenia",
     "COPY_TASK_LIST_MARKDOWN": "Kopírovať do schránky",
     "CREATE_PROJECT": "Vytvoriť Projekt",
     "CREATE_TAG": "Vytvoriť štítok",
