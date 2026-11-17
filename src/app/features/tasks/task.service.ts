@@ -3,7 +3,8 @@ import typia from 'typia';
 import { distinctUntilChanged, first, map, take, withLatestFrom } from 'rxjs/operators';
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Observable } from 'rxjs';
+import { merge, Observable } from 'rxjs';
+import { pageHidden$ } from '../../util/page-hidden';
 import {
   ArchiveTask,
   DEFAULT_TASK,
@@ -244,8 +245,8 @@ export class TaskService {
         }
       });
 
-    // Flush accumulated time when task stops (currentTaskId becomes null or changes)
-    this.currentTaskId$.subscribe(() => {
+    // Flush when the task stops or changes, and when the page is hidden (tab/app switch)
+    merge(this.currentTaskId$, pageHidden$()).subscribe(() => {
       this._flushAccumulatedTimeSpent();
     });
 
