@@ -351,6 +351,25 @@ describe('SyncEffects routing (Task 3)', () => {
       expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
     });
 
+    it('releases the quit only after the tracked time is written', async () => {
+      syncCfg$.next({ isManualSyncOnly: true });
+      let finishWrites!: () => void;
+      flushPendingWrites.and.returnValue(
+        new Promise<void>((resolve) => (finishWrites = resolve)),
+      );
+      subs.push(effects._syncBeforeQuit$().subscribe());
+
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+      expect(flushPendingWrites).toHaveBeenCalled();
+      expect(execBeforeClose.setDone).not.toHaveBeenCalled();
+
+      finishWrites();
+      await settle();
+      expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
     it('releases the quit even when persisting the time fails', async () => {
       syncCfg$.next({ isManualSyncOnly: true });
       flushPendingWrites.and.rejectWith(new Error('lock timeout'));

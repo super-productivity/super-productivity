@@ -138,10 +138,8 @@ export class SyncEffects {
           // because the op-log persistence effects schedule their writes in
           // the same tick; we just need to let them execute.
           await new Promise<void>((resolve) => setTimeout(resolve, 0));
-          const { isManualSyncOnly } = await firstValueFrom(
-            this._syncWrapperService.syncCfg$,
-          );
-          if (isManualSyncOnly) {
+          const syncCfg = await firstValueFrom(this._syncWrapperService.syncCfg$);
+          if (syncCfg?.isManualSyncOnly) {
             // "Only sync manually": no sync on quit (#11831), but wait until
             // the time flushed above is written, or the quit drops it.
             await this._writeFlushService.flushPendingWrites().catch((e: unknown) => {
