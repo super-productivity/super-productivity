@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Kesken"
       },
       "V": {
-        "ADD_NEW_BOARD": "Lisää uusi näkymä",
+        "ADD_NEW_BOARD": "Luo näkymä",
         "ADD_TASK_TO": "Lisää tehtävä kohteeseen {{title}}",
         "CONFIRM_DELETE": "Haluatko varmasti poistaa tämän näkymän?",
         "CREATE_NEW_TAG_BTN": "Luo tunniste",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "muokattu",
         "ENTITY": {
           "ALL": "Kaikki tiedot",
-          "BOARD": "Taulu",
+          "BOARD": "Näkymä",
           "GLOBAL_CONFIG": "Asetukset",
           "ISSUE_PROVIDER": "Ongelmien tarjoaja",
           "MENU_TREE": "Sivupalkki",

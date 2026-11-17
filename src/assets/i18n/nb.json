@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Ikke gjort"
       },
       "V": {
-        "ADD_NEW_BOARD": "Legg til ny visning",
+        "ADD_NEW_BOARD": "Opprett visning",
         "ADD_TASK_TO": "Legg til oppgave i {{title}}",
         "CONFIRM_DELETE": "Vil du virkelig slette denne visningen?",
         "CREATE_NEW_TAG_BTN": "Opprett merke",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "redigert",
         "ENTITY": {
           "ALL": "Alle data",
-          "BOARD": "Tavle",
+          "BOARD": "Visning",
           "GLOBAL_CONFIG": "Innstillinger",
           "ISSUE_PROVIDER": "Saksleverandør",
           "MENU_TREE": "Sidefelt",

@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Nefinalizate"
       },
       "V": {
-        "ADD_NEW_BOARD": "Adaugă o nouă vizualizare",
+        "ADD_NEW_BOARD": "Creează vizualizare",
         "ADD_TASK_TO": "Adaugă sarcină în {{title}}",
         "CONFIRM_DELETE": "Ești sigur că vrei să ștergi această vizualizare?",
         "CREATE_NEW_TAG_BTN": "Creează etichetă",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "editat",
         "ENTITY": {
           "ALL": "Toate datele",
-          "BOARD": "Tablă",
+          "BOARD": "Vizualizare",
           "GLOBAL_CONFIG": "Setări",
           "ISSUE_PROVIDER": "Furnizor de probleme",
           "MENU_TREE": "Bara laterală",

@@ -45,7 +45,7 @@
     "NO_TASKS": "您的待办事项列表中当前没有任务"
   },
   "BN": {
-    "SHOW_ISSUE_PANEL": "显示问题看板",
+    "SHOW_ISSUE_PANEL": "显示问题面板",
     "SHOW_NOTES": "显示项目备注",
     "SHOW_SCHEDULE": "日程",
     "SLOT_CHANGE_HINT": "长按可更改此按钮",
@@ -280,7 +280,7 @@
         "TWO_WAY_SYNC_TITLE": "标题同步方向"
       },
       "FORM_SECTION": {
-        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定项目的未完成 CalDav 待办事项。它们将列为建议，并提供指向待办事项的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加并同步所有未完成的待办事项到您的任务待办事项列表。</p><p>要在网页应用中为 nextcloud 启用此功能，您可能需要通过 nextcloud 应用 <a href='https://apps.nextcloud.com/apps/webapppassword '>webapppassword</a> 将 \"https://app.super-productivity.com \" 加入白名单。</p>"
+        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建面板中列出特定项目的未完成 CalDav 待办事项。它们将列为建议，并提供指向待办事项的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加并同步所有未完成的待办事项到您的任务待办事项列表。</p><p>要在网页应用中为 nextcloud 启用此功能，您可能需要通过 nextcloud 应用 <a href='https://apps.nextcloud.com/apps/webapppassword '>webapppassword</a> 将 \"https://app.super-productivity.com \" 加入白名单。</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "描述",
@@ -479,7 +479,7 @@
         "TOKEN": "访问令牌"
       },
       "FORM_SECTION": {
-        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定存储库的未结 Gitea 问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加和导入所有未结问题。</p><p>为了通过使用限制并访问，您可以提供一个访问令牌。"
+        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建面板中列出特定存储库的未结 Gitea 问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加和导入所有未结问题。</p><p>为了通过使用限制并访问，您可以提供一个访问令牌。"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "负责人",
@@ -782,7 +782,7 @@
         "HEATMAP_SHARE_TAGLINE": "{{title}} – 使用 Super Productivity 应用",
         "HEATMAP_SHARED_TO_DEVICE": "热力图已保存到设备存储",
         "HEATMAP_SHARED_TO_PATH": "热力图已保存到 {{path}}",
-        "NO_ADDITIONAL_DATA_YET": "尚未收集额外数据。使用每日摘要 \"评估\" 看板上的表单进行操作。",
+        "NO_ADDITIONAL_DATA_YET": "尚未收集额外数据。使用每日摘要 \"评估\" 面板上的表单进行操作。",
         "OPEN_DAILY_SUMMARY": "打开每日摘要",
         "SHARE_HEATMAP": "分享热力图",
         "SHARE_STATS": "分享您的生产力数据",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "已编辑",
         "ENTITY": {
           "ALL": "所有数据",
-          "BOARD": "看板",
+          "BOARD": "视图",
           "GLOBAL_CONFIG": "设置",
           "ISSUE_PROVIDER": "问题提供者",
           "MENU_TREE": "侧边栏",
@@ -2890,11 +2890,11 @@
       "TASK_UNSCHEDULE": "取消任务安排",
       "TITLE": "键盘快捷键",
       "TOGGLE_BACKLOG": "显示/隐藏任务待办事项",
-      "TOGGLE_ISSUE_PANEL": "显示/隐藏问题看板",
+      "TOGGLE_ISSUE_PANEL": "显示/隐藏问题面板",
       "TOGGLE_PLAY": "开始/停止 任务",
       "TOGGLE_SIDE_NAV": "聚焦侧边导航",
       "TOGGLE_SIDE_NAV_MODE": "切换侧边栏紧凑/完整模式",
-      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "切换筛选/分组/排序看板",
+      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "切换筛选/分组/排序面板",
       "TRIGGER_SYNC": "触发同步（如果已配置）",
       "ZOOM_DEFAULT": "默认缩放（仅限桌面）",
       "ZOOM_IN": "放大（仅限桌面）",
@@ -3258,7 +3258,7 @@
     "TASK_LIST": "任务列表",
     "TASKS": "任务",
     "TOGGLE_SHOW_BOOKMARKS": "显示/隐藏书签",
-    "TOGGLE_SHOW_ISSUE_PANEL": "显示/隐藏问题看板",
+    "TOGGLE_SHOW_ISSUE_PANEL": "显示/隐藏问题面板",
     "TOGGLE_SHOW_NOTES": "显示/隐藏项目备注",
     "TOGGLE_TRACK_TIME": "开始/停止跟踪时间",
     "TRIGGER_SYNC": "同步！",
@@ -3697,7 +3697,7 @@
     "LAST": "上一个：",
     "NEXT": "下一个",
     "NO_DEADLINES": "目前没有设置截止日期的任务。您可以通过任务的右键菜单或详细信息面板设置截止日期。",
-    "NO_REPEATABLE_TASKS": "当前没有重复任务。您可以通过在任务侧看板中选择 \"重复任务\" 来计划任务。要打开它，请点击悬停任务时出现的右侧图标（或在移动设备上点击任务）。",
+    "NO_REPEATABLE_TASKS": "当前没有重复任务。您可以通过在任务侧面板中选择 \"重复任务\" 来计划任务。要打开它，请点击悬停任务时出现的右侧图标（或在移动设备上点击任务）。",
     "NO_SCHEDULED": "当前没有计划任务。您可以通过在任务上下文菜单中选择 \"计划任务\" 来计划任务。要打开它，请右键单击（在移动设备上长按）任务。",
     "SCHEDULED_TASKS": "计划任务",
     "START_TASK": "开始任务并移除提醒"

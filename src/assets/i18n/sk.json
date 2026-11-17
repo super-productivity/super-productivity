@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Nezrealizované"
       },
       "V": {
-        "ADD_NEW_BOARD": "Pridať nové zobrazenie",
+        "ADD_NEW_BOARD": "Vytvoriť zobrazenie",
         "ADD_TASK_TO": "Pridať úlohu do {{title}}",
         "CONFIRM_DELETE": "Naozaj chcete odstrániť toto zobrazenie?",
         "CREATE_NEW_TAG_BTN": "Vytvoriť značku",
@@ -1249,15 +1249,15 @@
         "NEVER": "Nikdy",
         "OVERWRITE_WARNING": "UPOZORNENIE: Dáta {{targetName}} obsahujú približne {{targetChanges}} zmien, zatiaľ čo dáta {{sourceName}} obsahujú iba {{sourceChanges}} zmien. Ste si istí, že chcete prepísať dáta {{targetName}} verziou {{sourceName}}? Túto akciu nie je možné vrátiť späť.",
         "OVERWRITE_WARNING_UNKNOWN": "UPOZORNENIE: Toto zariadenie nedokáže zistiť, koľko nesynchronizovaných zmien obsahujú dáta {{targetName}} (nemá záznam o predchádzajúcej synchronizácii). Prepísaním dát {{targetName}} verziou {{sourceName}} sa môžu zahodiť zmeny. Naozaj chcete pokračovať?",
-        "OWN_UPLOADS_MISSING": "Zmeny, ktoré toto zariadenie už synchronizovalo, v synchronizovaných dátach chýbajú. Iné zariadenie mohlo uložiť staršiu kópiu, alebo sa v synchronizačnom priečinku stratila aktualizácia. Použiť lokálne ich obnoví; Použiť vzdialené ich zahodí.",
+        "OWN_UPLOADS_MISSING": "Zmeny, ktoré toto zariadenie už synchronizovalo, v synchronizovaných dátach chýbajú. Iné zariadenie mohlo uložiť staršiu kópiu, alebo sa v synchronizačnom priečinku stratila aktualizácia. Ponechať lokálne ich obnoví; Ponechať vzdialené ich zahodí.",
         "REMOTE": "Vzdialené",
         "RESULT": "Výsledok",
         "TEXT": "<p>Aktualizácia na diaľku. Zdá sa, že lokálne aj vzdialené údaje sa zmenili.</p>",
         "TIME": "Čas",
         "TIMESTAMP": "Časová pečiatka",
         "TITLE": "Synchronizácia: Konfliktné údaje",
-        "USE_LOCAL": "Použiť lokálne",
-        "USE_REMOTE": "Použiť vzdialené",
+        "USE_LOCAL": "Ponechať lokálne",
+        "USE_REMOTE": "Ponechať vzdialené",
         "VECTOR_CLOCK": "Vektorové hodiny",
         "VECTOR_CLOCK_HEADING": "Vektorové hodiny",
         "VECTOR_COMPARISON_CONCURRENT": "Súbežné (skutočný konflikt)",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "upravené",
         "ENTITY": {
           "ALL": "Všetky dáta",
-          "BOARD": "Tabuľa",
+          "BOARD": "Zobrazenie",
           "GLOBAL_CONFIG": "Nastavenia",
           "ISSUE_PROVIDER": "Poskytovateľ problémov",
           "MENU_TREE": "Bočný panel",
@@ -2028,7 +2028,7 @@
         "RESTORED": "Obnovené \"{{title}}\"",
         "SUB_TASKS": {
           "ONE": "+{{nr}} podúloha",
-          "OTHER": "+{{nr}} podúloh"
+          "OTHER": "+ podúlohy: {{nr}}"
         },
         "TITLE": "Nedávno odstránené"
       },
@@ -3164,7 +3164,7 @@
   },
   "GLOBAL_SNACK": {
     "ACTION_REJECTED": "Pri tejto zmene nastala interná chyba a nebola použitá. Nič sa nestratilo; ak sa to opakuje, načítajte aplikáciu znova.",
-    "COPY_TO_CLIPPBOARD": "Copied to clipboard",
+    "COPY_TO_CLIPPBOARD": "Skopírované do schránky",
     "DUPLICATE_PROJECT_ERROR": "Projekt sa nepodarilo duplikovať",
     "DUPLICATE_PROJECT_SUCCESS": "Projekt bol úspešne duplikovaný",
     "FILE_DOWNLOADED": "{{fileName}} downloaded",

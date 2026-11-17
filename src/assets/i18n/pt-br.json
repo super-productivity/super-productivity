@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Não Concluídas"
       },
       "V": {
-        "ADD_NEW_BOARD": "Adicionar nova visualização",
+        "ADD_NEW_BOARD": "Criar visualização",
         "ADD_TASK_TO": "Adicionar tarefa a {{title}}",
         "CONFIRM_DELETE": "Tem certeza de que deseja excluir esta visualização?",
         "CREATE_NEW_TAG_BTN": "Criar Etiqueta",

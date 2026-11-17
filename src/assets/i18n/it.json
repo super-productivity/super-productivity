@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Non completato"
       },
       "V": {
-        "ADD_NEW_BOARD": "Aggiungi nuova vista",
+        "ADD_NEW_BOARD": "Crea vista",
         "ADD_TASK_TO": "Aggiungi attività a {{title}}",
         "CONFIRM_DELETE": "Confermi l'eliminazione di questa vista?",
         "CREATE_NEW_TAG_BTN": "Crea nuova etichetta",

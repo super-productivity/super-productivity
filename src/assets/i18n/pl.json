@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Niezrobione"
       },
       "V": {
-        "ADD_NEW_BOARD": "Dodaj nowy widok",
+        "ADD_NEW_BOARD": "Utwórz widok",
         "ADD_TASK_TO": "Dodaj zadanie do: {{title}}",
         "CONFIRM_DELETE": "Czy na pewno chcesz usunąć ten widok?",
         "CREATE_NEW_TAG_BTN": "Utwórz tag",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "edytowano",
         "ENTITY": {
           "ALL": "Wszystkie dane",
-          "BOARD": "Tablica",
+          "BOARD": "Widok",
           "GLOBAL_CONFIG": "Ustawienia",
           "ISSUE_PROVIDER": "Dostawca zgłoszeń",
           "MENU_TREE": "Pasek boczny",
@@ -2028,7 +2028,7 @@
         "RESTORED": "Przywrócono „{{title}}”",
         "SUB_TASKS": {
           "ONE": "+{{nr}} podzadanie",
-          "OTHER": "+{{nr}} podzadań"
+          "OTHER": "+ podzadania: {{nr}}"
         },
         "TITLE": "Ostatnio usunięte"
       },

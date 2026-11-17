@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Unerledigt"
       },
       "V": {
-        "ADD_NEW_BOARD": "Neue Ansicht hinzufügen",
+        "ADD_NEW_BOARD": "Ansicht erstellen",
         "ADD_TASK_TO": "Aufgabe zu {{title}} hinzufügen",
         "CONFIRM_DELETE": "Möchtest du diese Ansicht wirklich löschen?",
         "CREATE_NEW_TAG_BTN": "Tag erstellen",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "bearbeitet",
         "ENTITY": {
           "ALL": "Alle Daten",
-          "BOARD": "Board",
+          "BOARD": "Ansicht",
           "GLOBAL_CONFIG": "Einstellungen",
           "ISSUE_PROVIDER": "Issue-Provider",
           "MENU_TREE": "Seitenleiste",

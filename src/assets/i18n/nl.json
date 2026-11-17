@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Ongedaan"
       },
       "V": {
-        "ADD_NEW_BOARD": "Voeg nieuwe weergave toe",
+        "ADD_NEW_BOARD": "Weergave maken",
         "ADD_TASK_TO": "Taak toevoegen aan {{title}}",
         "CONFIRM_DELETE": "Wilt u deze weergave echt verwijderen?",
         "CREATE_NEW_TAG_BTN": "Tag Aanmaken",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "bewerkt",
         "ENTITY": {
           "ALL": "Alle gegevens",
-          "BOARD": "Bord",
+          "BOARD": "Weergave",
           "GLOBAL_CONFIG": "Instellingen",
           "ISSUE_PROVIDER": "Issue-provider",
           "MENU_TREE": "Zijbalk",

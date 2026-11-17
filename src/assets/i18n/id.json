@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "diedit",
         "ENTITY": {
           "ALL": "Semua data",
-          "BOARD": "Papan",
+          "BOARD": "Tampilan",
           "GLOBAL_CONFIG": "Pengaturan",
           "ISSUE_PROVIDER": "Penyedia isu",
           "MENU_TREE": "Bilah samping",

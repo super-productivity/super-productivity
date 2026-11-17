@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "عُدّل",
         "ENTITY": {
           "ALL": "كل البيانات",
-          "BOARD": "لوحة",
+          "BOARD": "عرض",
           "GLOBAL_CONFIG": "الإعدادات",
           "ISSUE_PROVIDER": "مزوّد المشكلات",
           "MENU_TREE": "الشريط الجانبي",

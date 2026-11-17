@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Nedokončeno"
       },
       "V": {
-        "ADD_NEW_BOARD": "Přidat nové zobrazení",
+        "ADD_NEW_BOARD": "Vytvořit zobrazení",
         "ADD_TASK_TO": "Přidat úkol do {{title}}",
         "CONFIRM_DELETE": "Opravdu chcete toto zobrazení smazat?",
         "CREATE_NEW_TAG_BTN": "Vytvořit štítek",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "upraveno",
         "ENTITY": {
           "ALL": "Všechna data",
-          "BOARD": "Nástěnka",
+          "BOARD": "Zobrazení",
           "GLOBAL_CONFIG": "Nastavení",
           "ISSUE_PROVIDER": "Poskytovatel úkolů",
           "MENU_TREE": "Postranní panel",
@@ -2028,7 +2028,7 @@
         "RESTORED": "Obnoveno „{{title}}“",
         "SUB_TASKS": {
           "ONE": "+{{nr}} podúkol",
-          "OTHER": "+{{nr}} podúkolů"
+          "OTHER": "+ podúkoly: {{nr}}"
         },
         "TITLE": "Nedávno smazané"
       },

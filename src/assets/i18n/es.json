@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "No hecho"
       },
       "V": {
-        "ADD_NEW_BOARD": "Añadir nueva vista",
+        "ADD_NEW_BOARD": "Crear vista",
         "ADD_TASK_TO": "Añadir tarea a {{title}}",
         "CONFIRM_DELETE": "¿Realmente quieres eliminar esta vista?",
         "CREATE_NEW_TAG_BTN": "Crear etiqueta",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "editado",
         "ENTITY": {
           "ALL": "Todos los datos",
-          "BOARD": "Tablero",
+          "BOARD": "Vista",
           "GLOBAL_CONFIG": "Ajustes",
           "ISSUE_PROVIDER": "Proveedor de incidencias",
           "MENU_TREE": "Barra lateral",

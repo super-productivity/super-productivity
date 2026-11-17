@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "已編輯",
         "ENTITY": {
           "ALL": "所有資料",
-          "BOARD": "看板",
+          "BOARD": "檢視",
           "GLOBAL_CONFIG": "設定",
           "ISSUE_PROVIDER": "議題提供者",
           "MENU_TREE": "側邊欄",

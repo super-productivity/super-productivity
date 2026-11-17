@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Não concluído"
       },
       "V": {
-        "ADD_NEW_BOARD": "Adicionar nova vista",
+        "ADD_NEW_BOARD": "Criar vista",
         "ADD_TASK_TO": "Adicionar tarefa a {{title}}",
         "CONFIRM_DELETE": "Tem certeza de que deseja excluir esta vista?",
         "CREATE_NEW_TAG_BTN": "Criar Tag",

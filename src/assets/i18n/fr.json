@@ -230,7 +230,7 @@
         "TASK_DONE_STATE_UNDONE": "Non terminé"
       },
       "V": {
-        "ADD_NEW_BOARD": "Ajouter une nouvelle vue",
+        "ADD_NEW_BOARD": "Créer une vue",
         "ADD_TASK_TO": "Ajouter une tâche à {{title}}",
         "CONFIRM_DELETE": "Voulez-vous vraiment supprimer cette vue ?",
         "CREATE_NEW_TAG_BTN": "Créer un tag",
@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "modifié",
         "ENTITY": {
           "ALL": "Toutes les données",
-          "BOARD": "Tableau",
+          "BOARD": "Vue",
           "GLOBAL_CONFIG": "Réglages",
           "ISSUE_PROVIDER": "Fournisseur de tickets",
           "MENU_TREE": "Barre latérale",
