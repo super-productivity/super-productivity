@@ -31,8 +31,11 @@ const handleDeleteIssueProvider = (
     }
   }
 
-  // Filter to only existing tasks in current state
-  const existingTaskIds = [...idsToUnlink].filter((id) => !!taskState.entities[id]);
+  // A task listed by the origin may have been relinked before replay.
+  const existingTaskIds = [...idsToUnlink].filter((id) => {
+    const providerId = taskState.entities[id]?.issueProviderId;
+    return !!providerId && providerIds.has(providerId);
+  });
 
   if (existingTaskIds.length === 0) {
     return state;
