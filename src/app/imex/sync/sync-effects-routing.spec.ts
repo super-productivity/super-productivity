@@ -35,6 +35,7 @@ describe('SyncEffects routing (Task 3)', () => {
   let remoteBacklogRemains$: Subject<void>;
   let schedulerRequest: jasmine.Spy;
   let sync: jasmine.Spy;
+  let syncCfg$: BehaviorSubject<{ isManualSyncOnly: boolean }>;
   let subs: { unsubscribe: () => void }[];
 
   const flush = async (): Promise<void> => {
@@ -49,6 +50,9 @@ describe('SyncEffects routing (Task 3)', () => {
     remoteBacklogRemains$ = new Subject<void>();
     schedulerRequest = jasmine.createSpy('request');
     sync = jasmine.createSpy('sync').and.resolveTo('InSync');
+    syncCfg$ = new BehaviorSubject<{ isManualSyncOnly: boolean }>({
+      isManualSyncOnly: false,
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -69,6 +73,7 @@ describe('SyncEffects routing (Task 3)', () => {
             isEnabledAndReady$: new BehaviorSubject(true),
             syncInterval$: new BehaviorSubject(10000),
             syncProviderId$: new BehaviorSubject(SyncProviderId.WebDAV),
+            syncCfg$,
           },
         },
         {
@@ -221,6 +226,20 @@ describe('SyncEffects routing (Task 3)', () => {
       initialUpdateCheck$.next();
       await flush();
 
+      expect(trigger.setInitialSyncDone).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('manual sync only', () => {
+    it('skips the startup sync but still opens the initial gate', async () => {
+      syncCfg$.next({ isManualSyncOnly: true });
+      const trigger = TestBed.inject(SyncTriggerService);
+      subs.push(effects.triggerSync$.subscribe());
+
+      initialUpdateCheck$.next();
+      await flush();
+
+      expect(sync).not.toHaveBeenCalled();
       expect(trigger.setInitialSyncDone).toHaveBeenCalledWith(true);
     });
   });

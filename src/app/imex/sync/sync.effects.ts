@@ -266,8 +266,16 @@ export class SyncEffects {
                   first(),
                 ),
               ),
-              withLatestFrom(this._syncWrapperService.syncProviderId$),
-              switchMap(([_, providerId]) => {
+              withLatestFrom(
+                this._syncWrapperService.syncProviderId$,
+                this._syncWrapperService.syncCfg$,
+              ),
+              switchMap(([_, providerId, cfg]) => {
+                // "Only sync manually" also skips the startup sync (#4565)
+                if (cfg.isManualSyncOnly) {
+                  this._syncTriggerService.setInitialSyncDone(true);
+                  return EMPTY;
+                }
                 // SuperSync can be delayed - data is already local, just needs upload/download
                 // Other providers (Dropbox, WebDAV, LocalFile) need sync first to download data
                 if (providerId === SyncProviderId.SuperSync) {
