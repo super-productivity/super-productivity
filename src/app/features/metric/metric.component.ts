@@ -66,6 +66,16 @@ export class MetricComponent {
   });
 
   /**
+   * The button turns the synced daily-summary feature on when it is off, so the
+   * label says so instead of promising only navigation.
+   */
+  dailySummaryBtnLabel = computed(() =>
+    this._globalConfigService.appFeatures().isFinishDayEnabled
+      ? this.T.F.METRIC.CMP.OPEN_DAILY_SUMMARY
+      : this.T.F.METRIC.CMP.ENABLE_DAILY_SUMMARY,
+  );
+
+  /**
    * Dynamic title that changes based on context
    */
   metricsTitle = computed(() => {

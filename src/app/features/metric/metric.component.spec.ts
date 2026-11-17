@@ -406,4 +406,16 @@ describe('MetricComponent', () => {
       expect(router.navigate).toHaveBeenCalledWith(['/active/daily-summary']);
     });
   });
+
+  describe('dailySummaryBtnLabel computed', () => {
+    it('should say "open" when the daily summary is enabled', () => {
+      expect(component.dailySummaryBtnLabel()).toBe('F.METRIC.CMP.OPEN_DAILY_SUMMARY');
+    });
+
+    it('should say "turn on" when the daily summary is disabled', () => {
+      appFeatures.set({ isFinishDayEnabled: false });
+
+      expect(component.dailySummaryBtnLabel()).toBe('F.METRIC.CMP.ENABLE_DAILY_SUMMARY');
+    });
+  });
 });

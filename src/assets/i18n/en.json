@@ -774,6 +774,7 @@
         "AVG_TIME_SPENT_PER_TASK": "Avg. time spent per task",
         "COUNTING_SUBTASKS": "(counting subtasks)",
         "DAYS_WORKED": "Days worked",
+        "ENABLE_DAILY_SUMMARY": "Turn on daily summary",
         "EVALUATION_OVER_TIME": "Impact & energy over time",
         "FOCUS_SESSION_TRENDS": "Focus sessions over time",
         "GLOBAL_METRICS": "Global Metrics",
