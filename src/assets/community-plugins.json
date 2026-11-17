@@ -201,14 +201,6 @@
     "id": "caffeine-tracker"
   },
   {
-    "name": "Auto Tag Manager",
-    "shortDescription": "Automatically applies tags to tasks based on keywords in the task title.",
-    "url": "https://github.com/owarimono/super-productivity-auto-tag",
-    "author": "owarimono",
-    "authorUrl": "https://github.com/owarimono",
-    "id": "auto-tag-manager"
-  },
-  {
     "name": "YouGile Integration (SuperGile)",
     "shortDescription": "Two-way sync of YouGile tasks assigned to you: done state, title, deadline, time estimate and time spent.",
     "url": "https://github.com/SileboxUnderfined/SuperGile",
