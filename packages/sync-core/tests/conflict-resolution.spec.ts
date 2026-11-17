@@ -436,6 +436,78 @@ describe('planLwwConflictResolutions', () => {
       expect([plan.winner, plan.reason]).toEqual(['local', 'local-duplicate-create']);
     });
 
+    describe('with the same automatic follow-up on both sides', () => {
+      // A repeat with a start time is created as addTask + scheduleTaskWithTime;
+      // both devices derive the same schedule from the series.
+      const schedule = (
+        id: string,
+        timestamp: number,
+        clientId: string,
+        at = 5_000,
+      ): Operation<OpType> =>
+        createOp({
+          id,
+          actionType: '[Task Shared] scheduleTaskWithTime',
+          // Capture shape (action minus type/meta, plus entityChanges); task trimmed to its id.
+          payload: {
+            actionPayload: { task: { id: 'task-1' }, dueWithTime: at, remindAt: at },
+            entityChanges: [],
+          },
+          timestamp,
+          clientId,
+        });
+
+      it('does not count the mirrored follow-up as an edit', () => {
+        const conflict = createConflict(
+          [create('b-create', 9_000, 'B'), schedule('b-schedule', 9_001, 'B')],
+          [
+            create('a-create', 1_000, 'A'),
+            schedule('a-schedule', 1_001, 'A'),
+            update('a-time', 2_000, 'A'),
+          ],
+        );
+
+        const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+        expect([plan.winner, plan.reason]).toEqual(['remote', 'remote-duplicate-create']);
+      });
+
+      it('mirrors when only an undefined key differs (lost in JSON transit)', () => {
+        // "Do not remind" schedules with remindAt: undefined; the local op keeps
+        // the key, the downloaded copy has it dropped by JSON.
+        const local = schedule('a-schedule', 1_001, 'A');
+        (
+          local.payload as { actionPayload: Record<string, unknown> }
+        ).actionPayload.remindAt = undefined;
+        const remote = schedule('b-schedule', 9_001, 'B');
+        delete (remote.payload as { actionPayload: Record<string, unknown> })
+          .actionPayload.remindAt;
+        const conflict = createConflict(
+          [create('b-create', 9_000, 'B'), remote],
+          [create('a-create', 1_000, 'A'), local, update('a-time', 2_000, 'A')],
+        );
+
+        const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+        expect([plan.winner, plan.reason]).toEqual(['remote', 'remote-duplicate-create']);
+      });
+
+      it('counts a follow-up the other side did not make the same way', () => {
+        const conflict = createConflict(
+          [create('b-create', 9_000, 'B'), schedule('b-schedule', 9_001, 'B', 6_000)],
+          [
+            create('a-create', 1_000, 'A'),
+            schedule('a-schedule', 1_001, 'A'),
+            update('a-time', 2_000, 'A'),
+          ],
+        );
+
+        const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+        expect([plan.winner, plan.reason]).toEqual(['local', 'local-timestamp']);
+      });
+    });
+
     it('falls back to timestamps when both sides only created', () => {
       const conflict = createConflict(
         [create('b-create', 9_000, 'B')],

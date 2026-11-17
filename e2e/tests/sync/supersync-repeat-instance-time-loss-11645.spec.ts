@@ -7,7 +7,11 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
-import { openRecurDialog, saveRecurDialog } from '../../utils/recurring-task-helpers';
+import {
+  openRecurDialog,
+  openRecurScheduleDialog,
+  saveRecurDialog,
+} from '../../utils/recurring-task-helpers';
 import { getStoreSummary } from '../../utils/audit-error-paths-helpers';
 
 /**
@@ -27,7 +31,9 @@ import { getStoreSummary } from '../../utils/audit-error-paths-helpers';
  * afterwards, hours later, does B reach the day change (no sync in between).
  */
 
-const DAY = '2026-06-16';
+// A future year: the reminder check runs on real time, so a fake day in the
+// past would pop the timed instance's reminder over the UI mid-test.
+const DAY = '2030-06-16';
 
 /**
  * Book time on a task by id through the two actions the production timer uses
@@ -71,18 +77,30 @@ const recordTimeById = async (
 };
 
 /** Persisted-in-store timeSpent of a task id (0 when absent). */
+const readTaskNumber = (
+  page: SimulatedE2EClient['page'],
+  taskId: string,
+  field: 'timeSpent' | 'dueWithTime',
+): Promise<number> =>
+  page.evaluate(
+    ([id, key]) => {
+      type Store = {
+        subscribe: (n: (s: unknown) => void) => { unsubscribe: () => void };
+      };
+      const store = (window as unknown as { __e2eTestHelpers: { store: Store } })
+        .__e2eTestHelpers.store;
+      let root:
+        | { tasks: { entities: Record<string, Record<string, number>> } }
+        | undefined;
+      store.subscribe((s) => (root = s as typeof root)).unsubscribe();
+      return root!.tasks.entities[id]?.[key] ?? -1;
+    },
+    [taskId, field] as const,
+  );
 const readTimeSpent = (
   page: SimulatedE2EClient['page'],
   taskId: string,
-): Promise<number> =>
-  page.evaluate((id) => {
-    type Store = { subscribe: (n: (s: unknown) => void) => { unsubscribe: () => void } };
-    const store = (window as unknown as { __e2eTestHelpers: { store: Store } })
-      .__e2eTestHelpers.store;
-    let root: { tasks: { entities: Record<string, { timeSpent?: number }> } } | undefined;
-    store.subscribe((s) => (root = s as typeof root)).unsubscribe();
-    return root!.tasks.entities[id]?.timeSpent ?? -1;
-  }, taskId);
+): Promise<number> => readTaskNumber(page, taskId, 'timeSpent');
 
 /**
  * Open a task's detail panel (mirrors TaskPage.openTaskDetail, which the
@@ -154,13 +172,21 @@ const advancePastMidnight = async (
 
 // Both conflict directions: B resolves (A uploaded first, SuperSync's usual
 // order) or A resolves (B's blank copy reached the server first).
+// A start time makes creation also dispatch scheduleTaskWithTime, so both
+// sides carry a follow-up op besides the create.
 const SCENARIOS = [
-  { name: 'A uploads its tracked time first', aUploadsFirst: true },
-  { name: "B's blank copy reaches the server first", aUploadsFirst: false },
+  { name: 'A uploads its tracked time first', aUploadsFirst: true, startTime: null },
+  {
+    name: "B's blank copy reaches the server first",
+    aUploadsFirst: false,
+    startTime: null,
+  },
+  { name: 'timed, A uploads first', aUploadsFirst: true, startTime: '13:00' },
+  { name: "timed, B's blank copy first", aUploadsFirst: false, startTime: '13:00' },
 ] as const;
 
 test.describe('@supersync Repeat instance time loss (#11645)', () => {
-  for (const { name: scenario, aUploadsFirst } of SCENARIOS) {
+  for (const { name: scenario, aUploadsFirst, startTime } of SCENARIOS) {
     test(`keeps time tracked on A when B creates the same instance later: ${scenario}`, async ({
       browser,
       baseURL,
@@ -178,7 +204,7 @@ test.describe('@supersync Repeat instance time loss (#11645)', () => {
         clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
 
         for (const client of [clientA, clientB]) {
-          await client.page.clock.setSystemTime(new Date('2026-06-15T15:00:00'));
+          await client.page.clock.setSystemTime(new Date('2030-06-15T15:00:00'));
           await client.page.reload();
           await client.workView.waitForTaskList();
         }
@@ -190,6 +216,15 @@ test.describe('@supersync Repeat instance time loss (#11645)', () => {
         await waitForTask(clientA.page, parentName);
         await openTaskDetail(clientA.page, parentName);
         await openRecurDialog(clientA.page);
+        if (startTime) {
+          // remindAt defaults to AtStart once startTime is set, so the config is timed.
+          const scheduleDialog = await openRecurScheduleDialog(clientA.page);
+          const startTimeField = scheduleDialog.getByLabel('Time');
+          await startTimeField.fill(startTime);
+          await startTimeField.blur();
+          await scheduleDialog.locator('[data-test-id="schedule-submit-btn"]').click();
+          await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        }
         await saveRecurDialog(clientA.page);
         await clientA.page.keyboard.press('Escape');
         await clientA.sync.syncAndWait();
@@ -197,7 +232,7 @@ test.describe('@supersync Repeat instance time loss (#11645)', () => {
         await waitForTask(clientB.page, parentName);
 
         // 2. Day changes on A only: A creates the day-16 instance and tracks time.
-        await advancePastMidnight(clientA, parentName, '2026-06-16T00:05:00');
+        await advancePastMidnight(clientA, parentName, '2030-06-16T00:05:00');
         const instanceId = (await getStoreSummary(clientA.page)).tasks.find(
           (t) => t.title.includes(parentName) && !t.isDone && !t.parentId,
         )!.id;
@@ -212,7 +247,7 @@ test.describe('@supersync Repeat instance time loss (#11645)', () => {
         //    does B reach the day change and create the same instance.
         // B opens hours later, as in the report: its create must be the newest
         // write, or LWW picks A's side by timestamp alone.
-        await advancePastMidnight(clientB, parentName, '2026-06-16T09:00:00');
+        await advancePastMidnight(clientB, parentName, '2030-06-16T09:00:00');
         console.log(
           `[11645] B timeSpent right after its own create: ${await readTimeSpent(clientB.page, instanceId)}`,
         );
@@ -238,6 +273,15 @@ test.describe('@supersync Repeat instance time loss (#11645)', () => {
             `[11645] client ${name}: undone instances=${undone.length}, timeSpent(${instanceId})=${spent}`,
           );
           expect(undone, `client ${name}: one undone instance`).toHaveLength(1);
+          const dueWithTime = await readTaskNumber(
+            client.page,
+            instanceId,
+            'dueWithTime',
+          );
+          expect(
+            dueWithTime > 0,
+            `client ${name}: instance is timed iff the series is`,
+          ).toBe(!!startTime);
           expect(
             spent,
             `client ${name}: time tracked on A must survive B's concurrent create`,
