@@ -150,6 +150,77 @@ describe('summarizePendingOps', () => {
     ]);
   });
 
+  it('should return undefined when one bulk op touches more entities than the limit', () => {
+    const entityIds = Array.from(
+      { length: MAX_LISTED_LOCAL_CHANGES + 1 },
+      (_, i) => `task-${i}`,
+    );
+
+    expect(
+      listChanges([entry({ opType: OpType.Update, entityId: undefined, entityIds })]),
+    ).toBeUndefined();
+  });
+
+  it('should list a bulk op that touches exactly the limit', () => {
+    const entityIds = Array.from(
+      { length: MAX_LISTED_LOCAL_CHANGES },
+      (_, i) => `task-${i}`,
+    );
+
+    expect(
+      listChanges([entry({ opType: OpType.Update, entityId: undefined, entityIds })])
+        ?.length,
+    ).toBe(MAX_LISTED_LOCAL_CHANGES);
+  });
+
+  it('should count touched entities, not ops, against the limit', () => {
+    const entries = [
+      ...Array.from({ length: 15 }, (_, i) => entry({ entityId: `task-${i}` })),
+      entry({
+        entityId: undefined,
+        entityIds: Array.from({ length: 6 }, (_, i) => `bulk-${i}`),
+      }),
+    ];
+
+    expect(listChanges(entries)).toBeUndefined();
+  });
+
+  it('should read the title of a single archived task from the array payload', () => {
+    const result = listChanges([
+      entry({
+        opType: OpType.Update,
+        entityId: 'task-1',
+        payload: {
+          entityChanges: [],
+          actionPayload: {
+            tasks: [
+              { id: 'other', title: 'Not this one' },
+              { id: 'task-1', title: 'Archived task' },
+            ],
+          },
+        },
+      }),
+    ]);
+
+    expect(result).toEqual([
+      { entityType: 'TASK', entityId: 'task-1', kind: 'UPDATED', label: 'Archived task' },
+    ]);
+  });
+
+  it('should not take a title from an array element of a different entity', () => {
+    const result = listChanges([
+      entry({
+        entityId: 'task-1',
+        payload: {
+          entityChanges: [],
+          actionPayload: { tasks: [{ id: 'other', title: 'Not this one' }] },
+        },
+      }),
+    ]);
+
+    expect(result?.[0].label).toBeUndefined();
+  });
+
   it('should report a pending full-state op as an import', () => {
     const result = listChanges([
       entry({

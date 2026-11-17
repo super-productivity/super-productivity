@@ -54,15 +54,28 @@ const nonEmptyString = (value: unknown): string | undefined =>
  * Pulls a human label (task/note/project `title`, tag/project `name`) out of an
  * action payload. Entity payloads sit under varying keys (`task`, `project`, …)
  * and updates wrap the edited fields in `changes`, so scan the object-valued
- * entries rather than hard-coding one key per action.
+ * entries rather than hard-coding one key per action. Array-valued entries
+ * (e.g. the `tasks` of an archive op) are only trusted for the element whose
+ * `id` is the entity being labelled.
  */
-const readLabel = (actionPayload: Record<string, unknown>): string | undefined => {
-  for (const value of Object.values(actionPayload)) {
+const readLabel = (
+  actionPayload: Record<string, unknown>,
+  entityId: string | undefined,
+): string | undefined => {
+  const labelOf = (value: unknown): string | undefined => {
     if (!isRecord(value)) {
-      continue;
+      return undefined;
     }
     const source = isRecord(value['changes']) ? value['changes'] : value;
-    const label = nonEmptyString(source['title']) ?? nonEmptyString(source['name']);
+    return nonEmptyString(source['title']) ?? nonEmptyString(source['name']);
+  };
+
+  for (const value of Object.values(actionPayload)) {
+    const label = Array.isArray(value)
+      ? entityId !== undefined
+        ? labelOf(value.find((item) => isRecord(item) && item['id'] === entityId))
+        : undefined
+      : labelOf(value);
     if (label) {
       return label;
     }
@@ -116,7 +129,8 @@ const isAutomaticUpdate = (entityType: string, fields: string[]): boolean => {
 /**
  * Collapses pending local ops into one row per touched entity, in the order
  * each entity was first touched. Returns `undefined` when there are more ops
- * than the dialog should list, so callers can't render an unreadable wall.
+ * or more touched entities than the dialog should list (one bulk op can touch
+ * many), so callers can't render an unreadable wall.
  *
  * Pure and read-only: the ops stay exactly as they are in the log.
  */
@@ -143,7 +157,7 @@ export const summarizePendingOps = (
     }
     // A multi-id op shares one payload, so a label read from it would be
     // attributed to every id — only trust it for single-entity ops.
-    const label = ids.length === 1 ? readLabel(actionPayload) : undefined;
+    const label = ids.length === 1 ? readLabel(actionPayload, ids[0]) : undefined;
 
     for (const entityId of ids) {
       const key = `${op.entityType}:${entityId ?? '*'}`;
@@ -163,6 +177,12 @@ export const summarizePendingOps = (
       acc.label = label ?? acc.label;
       byEntity.set(key, acc);
     }
+  }
+
+  // The op cap above does not bound this: a single bulk op can carry any
+  // number of entity ids.
+  if (byEntity.size > MAX_LISTED_LOCAL_CHANGES) {
+    return undefined;
   }
 
   const changes = [...byEntity.values()].map((acc) => {
