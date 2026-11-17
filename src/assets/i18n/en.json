@@ -782,6 +782,7 @@
         "HEATMAP_SHARED_TO_DEVICE": "Heatmap saved to device storage",
         "HEATMAP_SHARED_TO_PATH": "Heatmap saved to {{path}}",
         "NO_ADDITIONAL_DATA_YET": "No additional data collected yet. Use the form on the daily summary \"Evaluation\" panel to do so.",
+        "OPEN_DAILY_SUMMARY": "Open daily summary",
         "SHARE_HEATMAP": "Share heatmap",
         "SHARE_STATS": "Share your productivity stats",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Click Counters over time",
