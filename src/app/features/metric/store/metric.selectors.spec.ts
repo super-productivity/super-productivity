@@ -5,6 +5,7 @@ import {
   selectSimpleCounterClickCounterLineChartData,
   selectSimpleCounterStopWatchLineChartData,
 } from './metric.selectors';
+import { T } from '../../../t.const';
 import { MetricState } from '../metric.model';
 import { initialSimpleCounterState } from '../../simple-counter/store/simple-counter.reducer';
 import {
@@ -225,9 +226,9 @@ describe('Metric Selectors - Focus Sessions', () => {
     const chart = selectFocusSessionLineChartDataComplete.projector(mockState);
 
     expect(chart.labels).toEqual([dayOne, dayTwo]);
-    expect(chart.datasets[0].label).toBe('Focus sessions');
+    expect(chart.datasets[0].label).toBe(T.F.METRIC.CMP.CHART_FOCUS_SESSIONS);
     expect(chart.datasets[0].data).toEqual([2, 0]);
-    expect(chart.datasets[1].label).toBe('Focus minutes');
+    expect(chart.datasets[1].label).toBe(T.F.METRIC.CMP.CHART_FOCUS_MINUTES);
     expect(chart.datasets[1].data).toEqual([40, 0]);
   });
 
@@ -255,9 +256,9 @@ describe('Metric Selectors - Evaluation', () => {
     const chart = selectEvaluationLineChartData.projector(mockState);
 
     expect(chart.labels).toEqual(['2024-01-01', '2024-01-03']);
-    expect(chart.datasets[0].label).toBe('Impact (1-4)');
+    expect(chart.datasets[0].label).toBe(T.F.METRIC.CMP.CHART_IMPACT);
     expect(chart.datasets[0].data).toEqual([3, undefined]);
-    expect(chart.datasets[1].label).toBe('Energy (1-3)');
+    expect(chart.datasets[1].label).toBe(T.F.METRIC.CMP.CHART_ENERGY);
     expect(chart.datasets[1].data).toEqual([2, 1]);
   });
 

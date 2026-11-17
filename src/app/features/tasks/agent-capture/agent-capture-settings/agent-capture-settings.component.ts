@@ -137,8 +137,8 @@ export class AgentCaptureSettingsComponent extends FieldType<FormlyFieldConfig> 
     });
   }
 
-  async copy(text: string, label: string): Promise<void> {
-    const result = await this._shareService.copyToClipboard(text, label);
+  async copy(text: string, successMsg: string): Promise<void> {
+    const result = await this._shareService.copyToClipboard(text, successMsg);
     if (!result.success) {
       this._snackService.open(T.F.SYNC.FORM.SUPER_SYNC.CAPTURE_S_COPY_FAILED);
     }

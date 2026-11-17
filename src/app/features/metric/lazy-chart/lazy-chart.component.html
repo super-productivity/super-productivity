@@ -36,7 +36,7 @@
     </button>
   </div>
   @if (!isModuleLoaded()) {
-    <div class="chart-loading">Loading chart...</div>
+    <div class="chart-loading">{{ T.F.METRIC.CMP.CHART_LOADING | translate }}</div>
   }
   @if (isModuleLoaded()) {
     <div

@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { firstValueFrom } from 'rxjs';
+import { TranslateService } from '@ngx-translate/core';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { IS_IOS } from '../../util/is-ios';
 import { SnackService } from '../snack/snack.service';
@@ -18,6 +19,7 @@ import * as ShareUrlBuilder from './share-url-builder.util';
 import * as ShareFileUtil from './share-file.util';
 import * as SharePlatformUtil from './share-platform.util';
 import { Log } from '../log';
+import { T } from '../../t.const';
 
 export type ShareOutcome = 'shared' | 'cancelled' | 'unavailable' | 'failed';
 export type { ShareSupport } from './share-platform.util';
@@ -47,6 +49,7 @@ export class ShareService {
 
   private _snackService = inject(SnackService);
   private _matDialog = inject(MatDialog);
+  private _translateService = inject(TranslateService);
 
   async shareText({ title, text }: ShareParams): Promise<ShareOutcome> {
     if (!text || typeof window === 'undefined') {
@@ -131,7 +134,7 @@ export class ShareService {
         case 'clipboard-text':
           return this.copyToClipboard(
             ShareTextUtil.formatTextForClipboard(payload),
-            'Text',
+            T.F.SHARE.COPIED.TEXT,
           );
         default:
           return this._openShareUrl(normalized, target);
@@ -232,9 +235,9 @@ export class ShareService {
           text: normalized.text,
           url: normalized.url,
           files: normalized.files,
-          dialogTitle: 'Share via',
+          dialogTitle: this._translateService.instant(T.F.SHARE.SHARE_VIA),
         });
-        this._snackService.open('Shared successfully!');
+        this._snackService.open(T.F.SHARE.SHARED_SUCCESSFULLY);
         return {
           success: true,
           usedNative: true,
@@ -264,7 +267,7 @@ export class ShareService {
           text: normalized.text,
           url: normalized.url,
         });
-        this._snackService.open('Shared successfully!');
+        this._snackService.open(T.F.SHARE.SHARED_SUCCESSFULLY);
         return {
           success: true,
           usedNative: true,
@@ -331,7 +334,7 @@ export class ShareService {
 
     window.open(url, '_blank', 'noopener,noreferrer');
 
-    this._snackService.open('Opening share window...');
+    this._snackService.open(T.F.SHARE.OPENING_SHARE_WINDOW);
 
     return {
       success: true,
@@ -342,10 +345,10 @@ export class ShareService {
   /**
    * Copy text to clipboard (public API for dialog component).
    */
-  async copyToClipboard(text: string, label: string): Promise<ShareResult> {
+  async copyToClipboard(text: string, successMsg: string): Promise<ShareResult> {
     try {
       await navigator.clipboard.writeText(text);
-      this._snackService.open(`${label} copied to clipboard!`);
+      this._snackService.open(successMsg);
       return {
         success: true,
         target: 'clipboard-text',
@@ -361,7 +364,7 @@ export class ShareService {
         document.execCommand('copy');
         document.body.removeChild(textArea);
 
-        this._snackService.open(`${label} copied to clipboard!`);
+        this._snackService.open(successMsg);
         return {
           success: true,
           target: 'clipboard-text',
@@ -557,10 +560,10 @@ export class ShareService {
         title,
         text: '',
         files: [fileUrl],
-        dialogTitle: 'Share via',
+        dialogTitle: this._translateService.instant(T.F.SHARE.SHARE_VIA),
       });
 
-      this._snackService.open('Shared successfully!');
+      this._snackService.open(T.F.SHARE.SHARED_SUCCESSFULLY);
       ShareFileUtil.scheduleCacheCleanup(relativePath);
       return {
         success: true,
@@ -612,7 +615,7 @@ export class ShareService {
             files: [file],
             title,
           });
-          this._snackService.open('Shared successfully!');
+          this._snackService.open(T.F.SHARE.SHARED_SUCCESSFULLY);
           return {
             success: true,
             usedNative: true,
@@ -626,7 +629,7 @@ export class ShareService {
           title,
           url: dataUrl,
         });
-        this._snackService.open('Shared successfully!');
+        this._snackService.open(T.F.SHARE.SHARED_SUCCESSFULLY);
         return {
           success: true,
           usedNative: true,

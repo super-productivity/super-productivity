@@ -6,6 +6,14 @@ import { DialogBackupsListComponent } from './dialog-backups-list.component';
 import { BackupListEntry, BackupSourcesService } from '../backup-sources.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
+import { signal } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeDe from '@angular/common/locales/de';
+import localeSv from '@angular/common/locales/sv';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+
+registerLocaleData(localeDe, 'de');
+registerLocaleData(localeSv, 'sv');
 
 describe('DialogBackupsListComponent', () => {
   let fixture: ComponentFixture<DialogBackupsListComponent>;
@@ -61,6 +69,10 @@ describe('DialogBackupsListComponent', () => {
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MatDialog, useValue: matDialog },
         { provide: SnackService, useValue: snack },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: signal('sv'), textLocale: signal('de') },
+        },
       ],
     })
       .overrideComponent(DialogBackupsListComponent, {
@@ -86,6 +98,20 @@ describe('DialogBackupsListComponent', () => {
       '[mat-dialog-actions] button[mat-flat-button]',
     );
     expect(restoreBtn.disabled).toBeTrue();
+  });
+
+  it('formats the listed backup date in the text locale', async () => {
+    const createdAt = new Date(2026, 9, 25, 14, 5, 57).getTime();
+    sources.listBackups.and.resolveTo({
+      entries: [{ ...ringEntry, createdAt }],
+      failedSources: [],
+    });
+    fixture = TestBed.createComponent(DialogBackupsListComponent);
+    fixture.detectChanges();
+    await flush();
+
+    const row: HTMLButtonElement = fixture.nativeElement.querySelector('button.backup');
+    expect(row.textContent).toContain('25.10.2026, 14:05:57');
   });
 
   it('marks the selected row pressed', async () => {
@@ -145,6 +171,17 @@ describe('DialogBackupsListComponent', () => {
       jasmine.objectContaining({ msg: T.GCF.AUTO_BACKUPS.S_RESTORE_SUCCESS }),
     );
     expect(dialogRef.close).toHaveBeenCalledWith(true);
+  });
+
+  it('formats the confirmation timestamp in the text locale', async () => {
+    const createdAt = new Date(2026, 9, 25, 14, 5, 57).getTime();
+    await component.select({ ...ringEntry, createdAt });
+    await component.restore();
+
+    const data = matDialog.open.calls.mostRecent().args[1]?.data as {
+      translateParams: Record<string, unknown>;
+    };
+    expect(data.translateParams['timestamp']).toBe('25.10.2026, 14:05:57');
   });
 
   it('does nothing when the confirmation is declined', async () => {

@@ -13,6 +13,13 @@ import { ConfettiInstance } from '../../../core/confetti/confetti.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { createProject } from '../project.test-helper';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { registerLocaleData } from '@angular/common';
+import localeDe from '@angular/common/locales/de';
+import localeSv from '@angular/common/locales/sv';
+
+registerLocaleData(localeDe, 'de');
+registerLocaleData(localeSv, 'sv');
 
 describe('DialogProjectCompleteComponent', () => {
   let fixture: ComponentFixture<DialogProjectCompleteComponent>;
@@ -64,6 +71,10 @@ describe('DialogProjectCompleteComponent', () => {
         { provide: ConfettiService, useValue: confettiService },
         { provide: GlobalConfigService, useValue: { misc: () => misc } },
         { provide: GlobalThemeService, useValue: { isDarkTheme } },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: () => 'sv', textLocale: () => 'de' },
+        },
       ],
     });
 
@@ -127,6 +138,18 @@ describe('DialogProjectCompleteComponent', () => {
     component.close();
 
     expect(dialogRef.close).toHaveBeenCalled();
+  });
+
+  it('formats the date range in the text locale', () => {
+    data.stats.startedOn = new Date(2026, 4, 1).getTime();
+
+    fixture.detectChanges();
+
+    const dateRange: HTMLElement = fixture.debugElement.query(
+      By.css('.date-range'),
+    ).nativeElement;
+    expect(dateRange.textContent).toContain('01.05.2026');
+    expect(dateRange.textContent).toContain('05.06.2026');
   });
 
   it('renders only a close action', () => {

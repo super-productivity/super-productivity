@@ -49,7 +49,7 @@ export class DialogShareComponent {
     { target: 'facebook', label: 'Facebook', icon: 'link' },
     { target: 'whatsapp', label: 'WhatsApp', icon: 'chat' },
     { target: 'telegram', label: 'Telegram', icon: 'send' },
-    { target: 'email', label: 'Email', icon: 'email' },
+    { target: 'email', label: T.F.SHARE.EMAIL, icon: 'email' },
     { target: 'mastodon', label: 'Mastodon', icon: 'link' },
   ];
 
@@ -80,7 +80,10 @@ export class DialogShareComponent {
 
   async copyText(): Promise<void> {
     const text = this._shareService.formatTextForClipboard(this.data.payload);
-    const result: ShareResult = await this._shareService.copyToClipboard(text, 'Text');
+    const result: ShareResult = await this._shareService.copyToClipboard(
+      text,
+      T.F.SHARE.COPIED.TEXT,
+    );
 
     if (result.success) {
       this._dialogRef.close(result);

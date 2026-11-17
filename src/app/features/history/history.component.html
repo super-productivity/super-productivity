@@ -46,7 +46,7 @@
                   >
                     <span
                       class="month-label"
-                      [innerHtml]="month.key | numberToMonth"
+                      [innerHtml]="month.key | numberToMonth: textLocale()"
                     ></span>
                     <mat-icon class="collapsible-expand-icon">{{
                       isMonthExpanded(year.key, month.key) ? 'expand_less' : 'expand_more'
@@ -166,18 +166,15 @@
                                       "
                                     >
                                       {{ worklogForDay.value.dayStr }}
-                                      {{ worklogForDay.key }}.
-                                      @if (
-                                        isOtherMonth(
-                                          worklogForDay.value.dateStr,
-                                          month.key
-                                        )
-                                      ) {
-                                        {{
-                                          worklogForDay.value.dateStr.slice(5, 7)
-                                            | numberToMonth
-                                        }}
-                                      }
+                                      {{
+                                        worklogForDay.value.dateStr
+                                          | dayOfMonth
+                                            : textLocale()
+                                            : isOtherMonth(
+                                                worklogForDay.value.dateStr,
+                                                month.key
+                                              )
+                                      }}
                                     </button>
                                   </td>
                                   <td class="work-range">

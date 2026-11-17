@@ -26,6 +26,8 @@ import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
 import { MsToStringPipe } from '../../ui/duration/ms-to-string.pipe';
 import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
 import { NumberToMonthPipe } from '../../ui/pipes/number-to-month.pipe';
+import { DayOfMonthPipe } from '../../ui/pipes/day-of-month.pipe';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { Log } from '../../core/log';
@@ -61,6 +63,7 @@ import { DialogRecentlyDeletedComponent } from '../tasks/recently-deleted/dialog
     MsToStringPipe,
     MomentFormatPipe,
     NumberToMonthPipe,
+    DayOfMonthPipe,
     TranslatePipe,
     WorklogTaskRowComponent,
     HistoryDayMetaComponent,
@@ -77,6 +80,7 @@ export class HistoryComponent {
   private readonly _store = inject(Store);
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _dateService = inject(DateService);
+  readonly textLocale = inject(DateTimeFormatService).textLocale;
   private readonly _queryParams = toSignal(this._route.queryParams, {
     initialValue: this._route.snapshot.queryParams,
   });
