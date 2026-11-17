@@ -1414,7 +1414,7 @@
         "CHANGE_UPDATED": "edited",
         "ENTITY": {
           "ALL": "All data",
-          "BOARD": "Board",
+          "BOARD": "View",
           "GLOBAL_CONFIG": "Settings",
           "ISSUE_PROVIDER": "Issue provider",
           "MENU_TREE": "Sidebar",
