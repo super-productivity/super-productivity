@@ -1254,6 +1254,22 @@ END:VCALENDAR`;
       const result = await promise;
       expect(result).toBe(false);
     });
+
+    // Saving the provider rejects such a body, so the test must not report
+    // success for it (#11510).
+    it('should reject a response that is not iCal data', async () => {
+      const cfg = createMockProvider();
+
+      const promise = service.testConnection(cfg);
+
+      const req = httpMock.expectOne(cfg.icalUrl);
+      req.flush('<!DOCTYPE html><html><body>Sign in</body></html>');
+
+      await expectAsync(promise).toBeRejectedWithError(
+        NotIcalResponseError,
+        'Response did not look like iCal data',
+      );
+    });
   });
 
   describe('requestEvents$', () => {
