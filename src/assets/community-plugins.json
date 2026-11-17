@@ -93,9 +93,9 @@
     "authorUrl": "https://github.com/ahanel13",
     "id": "sp-dashboard",
     "release": {
-      "version": "1.9.0",
-      "downloadUrl": "https://github.com/ahanel13/sp-dashboard/releases/download/v1.9.0/sp-dashboard.zip",
-      "sha256": "698d057da3235d4d3b549b8f202d3e07388b6670000a35fe9b74d7209ffb142d"
+      "version": "1.10.0",
+      "downloadUrl": "https://github.com/ahanel13/sp-dashboard/releases/download/v1.10.0/sp-dashboard.zip",
+      "sha256": "360f5a7aed51fe154e7886c350018bfe0c6403493dde7385c0cf6e088cf9f281"
     }
   },
   {
