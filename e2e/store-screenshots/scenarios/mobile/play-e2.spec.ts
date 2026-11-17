@@ -8,7 +8,8 @@
  * The regular build's cleanDerivedOutput() deletes this folder, so upload the
  * set before running `npm run screenshots`, or re-capture afterwards.
  *
- * Spec and captions: marketing repo, docs/aso/super-productivity.md ("E2").
+ * Spec and captions: marketing/docs/aso/super-productivity.md ("E2"), in the
+ * separate marketing repo.
  *
  *   npm run screenshots:capture:play-e2
  */
