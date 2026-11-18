@@ -53,13 +53,14 @@
     "STARTING": "Starting…",
     "PHASE_PROJECT": "creating project",
     "PHASE_TASKS": "creating tasks",
-    "PHASE_DETAILS": "applying dates and tags {{current}}/{{total}}",
+    "PHASE_DETAILS": "applying dates, tags and repeats {{current}}/{{total}}",
     "PROGRESS": "Project {{current}} of {{total}}: {{title}} — {{detail}}"
   },
   "SUMMARY": {
     "PROJECT_RESULT": "{{title}}: {{landedTasks}} of {{plannedTasks}} tasks, {{landedSubTasks}} of {{plannedSubTasks}} sub-tasks",
     "SHORTFALL": "some items did not land; please review",
     "UNVERIFIED": "Could not verify the imported counts — the numbers above may show 0 even for tasks that landed.",
+    "REPEATS_FAILED": "Recurring tasks that could not be set to repeat (the rule is noted in task notes): {{count}}.",
     "CREATED_TAGS": "Created tags: {{tags}}",
     "NOT_CARRIED_OVER": "Not carried over",
     "SNACK_FINISHED": "Todoist import finished",

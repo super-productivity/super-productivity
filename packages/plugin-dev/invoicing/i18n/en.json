@@ -1,0 +1,58 @@
+{
+  "TITLE": "Invoices",
+  "LOADING": "Loading…",
+  "LIST": {
+    "EMPTY": "No invoices yet.",
+    "PRINT": "Print / PDF",
+    "CSV": "CSV",
+    "DELETE": "Delete",
+    "CONFIRM_DELETE": "Delete invoice {{number}}? Its hours count as unbilled again."
+  },
+  "NEW": {
+    "TITLE": "New invoice",
+    "PROJECT": "Project",
+    "NO_PROJECTS": "Create a project first. Each project is billed separately.",
+    "FROM": "From",
+    "TO": "To",
+    "RATE": "Hourly rate",
+    "LANGUAGE": "Invoice language",
+    "CLIENT": "Bill to",
+    "CLIENT_HINT": "Client name and address. Remembered for this project.",
+    "INCLUDE": "Include",
+    "NO_HOURS": "No unbilled time on this project in this period.",
+    "NUMBER": "Invoice number",
+    "ISSUE_DATE": "Invoice date",
+    "ISSUE": "Issue and print",
+    "BLOCK": {
+      "PERIOD": "Choose From and To dates; From must come first.",
+      "LINES": "Tick at least one line with hours.",
+      "RATE": "Enter an hourly rate.",
+      "NUMBER": "Enter an invoice number.",
+      "NUMBER_USED": "This invoice number is already used.",
+      "DATE": "Enter the invoice date."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Your details",
+    "SELLER": "Your name, address and tax ID",
+    "PAYMENT_NOTE": "Payment details",
+    "PAYMENT_NOTE_HINT": "Bank details or payment terms, printed at the bottom.",
+    "CURRENCY": "Currency code",
+    "TAX": "Tax / VAT %",
+    "PAYMENT_DAYS": "Days until due",
+    "ROUNDING": "Round each line up to",
+    "ROUNDING_NONE": "No rounding",
+    "ROUNDING_MIN": "{{min}} minutes",
+    "PREFIX": "Invoice number prefix",
+    "SAVE": "Save",
+    "SAVED": "Saved."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Description",
+    "HOURS": "Hours",
+    "TOTAL": "Total"
+  },
+  "ERROR": {
+    "GENERIC": "Something went wrong: {{error}}"
+  }
+}

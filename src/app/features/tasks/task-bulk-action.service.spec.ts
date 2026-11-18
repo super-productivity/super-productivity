@@ -804,6 +804,22 @@ describe('TaskBulkActionService', () => {
       expect(action.taskIds).toEqual(['a', 'b']);
     });
 
+    it('offers reminders up to 1 hour when every picked task repeats', async () => {
+      dialogResult = undefined;
+      select([t('a', { repeatCfgId: 'c1' }), t('b', { repeatCfgId: 'c2' })]);
+      await service.openScheduleDialog();
+      const data = matDialog.open.calls.mostRecent().args[1].data;
+      expect(data.reminderOptions.map((o: { value: string }) => o.value)).toEqual([
+        TaskReminderOptionId.DoNotRemind,
+        TaskReminderOptionId.AtStart,
+        TaskReminderOptionId.m5,
+        TaskReminderOptionId.m10,
+        TaskReminderOptionId.m15,
+        TaskReminderOptionId.m30,
+        TaskReminderOptionId.h1,
+      ]);
+    });
+
     it('schedules with the picked time for every task', async () => {
       select([t('a'), t('b')]);
       await service.scheduleFor({
@@ -812,6 +828,29 @@ describe('TaskBulkActionService', () => {
         remindOption: null,
       });
       expect(taskService.scheduleTask).toHaveBeenCalledTimes(2);
+    });
+
+    // #11816: a repeat config holds at most a 1h lead and would overwrite a
+    // longer one on the next series edit
+    it('caps a day/week lead to 1 hour for repeating tasks only', async () => {
+      select([t('plain'), t('repeating', { repeatCfgId: 'cfg1' })]);
+      await service.scheduleFor({
+        date: new Date(2026, 8, 10),
+        time: '09:30',
+        remindOption: TaskReminderOptionId.w1,
+      });
+      expect(taskService.scheduleTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'plain' }),
+        jasmine.any(Number),
+        TaskReminderOptionId.w1,
+        false,
+      );
+      expect(taskService.scheduleTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'repeating' }),
+        jasmine.any(Number),
+        TaskReminderOptionId.h1,
+        false,
+      );
     });
   });
 
