@@ -6,7 +6,7 @@ const toDate = (dayStr: string): Date => {
   return new Date(y, m - 1, d);
 };
 
-/** Labels and money, date and hours formats in `locale`; unknown currency codes print as text. */
+/** Labels and money, date, hours and percent formats in `locale`; unknown currency codes print as text. */
 export const createFormat = (locale: string, currency: string): InvoiceFormat => {
   let money: (cents: number) => string;
   try {
@@ -21,10 +21,15 @@ export const createFormat = (locale: string, currency: string): InvoiceFormat =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+  const pf = new Intl.NumberFormat(locale, {
+    style: 'percent',
+    maximumFractionDigits: 4,
+  });
   return {
     money,
     date: (dayStr) => (dayStr ? df.format(toDate(dayStr)) : ''),
     hours: (hours) => hf.format(hours),
+    percent: (pct) => pf.format(pct / 100),
     lang: invoiceLanguage(locale),
     labels: invoiceLabels(locale),
   };

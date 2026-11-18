@@ -1,5 +1,5 @@
 import { invoiceToCsv } from '../core/csv';
-import { renderInvoiceHtml } from '../core/invoice-html';
+import { invoiceTitle, renderInvoiceHtml } from '../core/invoice-html';
 import { computeTotals } from '../core/totals';
 import { Invoice } from '../core/types';
 import { el } from './dom';
@@ -7,6 +7,30 @@ import { createFormat } from './format';
 import { t } from './i18n';
 import { snackError } from './notify';
 import { deleteInvoice, sendToBackground } from './store';
+
+/**
+ * Runs `print` with the app window renamed to `title`. The print dialog names
+ * the PDF after the app window (Chromium uses the top-level page title), not
+ * after this plugin frame; print() blocks until the dialog closes.
+ */
+const printWithWindowTitle = (title: string, print: () => void): void => {
+  let restore = (): void => undefined;
+  try {
+    const doc = (window.top ?? window).document;
+    const previous = doc.title;
+    doc.title = title;
+    restore = () => void (doc.title = previous);
+  } catch (error) {
+    // Only if the host stops sharing its origin with the plugin frame: print
+    // with the default file name rather than not at all.
+    console.warn('Invoicing: cannot set the PDF file name', error);
+  }
+  try {
+    print();
+  } finally {
+    restore();
+  }
+};
 
 /**
  * Puts the invoice into the print-only container and opens the print dialog.
@@ -17,7 +41,7 @@ export const printInvoice = (invoice: Invoice, appLocale: string): void => {
   const fmt = createFormat(invoice.language ?? appLocale, invoice.currency);
   // renderInvoiceHtml escapes all user text.
   root.innerHTML = renderInvoiceHtml(invoice, fmt);
-  window.print();
+  printWithWindowTitle(invoiceTitle(invoice, fmt.labels), () => window.print());
 };
 
 const downloadCsv = (invoice: Invoice): Promise<unknown> =>

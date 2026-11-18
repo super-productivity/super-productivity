@@ -23,6 +23,7 @@ export interface InvoiceFormat {
   money: (cents: number) => string;
   date: (dayStr: string) => string;
   hours: (hours: number) => string;
+  percent: (pct: number) => string;
   labels: InvoiceLabels;
 }
 
@@ -68,7 +69,7 @@ const sumRows = (invoice: Invoice, fmt: InvoiceFormat): string => {
   const tax =
     invoice.taxRatePct > 0
       ? sumRow(l.subtotal, money(totals.subtotalCents)) +
-        sumRow(`${l.tax} ${invoice.taxRatePct}%`, money(totals.taxCents))
+        sumRow(`${l.tax} ${fmt.percent(invoice.taxRatePct)}`, money(totals.taxCents))
       : '';
   return tax + sumRow(l.total, money(totals.totalCents), 'inv-total');
 };
@@ -77,6 +78,12 @@ const billTo = (invoice: Invoice, label: string): string =>
   invoice.client.trim()
     ? `<div><h2>${escapeHtml(label)}</h2>${block(invoice.client, 'inv-address')}</div>`
     : '<div></div>';
+
+/** The suggested PDF file name: number and the first line of the client. */
+export const invoiceTitle = (invoice: Invoice, labels: InvoiceLabels): string => {
+  const client = invoice.client.trim().split('\n')[0].trim();
+  return [`${labels.invoice} ${invoice.number}`, client].filter(Boolean).join(' - ');
+};
 
 const RTL = ['ar', 'fa'];
 

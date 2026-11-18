@@ -18,24 +18,25 @@ const todayStr = (): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-type PrintLog = { printed: number };
+type PrintLog = { printed: string[] };
 
 // The plugin view is a srcdoc iframe; window.print is replaced so the test can
-// see that printing was requested without a native dialog.
+// see that printing was requested, and the app window title the print dialog
+// suggests as the PDF file name, without a native dialog.
 const pluginFrame = async (page: Page): Promise<Frame> => {
   const handle = await page.locator(PLUGIN_IFRAME).elementHandle();
   const frame = await handle!.contentFrame();
   await frame!.evaluate(() => {
     const log = window as unknown as PrintLog;
-    log.printed = 0;
+    log.printed = [];
     window.print = () => {
-      log.printed++;
+      log.printed.push(window.top!.document.title);
     };
   });
   return frame!;
 };
 
-const printCount = (frame: Frame): Promise<number> =>
+const printedTitles = (frame: Frame): Promise<string[]> =>
   frame.evaluate(() => (window as unknown as PrintLog).printed);
 
 test.describe('Invoicing plugin', () => {
@@ -106,7 +107,9 @@ test.describe('Invoicing plugin', () => {
     await expect(ui.getByText(/^001 · .* · ACME Corp · €10\.00$/)).toBeVisible();
     await expect(ui.locator('[data-invoice-id] button').first()).toBeFocused();
     await expect(ui.getByText('No unbilled time on this project')).toBeVisible();
-    expect(await printCount(frame)).toBe(1);
+    expect(await printedTitles(frame)).toEqual(['Rechnung 001 - ACME Corp']);
+    // Remembered for the project, after the draft is gone.
+    await expect(ui.getByLabel('Invoice language')).toHaveValue('de');
     const printed = ui.locator('#print-root');
     await expect(printed).toContainText('Me Freelance');
     await expect(printed).toContainText(TASK);
@@ -114,11 +117,15 @@ test.describe('Invoicing plugin', () => {
     await expect(printed.locator('h1')).toHaveText('Rechnung');
     await expect(printed).toContainText(/10,00\s€/);
 
-    // Printing again from the list keeps the language.
+    // Printing again from the list keeps the language and the file name.
     await printed.evaluate((node) => (node.innerHTML = ''));
     await ui.getByRole('button', { name: 'Print / PDF' }).click();
     await expect(printed.locator('h1')).toHaveText('Rechnung');
-    expect(await printCount(frame)).toBe(2);
+    expect(await printedTitles(frame)).toEqual([
+      'Rechnung 001 - ACME Corp',
+      'Rechnung 001 - ACME Corp',
+    ]);
+    await expect(page).not.toHaveTitle(/Rechnung/);
 
     const [download] = await Promise.all([
       page.waitForEvent('download'),

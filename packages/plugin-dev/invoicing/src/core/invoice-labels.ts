@@ -137,7 +137,7 @@ export const INVOICE_LANGUAGES: Record<string, InvoiceLanguage> = {
   ),
   zh: lang(
     '简体中文',
-    '发票|发票号码|开票日期|到期日|服务期间|付款方|描述|工时|单价|金额|小计|税|合计',
+    '账单|账单编号|账单日期|到期日|服务期间|付款方|描述|工时|单价|金额|小计|税|合计',
   ),
   'zh-tw': lang(
     '繁體中文',

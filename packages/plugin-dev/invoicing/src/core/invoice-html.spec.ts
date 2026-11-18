@@ -1,4 +1,4 @@
-import { renderInvoiceHtml } from './invoice-html';
+import { invoiceTitle, renderInvoiceHtml } from './invoice-html';
 import { Invoice } from './types';
 
 const labels = {
@@ -41,6 +41,7 @@ const render = (inv: Invoice, lang = 'en'): string =>
     money: (cents) => (cents / 100).toFixed(2),
     date: (d) => d,
     hours: (h) => h.toFixed(2),
+    percent: (p) => `${p} pct`,
     labels,
   });
 
@@ -56,7 +57,7 @@ describe('renderInvoiceHtml', () => {
   it('shows subtotal and tax lines only when tax is set', () => {
     expect(render(invoice)).not.toMatch(/VAT|Subtotal/);
     expect(render({ ...invoice, taxRatePct: 20 })).toMatch(
-      /Subtotal.*100\.00.*VAT 20%.*20\.00.*Total.*120\.00/s,
+      /Subtotal.*100\.00.*VAT 20 pct.*20\.00.*Total.*120\.00/s,
     );
   });
 
@@ -77,5 +78,17 @@ describe('renderInvoiceHtml', () => {
   it('marks the language and lays out Arabic and Persian invoices right to left', () => {
     expect(render(invoice, 'de')).toContain('lang="de" dir="ltr"');
     expect(render(invoice, 'ar')).toContain('lang="ar" dir="rtl"');
+  });
+});
+
+describe('invoiceTitle', () => {
+  it('names the invoice and the first line of the client', () => {
+    expect(invoiceTitle({ ...invoice, client: ' ACME Ltd\n1 Main St' }, labels)).toBe(
+      'Invoice 001 - ACME Ltd',
+    );
+  });
+
+  it('leaves out an empty client', () => {
+    expect(invoiceTitle({ ...invoice, client: '' }, labels)).toBe('Invoice 001');
   });
 });
