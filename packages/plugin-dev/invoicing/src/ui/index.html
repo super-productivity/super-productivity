@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Invoicing</title>
+    <link
+      rel="icon"
+      href="data:,"
+    />
+    <style>
+      td .grow {
+        width: 100%;
+      }
+      #print-root {
+        display: none;
+      }
+      .inv-block {
+        white-space: pre-line;
+      }
+      .inv table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1em 0;
+      }
+      .inv th,
+      .inv td {
+        text-align: left;
+        padding: 4px 8px 4px 0;
+      }
+      .inv .num {
+        text-align: right;
+      }
+      .inv-lines thead th,
+      .inv-lines tfoot tr:first-child td {
+        border-bottom: 1px solid #000;
+      }
+      .inv-total td {
+        font-weight: bold;
+      }
+      /* Print only the invoice, black on white, whatever the app theme. */
+      @media print {
+        #app {
+          display: none;
+        }
+        #print-root {
+          display: block;
+        }
+        html,
+        body {
+          background: #fff;
+          color: #000;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main
+      id="app"
+      class="page stack"
+    ></main>
+    <div id="print-root"></div>
+    <!-- BUILD:SCRIPT -->
+  </body>
+</html>
