@@ -20,6 +20,7 @@ const task = (overrides: Partial<TodoistTask>): TodoistTask => ({
   dueWithTime: null,
   timeEstimate: null,
   isRecurring: false,
+  repeat: null,
   wasDemoted: false,
   isDayDurationSkipped: false,
   hasAssignee: false,
@@ -42,15 +43,19 @@ const createFakeApi = (
     failNthBatch?: number;
     failNthTag?: number;
     failGetTasks?: boolean;
+    rejectRepeatFor?: string;
   } = {},
 ): {
   api: Parameters<typeof runImport>[0];
   sentBatches: BatchUpdateRequest[];
   updates: { taskId: string; changes: Partial<Task> }[];
   createdTags: string[];
+  /** every updateTask and addTaskRepeatCfg call, in order */
+  calls: string[];
 } => {
   const sentBatches: BatchUpdateRequest[] = [];
   const updates: { taskId: string; changes: Partial<Task> }[] = [];
+  const calls: string[] = [];
   const createdTags: string[] = [];
   const createdTasks: Task[] = [];
   let idCounter = 0;
@@ -99,6 +104,14 @@ const createFakeApi = (
     },
     updateTask: async (taskId, changes) => {
       updates.push({ taskId, changes });
+      calls.push(`update ${taskId} ${Object.keys(changes).join(',')}`);
+    },
+    addTaskRepeatCfg: async (taskId, schedule) => {
+      if (opts.rejectRepeatFor === taskId) {
+        throw new Error('INVALID_INPUT: rejected');
+      }
+      calls.push(`repeat ${taskId} ${schedule?.quickSetting}`);
+      return `cfg-${taskId}`;
     },
     getTasks: async () => {
       if (opts.failGetTasks) {
@@ -107,7 +120,7 @@ const createFakeApi = (
       return createdTasks;
     },
   };
-  return { api, sentBatches, updates, createdTags };
+  return { api, sentBatches, updates, createdTags, calls };
 };
 
 describe('runImport', () => {
@@ -214,6 +227,49 @@ describe('runImport', () => {
     expect(result.errorMessage).toBeNull();
     expect(result.isCountUnverified).toBe(true);
     expect(result.imported.length).toBe(1);
+  });
+
+  describe('repeats', () => {
+    const repeating = (extId: string): TodoistTask =>
+      task({
+        extId,
+        dueDay: '2026-07-15',
+        notes: 'desc',
+        isRecurring: true,
+        repeat: {
+          schedule: { quickSetting: 'DAILY' },
+          notesWithRule: 'desc\n\nRepeats: every day',
+        },
+      });
+    const planFor = (tasks: TodoistTask[]) =>
+      planImport(model(tasks), { priorityMapping: 'none' });
+
+    it('sets up the repeat after the due date it starts from', async () => {
+      const { api, calls } = createFakeApi();
+      const result = await runImport(api, planFor([repeating('a')]), () => {});
+      expect(calls).toEqual(['update real-temp-a dueDay', 'repeat real-temp-a DAILY']);
+      expect(result.failedRepeatCount).toBe(0);
+    });
+
+    it('puts the rule back into the notes when the repeat is rejected', async () => {
+      const { api, calls, updates } = createFakeApi({ rejectRepeatFor: 'real-temp-a' });
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const result = await runImport(
+        api,
+        planFor([repeating('a'), repeating('b')]),
+        () => {},
+      );
+      warn.mockRestore();
+      expect(calls).toEqual([
+        'update real-temp-a dueDay',
+        'update real-temp-a notes',
+        'update real-temp-b dueDay',
+        'repeat real-temp-b DAILY',
+      ]);
+      expect(updates[1].changes).toEqual({ notes: 'desc\n\nRepeats: every day' });
+      expect(result.failedRepeatCount).toBe(1);
+      expect(result.errorMessage).toBeNull();
+    });
   });
 
   it('reports detail progress during follow-ups', async () => {
