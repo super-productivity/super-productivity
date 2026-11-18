@@ -1,0 +1,58 @@
+{
+  "TITLE": "Faturalar",
+  "LOADING": "Yükleniyor…",
+  "LIST": {
+    "EMPTY": "Henüz fatura yok.",
+    "PRINT": "Yazdır / PDF",
+    "CSV": "CSV",
+    "DELETE": "Sil",
+    "CONFIRM_DELETE": "{{number}} numaralı fatura silinsin mi? Saatleri yeniden faturalanmamış sayılır."
+  },
+  "NEW": {
+    "TITLE": "Yeni fatura",
+    "PROJECT": "Proje",
+    "NO_PROJECTS": "Önce bir proje oluşturun. Her proje ayrı faturalanır.",
+    "FROM": "Başlangıç",
+    "TO": "Bitiş",
+    "RATE": "Saatlik ücret",
+    "LANGUAGE": "Fatura dili",
+    "CLIENT": "Fatura edilen",
+    "CLIENT_HINT": "Müşterinin adı ve adresi. Bu proje için hatırlanır.",
+    "INCLUDE": "Dahil et",
+    "NO_HOURS": "Bu projede bu dönemde faturalanmamış süre yok.",
+    "NUMBER": "Fatura numarası",
+    "ISSUE_DATE": "Fatura tarihi",
+    "ISSUE": "Oluştur ve yazdır",
+    "BLOCK": {
+      "PERIOD": "Başlangıç ve Bitiş tarihlerini seçin; Başlangıç önce gelmelidir.",
+      "LINES": "Saat içeren en az bir satırı işaretleyin.",
+      "RATE": "Bir saatlik ücret girin.",
+      "NUMBER": "Bir fatura numarası girin.",
+      "NUMBER_USED": "Bu fatura numarası zaten kullanılıyor.",
+      "DATE": "Fatura tarihini girin."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Bilgileriniz",
+    "SELLER": "Adınız, adresiniz ve vergi numaranız",
+    "PAYMENT_NOTE": "Ödeme bilgileri",
+    "PAYMENT_NOTE_HINT": "Banka bilgileri veya ödeme koşulları, altta yazdırılır.",
+    "CURRENCY": "Para birimi kodu",
+    "TAX": "Vergi / KDV %",
+    "PAYMENT_DAYS": "Vadeye kalan gün",
+    "ROUNDING": "Her satırı yukarı yuvarla:",
+    "ROUNDING_NONE": "Yuvarlama yok",
+    "ROUNDING_MIN": "{{min}} dakika",
+    "PREFIX": "Fatura numarası öneki",
+    "SAVE": "Kaydet",
+    "SAVED": "Kaydedildi."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Açıklama",
+    "HOURS": "Saat",
+    "TOTAL": "Toplam"
+  },
+  "ERROR": {
+    "GENERIC": "Bir şeyler ters gitti: {{error}}"
+  }
+}
