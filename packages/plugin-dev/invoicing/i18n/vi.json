@@ -1,0 +1,58 @@
+{
+  "TITLE": "Hóa đơn",
+  "LOADING": "Đang tải…",
+  "LIST": {
+    "EMPTY": "Chưa có hóa đơn nào.",
+    "PRINT": "In / PDF",
+    "CSV": "CSV",
+    "DELETE": "Xóa",
+    "CONFIRM_DELETE": "Xóa hóa đơn {{number}}? Số giờ của hóa đơn sẽ được tính là chưa lập hóa đơn trở lại."
+  },
+  "NEW": {
+    "TITLE": "Hóa đơn mới",
+    "PROJECT": "Dự án",
+    "NO_PROJECTS": "Hãy tạo dự án trước. Mỗi dự án được lập hóa đơn riêng.",
+    "FROM": "Từ",
+    "TO": "Đến",
+    "RATE": "Đơn giá theo giờ",
+    "LANGUAGE": "Ngôn ngữ hóa đơn",
+    "CLIENT": "Gửi đến",
+    "CLIENT_HINT": "Tên và địa chỉ khách hàng. Được ghi nhớ cho dự án này.",
+    "INCLUDE": "Bao gồm",
+    "NO_HOURS": "Không có thời gian chưa lập hóa đơn trong dự án này ở kỳ này.",
+    "NUMBER": "Số hóa đơn",
+    "ISSUE_DATE": "Ngày hóa đơn",
+    "ISSUE": "Phát hành và in",
+    "BLOCK": {
+      "PERIOD": "Chọn ngày Từ và Đến; ngày Từ phải đứng trước.",
+      "LINES": "Chọn ít nhất một dòng có số giờ.",
+      "RATE": "Nhập đơn giá theo giờ.",
+      "NUMBER": "Nhập số hóa đơn.",
+      "NUMBER_USED": "Số hóa đơn này đã được sử dụng.",
+      "DATE": "Nhập ngày hóa đơn."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Thông tin của bạn",
+    "SELLER": "Tên, địa chỉ và mã số thuế của bạn",
+    "PAYMENT_NOTE": "Thông tin thanh toán",
+    "PAYMENT_NOTE_HINT": "Thông tin ngân hàng hoặc điều khoản thanh toán, in ở cuối trang.",
+    "CURRENCY": "Mã tiền tệ",
+    "TAX": "Thuế / VAT %",
+    "PAYMENT_DAYS": "Số ngày đến hạn",
+    "ROUNDING": "Làm tròn lên mỗi dòng đến",
+    "ROUNDING_NONE": "Không làm tròn",
+    "ROUNDING_MIN": "{{min}} phút",
+    "PREFIX": "Tiền tố số hóa đơn",
+    "SAVE": "Lưu",
+    "SAVED": "Đã lưu."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Mô tả",
+    "HOURS": "Số giờ",
+    "TOTAL": "Tổng cộng"
+  },
+  "ERROR": {
+    "GENERIC": "Đã xảy ra lỗi: {{error}}"
+  }
+}

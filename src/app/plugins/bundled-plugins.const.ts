@@ -29,6 +29,7 @@ export const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/ticktick-import',
   'assets/bundled-plugins/parallel-code',
   'assets/bundled-plugins/ai-command',
+  'assets/bundled-plugins/invoicing',
 ] as const;
 
 // Reserved ids: an uploaded plugin may not reuse a bundled plugin's manifest id (it would
@@ -53,6 +54,7 @@ export const BUNDLED_PLUGIN_IDS = new Set<string>([
   'github-issue-provider',
   'gitlab-issue-provider',
   'google-calendar-provider',
+  'invoicing',
   'linear-issue-provider',
   'nextcloud-deck-issue-provider',
   'parallel-code',

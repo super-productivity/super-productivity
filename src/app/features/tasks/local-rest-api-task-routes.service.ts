@@ -441,6 +441,9 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       currentTask,
       currentTaskId: currentTask?.id ?? null,
       taskCount: allTasks.length,
+      // The logical day (start-of-next-day setting), so clients writing
+      // `dueDay` mean the same day as Today.
+      todayStr: this._dateService.todayStr(),
       trackingOnOtherDevice: this._getTrackingOnOtherDevice(),
     });
   }
@@ -1015,6 +1018,14 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
     }
 
     const archivedTask = await this._taskArchiveService.getById(taskId);
+    if (archivedTask.parentId) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        'Cannot restore a subtask on its own; restore its parent task, which takes its subtasks with it',
+      );
+    }
     const subTasks: Task[] = [];
 
     if (archivedTask.subTaskIds?.length) {

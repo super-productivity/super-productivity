@@ -12,6 +12,7 @@ import {
 import { OpLog } from '../../core/log';
 import { runWithBulkReplayLoggingSuppressed } from '../../util/bulk-replay-log-guard';
 import { reportBulkReplayReducerFailure } from './bulk-replay-failure-collector';
+import { describeOpForLog } from '../util/describe-op-for-log.util';
 import { isFullStateOpType, isGenesisEntityType } from '../core/operation.types';
 
 /**
@@ -81,7 +82,10 @@ export const bulkOperationsMetaReducer = <T>(
           reportBulkReplayReducerFailure(op, error);
           OpLog.err(
             `bulkOperationsMetaReducer: Skipping reducer-failed operation ${op.id}`,
-            { name: error instanceof Error ? error.name : 'UnknownError' },
+            {
+              name: error instanceof Error ? error.name : 'UnknownError',
+              ...describeOpForLog(op),
+            },
           );
           return true;
         };

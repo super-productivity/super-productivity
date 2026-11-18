@@ -379,6 +379,28 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       );
     });
 
+    it('takes an end day and counting from completion', async () => {
+      await handle(
+        request('POST', '/task-repeat-cfgs', {
+          taskId: 't1',
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'DAILY',
+          repeatEvery: 3,
+          repeatFromCompletionDate: true,
+          repeatUntilDay: '2026-12-31',
+        }),
+      );
+
+      expect(createdCfg()).toEqual(
+        jasmine.objectContaining({
+          repeatEvery: 3,
+          repeatFromCompletionDate: true,
+          waitForCompletion: true,
+          repeatUntilDay: '2026-12-31',
+        }),
+      );
+    });
+
     it('treats a partial custom weekly weekday list as the complete selection', async () => {
       const response = await handle(
         request('POST', '/task-repeat-cfgs', {
@@ -538,6 +560,13 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
         expect(response.status).toBe(400);
         expect(errorCode(response)).toBe('INVALID_INPUT');
       }
+      const repeating = await handle(
+        request('POST', '/task-repeat-cfgs', { taskId: 'repeating' }),
+      );
+      // released wording (v19.2.0)
+      expect(repeating.body.ok ? undefined : repeating.body.error.message).toBe(
+        'Task already repeats; change its repeat config with PATCH /task-repeat-cfgs/:id',
+      );
       expectNoDispatch();
     });
 
@@ -564,6 +593,10 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       expect(response.body.ok ? undefined : response.body.error.details).toEqual({
         fields: ['title', 'lastTaskCreationDay'],
       });
+      // released wording (v19.2.0); scripts may match on it
+      expect(response.body.ok ? undefined : response.body.error.message).toBe(
+        'Field(s) cannot be set through this endpoint: title, lastTaskCreationDay',
+      );
       expectNoDispatch();
     });
 
@@ -582,6 +615,10 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
         expect(response.status).toBe(400);
         expect(errorCode(response)).toBe('INVALID_INPUT');
       }
+      const notObject = await handle(request('POST', '/task-repeat-cfgs', []));
+      expect(notObject.body.ok ? undefined : notObject.body.error.message).toBe(
+        'Request body must be a JSON object',
+      );
       expectNoDispatch();
     });
   });
@@ -697,6 +734,45 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
         'lastDay',
         { quickSetting: 'CUSTOM', monthlyLastDay: undefined },
+        false,
+      );
+    });
+
+    it('keeps counting from completion when a custom schedule leaves it out', async () => {
+      cfgs$.next([
+        createCfg('after', {
+          quickSetting: 'CUSTOM',
+          repeatEvery: 3,
+          repeatFromCompletionDate: true,
+          waitForCompletion: true,
+        }),
+      ]);
+
+      await handle(
+        request('PATCH', '/task-repeat-cfgs/after', {
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'WEEKLY',
+          repeatEvery: 2,
+        }),
+      );
+
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'after',
+        { repeatEvery: 14 },
+        false,
+      );
+    });
+
+    it('removes the end day with null', async () => {
+      cfgs$.next([createCfg('ending', { repeatUntilDay: '2026-12-31' })]);
+
+      await handle(
+        request('PATCH', '/task-repeat-cfgs/ending', { repeatUntilDay: null }),
+      );
+
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'ending',
+        { repeatUntilDay: undefined },
         false,
       );
     });

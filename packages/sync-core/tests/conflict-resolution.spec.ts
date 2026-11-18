@@ -362,6 +362,175 @@ describe('planLwwConflictResolutions', () => {
     ]);
   });
 
+  describe('concurrent creates of one id (#11645)', () => {
+    // Deterministic ids (a repeat instance is `rpt_<cfgId>_<day>`) let two
+    // devices create the same entity without seeing each other.
+    const create = (id: string, timestamp: number, clientId: string): Operation =>
+      createOp({ id, opType: OpType.Create, timestamp, clientId });
+    const update = (id: string, timestamp: number, clientId: string): Operation =>
+      createOp({ id, opType: OpType.Update, timestamp, clientId });
+
+    it('lets the edited remote side beat a newer local create-only side', () => {
+      // One conflict per remote op, as detection emits them.
+      const localOps = [create('b-create', 9_000, 'B')];
+      const conflicts = [
+        createConflict(localOps, [create('a-create', 1_000, 'A')]),
+        createConflict(localOps, [update('a-time', 2_000, 'A')]),
+      ];
+
+      const plans = planLwwConflictResolutions(conflicts, { isArchiveAction });
+
+      expect(plans.map((p) => [p.winner, p.reason, p.localWinOperationKind])).toEqual([
+        ['remote', 'remote-duplicate-create', undefined],
+        ['remote', 'remote-duplicate-create', undefined],
+      ]);
+    });
+
+    it('keeps the edited local side against a newer remote create-only side', () => {
+      const conflict = createConflict(
+        [create('a-create', 1_000, 'A'), update('a-time', 2_000, 'A')],
+        [create('b-create', 9_000, 'B')],
+      );
+
+      const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+      expect([plan.winner, plan.reason, plan.localWinOperationKind]).toEqual([
+        'local',
+        'local-duplicate-create',
+        'update',
+      ]);
+    });
+
+    it('keeps the edited local side when its ops span several conflicts', () => {
+      const remoteOps = [create('b-create', 9_000, 'B')];
+      const conflicts = [
+        createConflict([create('a-create', 1_000, 'A')], remoteOps),
+        createConflict([update('a-time', 2_000, 'A')], remoteOps),
+      ];
+
+      const plans = planLwwConflictResolutions(conflicts, { isArchiveAction });
+
+      expect(plans.map((p) => [p.winner, p.reason])).toEqual([
+        ['local', 'local-duplicate-create'],
+        ['local', 'local-duplicate-create'],
+      ]);
+    });
+
+    it('lets a one-sided delete beat a newer create-only copy', () => {
+      // A user-deleted instance must not come back as the other device's blank copy.
+      const conflict = createConflict(
+        [
+          create('a-create', 1_000, 'A'),
+          createOp({
+            id: 'a-delete',
+            opType: OpType.Delete,
+            timestamp: 2_000,
+            clientId: 'A',
+          }),
+        ],
+        [create('b-create', 9_000, 'B')],
+      );
+
+      const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+      expect([plan.winner, plan.reason]).toEqual(['local', 'local-duplicate-create']);
+    });
+
+    describe('with the same automatic follow-up on both sides', () => {
+      // A repeat with a start time is created as addTask + scheduleTaskWithTime;
+      // both devices derive the same schedule from the series.
+      const schedule = (
+        id: string,
+        timestamp: number,
+        clientId: string,
+        at = 5_000,
+      ): Operation<OpType> =>
+        createOp({
+          id,
+          actionType: '[Task Shared] scheduleTaskWithTime',
+          // Capture shape (action minus type/meta, plus entityChanges); task trimmed to its id.
+          payload: {
+            actionPayload: { task: { id: 'task-1' }, dueWithTime: at, remindAt: at },
+            entityChanges: [],
+          },
+          timestamp,
+          clientId,
+        });
+
+      it('does not count the mirrored follow-up as an edit', () => {
+        const conflict = createConflict(
+          [create('b-create', 9_000, 'B'), schedule('b-schedule', 9_001, 'B')],
+          [
+            create('a-create', 1_000, 'A'),
+            schedule('a-schedule', 1_001, 'A'),
+            update('a-time', 2_000, 'A'),
+          ],
+        );
+
+        const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+        expect([plan.winner, plan.reason]).toEqual(['remote', 'remote-duplicate-create']);
+      });
+
+      it('mirrors when only an undefined key differs (lost in JSON transit)', () => {
+        // "Do not remind" schedules with remindAt: undefined; the local op keeps
+        // the key, the downloaded copy has it dropped by JSON.
+        const local = schedule('a-schedule', 1_001, 'A');
+        (
+          local.payload as { actionPayload: Record<string, unknown> }
+        ).actionPayload.remindAt = undefined;
+        const remote = schedule('b-schedule', 9_001, 'B');
+        delete (remote.payload as { actionPayload: Record<string, unknown> })
+          .actionPayload.remindAt;
+        const conflict = createConflict(
+          [create('b-create', 9_000, 'B'), remote],
+          [create('a-create', 1_000, 'A'), local, update('a-time', 2_000, 'A')],
+        );
+
+        const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+        expect([plan.winner, plan.reason]).toEqual(['remote', 'remote-duplicate-create']);
+      });
+
+      it('counts a follow-up the other side did not make the same way', () => {
+        const conflict = createConflict(
+          [create('b-create', 9_000, 'B'), schedule('b-schedule', 9_001, 'B', 6_000)],
+          [
+            create('a-create', 1_000, 'A'),
+            schedule('a-schedule', 1_001, 'A'),
+            update('a-time', 2_000, 'A'),
+          ],
+        );
+
+        const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+        expect([plan.winner, plan.reason]).toEqual(['local', 'local-timestamp']);
+      });
+    });
+
+    it('falls back to timestamps when both sides only created', () => {
+      const conflict = createConflict(
+        [create('b-create', 9_000, 'B')],
+        [create('a-create', 1_000, 'A')],
+      );
+
+      const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+      expect([plan.winner, plan.reason]).toEqual(['local', 'local-timestamp']);
+    });
+
+    it('keeps timestamps when only one side created', () => {
+      const conflict = createConflict(
+        [create('b-create', 9_000, 'B')],
+        [update('a-edit', 1_000, 'A')],
+      );
+
+      const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+      expect([plan.winner, plan.reason]).toEqual(['local', 'local-timestamp']);
+    });
+  });
+
   describe('delete-wins frontier guard (#11489)', () => {
     const options = { isArchiveAction, isDeleteWinsAction };
     const deleteWins = (overrides: Partial<Operation>): Operation =>

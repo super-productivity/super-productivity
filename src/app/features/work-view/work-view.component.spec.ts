@@ -7,13 +7,14 @@ import {
 } from '@angular/core/testing';
 import { Component, ElementRef, inject, NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 
 import { WorkViewComponent } from './work-view.component';
+import type { TaskAddEvent } from '../tasks/add-task-bar/add-task-bar.component';
 import { TaskService } from '../tasks/task.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
@@ -24,6 +25,7 @@ import { ProjectService } from '../project/project.service';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import { SnackService } from '../../core/snack/snack.service';
+import { SnackParams } from '../../core/snack/snack.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { T } from '../../t.const';
@@ -98,6 +100,7 @@ const configureWorkViewTestBed = (
     taskService?: ServiceStub;
     customizerService?: ServiceStub;
     sectionService?: ServiceStub;
+    projectService?: ServiceStub;
     queryParams$?: Observable<Record<string, string>>;
     /** Drives `isOnTodayList()`, which gates the Overdue/Later Today panels. */
     isTodayList?: boolean;
@@ -178,7 +181,10 @@ const configureWorkViewTestBed = (
           ),
         },
       },
-      { provide: ProjectService, useValue: { onMoveToBacklog$: of() } },
+      {
+        provide: ProjectService,
+        useValue: { onMoveToBacklog$: of(), ...overrides.projectService },
+      },
       {
         provide: SectionService,
         useValue: {
@@ -431,6 +437,32 @@ describe('WorkViewComponent', () => {
 
       expect(moveToArchive).toHaveBeenCalledOnceWith([listed, earlier]);
     });
+
+    it('offers History, where the archived tasks can be found again', async () => {
+      const done = buildTask('done');
+      configureWorkViewTestBed({
+        taskService: { moveToArchive: () => Promise.resolve() },
+        doneTasksToArchive: [done],
+      });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+
+      await TestBed.compileComponents();
+      const open = spyOn(TestBed.inject(SnackService), 'open');
+      const navigate = spyOn(TestBed.inject(Router), 'navigate');
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', [done]);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+
+      await fixture.componentInstance.moveDoneToArchive();
+
+      const snack = open.calls.mostRecent().args[0] as SnackParams;
+      expect(snack.actionStr).toBe('MH.HISTORY');
+      snack.actionFn?.();
+      expect(navigate).toHaveBeenCalledOnceWith(['/active/history']);
+    });
   });
 
   describe('undoneTasksBySection', () => {
@@ -517,6 +549,170 @@ describe('WorkViewComponent', () => {
       const result = cmp.undoneTasksBySection();
       expect(result.dict).toEqual({});
       expect(result.noSection.map((t) => t.id)).toEqual(['a', 'b']);
+    });
+  });
+
+  describe('addToSection', () => {
+    const today = getDbDateStr();
+    const buildSection = (
+      id: string,
+      taskIds: string[],
+      contextType: 'PROJECT' | 'TAG' = 'PROJECT',
+    ): Section =>
+      ({
+        id,
+        title: id,
+        contextId: contextType === 'PROJECT' ? 'ctx' : TODAY_TAG.id,
+        contextType,
+        taskIds,
+      }) as unknown as Section;
+
+    const setup = async (opts: {
+      sections: Section[];
+      undone: TaskWithSubTasks[];
+      createdTask: Partial<TaskWithSubTasks>;
+      backlogTaskIds?: string[];
+    }): Promise<{ cmp: WorkViewComponent; addSpy: jasmine.Spy }> => {
+      const addSpy = jasmine.createSpy('addTaskToSection');
+      configureWorkViewTestBed({
+        sectionService: {
+          getSectionsByContextId$: () => of(opts.sections as readonly Section[]),
+          addTaskToSection: addSpy,
+          updateSection: () => {},
+        },
+        taskService: {
+          getByIdOnce$: () => of({ id: 'new', ...opts.createdTask }),
+        },
+        projectService: {
+          getByIdOnce$: () =>
+            of({ id: 'ctx', backlogTaskIds: opts.backlogTaskIds ?? [] }),
+        },
+      });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', opts.undone);
+      fixture.componentRef.setInput('doneTasks', []);
+      fixture.componentRef.setInput('backlogTasks', []);
+      fixture.detectChanges();
+      return { cmp: fixture.componentInstance, addSpy };
+    };
+
+    const addEvent = (isAddToBottom: boolean): TaskAddEvent => ({
+      taskId: 'new',
+      isAddToBottom,
+      isNewTask: true,
+    });
+
+    it('adds a project task to the top of the section', async () => {
+      const section = buildSection('s1', ['a']);
+      const { cmp, addSpy } = await setup({
+        sections: [section],
+        undone: [buildTask('a'), buildTask('new')],
+        createdTask: { projectId: 'ctx' },
+      });
+      await cmp.addToSection(section, addEvent(false));
+      expect(addSpy).toHaveBeenCalledOnceWith('s1', 'new', null, null);
+    });
+
+    it('appends after the last section task when adding to the bottom', async () => {
+      const section = buildSection('s1', ['a', 'b']);
+      const { cmp, addSpy } = await setup({
+        sections: [section],
+        undone: [buildTask('a'), buildTask('b'), buildTask('new')],
+        createdTask: { projectId: 'ctx' },
+      });
+      await cmp.addToSection(section, addEvent(true));
+      expect(addSpy).toHaveBeenCalledOnceWith('s1', 'new', 'b', null);
+    });
+
+    it('passes the source section when a picked task moves between sections', async () => {
+      const target = buildSection('s1', []);
+      const { cmp, addSpy } = await setup({
+        sections: [target, buildSection('s2', ['new'])],
+        undone: [buildTask('new')],
+        createdTask: { projectId: 'ctx' },
+      });
+      await cmp.addToSection(target, addEvent(false));
+      expect(addSpy).toHaveBeenCalledOnceWith('s1', 'new', null, 's2');
+    });
+
+    it('does nothing when the task is already in that section', async () => {
+      const section = buildSection('s1', ['new']);
+      const { cmp, addSpy } = await setup({
+        sections: [section],
+        undone: [buildTask('new')],
+        createdTask: { projectId: 'ctx' },
+      });
+      await cmp.addToSection(section, addEvent(false));
+      expect(addSpy).not.toHaveBeenCalled();
+    });
+
+    it('skips a task the bar sent to another project', async () => {
+      const section = buildSection('s1', []);
+      const { cmp, addSpy } = await setup({
+        sections: [section],
+        undone: [],
+        createdTask: { projectId: 'other' },
+      });
+      await cmp.addToSection(section, addEvent(false));
+      expect(addSpy).not.toHaveBeenCalled();
+    });
+
+    it('skips a task the bar sent to the backlog', async () => {
+      const section = buildSection('s1', []);
+      const { cmp, addSpy } = await setup({
+        sections: [section],
+        undone: [],
+        createdTask: { projectId: 'ctx' },
+        backlogTaskIds: ['new'],
+      });
+      await cmp.addToSection(section, addEvent(false));
+      expect(addSpy).not.toHaveBeenCalled();
+    });
+
+    it('adds a task due today to a Today section', async () => {
+      const section = buildSection('s1', [], 'TAG');
+      const { cmp, addSpy } = await setup({
+        sections: [section],
+        undone: [buildTask('new')],
+        createdTask: { dueDay: today },
+      });
+      await cmp.addToSection(section, addEvent(false));
+      expect(addSpy).toHaveBeenCalledOnceWith('s1', 'new', null, null);
+    });
+
+    it("keeps the newly opened bar when the old bar's click-outside close fires", async () => {
+      const { cmp } = await setup({ sections: [], undone: [], createdTask: {} });
+      cmp.inlineAddKey.set('s:b');
+      cmp.closeInlineAdd('s:a');
+      expect(cmp.inlineAddKey()).toBe('s:b');
+      cmp.closeInlineAdd('s:b');
+      expect(cmp.inlineAddKey()).toBeNull();
+    });
+
+    it("collapsing a section drops its open bar but not another section's", async () => {
+      const a = buildSection('a', []);
+      const { cmp } = await setup({ sections: [a], undone: [], createdTask: {} });
+      cmp.inlineAddKey.set('s:a');
+      cmp.onSectionExpandedChange(a, true);
+      expect(cmp.inlineAddKey()).toBe('s:a');
+      cmp.onSectionExpandedChange(buildSection('b', []), false);
+      expect(cmp.inlineAddKey()).toBe('s:a');
+      cmp.onSectionExpandedChange(a, false);
+      expect(cmp.inlineAddKey()).toBeNull();
+    });
+
+    it('skips a Today-section task the bar rescheduled away from today', async () => {
+      const section = buildSection('s1', [], 'TAG');
+      const { cmp, addSpy } = await setup({
+        sections: [section],
+        undone: [],
+        createdTask: { dueDay: '2000-01-01' },
+      });
+      await cmp.addToSection(section, addEvent(false));
+      expect(addSpy).not.toHaveBeenCalled();
     });
   });
 

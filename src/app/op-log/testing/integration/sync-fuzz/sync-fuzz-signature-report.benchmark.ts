@@ -40,7 +40,11 @@ interface Entities {
 
 /** The fields the intents write, per store slice, plus today's time and count. */
 const FIELDS: [slice: string, type: string, fields: string[]][] = [
-  ['tasks', 'task', ['title', 'notes', 'isDone', 'dueDay', 'timeSpentOnDay']],
+  [
+    'tasks',
+    'task',
+    ['title', 'notes', 'isDone', 'dueDay', 'timeSpentOnDay', 'projectId'],
+  ],
   ['note', 'note', ['content', 'isPinnedToToday', 'isLock']],
   ['simpleCounter', 'habit', ['title', 'isEnabled', 'countOnDay']],
 ];

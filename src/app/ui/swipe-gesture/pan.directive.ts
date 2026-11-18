@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 
 import { DRAG_DELAY_FOR_TOUCH } from '../../app.constants';
+import { isTouchStartClaimedByEdgeSwipe } from './edge-swipe-claim';
 
 /**
  * If the touch has been held longer than this before moving,
@@ -142,6 +143,11 @@ export class PanDirective implements OnDestroy {
     // Reset if we have a stale touchIdentifier
     if (this._touchIdentifier !== null) {
       this._reset();
+    }
+
+    // The mobile drawer's edge swipe took this touch (#4464).
+    if (isTouchStartClaimedByEdgeSwipe(event)) {
+      return;
     }
 
     const touch = event.touches[0];

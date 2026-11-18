@@ -34,6 +34,10 @@ class LaunchDecider(private val context: Context) {
 
             return if (hasLegacyData) MODE_ONLINE else MODE_OFFLINE
         }
+
+        /** A build forcing online mode (LAUNCH_MODE=1) must never hand over, or it would restart-loop. */
+        internal fun canLeaveOnlineMode(buildLaunchMode: String): Boolean =
+            buildLaunchMode.toIntOrNull() != MODE_ONLINE
     }
 
     private val sharedPrefs: SharedPreferences =
@@ -99,6 +103,18 @@ class LaunchDecider(private val context: Context) {
         val dataDir = context.filesDir.parentFile
         val dbFile = File(dataDir, "databases/SupKeyValStore")
         return dbFile.exists()
+    }
+
+    /**
+     * Persists offline mode for the online-mode sunset (#8832). Returns false
+     * when the build forces online mode or the preference could not be written.
+     */
+    fun switchToOfflineMode(): Boolean {
+        if (!canLeaveOnlineMode(BuildConfig.LAUNCH_MODE)) {
+            return false
+        }
+        // commit, not apply: the restart that follows must already read MODE_OFFLINE.
+        return sharedPrefs.edit().putInt(LAUNCH_MODE_KEY, MODE_OFFLINE).commit()
     }
 
     /**

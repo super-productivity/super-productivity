@@ -6,7 +6,7 @@ import { Store } from '@ngrx/store';
 import { OAuthFlowConfig } from '@super-productivity/plugin-api';
 import { firstValueFrom, of, Subject } from 'rxjs';
 import { DialogEditIssueProviderComponent } from './dialog-edit-issue-provider.component';
-import { ICAL_TYPE } from '../issue.const';
+import { CALDAV_TYPE, ICAL_TYPE } from '../issue.const';
 import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { RegisteredPluginIssueProvider } from '../../../plugins/issue-provider/plugin-issue-provider.model';
@@ -26,6 +26,7 @@ import {
   saveOAuthTokens,
 } from '../../../plugins/oauth/plugin-oauth-token-store';
 import { GOOGLE_CALENDAR_PLUGIN_ID } from '../../../plugins/oauth/plugin-oauth-token-key.util';
+import { CertTrustService } from '../cert-trust.service';
 
 describe('DialogEditIssueProviderComponent', () => {
   let fixture: ComponentFixture<DialogEditIssueProviderComponent> | undefined;
@@ -33,6 +34,7 @@ describe('DialogEditIssueProviderComponent', () => {
   let beforeClosed$: Subject<void>;
   let pluginBridge: jasmine.SpyObj<PluginBridgeService>;
   let store: jasmine.SpyObj<Store>;
+  let certTrust: jasmine.SpyObj<CertTrustService>;
   let cleanupPending: Promise<void> = Promise.resolve();
 
   const GOOGLE_PROVIDER_KEY = `plugin:${GOOGLE_CALENDAR_PLUGIN_ID}` as IssueProviderKey;
@@ -136,6 +138,10 @@ describe('DialogEditIssueProviderComponent', () => {
     beforeClosed$ = new Subject<void>();
     pluginBridge = bridge as jasmine.SpyObj<PluginBridgeService>;
     store = jasmine.createSpyObj<Store>('Store', ['dispatch', 'select', 'pipe']);
+    certTrust = jasmine.createSpyObj<CertTrustService>('CertTrustService', [
+      'setPendingConfig',
+    ]);
+    certTrust.setPendingConfig.and.resolveTo();
 
     const pluginRegistry = jasmine.createSpyObj<PluginIssueProviderRegistryService>(
       'PluginIssueProviderRegistryService',
@@ -212,6 +218,7 @@ describe('DialogEditIssueProviderComponent', () => {
         },
         { provide: TaskService, useValue: { allTasks$: of([]) } },
         { provide: TagService, useValue: { tagsNoMyDayAndNoList$: of([]) } },
+        { provide: CertTrustService, useValue: certTrust },
       ],
     })
       // Render nothing: we only exercise the component logic, not the
@@ -239,6 +246,19 @@ describe('DialogEditIssueProviderComponent', () => {
   afterEach(async () => {
     fixture?.destroy();
     await Promise.all(tokenStoreKeys.map((key) => deleteOAuthTokens(key)));
+  });
+
+  describe('auto import default for a new provider (#8275)', () => {
+    it('is on for CalDAV, but inert until a default project is chosen', async () => {
+      await setup({ data: { issueProviderKey: CALDAV_TYPE } });
+
+      expect(component.model.isAutoAddToBacklog).toBe(true);
+      expect(component.model.defaultProjectId).toBeNull();
+    });
+
+    it('stays off for other built-in providers', () => {
+      expect(component.model.isAutoAddToBacklog).toBe(false);
+    });
   });
 
   describe('formlyModelChange (#8777 infinite rebuild-loop guard)', () => {
@@ -480,6 +500,32 @@ describe('DialogEditIssueProviderComponent', () => {
       beforeClosed$.next();
       await cleanupPending;
       expect(await loadOAuthTokens('other-provider__oauth')).toBe('connected-credential');
+    });
+  });
+
+  describe('certificate trust for the config under test (#11097)', () => {
+    it('trusts the unsaved config before sending the test request', async () => {
+      const issueService = TestBed.inject(IssueService) as jasmine.SpyObj<IssueService>;
+      let resolveTrust!: () => void;
+      certTrust.setPendingConfig.and.returnValue(
+        new Promise<void>((resolve) => (resolveTrust = resolve)),
+      );
+      issueService.testConnection.and.resolveTo(true);
+
+      const done = component.testConnection();
+      await Promise.resolve();
+
+      expect(certTrust.setPendingConfig).toHaveBeenCalledWith(component, component.model);
+      expect(issueService.testConnection).not.toHaveBeenCalled();
+      resolveTrust();
+      await done;
+      expect(issueService.testConnection).toHaveBeenCalled();
+    });
+
+    it('stops trusting the config when the dialog closes', () => {
+      beforeClosed$.next();
+
+      expect(certTrust.setPendingConfig).toHaveBeenCalledWith(component, null);
     });
   });
 
