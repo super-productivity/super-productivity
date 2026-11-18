@@ -3,8 +3,8 @@ import { Invoice } from './types';
 
 const cell = (value: string | number): string => {
   const text = String(value);
-  // Quote when needed; a leading =,+,-,@ would run as a formula in spreadsheets.
-  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  // Quote when needed; a leading =,+,-,@, tab or CR can run as a formula in spreadsheets.
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
 

@@ -14,7 +14,7 @@ import { INVOICE_LANGUAGES } from '../core/invoice-labels';
 import { computeTotals } from '../core/totals';
 import { Invoice } from '../core/types';
 import { el, field, numberInput } from './dom';
-import { createFormat } from './format';
+import { createFormat, parseAmount } from './format';
 import { t } from './i18n';
 import { printInvoice } from './invoice-list';
 import { snackError } from './notify';
@@ -89,7 +89,7 @@ const lineRow = (line: DraftLineState, onEdit: () => void): HTMLTableRowElement 
   hours.setAttribute('aria-label', `${t('INVOICE.HOURS')}: ${line.title}`);
   include.onchange = () => ((line.include = include.checked), onEdit());
   title.oninput = () => ((line.title = title.value), onEdit());
-  hours.oninput = () => ((line.hours = Number(hours.value) || 0), onEdit());
+  hours.oninput = () => ((line.hours = parseAmount(hours.value)), onEdit());
   return el('tr', {}, [
     el('td', {}, [include]),
     el('td', {}, [title]),
@@ -157,7 +157,7 @@ const draftInputs = (
   };
   from.onchange = () => ((draft.from = from.value), on.redraft());
   to.onchange = () => ((draft.to = to.value), on.redraft());
-  rate.oninput = () => ((draft.rate = Number(rate.value) || 0), on.update());
+  rate.oninput = () => ((draft.rate = parseAmount(rate.value)), on.update());
   client.oninput = () => (draft.client = client.value);
   language.onchange = () => (draft.language = language.value);
   return [

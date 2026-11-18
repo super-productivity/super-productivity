@@ -49,12 +49,14 @@ describe('invoiceToCsv', () => {
       lines: [
         { title: 'Design, "v2"', hours: 1.5, rate: 80 },
         { title: '=SUM(A1)', hours: 1, rate: 80 },
+        { title: '\t=1+1', hours: 1, rate: 80 },
       ],
     } as Invoice;
     expect(invoiceToCsv(invoice)).toBe(
       'Invoice,Date,Description,Hours,Rate,Amount,Currency\n' +
         '001,2026-11-01,"Design, ""v2""",1.50,80.00,120.00,EUR\n' +
-        "001,2026-11-01,'=SUM(A1),1.00,80.00,80.00,EUR\n",
+        "001,2026-11-01,'=SUM(A1),1.00,80.00,80.00,EUR\n" +
+        "001,2026-11-01,'\t=1+1,1.00,80.00,80.00,EUR\n",
     );
   });
 });

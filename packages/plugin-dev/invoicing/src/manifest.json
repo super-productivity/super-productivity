@@ -14,7 +14,8 @@
     "getAllProjects",
     "persistDataSynced",
     "loadSyncedData",
-    "downloadFile"
+    "downloadFile",
+    "showSnack"
   ],
   "dataSharing": [],
   "iFrame": true,

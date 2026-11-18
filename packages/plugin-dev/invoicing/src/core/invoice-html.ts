@@ -46,16 +46,16 @@ const metaRow = (label: string, value: string): string =>
 
 const sumRow = (label: string, amount: string, className = ''): string =>
   `<tr class="${className}"><td colspan="3">${escapeHtml(label)}</td>` +
-  `<td class="num">${amount}</td></tr>`;
+  `<td class="num">${escapeHtml(amount)}</td></tr>`;
 
 const lineRows = (invoice: Invoice, fmt: InvoiceFormat): string =>
   invoice.lines
     .map(
       (line) =>
         `<tr><td dir="auto">${escapeHtml(line.title)}</td>` +
-        `<td class="num">${fmt.hours(line.hours)}</td>` +
-        `<td class="num">${fmt.money(Math.round(line.rate * 100))}</td>` +
-        `<td class="num">${fmt.money(lineCents(line))}</td></tr>`,
+        `<td class="num">${escapeHtml(fmt.hours(line.hours))}</td>` +
+        `<td class="num">${escapeHtml(fmt.money(Math.round(line.rate * 100)))}</td>` +
+        `<td class="num">${escapeHtml(fmt.money(lineCents(line)))}</td></tr>`,
     )
     .join('');
 
@@ -87,7 +87,10 @@ export const invoiceTitle = (invoice: Invoice, labels: InvoiceLabels): string =>
 
 const RTL = ['ar', 'fa'];
 
-/** The printable invoice. All user text is escaped. */
+/**
+ * The printable invoice. All text is escaped, formatted values too: an unknown
+ * currency code prints as typed.
+ */
 export const renderInvoiceHtml = (invoice: Invoice, fmt: InvoiceFormat): string => {
   const { labels: l, date } = fmt;
   const th = (label: string, className = ''): string =>

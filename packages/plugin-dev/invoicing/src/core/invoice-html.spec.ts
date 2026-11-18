@@ -54,6 +54,19 @@ describe('renderInvoiceHtml', () => {
     expect(html).toMatch(/Total<\/td><td class="num">100\.00/);
   });
 
+  it('escapes formatted values too: an unknown currency code prints as typed', () => {
+    const html = renderInvoiceHtml(invoice, {
+      lang: 'en',
+      money: (cents) => `${(cents / 100).toFixed(2)} <b>`,
+      date: (d) => d,
+      hours: (h) => h.toFixed(2),
+      percent: (p) => `${p} pct`,
+      labels,
+    });
+    expect(html).not.toContain('<b>');
+    expect(html).toContain('100.00 &lt;b&gt;');
+  });
+
   it('shows subtotal and tax lines only when tax is set', () => {
     expect(render(invoice)).not.toMatch(/VAT|Subtotal/);
     expect(render({ ...invoice, taxRatePct: 20 })).toMatch(

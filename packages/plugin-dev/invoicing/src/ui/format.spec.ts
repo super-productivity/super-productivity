@@ -1,4 +1,4 @@
-import { createFormat } from './format';
+import { createFormat, parseAmount } from './format';
 
 describe('createFormat', () => {
   it('formats the tax rate in the invoice language', () => {
@@ -8,5 +8,17 @@ describe('createFormat', () => {
 
   it('labels in the invoice language', () => {
     expect(createFormat('fr', 'EUR').labels.invoice).toBe('Facture');
+  });
+});
+
+describe('parseAmount', () => {
+  it('keeps two decimals, as printed, so hours × rate matches the amount', () => {
+    expect(parseAmount('1.234')).toBe(1.23);
+    expect(parseAmount('33.336')).toBe(33.34);
+  });
+
+  it('reads an empty or invalid field as 0', () => {
+    expect(parseAmount('')).toBe(0);
+    expect(parseAmount('abc')).toBe(0);
   });
 });

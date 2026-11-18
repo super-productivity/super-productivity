@@ -6,6 +6,13 @@ const toDate = (dayStr: string): Date => {
   return new Date(y, m - 1, d);
 };
 
+/**
+ * A typed hours or rate value, kept to the two decimals the invoice prints:
+ * otherwise 1.234 h prints as 1.23 h but is charged in full.
+ */
+export const parseAmount = (value: string): number =>
+  Math.round((Number(value) || 0) * 100) / 100;
+
 /** Labels and money, date, hours and percent formats in `locale`; unknown currency codes print as text. */
 export const createFormat = (locale: string, currency: string): InvoiceFormat => {
   let money: (cents: number) => string;
