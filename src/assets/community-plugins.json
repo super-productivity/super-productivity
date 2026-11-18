@@ -49,9 +49,9 @@
     "authorUrl": "https://github.com/nexumia-de",
     "id": "questarc",
     "release": {
-      "version": "3.1.0",
-      "downloadUrl": "https://github.com/nexumia-de/quest-arc/releases/download/v3.1.0/questarc-3.1.0.zip",
-      "sha256": "a3dfef0791403a9d70fc35a70399428bb4d18a60ef6612031884a8a22f659ccd"
+      "version": "4.3.1",
+      "downloadUrl": "https://github.com/nexumia-de/quest-arc/releases/download/v4.3.1/questarc-4.3.1.zip",
+      "sha256": "5d414d6124fb0ab1396d02e19470fe50249b64637f9edd4a8e456b71303a1884"
     }
   },
   {
