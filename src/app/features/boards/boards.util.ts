@@ -41,6 +41,7 @@ const NEW_SORT_KEYS: ReadonlySet<string> = new Set<TaskSortKey>([
   'timeSpent',
   'priority',
   'tag',
+  'project',
 ]);
 
 // Optional string fields Formly writes `null` into; unknown strings are kept,

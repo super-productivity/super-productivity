@@ -929,6 +929,10 @@ describe('panel sort keys', () => {
     const priority = withPanelSortKey(panel({ sortBy: 'title' }), 'priority');
     expect(priority.sortKey).toBe('priority');
     expect('sortBy' in priority).toBeFalse();
+    const project = withPanelSortKey(panel({ sortBy: 'title' }), 'project');
+    expect(project.sortKey).toBe('project');
+    expect('sortBy' in project).toBeFalse();
+    expect(getPanelSortKey(project)).toBe('project');
     const manual = withPanelSortKey(panel({ sortBy: 'title' }), null);
     expect('sortBy' in manual || 'sortKey' in manual).toBeFalse();
   });
