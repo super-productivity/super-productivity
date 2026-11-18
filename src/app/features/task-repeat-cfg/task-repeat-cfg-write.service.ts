@@ -156,7 +156,7 @@ const parseFields = <T>(
   validate: (fields: Record<string, unknown>) => IValidation<T>,
 ): Result<T> => {
   if (!isRecord(fields)) {
-    return invalid('Repeat config fields must be an object');
+    return invalid('Request body must be a JSON object');
   }
   const unsupported = Object.keys(fields).filter((key) => !allowedKeys.has(key));
   if (unsupported.length > 0) {
@@ -164,7 +164,7 @@ const parseFields = <T>(
       ok: false,
       error: {
         code: 'UNSUPPORTED_FIELD',
-        message: `Field(s) cannot be set: ${unsupported.join(', ')}`,
+        message: `Field(s) cannot be set through this endpoint: ${unsupported.join(', ')}`,
         details: { fields: unsupported },
       },
     };
@@ -217,7 +217,7 @@ export class TaskRepeatCfgWriteService {
     if (task.repeatCfgId) {
       // the id in the message too: plugins only see the message
       return invalid(
-        `Task already repeats; update its repeat config ${task.repeatCfgId} instead`,
+        'Task already repeats; change its repeat config with PATCH /task-repeat-cfgs/:id',
         { repeatCfgId: task.repeatCfgId },
       );
     }
@@ -431,10 +431,13 @@ export class TaskRepeatCfgWriteService {
     if (result.monthlyLastDay && quickSetting !== 'MONTHLY_LAST_DAY') {
       result = { ...result, monthlyLastDay: undefined };
     }
-    // Stored like the dialog's "After I complete it…" preset. The schedule is
-    // replaced as a whole, so leaving the flag out turns the mode off; the
-    // waiting it forced goes with it.
-    if (repeatFromCompletionDate) {
+    // Stored like the dialog's "After I complete it…" preset. A custom schedule
+    // that leaves the flag out keeps the mode, as released REST clients expect;
+    // a preset or an explicit false turns it off, with the waiting it forced.
+    const isFromCompletion =
+      repeatFromCompletionDate ??
+      (quickSetting === 'CUSTOM' && !!base.repeatFromCompletionDate);
+    if (isFromCompletion) {
       result = toStoredRepeatCfg({ ...result, quickSetting: AFTER_COMPLETION_PRESET });
     } else if (result.repeatFromCompletionDate) {
       result = { ...result, repeatFromCompletionDate: false, waitForCompletion: false };

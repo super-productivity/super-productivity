@@ -51,7 +51,9 @@ export class PluginBridgeRepeatCfgService {
     }
     // the task is the first argument; one in the schedule could redirect it
     if (Object.hasOwn(fields, 'taskId')) {
-      throw new Error('UNSUPPORTED_FIELD: Field(s) cannot be set: taskId');
+      throw new Error(
+        'UNSUPPORTED_FIELD: Field(s) cannot be set through this endpoint: taskId',
+      );
     }
     const id = unwrap(await this._writeService.create({ ...fields, taskId }));
     PluginLog.log('PluginBridge: repeat config added', { taskId, id });

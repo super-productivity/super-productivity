@@ -636,8 +636,9 @@ export interface PluginTaskRepeatCfgSchedule {
   /**
    * `'CUSTOM'` only: count the interval from the day a copy is completed
    * ("every 3 days after I finish it"); the next copy is only created then.
-   * A weekly interval is stored as days. Part of the schedule, so a schedule
-   * change without it turns it off.
+   * A weekly interval is stored as days. A `'CUSTOM'` schedule change without
+   * it keeps it; a preset or `false` turns it off, and new copies then no
+   * longer wait for completion.
    */
   repeatFromCompletionDate?: boolean;
   isPaused?: boolean;

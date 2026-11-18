@@ -49,9 +49,8 @@ type ImportApi = Pick<
   | 'batchUpdateForProject'
   | 'updateTask'
   | 'getTasks'
-> &
-  // missing in app versions before plugins could create repeats
-  Partial<Pick<PluginAPI, 'addTaskRepeatCfg'>>;
+  | 'addTaskRepeatCfg'
+>;
 
 const ensureTags = async (
   api: ImportApi,
@@ -101,17 +100,12 @@ const setUpRepeat = async (
   taskId: string,
   repeat: NonNullable<TaskFollowUp['repeat']>,
 ): Promise<boolean> => {
-  if (api.addTaskRepeatCfg) {
-    try {
-      await api.addTaskRepeatCfg(taskId, repeat.schedule);
-      return true;
-    } catch (e) {
-      // the message names the reason, never task content
-      console.warn(
-        'todoist-import: repeat not set up',
-        e instanceof Error ? e.message : e,
-      );
-    }
+  try {
+    await api.addTaskRepeatCfg(taskId, repeat.schedule);
+    return true;
+  } catch (e) {
+    // the message names the reason, never task content
+    console.warn('todoist-import: repeat not set up', e instanceof Error ? e.message : e);
   }
   await api.updateTask(taskId, { notes: repeat.notesWithRule });
   return false;

@@ -197,25 +197,23 @@ describe('parseSyncResponse', () => {
       expect(subTask.notes).toBe('living room only\n\nRepeats: every day');
     });
 
-    it('anchors a day rule to the logical day, as the app does', () => {
-      const raw = baseFixture();
-      // 02:00 on Wed 2026-07-15 belongs to Tue 2026-07-14 when the day starts at 04:00
-      raw.items = [
-        {
-          ...recurringItem('every 15th at 2am'),
-          due: {
-            date: '2026-07-15T02:00:00',
-            is_recurring: true,
-            string: 'every 15th at 2am',
+    // Todoist days are calendar days; the app reads repeat days as logical days
+    it.each(['every 15th at 2am', 'every wed at 2am', 'every weekday at 2am'])(
+      'leaves "%s" unmapped when its time falls before the start of the day',
+      (rule) => {
+        const raw = baseFixture();
+        // 02:00 on Wed 2026-07-15 belongs to Tue 2026-07-14 when the day starts at 04:00
+        raw.items = [
+          {
+            ...recurringItem(rule),
+            due: { date: '2026-07-15T02:00:00', is_recurring: true, string: rule },
           },
-        },
-      ];
-      const fourHours = 4 * 60 * 60 * 1000;
-      expect(parseSyncResponse(raw).tasks[0].repeat?.schedule).toEqual({
-        quickSetting: 'MONTHLY_CURRENT_DATE',
-      });
-      expect(parseSyncResponse(raw, undefined, fourHours).tasks[0].repeat).toBeNull();
-    });
+        ];
+        const fourHours = 4 * 60 * 60 * 1000;
+        expect(parseSyncResponse(raw).tasks[0].repeat).not.toBeNull();
+        expect(parseSyncResponse(raw, undefined, fourHours).tasks[0].repeat).toBeNull();
+      },
+    );
   });
 
   describe('durations', () => {

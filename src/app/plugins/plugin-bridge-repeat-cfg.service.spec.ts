@@ -120,7 +120,9 @@ describe('PluginBridgeRepeatCfgService', () => {
 
       await expectAsync(
         service.createBoundMethods().addTaskRepeatCfg('t1', schedule),
-      ).toBeRejectedWithError('UNSUPPORTED_FIELD: Field(s) cannot be set: taskId');
+      ).toBeRejectedWithError(
+        'UNSUPPORTED_FIELD: Field(s) cannot be set through this endpoint: taskId',
+      );
       expect(repeatCfgServiceMock.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
     });
 
@@ -133,7 +135,7 @@ describe('PluginBridgeRepeatCfgService', () => {
       await expectAsync(
         service.createBoundMethods().addTaskRepeatCfg('other'),
       ).toBeRejectedWithError(
-        'INVALID_INPUT: Task already repeats; update its repeat config cfg-other instead',
+        'INVALID_INPUT: Task already repeats; change its repeat config with PATCH /task-repeat-cfgs/:id',
       );
       tasks.other = task('other');
       await expectAsync(
@@ -147,7 +149,7 @@ describe('PluginBridgeRepeatCfgService', () => {
       const withTitle = { title: 'x' } as unknown as Record<string, never>;
 
       await expectAsync(addTaskRepeatCfg('t1', withTitle)).toBeRejectedWithError(
-        'UNSUPPORTED_FIELD: Field(s) cannot be set: title',
+        'UNSUPPORTED_FIELD: Field(s) cannot be set through this endpoint: title',
       );
       await expectAsync(
         addTaskRepeatCfg('t1', 'daily' as unknown as Record<string, never>),

@@ -270,14 +270,6 @@ describe('runImport', () => {
       expect(result.failedRepeatCount).toBe(1);
       expect(result.errorMessage).toBeNull();
     });
-
-    it('puts the rule into the notes on an app without repeat support', async () => {
-      const { api, calls } = createFakeApi();
-      delete api.addTaskRepeatCfg;
-      const result = await runImport(api, planFor([repeating('a')]), () => {});
-      expect(calls).toEqual(['update real-temp-a dueDay', 'update real-temp-a notes']);
-      expect(result.failedRepeatCount).toBe(1);
-    });
   });
 
   it('reports detail progress during follow-ups', async () => {

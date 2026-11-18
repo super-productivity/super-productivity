@@ -193,12 +193,9 @@ const parseDue = (
     : { dueDay: null, dueWithTime: ts };
 };
 
-/**
- * The logical day of a timestamp: the app derives a repeat's start from it,
- * so a rule anchored to a day must be checked against the same day.
- */
-const logicalDayStr = (ts: number, startOfNextDayDiffMs: number): string => {
-  const date = new Date(ts - startOfNextDayDiffMs);
+/** The local calendar day of a timestamp. */
+const localDayStr = (ts: number): string => {
+  const date = new Date(ts);
   const pad = (n: number): string => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
@@ -427,9 +424,13 @@ export const parseSyncResponse = (
       (label): label is string => typeof label === 'string' && label.trim() !== '',
     );
     const repeatRule = item.due?.is_recurring ? asStr(item.due.string) || null : null;
+    // Todoist rule days are calendar days, the app's repeat days logical days:
+    // a time before the start of the day would shift the repeat by a day
+    const isOnLogicalDay =
+      !dueWithTime ||
+      localDayStr(dueWithTime) === localDayStr(dueWithTime - startOfNextDayDiffMs);
     const nextDay =
-      parsedDueDay ??
-      (dueWithTime ? logicalDayStr(dueWithTime, startOfNextDayDiffMs) : null);
+      parsedDueDay ?? (dueWithTime && isOnLogicalDay ? localDayStr(dueWithTime) : null);
     // Super Productivity cannot repeat sub-tasks
     const schedule =
       repeatRule && !rootExtId && nextDay

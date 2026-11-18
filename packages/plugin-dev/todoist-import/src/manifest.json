@@ -18,6 +18,7 @@
     "batchUpdateForProject",
     "updateTask",
     "addTaskRepeatCfg",
+    "getDayContext",
     "showSnack"
   ],
   "allowedHosts": ["api.todoist.com"],
