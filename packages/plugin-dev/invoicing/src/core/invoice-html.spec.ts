@@ -52,8 +52,24 @@ describe('renderInvoiceHtml', () => {
     expect(html).toMatch(/Total<\/td><td class="num">100\.00/);
   });
 
-  it('shows the tax line only when tax is set', () => {
-    expect(render(invoice)).not.toContain('VAT');
-    expect(render({ ...invoice, taxRatePct: 20 })).toMatch(/VAT 20%.*20\.00/);
+  it('shows subtotal and tax lines only when tax is set', () => {
+    expect(render(invoice)).not.toMatch(/VAT|Subtotal/);
+    expect(render({ ...invoice, taxRatePct: 20 })).toMatch(
+      /Subtotal.*100\.00.*VAT 20%.*20\.00.*Total.*120\.00/s,
+    );
+  });
+
+  it('keeps the totals out of tfoot, which browsers repeat on every printed page', () => {
+    expect(render(invoice)).not.toContain('<tfoot');
+  });
+
+  it('leaves out "Bill to" without a client', () => {
+    expect(render({ ...invoice, client: ' ' })).not.toContain('Bill to');
+  });
+
+  it('lets right-to-left text pick its own direction', () => {
+    expect(
+      render({ ...invoice, lines: [{ title: 'تصميم', hours: 1, rate: 1 }] }),
+    ).toContain('<td dir="auto">تصميم</td>');
   });
 });

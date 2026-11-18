@@ -31,53 +31,75 @@ const escapeHtml = (text: string): string =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-/** Multi-line free text (addresses, bank details) keeps its line breaks. */
-const block = (text: string): string =>
-  text.trim() ? `<p class="inv-block">${escapeHtml(text.trim())}</p>` : '';
+/**
+ * Multi-line free text (addresses, bank details) keeps its line breaks.
+ * `dir="auto"` lays out Arabic or Hebrew text right to left.
+ */
+const block = (text: string, className: string): string =>
+  text.trim() ? `<p class="${className}" dir="auto">${escapeHtml(text.trim())}</p>` : '';
 
 const metaRow = (label: string, value: string): string =>
   `<tr><th scope="row">${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`;
 
-/** The printable invoice. All user text is escaped. */
-export const renderInvoiceHtml = (invoice: Invoice, fmt: InvoiceFormat): string => {
-  const { labels: l, money, date } = fmt;
-  const totals = computeTotals(invoice.lines, invoice.taxRatePct);
-  const lines = invoice.lines
+const sumRow = (label: string, amount: string, className = ''): string =>
+  `<tr class="${className}"><td colspan="3">${escapeHtml(label)}</td>` +
+  `<td class="num">${amount}</td></tr>`;
+
+const lineRows = (invoice: Invoice, fmt: InvoiceFormat): string =>
+  invoice.lines
     .map(
       (line) =>
-        `<tr><td>${escapeHtml(line.title)}</td><td class="num">${fmt.hours(line.hours)}</td>` +
-        `<td class="num">${money(Math.round(line.rate * 100))}</td>` +
-        `<td class="num">${money(lineCents(line))}</td></tr>`,
+        `<tr><td dir="auto">${escapeHtml(line.title)}</td>` +
+        `<td class="num">${fmt.hours(line.hours)}</td>` +
+        `<td class="num">${fmt.money(Math.round(line.rate * 100))}</td>` +
+        `<td class="num">${fmt.money(lineCents(line))}</td></tr>`,
     )
     .join('');
-  const taxRow =
+
+/**
+ * Subtotal and tax only when there is tax; else the total says it all. A
+ * second tbody rather than tfoot: browsers repeat tfoot on every printed page.
+ */
+const sumRows = (invoice: Invoice, fmt: InvoiceFormat): string => {
+  const { labels: l, money } = fmt;
+  const totals = computeTotals(invoice.lines, invoice.taxRatePct);
+  const tax =
     invoice.taxRatePct > 0
-      ? `<tr><td colspan="3">${escapeHtml(l.tax)} ${invoice.taxRatePct}%</td>` +
-        `<td class="num">${money(totals.taxCents)}</td></tr>`
+      ? sumRow(l.subtotal, money(totals.subtotalCents)) +
+        sumRow(`${l.tax} ${invoice.taxRatePct}%`, money(totals.taxCents))
       : '';
-  return (
-    `<article class="inv">
-  ${block(invoice.seller)}
-  <h1>${escapeHtml(l.invoice)}</h1>
-  <table class="inv-meta">
-    ${metaRow(l.number, invoice.number)}
-    ${metaRow(l.issueDate, date(invoice.issueDate))}
-    ${metaRow(l.dueDate, date(invoice.dueDate))}
-    ${metaRow(l.period, `${date(invoice.periodFrom)} – ${date(invoice.periodTo)}`)}
-  </table>
-  <h2>${escapeHtml(l.billTo)}</h2>
-  ${block(invoice.client)}
+  return tax + sumRow(l.total, money(totals.totalCents), 'inv-total');
+};
+
+const billTo = (invoice: Invoice, label: string): string =>
+  invoice.client.trim()
+    ? `<div><h2>${escapeHtml(label)}</h2>${block(invoice.client, 'inv-address')}</div>`
+    : '<div></div>';
+
+/** The printable invoice. All user text is escaped. */
+export const renderInvoiceHtml = (invoice: Invoice, fmt: InvoiceFormat): string => {
+  const { labels: l, date } = fmt;
+  const th = (label: string, className = ''): string =>
+    `<th scope="col" class="${className}">${escapeHtml(label)}</th>`;
+  return `<article class="inv">
+  <header class="inv-head">
+    <h1>${escapeHtml(l.invoice)}</h1>
+    ${block(invoice.seller, 'inv-address')}
+  </header>
+  <div class="inv-head">
+    ${billTo(invoice, l.billTo)}
+    <table class="inv-meta">
+      ${metaRow(l.number, invoice.number)}
+      ${metaRow(l.issueDate, date(invoice.issueDate))}
+      ${metaRow(l.dueDate, date(invoice.dueDate))}
+      ${metaRow(l.period, `${date(invoice.periodFrom)} – ${date(invoice.periodTo)}`)}
+    </table>
+  </div>
   <table class="inv-lines">
-    <thead><tr><th>${escapeHtml(l.description)}</th><th class="num">${escapeHtml(l.hours)}</th>` +
-    `<th class="num">${escapeHtml(l.rate)}</th><th class="num">${escapeHtml(l.amount)}</th></tr></thead>
-    <tbody>${lines}</tbody>
-    <tfoot>
-      <tr><td colspan="3">${escapeHtml(l.subtotal)}</td><td class="num">${money(totals.subtotalCents)}</td></tr>
-      ${taxRow}
-      <tr class="inv-total"><td colspan="3">${escapeHtml(l.total)}</td><td class="num">${money(totals.totalCents)}</td></tr>
-    </tfoot>
+    <thead><tr>${th(l.description)}${th(l.hours, 'num')}${th(l.rate, 'num')}${th(l.amount, 'num')}</tr></thead>
+    <tbody>${lineRows(invoice, fmt)}</tbody>
+    <tbody class="inv-sum">${sumRows(invoice, fmt)}</tbody>
   </table>
-  ${block(invoice.paymentNote)}
-</article>`
-  );
+  ${block(invoice.paymentNote, 'inv-note')}
+</article>`;
 };
