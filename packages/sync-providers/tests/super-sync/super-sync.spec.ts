@@ -2201,6 +2201,60 @@ describe('SuperSyncProvider', () => {
     });
 
     /**
+     * #10219: on Android, CapacitorHttp rejects with an `Error` whose `.code` is
+     * the Java exception class (`SSLHandshakeException`, …) and whose name is
+     * plain "Error". The class name is the only safe detail that tells a
+     * certificate failure from anything else, so it must reach the log and the
+     * message; the hostname in `.message` must still not.
+     */
+    it('keeps the native error code of a foreign native error (Android exception class)', async () => {
+      const ctx = buildProvider({ isNativePlatform: true });
+      const { logger, spy } = createLoggerSpy();
+      ctx.deps.logger = logger;
+      ctx.cfgStore.load.mockResolvedValue(testConfig);
+      const androidError = Object.assign(
+        new Error('Trust anchor for certification path not found: sync.example.com'),
+        { code: 'SSLHandshakeException' },
+      );
+      ctx.nativeHttpExecutor.mockRejectedValue(androidError);
+
+      let caught: Error | undefined;
+      try {
+        await ctx.provider.uploadOps([createMockOperation()], 'client-1');
+      } catch (e) {
+        caught = e as Error;
+      }
+      expect(caught?.message).toBe(
+        'SuperSync native request failed: SSLHandshakeException',
+      );
+      expect(JSON.stringify(spy.error.mock.calls)).toContain(
+        '"errorCode":"SSLHandshakeException"',
+      );
+      expect(JSON.stringify(spy.error.mock.calls)).not.toContain('sync.example.com');
+      expect(caught!.message).not.toContain('sync.example.com');
+    });
+
+    it('ignores a native error code that is not a plain identifier', async () => {
+      const ctx = buildProvider({ isNativePlatform: true });
+      const { logger, spy } = createLoggerSpy();
+      ctx.deps.logger = logger;
+      ctx.cfgStore.load.mockResolvedValue(testConfig);
+      const oddError = Object.assign(new Error('boom'), {
+        code: 'refused by sync.example.com',
+      });
+      ctx.nativeHttpExecutor.mockRejectedValue(oddError);
+
+      let caught: Error | undefined;
+      try {
+        await ctx.provider.uploadOps([createMockOperation()], 'client-1');
+      } catch (e) {
+        caught = e as Error;
+      }
+      expect(caught?.message).toBe('SuperSync native request failed: Error');
+      expect(JSON.stringify(spy.error.mock.calls)).not.toContain('sync.example.com');
+    });
+
+    /**
      * Regression: an earlier version of `_handleNativeRequestError`
      * used `error.message.startsWith('HTTP ')` to detect our own
      * thrown HTTP errors. That heuristic would have let a foreign

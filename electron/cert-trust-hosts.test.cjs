@@ -33,6 +33,36 @@ test('ignores non-URL strings, other schemes, null and duplicates', () => {
   assert.deepEqual(hosts, ['same.example.org']);
 });
 
+test('trims whitespace around URL values', () => {
+  const hosts = getConfiguredHosts([
+    { serverUrl: '  https://cloud.lan/ ' },
+    { pluginConfig: { url: '\thttp://gitea.lan:3000\n' } },
+  ]);
+  assert.deepEqual(hosts.sort(), ['cloud.lan', 'gitea.lan:3000']);
+});
+
+test('accepts scheme-less values only in URL and host fields', () => {
+  const hosts = getConfiguredHosts([
+    { pluginConfig: { gitlabBaseUrl: 'gitlab.corp.lan', project: 'group/repo' } },
+    { host: ' jira.corp.local:8443 ', serverUrl: 'nas.lan/sub' },
+    { name: 'my.server.lan', title: 'just text', token: 'abc' },
+  ]);
+  assert.deepEqual(hosts.sort(), ['gitlab.corp.lan', 'jira.corp.local:8443', 'nas.lan']);
+});
+
+test('ignores other schemes and unparsable values in URL fields', () => {
+  const hosts = getConfiguredHosts([
+    {
+      icalUrl: 'webcal://cal.example.org/x.ics',
+      baseUrl: 'ftp://files.example.org',
+      host: 'javascript:alert(1)',
+      serverUrl: 'not a host',
+      apiUrl: '',
+    },
+  ]);
+  assert.deepEqual(hosts, []);
+});
+
 test('does not descend deeper than one nested level', () => {
   const hosts = getConfiguredHosts([{ a: { b: { c: 'https://deep.example.org' } } }]);
   assert.deepEqual(hosts, []);

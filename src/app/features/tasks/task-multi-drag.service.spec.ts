@@ -228,6 +228,18 @@ describe('TaskMultiDragService', () => {
     await service.drop('right', 'a', ['a']);
     expect(sectionService.addTaskToSection).not.toHaveBeenCalled();
   });
+  it('cancels an unselected task and a subtask, clearing the flag for the next drag', () => {
+    for (const dragged of [tasks()['c'], task('child', { parentId: 'a' })]) {
+      service.start(dragged);
+      expect(service.isCancelled()).toBeFalse();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(service.isCancelled()).toBeTrue();
+      expect(service.ids()).toEqual([]);
+      service.clear();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(service.isCancelled()).toBeFalse();
+    }
+  });
   it('cancels without falling back to moving one task', async () => {
     start();
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

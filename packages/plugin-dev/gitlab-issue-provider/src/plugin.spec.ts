@@ -64,7 +64,6 @@ describe('GitLab Plugin - manifest-facing config', () => {
       'tokenHelp',
       'scope',
       'gitlabBaseUrl',
-      'filterUsername',
       'filter',
       'isSubmitWorklogOnFinishDay',
     ]);
@@ -268,7 +267,7 @@ describe('GitLab Plugin - getById', () => {
 });
 
 describe('GitLab Plugin - getIssueLink', () => {
-  it('strips the project part of a full-reference id', () => {
+  it('builds the link from a full-reference or legacy id', () => {
     expect(definition.getIssueLink('group/sub/proj#44', cfg)).toBe(
       'https://gitlab.com/group/sub/proj/-/issues/44',
     );
@@ -295,8 +294,21 @@ describe('GitLab Plugin - getIssueLink', () => {
     ).toBe('https://git.x.io/g/p/-/issues/1');
   });
 
-  it('is empty without a project', () => {
-    expect(definition.getIssueLink('g/p#1', {})).toBe('');
+  it("links to the issue's own project, not a numeric configured project ID", () => {
+    expect(definition.getIssueLink('group/proj#44', { project: '12345' })).toBe(
+      'https://gitlab.com/group/proj/-/issues/44',
+    );
+  });
+
+  it('decodes a %2F-encoded configured project for legacy ids', () => {
+    expect(definition.getIssueLink('#44', { project: 'group%2Fproj' })).toBe(
+      'https://gitlab.com/group/proj/-/issues/44',
+    );
+  });
+
+  it('is empty for a legacy id without a configured project', () => {
+    expect(definition.getIssueLink('#1', {})).toBe('');
+    expect(definition.getIssueLink('1', {})).toBe('');
   });
 });
 

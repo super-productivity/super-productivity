@@ -1,0 +1,146 @@
+@use 'angular-material-css-vars' as mat-css-vars;
+@use '../../../../styles/_globals.scss' as *;
+
+// The grid columns are set on this host by schedule-week, which owns the widths.
+:host {
+  text-align: left;
+}
+
+// Panel: one full-width day, no time column.
+:host(.isInPanel) .filler {
+  display: none;
+}
+
+// Horizontal scroll: the corner stays put like the time column below it.
+:host(.is-horizontal-scroll) {
+  .filler {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--bg-lighter);
+    @include extraBorder('-right');
+  }
+
+  .filler + .tray-cell {
+    border-left: 0;
+  }
+}
+
+.filler,
+.tray-cell {
+  @include extraBorder('-top');
+}
+
+.tray-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-quarter);
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--s-half);
+  @include extraBorder('-left');
+
+  &.drag-over {
+    background: mat-css-vars.mat-css-color-primary($opacity: 0.05);
+  }
+}
+
+.capacity,
+.summary,
+.toggle {
+  font-size: var(--font-size-xs);
+  color: var(--text-color-muted);
+
+  &.is-over {
+    color: var(--c-warn);
+  }
+}
+
+.summary,
+.toggle,
+.chip-main,
+.chip-set-time {
+  appearance: none;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  // Keyboard focus scrolls its target out of the grid's scroll-padding zone,
+  // but this row is sticky: the grid would move and the row would not. A
+  // scroll area taller than the scrollport already counts as in view.
+  scroll-margin-block: 100vh;
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+.summary,
+.toggle {
+  padding: 0;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--separator-color);
+  border-radius: var(--radius-sm);
+  background: var(--schedule-event-bg);
+  color: var(--text-color);
+  font-size: var(--font-size-sm);
+  cursor: grab;
+  user-select: none;
+
+  &.is-shown-in-grid {
+    opacity: 0;
+  }
+
+  &.is-projection {
+    gap: var(--s-half);
+    padding: var(--s-quarter) var(--s-half);
+    border-style: dashed;
+    opacity: var(--muted-alpha);
+    cursor: default;
+  }
+}
+
+.chip-main {
+  display: flex;
+  flex: 1;
+  gap: var(--s-half);
+  min-width: 0;
+  padding: var(--s-quarter) var(--s-half);
+  color: inherit;
+  font-size: inherit;
+  cursor: inherit;
+}
+
+.chip-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-time {
+  flex: none;
+  color: var(--text-color-muted);
+}
+
+.chip-set-time {
+  display: flex;
+  flex: none;
+  padding: 0 var(--s-half);
+  color: var(--text-color-muted);
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    line-height: 16px;
+  }
+}

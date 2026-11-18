@@ -30,6 +30,30 @@ const attachmentPath = (page: Page, domId: string | null): Promise<string | unde
     return state?.tasks.entities[id!.slice(2)]?.attachments[0]?.path;
   }, domId);
 
+const selectedTaskId = (page: Page): Promise<string | null | undefined> =>
+  page.evaluate(() => {
+    let state: RootState | undefined;
+    (
+      window as Window & { __e2eTestHelpers: { store: Store<RootState> } }
+    ).__e2eTestHelpers.store
+      .subscribe((s) => (state = s))
+      .unsubscribe();
+    return state?.tasks.selectedTaskId;
+  });
+
+// 'i' toggles the panel, and right after a reload the selection can still be
+// settling, so a single isVisible() check could toggle it shut instead of open.
+// Retry until the panel is open on this task.
+const showPanelFor = async (page: Page, domId: string | null): Promise<void> => {
+  const taskId = domId!.slice(2);
+  await expect(async () => {
+    await page.locator(`[id="${domId}"]`).focus();
+    if ((await selectedTaskId(page)) !== taskId) await page.keyboard.press('i');
+    await expect.poll(() => selectedTaskId(page), { timeout: 1000 }).toBe(taskId);
+    await expect(page.locator('task-detail-panel')).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15000 });
+};
+
 test('duplicate attachment edits and deletion stay scoped to the copied task', async ({
   page,
   workViewPage,
@@ -59,8 +83,7 @@ test('duplicate attachment edits and deletion stay scoped to the copied task', a
   await expect
     .poll(() => attachmentPath(page, copyId))
     .toBe('https://attachment.example.test/original');
-  await copy.focus();
-  if (!(await panel.isVisible())) await page.keyboard.press('i');
+  await showPanelFor(page, copyId);
   await panel.locator('.attachment').hover();
   await panel.locator('.edit-btn').click();
   await saveAttachment(page, 'https://attachment.example.test/copied');
@@ -70,14 +93,12 @@ test('duplicate attachment edits and deletion stay scoped to the copied task', a
   await flushPendingWrites(page);
   await page.reload();
   await workViewPage.waitForTaskList();
-  await page.locator(`[id="${originalId}"]`).focus();
-  if (!(await panel.isVisible())) await page.keyboard.press('i');
+  await showPanelFor(page, originalId);
   await expect
     .poll(() => attachmentPath(page, originalId))
     .toBe('https://attachment.example.test/original');
   await page.keyboard.press('Escape');
-  await page.locator(`[id="${copyId}"]`).focus();
-  if (!(await panel.isVisible())) await page.keyboard.press('i');
+  await showPanelFor(page, copyId);
   await expect
     .poll(() => attachmentPath(page, copyId))
     .toBe('https://attachment.example.test/copied');
@@ -89,8 +110,7 @@ test('duplicate attachment edits and deletion stay scoped to the copied task', a
   await flushPendingWrites(page);
   await page.reload();
   await workViewPage.waitForTaskList();
-  await page.locator(`[id="${originalId}"]`).focus();
-  if (!(await panel.isVisible())) await page.keyboard.press('i');
+  await showPanelFor(page, originalId);
   await expect
     .poll(() => attachmentPath(page, originalId))
     .toBe('https://attachment.example.test/original');

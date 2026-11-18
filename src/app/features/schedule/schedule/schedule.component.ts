@@ -9,6 +9,7 @@ import {
   Signal,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { combineLatest, fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
@@ -48,6 +49,7 @@ import { LS } from 'src/app/core/persistence/storage-keys.const';
 import { selectTimelineWorkStartEndHours } from '../../config/store/global-config.reducer';
 import { FH } from '../schedule.const';
 import { mapScheduleDaysToScheduleEvents } from '../map-schedule-data/map-schedule-days-to-schedule-events';
+import { mapScheduleDaysToTrays } from '../map-schedule-data/with-schedule-day-tray';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ScheduleWeekComponent } from '../schedule-week/schedule-week.component';
 import { ScheduleMonthComponent } from '../schedule-month/schedule-month.component';
@@ -350,8 +352,10 @@ export class ScheduleComponent {
       contextNow: this._contextNow(),
       realNow: Date.now(),
       currentTaskId: this.taskService.currentTaskId() ?? null,
+      isAutoPlacementOnly: this.isMonthView(),
     });
   });
+  trays = computed(() => mapScheduleDaysToTrays(this.scheduleDays()));
 
   private _eventsAndBeyondBudget = computed(() => {
     const days = this.scheduleDays();
@@ -402,6 +406,11 @@ export class ScheduleComponent {
   isPagerWarm = signal(false);
   readonly dayPageKey = scheduleDayPageKey;
   private _dayPager = viewChild(SwipePagerComponent);
+  // the week view's schedule-week, or one per rendered page of the day pager
+  private _scheduleWeeks = viewChildren(ScheduleWeekComponent);
+  private _scheduleWeekEls = viewChildren(ScheduleWeekComponent, {
+    read: ElementRef<HTMLElement>,
+  });
 
   currentDayPage = computed<ScheduleDayPage | undefined>(() => {
     const day = this.daysToShow()[0];
@@ -573,7 +582,27 @@ export class ScheduleComponent {
       this._elRef.nativeElement.querySelectorAll<HTMLElement>(`#${elementId}`),
     ).find((el) => !el.closest('[inert]'));
 
-    element?.scrollIntoView({ block: 'start', inline: 'start', behavior: 'instant' });
+    if (!element) {
+      return;
+    }
+    // The tray makes the sticky header taller than the scroll-padding allows
+    // for; a scroll margin on the target adds the difference in the same
+    // scroll, so it is still clamped at the end of the day. offsetHeight is a
+    // layout value: the enter animation's transform does not skew it.
+    const weekIndex = this._scheduleWeekEls().findIndex((ref) =>
+      ref.nativeElement.contains(element),
+    );
+    const trayHeight =
+      this._scheduleWeeks()[weekIndex]?.getVisibleTrayEl()?.offsetHeight ?? 0;
+    element.style.scrollMarginTop = `${trayHeight}px`;
+    element.scrollIntoView({ block: 'start', inline: 'start', behavior: 'instant' });
+  }
+
+  openDayView(day: string): void {
+    // same rule as onDayPagerNavigate: (logical) today is the "today" mode
+    const today = this._todayDateStr();
+    this._selectedDate.set(today && day > today ? parseDbDateStr(day) : null);
+    this.selectTimeView('day');
   }
 
   selectTimeView(view: 'week' | 'month' | 'day'): void {

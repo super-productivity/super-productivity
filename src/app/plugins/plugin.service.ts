@@ -759,11 +759,8 @@ export class PluginService implements OnDestroy {
       platform = 'android';
     }
 
-    const darkModeValue = this._globalThemeService.darkMode();
-    const isDark = darkModeValue === 'dark';
-
     return {
-      theme: isDark ? 'dark' : 'light',
+      theme: this._globalThemeService.isDarkTheme() ? 'dark' : 'light',
       appVersion: environment.version,
       platform,
       isDev: !environment.production,

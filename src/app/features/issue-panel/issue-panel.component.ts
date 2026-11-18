@@ -78,15 +78,18 @@ export class IssuePanelComponent {
       tooltip: string;
       missingPluginName?: string;
     }[]
-  > = computed(
-    () =>
+  > = computed(() => {
+    // Re-evaluate when a provider's plugin registers after this panel opened.
+    this._pluginRegistry.registrationVersion();
+    return (
       this.issueProviders()?.map((p) => ({
         issueProvider: this._withPluginAvailability(p),
         initials: getIssueProviderInitials(p),
         tooltip: getIssueProviderTooltip(p),
         missingPluginName: this._getMissingPluginName(p),
-      })) || [],
-  );
+      })) || []
+    );
+  });
 
   constructor() {
     this._setSelectedTabIndex();

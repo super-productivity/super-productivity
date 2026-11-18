@@ -4,8 +4,10 @@
 import { alertDialog } from '../../util/native-dialogs';
 
 const STORAGE_QUOTA_ALERT =
-  'Sync storage is full! Your data is NOT syncing to the server. ' +
-  'Please archive old tasks or upgrade your plan to continue syncing.';
+  'Sync storage is full! Your changes are saved on this device but are NOT syncing. ' +
+  'Your account has reached its storage limit on the sync server. ' +
+  "If you host the server yourself, raise this account's storage quota in its database. " +
+  'Otherwise, write to contact@super-productivity.com.';
 
 export const getSyncErrorCode = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null) {

@@ -21,6 +21,7 @@ import { SyncConfig } from '../../../features/config/global-config.model';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
 import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
+import { CertTrustService } from '../../../features/issue/cert-trust.service';
 
 describe('DialogSyncCfgComponent', () => {
   let component: DialogSyncCfgComponent;
@@ -33,6 +34,7 @@ describe('DialogSyncCfgComponent', () => {
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockSyncLocalStateService: jasmine.SpyObj<SyncLocalStateService>;
+  let mockCertTrustService: jasmine.SpyObj<CertTrustService>;
 
   const baseSyncConfig: SyncConfig = {
     isEnabled: false,
@@ -78,6 +80,8 @@ describe('DialogSyncCfgComponent', () => {
     });
 
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
+    mockCertTrustService = jasmine.createSpyObj('CertTrustService', ['setPendingConfig']);
+    mockCertTrustService.setPendingConfig.and.resolveTo();
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     // Default: the file-based setup encryption dialog is dismissed/skipped.
     mockMatDialog.open.and.returnValue({
@@ -100,6 +104,7 @@ describe('DialogSyncCfgComponent', () => {
         { provide: SnackService, useValue: mockSnackService },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: SyncLocalStateService, useValue: mockSyncLocalStateService },
+        { provide: CertTrustService, useValue: mockCertTrustService },
       ],
     });
     // Replace the Formly-based template with a minimal placeholder so we can
@@ -842,6 +847,25 @@ describe('DialogSyncCfgComponent', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL }),
       );
+    });
+  });
+
+  describe('certificate trust for the config under test (#11097)', () => {
+    it('trusts the unsaved WebDAV config before testing it, until the dialog closes', async () => {
+      // Never resolves, so no request goes out in this test.
+      mockCertTrustService.setPendingConfig.and.returnValue(new Promise(() => {}));
+      const cfg = {
+        baseUrl: 'https://nas.lan/dav',
+        userName: 'u',
+        password: 'p',
+        syncFolderPath: '/sp',
+      };
+
+      void (component as any)._testWebDavConnection(cfg);
+      expect(mockCertTrustService.setPendingConfig).toHaveBeenCalledWith(component, cfg);
+
+      fixture.destroy();
+      expect(mockCertTrustService.setPendingConfig).toHaveBeenCalledWith(component, null);
     });
   });
 

@@ -47,6 +47,8 @@ const PLUGIN_API_MEMBERS: Record<keyof PluginAPIInterface, true> = {
   getAllTags: true,
   addTag: true,
   updateTag: true,
+  addTaskRepeatCfg: true,
+  updateTaskRepeatCfg: true,
   reorderTasks: true,
   log: true,
   persistDataSynced: true,

@@ -14,6 +14,7 @@ import {
   PluginBinaryFileResult,
   PluginBaseCfg,
   PluginCreateTaskData,
+  PluginTaskRepeatCfgSchedule,
   PluginUpdateTaskOptions,
   PluginHeaderBtnCfg,
   PluginHookHandler,
@@ -309,6 +310,24 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#pluginBridge.updateTag(tagId, updates as Partial<TagCopy>);
   }
 
+  async addTaskRepeatCfg(
+    taskId: string,
+    schedule?: PluginTaskRepeatCfgSchedule,
+  ): Promise<string> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to add repeat config to ${taskId}`);
+    return this.#boundMethods.addTaskRepeatCfg(taskId, schedule);
+  }
+
+  async updateTaskRepeatCfg(
+    repeatCfgId: string,
+    updates: PluginTaskRepeatCfgSchedule,
+  ): Promise<void> {
+    PluginLog.log(
+      `Plugin ${this.#pluginId} requested to update repeat config ${repeatCfgId}`,
+    );
+    return this.#boundMethods.updateTaskRepeatCfg(repeatCfgId, updates);
+  }
+
   async reorderTasks(
     taskIds: string[],
     contextId: string,
@@ -399,10 +418,11 @@ export class PluginAPI implements PluginAPIInterface {
 
   /**
    * Register a callback the host invokes when the plugin is disabled, reloaded,
-   * or uninstalled. Code-based plugins must clear timers/listeners they created
-   * here, since they run directly in the renderer and outlive their unload
-   * otherwise. The returned promise is not awaited — do synchronous cleanup
-   * before any await. Registering again replaces the previous callback.
+   * or uninstalled. Code-based plugins run directly in the renderer: the host
+   * stops plain setTimeout/setInterval timers and ignores API calls after
+   * unload, but listeners etc. must be cleared here. The returned promise is
+   * not awaited — do cleanup and API calls before any await. Registering
+   * again replaces the previous callback.
    */
   onUnload(fn: () => void | Promise<void>): void {
     this.#onUnloadRegister?.(fn);
