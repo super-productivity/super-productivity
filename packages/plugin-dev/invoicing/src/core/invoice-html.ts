@@ -18,6 +18,8 @@ export interface InvoiceLabels {
 }
 
 export interface InvoiceFormat {
+  /** Language code of the labels, for `lang`/`dir` on the printed page. */
+  lang: string;
   money: (cents: number) => string;
   date: (dayStr: string) => string;
   hours: (hours: number) => string;
@@ -76,12 +78,15 @@ const billTo = (invoice: Invoice, label: string): string =>
     ? `<div><h2>${escapeHtml(label)}</h2>${block(invoice.client, 'inv-address')}</div>`
     : '<div></div>';
 
+const RTL = ['ar', 'fa'];
+
 /** The printable invoice. All user text is escaped. */
 export const renderInvoiceHtml = (invoice: Invoice, fmt: InvoiceFormat): string => {
   const { labels: l, date } = fmt;
   const th = (label: string, className = ''): string =>
     `<th scope="col" class="${className}">${escapeHtml(label)}</th>`;
-  return `<article class="inv">
+  const dir = RTL.includes(fmt.lang) ? 'rtl' : 'ltr';
+  return `<article class="inv" lang="${escapeHtml(fmt.lang)}" dir="${dir}">
   <header class="inv-head">
     <h1>${escapeHtml(l.invoice)}</h1>
     ${block(invoice.seller, 'inv-address')}

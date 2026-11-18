@@ -15,6 +15,7 @@
     "FROM": "From",
     "TO": "To",
     "RATE": "Hourly rate",
+    "LANGUAGE": "Invoice language",
     "CLIENT": "Bill to",
     "CLIENT_HINT": "Client name and address. Remembered for this project.",
     "INCLUDE": "Include",
@@ -47,18 +48,8 @@
     "SAVED": "Saved."
   },
   "INVOICE": {
-    "INVOICE": "Invoice",
-    "NUMBER": "Invoice number",
-    "ISSUE_DATE": "Invoice date",
-    "DUE_DATE": "Due date",
-    "PERIOD": "Period",
-    "BILL_TO": "Bill to",
     "DESCRIPTION": "Description",
     "HOURS": "Hours",
-    "RATE": "Rate",
-    "AMOUNT": "Amount",
-    "SUBTOTAL": "Subtotal",
-    "TAX": "Tax",
     "TOTAL": "Total"
   },
   "ERROR": {

@@ -18,19 +18,25 @@ const todayStr = (): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
+type PrintLog = { printed: number };
+
 // The plugin view is a srcdoc iframe; window.print is replaced so the test can
 // see that printing was requested without a native dialog.
 const pluginFrame = async (page: Page): Promise<Frame> => {
   const handle = await page.locator(PLUGIN_IFRAME).elementHandle();
   const frame = await handle!.contentFrame();
   await frame!.evaluate(() => {
-    (window as unknown as { printed: number }).printed = 0;
+    const log = window as unknown as PrintLog;
+    log.printed = 0;
     window.print = () => {
-      (window as unknown as { printed: number }).printed++;
+      log.printed++;
     };
   });
   return frame!;
 };
+
+const printCount = (frame: Frame): Promise<number> =>
+  frame.evaluate(() => (window as unknown as PrintLog).printed);
 
 test.describe('Invoicing plugin', () => {
   test.beforeEach(async ({ page, workViewPage }) => {
@@ -81,7 +87,9 @@ test.describe('Invoicing plugin', () => {
     await ui.getByLabel('To', { exact: true }).dispatchEvent('change');
     await expect(ui.locator('tbody input[type="number"]')).toHaveValue('0.1');
     await ui.getByLabel('Hourly rate').fill('100');
-    await ui.getByLabel('Bill to').fill('ACME Corp');
+    await ui.getByLabel('Bill to').fill('ACME Corp\nMain St 1');
+    await expect(ui.getByLabel('Invoice language')).toHaveValue('en');
+    await ui.getByLabel('Invoice language').selectOption({ label: 'Deutsch' });
     await expect(ui.getByText('Total: €10.00')).toBeVisible();
 
     // Saving your details again keeps the half-finished invoice.
@@ -89,7 +97,8 @@ test.describe('Invoicing plugin', () => {
     await ui.getByRole('button', { name: 'Save' }).click();
     await expect(ui.locator('summary')).toBeFocused();
     await expect(ui.getByLabel('Hourly rate')).toHaveValue('100');
-    await expect(ui.getByLabel('Bill to')).toHaveValue('ACME Corp');
+    await expect(ui.getByLabel('Bill to')).toHaveValue('ACME Corp\nMain St 1');
+    await expect(ui.getByLabel('Invoice language')).toHaveValue('de');
 
     const frame = await pluginFrame(page);
     await ui.getByRole('button', { name: 'Issue and print' }).click();
@@ -97,13 +106,19 @@ test.describe('Invoicing plugin', () => {
     await expect(ui.getByText(/^001 · .* · ACME Corp · €10\.00$/)).toBeVisible();
     await expect(ui.locator('[data-invoice-id] button').first()).toBeFocused();
     await expect(ui.getByText('No unbilled time on this project')).toBeVisible();
-    expect(
-      await frame.evaluate(() => (window as unknown as { printed: number }).printed),
-    ).toBe(1);
+    expect(await printCount(frame)).toBe(1);
     const printed = ui.locator('#print-root');
     await expect(printed).toContainText('Me Freelance');
     await expect(printed).toContainText(TASK);
-    await expect(printed).toContainText('€10.00');
+    // In the invoice language, not the app language.
+    await expect(printed.locator('h1')).toHaveText('Rechnung');
+    await expect(printed).toContainText(/10,00\s€/);
+
+    // Printing again from the list keeps the language.
+    await printed.evaluate((node) => (node.innerHTML = ''));
+    await ui.getByRole('button', { name: 'Print / PDF' }).click();
+    await expect(printed.locator('h1')).toHaveText('Rechnung');
+    expect(await printCount(frame)).toBe(2);
 
     const [download] = await Promise.all([
       page.waitForEvent('download'),

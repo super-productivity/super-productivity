@@ -10,6 +10,7 @@ import {
   resumeDraft,
   toInvoice,
 } from '../core/draft';
+import { INVOICE_LANGUAGES } from '../core/invoice-labels';
 import { computeTotals } from '../core/totals';
 import { Invoice } from '../core/types';
 import { el, field, numberInput } from './dom';
@@ -32,7 +33,7 @@ const newId = (): string =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 /**
- * Remembers rate and client for the project, then prints. Runs only after the
+ * Remembers rate, client and language for the project, then prints. Runs only after the
  * invoice is saved, so a failure here must not offer a retry: that would issue
  * the same hours twice.
  */
@@ -44,7 +45,11 @@ const afterIssue = async (
   try {
     const projects = {
       ...data.settings.projects,
-      [draft.projectId]: { rate: draft.rate, client: draft.client },
+      [draft.projectId]: {
+        rate: draft.rate,
+        client: draft.client,
+        language: draft.language,
+      },
     };
     await saveSettings({ ...data.settings, projects });
     printInvoice(invoice, data.locale);
@@ -133,26 +138,38 @@ const draftInputs = (
   const to = el('input', { type: 'date', value: draft.to });
   const rate = numberInput(draft.rate);
   const client = el('textarea', { rows: 3, value: draft.client });
+  const language = el(
+    'select',
+    {},
+    Object.entries(INVOICE_LANGUAGES).map(([code, { name }]) =>
+      el('option', { value: code, text: name, selected: code === draft.language }),
+    ),
+  );
   project.onchange = () => {
     Object.assign(draft, {
       projectId: project.value,
-      ...projectDefaults(data.settings, project.value),
+      ...projectDefaults(data, project.value),
     });
     rate.value = String(draft.rate);
     client.value = draft.client;
+    language.value = draft.language;
     on.redraft();
   };
   from.onchange = () => ((draft.from = from.value), on.redraft());
   to.onchange = () => ((draft.to = to.value), on.redraft());
   rate.oninput = () => ((draft.rate = Number(rate.value) || 0), on.update());
   client.oninput = () => (draft.client = client.value);
+  language.onchange = () => (draft.language = language.value);
   return [
     el('div', { className: 'row' }, [
       field(t('NEW.PROJECT'), project),
       field(t('NEW.FROM'), from),
       field(t('NEW.TO'), to),
     ]),
-    el('div', { className: 'row' }, [field(t('NEW.RATE'), rate)]),
+    el('div', { className: 'row' }, [
+      field(t('NEW.RATE'), rate),
+      field(t('NEW.LANGUAGE'), language),
+    ]),
     field(t('NEW.CLIENT'), client, t('NEW.CLIENT_HINT')),
   ];
 };

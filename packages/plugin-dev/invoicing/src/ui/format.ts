@@ -1,12 +1,12 @@
 import { InvoiceFormat } from '../core/invoice-html';
-import { t } from './i18n';
+import { invoiceLabels, invoiceLanguage } from '../core/invoice-labels';
 
 const toDate = (dayStr: string): Date => {
   const [y, m, d] = dayStr.split('-').map(Number);
   return new Date(y, m - 1, d);
 };
 
-/** Money, date and hours formatting in the app language; unknown currency codes print as text. */
+/** Labels and money, date and hours formats in `locale`; unknown currency codes print as text. */
 export const createFormat = (locale: string, currency: string): InvoiceFormat => {
   let money: (cents: number) => string;
   try {
@@ -25,20 +25,7 @@ export const createFormat = (locale: string, currency: string): InvoiceFormat =>
     money,
     date: (dayStr) => (dayStr ? df.format(toDate(dayStr)) : ''),
     hours: (hours) => hf.format(hours),
-    labels: {
-      invoice: t('INVOICE.INVOICE'),
-      number: t('INVOICE.NUMBER'),
-      issueDate: t('INVOICE.ISSUE_DATE'),
-      dueDate: t('INVOICE.DUE_DATE'),
-      period: t('INVOICE.PERIOD'),
-      billTo: t('INVOICE.BILL_TO'),
-      description: t('INVOICE.DESCRIPTION'),
-      hours: t('INVOICE.HOURS'),
-      rate: t('INVOICE.RATE'),
-      amount: t('INVOICE.AMOUNT'),
-      subtotal: t('INVOICE.SUBTOTAL'),
-      tax: t('INVOICE.TAX'),
-      total: t('INVOICE.TOTAL'),
-    },
+    lang: invoiceLanguage(locale),
+    labels: invoiceLabels(locale),
   };
 };

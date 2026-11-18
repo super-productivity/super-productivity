@@ -1,4 +1,5 @@
 import { addDays, previousMonth, toDayStr } from './dates';
+import { invoiceLanguage } from './invoice-labels';
 import { buildDraftLines, DraftLine, sumBilled, TaskLike, toBilledMs } from './lines';
 import { formatNumber, nextSeq } from './numbering';
 import { Invoice, ProjectBilling, Settings } from './types';
@@ -6,6 +7,8 @@ import { Invoice, ProjectBilling, Settings } from './types';
 /** What a draft is built from; `invoices` is sorted newest first. */
 export interface DraftInput {
   settings: Settings;
+  /** The app language; the default invoice language. */
+  locale: string;
   invoices: Invoice[];
   projects: { id: string }[];
   tasks: TaskLike[];
@@ -24,6 +27,8 @@ export interface Draft {
   to: string;
   rate: number;
   client: string;
+  /** Printed-invoice language code. */
+  language: string;
   /** `null` until the user edits it: then it follows the next free number. */
   number: string | null;
   issueDate: string;
@@ -38,14 +43,18 @@ export const initialProjectId = (input: DraftInput): string => {
     : input.projects[0].id;
 };
 
-/** Rate and client remembered from the project's last invoice. */
+/** Rate, client and language remembered from the project's last invoice. */
 export const projectDefaults = (
-  settings: Settings,
+  input: Pick<DraftInput, 'settings' | 'locale'>,
   projectId: string,
-): ProjectBilling => ({
-  rate: settings.projects[projectId]?.rate ?? 0,
-  client: settings.projects[projectId]?.client ?? '',
-});
+): Required<ProjectBilling> => {
+  const remembered = input.settings.projects[projectId];
+  return {
+    rate: remembered?.rate ?? 0,
+    client: remembered?.client ?? '',
+    language: invoiceLanguage(remembered?.language ?? input.locale),
+  };
+};
 
 export const buildLines = (
   input: DraftInput,
@@ -64,7 +73,7 @@ export const newDraft = (input: DraftInput, today: Date): Draft => {
   const head = {
     projectId,
     ...previousMonth(today),
-    ...projectDefaults(input.settings, projectId),
+    ...projectDefaults(input, projectId),
     number: null,
     issueDate: toDayStr(today),
   };
@@ -148,5 +157,6 @@ export const toInvoice = ({ input, draft, id }: IssueOptions): Invoice => {
       .filter((line) => line.hours > 0)
       .map(({ title, hours }) => ({ title: title.trim(), hours, rate: draft.rate })),
     billedMs: toBilledMs(included),
+    language: draft.language,
   };
 };

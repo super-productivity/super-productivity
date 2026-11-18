@@ -4,6 +4,7 @@ import {
   initialProjectId,
   issueBlocker,
   newDraft,
+  projectDefaults,
   resumeDraft,
   toInvoice,
 } from './draft';
@@ -46,6 +47,7 @@ const input = (overrides: Partial<DraftInput> = {}): DraftInput => ({
     ...DEFAULT_SETTINGS,
     projects: { p1: { rate: 80, client: 'ACME' } },
   },
+  locale: 'de-DE',
   invoices: [],
   projects: [{ id: 'p1' }, { id: 'p2' }],
   tasks: [task('a', { '2026-10-02': 2 * H }), task('b', { '2026-10-05': H })],
@@ -79,6 +81,7 @@ describe('newDraft', () => {
       to: '2026-10-31',
       rate: 80,
       client: 'ACME',
+      language: 'de',
       number: null,
       issueDate: '2026-11-18',
     });
@@ -86,6 +89,26 @@ describe('newDraft', () => {
       ['a', 2, true],
       ['b', 1, true],
     ]);
+  });
+});
+
+describe('projectDefaults', () => {
+  it('uses the language remembered for the project', () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      projects: { p1: { rate: 80, client: 'ACME', language: 'fr' } },
+    };
+    expect(projectDefaults({ settings, locale: 'de' }, 'p1').language).toBe('fr');
+  });
+
+  it('falls back to the app language, then English', () => {
+    const settings = DEFAULT_SETTINGS;
+    expect(projectDefaults({ settings, locale: 'pt-BR' }, 'p9')).toEqual({
+      rate: 0,
+      client: '',
+      language: 'pt-br',
+    });
+    expect(projectDefaults({ settings, locale: 'xx' }, 'p9').language).toBe('en');
   });
 });
 
@@ -208,6 +231,7 @@ describe('toInvoice', () => {
       taxRatePct: 19,
       lines: [{ title: 'Design', hours: 2, rate: 80 }],
       billedMs: { a: { '2026-10-02': 2 * H } },
+      language: 'de',
     });
   });
 

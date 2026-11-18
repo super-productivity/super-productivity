@@ -35,8 +35,9 @@ const invoice: Invoice = {
   billedMs: {},
 };
 
-const render = (inv: Invoice): string =>
+const render = (inv: Invoice, lang = 'en'): string =>
   renderInvoiceHtml(inv, {
+    lang,
     money: (cents) => (cents / 100).toFixed(2),
     date: (d) => d,
     hours: (h) => h.toFixed(2),
@@ -71,5 +72,10 @@ describe('renderInvoiceHtml', () => {
     expect(
       render({ ...invoice, lines: [{ title: 'تصميم', hours: 1, rate: 1 }] }),
     ).toContain('<td dir="auto">تصميم</td>');
+  });
+
+  it('marks the language and lays out Arabic and Persian invoices right to left', () => {
+    expect(render(invoice, 'de')).toContain('lang="de" dir="ltr"');
+    expect(render(invoice, 'ar')).toContain('lang="ar" dir="rtl"');
   });
 });

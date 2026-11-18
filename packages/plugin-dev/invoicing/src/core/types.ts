@@ -2,6 +2,8 @@
 export interface ProjectBilling {
   rate: number;
   client: string;
+  /** Printed-invoice language code; missing in older data → app language. */
+  language?: string;
 }
 
 /** Saved under the `settings` key; every field may be missing in older data. */
@@ -46,6 +48,8 @@ export interface Invoice {
   lines: InvoiceLine[];
   /** The tracked time this invoice billed; subtracted from later drafts. */
   billedMs: MsByTaskDay;
+  /** Printed-invoice language code; missing in older invoices → app language. */
+  language?: string;
 }
 
 export interface Period {

@@ -8,11 +8,15 @@ import { t } from './i18n';
 import { snackError } from './notify';
 import { deleteInvoice, sendToBackground } from './store';
 
-/** Puts the invoice into the print-only container and opens the print dialog. */
-export const printInvoice = (invoice: Invoice, locale: string): void => {
+/**
+ * Puts the invoice into the print-only container and opens the print dialog.
+ * Invoices from before the language choice print in the app language.
+ */
+export const printInvoice = (invoice: Invoice, appLocale: string): void => {
   const root = document.getElementById('print-root') as HTMLElement;
+  const fmt = createFormat(invoice.language ?? appLocale, invoice.currency);
   // renderInvoiceHtml escapes all user text.
-  root.innerHTML = renderInvoiceHtml(invoice, createFormat(locale, invoice.currency));
+  root.innerHTML = renderInvoiceHtml(invoice, fmt);
   window.print();
 };
 
