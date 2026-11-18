@@ -69,6 +69,12 @@ describe('buildDraftLines', () => {
     expect(line.openMs).toEqual({ '2026-10-02': H });
   });
 
+  it('hides a line whose time rounds to 0.00 h, unless rounding lifts it', () => {
+    const tasks = [task({ id: 'blip', timeSpentOnDay: { '2026-10-02': 10_000 } })];
+    expect(buildDraftLines(tasks, opts)).toEqual([]);
+    expect(buildDraftLines(tasks, { ...opts, roundingMin: 6 })[0].hours).toBe(0.1);
+  });
+
   it('orders lines by the first day worked', () => {
     const tasks = [
       task({ id: 'late', timeSpentOnDay: { '2026-10-20': H } }),

@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import type { Frame, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import {
@@ -83,10 +84,18 @@ test.describe('Invoicing plugin', () => {
     await ui.getByLabel('Bill to').fill('ACME Corp');
     await expect(ui.getByText('Total: €10.00')).toBeVisible();
 
+    // Saving your details again keeps the half-finished invoice.
+    await ui.locator('summary').click();
+    await ui.getByRole('button', { name: 'Save' }).click();
+    await expect(ui.locator('summary')).toBeFocused();
+    await expect(ui.getByLabel('Hourly rate')).toHaveValue('100');
+    await expect(ui.getByLabel('Bill to')).toHaveValue('ACME Corp');
+
     const frame = await pluginFrame(page);
     await ui.getByRole('button', { name: 'Issue and print' }).click();
 
     await expect(ui.getByText(/^001 · .* · ACME Corp · €10\.00$/)).toBeVisible();
+    await expect(ui.locator('[data-invoice-id] button').first()).toBeFocused();
     await expect(ui.getByText('No unbilled time on this project')).toBeVisible();
     expect(
       await frame.evaluate(() => (window as unknown as { printed: number }).printed),
@@ -96,9 +105,26 @@ test.describe('Invoicing plugin', () => {
     await expect(printed).toContainText(TASK);
     await expect(printed).toContainText('€10.00');
 
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      ui.getByRole('button', { name: 'CSV' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('invoice-001.csv');
+    const csv = fs.readFileSync((await download.path())!, 'utf8');
+    // Byte order mark first, so Excel reads accents correctly.
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    const [header, line, ...rest] = csv.slice(1).split('\n');
+    expect(header).toBe('Invoice,Date,Description,Hours,Rate,Amount,Currency');
+    // The fixture prefixes task titles per worker.
+    expect(line).toMatch(
+      new RegExp(`^001,${todayStr()},\\S*${TASK},0\\.10,100\\.00,10\\.00,EUR$`),
+    );
+    expect(rest).toEqual(['']);
+
     page.once('dialog', (dialog) => dialog.accept());
     await ui.getByRole('button', { name: 'Delete' }).click();
     await expect(ui.getByText('No invoices yet.')).toBeVisible();
+    await expect(ui.getByRole('heading', { name: 'Invoices' })).toBeFocused();
     await ui.getByLabel('Project').selectOption({ label: 'Inbox' });
     await ui.getByLabel('To', { exact: true }).fill(todayStr());
     await ui.getByLabel('To', { exact: true }).dispatchEvent('change');

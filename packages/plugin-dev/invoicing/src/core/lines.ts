@@ -81,7 +81,8 @@ export const buildDraftLines = (tasks: TaskLike[], opts: DraftOptions): DraftLin
         openMs,
       };
     })
-    .filter((line) => line.firstDay !== '')
+    // Also drops lines under 18 s, which would print as 0.00 h.
+    .filter((line) => line.hours > 0)
     .sort((a, b) => a.firstDay.localeCompare(b.firstDay));
 
 /** What an invoice records as billed: the unbilled time of its included lines. */

@@ -41,22 +41,30 @@ const invoiceRow = (
       snackError(error);
     }
   };
-  return el('li', { className: 'list-item' }, [
+  const summaryId = `inv-${invoice.id}`;
+  // Each row repeats the same button names; the description says which invoice.
+  const button = (props: Partial<HTMLButtonElement> & { text: string }): HTMLElement => {
+    const node = el('button', props);
+    node.setAttribute('aria-describedby', summaryId);
+    return node;
+  };
+  const row = el('li', { className: 'list-item' }, [
     el('span', {
+      id: summaryId,
       className: 'grow',
-      text: `${invoice.number} · ${fmt.date(invoice.issueDate)} · ${client} · ${total}`,
+      text: [invoice.number, fmt.date(invoice.issueDate), client, total]
+        .filter(Boolean)
+        .join(' · '),
     }),
-    el('button', { text: t('LIST.PRINT'), onclick: () => printInvoice(invoice, locale) }),
-    el('button', {
+    button({ text: t('LIST.PRINT'), onclick: () => printInvoice(invoice, locale) }),
+    button({
       text: t('LIST.CSV'),
       onclick: () => downloadCsv(invoice).catch(snackError),
     }),
-    el('button', {
-      className: 'btn-text btn-danger',
-      text: t('LIST.DELETE'),
-      onclick: remove,
-    }),
+    button({ className: 'btn-text btn-danger', text: t('LIST.DELETE'), onclick: remove }),
   ]);
+  row.dataset.invoiceId = invoice.id;
+  return row;
 };
 
 export const renderInvoiceList = (

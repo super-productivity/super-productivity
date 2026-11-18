@@ -18,8 +18,12 @@ const showError = (error: unknown): void => {
   );
 };
 
-/** Reloads everything and redraws; called on open and after every save. */
-const refresh = async (): Promise<void> => {
+/**
+ * Reloads everything and redraws; called on open and after every save. The
+ * redraw replaces the focused control, so `focus` names where keyboard focus
+ * goes next.
+ */
+const refresh = async (focus?: string): Promise<void> => {
   const [settings, invoices, projects, tasks, locale] = await Promise.all([
     loadSettings(),
     loadInvoices(),
@@ -27,14 +31,17 @@ const refresh = async (): Promise<void> => {
     loadTasks(),
     Promise.resolve(host().getCurrentLanguage()),
   ]);
-  const reload = (): void => void refresh().catch(showError);
+  const reload = (next: string): void => void refresh(next).catch(showError);
   app().replaceChildren(
-    el('h1', { text: t('TITLE') }),
-    renderInvoiceList(invoices, locale, reload),
+    el('h1', { text: t('TITLE'), tabIndex: -1 }),
+    renderInvoiceList(invoices, locale, () => reload('h1')),
     el('h2', { text: t('NEW.TITLE') }),
-    renderNewInvoice({ settings, invoices, projects, tasks, locale }, reload),
-    renderSettingsForm(settings, reload),
+    renderNewInvoice({ settings, invoices, projects, tasks, locale }, (id) =>
+      reload(`[data-invoice-id="${id}"] button`),
+    ),
+    renderSettingsForm(settings, () => reload('summary')),
   );
+  if (focus) app().querySelector<HTMLElement>(focus)?.focus();
 };
 
 const init = async (): Promise<void> => {
