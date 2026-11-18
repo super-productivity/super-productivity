@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import { createEffect, ofType } from '@ngrx/effects';
 import { select, Store } from '@ngrx/store';
 import {
@@ -23,8 +24,6 @@ import {
 } from '../features/tasks/store/task.selectors';
 import { selectProjectFeatureState } from '../features/project/store/project.selectors';
 import { selectTagFeatureState } from '../features/tag/store/tag.reducer';
-import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
-import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { Task } from '../features/tasks/task.model';
 import { isWontDoTask } from '../features/tasks/util/is-wont-do-task';
 import { DataInitStateService } from '../core/data-init/data-init-state.service';
@@ -51,7 +50,6 @@ import {
 } from '../features/work-context/store/work-context-meta.actions';
 import { LOCAL_ACTIONS } from '../util/local-actions.token';
 import { PlannerActions } from '../features/planner/store/planner.actions';
-import { LanguageCode } from '../core/locale.constants';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { toActiveWorkContext } from './util/active-work-context.util';
 import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
@@ -60,6 +58,7 @@ import { diffChangedPluginIds } from './util/plugin-data-diff.util';
 import { GlobalTrackingIntervalService } from '../core/global-tracking-interval/global-tracking-interval.service';
 import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
 import { PluginLog } from '../core/log';
+import { LanguageService } from '../core/language/language.service';
 
 // Coalesces a sync batch or bulk action into one DATA_CHANGED call while
 // keeping views responsive. Time tracking updates the tracked task once a
@@ -77,6 +76,7 @@ export class PluginHooksEffects {
   private readonly _dataInitState = inject(DataInitStateService);
   private readonly _beforeFinishDayService = inject(BeforeFinishDayService);
   private readonly _globalTrackingInterval = inject(GlobalTrackingIntervalService);
+  private readonly _languageService = inject(LanguageService);
 
   taskComplete$ = createEffect(
     () =>
@@ -238,15 +238,10 @@ export class PluginHooksEffects {
     { dispatch: false },
   );
 
-  // Language change effect - listens to actual language config changes
+  // Notify plugins after the UI language has actually been applied.
   languageChange$ = createEffect(
     () =>
-      this.actions$.pipe(
-        ofType(updateGlobalConfigSection),
-        filter((action) => action.sectionKey === 'localization'),
-        withLatestFrom(this.store.pipe(select(selectLocalizationConfig))),
-        map(([_, localizationConfig]) => localizationConfig.lng),
-        filter((lng): lng is LanguageCode => typeof lng === 'string' && lng.length > 0),
+      toObservable(this._languageService.currentLanguage).pipe(
         distinctUntilChanged(),
         tap((newLanguage) => {
           // Update plugin i18n service with new language

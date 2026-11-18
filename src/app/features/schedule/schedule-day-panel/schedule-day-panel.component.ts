@@ -37,7 +37,10 @@ import { ScheduleService } from '../schedule.service';
 import { ScheduleEvent } from '../schedule.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
-import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
+import {
+  millisecondsDiffToRemindOption,
+  remindOptionToMilliseconds,
+} from '../../tasks/util/remind-option-to-milliseconds';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { MatBottomSheetRef } from '@angular/material/bottom-sheet';
@@ -372,7 +375,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
       if (!hasExistingSchedule && !hasReminder) {
         remindAt = remindOptionToMilliseconds(dropTime, this._getDefaultReminderOption());
       } else if (hasReminder) {
-        remindAt = dropTime;
+        // Keep the reminder's option (e.g. 30 minutes before), like the planner.
+        remindAt =
+          task.dueWithTime && typeof task.remindAt === 'number'
+            ? remindOptionToMilliseconds(
+                dropTime,
+                millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt),
+              )
+            : dropTime;
       }
 
       const payload = {
@@ -471,11 +481,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
       return dz;
     }
     const left = Math.max(dz.left, sc.left);
-    // The overdue list sticks to the top of the panel and covers the grid
-    // there. A card released over it, e.g. right where its drag started, must
-    // not be placed at the hidden time underneath.
+    // The overdue list and the tray stick to the top of the panel and cover
+    // the grid there. A card released over them, e.g. right where its drag
+    // started, must not be placed at the hidden time underneath.
     const overdueBottom = this._overdueEl?.getBoundingClientRect().bottom ?? sc.top;
-    const top = Math.max(dz.top, sc.top, overdueBottom);
+    const trayBottom =
+      this.scheduleWeekComponent?.getVisibleTrayEl()?.getBoundingClientRect().bottom ??
+      sc.top;
+    const top = Math.max(dz.top, sc.top, overdueBottom, trayBottom);
     const right = Math.min(dz.right, sc.right);
     const bottom = Math.min(dz.bottom, sc.bottom);
     return new DOMRect(left, top, Math.max(0, right - left), Math.max(0, bottom - top));
@@ -598,11 +611,16 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     const containerRect = scrollContainer.getBoundingClientRect();
     const elementRect = currentTimeElement.getBoundingClientRect();
     const relativePosition = elementRect.top - containerRect.top;
-    // The overdue list makes the sticky header taller; without its height the
-    // current time would land underneath it.
+    // The tray and the overdue list make the sticky header taller; without
+    // their height the current time would land underneath them.
+    const trayHeight = this.scheduleWeekComponent?.getVisibleTrayEl()?.offsetHeight ?? 0;
     const overdueHeight = this._overdueEl?.offsetHeight ?? 0;
     const targetScrollTop =
-      scrollContainer.scrollTop + relativePosition - SCROLL_TOP_OFFSET_PX - overdueHeight;
+      scrollContainer.scrollTop +
+      relativePosition -
+      SCROLL_TOP_OFFSET_PX -
+      trayHeight -
+      overdueHeight;
 
     Log.log('[ScheduleDayPanel] Scrolling to position:', Math.max(0, targetScrollTop));
 

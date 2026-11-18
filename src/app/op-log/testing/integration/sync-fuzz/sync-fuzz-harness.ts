@@ -114,6 +114,7 @@ import { TabSeqFrontierService } from '../../../persistence/tab-seq-frontier.ser
 import { ImmediateUploadService } from '../../../sync/immediate-upload.service';
 import { OperationLogDownloadService } from '../../../sync/operation-log-download.service';
 import { OperationLogSyncService } from '../../../sync/operation-log-sync.service';
+import { RemoteStateRebuildService } from '../../../sync/remote-state-rebuild.service';
 import { OperationWriteFlushService } from '../../../sync/operation-write-flush.service';
 import { RemoteOpsProcessingService } from '../../../sync/remote-ops-processing.service';
 import { RejectedOpsHandlerService } from '../../../sync/rejected-ops-handler.service';
@@ -248,7 +249,7 @@ const DEVICE_FIELDS: ReadonlyArray<readonly [ProviderToken<object>, readonly str
     [OperationLogHydratorService, ['_migrationRanDuringHydration']],
     // Once-per-session latches: every device is its own app session.
     [RepairOperationService, ['_hasShownRepairSnackThisSession']],
-    [OperationLogSyncService, ['_hasWarnedRebuildVersionBlockThisSession']],
+    [RemoteStateRebuildService, ['_hasWarnedRebuildVersionBlockThisSession']],
     [
       RemoteOpsProcessingService,
       ['_hasWarnedVersionBlockThisSession', '_hasWarnedMigrationFailureThisSession'],

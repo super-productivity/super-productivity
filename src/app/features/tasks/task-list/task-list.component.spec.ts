@@ -91,6 +91,7 @@ describe('TaskListComponent', () => {
             previewTasks: () => [],
             selectionSize: () => 0,
             isListGroupDrag: () => false,
+            isCancelled: () => false,
             start: () => {},
             clear: () => {},
             finish: () => {},
