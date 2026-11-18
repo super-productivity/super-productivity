@@ -9,26 +9,25 @@ import { snackError } from './notify';
 import { deleteInvoice, sendToBackground } from './store';
 
 /**
- * Runs `print` with the app window renamed to `title`. The print dialog names
- * the PDF after the app window (Chromium uses the top-level page title), not
- * after this plugin frame; print() blocks until the dialog closes.
+ * Runs `print` with this frame and the app window titled `title`: print
+ * dialogs suggest it as the PDF file name, Chromium from the app window,
+ * Firefox from the printed frame. print() blocks until the dialog closes.
  */
 const printWithWindowTitle = (title: string, print: () => void): void => {
-  let restore = (): void => undefined;
+  const docs = [document];
   try {
-    const doc = (window.top ?? window).document;
-    const previous = doc.title;
-    doc.title = title;
-    restore = () => void (doc.title = previous);
+    if (window.top && window.top !== window) docs.push(window.top.document);
   } catch (error) {
     // Only if the host stops sharing its origin with the plugin frame: print
-    // with the default file name rather than not at all.
+    // with the frame's title rather than not at all.
     console.warn('Invoicing: cannot set the PDF file name', error);
   }
+  const previous = docs.map((doc) => doc.title);
+  docs.forEach((doc) => (doc.title = title));
   try {
     print();
   } finally {
-    restore();
+    docs.forEach((doc, i) => (doc.title = previous[i]));
   }
 };
 

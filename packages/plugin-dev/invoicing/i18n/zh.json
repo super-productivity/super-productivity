@@ -20,15 +20,15 @@
     "CLIENT_HINT": "客户名称和地址。将为此项目记住。",
     "INCLUDE": "包含",
     "NO_HOURS": "此项目在该期间没有未结算的时间。",
-    "NUMBER": "账单号码",
+    "NUMBER": "账单编号",
     "ISSUE_DATE": "账单日期",
     "ISSUE": "开具并打印",
     "BLOCK": {
       "PERIOD": "请选择开始和结束日期；开始日期必须在前。",
       "LINES": "请至少勾选一行有工时的记录。",
       "RATE": "请输入小时费率。",
-      "NUMBER": "请输入账单号码。",
-      "NUMBER_USED": "此账单号码已被使用。",
+      "NUMBER": "请输入账单编号。",
+      "NUMBER_USED": "此账单编号已被使用。",
       "DATE": "请输入账单日期。"
     }
   },
@@ -43,7 +43,7 @@
     "ROUNDING": "每行向上取整至",
     "ROUNDING_NONE": "不取整",
     "ROUNDING_MIN": "{{min}} 分钟",
-    "PREFIX": "账单号码前缀",
+    "PREFIX": "账单编号前缀",
     "SAVE": "保存",
     "SAVED": "已保存。"
   },
