@@ -14,6 +14,7 @@ const task = (overrides: Partial<TodoistTask>): TodoistTask => ({
   dueWithTime: null,
   timeEstimate: null,
   isRecurring: false,
+  repeat: null,
   wasDemoted: false,
   isDayDurationSkipped: false,
   hasAssignee: false,

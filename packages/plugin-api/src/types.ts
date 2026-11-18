@@ -595,6 +595,8 @@ export interface PluginTaskRepeatCfg {
   quickSetting?: string;
   remindAt?: string;
   skipOverdue?: boolean;
+  repeatFromCompletionDate?: boolean;
+  repeatUntilDay?: string;
 }
 
 /**
@@ -631,9 +633,18 @@ export interface PluginTaskRepeatCfgSchedule {
   friday?: boolean;
   saturday?: boolean;
   sunday?: boolean;
+  /**
+   * `'CUSTOM'` only: count the interval from the day a copy is completed
+   * ("every 3 days after I finish it"); the next copy is only created then.
+   * A weekly interval is stored as days. Part of the schedule, so a schedule
+   * change without it turns it off.
+   */
+  repeatFromCompletionDate?: boolean;
   isPaused?: boolean;
   /** Skip missed (overdue) instances instead of creating them. */
   skipOverdue?: boolean;
+  /** YYYY-MM-DD, the last day a copy may be created on; `null` removes it. */
+  repeatUntilDay?: string | null;
 }
 
 export interface PluginSimpleCounterFull {

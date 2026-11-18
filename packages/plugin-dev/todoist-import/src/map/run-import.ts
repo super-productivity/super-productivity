@@ -1,5 +1,5 @@
 import { BatchOperation, PluginAPI, Task } from '@super-productivity/plugin-api';
-import { ImportPlan, ProjectImportPlan } from './plan-import';
+import { ImportPlan, ProjectImportPlan, TaskFollowUp } from './plan-import';
 
 /** SP's virtual Today tag — must never land in task.tagIds (sync rule #5). */
 const TODAY_TAG_ID = 'TODAY';
@@ -37,6 +37,8 @@ export interface ImportResult {
   errorMessage: string | null;
   /** the post-import recount failed; landed counts are unknown, not zero */
   isCountUnverified: boolean;
+  /** repeats that could not be set up; their rule went into the notes */
+  failedRepeatCount: number;
 }
 
 type ImportApi = Pick<
@@ -47,7 +49,9 @@ type ImportApi = Pick<
   | 'batchUpdateForProject'
   | 'updateTask'
   | 'getTasks'
->;
+> &
+  // missing in app versions before plugins could create repeats
+  Partial<Pick<PluginAPI, 'addTaskRepeatCfg'>>;
 
 const ensureTags = async (
   api: ImportApi,
@@ -91,6 +95,28 @@ const resolveKnownParents = (
       : op,
   );
 
+/** Sets up the repeat, or puts the rule back into the notes when it cannot. */
+const setUpRepeat = async (
+  api: ImportApi,
+  taskId: string,
+  repeat: NonNullable<TaskFollowUp['repeat']>,
+): Promise<boolean> => {
+  if (api.addTaskRepeatCfg) {
+    try {
+      await api.addTaskRepeatCfg(taskId, repeat.schedule);
+      return true;
+    } catch (e) {
+      // the message names the reason, never task content
+      console.warn(
+        'todoist-import: repeat not set up',
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+  await api.updateTask(taskId, { notes: repeat.notesWithRule });
+  return false;
+};
+
 const importProject = async (
   api: ImportApi,
   projectPlan: ProjectImportPlan,
@@ -98,7 +124,7 @@ const importProject = async (
   onProgress: (
     detail: Partial<ImportProgress> & { phase: ImportProgress['phase'] },
   ) => void,
-): Promise<string> => {
+): Promise<{ projectId: string; failedRepeatCount: number }> => {
   onProgress({ phase: 'project' });
   const projectId = await api.addProject({ title: projectPlan.title });
 
@@ -114,6 +140,7 @@ const importProject = async (
   }
 
   const followUps = projectPlan.followUps;
+  let failedRepeatCount = 0;
   for (let i = 0; i < followUps.length; i++) {
     if (i % DETAIL_PROGRESS_STEP === 0) {
       onProgress({ phase: 'details', detailIndex: i, detailTotal: followUps.length });
@@ -140,8 +167,12 @@ const importProject = async (
     if (Object.keys(updates).length) {
       await api.updateTask(taskId, updates);
     }
+    // sequentially: two concurrent calls for one task could both create one
+    if (followUp.repeat && !(await setUpRepeat(api, taskId, followUp.repeat))) {
+      failedRepeatCount++;
+    }
   }
-  return projectId;
+  return { projectId, failedRepeatCount };
 };
 
 const countLanded = async (api: ImportApi, result: ImportResult): Promise<void> => {
@@ -178,6 +209,7 @@ export const runImport = async (
     failedProjectTitle: null,
     errorMessage: null,
     isCountUnverified: false,
+    failedRepeatCount: 0,
   };
 
   try {
@@ -193,7 +225,13 @@ export const runImport = async (
           ...detail,
         });
       try {
-        const projectId = await importProject(api, projectPlan, tagIdByTitle, report);
+        const { projectId, failedRepeatCount } = await importProject(
+          api,
+          projectPlan,
+          tagIdByTitle,
+          report,
+        );
+        result.failedRepeatCount += failedRepeatCount;
         result.imported.push({
           title: projectPlan.title,
           projectId,

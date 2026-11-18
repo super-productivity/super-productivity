@@ -11,6 +11,10 @@ import { GlobalConfigService } from '../config/global-config.service';
 import { Task } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
 import { getTaskPriority } from '../tasks/task-priority.const';
+import {
+  AFTER_COMPLETION_PRESET,
+  toStoredRepeatCfg,
+} from './dialog-edit-task-repeat-cfg/after-completion-form-mapping';
 import { getDefaultSkipOverdue } from './dialog-edit-task-repeat-cfg/get-default-skip-overdue';
 import { getQuickSettingUpdates } from './dialog-edit-task-repeat-cfg/get-quick-setting-updates';
 import { getResumeCursorChanges } from './dialog-edit-task-repeat-cfg/get-resume-cursor-changes';
@@ -41,11 +45,15 @@ interface ScheduleFields {
   friday?: boolean;
   saturday?: boolean;
   sunday?: boolean;
+  /** Only with `CUSTOM`: the interval counts from the day a copy is done. */
+  repeatFromCompletionDate?: boolean;
 }
 
 interface CfgFlagFields {
   isPaused?: boolean;
   skipOverdue?: boolean;
+  /** Inclusive last day (YYYY-MM-DD); `null` removes it. */
+  repeatUntilDay?: string | null;
 }
 
 type UpdateRepeatCfgFields = ScheduleFields & CfgFlagFields;
@@ -95,8 +103,10 @@ const UPDATE_KEYS: ReadonlySet<string> = new Set([
   'repeatCycle',
   'repeatEvery',
   ...WEEKDAYS,
+  'repeatFromCompletionDate',
   'isPaused',
   'skipOverdue',
+  'repeatUntilDay',
 ]);
 const CREATE_KEYS: ReadonlySet<string> = new Set([...UPDATE_KEYS, 'taskId']);
 
@@ -114,6 +124,24 @@ const invalid = <T>(message: string, details?: unknown): Result<T> => ({
   ok: false,
   error: { code: 'INVALID_INPUT', message, details },
 });
+
+/** Why `untilDay` cannot end a repeat starting on `startDate`, if it cannot. */
+const checkUntilDay = (
+  startDate: string | undefined,
+  untilDay: string | null | undefined,
+): Result<never> | undefined => {
+  if (untilDay === undefined || untilDay === null) {
+    return undefined;
+  }
+  if (!isValidDBDateStr(untilDay)) {
+    return invalid('repeatUntilDay must be a valid YYYY-MM-DD date');
+  }
+  // the dialog's date picker does not allow an end before the start
+  if (startDate !== undefined && untilDay < startDate) {
+    return invalid(`repeatUntilDay must not be before startDate ${startDate}`);
+  }
+  return undefined;
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -171,7 +199,7 @@ export class TaskRepeatCfgWriteService {
     if (!parsed.ok) {
       return parsed;
     }
-    const { taskId, isPaused, skipOverdue, ...schedule } = parsed.value;
+    const { taskId, isPaused, skipOverdue, repeatUntilDay, ...schedule } = parsed.value;
 
     const task = await this._getTask(taskId);
     if (!task) {
@@ -213,8 +241,13 @@ export class TaskRepeatCfgWriteService {
     if (!built.ok) {
       return built;
     }
+    const untilError = checkUntilDay(built.value.startDate, repeatUntilDay);
+    if (untilError) {
+      return untilError;
+    }
     const cfg: Omit<TaskRepeatCfgCopy, 'id'> = {
       ...built.value,
+      ...(repeatUntilDay ? { repeatUntilDay } : {}),
       ...(isPaused !== undefined ? { isPaused } : {}),
       // Seeded from the final schedule, as the dialog does unless the
       // checkbox was set explicitly.
@@ -236,7 +269,7 @@ export class TaskRepeatCfgWriteService {
     if (!parsed.ok) {
       return parsed;
     }
-    const { isPaused, skipOverdue, ...schedule } = parsed.value;
+    const { isPaused, skipOverdue, repeatUntilDay, ...schedule } = parsed.value;
 
     const cfg = await this.getCfg(cfgId);
     if (!cfg) {
@@ -259,6 +292,16 @@ export class TaskRepeatCfgWriteService {
         return built;
       }
       final = built.value;
+    }
+    if (repeatUntilDay !== undefined) {
+      final = { ...final, repeatUntilDay: repeatUntilDay ?? undefined };
+    }
+    // a moved start date can pass the stored end day too
+    if (repeatUntilDay !== undefined || Object.keys(schedule).length > 0) {
+      const untilError = checkUntilDay(final.startDate, final.repeatUntilDay);
+      if (untilError) {
+        return untilError;
+      }
     }
     final = {
       ...final,
@@ -335,8 +378,11 @@ export class TaskRepeatCfgWriteService {
     base: Omit<TaskRepeatCfgCopy, 'id'>,
     schedule: ScheduleFields & { quickSetting: RepeatQuickSetting },
   ): Result<Omit<TaskRepeatCfgCopy, 'id'>> {
-    const { quickSetting, startDate, ...custom } = schedule;
+    const { quickSetting, startDate, repeatFromCompletionDate, ...custom } = schedule;
     const customKeys = Object.keys(custom);
+    if (repeatFromCompletionDate) {
+      customKeys.push('repeatFromCompletionDate');
+    }
     if (quickSetting !== 'CUSTOM' && customKeys.length > 0) {
       return invalid(
         `${customKeys.join(', ')} can only be set with quickSetting "CUSTOM"`,
@@ -384,6 +430,14 @@ export class TaskRepeatCfgWriteService {
     }
     if (result.monthlyLastDay && quickSetting !== 'MONTHLY_LAST_DAY') {
       result = { ...result, monthlyLastDay: undefined };
+    }
+    // Stored like the dialog's "After I complete it…" preset. The schedule is
+    // replaced as a whole, so leaving the flag out turns the mode off; the
+    // waiting it forced goes with it.
+    if (repeatFromCompletionDate) {
+      result = toStoredRepeatCfg({ ...result, quickSetting: AFTER_COMPLETION_PRESET });
+    } else if (result.repeatFromCompletionDate) {
+      result = { ...result, repeatFromCompletionDate: false, waitForCompletion: false };
     }
 
     // A weekly custom schedule without a weekday never repeats (#8025).

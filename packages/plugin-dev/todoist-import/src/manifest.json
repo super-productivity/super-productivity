@@ -17,6 +17,7 @@
     "addTag",
     "batchUpdateForProject",
     "updateTask",
+    "addTaskRepeatCfg",
     "showSnack"
   ],
   "allowedHosts": ["api.todoist.com"],

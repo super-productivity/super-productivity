@@ -156,7 +156,86 @@ describe('PluginBridgeRepeatCfgService', () => {
     });
   });
 
+  describe('end day and repeating after completion', () => {
+    it('stores "2 weeks after completion" as 14 days that wait for completion', async () => {
+      const id = await service.createBoundMethods().addTaskRepeatCfg('t1', {
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 2,
+        repeatFromCompletionDate: true,
+        repeatUntilDay: '2026-12-31',
+      });
+
+      expect(storedCfg(id)).toEqual(
+        jasmine.objectContaining({
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'DAILY',
+          repeatEvery: 14,
+          repeatFromCompletionDate: true,
+          waitForCompletion: true,
+          repeatUntilDay: '2026-12-31',
+        }),
+      );
+    });
+
+    it('rejects after completion with a preset and an end before the start', async () => {
+      const { addTaskRepeatCfg } = service.createBoundMethods();
+
+      await expectAsync(
+        addTaskRepeatCfg('t1', { quickSetting: 'DAILY', repeatFromCompletionDate: true }),
+      ).toBeRejectedWithError(
+        'INVALID_INPUT: repeatFromCompletionDate can only be set with quickSetting "CUSTOM"',
+      );
+      await expectAsync(
+        addTaskRepeatCfg('t1', { repeatUntilDay: '' }),
+      ).toBeRejectedWithError(
+        'INVALID_INPUT: repeatUntilDay must be a valid YYYY-MM-DD date',
+      );
+      await expectAsync(
+        addTaskRepeatCfg('t1', { repeatUntilDay: '2026-10-12' }),
+      ).toBeRejectedWithError(
+        'INVALID_INPUT: repeatUntilDay must not be before startDate 2026-10-13',
+      );
+      expect(repeatCfgServiceMock.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    });
+
+    it('removes the end day with null and leaves after completion on a new schedule', async () => {
+      const { addTaskRepeatCfg, updateTaskRepeatCfg } = service.createBoundMethods();
+      const id = await addTaskRepeatCfg('t1', {
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'DAILY',
+        repeatEvery: 3,
+        repeatFromCompletionDate: true,
+        repeatUntilDay: '2026-12-31',
+      });
+
+      await updateTaskRepeatCfg(id, { quickSetting: 'DAILY', repeatUntilDay: null });
+
+      expect(storedCfg(id)).toEqual(
+        jasmine.objectContaining({
+          quickSetting: 'DAILY',
+          repeatEvery: 1,
+          repeatFromCompletionDate: false,
+          waitForCompletion: false,
+          repeatUntilDay: undefined,
+        }),
+      );
+    });
+  });
+
   describe('updateTaskRepeatCfg', () => {
+    it('rejects a new start after the stored end day', async () => {
+      const { updateTaskRepeatCfg } = service.createBoundMethods();
+      await updateTaskRepeatCfg('daily', { repeatUntilDay: '2026-09-30' });
+
+      await expectAsync(
+        updateTaskRepeatCfg('daily', { quickSetting: 'DAILY', startDate: '2026-10-01' }),
+      ).toBeRejectedWithError(
+        'INVALID_INPUT: repeatUntilDay must not be before startDate 2026-10-01',
+      );
+      expect(storedCfg('daily')?.startDate).toBe('2026-09-01');
+    });
+
     it('changes the schedule of an existing config', async () => {
       await service.createBoundMethods().updateTaskRepeatCfg('daily', {
         quickSetting: 'CUSTOM',

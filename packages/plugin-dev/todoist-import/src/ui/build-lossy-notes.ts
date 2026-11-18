@@ -29,7 +29,10 @@ export const buildLossyNotes = (
     model.sections.filter((section) => selected.has(section.projectExtId)).length,
   );
   addCount('LOSS.DEMOTED_SUBTASKS', tasks.filter((task) => task.wasDemoted).length);
-  addCount('LOSS.RECURRING', tasks.filter((task) => task.isRecurring).length);
+  addCount(
+    'LOSS.RECURRING',
+    tasks.filter((task) => task.isRecurring && !task.repeat).length,
+  );
   addCount(
     'LOSS.DAY_DURATIONS',
     tasks.filter((task) => task.isDayDurationSkipped).length,
