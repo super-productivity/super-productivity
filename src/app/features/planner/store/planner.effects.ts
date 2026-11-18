@@ -8,7 +8,7 @@ import { T } from 'src/app/t.const';
 import { PlannerService } from '../planner.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { TranslateService } from '@ngx-translate/core';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
 
 @Injectable()
 export class PlannerEffects {
@@ -17,6 +17,7 @@ export class PlannerEffects {
   private _plannerService = inject(PlannerService);
   private _datePipe = inject(LocaleDatePipe);
   private _translateService = inject(TranslateService);
+  private _dateService = inject(DateService);
 
   planForDaySnack$ = createEffect(
     () => {
@@ -24,7 +25,7 @@ export class PlannerEffects {
         ofType(PlannerActions.planTaskForDay),
         filter((action) => !!action.isShowSnack),
         tap(async (action) => {
-          const isForToday = action.day === getDbDateStr();
+          const isForToday = action.day === this._dateService.todayStr();
           const formattedDate = isForToday
             ? this._translateService.instant(T.G.TODAY_TAG_TITLE)
             : (this._datePipe.transform(action.day, 'shortDate') as string);

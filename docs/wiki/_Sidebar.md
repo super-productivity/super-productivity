@@ -20,6 +20,7 @@
 - [[2.08-Choose-Sync-Backend]]
 - [[2.09-Configure-Sync-Backend]]
 - [[2.19-Sync-Proton-Drive-via-rclone]]
+- [[2.25-Sync-WebDAV-with-a-Private-Certificate-on-Android]]
 - [[2.20-Import-from-Todoist]]
 - [[2.21-Manage-Plugins]]
 - [[2.22-Import-from-TickTick]]
