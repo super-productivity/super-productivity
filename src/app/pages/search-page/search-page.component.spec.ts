@@ -195,6 +195,60 @@ describe('SearchPageComponent', () => {
     expect(latestResults[0].id).toBe('t1');
   }));
 
+  it('finds an attachment URL including its query parameters', fakeAsync(() => {
+    allTasks$.next([
+      createTask({
+        id: 'linked-task',
+        attachments: [
+          { id: 'link', type: 'LINK', path: 'https://example.com/ticket?id=SP-123' },
+        ],
+      }),
+      createTask({ id: 'no-attachments', attachments: [] }),
+    ]);
+    initAndFlush();
+    typeAndFlush('sp-123');
+    expect(latestResults.map((item) => item.id)).toEqual(['linked-task']);
+    typeAndFlush('https://example.com/ticket');
+    expect(latestResults.map((item) => item.id)).toEqual(['linked-task']);
+  }));
+
+  it('finds archived tasks by attachment URL when completed tasks are included', fakeAsync(() => {
+    taskServiceSpy.getArchivedTasks.and.resolveTo([
+      createTask({
+        id: 'archived-link',
+        attachments: [
+          { id: 'link', type: 'LINK', path: 'https://example.com/ARCHIVE-42' },
+        ],
+      }),
+    ]);
+    fixture = TestBed.createComponent(SearchPageComponent);
+    component = fixture.componentInstance;
+    initAndFlush();
+    typeAndFlush('archive-42');
+    expect(latestResults).toEqual([]);
+    component.includeCompletedForm.setValue(true);
+    tick(150);
+    expect(latestResults.map((item) => item.id)).toEqual(['archived-link']);
+  }));
+
+  it('does not search non-link attachment paths or combine separate URLs', fakeAsync(() => {
+    allTasks$.next([
+      createTask({
+        attachments: [
+          { id: 'file', type: 'FILE', path: '/private/file-only' },
+          { id: 'one', type: 'LINK', path: 'https://example.com/end' },
+          { id: 'two', type: 'LINK', path: 'https://example.com/start' },
+          { id: 'legacy', type: 'LINK' },
+        ],
+      }),
+    ]);
+    initAndFlush();
+    typeAndFlush('file-only');
+    expect(latestResults).toEqual([]);
+    typeAndFlush('endhttps');
+    expect(latestResults).toEqual([]);
+  }));
+
   it('should limit results to 50', fakeAsync(() => {
     const tasks = Array.from({ length: 60 }, (_, i) =>
       createTask({ id: `t${i}`, title: `Match Task ${i}` }),
