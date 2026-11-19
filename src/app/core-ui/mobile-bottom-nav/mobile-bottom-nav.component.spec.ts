@@ -281,7 +281,9 @@ describe('MobileBottomNavComponent', () => {
     for (const [url, isShown] of [
       ['/project/p1/tasks', true],
       ['/config', false],
+      ['/config?tab=x', false],
       ['/tag/TODAY/metrics', false],
+      ['/project/p1/metrics', false],
       ['/planner', true],
     ] as const) {
       await router.navigateByUrl(url);
