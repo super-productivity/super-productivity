@@ -23,6 +23,12 @@ const exec = (command, options, callback) => {
   callback(Object.assign(new Error(`${command} ENOENT`), { code: 'ENOENT' }));
 };
 
+// gdbus/dbus-send are not installed in these tests.
+const execFile = (file, ...args) => {
+  const callback = args.find((arg) => typeof arg === 'function');
+  callback(Object.assign(new Error(`${file} ENOENT`), { code: 'ENOENT' }));
+};
+
 // Pin an X11, non-snap session so constructor-time method detection behaves the
 // same on any host running the tests.
 const ENV_KEYS = [
@@ -50,7 +56,7 @@ const loadHandler = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
     if (parent?.filename === handlerModulePath) {
       if (request === 'child_process') {
-        return { exec, spawn: () => assert.fail('spawn is not expected') };
+        return { exec, execFile, spawn: () => assert.fail('spawn is not expected') };
       }
       if (request === 'electron') {
         return {
