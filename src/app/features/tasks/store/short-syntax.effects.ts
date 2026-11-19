@@ -233,54 +233,88 @@ export class ShortSyntaxEffects {
                 finalTaskChanges.tagIds = unique(tagIds);
               }
 
-              // Add parsed URL attachments to task (merge with existing)
-              if (attachments.length > 0) {
-                finalTaskChanges.attachments = [
-                  ...(task.attachments || []),
-                  ...attachments,
-                ];
-              }
+              const createActions = (): Action[] => {
+                // Add parsed URL attachments to task (merge with existing)
+                if (attachments.length > 0) {
+                  finalTaskChanges.attachments = [
+                    ...(task.attachments || []),
+                    ...attachments,
+                  ];
+                }
 
-              // Use compound action for atomic state update
-              const autoPlanFields = getDeadlineAutoPlanFields(
-                this._dateService,
-                finalTaskChanges.deadlineDay,
-                finalTaskChanges.deadlineWithTime,
-              );
+                // Use compound action for atomic state update
+                const autoPlanFields = getDeadlineAutoPlanFields(
+                  this._dateService,
+                  finalTaskChanges.deadlineDay,
+                  finalTaskChanges.deadlineWithTime,
+                );
 
-              delete finalTaskChanges.hasDeadlineTime;
-              delete finalTaskChanges.dueTimeStr;
+                delete finalTaskChanges.hasDeadlineTime;
+                delete finalTaskChanges.dueTimeStr;
 
-              // The parser writes an absolute per-day total. Persist any earlier
-              // additive timer batch first so replay observes the same order as
-              // the live store: delta, then absolute replacement.
-              if (finalTaskChanges.timeSpentOnDay) {
-                this._taskTimeSyncService.flushOne(task.id);
-              }
+                // The parser writes an absolute per-day total. Persist any earlier
+                // additive timer batch first so replay observes the same order as
+                // the live store: delta, then absolute replacement.
+                if (finalTaskChanges.timeSpentOnDay) {
+                  this._taskTimeSyncService.flushOne(task.id);
+                }
 
-              actions.push(
-                TaskSharedActions.applyShortSyntax({
-                  task,
-                  taskChanges: finalTaskChanges,
-                  targetProjectId,
-                  schedulingInfo,
-                  ...autoPlanFields,
-                }),
-              );
-
-              // New tag creation requires user confirmation, so remains separate
-              if (r.newTagTitles.length) {
                 actions.push(
-                  addNewTagsFromShortSyntax({
-                    taskId: task.id,
-                    newTitles: r.newTagTitles,
+                  TaskSharedActions.applyShortSyntax({
+                    task,
+                    taskChanges: finalTaskChanges,
+                    targetProjectId,
+                    schedulingInfo,
+                    ...autoPlanFields,
                   }),
                 );
-              }
 
-              return actions;
+                // New tag creation requires user confirmation, so remains separate
+                if (r.newTagTitles.length) {
+                  actions.push(
+                    addNewTagsFromShortSyntax({
+                      taskId: task.id,
+                      newTitles: r.newTagTitles,
+                    }),
+                  );
+                }
+
+                return actions;
+              };
+
+              return createActions();
             }),
-        ).pipe(mergeMap((actions) => actions));
+        ).pipe(
+          mergeMap((actions) => actions),
+          mergeMap((action) => {
+            if (
+              originalAction.type === TaskSharedActions.updateTask.type ||
+              !originalAction.isPreserveExplicitReminder ||
+              action.type !== TaskSharedActions.applyShortSyntax.type
+            ) {
+              return of(action);
+            }
+            const syntaxAction = action as ReturnType<
+              typeof TaskSharedActions.applyShortSyntax
+            >;
+            // Store selectors and effect dispatch are synchronous: no promise may
+            // separate the last read from applying the parsed action.
+            return this._taskService.getByIdOnce$(task.id).pipe(
+              map((latestTask) => {
+                const taskChanges = { ...syntaxAction.taskChanges };
+                if (typeof latestTask?.remindAt === 'number') {
+                  taskChanges.remindAt = latestTask.remindAt;
+                } else {
+                  delete taskChanges.remindAt;
+                }
+                const schedulingInfo = syntaxAction.schedulingInfo?.dueWithTime
+                  ? { ...syntaxAction.schedulingInfo, remindAt: latestTask?.remindAt }
+                  : syntaxAction.schedulingInfo;
+                return { ...syntaxAction, taskChanges, schedulingInfo };
+              }),
+            );
+          }),
+        );
       }),
     ),
   );

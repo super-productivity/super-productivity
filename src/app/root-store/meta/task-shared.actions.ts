@@ -101,6 +101,7 @@ export const TaskSharedActions = createActionGroup({
       isAddToBacklog: boolean;
       isAddToBottom: boolean;
       isIgnoreShortSyntax?: boolean;
+      isPreserveExplicitReminder?: boolean;
       autoPlanToday?: string;
       autoPlanStartOfNextDayDiffMs?: number;
       isExampleTask?: boolean;
