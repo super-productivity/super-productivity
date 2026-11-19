@@ -50,7 +50,11 @@ const loadHandler = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
     if (parent?.filename === handlerModulePath) {
       if (request === 'child_process') {
-        return { exec, spawn: () => assert.fail('spawn is not expected') };
+        return {
+          exec,
+          execFile: () => assert.fail('execFile is not expected'),
+          spawn: () => assert.fail('spawn is not expected'),
+        };
       }
       if (request === 'electron') {
         return {
