@@ -178,7 +178,7 @@ class WorkContextRowsHostComponent {
   readonly project = {
     id: 'project',
     title: 'Project',
-    taskIds: ['open-task', 'done-task', 'missing-task'],
+    taskIds: ['open-task', 'another-open-task', 'done-task', 'missing-task'],
     advancedCfg: {},
     theme: {},
   } as unknown as WorkContextCommon;
@@ -241,31 +241,40 @@ describe('NavItemComponent task count badges', () => {
 
   const badges = (): HTMLElement[] =>
     Array.from(fixture.nativeElement.querySelectorAll('.task-count'));
+  const rows = (): HTMLElement[] =>
+    Array.from(fixture.nativeElement.querySelectorAll('button.nav-link'));
+  const rowTaskClasses = (): boolean[] =>
+    rows().map((row) => row.classList.contains('has-tasks'));
 
   it('shows the correct open-task count for projects and tags when false', () => {
     expect(badges().map((badge) => badge.textContent?.trim())).toEqual(['1', '1']);
+    expect(rowTaskClasses()).toEqual([true, true]);
   });
 
   it('shows badges for projects and tags when the setting is undefined', () => {
     hideNavTaskCount.set(undefined);
     fixture.detectChanges();
     expect(badges().length).toBe(2);
+    expect(rowTaskClasses()).toEqual([true, true]);
   });
 
   it('hides badges for projects and tags when the setting is true', () => {
     hideNavTaskCount.set(true);
     fixture.detectChanges();
     expect(badges().length).toBe(0);
+    expect(rowTaskClasses()).toEqual([false, false]);
   });
 
-  it('reacts to setting changes without recalculating task counts', () => {
+  it('reacts to setting and task count changes', () => {
     hideNavTaskCount.set(true);
     fixture.detectChanges();
     expect(badges().length).toBe(0);
+    expect(rowTaskClasses()).toEqual([false, false]);
 
     hideNavTaskCount.set(false);
     fixture.detectChanges();
     expect(badges().map((badge) => badge.textContent?.trim())).toEqual(['1', '1']);
+    expect(rowTaskClasses()).toEqual([true, true]);
 
     store.overrideSelector(
       selectOpenTaskIds,
@@ -273,7 +282,18 @@ describe('NavItemComponent task count badges', () => {
     );
     store.refreshState();
     fixture.detectChanges();
-    expect(badges().map((badge) => badge.textContent?.trim())).toEqual(['1', '1']);
+    expect(badges().map((badge) => badge.textContent?.trim())).toEqual(['2', '1']);
+    expect(rowTaskClasses()).toEqual([true, true]);
+
+    hideNavTaskCount.set(true);
+    fixture.detectChanges();
+    expect(badges().length).toBe(0);
+    expect(rowTaskClasses()).toEqual([false, false]);
+
+    hideNavTaskCount.set(false);
+    fixture.detectChanges();
+    expect(badges().map((badge) => badge.textContent?.trim())).toEqual(['2', '1']);
+    expect(rowTaskClasses()).toEqual([true, true]);
   });
 });
 

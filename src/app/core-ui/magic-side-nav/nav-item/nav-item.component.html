@@ -9,7 +9,7 @@
     [routerLink]="[type() === 'TAG' ? 'tag' : 'project', workContext()!.id, 'tasks']"
     routerLinkActive="active"
     class="nav-link"
-    [class.has-tasks]="nrOfOpenTasks() > 0"
+    [class.has-tasks]="nrOfOpenTasks() > 0 && !isHideNavTaskCount()"
     mat-menu-item
     (click)="clicked.emit()"
   >
