@@ -1,17 +1,16 @@
-import { CapacitorHttp } from '@capacitor/core';
 import {
   PROVIDER_ID_SUPER_SYNC,
   SUPER_SYNC_DEFAULT_BASE_URL,
   SuperSyncProvider as PackageSuperSyncProvider,
   type SuperSyncDeps,
 } from '@sp/sync-providers/super-sync';
-import type { NativeHttpResponse } from '@sp/sync-providers/http';
 import type { SuperSyncImportReason, SuperSyncOpType } from '@sp/shared-schema';
 import { OpType, type SyncImportReason } from '../../core/operation.types';
 import { OP_LOG_SYNC_LOGGER } from '../../core/sync-logger.adapter';
 import { SyncCredentialStore } from '../credential-store.service';
 import { APP_PROVIDER_PLATFORM_INFO } from '../platform/app-provider-platform-info';
 import { APP_WEB_FETCH } from '../platform/app-web-fetch';
+import { APP_NATIVE_HTTP_EXECUTOR } from '../platform/capacitor-http-options';
 import { SyncProviderId } from '../provider.const';
 import { getAppSemver } from '../../../util/get-app-version-str';
 import {
@@ -99,8 +98,7 @@ export const createSuperSyncProvider = (): PackageSuperSyncProvider => {
     credentialStore: new SyncCredentialStore(
       SyncProviderId.SuperSync,
     ) as SuperSyncDeps['credentialStore'],
-    nativeHttpExecutor: (httpCfg) =>
-      CapacitorHttp.request(httpCfg) as unknown as Promise<NativeHttpResponse>,
+    nativeHttpExecutor: APP_NATIVE_HTTP_EXECUTOR,
     storage: localStoragePort,
     responseValidators,
     // Host owns the SP-specific fallback. The package itself is

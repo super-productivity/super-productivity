@@ -1,5 +1,7 @@
 import { Capacitor, CapacitorHttp, HttpOptions, HttpResponse } from '@capacitor/core';
 import { APP_WEB_FETCH } from '../../../op-log/sync-providers/platform/app-web-fetch';
+import { toCapacitorHttpOptions } from '../../../op-log/sync-providers/platform/capacitor-http-options';
+import { IS_IOS_NATIVE } from '../../../util/is-native-platform';
 import { SyncLog } from '../../../core/log';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 
@@ -77,7 +79,8 @@ const webPostJson = async (url: string, body: object): Promise<ConnectResponse> 
 
 /** Seam for tests: Capacitor's plugin proxy can't be spied on. */
 export const connectNativeHttp = {
-  request: (opts: HttpOptions): Promise<HttpResponse> => CapacitorHttp.request(opts),
+  request: (opts: HttpOptions): Promise<HttpResponse> =>
+    CapacitorHttp.request(toCapacitorHttpOptions(opts, IS_IOS_NATIVE)),
 };
 
 const nativePostJson = async (url: string, body: object): Promise<ConnectResponse> => {
