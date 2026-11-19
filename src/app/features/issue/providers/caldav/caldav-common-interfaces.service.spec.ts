@@ -120,6 +120,23 @@ describe('CaldavCommonInterfacesService', () => {
       );
       expect(service.getPollIntervalForCfg({ ...BASE_CFG })).toBe(CALDAV_POLL_INTERVAL);
     });
+
+    // Delays above 2^31-1 ms overflow setInterval and make it fire immediately.
+    it('caps huge pollIntervalMinutes at one day', () => {
+      (service as unknown as { _cachedCfg?: CaldavCfg })._cachedCfg = {
+        ...BASE_CFG,
+        pollIntervalMinutes: 100000,
+      };
+      expect(service.pollInterval).toBe(24 * 60 * 60 * 1000);
+    });
+
+    it('raises sub-minute pollIntervalMinutes to one minute', () => {
+      (service as unknown as { _cachedCfg?: CaldavCfg })._cachedCfg = {
+        ...BASE_CFG,
+        pollIntervalMinutes: 0.001,
+      };
+      expect(service.pollInterval).toBe(60 * 1000);
+    });
   });
 
   describe('getAddTaskData - DTSTART mapping', () => {
