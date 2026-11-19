@@ -84,6 +84,16 @@ describe('InputDurationDirective', () => {
       });
     });
 
+    it('emits a re-entered value after the model changes externally', () => {
+      directive.onInput('1h');
+      directive.writeValue(7200000);
+      onChangeSpy.calls.reset();
+
+      directive.onInput('1h');
+
+      expect(onChangeSpy).toHaveBeenCalledOnceWith(3600000);
+    });
+
     it('should process "2h 3m" and parse as 2 hours 3 minutes', () => {
       directive.onInput('2h 3m');
 

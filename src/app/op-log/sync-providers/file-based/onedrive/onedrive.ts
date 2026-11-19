@@ -1,15 +1,14 @@
-import { CapacitorHttp } from '@capacitor/core';
 import {
   OneDrive as PackageOneDrive,
   PROVIDER_ID_ONEDRIVE,
   type OneDriveDeps,
 } from '@sp/sync-providers/onedrive';
-import { type NativeHttpResponse } from '@sp/sync-providers/http';
 import { SyncProviderId } from '../../provider.const';
 import { SyncCredentialStore } from '../../credential-store.service';
 import { OP_LOG_SYNC_LOGGER } from '../../../core/sync-logger.adapter';
 import { APP_PROVIDER_PLATFORM_INFO } from '../../platform/app-provider-platform-info';
 import { APP_WEB_FETCH } from '../../platform/app-web-fetch';
+import { APP_NATIVE_HTTP_EXECUTOR } from '../../platform/capacitor-http-options';
 import {
   OFFICIAL_ONEDRIVE_CLIENT_ID,
   HAS_OFFICIAL_ONEDRIVE_CLIENT_ID,
@@ -41,8 +40,7 @@ export const createOneDriveProvider = (
     isElectron: IS_ELECTRON,
     // Token requests must bypass the WebView on native: its `Origin` header
     // makes Entra reject redemption for native app registrations (#9546).
-    nativeHttpExecutor: (httpCfg) =>
-      CapacitorHttp.request(httpCfg) as unknown as Promise<NativeHttpResponse>,
+    nativeHttpExecutor: APP_NATIVE_HTTP_EXECUTOR,
   };
   return new PackageOneDrive(cfg, deps);
 };

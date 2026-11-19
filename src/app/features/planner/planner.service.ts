@@ -1,7 +1,7 @@
 import { effect, inject, Injectable, signal } from '@angular/core';
 import { BehaviorSubject, combineLatest, Observable, of } from 'rxjs';
 import { first, map, shareReplay, switchMap, tap } from 'rxjs/operators';
-import { selectAllTasksWithDueTime } from '../tasks/store/task.selectors';
+import { selectAllTasksWithDueTimeSorted } from '../tasks/store/task.selectors';
 import { Store } from '@ngrx/store';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { PlannerDay } from './planner.model';
@@ -82,8 +82,11 @@ export class PlannerService {
     ),
   );
 
+  // Snapshot-backed: emits only when a due-time task changes, so a tracking
+  // tick on an unscheduled task doesn't rebuild the planner-days selector.
+  // Sorted input is fine: scheduled items are re-sorted by start downstream.
   allDueWithTimeTasks$: Observable<TaskWithDueTime[]> = this._store.select(
-    selectAllTasksWithDueTime,
+    selectAllTasksWithDueTimeSorted,
   );
 
   // TODO this needs to be more performant

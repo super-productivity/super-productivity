@@ -1,5 +1,6 @@
 import { Task, TaskState } from '../tasks/task.model';
 import { EntityState } from '@ngrx/entity';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskAttachment } from '../tasks/task-attachment/task-attachment.model';
 import { Tag } from '../tag/tag.model';
 import { MetricState } from '../metric/metric.model';

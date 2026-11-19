@@ -14,6 +14,10 @@ import {
 } from '../../util/is-android-web-view';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { androidInterface } from '../../features/android/android-interface';
+import { createIosReminderBudget } from './ios-reminder-budget';
+import { SnackService } from '../snack/snack.service';
+import { LS } from '../persistence/storage-keys.const';
+import { T } from '../../t.const';
 import { Observable } from 'rxjs';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
@@ -45,6 +49,13 @@ export interface ScheduleReminderOptions {
   triggerAtMs: number;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Reminders armed this far ahead need no notice: before the budget, repeating
+// reminders were armed 14 days ahead on iOS and nobody was told.
+const IOS_QUIET_HORIZON_MS = 14 * DAY_MS;
+// The limit notice returns this often at most while reminders stay cut short.
+const IOS_LIMIT_NOTICE_INTERVAL_MS = 30 * DAY_MS;
+
 /**
  * Service for scheduling reminders across platforms.
  *
@@ -64,6 +75,15 @@ export class CapacitorReminderService {
   // See requestPermissionsInBackground().
   private _backgroundPermissionRequest?: Promise<boolean>;
   private _isBackgroundPermissionRequestSettled = false;
+  private _snackService = inject(SnackService);
+  // iOS only: decides which reminders are armed (see ios-reminder-budget.ts).
+  private _iosBudget = createIosReminderBudget({
+    schedule: (reminder) => this._scheduleNow(reminder),
+    cancel: (ids) => this._notificationService.cancelMultiple(ids),
+    getPendingIds: async () =>
+      (await this._notificationService.getPending()).map((n) => n.id),
+    onPlanned: (horizonAtMs) => this._notifyIosLimit(horizonAtMs),
+  });
 
   /**
    * Observable that emits when a notification action is performed (iOS).
@@ -106,6 +126,15 @@ export class CapacitorReminderService {
       return false;
     }
 
+    if (this._platformService.isIOS()) {
+      // Armed shortly after, if it is among the soonest reminders.
+      this._iosBudget.want(options);
+      return true;
+    }
+    return this._scheduleNow(options);
+  }
+
+  private async _scheduleNow(options: ScheduleReminderOptions): Promise<boolean> {
     const now = Date.now();
     const triggerAt = options.triggerAtMs <= now ? now + 1000 : options.triggerAtMs;
 
@@ -251,7 +280,12 @@ export class CapacitorReminderService {
       }
     }
 
-    // On iOS (and Android as fallback), use Capacitor LocalNotifications
+    if (this._platformService.isIOS()) {
+      this._iosBudget.unwant(notificationId);
+      return true;
+    }
+
+    // On Android as fallback, use Capacitor LocalNotifications
     if (this._platformService.isNative) {
       return this._notificationService.cancel(notificationId);
     }
@@ -283,12 +317,42 @@ export class CapacitorReminderService {
       }
     }
 
-    // On iOS (and Android as fallback), use batch cancellation
+    if (this._platformService.isIOS()) {
+      notificationIds.forEach((id) => this._iosBudget.unwant(id));
+      return true;
+    }
+
+    // On Android as fallback, use batch cancellation
     if (this._platformService.isNative) {
       return this._notificationService.cancelMultiple(notificationIds);
     }
 
     return false;
+  }
+
+  /**
+   * Tells the user when the iOS limit leaves reminders of the coming two weeks
+   * unarmed. They are armed once nearer ones fired and the app is opened.
+   */
+  private _notifyIosLimit(horizonAtMs: number | null): void {
+    const now = Date.now();
+    if (horizonAtMs === null || horizonAtMs - now >= IOS_QUIET_HORIZON_MS) {
+      return;
+    }
+    // Persisted: the first pass of every launch would repeat it otherwise.
+    const lastShownAt = Number(localStorage.getItem(LS.IOS_REMINDER_LIMIT_NOTICE_AT));
+    if (lastShownAt && now - lastShownAt < IOS_LIMIT_NOTICE_INTERVAL_MS) {
+      return;
+    }
+    localStorage.setItem(LS.IOS_REMINDER_LIMIT_NOTICE_AT, String(now));
+    this._snackService.open({
+      msg: T.F.REMINDER.S_IOS_LIMIT,
+      // shortcut: a horizon under a day (60 reminders due within it) reads as
+      // "1 day" — word it in hours if that ever comes up.
+      translateParams: {
+        days: Math.max(1, Math.floor((horizonAtMs - now) / DAY_MS)),
+      },
+    });
   }
 
   /**

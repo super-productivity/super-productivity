@@ -1,0 +1,58 @@
+{
+  "TITLE": "Factures",
+  "LOADING": "Chargement…",
+  "LIST": {
+    "EMPTY": "Aucune facture pour l'instant.",
+    "PRINT": "Imprimer / PDF",
+    "CSV": "CSV",
+    "DELETE": "Supprimer",
+    "CONFIRM_DELETE": "Supprimer la facture {{number}} ? Ses heures redeviennent non facturées."
+  },
+  "NEW": {
+    "TITLE": "Nouvelle facture",
+    "PROJECT": "Projet",
+    "NO_PROJECTS": "Créez d'abord un projet. Chaque projet est facturé séparément.",
+    "FROM": "Du",
+    "TO": "Au",
+    "RATE": "Taux horaire",
+    "LANGUAGE": "Langue de la facture",
+    "CLIENT": "Facturé à",
+    "CLIENT_HINT": "Nom et adresse du client. Mémorisés pour ce projet.",
+    "INCLUDE": "Inclure",
+    "NO_HOURS": "Aucun temps non facturé sur ce projet pour cette période.",
+    "NUMBER": "Numéro de facture",
+    "ISSUE_DATE": "Date de facture",
+    "ISSUE": "Émettre et imprimer",
+    "BLOCK": {
+      "PERIOD": "Choisissez les dates Du et Au ; Du doit venir en premier.",
+      "LINES": "Cochez au moins une ligne avec des heures.",
+      "RATE": "Saisissez un taux horaire.",
+      "NUMBER": "Saisissez un numéro de facture.",
+      "NUMBER_USED": "Ce numéro de facture est déjà utilisé.",
+      "DATE": "Saisissez la date de facture."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Vos informations",
+    "SELLER": "Votre nom, adresse et numéro fiscal",
+    "PAYMENT_NOTE": "Informations de paiement",
+    "PAYMENT_NOTE_HINT": "Coordonnées bancaires ou conditions de paiement, imprimées en bas.",
+    "CURRENCY": "Code de la devise",
+    "TAX": "Taxe / TVA %",
+    "PAYMENT_DAYS": "Jours avant échéance",
+    "ROUNDING": "Arrondir chaque ligne à",
+    "ROUNDING_NONE": "Pas d'arrondi",
+    "ROUNDING_MIN": "{{min}} minutes",
+    "PREFIX": "Préfixe du numéro de facture",
+    "SAVE": "Enregistrer",
+    "SAVED": "Enregistré."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Description",
+    "HOURS": "Heures",
+    "TOTAL": "Total"
+  },
+  "ERROR": {
+    "GENERIC": "Une erreur s'est produite : {{error}}"
+  }
+}

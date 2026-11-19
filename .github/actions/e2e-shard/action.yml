@@ -1,0 +1,63 @@
+name: 'Run Regular E2E Shard'
+description: 'Runs one shard of the regular (non-sync) E2E suite, split by measured duration, and uploads its junit timings'
+
+# Playwright's --shard cuts by test count, so the shard that gets the slow specs
+# runs far longer (481–805 s across four shards in one release run, measured
+# 2026-11). tools/e2e-shard.js packs spec files by e2e/test-durations.json.
+inputs:
+  shard:
+    description: '1-based shard index'
+    required: true
+  shards:
+    description: 'Total number of shards'
+    required: false
+    default: '4'
+  grep-invert:
+    description: 'Tags excluded from the regular suite (same filter as `npm run e2e`)'
+    required: false
+    default: '@supersync|@webdav'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: List shard specs
+      shell: bash
+      env:
+        SHARD: ${{ inputs.shard }}
+        SHARDS: ${{ inputs.shards }}
+        GREP_INVERT: ${{ inputs.grep-invert }}
+      run: node tools/e2e-shard.js --grep-invert "$GREP_INVERT" --shards "$SHARDS" --shard "$SHARD" --out .tmp/e2e-shard.txt --count-out .tmp/e2e-shard.count
+
+    - name: Test E2E
+      shell: bash
+      env:
+        PLAYWRIGHT_JUNIT_OUTPUT_FILE: .tmp/e2e-test-results/junit-e2e-${{ inputs.shard }}.xml
+        GREP_INVERT: ${{ inputs.grep-invert }}
+      run: npx playwright test --config e2e/playwright.config.ts --project=chromium --reporter=line,junit --grep-invert "$GREP_INVERT" --test-list .tmp/e2e-shard.txt
+
+    # Playwright passes a --test-list run that found no tests, so compare
+    # the report with the count the shard tool listed.
+    - name: Check every listed test ran
+      shell: bash
+      env:
+        JUNIT: .tmp/e2e-test-results/junit-e2e-${{ inputs.shard }}.xml
+      run: |
+        expected="$(cat .tmp/e2e-shard.count)"
+        actual="$(grep -oE '<testsuites [^>]*' "$JUNIT" | grep -oE ' tests="[0-9]+"' | grep -oE '[0-9]+' || true)"
+        if [ "${actual}" != "${expected}" ]; then
+          echo "::error::E2E shard reported ${actual:-no} tests; the shard list holds ${expected}."
+          exit 1
+        fi
+        echo "✓ ${actual} tests ran, as listed."
+
+    # Feeds `tools/e2e-shard.js --update-durations`. Uploaded on failures too:
+    # a red run still timed every test that finished.
+    - name: Upload JUnit Timings
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: e2e-junit-${{ inputs.shard }}-${{ github.run_id }}
+        path: .tmp/e2e-test-results/junit-e2e-${{ inputs.shard }}.xml
+        if-no-files-found: ignore
+        retention-days: 14
+        overwrite: true # so a re-run of this job does not fail on the existing artifact

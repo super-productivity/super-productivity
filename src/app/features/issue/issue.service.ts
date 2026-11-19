@@ -86,10 +86,27 @@ const isIssueAwaitingNextOccurrence = (
   !!(issue as PlainspaceIssue).isRecurring &&
   !(issue as PlainspaceIssue).isDone;
 
+interface AddTaskFromIssueOptions {
+  issueDataReduced: IssueDataReduced;
+  issueProviderId: string;
+  issueProviderKey: IssueProviderKey;
+  additional?: Partial<Task>;
+  isAddToBacklog?: boolean;
+  isForceDefaultProject?: boolean;
+  // Automatic (non-user-initiated) import — a background backlog poll or
+  // calendar auto-import. Such imports fire regardless of what the user is
+  // viewing, so they must not inherit the active context's tag (#8673).
+  isAutoImport?: boolean;
+}
+
 @Injectable({
   providedIn: 'root',
 })
 export class IssueService {
+  private _pendingIssueImports = new Map<
+    string,
+    { promise: Promise<string | undefined>; hasForegroundRequest: boolean }
+  >();
   private _taskService = inject(TaskService);
   private _pendingRemoteIssueDelete = inject(PendingRemoteIssueDeleteService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
@@ -505,7 +522,36 @@ export class IssueService {
     }
   }
 
-  async addTaskFromIssue({
+  async addTaskFromIssue(options: AddTaskFromIssueOptions): Promise<string | undefined> {
+    const { issueDataReduced, issueProviderId } = options;
+    if (!issueDataReduced || !issueDataReduced.id || !issueProviderId) {
+      throw new Error('No issueData');
+    }
+    const key = JSON.stringify([issueProviderId, String(issueDataReduced.id)]);
+    // Archive lookup is async: two clicks can both observe "not imported".
+    const pending = this._pendingIssueImports.get(key);
+    if (pending) {
+      // Let one foreground caller finish its planning/board action when a
+      // background import won. Further clicks must not repeat that completion.
+      if (!options.isAutoImport && !pending.hasForegroundRequest) {
+        pending.hasForegroundRequest = true;
+        return pending.promise;
+      }
+      return undefined;
+    }
+    const promise = this._addTaskFromIssue(options);
+    this._pendingIssueImports.set(key, {
+      promise,
+      hasForegroundRequest: !options.isAutoImport,
+    });
+    try {
+      return await promise;
+    } finally {
+      this._pendingIssueImports.delete(key);
+    }
+  }
+
+  private async _addTaskFromIssue({
     issueDataReduced,
     issueProviderId,
     issueProviderKey,
@@ -513,22 +559,7 @@ export class IssueService {
     isAddToBacklog = false,
     isForceDefaultProject = false,
     isAutoImport = false,
-  }: {
-    issueDataReduced: IssueDataReduced;
-    issueProviderId: string;
-    issueProviderKey: IssueProviderKey;
-    additional?: Partial<Task>;
-    isAddToBacklog?: boolean;
-    isForceDefaultProject?: boolean;
-    // Automatic (non-user-initiated) import — a background backlog poll or
-    // calendar auto-import. Such imports fire regardless of what the user is
-    // viewing, so they must not inherit the active context's tag (#8673).
-    isAutoImport?: boolean;
-  }): Promise<string | undefined> {
-    if (!issueDataReduced || !issueDataReduced.id || !issueProviderId) {
-      throw new Error('No issueData');
-    }
-
+  }: AddTaskFromIssueOptions): Promise<string | undefined> {
     const issueIdCandidates = this._getIssueIdCandidates(
       issueProviderKey,
       issueDataReduced,

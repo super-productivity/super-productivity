@@ -87,6 +87,9 @@ const SHORT_SYNTAX_TAGS_REG_EX = new RegExp(`\\${CH_TAG}[^${ALL_SPECIAL}|\\s]+`,
 // Match string starting with the literal @ and followed by 1 or more of the characters
 // not in the ALL_SPECIAL
 const SHORT_SYNTAX_DUE_REG_EX = new RegExp(`\\${CH_DUE}[^${ALL_SPECIAL}]+`, 'gi');
+// The domain after an email's at-sign ("@example.com" in "max@example.com")
+const EMAIL_DOMAIN_START_REG_EX =
+  /^@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,}(?![\p{L}\p{N}-])/u;
 
 // Weekday unit → Date.getDay() index; covers abbreviations and singular form
 // (plural "fridays" is normalized by stripping the trailing "s" before lookup)
@@ -898,12 +901,42 @@ const parseShortSyntaxDate = async (
   // A deadline trigger only counts at the start of the title or after a space
   // (so "Done!" is not a deadline). Skip a match that fails this check rather
   // than giving up, so "wow! !tomorrow" still finds "!tomorrow" (#10217).
-  const rr =
-    [...text.matchAll(regEx)].find((m) => {
-      const index = m.index ?? 0;
-      const charBeforeTrigger = index > 0 ? text.charAt(index - 1) : '';
-      return !isDeadline || !charBeforeTrigger || charBeforeTrigger === ' ';
-    }) ?? null;
+  // Skip an email's at-sign the same way: a date word or digits in its domain
+  // or the prose after it must not erase the address, and an "@date" after it
+  // still counts. Attached syntax such as "lunch@12" stays a trigger.
+  let rr: RegExpMatchArray | null = null;
+  for (const m of text.matchAll(regEx)) {
+    const index = m.index ?? 0;
+    const charBeforeTrigger = index > 0 ? text.charAt(index - 1) : '';
+    if (charBeforeTrigger && charBeforeTrigger !== ' ') {
+      if (isDeadline) {
+        continue;
+      }
+      if (EMAIL_DOMAIN_START_REG_EX.test(m[0])) {
+        // Prefer established day-dot-month syntax ("Termin@3.okt.") only when
+        // chrono recognizes the entire token, never a fragment of "3.okt.de"
+        // or an arbitrary numeric domain such as "3.com". Prose punctuation
+        // ends the token; chrono can leave it outside the consumed date.
+        const token = m[0].match(/^@\d{1,2}\.[^\s,;:?]+/)?.[0];
+        if (!token) {
+          continue;
+        }
+        const dateParser = await loadShortSyntaxDateParser(dateLocale);
+        const [date] = dateParser.parse(token, now, { forwardDate: true });
+        if (
+          !date ||
+          date.index !== 1 ||
+          date.text.length !== token.length - 1 ||
+          !date.start.isCertain('day') ||
+          !date.start.isCertain('month')
+        ) {
+          continue;
+        }
+      }
+    }
+    rr = m;
+    break;
+  }
 
   if (rr && rr[0]) {
     const triggerIndex = rr.index ?? 0;

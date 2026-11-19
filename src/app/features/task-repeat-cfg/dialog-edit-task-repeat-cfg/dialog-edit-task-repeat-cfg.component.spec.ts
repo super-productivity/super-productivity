@@ -103,6 +103,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       'addTaskRepeatCfgToTask',
       'deleteTaskRepeatCfg',
       'deleteTaskRepeatCfgWithDialog',
+      'detachTaskRepeatCfgInstance',
     ]);
     mockDateService = jasmine.createSpyObj('DateService', [
       'todayStr',
@@ -445,6 +446,109 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(mockMatDialog.open).toHaveBeenCalledWith(
         jasmine.anything(),
         jasmine.objectContaining({ data: jasmine.objectContaining({ message: '0' }) }),
+      );
+    });
+  });
+
+  describe('detachInstance (#11694)', () => {
+    const FUTURE_DAY = '2026-06-10';
+
+    /** Runs the init effect, which checks whether the date is a future one. */
+    const setup = async (
+      dialogData: Parameters<typeof setupTestBed>[0],
+      repeatCfg$?: Parameters<typeof setupTestBed>[1],
+    ): Promise<DialogEditTaskRepeatCfgComponent> => {
+      const fixture = await setupTestBed(dialogData, repeatCfg$);
+      fixture.detectChanges();
+      return fixture.componentInstance;
+    };
+
+    it('is offered for a future occurrence of a fixed-schedule series', async () => {
+      const component = await setup({
+        repeatCfg: mockRepeatCfg,
+        targetDate: FUTURE_DAY,
+      });
+
+      expect(component.canDetachInstance()).toBe(true);
+    });
+
+    it('is offered for a series that waits for completion', async () => {
+      const component = await setup({
+        repeatCfg: { ...mockRepeatCfg, waitForCompletion: true },
+        targetDate: FUTURE_DAY,
+      });
+
+      expect(component.canDetachInstance()).toBe(true);
+    });
+
+    it('is not offered for today, where the occurrence already is a task', async () => {
+      const component = await setup({
+        repeatCfg: mockRepeatCfg,
+        targetDate: MOCK_TODAY_STR,
+      });
+
+      expect(component.canDetachInstance()).toBe(false);
+    });
+
+    it('is not offered when the dialog was not opened for a date', async () => {
+      const component = await setup({ repeatCfg: mockRepeatCfg });
+
+      expect(component.canDetachInstance()).toBe(false);
+    });
+
+    it('is not offered for a series that repeats from the completion date', async () => {
+      const component = await setup({
+        repeatCfg: { ...mockRepeatCfg, repeatFromCompletionDate: true },
+        targetDate: FUTURE_DAY,
+      });
+
+      expect(component.canDetachInstance()).toBe(false);
+      component.detachInstance();
+      expect(mockTaskRepeatCfgService.detachTaskRepeatCfgInstance).not.toHaveBeenCalled();
+    });
+
+    it('is not offered when opened from a task, which already is the occurrence', async () => {
+      const component = await setup(
+        {
+          task: { ...mockTask, repeatCfgId: mockRepeatCfg.id },
+          targetDate: FUTURE_DAY,
+        },
+        of(mockRepeatCfg),
+      );
+
+      expect(component.canDetachInstance()).toBe(false);
+      component.detachInstance();
+      expect(mockTaskRepeatCfgService.detachTaskRepeatCfgInstance).not.toHaveBeenCalled();
+    });
+
+    it('detaches from the saved series without asking and closes the dialog', async () => {
+      const component = await setup({
+        repeatCfg: mockRepeatCfg,
+        targetDate: FUTURE_DAY,
+      });
+      // An unsaved edit in the form must not end up in the new task.
+      component.repeatCfg.set({ ...component.repeatCfg(), title: 'Unsaved title' });
+
+      component.detachInstance();
+
+      expect(
+        mockTaskRepeatCfgService.detachTaskRepeatCfgInstance,
+      ).toHaveBeenCalledOnceWith(mockRepeatCfg.id, FUTURE_DAY);
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).toHaveBeenCalled();
+    });
+
+    it('labels the button with the date of the occurrence', async () => {
+      const component = await setup({
+        repeatCfg: mockRepeatCfg,
+        targetDate: FUTURE_DAY,
+      });
+      spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(
+        (key: string, params?: { date?: string }) => `${key}|${params?.date}`,
+      );
+
+      expect(component.detachInstanceButtonText()).toBe(
+        'F.TASK_REPEAT.F.DETACH_FOR_DATE|6/10',
       );
     });
   });

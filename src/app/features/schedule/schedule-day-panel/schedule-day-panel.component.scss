@@ -23,6 +23,11 @@ schedule-week {
   display: block;
 }
 
+// Second row of the sticky date header, across its three columns.
+schedule-day-overdue {
+  grid-column: 1 / -1;
+}
+
 // Zero-height, so the hint takes no space in the flow: it would otherwise push
 // an empty day's grid down against the neighbouring day while swiping.
 .empty-state-anchor {

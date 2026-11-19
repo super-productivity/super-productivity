@@ -4,6 +4,7 @@ import {
   TodoistSection,
   TodoistTask,
 } from './normalized-model';
+import { parseTodoistRecurrence } from './parse-recurrence';
 
 /**
  * Raw shapes from `POST https://api.todoist.com/api/v1/sync` (unified v1).
@@ -192,10 +193,17 @@ const parseDue = (
     : { dueDay: null, dueWithTime: ts };
 };
 
+/** The local calendar day of a timestamp. */
+const localDayStr = (ts: number): string => {
+  const date = new Date(ts);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
 const buildNotes = (
   item: RawItem,
   comments: RawNote[],
-  deadlineNoted: string | null,
+  noted: { deadline: string | null; repeatRule: string | null },
   strings: ParseStrings,
 ): { notes: string; truncatedFieldCount: number } => {
   const parts: string[] = [];
@@ -204,11 +212,11 @@ const buildNotes = (
     parts.push(description);
   }
   const extras: string[] = [];
-  if (item.due?.is_recurring && asStr(item.due.string)) {
-    extras.push(strings.repeats(asStr(item.due.string)));
+  if (noted.repeatRule) {
+    extras.push(strings.repeats(noted.repeatRule));
   }
-  if (deadlineNoted) {
-    extras.push(strings.deadline(deadlineNoted));
+  if (noted.deadline) {
+    extras.push(strings.deadline(noted.deadline));
   }
   if (extras.length) {
     parts.push(extras.join('\n'));
@@ -245,6 +253,8 @@ const buildNotes = (
 export const parseSyncResponse = (
   raw: RawSyncResponse,
   strings: ParseStrings = DEFAULT_PARSE_STRINGS,
+  /** The user's start-of-next-day offset (`getDayContext`). */
+  startOfNextDayDiffMs = 0,
 ): TodoistImportModel => {
   const projects: TodoistProject[] = [];
   const keptProjectIds = new Set<string>();
@@ -413,25 +423,45 @@ export const parseSyncResponse = (
     const labels = (item.labels || []).filter(
       (label): label is string => typeof label === 'string' && label.trim() !== '',
     );
+    const repeatRule = item.due?.is_recurring ? asStr(item.due.string) || null : null;
+    // Todoist rule days are calendar days, the app's repeat days logical days:
+    // a time before the start of the day would shift the repeat by a day
+    const isOnLogicalDay =
+      !dueWithTime ||
+      localDayStr(dueWithTime) === localDayStr(dueWithTime - startOfNextDayDiffMs);
+    const nextDay =
+      parsedDueDay ?? (dueWithTime && isOnLogicalDay ? localDayStr(dueWithTime) : null);
+    // Super Productivity cannot repeat sub-tasks
+    const schedule =
+      repeatRule && !rootExtId && nextDay
+        ? parseTodoistRecurrence(repeatRule, nextDay)
+        : null;
+    const comments = commentsByItemId.get(extId) || [];
     const builtNotes = buildNotes(
       item,
-      commentsByItemId.get(extId) || [],
-      deadlineNoted,
+      comments,
+      { deadline: deadlineNoted, repeatRule },
       strings,
     );
+    // a set-up repeat makes the rule line redundant in every future copy
+    const notesWithoutRule = schedule
+      ? buildNotes(item, comments, { deadline: deadlineNoted, repeatRule: null }, strings)
+          .notes
+      : null;
 
     return {
       extId,
       projectExtId: asId(item.project_id) as string,
       parentExtId: rootExtId,
       title: clamp(title, MAX_TITLE_LEN) || strings.untitledTask,
-      notes: builtNotes.notes,
+      notes: notesWithoutRule ?? builtNotes.notes,
       labels: labels.map((label) => clamp(label, MAX_LABEL_LEN)),
       apiPriority: item.priority ?? 1,
       dueDay,
       dueWithTime,
       timeEstimate: isMinuteDuration ? (duration.amount as number) * 60_000 : null,
       isRecurring: !!item.due?.is_recurring,
+      repeat: schedule ? { schedule, notesWithRule: builtNotes.notes } : null,
       wasDemoted: depth >= 2,
       isDayDurationSkipped,
       hasAssignee: !!asId(item.responsible_uid),

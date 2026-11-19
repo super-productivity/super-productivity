@@ -784,6 +784,12 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       }
 
       const taskValue = mapping.toTaskValue(freshValue, ctx);
+      // Search results can already contain display formatting (e.g. #42),
+      // while getById returns the raw title. Compare the mapped values too
+      // so that representation-only differences do not undo local edits.
+      if (lastValue !== undefined && taskValue === mapping.toTaskValue(lastValue, ctx)) {
+        continue;
+      }
       if (taskValue !== undefined) {
         changes[mapping.taskField] = taskValue;
         // Clear mutually exclusive fields (use null to explicitly unset)

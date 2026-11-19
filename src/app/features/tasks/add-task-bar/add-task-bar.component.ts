@@ -58,7 +58,9 @@ import {
 } from '@angular/material/autocomplete';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { AddTaskSuggestion } from './add-task-suggestions.model';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagComponent } from '../../tag/tag/tag.component';
 import { truncate } from '../../../util/truncate';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -460,6 +462,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (fields.dueDay) {
       this.stateService.updateDate(fields.dueDay);
     }
+    if (fields.deadlineDay) {
+      this.stateService.updateDeadline(fields.deadlineDay);
+    }
   }
 
   private _setupDefaultDate(): void {
@@ -781,7 +786,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const planForDay = this.planForDay();
     let didPlanForDay = false;
 
-    if (suggestion.taskId && this.isNoDefaults() && !suggestion.isArchivedTask) {
+    if (suggestion.taskId && this.isNoDefaults()) {
       taskId = suggestion.taskId;
     } else if (suggestion.taskId && suggestion.isFromOtherContextAndTagOnlySearch) {
       let isTaskFound = true;
@@ -826,13 +831,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         this._projectService.moveTaskToTodayList(suggestion.taskId, suggestion.projectId);
       }
 
-      if (suggestion.isArchivedTask) {
-        this._snackService.open({
-          ico: 'unarchive',
-          msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,
-          translateParams: { title: suggestion.title },
-        });
-      } else if (suggestion.projectId) {
+      if (suggestion.projectId) {
         this._snackService.open({
           ico: 'arrow_upward',
           msg: T.F.TASK.S.FOUND_MOVE_FROM_BACKLOG,
@@ -892,9 +891,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!this._markdownPasteService.isMarkdownTaskList(pastedText)) return;
 
     event.preventDefault();
-    this._markdownPasteService.handleMarkdownPaste(pastedText, null).then(() => {
-      this.stateService.updateInputTxt('');
-    });
+    this._markdownPasteService
+      .handleMarkdownPaste(pastedText, null, undefined, undefined, {
+        isAddToBacklog: this.isAddToBacklog(),
+        isAddToBottom: this.isAddToBottom(),
+      })
+      .then(() => {
+        this.stateService.updateInputTxt('');
+      });
   }
 
   @HostListener('document:click', ['$event'])
@@ -1061,6 +1065,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       .subscribe({
         next: async (task) => {
           const { DialogEditTaskRepeatCfgComponent } =
+            // eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
             await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
           this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
             data: { task, defaultRemindOption: remindOption },

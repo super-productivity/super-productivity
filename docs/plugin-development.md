@@ -470,6 +470,19 @@ Feature-detect `getDayContext`, `startTracking` and `stopTracking` on older host
 - `addTag(tag)` - Create new tag
 - `updateTag(tagId, updates)` - Update tag
 
+#### Repeating tasks
+
+Read repeat configs from `getAppState().taskRepeatCfgs`. Both methods accept only the schedule fields of `PluginTaskRepeatCfgSchedule` and reject anything else with an error saying why; older app versions lack them, so check `typeof PluginAPI.addTaskRepeatCfg === 'function'` first.
+
+- `addTaskRepeatCfg(taskId, schedule?)` - Make an existing top-level task repeat, like "Repeat" in its schedule dialog (title, tags, estimate, day and time come from the task). Without a schedule it repeats daily. `repeatFromCompletionDate` (with `quickSetting: 'CUSTOM'`) counts the interval from completion; `repeatUntilDay` sets the last day. Resolves with the repeat config id.
+- `updateTaskRepeatCfg(repeatCfgId, updates)` - Change the schedule, `isPaused`, `skipOverdue` or the end day `repeatUntilDay` (`null` removes it). Changing the schedule requires `quickSetting`.
+
+```js
+const taskId = await PluginAPI.addTask({ title: 'Team sync', dueDay: '2026-10-13' });
+// the second Tuesday of every month, derived from the task's day
+await PluginAPI.addTaskRepeatCfg(taskId, { quickSetting: 'MONTHLY_NTH_WEEKDAY' });
+```
+
 #### Simple Counters
 
 Simple counters let you track lightweight metrics (e.g., daily clicks or habits) that persist and sync with your data. There are two levels: **basic** (key-value pairs for today's count) and **full model** (full CRUD on `SimpleCounter` entities with date-specific values).
