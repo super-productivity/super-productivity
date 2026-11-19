@@ -19,6 +19,7 @@ import { BoardPanelCfg } from '../boards.model';
 import {
   getPanelItems,
   getPanelSortKey,
+  getProjectRankById,
   matchPanelTasks,
   panelToCriteria,
 } from '../boards.util';
@@ -664,18 +665,14 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
       ),
   );
 
-  // Side-menu project order, for sorting by project. The menu shows the Inbox
-  // above the project tree, so it ranks first: its entry comes last and
-  // overrides its tree position. Only read when the panel sorts by project.
-  private readonly _projectRankById = computed(
-    () =>
-      new Map<string, number>([
-        ...this._injector
-          .get(MenuTreeService)
-          .buildProjectListInTreeOrder(this._allProjects())
-          .map((project, index): [string, number] => [project.id, index]),
-        [INBOX_PROJECT.id, -1],
-      ]),
+  // Side-menu project order, for sorting by project. Only read when the panel
+  // sorts by project.
+  private readonly _projectRankById = computed(() =>
+    getProjectRankById(
+      this._injector
+        .get(MenuTreeService)
+        .buildProjectListInTreeOrder(this._allProjects()),
+    ),
   );
 
   // === WHAT THE PANEL SHOWS (both renderers) ===

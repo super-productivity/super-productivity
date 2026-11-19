@@ -10,6 +10,7 @@ import {
   matchPanelTasks,
   normalizeBoardForSave,
   getPanelSortKey,
+  getProjectRankById,
   panelToCriteria,
   sanitizePanelCfg,
   toEditorModel,
@@ -27,6 +28,7 @@ import {
 } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { TODAY_TAG } from '../tag/tag.const';
+import { INBOX_PROJECT } from '../project/project.const';
 import { T } from '../../t.const';
 import {
   addDaysToDbDateStr,
@@ -1277,5 +1279,22 @@ describe('panel rows and header count', () => {
       'openSub',
       'lone',
     ]);
+  });
+});
+
+describe('getProjectRankById', () => {
+  it('ranks projects in tree order, with the Inbox first wherever the tree has it', () => {
+    const ranks = getProjectRankById([
+      { id: 'a' },
+      { id: INBOX_PROJECT.id },
+      { id: 'b' },
+    ]);
+    expect(ranks.get(INBOX_PROJECT.id)).toBeLessThan(ranks.get('a')!);
+    expect(ranks.get('a')).toBeLessThan(ranks.get('b')!);
+  });
+
+  it('ranks the Inbox first even when the tree omits it', () => {
+    const ranks = getProjectRankById([{ id: 'a' }]);
+    expect(ranks.get(INBOX_PROJECT.id)).toBeLessThan(ranks.get('a')!);
   });
 });
