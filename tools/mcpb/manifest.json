@@ -3,8 +3,8 @@
   "name": "super-productivity",
   "display_name": "Super Productivity",
   "version": "1.0.0",
-  "description": "Lets Claude read your Super Productivity tasks or add tasks to your Inbox, limited to the permissions you grant in the app.",
-  "long_description": "Connects Claude Desktop to the Super Productivity desktop app running on this computer (Settings → Misc → Enable assistant access). The app decides what Claude may do: read task summaries, also read notes, and/or add tasks to the Inbox. This extension only relays messages to http://127.0.0.1:3876/mcp; it stores no data. Super Productivity must be running.",
+  "description": "Lets Claude read your Super Productivity tasks, add tasks to your Inbox or switch the tracked task, limited to the permissions you grant in the app.",
+  "long_description": "Connects Claude Desktop to the Super Productivity desktop app running on this computer (Settings → Misc → Enable assistant access). The app decides what Claude may do: read task summaries, also read notes, add tasks to the Inbox, and/or start and stop time tracking. This extension only relays messages to http://127.0.0.1:3876/mcp; it stores no data. Super Productivity must be running.",
   "author": {
     "name": "Super Productivity",
     "url": "https://super-productivity.com"

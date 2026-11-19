@@ -245,6 +245,41 @@ const getTask: ToolSpec = {
   },
 };
 
+const getCurrentTask: ToolSpec = {
+  scope: 'tasks:read',
+  definition: {
+    name: 'get_current_task',
+    ...describeTool('Get currently tracked task', READ_ONLY_HINTS),
+    description:
+      'Returns the task whose time is being tracked now, as a summary like list_tasks, or null. ' +
+      UNTRUSTED_NOTE,
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  run: async (args, _scopes, forward) => {
+    const unknownArg = findUnknownArg(args, []);
+    if (unknownArg) {
+      return invalid(unknownArg);
+    }
+    const reply = await forwardSafely(forward, {
+      method: 'GET',
+      path: '/task-control/current',
+    });
+    if (isToolResult(reply)) {
+      return reply;
+    }
+    if (!reply.body.ok) {
+      return failFromRenderer(reply);
+    }
+    const task = isRecord(reply.body.data) ? toTaskSummary(reply.body.data) : null;
+
+    // Titles are not bounded by the app.
+    if (byteLength({ task }) > MAX_RESPONSE_BYTES) {
+      return fail('RESPONSE_TOO_LARGE', 'This task is too large to return.');
+    }
+    return ok({ task });
+  },
+};
+
 const namedEntityList = (
   name: 'list_projects' | 'list_tags',
   title: string,
@@ -452,13 +487,132 @@ const createTask: ToolSpec = {
   },
 };
 
+// A tracking write may have run even when the renderer did not answer. The user should check
+const TRACKING_UNKNOWN =
+  'Tracking may or may not have changed. Check the current task before retrying.';
+
+const setCurrentTask: ToolSpec = {
+  scope: 'tasks:track',
+  definition: {
+    name: 'set_current_task',
+    ...describeTool('Track task', {
+      readOnly: false,
+      destructive: false,
+      idempotent: true,
+      openWorld: true,
+    }),
+    description:
+      'Starts tracking time on an open task without subtasks, switching away from the task ' +
+      'tracked now, and returns the previous task id (null if none). Issue integrations set ' +
+      'to act when a task starts (such as Jira transitions) will do so.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'The task id.' } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  run: async (args, _scopes, forward, getScopes) => {
+    const unknownArg = findUnknownArg(args, ['id']);
+    if (unknownArg) {
+      return invalid(unknownArg);
+    }
+    const id = optionalId(args, 'id');
+    if (id === undefined || id instanceof Error) {
+      return invalid('id must be a task id');
+    }
+
+    const lookup = await forwardSafely(forward, {
+      method: 'GET',
+      path: `/tasks/${id}`,
+      query: { source: 'active' },
+    });
+    if (isToolResult(lookup)) {
+      return lookup;
+    }
+    if (!lookup.body.ok || !isRecord(lookup.body.data)) {
+      return failFromRenderer(lookup);
+    }
+    if (lookup.body.data.isDone === true) {
+      return fail('TASK_DONE', 'This task is done. Ask the user to reopen it first.');
+    }
+    const subTaskIds = lookup.body.data.subTaskIds;
+    if (Array.isArray(subTaskIds) && subTaskIds.length > 0) {
+      return fail('HAS_SUBTASKS', 'This task has subtasks. Track one of them instead.');
+    }
+
+    const current = await forwardSafely(forward, {
+      method: 'GET',
+      path: '/task-control/current',
+    });
+    if (isToolResult(current)) {
+      return current;
+    }
+    if (!current.body.ok) {
+      return failFromRenderer(current);
+    }
+    const previous = current.body.data;
+    const previousTaskId =
+      isRecord(previous) && typeof previous.id === 'string' ? previous.id : null;
+
+    let reply: RendererReply;
+    try {
+      reply = await forward({
+        method: 'POST',
+        path: '/task-control/current',
+        body: { taskId: id },
+      });
+    } catch {
+      return fail('OUTCOME_UNKNOWN', TRACKING_UNKNOWN);
+    }
+    if (!reply.body.ok) {
+      return failFromRenderer(reply);
+    }
+    return ok({ currentTaskId: id, previousTaskId });
+  },
+};
+
+const stopTracking: ToolSpec = {
+  scope: 'tasks:track',
+  definition: {
+    name: 'stop_tracking',
+    ...describeTool('Stop tracking', {
+      readOnly: false,
+      destructive: false,
+      idempotent: true,
+    }),
+    description: 'Stops time tracking. Does nothing when no task is tracked.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  run: async (args, _scopes, forward) => {
+    const unknownArg = findUnknownArg(args, []);
+    if (unknownArg) {
+      return invalid(unknownArg);
+    }
+
+    let reply: RendererReply;
+    try {
+      reply = await forward({ method: 'POST', path: '/task-control/stop' });
+    } catch {
+      return fail('OUTCOME_UNKNOWN', TRACKING_UNKNOWN);
+    }
+    if (!reply.body.ok) {
+      return failFromRenderer(reply);
+    }
+    return ok({ currentTaskId: null });
+  },
+};
+
 const ALL_TOOLS: ToolSpec[] = [
   getStatus,
   listTasks,
   getTask,
+  getCurrentTask,
   listProjects,
   listTags,
   createTask,
+  setCurrentTask,
+  stopTracking,
 ];
 
 const isGranted = (tool: ToolSpec, scopes: readonly AssistantAccessScope[]): boolean =>
@@ -494,9 +648,9 @@ export const runTool = async (
   }
   const result = await tool.run(args, scopes, forward, getScopes);
   // A grant revoked (or access switched off) while the renderer was answering
-  // must not still hand out the data. A capture that already ran is reported
-  // as such, since withholding it would invite a duplicate.
-  if (tool.scope !== 'tasks:capture' && !isGranted(tool, getScopes())) {
+  // must not still hand out the data. A write that already ran is reported
+  // as such, since withholding it would invite a duplicate or a wrong retry.
+  if (tool.definition.annotations.readOnlyHint && !isGranted(tool, getScopes())) {
     return fail('NOT_PERMITTED', 'This connection may not use this tool.');
   }
   return result;
