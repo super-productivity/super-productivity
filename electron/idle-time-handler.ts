@@ -552,9 +552,20 @@ export class IdleTimeHandler {
   }
 
   private async _getLoginctlIdleTime(): Promise<number | null> {
-    const { stdout } = await execAsync('loginctl show-session -p IdleSinceHint', {
-      timeout: 3000,
-    });
+    const { stdout } = await execAsync(
+      'loginctl show-session -p IdleHint -p IdleSinceHint',
+      { timeout: 3000 },
+    );
+
+    // IdleSinceHint marks the last IdleHint transition (either direction), so it
+    // stays set while the user is active; it is an idle duration only when IdleHint=yes.
+    const idleHint = stdout.match(/IdleHint=(yes|no)/)?.[1];
+    if (idleHint === 'no') {
+      return 0;
+    }
+    if (idleHint !== 'yes') {
+      return null;
+    }
 
     const match = stdout.match(/IdleSinceHint=(\d+)/);
     if (match && match[1]) {
