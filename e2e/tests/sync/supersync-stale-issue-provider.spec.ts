@@ -57,6 +57,25 @@ const tasks = (page: Page): Promise<Task[]> =>
     return result;
   });
 
+const issueProviderIds = (page: Page): Promise<string[]> =>
+  page.evaluate(() => {
+    let ids: string[] = [];
+    (
+      window as unknown as {
+        __e2eTestHelpers: {
+          store: {
+            subscribe: (fn: (s: { issueProvider: { ids: string[] } }) => void) => {
+              unsubscribe: () => void;
+            };
+          };
+        };
+      }
+    ).__e2eTestHelpers.store
+      .subscribe((state) => (ids = state.issueProvider.ids))
+      .unsubscribe();
+    return ids;
+  });
+
 const taskByTitleSuffix = async (page: Page, suffix: string): Promise<Task> => {
   const task = (await tasks(page)).find((candidate) => candidate.title.endsWith(suffix));
   expect(task, `task ending with "${suffix}"`).toBeDefined();
@@ -400,6 +419,81 @@ test.describe('@supersync Stale issue provider references (#8147)', () => {
           repairOrigin: 1,
           repairPeer: 0,
         });
+      } finally {
+        for (const client of clients) await closeClient(client);
+      }
+    });
+  }
+
+  for (const deleteFirst of [true, false]) {
+    test(`concurrent provider deletion preserves a replacement link (${deleteFirst ? 'delete' : 'relink'} uploads first)`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.slow();
+      const clients: SimulatedE2EClient[] = [];
+      try {
+        const config = getSuperSyncConfig(await createTestUser(testRunId));
+        for (const name of ['A', 'B']) {
+          const client = await createSimulatedClient(browser, baseURL!, name, testRunId);
+          clients.push(client);
+          await client.workView.waitForTaskList();
+          await client.sync.setupSuperSync(config);
+        }
+        const [origin, peer] = clients;
+        const oldProvider = calendarProvider('old-calendar');
+        const replacement = calendarProvider('replacement-calendar');
+        await addProvider(origin.page, oldProvider);
+        await addProvider(origin.page, replacement);
+        const title = 'Task with a replacement issue link';
+        await origin.workView.addTask(title);
+        const task = await taskByTitleSuffix(origin.page, title);
+        await linkTaskToProvider(origin.page, task, oldProvider.id);
+        await origin.sync.syncAndWait();
+        await peer.sync.syncAndWait();
+
+        await setWsDownloadBlocked(origin, true);
+        await setWsDownloadBlocked(peer, true);
+        const peerTask = await taskByTitleSuffix(peer.page, title);
+        expect(peerTask.issueProviderId).toBe(oldProvider.id);
+        await deleteProvider(origin.page, oldProvider.id, [task.id], false);
+        await expectUnlinked(origin.page, task.id);
+        await linkTaskToProvider(peer.page, peerTask, replacement.id);
+        const relinkedTask = await taskByTitleSuffix(peer.page, title);
+        expect(relinkedTask.issueProviderId).toBe(replacement.id);
+
+        const [first, second] = deleteFirst ? [origin, peer] : [peer, origin];
+        await first.sync.syncAndWait();
+        await second.sync.syncAndWait();
+        await first.sync.syncAndWait();
+        await origin.sync.syncAndWait();
+        await peer.sync.syncAndWait();
+
+        const expectedLink = {
+          id: task.id,
+          title: relinkedTask.title,
+          issueProviderId: replacement.id,
+          issueId: relinkedTask.issueId,
+          issueType: relinkedTask.issueType,
+          issueLastSyncedValues: relinkedTask.issueLastSyncedValues,
+        };
+        const expectConverged = async (client: SimulatedE2EClient): Promise<void> => {
+          expect(
+            await taskByTitleSuffix(client.page, title),
+            client.clientName,
+          ).toMatchObject(expectedLink);
+          const providerIds = await issueProviderIds(client.page);
+          expect(providerIds, client.clientName).not.toContain(oldProvider.id);
+          expect(providerIds, client.clientName).toContain(replacement.id);
+        };
+        for (const client of clients) {
+          await expectConverged(client);
+          await flushPendingWrites(client.page);
+          await client.page.reload();
+          await waitForAppReady(client.page);
+          await expectConverged(client);
+        }
       } finally {
         for (const client of clients) await closeClient(client);
       }
