@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { Task } from '../../tasks/task.model';
 
 /**
  * Transient sidecar that holds task IDs with dueWithTime (and, separately, with
@@ -10,9 +11,14 @@ export class TimeBlockDeleteSidecarService {
   private _pendingTaskIds: string[] = [];
   private _pendingDayOnlyTaskIds: string[] = [];
 
-  set(taskIds: string[], dayOnlyTaskIds: string[] = []): void {
-    this._pendingTaskIds.push(...taskIds);
-    this._pendingDayOnlyTaskIds.push(...dayOnlyTaskIds);
+  set(tasks: readonly Pick<Task, 'id' | 'dueWithTime' | 'dueDay'>[]): void {
+    for (const t of tasks) {
+      if (t.dueWithTime) {
+        this._pendingTaskIds.push(t.id);
+      } else if (t.dueDay) {
+        this._pendingDayOnlyTaskIds.push(t.id);
+      }
+    }
   }
 
   consume(): string[] {

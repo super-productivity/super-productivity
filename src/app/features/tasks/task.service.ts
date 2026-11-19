@@ -501,10 +501,7 @@ export class TaskService {
           issueProviderId: t.issueProviderId!,
         })),
     );
-    this._timeBlockDeleteSidecar.set(
-      tasks.filter((t) => !!t.dueWithTime).map((t) => t.id),
-      tasks.filter((t) => !t.dueWithTime && !!t.dueDay).map((t) => t.id),
-    );
+    this._timeBlockDeleteSidecar.set(tasks);
     this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds, tasks }));
   }
 
