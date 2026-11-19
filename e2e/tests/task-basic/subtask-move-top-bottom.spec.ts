@@ -82,6 +82,13 @@ test.describe('Subtask move to top/bottom', () => {
       await parent.focus();
       await page.keyboard.press('i');
       const panel = page.locator('task-detail-panel');
+      // Let the panel's deferred open-time auto-focus land first; under load it
+      // can fire after subC.focus() below and steal focus from it.
+      await expect
+        .poll(async () =>
+          page.evaluate(() => !!document.activeElement?.closest('task-detail-panel')),
+        )
+        .toBe(true);
       await panel
         .locator('mat-expansion-panel-header')
         .filter({ hasText: 'Subtasks' })

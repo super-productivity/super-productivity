@@ -77,6 +77,9 @@ export const throttle = (
           clearTimeout(state.timeoutId);
           state.timeoutId = null;
         }
+        // args stored for a late trailing call are superseded by this one
+        state.lastArgs = null;
+        state.lastThis = null;
 
         // Reset leading invoked flag since we're in a new throttle window
         state.isLeadingInvoked = false;

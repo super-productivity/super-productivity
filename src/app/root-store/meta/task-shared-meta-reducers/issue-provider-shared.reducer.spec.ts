@@ -3,6 +3,7 @@ import { TaskSharedActions } from '../task-shared.actions';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { Action, ActionReducer } from '@ngrx/store';
 import { createStateWithExistingTasks, expectStateUpdate } from './test-utils';
+import { RootState } from '../../root-state';
 
 describe('issueProviderSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -12,6 +13,56 @@ describe('issueProviderSharedMetaReducer', () => {
     mockReducer = jasmine.createSpy('reducer').and.callFake((state, action) => state);
     metaReducer = issueProviderSharedMetaReducer(mockReducer);
   });
+
+  for (const bulk of [false, true]) {
+    it(`should derive ${bulk ? 'bulk' : 'single'} delete unlinks from replay state and clear sync baselines`, () => {
+      const state = createStateWithExistingTasks(['task1', 'task2', 'task3'], [], []);
+      for (const [id, providerId] of [
+        ['task1', 'provider-1'],
+        ['task2', 'provider-2'],
+        ['task3', 'provider-3'],
+      ]) {
+        state[TASK_FEATURE_NAME].entities[id] = {
+          ...state[TASK_FEATURE_NAME].entities[id]!,
+          issueProviderId: providerId,
+          issueId: `issue-${id}`,
+          issueType: 'JIRA',
+          issueLastSyncedValues: { title: 'Synced title' },
+        };
+      }
+      const snapshot = structuredClone(state);
+      const action = bulk
+        ? TaskSharedActions.deleteIssueProviders({
+            ids: ['provider-1', 'provider-2'],
+            taskIdsToUnlink: ['missing-task', 'task1'],
+          })
+        : TaskSharedActions.deleteIssueProvider({
+            issueProviderId: 'provider-1',
+            taskIdsToUnlink: ['missing-task'],
+          });
+
+      const result = metaReducer(state, action) as RootState;
+      for (const id of bulk ? ['task1', 'task2'] : ['task1']) {
+        expect(result[TASK_FEATURE_NAME].entities[id]).toEqual(
+          jasmine.objectContaining({
+            issueProviderId: undefined,
+            issueId: undefined,
+            issueType: undefined,
+            issueLastSyncedValues: undefined,
+          }),
+        );
+      }
+      expect(result[TASK_FEATURE_NAME].entities.task3).toBe(
+        state[TASK_FEATURE_NAME].entities.task3,
+      );
+      if (!bulk) {
+        expect(result[TASK_FEATURE_NAME].entities.task2).toBe(
+          state[TASK_FEATURE_NAME].entities.task2,
+        );
+      }
+      expect(state).toEqual(snapshot);
+    });
+  }
 
   describe('deleteIssueProvider action', () => {
     it('should unlink issue data from tasks', () => {

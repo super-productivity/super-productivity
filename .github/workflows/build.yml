@@ -78,9 +78,10 @@ jobs:
           prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
           body_path: /tmp/release-body.md
 
-  # The checks gating the Linux release run as parallel jobs, split the same way
-  # as ci.yml, so the critical path is the slowest shard rather than the sum of
-  # lint + unit + E2E in one serial job (~50 min of the ~80 min run).
+  # The checks gating the Linux release run as parallel jobs, split like
+  # ci.yml, so the critical path is the slowest job rather than the sum of
+  # lint + unit + E2E in one serial job (~50 min of the ~80 min run). Small
+  # checks share a job: every job waits for one of the org's capped runners.
   lint:
     permissions:
       contents: read
@@ -92,13 +93,19 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Node Dependencies
+        id: setup
         uses: ./.github/actions/setup-deps
       - run: npm run lint
+      # A lint failure still lets the tests below report; a failed setup doesn't.
+      - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: npm run packages:test
+      - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: npm run release-notes:test
 
-  # Same coverage as `npm run test:ci`: Angular specs in both time zones plus
-  # the package and release-notes tests.
+  # With the package and release-notes tests in `lint`: same coverage as
+  # `npm run test:ci`, Angular specs in both time zones.
   unit-tests:
-    name: unit-tests (${{ matrix.suite }} ${{ matrix.shard }})
+    name: unit-tests (${{ matrix.suite }})
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -107,7 +114,6 @@ jobs:
       fail-fast: false
       matrix:
         suite: [berlin, la]
-        shard: ['1/2', '2/2']
     steps:
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -119,23 +125,7 @@ jobs:
       - name: Run Angular specs
         env:
           SUITE: ${{ matrix.suite }}
-          SHARD: ${{ matrix.shard }}
-        run: node tools/test-shards.js "$SUITE" --shard "$SHARD"
-
-  unit-tests-tooling:
-    permissions:
-      contents: read
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-        with:
-          persist-credentials: false
-      - name: Setup Node Dependencies
-        uses: ./.github/actions/setup-deps
-      - run: npm run packages:test
-      - run: npm run release-notes:test
+        run: node tools/test-shards.js "$SUITE" --shards 1
 
   e2e-build:
     permissions:
@@ -201,7 +191,7 @@ jobs:
           overwrite: true # so a re-run of this job does not fail on the existing artifact
 
   linux-bin-and-snap-release:
-    needs: [lint, unit-tests, unit-tests-tooling, e2e]
+    needs: [lint, unit-tests, e2e]
     runs-on: ubuntu-latest
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

@@ -95,6 +95,7 @@ import {
   PluginBridgeContextService,
   PluginContextBoundMethods,
 } from './plugin-bridge-context.service';
+import { PluginBridgeRepeatCfgService } from './plugin-bridge-repeat-cfg.service';
 import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
 
@@ -173,6 +174,7 @@ export class PluginBridgeService implements OnDestroy {
   private _dateService = inject(DateService);
   private _taskContextMenuRegistry = inject(PluginTaskContextMenuRegistryService);
   private _contextBridge = inject(PluginBridgeContextService);
+  private _repeatCfgBridge = inject(PluginBridgeRepeatCfgService);
   readonly #nodeExecutionGrantTokens = new Map<string, string>();
   readonly #nodeExecutionApi = this._consumeNodeExecutionApi();
 
@@ -244,6 +246,8 @@ export class PluginBridgeService implements OnDestroy {
     pluginId: string,
     manifest?: PluginManifest,
   ): PluginContextBoundMethods & {
+    addTaskRepeatCfg: PluginBridgeRepeatCfgService['addTaskRepeatCfg'];
+    updateTaskRepeatCfg: PluginBridgeRepeatCfgService['updateTaskRepeatCfg'];
     persistDataSynced: (dataStr: string, key?: string) => Promise<void>;
     loadPersistedData: (key?: string) => Promise<string | null>;
     listSyncedDataKeys: (prefix?: string) => Promise<string[]>;
@@ -336,6 +340,7 @@ export class PluginBridgeService implements OnDestroy {
       showInWorkContext: () => this._showInWorkContext(pluginId),
       closeWorkContextView: () => this._closeWorkContextView(pluginId),
       ...this._contextBridge.createBoundMethods(),
+      ...this._repeatCfgBridge.createBoundMethods(),
       getSelectedTask: () => this.getSelectedTask(),
       getFocusedTask: () => this.getFocusedTask(),
 
