@@ -135,6 +135,26 @@ export const optionalId = (
   return value;
 };
 
+export const optionalIdList = (
+  args: Record<string, unknown>,
+  key: string,
+  max: number,
+): string[] | undefined | Error => {
+  const value = args[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(value) ||
+    value.length > max ||
+    !value.every((id) => typeof id === 'string' && ID_PATTERN.test(id)) ||
+    new Set(value).size !== value.length
+  ) {
+    return new Error(`${key} must be a list of up to ${max} distinct ids`);
+  }
+  return value;
+};
+
 export const optionalBoolean = (
   args: Record<string, unknown>,
   key: string,
