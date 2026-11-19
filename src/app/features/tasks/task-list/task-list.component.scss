@@ -36,6 +36,11 @@
   padding: var(--s) 0;
 }
 
+// Empty view sections still need a receiving rectangle for CDK hit testing.
+.task-list-inner[data-id='VIEW'] {
+  min-height: var(--s5);
+}
+
 .done-task-box {
   text-align: center;
   display: flex;
