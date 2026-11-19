@@ -221,7 +221,7 @@ describe('SearchPageComponent', () => {
   }));
 
   it('finds archived tasks by attachment URL when completed tasks are included', fakeAsync(() => {
-    taskServiceSpy.getArchivedTasks.and.resolveTo([
+    taskArchiveOrchestrator.getArchivedTasks.and.resolveTo([
       createTask({
         id: 'archived-link',
         attachments: [
