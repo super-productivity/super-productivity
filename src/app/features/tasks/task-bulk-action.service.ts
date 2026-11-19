@@ -195,7 +195,7 @@ export class TaskBulkActionService {
               workContextId: context.id,
             }),
           );
-        } else {
+        } else if (context.taskIds.includes(task.id)) {
           this._store.dispatch(
             moveTaskInTodayList({
               taskId: copyId,

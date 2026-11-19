@@ -59,6 +59,7 @@ describe('TaskBulkActionService', () => {
   let sectionService: jasmine.SpyObj<SectionService>;
   let sections: Section[];
   let plannerDays: ReturnType<typeof signal<Record<string, string[]>>>;
+  let contextTaskIds: string[];
   let backlogTaskIds: string[];
 
   const t = (id: string, overrides: Partial<Task> = {}): Task => ({
@@ -83,6 +84,7 @@ describe('TaskBulkActionService', () => {
   beforeEach(() => {
     sections = [];
     plannerDays = signal<Record<string, string[]>>({});
+    contextTaskIds = [];
     backlogTaskIds = [];
     duplicateService = jasmine.createSpyObj('TaskDuplicateService', ['duplicate']);
     duplicateService.duplicate.and.callFake((task) => `copy-${task.id}`);
@@ -198,7 +200,7 @@ describe('TaskBulkActionService', () => {
               of({
                 id: 'p1',
                 type: WorkContextType.PROJECT,
-                taskIds: [],
+                taskIds: contextTaskIds,
                 backlogTaskIds,
                 isEnableBacklog,
               }),
@@ -253,6 +255,7 @@ describe('TaskBulkActionService', () => {
     });
 
     it('duplicates every selected root with unchanged titles, keeps selection and places copies after originals', async () => {
+      contextTaskIds = ['a', 'b'];
       select([t('a'), t('b')]);
       await service.duplicateSelected();
       expect(
@@ -273,6 +276,20 @@ describe('TaskBulkActionService', () => {
       ]);
       expect(multiSelect.clear).not.toHaveBeenCalled();
       expect([...selectedIds()]).toEqual(['a', 'b']);
+    });
+
+    it('does not dispatch placement into a project that does not contain the original', async () => {
+      const task = t('a', { projectId: 'p2' });
+      contextTaskIds = ['existing'];
+      select([task]);
+
+      await service.duplicateSelected();
+
+      expect(duplicateService.duplicate).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: task.id, projectId: task.projectId }),
+        true,
+      );
+      expect(store.dispatch).not.toHaveBeenCalled();
     });
 
     it('copies a selected parent and its child only once', async () => {

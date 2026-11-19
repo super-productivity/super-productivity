@@ -190,6 +190,49 @@ test('places future Planner copies after each selected original', async ({
   ).toEqual(copiedIds);
 });
 
+test('keeps Inbox copies from a board out of the previously opened project', async ({
+  page,
+  projectPage,
+  workViewPage,
+  testPrefix,
+}) => {
+  await page.goto('/#/project/INBOX_PROJECT/tasks');
+  await workViewPage.waitForTaskList();
+  const titles = [`${testPrefix} First`, `${testPrefix} Second`];
+  for (const title of titles) await workViewPage.addTask(title);
+
+  await projectPage.createProject('Last opened project');
+  await projectPage.navigateToProjectByName('Last opened project');
+  await workViewPage.waitForTaskList();
+  const existingTitle = `${testPrefix} Project task`;
+  await workViewPage.addTask(existingTitle);
+  const projectTitles = page.locator(
+    '.task-list-inner[data-id="UNDONE"] > task task-title',
+  );
+  await expect(projectTitles).toHaveText([existingTitle]);
+
+  await page.goto('/#/boards/EISENHOWER_MATRIX');
+  await page.getByRole('button', { name: /Create.*Tags/i }).click();
+  const cards = page.locator('board-panel planner-task');
+  for (const title of titles) {
+    await cards.filter({ hasText: title }).click({ modifiers: ['Control'] });
+  }
+  await expect(page.locator('task-multi-select-bar .bar')).toContainText('2 selected');
+  await page.keyboard.press('Control+d');
+  for (const title of titles)
+    await expect(cards.filter({ hasText: title })).toHaveCount(2);
+
+  await projectPage.navigateToProjectByName('Last opened project');
+  await workViewPage.waitForTaskList();
+  await expect(projectTitles).toHaveText([existingTitle]);
+  await page.goto('/#/project/INBOX_PROJECT/tasks');
+  await workViewPage.waitForTaskList();
+  await expect(projectTitles).toHaveCount(4);
+  for (const title of titles) {
+    await expect(projectTitles.filter({ hasText: title })).toHaveCount(2);
+  }
+});
+
 test('keeps section copies adjacent inside their section', async ({
   page,
   workViewPage,
