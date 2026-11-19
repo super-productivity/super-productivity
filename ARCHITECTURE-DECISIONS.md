@@ -361,6 +361,14 @@ recoverable via local undo, not via sync.
   File-based providers use the same client planner and marker.
 - Do not add per-task/note restoration operations or project-sized snapshots to
   compensate a losing marked project delete.
+- **Notes that reach the project concurrently (#10744)** are kept in the Inbox,
+  not deleted. A marked delete moves notes listed in the project but not named
+  in its payload to the Inbox, and a note move whose target project is gone is
+  applied as a move to the Inbox. Both are derived from state below op capture,
+  so every replay agrees. Tasks still go with the project (#8997 enrichment).
+  This also catches a note added to the project concurrently: the adding device
+  keeps it in the Inbox, while the deleting device never had it (unchanged).
+  Proof: [`supersync-note-move-into-deleted-project.spec.ts`](e2e/tests/sync/supersync-note-move-into-deleted-project.spec.ts).
 
 **Extension — single-tag deletion (#11489, since November 2026)**: new
 `deleteTag` actions carry `tagDeleteWins: true` and win the same way. Under

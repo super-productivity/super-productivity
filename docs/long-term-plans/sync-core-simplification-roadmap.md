@@ -1,6 +1,13 @@
 # Sync Core Simplification Roadmap
 
-> **Status: Planned**
+> **Status: Partly done, rest deferred** (checked against the code on 2026-11-12).
+>
+> - **Phase 1 landed:** sync results are `kind` unions in [sync-results.types.ts](../../src/app/op-log/core/types/sync-results.types.ts), and the wrapper branches on `.kind`. Optional flags remain on the transport-level types.
+> - **Phase 2 partly landed:** the USE_REMOTE rebuild moved out of the sync service into [remote-state-rebuild.service.ts](../../src/app/op-log/sync/remote-state-rebuild.service.ts) (#11723). There is no `full-state-sync.service.ts`.
+> - **Phase 3 landed in a different shape:** #10621 split `ConflictResolutionService` (4,496 → 1,181 lines) into seven services and two utils by responsibility, not a `conflict-strategies/` directory.
+> - **Phases 0 and 4 not started.**
+>
+> The current sync queue is [make sync boring](../plans/2026-11-09-make-sync-boring.md); this roadmap is kept for its rationale.
 
 **Goal:** Reduce cognitive load and architectural coupling in the sync stack without destabilizing behavior.
 

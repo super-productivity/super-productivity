@@ -1,6 +1,6 @@
 # Survey 2026: bringing Planner and Schedule closer
 
-> **Status: Proposed**, direction decided 2026-10-28 (§ 11); nothing scheduled, the survey is still open
+> **Status: Option A implemented** (Planner cards onto the day panel in v20.0.0, overdue tasks in the panel in #11703). The rest of the direction decided 2026-10-28 (§ 11) is not scheduled; the survey is still open
 >
 > **Owner / tracking:** Unassigned; related open issues #10853, #5614, #8132.
 >

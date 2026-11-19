@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
@@ -5,6 +6,8 @@ import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { strToU8, zipSync } from 'fflate';
 import { of } from 'rxjs';
+import { LanguageService } from '../core/language/language.service';
+import { LanguageCode } from '../core/locale.constants';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { GlobalThemeService } from '../core/theme/global-theme.service';
 import { SnackService } from '../core/snack/snack.service';
@@ -127,11 +130,18 @@ describe('PluginService uploaded translations round-trip', () => {
         PluginI18nService,
         { provide: HttpClient, useValue: { get: () => of(null) } },
         { provide: GlobalConfigService, useValue: globalConfig },
+        {
+          provide: LanguageService,
+          useValue: { currentLanguage: signal(LanguageCode.en).asReadonly() },
+        },
         { provide: PluginRunner, useValue: pluginRunner },
         { provide: PluginSecurityService, useValue: pluginSecurity },
         { provide: PluginMetaPersistenceService, useValue: pluginMetaPersistence },
         { provide: TranslateService, useValue: translateService },
-        { provide: GlobalThemeService, useValue: { darkMode: () => 'light' } },
+        {
+          provide: GlobalThemeService,
+          useValue: { darkMode: () => 'light', isDarkTheme: () => false },
+        },
         {
           provide: PluginHooksService,
           useValue: jasmine.createSpyObj<PluginHooksService>('PluginHooksService', [

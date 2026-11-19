@@ -21,6 +21,8 @@ import { TaskService } from '../tasks/task.service';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { ScheduleCalendarMapEntry, ScheduleEvent } from './schedule.model';
 import { SVEType } from './schedule.const';
+import { ScheduleConfig } from '../config/global-config.model';
+import { TaskWithSubTasks } from '../tasks/task.model';
 
 describe('ScheduleService', () => {
   let service: ScheduleService;
@@ -583,6 +585,84 @@ describe('ScheduleService', () => {
       // Assert
       // Should work without throwing
       expect(result).toBeDefined();
+    });
+
+    describe('tasks without a time', () => {
+      const DAY = '2026-01-20';
+      const NOON = new Date(2026, 0, 20, 12, 0).getTime();
+      const task = {
+        id: 'A',
+        title: 'A',
+        tagIds: [],
+        subTaskIds: [],
+        subTasks: [],
+        timeSpent: 0,
+        timeEstimate: 60 * 60 * 1000,
+        dueDay: DAY,
+      } as Partial<TaskWithSubTasks> as TaskWithSubTasks;
+      const cfg = (add: Partial<ScheduleConfig>): ScheduleConfig => ({
+        isWorkStartEndEnabled: false,
+        workStart: '9:00',
+        workEnd: '17:00',
+        isLunchBreakEnabled: false,
+        lunchBreakStart: '13:00',
+        lunchBreakEnd: '14:00',
+        ...add,
+      });
+      const build = (
+        timelineCfg: ScheduleConfig,
+        isAutoPlacementOnly?: boolean,
+      ): ReturnType<ScheduleService['buildScheduleDays']> =>
+        service.buildScheduleDays({
+          now: NOON,
+          realNow: NOON,
+          daysToShow: [DAY],
+          timelineTasks: { unPlanned: [task], planned: [] },
+          taskRepeatCfgs: { withStartTime: [], withoutStartTime: [] },
+          calendarEvents: [],
+          plannerDayMap: {},
+          timelineCfg,
+          isAutoPlacementOnly,
+        });
+
+      it('are placed in the grid while the setting is missing', () => {
+        const [day] = build(cfg({}));
+
+        expect(day.tray).toBeUndefined();
+        expect(day.entries.map((entry) => entry.id)).toEqual(['A']);
+      });
+
+      it('are placed in the grid with the setting on auto', () => {
+        const [day] = build(cfg({ untimedTaskPlacement: 'auto' }));
+
+        expect(day.tray).toBeUndefined();
+        expect(day.entries.map((entry) => entry.id)).toEqual(['A']);
+      });
+
+      it('are kept in the tray with the setting on tray', () => {
+        const [day] = build(cfg({ untimedTaskPlacement: 'tray' }));
+
+        expect(day.entries).toEqual([]);
+        expect(day.tray?.tasks.map((t) => t.id)).toEqual(['A']);
+        // work hours off: nothing to measure against
+        expect(day.tray?.freeMs).toBeUndefined();
+      });
+
+      it('are measured against the work hours left when those are on', () => {
+        const [day] = build(
+          cfg({ untimedTaskPlacement: 'tray', isWorkStartEndEnabled: true }),
+        );
+
+        // 12:00–17:00 is 5h, minus the 1h task
+        expect(day.tray?.freeMs).toBe(4 * 60 * 60 * 1000);
+      });
+
+      it('stay in the grid where the view has no tray', () => {
+        const [day] = build(cfg({ untimedTaskPlacement: 'tray' }), true);
+
+        expect(day.tray).toBeUndefined();
+        expect(day.entries.map((entry) => entry.id)).toEqual(['A']);
+      });
     });
   });
 

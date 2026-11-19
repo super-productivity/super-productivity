@@ -1,4 +1,5 @@
-import { ScheduleDay, ScheduleEvent } from './schedule.model';
+import { ScheduleDay, ScheduleDayTray, ScheduleEvent } from './schedule.model';
+import { mapScheduleDaysToTrays } from './map-schedule-data/with-schedule-day-tray';
 import { mapScheduleDaysToScheduleEvents } from './map-schedule-data/map-schedule-days-to-schedule-events';
 import { FH, SVEType } from './schedule.const';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
@@ -10,6 +11,7 @@ export interface ScheduleDayPage {
   daysToShow: string[];
   events: ScheduleEvent[];
   beyondBudget: ScheduleEvent[][];
+  trays: Record<string, ScheduleDayTray> | null;
   hasNoEvents: boolean;
 }
 
@@ -25,12 +27,16 @@ export const toScheduleDayPage = (
   );
   const hasVisibleEvents = eventsFlat.some((ev) => ev.type !== SVEType.LunchBreak);
   const hasBeyondBudgetEvents = beyondBudgetDays.some((d) => d.length > 0);
+  const hasTrayItems = scheduleDays.some(
+    (d) => !!d.tray && d.tray.tasks.length + d.tray.repeatCfgs.length > 0,
+  );
   return {
     day,
     daysToShow: [day],
     events: eventsFlat,
     beyondBudget: beyondBudgetDays,
-    hasNoEvents: !hasVisibleEvents && !hasBeyondBudgetEvents,
+    trays: mapScheduleDaysToTrays(scheduleDays),
+    hasNoEvents: !hasVisibleEvents && !hasBeyondBudgetEvents && !hasTrayItems,
   };
 };
 

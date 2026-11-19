@@ -539,6 +539,26 @@ describe('conflict-disjoint-merge.util', () => {
       expect(commutes([deferredSyncTimeSpentOp()], [planOp()])).toBe(true);
     });
 
+    it('is true beside a project move, which writes projectId only (#11685)', () => {
+      const move = op({
+        actionType: ActionType.TASK_SHARED_MOVE_TO_PROJECT,
+        payload: {
+          actionPayload: {
+            task: { id: 'task-1', projectId: 'P-old', timeSpent: 5, timeSpentOnDay: {} },
+            targetProjectId: 'P-new',
+          },
+          entityChanges: [],
+        },
+      });
+      expect(mergeChangedFields([move], 'task', 'task-1')).toEqual({
+        projectId: 'P-new',
+      });
+      expect(writesNoTaskTime(move, 'task', 'task-1')).toBe(true);
+      expect(commutes([syncTimeSpentOp()], [move])).toBe(true);
+      expect(commutes([move], [syncTimeSpentOp()])).toBe(true);
+      expect(touchesCrossEntityTaskFields([move], 'task', 'task-1')).toBe(true);
+    });
+
     it('is true beside a readable edit that writes no time field', () => {
       const rename = op({ payload: { task: { id: 'task-1', changes: { title: 'A' } } } });
       expect(commutes([syncTimeSpentOp()], [planOp({ id: 'plan' }), rename])).toBe(true);

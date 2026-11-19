@@ -1,6 +1,6 @@
 import type { DateService } from '../../../core/date/date.service';
 import type { Task } from '../task.model';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStrWithOffset } from '../../../util/get-db-date-str';
 
 export type DeadlineAutoPlanFields = {
   autoPlanToday?: string;
@@ -34,18 +34,14 @@ const NO_AUTO_PLAN: DeadlineAutoPlanDecision = {
 const isPositiveFiniteTimestamp = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 
-const getDateStrWithOffset = (
-  timestamp: number,
-  context: DeadlineAutoPlanContext,
-): string => getDbDateStr(new Date(timestamp - context.startOfNextDayDiffMs));
-
 const isDeadlineTodayForAutoPlan = (
   deadlineDay: string | null | undefined,
   deadlineWithTime: number | null | undefined,
   context: DeadlineAutoPlanContext,
 ): boolean =>
   isPositiveFiniteTimestamp(deadlineWithTime)
-    ? getDateStrWithOffset(deadlineWithTime, context) === context.today
+    ? getDbDateStrWithOffset(deadlineWithTime, context.startOfNextDayDiffMs) ===
+      context.today
     : deadlineDay === context.today;
 
 const getDueScheduleDay = (
@@ -53,7 +49,7 @@ const getDueScheduleDay = (
   context: DeadlineAutoPlanContext,
 ): string | undefined => {
   if (isPositiveFiniteTimestamp(task.dueWithTime)) {
-    return getDateStrWithOffset(task.dueWithTime, context);
+    return getDbDateStrWithOffset(task.dueWithTime, context.startOfNextDayDiffMs);
   }
 
   return task.dueDay ?? undefined;

@@ -464,6 +464,10 @@ describe('performance migrations', () => {
     expect(dockerWorkflow).toContain(
       "needs.server-tests.result == 'success' && needs.sync-e2e.result == 'success'",
     );
+    // The dispatch that skips those suites publishes `latest` from master only.
+    expect(dockerWorkflow).toContain(
+      "github.event_name == 'workflow_dispatch' && inputs.release_tag == '' && github.ref == 'refs/heads/master'",
+    );
     // Release images: a vX.Y.Z tag built from the tag's tree, never `latest`, never pruned.
     expect(dockerWorkflow).toContain('types: [published]');
     expect(dockerWorkflow).toContain('!github.event.release.prerelease');

@@ -3,7 +3,9 @@
  * gap-free `server_seq` values.
  *
  * Each upload increments `user_sync_state.last_seq` under `SELECT ... FOR
- * UPDATE` inside a RepeatableRead transaction (`SyncService.uploadOps`). Under
+ * UPDATE` inside a RepeatableRead transaction (`SyncService.uploadOps`). For
+ * an ordinary upload the row lock is only taken when it sends
+ * `lastKnownServerSeq`, as the client does, so the uploads here send it. Under
  * contention a loser fails with a serialization error and the whole batch is
  * rejected as retryable (`INTERNAL_ERROR`, "Concurrent transaction conflict").
  * The invariant this pins: an accepted op's sequence is unique, the stored
@@ -86,7 +88,18 @@ describeWithDb('Concurrent uploads get unique, gap-free server_seq (PostgreSQL)'
       expect(attempt).toBeLessThan(MAX_ATTEMPTS);
       const results = await Promise.all(
         pending.map(({ clientId, ops }) =>
-          service.uploadOps(TEST_USER_ID, clientId, ops),
+          service.uploadOps(
+            TEST_USER_ID,
+            clientId,
+            ops,
+            undefined,
+            undefined,
+            undefined,
+            false,
+            // No state replacement exists, so any cursor passes the fence; what
+            // matters is that sending one takes the sync-state row lock.
+            0,
+          ),
         ),
       );
       const retry: typeof uploads = [];
