@@ -29,7 +29,7 @@ for (const trigger of ['menu', 'shortcut'] as const) {
     }
     await expect(rows).toHaveCount(4);
     await expect(rows.locator('task-title')).toHaveText(
-      titles.flatMap((title) => [title.trim(), title.trim()]),
+      titles.flatMap((title) => [title.trim(), `${title.trim()} (copy)`]),
     );
     const ids = await rows.evaluateAll((elements) =>
       elements.map((element) => element.getAttribute('data-task-id')),
@@ -82,7 +82,9 @@ test('duplicates a selected parent and child once, then duplicates a standalone 
   const roots = page.locator('.task-list-inner[data-id="UNDONE"] > task');
   await expect(roots).toHaveCount(2);
   await expect(roots.nth(0).locator('.sub-tasks task')).toHaveCount(1);
-  await expect(roots.nth(1).locator('.sub-tasks task')).toHaveCount(1);
+  await expect(roots.nth(1).locator('.sub-tasks task task-title')).toHaveText([
+    `${testPrefix} Child`,
+  ]);
   await expect(page.locator('task-multi-select-bar .bar')).toContainText('2 selected');
   await page.keyboard.press('Escape');
   const childId = await child.getAttribute('data-task-id');
@@ -95,7 +97,7 @@ test('duplicates a selected parent and child once, then duplicates a standalone 
   ).toBe(childId);
   await expect(parent.locator('.sub-tasks task task-title')).toHaveText([
     `${testPrefix} Child`,
-    `${testPrefix} Child`,
+    `${testPrefix} Child (copy)`,
   ]);
   await expect(child.first()).toHaveClass(/isMultiSelected/);
 });
@@ -136,7 +138,9 @@ test('keeps duplicate copies in the backlog beside their originals', async ({
   );
   await page.keyboard.press('Control+d');
   await expect(rows).toHaveCount(4);
-  await expect(rows.locator('task-title')).toHaveText(titles.flatMap((t) => [t, t]));
+  await expect(rows.locator('task-title')).toHaveText(
+    titles.flatMap((t) => [t, `${t} (copy)`]),
+  );
   await expect(page.locator('task').filter({ hasText: testPrefix })).toHaveCount(4);
   await expect(bar).toContainText('2 selected');
 });
@@ -274,7 +278,9 @@ test('keeps section copies adjacent inside their section', async ({
     await taskPage.getTaskByText(title).click({ modifiers: ['Control'] });
   await page.keyboard.press('Control+d');
   await expect(rows).toHaveCount(4);
-  await expect(rows.locator('task-title')).toHaveText(titles.flatMap((t) => [t, t]));
+  await expect(rows.locator('task-title')).toHaveText(
+    titles.flatMap((t) => [t, `${t} (copy)`]),
+  );
   await expect(page.locator('.no-section task')).toHaveCount(0);
   await expect(page.locator('task-multi-select-bar .bar')).toContainText('2 selected');
 });

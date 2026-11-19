@@ -11,6 +11,48 @@ interface SubtaskSchedule {
   dueWithTime: number | null;
 }
 
+for (const trigger of ['menu', 'shortcut'] as const) {
+  test(`single duplicate marks its title and stays adjacent through the ${trigger}`, async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const title = `${testPrefix} Original`;
+    const precedingTitle = `${testPrefix} Before`;
+    await workViewPage.addTask(title);
+    await workViewPage.addTask(precedingTitle);
+    const original = taskPage.getTaskByText(title);
+    const originalId = await original.getAttribute('data-task-id');
+    if (trigger === 'menu') {
+      await original.click({ button: 'right' });
+      await page.getByRole('menuitem', { name: /Duplicate/ }).click();
+    } else {
+      await original.focus();
+      await original.press('Control+d');
+    }
+    const rows = page.locator('.task-list-inner[data-id="UNDONE"] > task');
+    const expectedTitles = [precedingTitle, title, `${title} (copy)`];
+    await expect(rows.locator('task-title')).toHaveText(expectedTitles);
+    const ids = await rows.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('data-task-id')),
+    );
+    expect(ids[1]).toBe(originalId);
+    expect(new Set(ids).size).toBe(3);
+
+    await flushPendingWrites(page);
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(rows.locator('task-title')).toHaveText(expectedTitles);
+    expect(
+      await rows.evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute('data-task-id')),
+      ),
+    ).toEqual(ids);
+  });
+}
+
 const readSubtaskSchedules = async (
   page: Page,
   parentTitle: string,
