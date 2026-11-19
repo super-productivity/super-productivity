@@ -104,7 +104,12 @@
     "url": "https://github.com/1jamesthompson1/sp-invoicer",
     "author": "1jamesthompson1",
     "authorUrl": "https://github.com/1jamesthompson1",
-    "id": "invoicer"
+    "id": "invoicer",
+    "release": {
+      "version": "0.0.9",
+      "downloadUrl": "https://github.com/1jamesthompson1/sp-invoicer/releases/download/v0.0.9/invoice-maker-v0.0.9.zip",
+      "sha256": "dddab0a233860d0dd89f0d29918d7314023e8e598eb78b5e440e929a99d77663"
+    }
   },
   {
     "name": "StudyForge Leaderboard",
