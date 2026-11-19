@@ -127,15 +127,27 @@ export class TimeBlockSyncEffects {
           TaskSharedActions.addTask,
         ),
         mergeMap((action): TimeBlockQueueRequest[] => {
+          // Only the user's own actions write to the calendar. Add to Today and
+          // creating a task on a day share their actions with automatic
+          // dispatches, which are told apart below and skipped.
           if (action.type === TaskSharedActions.planTasksForToday.type) {
             const a = action as ReturnType<typeof TaskSharedActions.planTasksForToday>;
+            // isSkipRemoveReminder marks the day-change self-heals: task-due.effects
+            // and add-tasks-for-tomorrow are its only callers, and both run on
+            // their own when the day changes, not on a user action.
+            if (a.isSkipRemoveReminder) {
+              return [];
+            }
             return a.taskIds.map((taskId) => ({ taskId, operation: 'resync' }));
           }
           if (action.type === TaskSharedActions.addTask.type) {
             const a = action as ReturnType<typeof TaskSharedActions.addTask>;
             // A new task with a time gets no block on add (unchanged); one created
-            // on a day (e.g. in Today) gets its all-day block.
-            return a.task.dueDay && !a.task.dueWithTime
+            // on a day (e.g. in Today) gets its all-day block. Repeat instances
+            // (repeatCfgId) and tasks created from an issue or a calendar import
+            // (issueId) are created automatically, so they get none.
+            const isAutoCreated = !!a.task.repeatCfgId || !!a.task.issueId;
+            return a.task.dueDay && !a.task.dueWithTime && !isAutoCreated
               ? [{ taskId: a.task.id, operation: 'resync' }]
               : [];
           }

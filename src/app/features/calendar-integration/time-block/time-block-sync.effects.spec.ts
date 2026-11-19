@@ -809,6 +809,67 @@ describe('TimeBlockSyncEffects', () => {
       flush();
     }));
 
+    describe('automatic day changes write nothing', () => {
+      const addTaskToToday = (task: Task): void =>
+        actions$.next(
+          TaskSharedActions.addTask({
+            task,
+            workContextId: 'TODAY',
+            workContextType: WorkContextType.TAG,
+            isAddToBacklog: false,
+            isAddToBottom: false,
+          }),
+        );
+
+      it('skips a repeat instance created for today', fakeAsync(() => {
+        const task = createDayTask('repeat-task', dayStr(0), { repeatCfgId: 'cfg-1' });
+        getByIdOnce$Spy.and.returnValue(of(task));
+
+        addTaskToToday(task);
+        tick(COALESCE_MS);
+
+        expect(upsertAllDayEventSpy).not.toHaveBeenCalled();
+        expect(upsertEventSpy).not.toHaveBeenCalled();
+        expect(deleteEventSpy).not.toHaveBeenCalled();
+        flush();
+      }));
+
+      it('skips an all-day event auto-imported from another calendar provider', fakeAsync(() => {
+        const task = createDayTask('imported-task', dayStr(0), {
+          issueId: 'ical::event-1',
+          issueProviderId: 'other-calendar-provider',
+          issueType: 'ICAL',
+        });
+        getByIdOnce$Spy.and.returnValue(of(task));
+
+        addTaskToToday(task);
+        tick(COALESCE_MS);
+
+        expect(upsertAllDayEventSpy).not.toHaveBeenCalled();
+        expect(upsertEventSpy).not.toHaveBeenCalled();
+        expect(deleteEventSpy).not.toHaveBeenCalled();
+        flush();
+      }));
+
+      it('skips the day-change self-heal (planTasksForToday with isSkipRemoveReminder)', fakeAsync(() => {
+        getByIdOnce$Spy.and.callFake((id: string) => of(createDayTask(id, dayStr(0))));
+
+        actions$.next(
+          TaskSharedActions.planTasksForToday({
+            taskIds: ['task-1', 'task-2'],
+            today: dayStr(0),
+            isSkipRemoveReminder: true,
+          }),
+        );
+        tick(COALESCE_MS);
+
+        expect(upsertAllDayEventSpy).not.toHaveBeenCalled();
+        expect(upsertEventSpy).not.toHaveBeenCalled();
+        expect(deleteEventSpy).not.toHaveBeenCalled();
+        flush();
+      }));
+    });
+
     it('ignores the option when the plugin does not implement all-day blocks', fakeAsync(() => {
       delete timeBlockDef['upsertAllDayEvent'];
       const task = createDayTask('task-1', '2026-05-14');
