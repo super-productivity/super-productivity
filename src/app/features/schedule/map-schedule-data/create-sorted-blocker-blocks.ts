@@ -1,6 +1,5 @@
 import { TaskWithDueTime } from '../../tasks/task.model';
 
-import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { devError } from '../../../util/dev-error';
@@ -260,8 +259,8 @@ const createBlockerBlocksForScheduledTasks = (
   const blockedBlocks: BlockedBlock[] = [];
   scheduledTasks.forEach((task) => {
     const start = task.dueWithTime;
-    // const end = task.due + Math.max(getTimeLeftForTask(task), 1);
-    const end = task.dueWithTime + getTimeLeftForTask(task);
+    const duration = Math.max(0, task.timeEstimate) || 0;
+    const end = start + duration;
 
     let wasMerged = false;
     for (const blockedBlock of blockedBlocks) {

@@ -218,6 +218,31 @@ describe('mapToScheduleDays()', () => {
     ] as any);
   });
 
+  it('keeps automatically placed work outside a scheduled block while tracking', () => {
+    const [day] = mapToScheduleDays(
+      N,
+      [NDS],
+      [fakeTaskEntry('N1', { timeEstimate: h(1) })],
+      [
+        fakePlannedTaskEntry('S1', minAfterNow(30), {
+          timeEstimate: h(1),
+          timeSpent: minAfterNowTs(10) - N,
+        }),
+      ],
+      [],
+      [],
+      [],
+      'S1',
+      {},
+    );
+
+    const scheduled = day.entries.find((entry) => entry.id === 'S1');
+    const continued = day.entries.find((entry) => entry.id.startsWith('N1_'));
+    expect(scheduled?.start).toBe(minAfterNowTs(30));
+    expect(scheduled?.duration).toBe(h(1));
+    expect(continued?.start).toBe(minAfterNowTs(90));
+  });
+
   it('should work for very long scheduled tasks', () => {
     const r = mapToScheduleDays(
       N,
