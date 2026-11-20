@@ -1,3 +1,8 @@
+import { Task } from '../../../../features/tasks/task.model';
+import {
+  syncTimeSpent,
+  TimeTrackingActions,
+} from '../../../../features/time-tracking/store/time-tracking.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { SyncProviderId } from '../../../sync-providers/provider.const';
 import {
@@ -10,6 +15,7 @@ import {
 import { FuzzDevice, SyncFuzzHarness } from './sync-fuzz-harness';
 
 const TASK_ID = 't3';
+const TRACKED_MS = 5000;
 const SYNC_FILE = 'sync-data.json';
 
 /** `isDone` of the task in the full-state snapshot the remote file carries. */
@@ -41,11 +47,16 @@ describe('#11184 a done that loses to "add to today" from another device', () =>
   afterEach(() => SyncFuzzHarness.dispose());
 
   // Several tasks at once: the day-change auto-plan or a multi-select add.
-  for (const [planned, taskIds] of [
-    ['alone', [TASK_ID]],
-    ['with another task', [TASK_ID, 't1']],
+  // Tracked: time tracked on the task right before the done, so its
+  // `syncTimeSpent` delta is pending beside the done. The delta stays pending
+  // beside a remote add to today for one task (`timeDeltasSurvivingLww`).
+  for (const [planned, taskIds, isTracked] of [
+    ['alone', [TASK_ID], false],
+    ['with another task', [TASK_ID, 't1'], false],
+    ['alone', [TASK_ID], true],
   ] as const) {
-    it(`reaches the other device (planned ${planned})`, async () => {
+    const tracked = isTracked ? ', time tracked before the done' : '';
+    it(`reaches the other device (planned ${planned}${tracked})`, async () => {
       const harness = await SyncFuzzHarness.create({
         providerId: SyncProviderId.Dropbox,
       });
@@ -64,6 +75,27 @@ describe('#11184 a done that loses to "add to today" from another device', () =>
       await harness.sync(desktop);
       await harness.sync(phone);
 
+      if (isTracked) {
+        // TaskService's tick and flush, without the auto-plan of `track`:
+        // the task is not planned for today when the desktop works on it.
+        await harness.as(desktop, async () => {
+          const root = (await harness.state()) as {
+            tasks: { entities: Record<string, Task> };
+          };
+          const task = root.tasks.entities[TASK_ID];
+          await harness.dispatch(
+            TimeTrackingActions.addTimeSpent({
+              task,
+              date: fuzzDay(),
+              duration: TRACKED_MS,
+              isFromTrackingReminder: false,
+            }),
+          );
+          await harness.dispatch(
+            syncTimeSpent({ taskId: TASK_ID, date: fuzzDay(), duration: TRACKED_MS }),
+          );
+        });
+      }
       await run(desktop, ['doneTask', TASK_ID, true]);
       // A minute later, before the desktop has synced.
       harness.tick();
@@ -89,6 +121,8 @@ describe('#11184 a done that loses to "add to today" from another device', () =>
       await harness.sync(desktop);
       await harness.sync(phone);
       await harness.restart(phone);
+      // Replay is status-blind: a kept delta must not count twice.
+      await harness.restart(desktop);
       const phoneTaskIds = await harness.as(phone, async () =>
         viewOf(await harness.state()).tasks.map((t) => t.id),
       );
@@ -105,6 +139,19 @@ describe('#11184 a done that loses to "add to today" from another device', () =>
         reinstalled: await isDoneOn(reinstalled),
         phone: await isDoneOn(phone),
       }).toEqual({ desktop: true, remoteFile: true, reinstalled: true, phone: true });
+      // The tracked time arrives once, beside the done.
+      const timeSpentOn = (device: FuzzDevice): Promise<number | undefined> =>
+        harness.as(
+          device,
+          async () =>
+            viewOf(await harness.state()).tasks.find((t) => t.id === TASK_ID)?.timeSpent,
+        );
+      const time = isTracked ? TRACKED_MS : 0;
+      expect({
+        desktop: await timeSpentOn(desktop),
+        reinstalled: await timeSpentOn(reinstalled),
+        phone: await timeSpentOn(phone),
+      }).toEqual({ desktop: time, reinstalled: time, phone: time });
     });
   }
 });

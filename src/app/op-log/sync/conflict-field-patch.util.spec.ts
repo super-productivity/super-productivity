@@ -994,5 +994,35 @@ describe('conflict-field-patch.util', () => {
         ),
       ).toEqual([]);
     });
+
+    it('re-sends a done beside a time delta kept pending, without its time (#11184)', async () => {
+      const kept = delta({ id: 'kept' });
+      const done = edit({ isDone: true }, { id: 'l' });
+      const conflict = conflictOf([kept, done], [lwwRow]);
+      const createPatch = jasmine
+        .createSpy('createPatch')
+        .and.callFake((_c: EntityConflict, fields: Record<string, unknown>) =>
+          op({ id: 'patch', payload: fields }),
+        );
+      const deps = {
+        getState: async (): Promise<unknown> => ({
+          isDone: true,
+          doneOn: 5,
+          timeSpent: 1000,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          timeSpentOnDay: { '2026-01-01': 1000 },
+        }),
+        payloadKeyFor: (): string => 'task',
+        createPatch,
+      };
+      // The caller passes the rejected done and the kept delta as pending.
+      const patches = await buildSurvivingFieldPatches(
+        [{ conflict, winner: 'remote' }],
+        new Set(['l', 'kept']),
+        deps,
+      );
+      expect(patches.length).toBe(1);
+      expect(createPatch).toHaveBeenCalledWith(conflict, { isDone: true, doneOn: 5 });
+    });
   });
 });

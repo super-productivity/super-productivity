@@ -642,7 +642,9 @@ const writtenByLocalSide = (
 
 /**
  * One `survivingLocalFields` patch per entity whose losing local ops are all
- * pending (a no-pending crossing's retained ops already uploaded).
+ * pending (a no-pending crossing's retained ops already uploaded). Pending
+ * includes the time deltas kept beside a remote win: they stay as they are and
+ * the patch never carries them (`survivingLocalFields` skips additive time).
  */
 export const buildSurvivingFieldPatches = async (
   resolutions: { conflict: EntityConflict; winner: 'local' | 'remote' }[],
