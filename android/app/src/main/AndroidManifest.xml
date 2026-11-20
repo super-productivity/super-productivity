@@ -56,7 +56,13 @@
         android:resource="@xml/file_paths" />
     </provider>
 
-    <!-- Set FullscreenActivity as the default launcher -->
+    <!-- Set FullscreenActivity as the default launcher.
+         Standard launchMode on purpose: in offline mode this activity is only a
+         trampoline that finishes after forwarding to CapacitorMainActivity. As
+         singleTask, a launcher tap on the backgrounded app found no instance in
+         the task and created a new one (splash + forward) over the running app,
+         which flashed. Standard mode lets the launcher just bring the task to
+         the front. -->
     <activity
       android:name=".FullscreenActivity"
       android:allowTaskReparenting="true"
@@ -64,7 +70,6 @@
       android:exported="true"
       android:hardwareAccelerated="true"
       android:label="@string/title_activity_fullscreen"
-      android:launchMode="singleTask"
       android:theme="@style/AppTheme.NoActionBarLaunch"
       android:windowSoftInputMode="adjustResize">
 

@@ -133,7 +133,7 @@ test.describe('Worklog', () => {
     await contextBtn.click({ button: 'right' });
 
     const historyBtn = page
-      .locator('work-context-menu button, .mat-mdc-menu-content button')
+      .locator('.mat-mdc-menu-content button')
       .filter({ hasText: 'History' })
       .first();
     await expect(historyBtn).toBeVisible();

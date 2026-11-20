@@ -72,7 +72,7 @@ export const ProcrastinationInfo: Component<ProcrastinationInfoProps> = (props) 
   });
 
   return (
-    <div class="page-fade info-content">
+    <div class="stack page-fade">
       <div class="intro">
         <h2>{title()}</h2>
         <p>
@@ -83,14 +83,14 @@ export const ProcrastinationInfo: Component<ProcrastinationInfoProps> = (props) 
       <section>
         <h3>{cycleTitle()}</h3>
         <p>{cycleIntro()}</p>
-        <div class="procrastination-graph">
-          <div class="graph-item">{cycleStep1()}</div>
-          <div class="sync-icon">→</div>
-          <div class="graph-item">{cycleStep2()}</div>
-          <div class="sync-icon">→</div>
-          <div class="graph-item">{cycleStep3()}</div>
-          <div class="sync-icon">→</div>
-          <div class="graph-item">{cycleStep4()}</div>
+        <div class="row procrastination-graph">
+          <div class="card">{cycleStep1()}</div>
+          <div class="text-muted">→</div>
+          <div class="card">{cycleStep2()}</div>
+          <div class="text-muted">→</div>
+          <div class="card">{cycleStep3()}</div>
+          <div class="text-muted">→</div>
+          <div class="card">{cycleStep4()}</div>
         </div>
       </section>
 
@@ -127,7 +127,7 @@ export const ProcrastinationInfo: Component<ProcrastinationInfoProps> = (props) 
         <p>{triggersText()}</p>
       </section>
 
-      <div class="action-buttons">
+      <div class="actions">
         <button
           class="btn-primary"
           onClick={props.onBackToWork}

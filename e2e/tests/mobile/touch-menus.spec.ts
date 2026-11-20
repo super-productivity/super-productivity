@@ -123,7 +123,7 @@ test.describe('Phone menus (touch)', () => {
     });
     await longPress(page, projectRow);
     await waitForMenuSettled(page);
-    await expect(page.locator('.mat-mdc-menu-content work-context-menu')).toBeVisible();
+    await expect(page.locator('.work-context-menu-panel')).toBeVisible();
     await expect(page.locator('.cdk-drag-preview')).toHaveCount(0);
     expect(page.url()).toBe(url);
   });

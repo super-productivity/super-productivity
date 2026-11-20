@@ -474,7 +474,7 @@
   cursor: ns-resize;
   z-index: 4;
   opacity: 0.5;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--transition-duration-m) ease;
   pointer-events: auto;
 
   &:hover {

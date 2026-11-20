@@ -386,7 +386,7 @@ const updateDocStatusBanner = (): void => {
   }
   if (!bannerEl) {
     bannerEl = document.createElement('div');
-    bannerEl.className = 'doc-banner';
+    bannerEl.className = 'callout callout--warning doc-banner';
     bannerEl.setAttribute('role', 'status');
     document.body.insertBefore(bannerEl, document.body.firstChild);
   }
@@ -408,7 +408,8 @@ const showRemoteUpdateBanner = (): void => {
     return;
   }
   remoteBannerEl = document.createElement('div');
-  remoteBannerEl.className = 'doc-banner doc-banner--remote-update';
+  remoteBannerEl.className =
+    'callout callout--warning doc-banner doc-banner--remote-update';
   remoteBannerEl.setAttribute('role', 'status');
 
   const text = document.createElement('span');
@@ -2173,7 +2174,7 @@ void waitForPluginAPI()
     if (root) {
       root.textContent = '';
       const msg = document.createElement('div');
-      msg.className = 'doc-error-state';
+      msg.className = 'empty-state doc-error-state';
       msg.textContent =
         'Doc Mode could not connect to Super Productivity. ' +
         'Try closing and reopening this panel.';

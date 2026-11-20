@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "ID projektu lub nazwa użytkownika/projekt",
+    "PROJECT_HINT": "Ścieżka projektu (namespace/project-slug) lub numeryczny identyfikator projektu, a nie wyświetlana nazwa (np. super-productivity/super-productivity lub 12345)",
+    "TOKEN": "Token dostępu",
+    "HOW_TO_GET_TOKEN": "Jak zdobyć token?",
+    "SCOPE": "Zakres",
+    "SCOPE_ALL": "Wszystkie",
+    "SCOPE_CREATED": "Utworzone przeze mnie",
+    "SCOPE_ASSIGNED": "Przypisane do mnie",
+    "GITLAB_BASE_URL": "Własne URL do GitLab",
+    "FILTER_USER": "Nazwa użytkownika (np. w celu filtrowania twoich zmian)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Filtr niestandardowy",
+    "FILTER_DESCRIPTION": "Zobacz https://docs.gitlab.com/ee/api/issues.html#list-issues. Można łączyć wiele filtrów przez użycie &",
+    "SUBMIT_TIMELOGS": "Przesyłanie dzienników czasowych do GitLab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Wyświetlanie okna dialogowego śledzenia czasu po kliknięciu dnia zakończenia"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Podsumowanie",
+    "STATE": "Status",
+    "ASSIGNEE": "Przypisany",
+    "LABELS": "Kategorie",
+    "DESCRIPTION": "Opis"
+  },
+  "FORM_HELP": "<p>Tutaj możesz skonfigurować Super Productivity tak, aby wyświetlał otwarte zgłoszenia GitLab (zarówno wersji online, jak i instancji hostowanej samodzielnie) dla wybranego projektu w panelu tworzenia zadań w widoku planowania dziennego. Będą one pokazywane jako sugestie i będą zawierały link do zgłoszenia oraz dodatkowe informacje.</p><p>Możesz też automatycznie dodawać i synchronizować wszystkie otwarte zgłoszenia do zaległości.</p>"
+}

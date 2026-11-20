@@ -231,7 +231,8 @@ export const getTagIdsToMatch = (
         next = next.concat(includedTagIds[0]);
       }
     } else {
-      next = next.concat(includedTagIds);
+      // Only the missing ones: a repeated id would be written into the task.
+      next = next.concat(includedTagIds.filter((id) => !next.includes(id)));
     }
   }
 

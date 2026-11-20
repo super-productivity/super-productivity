@@ -28,6 +28,7 @@ import { ReactiveFormsModule, UntypedFormControl } from '@angular/forms';
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
 import { T } from '../../../t.const';
 import { TagService } from '../tag.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskService } from '../../tasks/task.service';
 import { TaskCopy } from '../../tasks/task.model';
 import { TagComponent } from '../tag/tag.component';

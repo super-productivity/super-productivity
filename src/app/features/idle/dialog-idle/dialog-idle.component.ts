@@ -337,7 +337,8 @@ export class DialogIdleComponent implements OnInit, OnDestroy {
         return;
     }
 
-    this._close(trackItems);
+    // the whole idle time was a break, so the reminder must restart — no opt-out
+    this._close(trackItems, this.mode === 'BREAK' ? { isResetBreakTimer: true } : {});
   }
 
   skipTrack(): void {

@@ -155,4 +155,31 @@ describe('stringToMs', () => {
       expect(stringToMs('1h 30m 45m')).toBe(6300000); // 1h + 45m (30m is overwritten)
     });
   });
+
+  describe('units written out or separated by a space', () => {
+    it('should accept a space between a number and its unit', () => {
+      expect(stringToMs('45 m')).toBe(45 * 60 * 1000);
+      expect(stringToMs('1 h 30 m')).toBe(90 * 60 * 1000);
+      expect(stringToMs('90 s')).toBe(90 * 1000);
+    });
+
+    it('should accept spelled-out units', () => {
+      expect(stringToMs('30min')).toBe(30 * 60 * 1000);
+      expect(stringToMs('30 min')).toBe(30 * 60 * 1000);
+      expect(stringToMs('2 hours')).toBe(2 * 60 * 60 * 1000);
+      expect(stringToMs('1 hour 30 minutes')).toBe(90 * 60 * 1000);
+      expect(stringToMs('1hr 15mins')).toBe(75 * 60 * 1000);
+      expect(stringToMs('90 sec')).toBe(90 * 1000);
+      expect(stringToMs('2H 5M')).toBe(125 * 60 * 1000);
+    });
+
+    it('should accept a decimal comma in every part', () => {
+      expect(stringToMs('1,5h 2,5m')).toBe((90 + 2.5) * 60 * 1000);
+    });
+
+    it('should still reject unknown words', () => {
+      expect(stringToMs('2 days')).toBe(0);
+      expect(stringToMs('abc')).toBe(0);
+    });
+  });
 });

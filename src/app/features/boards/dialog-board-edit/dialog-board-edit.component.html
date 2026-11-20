@@ -1,19 +1,13 @@
-<h2 mat-dialog-title>
-  {{ (data.isCreate ? T.F.BOARDS.V.ADD_NEW_BOARD : T.F.BOARDS.V.EDIT_BOARD) | translate }}
-</h2>
-<mat-dialog-content>
-  @for (hint of data.hints ?? []; track hint) {
-    <p>{{ hint | translate }}</p>
-  }
-  @if (data.board) {
-    <board-edit
-      #boarEditCmp
-      [board]="data.board"
-      [openPanelId]="data.openPanelId"
-      (afterSave)="close($event)"
-    ></board-edit>
-  }
-</mat-dialog-content>
+<!-- The editor renders the title (the view's name) and the content. -->
+@if (data.board) {
+  <board-edit
+    #boarEditCmp
+    [board]="data.board"
+    [openPanelId]="data.openPanelId"
+    [hints]="data.hints ?? []"
+    (afterSave)="close($event)"
+  ></board-edit>
+}
 
 <mat-dialog-actions align="end">
   <button

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Invoicing</title>
+    <link
+      rel="icon"
+      href="data:,"
+    />
+    <style>
+      td .grow {
+        width: 100%;
+      }
+      #print-root {
+        display: none;
+      }
+      @page {
+        margin: 16mm;
+      }
+      @media print {
+        #app {
+          display: none;
+        }
+        #print-root {
+          display: block;
+        }
+        html,
+        body {
+          background: #fff;
+        }
+      }
+      /* The invoice prints black on white whatever the app theme: pin the
+         theme tokens the UI kit colours text and borders with. */
+      .inv {
+        --text-color: #000;
+        --text-color-most-intense: #000;
+        --text-color-muted: #555;
+        --divider-color: #ddd;
+        color: var(--text-color);
+        font-size: 10pt;
+        line-height: 1.45;
+      }
+      .inv h1 {
+        margin: 0;
+        font-size: 24pt;
+      }
+      .inv h2 {
+        margin: 0 0 var(--s-half);
+        font-size: inherit;
+        color: var(--text-color-muted);
+      }
+      .inv-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: var(--s2) var(--s4);
+        margin-bottom: var(--s4);
+      }
+      .inv p {
+        margin: 0;
+        white-space: pre-line;
+        overflow-wrap: anywhere;
+      }
+      .inv-address::first-line {
+        font-weight: var(--font-weight-semibold);
+      }
+      .inv th,
+      .inv td {
+        padding: var(--s-half) var(--s);
+        vertical-align: top;
+        font-size: inherit;
+      }
+      .inv :is(th, td):first-child {
+        padding-inline-start: 0;
+      }
+      .inv :is(th, td):last-child {
+        padding-inline-end: 0;
+      }
+      .inv-meta {
+        width: auto;
+      }
+      .inv-meta :is(th, td) {
+        padding-block: 0;
+        border: 0;
+      }
+      .inv-meta th {
+        font-weight: normal;
+      }
+      /* Chrome drops collapsed borders on the header it repeats on later pages. */
+      .inv-lines {
+        border-collapse: separate;
+        border-spacing: 0;
+      }
+      .inv-lines thead th {
+        border-bottom: 1px solid var(--text-color);
+      }
+      .inv-lines td:first-child {
+        width: 100%;
+        overflow-wrap: anywhere;
+      }
+      .inv-lines tr {
+        break-inside: avoid;
+      }
+      .inv .num {
+        text-align: end;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .inv-sum td {
+        border: 0;
+        text-align: end;
+      }
+      .inv-sum tr:first-child td {
+        padding-top: var(--s);
+      }
+      .inv-total td {
+        border-top: 1px solid var(--text-color);
+        font-weight: var(--font-weight-semibold);
+        font-size: 12pt;
+      }
+      .inv .inv-note {
+        margin-top: var(--s4);
+        break-inside: avoid;
+      }
+    </style>
+  </head>
+  <body>
+    <main
+      id="app"
+      class="page stack"
+    ></main>
+    <div id="print-root"></div>
+    <!-- BUILD:SCRIPT -->
+  </body>
+</html>

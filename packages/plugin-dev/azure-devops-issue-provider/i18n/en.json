@@ -21,5 +21,8 @@
     "PRIORITY": "Priority",
     "DESCRIPTION": "Description"
   },
-  "FORM_HELP": "<p>Here you can configure Super Productivity to list Azure DevOps work items for a project in the task creation panel. They are shown as suggestions and link back to the work item.</p><p>In addition, you can automatically import open work items. Provide a Personal Access Token with work-item read access.</p>"
+  "FORM_HELP": "<p>Here you can configure Super Productivity to list Azure DevOps work items for a project in the task creation panel. They are shown as suggestions and link back to the work item.</p><p>In addition, you can automatically import open work items. Provide a Personal Access Token with work-item read access.</p><p>To mark work items done or active when you complete or reopen a task, set <b>Status sync direction</b> under Two-Way Sync to <b>Both</b> or <b>Push only</b>, and give the token work-item read and write access.</p>",
+  "ERRORS": {
+    "NO_TARGET_STATE": "Azure DevOps work item type \"{{type}}\" has no state to move it to."
+  }
 }

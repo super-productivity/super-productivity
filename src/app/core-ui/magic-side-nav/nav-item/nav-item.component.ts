@@ -6,7 +6,6 @@ import {
   inject,
   input,
   output,
-  TemplateRef,
 } from '@angular/core';
 import { RouterLink, RouterModule } from '@angular/router';
 
@@ -28,9 +27,14 @@ import { T } from '../../../t.const';
 import { CdkDragPlaceholder } from '@angular/cdk/drag-drop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenuItem, MatMenuModule, MatMenuPanel } from '@angular/material/menu';
+import {
+  MatMenu,
+  MatMenuItem,
+  MatMenuModule,
+  MatMenuPanel,
+} from '@angular/material/menu';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { selectAllDoneIds } from '../../../features/tasks/store/task.selectors';
+import { selectOpenTaskIds } from '../../../features/tasks/store/task.selectors';
 import { Store } from '@ngrx/store';
 import { TranslatePipe } from '@ngx-translate/core';
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
@@ -73,6 +77,7 @@ export class NavItemComponent {
   readonly T = T;
   private readonly _globalThemeService = inject(GlobalThemeService);
   private readonly _navConfigService = inject(MagicNavConfigService);
+  readonly isHideNavTaskCount = this._navConfigService.isHideNavTaskCount;
   private readonly _translateService = inject(TranslateService);
   private readonly _iconRegistrationEffect = effect(() => {
     const svgUrl = this.svgIcon();
@@ -121,13 +126,13 @@ export class NavItemComponent {
   featureConfigKey = input<keyof AppFeaturesConfig | undefined>(undefined);
   // Menu for a route row (more-button, right-click, long-press) or a section
   // header (right-click, long-press). Ignored when `featureConfigKey` is set.
-  contextMenu = input<TemplateRef<unknown> | null>(null);
+  contextMenu = input<MatMenu | null>(null);
 
   // Events
   clicked = output<void>();
 
-  private readonly _allDoneTaskIds = toSignal(this._store.select(selectAllDoneIds), {
-    initialValue: [],
+  private readonly _openTaskIds = toSignal(this._store.select(selectOpenTaskIds), {
+    initialValue: new Set<string>(),
   });
 
   // Memoized computation for better performance
@@ -135,10 +140,8 @@ export class NavItemComponent {
     const wc = this.workContext();
     if (!wc || wc.taskIds.length === 0) return 0;
 
-    const allDoneTaskIds = this._allDoneTaskIds();
-    const undoneTaskCount = wc.taskIds.filter(
-      (tid) => !allDoneTaskIds.includes(tid),
-    ).length;
+    const openTaskIds = this._openTaskIds();
+    const undoneTaskCount = wc.taskIds.filter((tid) => openTaskIds.has(tid)).length;
     return undoneTaskCount;
   });
 

@@ -315,8 +315,8 @@ test.describe('@supersync Post-Import Operation Flow', () => {
     }
   });
 
-  // NOTE: The "Reload after SYNC_IMPORT" scenario is already covered by
-  // supersync-superseded-clock-regression.spec.ts tests. That test verifies that
-  // reloading after receiving SYNC_IMPORT doesn't cause superseded clock issues.
+  // NOTE: The "Reload after SYNC_IMPORT" clock merge is covered by unit tests
+  // (operation-log-hydrator.service.spec.ts: SYNC_IMPORT clock merged before
+  // loadAllData; rejected-ops-handler.service.spec.ts: CONFLICT_SUPERSEDED).
   // Together they cover the ordinary post-import flow, not clock pruning.
 });

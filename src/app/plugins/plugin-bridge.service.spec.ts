@@ -21,6 +21,7 @@ import { NotifyService } from '../core/notify/notify.service';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../features/tasks/task-archive-orchestrator.service';
 import { DEFAULT_TASK, TaskWithSubTasks } from '../features/tasks/task.model';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { ProjectService } from '../features/project/project.service';
@@ -42,6 +43,7 @@ import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
 import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
+import { showPluginPanel } from '../core-ui/layout/store/layout.actions';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
 import { T } from '../t.const';
 import { INBOX_PROJECT } from '../features/project/project.const';
@@ -563,6 +565,23 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
       T.PLUGINS.ACTION_TYPE_NOT_ALLOWED,
       { type },
     );
+  });
+
+  it('lets a plugin open its own panel', () => {
+    const bound = service.createBoundMethods('test-plugin');
+
+    bound.dispatchAction({ type: showPluginPanel.type, pluginId: 'test-plugin' });
+
+    expect(store.dispatch).toHaveBeenCalledOnceWith(showPluginPanel('test-plugin'));
+  });
+
+  it("refuses to open another plugin's panel", () => {
+    const bound = service.createBoundMethods('test-plugin');
+
+    expect(() =>
+      bound.dispatchAction({ type: showPluginPanel.type, pluginId: 'other-plugin' }),
+    ).toThrowError('Action type is not allowed');
+    expect(store.dispatch).not.toHaveBeenCalled();
   });
 });
 
@@ -1266,6 +1285,7 @@ describe('PluginBridgeService - deleteProject', () => {
 describe('PluginBridgeService - updateTask() with a new projectId', () => {
   let service: PluginBridgeService;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let repeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let dialogOpen: jasmine.Spy;
   let store: MockStore;
@@ -1283,19 +1303,17 @@ describe('PluginBridgeService - updateTask() with a new projectId', () => {
   beforeEach(() => {
     taskService = jasmine.createSpyObj<TaskService>(
       'TaskService',
-      [
-        'moveToProject',
-        'update',
-        'getTasksWithSubTasksByRepeatCfgId$',
-        'getArchiveTasksForRepeatCfgId',
-        'updateArchiveTasks',
-      ],
+      ['moveToProject', 'update', 'getTasksWithSubTasksByRepeatCfgId$'],
       { allTasks$: of([]), selectedTask$: of(null) },
     );
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchiveTasksForRepeatCfgId',
+      'updateArchiveTasks',
+    ]);
     taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
       of([task, otherInstance]),
     );
-    taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+    taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
     repeatCfgService = jasmine.createSpyObj<TaskRepeatCfgService>(
       'TaskRepeatCfgService',
       ['getTaskRepeatCfgByIdAllowUndefined$', 'updateTaskRepeatCfg'],
@@ -1314,6 +1332,7 @@ describe('PluginBridgeService - updateTask() with a new projectId', () => {
         { provide: MatDialog, useValue: { open: dialogOpen } },
         { provide: PluginHooksService, useValue: {} },
         { provide: TaskService, useValue: taskService },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskRepeatCfgService, useValue: repeatCfgService },
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         {

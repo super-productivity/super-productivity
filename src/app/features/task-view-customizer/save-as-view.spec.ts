@@ -207,7 +207,7 @@ describe('buildViewFromList', () => {
     }
     expect(
       buildWithHints(list({ type: WorkContextType.TAG, id: TODAY_TAG.id })).hints,
-    ).toEqual([T.F.BOARDS.V.HINT_TODAY_OR_OVERDUE]);
+    ).toEqual([]);
     expect(buildWithHints(list()).hints).toEqual([]);
   });
 

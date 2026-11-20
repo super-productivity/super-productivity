@@ -27,6 +27,7 @@ import {
   getSyncService,
 } from './sync';
 import { wsRoutes } from './sync/websocket.routes';
+import { connectRoutes } from './connect/connect.routes';
 import { RETENTION_DAYS } from './sync/sync.types';
 import {
   getWsConnectionService,
@@ -514,6 +515,9 @@ export const createServer = (
 
       // WebSocket routes for real-time sync notifications
       await fastifyServer.register(wsRoutes, { prefix: '/api/sync' });
+
+      // Browser sign-in of new devices; the app falls back to token paste without it
+      await fastifyServer.register(connectRoutes, { prefix: '/api/connect' });
 
       // Agent task capture: public /mcp for assistants, /api/capture for the app
       if (fullConfig.captureConnectorEnabled) {

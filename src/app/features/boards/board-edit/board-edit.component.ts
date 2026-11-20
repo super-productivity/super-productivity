@@ -24,6 +24,8 @@ import { selectAllBoards } from '../store/boards.selectors';
   standalone: true,
   imports: [ViewEditorComponent],
   templateUrl: './board-edit.component.html',
+  // The editor's title and content are the dialog's own rows.
+  styles: [':host { display: contents; }'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class BoardEditComponent {
@@ -35,6 +37,8 @@ export class BoardEditComponent {
   readonly board = input.required<BoardCfg>();
   /** The section or column shown open (default: the first). */
   readonly openPanelId = input<string | undefined>(undefined);
+  /** Translation keys shown above the editor. */
+  readonly hints = input<readonly string[]>([]);
   readonly afterSave = output<string>();
 
   readonly isEdit = computed(() => !!this.board().id);

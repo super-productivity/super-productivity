@@ -6,7 +6,7 @@ import { MatButton, MatMiniFabButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { ContextMenuComponent } from '../../../ui/context-menu/context-menu.component';
-import { MatMenuItem } from '@angular/material/menu';
+import { MatMenu, MatMenuContent, MatMenuItem } from '@angular/material/menu';
 
 @Component({
   selector: 'repeat-section-type',
@@ -21,6 +21,8 @@ import { MatMenuItem } from '@angular/material/menu';
     MatButton,
     TranslatePipe,
     ContextMenuComponent,
+    MatMenu,
+    MatMenuContent,
     MatMenuItem,
   ],
   standalone: true,

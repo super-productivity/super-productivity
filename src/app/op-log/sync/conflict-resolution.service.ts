@@ -800,7 +800,7 @@ export class ConflictResolutionService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 3: Add non-conflicting remote ops to the batch
-    // Uses retry to handle race condition (issue #6213)
+    // Duplicates are skipped atomically in the append transaction (issue #6343)
     // ─────────────────────────────────────────────────────────────────────────
     if (nonConflictingOps.length > 0) {
       const result = await this._filterAndAppendOpsWithRetry(

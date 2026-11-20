@@ -11,7 +11,7 @@ import {
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatMenuItem } from '@angular/material/menu';
+import { MatMenu, MatMenuContent, MatMenuItem } from '@angular/material/menu';
 import { MatTooltip } from '@angular/material/tooltip';
 import { Store } from '@ngrx/store';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -37,6 +37,8 @@ import { getViewIcon } from '../../../features/boards/boards.util';
     CdkDropList,
     MatIcon,
     MatIconButton,
+    MatMenu,
+    MatMenuContent,
     MatMenuItem,
     MatTooltip,
     NavItemComponent,

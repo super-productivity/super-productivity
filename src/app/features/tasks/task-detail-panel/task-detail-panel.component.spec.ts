@@ -283,6 +283,22 @@ describe('TaskDetailPanelComponent', () => {
     });
   });
 
+  describe('addAttachment()', () => {
+    // the dialog needs the task id to hint on repeating instances
+    it('opens the attachment dialog with the id of the panel task', () => {
+      const matDialog = TestBed.inject(MatDialog) as jasmine.SpyObj<MatDialog>;
+      matDialog.open.and.returnValue({
+        afterClosed: () => of(undefined),
+      } as ReturnType<MatDialog['open']>);
+
+      component.addAttachment();
+
+      expect(matDialog.open).toHaveBeenCalledOnceWith(jasmine.anything(), {
+        data: { taskId: 'test-task-id' },
+      });
+    });
+  });
+
   // A won't-do task is one whose `wontDoOn` matches its `doneOn`.
   describe('editCompleted()', () => {
     const editCompletedTo = (task: TaskWithSubTasks, doneOn: number): void => {
@@ -589,6 +605,45 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
 
     expect(focusItemSpy).not.toHaveBeenCalled();
     editable.remove();
+  }));
+
+  // The on-open auto-focus fires 200ms+ after opening, later under load. A
+  // sub-task row focused in the panel by then must keep focus, or the next
+  // task shortcut (e.g. Ctrl+Alt+ArrowUp) finds no focused task.
+  it('does not steal focus from a panel sub-task focused while the timer is pending', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const subTask = document.createElement('task');
+    subTask.tabIndex = 0;
+    fixture.nativeElement.appendChild(subTask);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    subTask.focus();
+
+    tick(200);
+
+    expect(focusItemSpy).not.toHaveBeenCalled();
+    subTask.remove();
+  }));
+
+  // Opening the panel with `i` leaves focus on the main-list row; the on-open
+  // auto-focus must still move into the panel.
+  it('still focuses the panel item when a main-list task row holds focus', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const listTask = document.createElement('task');
+    listTask.tabIndex = 0;
+    document.body.appendChild(listTask);
+    listTask.focus();
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+
+    tick(200);
+
+    expect(focusItemSpy).toHaveBeenCalled();
+    listTask.remove();
   }));
 
   it('still focuses the panel item when focus is not in a text field', fakeAsync(() => {

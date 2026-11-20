@@ -1,0 +1,55 @@
+@if (isEditing()) {
+  <span class="inline-field">
+    <input
+      #model="ngModel"
+      class="title-input"
+      required
+      [class.is-error]="isError()"
+      [attr.aria-label]="label()"
+      [placeholder]="label()"
+      [attr.aria-invalid]="isError()"
+      [attr.aria-describedby]="isError() ? errorId : null"
+      [ngModel]="title()"
+      (ngModelChange)="titleChange.emit($event)"
+      (keydown.enter)="onEnter($event)"
+      (blur)="finish()"
+    />
+    @if (isError()) {
+      <span
+        class="title-error"
+        [id]="errorId"
+        >{{ T.V.E_REQUIRED | translate }}</span
+      >
+    }
+  </span>
+} @else if (isPencilShown()) {
+  <!-- The pencil is the keyboard control; the text is a larger click target. -->
+  <span
+    class="title-text"
+    (click)="edit()"
+    >{{ title() }}</span
+  >
+  <button
+    #textBtn
+    class="rename-btn"
+    mat-icon-button
+    type="button"
+    [attr.aria-label]="T.G.RENAME | translate"
+    [matTooltip]="T.G.RENAME | translate"
+    [attr.cdkFocusInitial]="isFocusInitial() ? '' : null"
+    (click)="edit()"
+  >
+    <mat-icon>edit</mat-icon>
+  </button>
+} @else {
+  <button
+    #textBtn
+    class="title-text title-btn focus-ring"
+    type="button"
+    [attr.aria-label]="T.F.BOARDS.EDITOR.RENAME_TITLE | translate: { title: title() }"
+    [attr.cdkFocusInitial]="isFocusInitial() ? '' : null"
+    (click)="edit()"
+  >
+    {{ title() }}
+  </button>
+}

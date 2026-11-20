@@ -1,17 +1,29 @@
 import { Component, ElementRef, viewChild } from '@angular/core';
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { FocusMonitor } from '@angular/cdk/a11y';
+import { MatMenu, MatMenuItem } from '@angular/material/menu';
 import { ContextMenuComponent } from './context-menu.component';
 
 @Component({
   standalone: true,
-  imports: [ContextMenuComponent],
+  imports: [ContextMenuComponent, MatMenu, MatMenuItem],
   template: `
-    <div #trigger></div>
-    <ng-template #menuTpl><span>menu item</span></ng-template>
+    <div
+      #trigger
+      tabindex="0"
+    ></div>
+    <button
+      #more
+      style="position: fixed; left: 50px; top: 60px; height: 20px"
+    >
+      more
+    </button>
+    <mat-menu #menu="matMenu"><button mat-menu-item>menu item</button></mat-menu>
     <context-menu
       [rightClickTriggerEl]="trigger"
-      [contextMenu]="menuTpl"
+      [leftClickTriggerEl]="more"
+      [menu]="menu"
       [isEnabled]="isEnabled"
       [isTouchLongPress]="isTouchLongPress"
     ></context-menu>
@@ -19,6 +31,7 @@ import { ContextMenuComponent } from './context-menu.component';
 })
 class HostComponent {
   readonly triggerRef = viewChild.required<ElementRef<HTMLElement>>('trigger');
+  readonly moreRef = viewChild.required<ElementRef<HTMLButtonElement>>('more');
   readonly contextMenu = viewChild.required(ContextMenuComponent);
   isEnabled = true;
   isTouchLongPress = false;
@@ -76,6 +89,64 @@ describe('ContextMenuComponent', () => {
     const openMenuSpy = setup(false);
     dispatchRightClick(host.triggerRef().nativeElement);
     expect(openMenuSpy).not.toHaveBeenCalled();
+  });
+
+  describe('opened from its button by keyboard', () => {
+    // Enter or Space on a button fires a click with detail 0 and no position.
+    const pressMore = (): HTMLButtonElement => {
+      const more = host.moreRef().nativeElement;
+      more.focus();
+      more.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
+      fixture.detectChanges();
+      return more;
+    };
+
+    it('opens below the button, not in the corner', () => {
+      setup(true);
+      pressMore();
+      expect(host.contextMenu().contextMenuPosition).toEqual({ x: '50px', y: '80px' });
+    });
+
+    it('gives the focus back to the button on close', () => {
+      setup(true).and.callThrough();
+      const more = pressMore();
+      // Focus sits in the menu while it is open.
+      more.blur();
+      expect(document.activeElement).not.toBe(more);
+      host.contextMenu().contextMenuTriggerEl().closeMenu();
+      expect(document.activeElement).toBe(more);
+    });
+
+    // A plain focus() counts as program focus, which Material highlights: the
+    // row stayed grey after a menu closed by mouse.
+    it('gives the focus back as mouse focus when the menu is closed by mouse', fakeAsync(() => {
+      setup(true).and.callThrough();
+      const more = pressMore();
+      TestBed.inject(FocusMonitor).monitor(more);
+      more.blur();
+      document.body.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, buttons: 1, detail: 1 }),
+      );
+      // A real click closes the menu well after its mousedown; the focus
+      // monitor only links a focus to a mousedown within 1ms.
+      tick(100);
+      host.contextMenu().contextMenuTriggerEl().closeMenu();
+      expect(document.activeElement).toBe(more);
+      expect(more.classList).toContain('cdk-mouse-focused');
+      expect(more.classList).not.toContain('cdk-program-focused');
+      TestBed.inject(FocusMonitor).stopMonitoring(more);
+      flush();
+    }));
+
+    // A side-menu row's ⋮ hides once the row loses its hover.
+    it('gives the focus to the row when the button has gone', () => {
+      setup(true).and.callThrough();
+      const more = pressMore();
+      more.blur();
+      more.style.display = 'none';
+      host.contextMenu().contextMenuTriggerEl().closeMenu();
+      expect(document.activeElement).toBe(host.triggerRef().nativeElement);
+    });
   });
 
   describe('touch long-press', () => {

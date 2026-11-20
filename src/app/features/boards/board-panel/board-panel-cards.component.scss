@@ -16,6 +16,11 @@ planner-task {
   }
 }
 
+// The first done card follows the open cards: the last one's line is there.
+.drop-list + planner-task {
+  border-top: none;
+}
+
 // Opened from the header "+", above the column's cards.
 .panel-add-task-bar {
   margin: var(--s);

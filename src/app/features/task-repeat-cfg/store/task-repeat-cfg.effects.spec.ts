@@ -4,6 +4,7 @@ import { firstValueFrom, Observable, of, throwError } from 'rxjs';
 import { Action } from '@ngrx/store';
 import { TaskRepeatCfgEffects } from './task-repeat-cfg.effects';
 import { TaskService } from '../../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { DateService } from '../../../core/date/date.service';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -37,6 +38,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
   let actions$: Observable<Action>;
   let effects: TaskRepeatCfgEffects;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let taskRepeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let taskArchiveService: jasmine.SpyObj<TaskArchiveService>;
   let addTasksForTomorrowService: jasmine.SpyObj<AddTasksForTomorrowService>;
@@ -92,8 +94,10 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       'getByIdOnce$',
       'getTasksByRepeatCfgId$',
       'getByIdsLive$',
-      'getArchiveTasksForRepeatCfgId',
       'update',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchiveTasksForRepeatCfgId',
       'updateArchiveTasks',
     ]);
 
@@ -121,6 +125,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         TaskRepeatCfgEffects,
         provideMockActions(() => actions$),
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: TaskArchiveService, useValue: taskArchiveServiceSpy },
@@ -157,7 +162,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         }),
       );
       taskService.getTasksByRepeatCfgId$.and.returnValue(of([mockTask]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
         Promise.resolve([{ ...mockTask, id: 'archived-instance' }]),
       );
       taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(
@@ -170,7 +175,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       await firstValueFrom(effects.checkToUpdateAllTaskInstances$);
 
       expect(taskService.update).toHaveBeenCalledWith(mockTask.id, { priority });
-      expect(taskService.updateArchiveTasks).toHaveBeenCalledWith([
+      expect(taskArchiveOrchestrator.updateArchiveTasks).toHaveBeenCalledWith([
         { id: 'archived-instance', changes: { priority } },
       ]);
     });
@@ -1500,7 +1505,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
       taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(mockRepeatCfg));
       taskService.getTasksByRepeatCfgId$.and.returnValue(of([])); // No live instances
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
         Promise.resolve([archiveTask]),
       );
       taskArchiveService.load.and.returnValue(Promise.resolve(archiveState));
@@ -2749,59 +2754,135 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       });
     });
 
-    // Issue #7423 guard: for repeatFromCompletionDate=true, startDate is
-    // decoupled from scheduling (getEffectiveRepeatStartDate returns
+    // Issue #7423 guard: with no open copy, an earlier startDate does not move
+    // an after-completion schedule (getEffectiveRepeatStartDate keeps
     // lastTaskCreationDay). Editing startDate must NOT take the re-anchor
-    // branch — doing so would wipe completion history and re-schedule from
+    // branch: that would wipe the completion day and recreate the series from
     // an arbitrary past anchor.
-    it('should NOT re-anchor on startDate edit when repeatFromCompletionDate is true (#7423)', (done) => {
+    it('should NOT re-anchor on an earlier startDate when repeatFromCompletionDate is true and no copy is open (#7423)', (done) => {
       const today = new Date();
-
-      // lastTaskCreationDay (April 15) > new startDate (Feb 1) — the same
-      // shape as the bug, but on a repeatFromCompletionDate config.
       const lastCompletionStr = getDbDateStr(addDays(today, -16));
       const newStartDateStr = getDbDateStr(addDays(today, -89));
 
-      const liveTask: Task = {
-        ...mockTask,
-        isDone: false,
-        dueDay: lastCompletionStr,
-        created: today.getTime(),
-      };
-
       const updatedCfg: TaskRepeatCfgCopy = {
         ...mockRepeatCfg,
-        repeatCycle: 'DAILY',
+        repeatCycle: 'YEARLY',
         repeatEvery: 1,
         startDate: newStartDateStr,
         lastTaskCreationDay: lastCompletionStr,
         repeatFromCompletionDate: true,
       };
 
-      const action = updateTaskRepeatCfg({
-        taskRepeatCfg: {
-          id: 'repeat-cfg-id',
-          changes: { startDate: newStartDateStr },
-        },
-      });
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { startDate: newStartDateStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
 
-      actions$ = of(action);
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe();
+
+      setTimeout(() => {
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+        expect(addTasksForTomorrowService.addAllDueToday).not.toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    // #11266 review: an open copy has no completion after it to protect, so it
+    // follows an earlier startDate too. Otherwise moving the date forward moved
+    // lastTaskCreationDay with the copy, and moving it back was ignored.
+    it('should move the open copy back to an earlier startDate when repeatFromCompletionDate is true (#11266)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const movedForwardStr = getDbDateStr(addDays(today, 1));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: movedForwardStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        waitForCompletion: true,
+        startDate: todayStr,
+        lastTaskCreationDay: movedForwardStr,
+      };
+
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { startDate: todayStr } },
+        }),
+      );
       taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
       taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
 
-      // The re-anchor branch (which would call getFirstRepeatOccurrence and
-      // schedule for newStartDateStr) must NOT fire. Capture the planned day
-      // and assert it never equals the past startDate.
-      let emittedDay: string | undefined;
       effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
-        if (result.type === PlannerActions.planTaskForDay.type) {
-          emittedDay = result.day;
-        }
-      });
-      setTimeout(() => {
-        expect(emittedDay).not.toBe(newStartDateStr);
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({ task: liveTask as any, day: todayStr }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({ lastTaskCreationDay: todayStr }),
+        );
         done();
-      }, 0);
+      });
+    });
+
+    // #11266: a startDate later than lastTaskCreationDay does count, so the
+    // open copy moves to it instead of a year after its own day.
+    it('should move the open copy to a startDate moved past lastTaskCreationDay when repeatFromCompletionDate is true (#11266)', (done) => {
+      const today = new Date();
+      const lastCreationStr = getDbDateStr(addDays(today, -10));
+      const newStartDateStr = getDbDateStr(addDays(today, 5));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: lastCreationStr,
+        created: addDays(today, -10).getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        waitForCompletion: true,
+        startDate: newStartDateStr,
+        lastTaskCreationDay: lastCreationStr,
+      };
+
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { startDate: newStartDateStr } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) => {
+        expect(result).toEqual(
+          PlannerActions.planTaskForDay({
+            task: liveTask as any,
+            day: newStartDateStr,
+          }),
+        );
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+          'repeat-cfg-id',
+          jasmine.objectContaining({ lastTaskCreationDay: newStartDateStr }),
+        );
+        done();
+      });
     });
 
     // Issue #7423: edge case where the new startDate lies in the past relative
@@ -3034,6 +3115,39 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       setTimeout(() => {
         expect(emitted).toEqual([]);
         // The anchor is already before today; it must not be moved.
+        expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+        expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    // #11266: the same replan on a repeat-from-completion series. A startDate
+    // later than the last completion must count, not only lastTaskCreationDay.
+    it('should trigger addAllDueToday when startDate is moved past the last completion to today (#11266)', (done) => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const lastCompletionStr = getDbDateStr(addDays(today, -10));
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'YEARLY',
+        repeatEvery: 1,
+        repeatFromCompletionDate: true,
+        waitForCompletion: true,
+        startDate: todayStr,
+        lastTaskCreationDay: lastCompletionStr,
+      };
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: { id: 'repeat-cfg-id', changes: { startDate: todayStr } },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe();
+
+      setTimeout(() => {
         expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
         expect(addTasksForTomorrowService.addAllDueToday).toHaveBeenCalled();
         done();
@@ -3513,6 +3627,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
   let actions$: Observable<Action>;
   let effects: TaskRepeatCfgEffects;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let taskRepeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let testScheduler: TestScheduler;
 
@@ -3549,11 +3664,13 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       'getByIdOnce$',
       'getTasksByRepeatCfgId$',
       'getByIdsLive$',
-      'getArchiveTasksForRepeatCfgId',
       'update',
       'scheduleTask',
       'reScheduleTask',
       'updateTags',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchiveTasksForRepeatCfgId',
     ]);
 
     const taskRepeatCfgServiceSpy = jasmine.createSpyObj('TaskRepeatCfgService', [
@@ -3573,6 +3690,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
         TaskRepeatCfgEffects,
         provideMockActions(() => actions$),
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: TaskArchiveService, useValue: taskArchiveServiceSpy },

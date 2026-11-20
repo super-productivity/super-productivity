@@ -193,6 +193,20 @@
           <span class="hide-on-small">{{ skipInstanceButtonText() }}</span>
         </button>
       }
+      @if (canDetachInstance()) {
+        <button
+          (click)="detachInstance()"
+          [attr.aria-label]="detachInstanceButtonText()"
+          [matTooltip]="T.F.TASK_REPEAT.F.DETACH_FOR_DATE_TOOLTIP | translate"
+          class="icon-on-small"
+          color="primary"
+          mat-stroked-button
+          type="button"
+        >
+          <mat-icon>call_split</mat-icon>
+          <span class="hide-on-small">{{ detachInstanceButtonText() }}</span>
+        </button>
+      }
       <span class="spacer"></span>
     }
 

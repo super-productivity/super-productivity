@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "nume utilizator/proiect",
+    "PROJECT_HINT": "d.e. super-productivity/super-productivity",
+    "TOKEN": "Jeton de acces",
+    "HOW_TO_GET_TOKEN": "Cum se obține un jeton?",
+    "SCOPE": "Domeniu de aplicare",
+    "SCOPE_ALL": "Toate",
+    "SCOPE_CREATED": "Create de mine",
+    "SCOPE_ASSIGNED": "Atribuite mie",
+    "GITLAB_BASE_URL": "URL de bază personalizat GitLab (opțional)",
+    "FILTER_USER": "Filtrează după numele de utilizator",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Filtru personalizat",
+    "FILTER_DESCRIPTION": "Vezi https://docs.gitlab.com/ee/api/issues.html#list-issues. Mai multe pot fi combinate cu &",
+    "SUBMIT_TIMELOGS": "Trimite jurnale de timp la GitLab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Arată dialogul de urmărire a timpului după clic pe \"Finalizează ziua\""
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sumar",
+    "STATE": "Stare",
+    "ASSIGNEE": "Asignat lui",
+    "LABELS": "Etichete",
+    "DESCRIPTION": "Descriere"
+  },
+  "FORM_HELP": "<p>De aici poți configura Super Productivity pentru a lista problemele deschise pe GitLab (fie că este versiunea online sau o instanță self-hosted) pentru un proiect specific în panoul de creare a sarcinilor în modul de planificare zilnic. Acestea vor fi listate ca sugestii și vor conține o legătură către problemă și mai multe informații despre acesta.</p> <p>În plus, poți importa automat toate problemele deschise.</p>"
+}

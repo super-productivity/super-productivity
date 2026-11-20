@@ -319,6 +319,61 @@ describe('issueProviderReducer loadAllData migration', () => {
     });
   });
 
+  describe('GITLAB → gitlab-issue-provider', () => {
+    const legacyGitlab = {
+      id: 'gl1',
+      issueProviderKey: 'GITLAB',
+      isEnabled: true,
+      project: 'group/repo',
+      token: 'tok',
+      gitlabBaseUrl: 'https://gitlab.example.com',
+      scope: 'assigned-to-me',
+      filterUsername: 'me',
+      filter: 'labels=bug',
+      isEnableTimeTracking: true,
+    };
+    const migrate = (provider: unknown): Record<string, unknown> =>
+      issueProviderReducer(issueProviderInitialState, loadWith({ gl1: provider }))
+        .entities['gl1'] as unknown as Record<string, unknown>;
+
+    it('moves fields into pluginConfig and keeps the finish-day worklog opt-in', () => {
+      const migrated = migrate(legacyGitlab);
+      expect(migrated['pluginId']).toBe('gitlab-issue-provider');
+      expect(migrated['pluginConfig']).toEqual({
+        project: 'group/repo',
+        token: 'tok',
+        gitlabBaseUrl: 'https://gitlab.example.com',
+        scope: 'assigned-to-me',
+        filterUsername: 'me',
+        filter: 'labels=bug',
+        isSubmitWorklogOnFinishDay: true,
+      });
+      expect(migrated['project']).toBe('group/repo');
+    });
+
+    it('defaults missing optional fields', () => {
+      const migrated = migrate({ id: 'gl1', issueProviderKey: 'GITLAB', project: 'g/r' });
+      expect(migrated['pluginConfig']).toEqual({
+        project: 'g/r',
+        token: '',
+        gitlabBaseUrl: '',
+        scope: 'all',
+        filterUsername: '',
+        filter: '',
+        isSubmitWorklogOnFinishDay: false,
+      });
+    });
+
+    it('is idempotent — already-migrated providers are left untouched', () => {
+      const already = { ...legacyGitlab, pluginId: 'x', pluginConfig: {} };
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({ gl1: already }),
+      );
+      expect(state.entities['gl1'] as unknown).toBe(already);
+    });
+  });
+
   describe('NEXTCLOUD_DECK → nextcloud-deck-issue-provider', () => {
     const legacyDeck = {
       id: 'np1',

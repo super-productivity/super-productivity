@@ -12,6 +12,14 @@
     "url": ""
   },
   "permissions": [],
+  "dataSharing": [
+    {
+      "recipient": "Webhook",
+      "userServer": true,
+      "data": [],
+      "optionalData": ["taskTitles", "taskStatus", "ids"]
+    }
+  ],
   "hooks": ["taskCreated", "taskComplete", "taskUpdate", "anyTaskUpdate", "currentTaskChange"],
   "iFrame": true,
   "sidePanel": false,

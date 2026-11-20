@@ -2,9 +2,11 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  OnChanges,
   OnInit,
   inject,
   Input,
+  viewChild,
 } from '@angular/core';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { T } from 'src/app/t.const';
@@ -32,7 +34,7 @@ import {
 } from '../../features/project/dialog-complete-resolve-tasks/dialog-complete-resolve-tasks.component';
 import { SectionService } from '../../features/section/section.service';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
-import { MatMenuItem } from '@angular/material/menu';
+import { MatMenu, MatMenuContent, MatMenuItem } from '@angular/material/menu';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { INBOX_PROJECT } from '../../features/project/project.const';
@@ -55,10 +57,22 @@ import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
   selector: 'work-context-menu',
   templateUrl: './work-context-menu.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RouterModule, MatMenuItem, TranslatePipe, MatIcon, AsyncPipe],
+  imports: [
+    RouterLink,
+    RouterModule,
+    MatMenu,
+    MatMenuContent,
+    MatMenuItem,
+    TranslatePipe,
+    MatIcon,
+    AsyncPipe,
+  ],
+  // Renders only a <mat-menu>, which draws into the overlay: the host must not
+  // take part in layout (e.g. take a flex gap).
+  styles: [':host { display: contents; }'],
   standalone: true,
 })
-export class WorkContextMenuComponent implements OnInit {
+export class WorkContextMenuComponent implements OnInit, OnChanges {
   private _matDialog = inject(MatDialog);
   private _tagService = inject(TagService);
   private _projectService = inject(ProjectService);
@@ -72,6 +86,9 @@ export class WorkContextMenuComponent implements OnInit {
   private _store = inject(Store);
   private _dateService = inject(DateService);
   private _plainspaceShareService = inject(PlainspaceShareService);
+
+  /** For a trigger: `[matMenuTriggerFor]="workContextMenu.menu()"`. */
+  readonly menu = viewChild.required(MatMenu);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -94,7 +111,11 @@ export class WorkContextMenuComponent implements OnInit {
     this.base = this.isForProject ? 'project' : 'tag';
   }
 
-  async ngOnInit(): Promise<void> {
+  // The menu's items are created each time it opens, but this component lives
+  // as long as its trigger (e.g. the title bar across context switches), so its
+  // state has to follow the inputs. The streams are cold: nothing subscribes
+  // until the menu opens.
+  ngOnChanges(): void {
     if (this.isForProject) {
       this.isArchived$ = this._projectService
         .getByIdLive$(this.contextId)
@@ -106,7 +127,15 @@ export class WorkContextMenuComponent implements OnInit {
         selectIsProjectSharedOnPlainspace(this.contextId),
       );
       this.inviteUrl$ = this._plainspaceShareService.inviteUrl$(this.contextId);
+    } else {
+      this.isArchived$ = of(false);
+      this.isDone$ = of(false);
+      this.isSharedOnPlainspace$ = of(false);
+      this.inviteUrl$ = of(null);
     }
+  }
+
+  async ngOnInit(): Promise<void> {
     const support = await this._shareService.getShareSupport();
     this._setShareSupport(support);
   }
@@ -404,9 +433,10 @@ export class WorkContextMenuComponent implements OnInit {
           placeholder: T.WW.ADD_SECTION_TITLE,
         },
       })
-      // NOTE: do NOT pipe takeUntilDestroyed here. This component lives inside
-      // a <mat-menu>; the menu (and component) is destroyed the moment the
-      // dialog opens, which would unsubscribe before afterClosed() emits.
+      // NOTE: do NOT pipe takeUntilDestroyed here. The item that opened the
+      // dialog is gone once the menu closes, and this component can go too
+      // while the dialog is open (e.g. its side-menu row is removed), which
+      // would unsubscribe before afterClosed() emits.
       // MatDialog cleans up its own subscription when the dialog closes.
       .afterClosed()
       .subscribe((title: string) => {

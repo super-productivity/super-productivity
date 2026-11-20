@@ -273,6 +273,34 @@ describe('ArchiveService', () => {
       });
     });
 
+    it('should keep undone subtasks of a done parent undone (#11720)', async () => {
+      const parentDoneOn = Date.now() - ONE_DAY_MS;
+      const doneSub = createMockTask('sub-done', {
+        parentId: 'task-1',
+        doneOn: parentDoneOn - 1000,
+      });
+      const undoneSub = createMockTask('sub-undone', {
+        parentId: 'task-1',
+        isDone: false,
+        doneOn: undefined,
+      });
+      const parentTask = createMockTask('task-1', {
+        doneOn: parentDoneOn,
+        subTaskIds: ['sub-done', 'sub-undone'],
+        subTasks: [doneSub, undoneSub],
+      });
+
+      await service.moveTasksToArchiveAndFlushArchiveIfDue([parentTask]);
+
+      const saved =
+        mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0].task.entities;
+      expect(saved['task-1']!.isDone).toBe(true);
+      expect(saved['sub-done']!.isDone).toBe(true);
+      expect(saved['sub-done']!.doneOn).toBe(parentDoneOn - 1000);
+      expect(saved['sub-undone']!.isDone).toBe(false);
+      expect(saved['sub-undone']!.doneOn).toBeUndefined();
+    });
+
     it('should do nothing if no tasks provided', async () => {
       await service.moveTasksToArchiveAndFlushArchiveIfDue([]);
 
@@ -470,6 +498,26 @@ describe('ArchiveService', () => {
 
       expect(archiveYoung).toEqual(afterFirstCopy);
       expect(archiveYoung.task.ids).toEqual(['task-a', 'task-b']);
+    });
+
+    it('should keep undone subtasks undone when replaying a remote archive op (#11720)', async () => {
+      const undoneSub = createMockTask('sub-undone', {
+        parentId: 'task-1',
+        isDone: false,
+        doneOn: undefined,
+      });
+      const parentTask = createMockTask('task-1', {
+        subTaskIds: ['sub-undone'],
+        subTasks: [undoneSub],
+      });
+
+      await service.writeTasksToArchiveForRemoteSync([parentTask]);
+
+      const saved =
+        mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0].task.entities;
+      expect(saved['task-1']!.isDone).toBe(true);
+      expect(saved['sub-undone']!.isDone).toBe(false);
+      expect(saved['sub-undone']!.doneOn).toBeUndefined();
     });
 
     it('should ignore malformed tasks without valid ids', async () => {

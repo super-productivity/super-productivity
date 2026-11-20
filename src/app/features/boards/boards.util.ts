@@ -389,8 +389,8 @@ export const matchPanelTasks = (
 ): TaskCopy[] => tasks.filter((task) => matchesTaskCriteria(task, criteria, ctx));
 
 /**
- * Done tasks get their own collapsed group at the end of a panel (cards and
- * rows alike), unless the column only shows done tasks anyway.
+ * Done tasks follow a panel's open ones and stay put (cards and rows alike),
+ * unless the column only shows done tasks anyway.
  */
 export const isPanelDoneSplit = (panel: Pick<BoardPanelCfg, 'taskDoneState'>): boolean =>
   panel.taskDoneState !== BoardPanelCfgTaskDoneState.Done;
@@ -399,7 +399,7 @@ export const isPanelDoneSplit = (panel: Pick<BoardPanelCfg, 'taskDoneState'>): b
  * The list layout's top-level rows among a panel's matching tasks: a task,
  * unless its parent matches too (then it shows under the parent). An open
  * subtask of a done parent stays a row of its own among the open rows instead
- * of hiding in the collapsed done section.
+ * of hiding among the done ones.
  */
 export const getPanelRowIds = (
   tasks: readonly TaskCopy[],
@@ -417,14 +417,14 @@ export const getPanelRowIds = (
 export interface PanelItems {
   /** What the panel shows first (the open items; a done column's done ones). */
   main: TaskCopy[];
-  /** The collapsed done group at its end (`isPanelDoneSplit`). */
+  /** The done ones after them (`isPanelDoneSplit`). */
   done: TaskCopy[];
 }
 
 /**
  * What a panel shows of its matching tasks, in its order: every task as a
  * card, or the list layout's top-level rows (`getPanelRowIds`), done ones
- * apart in their own group.
+ * apart after them.
  */
 export const getPanelItems = (
   tasks: readonly TaskCopy[],

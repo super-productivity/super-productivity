@@ -17,7 +17,9 @@ import { first } from 'rxjs/operators';
 import { ProjectService } from '../../../project/project.service';
 import { TagService } from '../../../tag/tag.service';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD } from '../../../planner/dialog-schedule-task/task-reminder-options.const';
 import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { AddTaskBarStateService } from '../add-task-bar-state.service';
 import { AddTaskBarParserService } from '../add-task-bar-parser.service';
@@ -271,6 +273,10 @@ export class AddTaskBarActionsComponent {
           targetDay: state.date || undefined,
           targetTime: state.time || undefined,
           isSelectDueOnly: true,
+          // a repeat config holds at most a 1h lead (#11816)
+          ...(state.repeat
+            ? { reminderOptions: TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD }
+            : {}),
         },
       });
     } catch (err) {

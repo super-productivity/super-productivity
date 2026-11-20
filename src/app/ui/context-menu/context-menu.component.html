@@ -1,13 +1,9 @@
 <div
   #contextMenuTriggerEl
-  [matMenuTriggerFor]="contextMenuEl"
+  [matMenuTriggerFor]="menu()"
+  [matMenuTriggerRestoreFocus]="false"
+  (menuClosed)="onMenuClosed()"
   style="visibility: hidden; height: 0; width: 0; position: fixed"
   [style.left]="contextMenuPosition.x"
   [style.top]="contextMenuPosition.y"
 ></div>
-
-<mat-menu #contextMenuEl="matMenu">
-  <ng-template matMenuContent>
-    <ng-container [ngTemplateOutlet]="contextMenu()"></ng-container>
-  </ng-template>
-</mat-menu>

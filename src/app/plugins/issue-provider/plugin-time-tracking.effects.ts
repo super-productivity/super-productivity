@@ -4,31 +4,20 @@ import { createEffect, ofType } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { firstValueFrom, from, Observable, of } from 'rxjs';
-import { catchError, concatMap, filter, first, map, tap } from 'rxjs/operators';
-import type {
-  IssueProviderPluginDefinition,
-  PluginHttp,
-  PluginTimeTracking,
-} from '@super-productivity/plugin-api';
+import { catchError, concatMap, filter, map, tap } from 'rxjs/operators';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { TaskService } from '../../features/tasks/task.service';
 import { Task } from '../../features/tasks/task.model';
 import { isWontDoTask } from '../../features/tasks/util/is-wont-do-task';
-import { IssueProviderPluginType } from '../../features/issue/issue.model';
-import { selectIssueProviderState } from '../../features/issue/store/issue-provider.selectors';
 import { IssueProviderActions } from '../../features/issue/store/issue-provider.actions';
 import { JiraWorklogExportDefaultTime } from '../../features/issue/providers/jira/jira.model';
 import { TrackTimeDialogData } from '../../features/issue/shared/dialog-track-time/track-time-dialog.model';
-import { SnackService } from '../../core/snack/snack.service';
-import { getErrorTxt } from '../../util/get-error-text';
 import { T } from '../../t.const';
 import {
-  PluginIssueProviderRegistryService,
-  toPluginSvgIcon,
-} from './plugin-issue-provider-registry.service';
-import { PluginHttpService } from './plugin-http.service';
-import { withPluginOAuthTokenKey } from '../oauth/plugin-oauth-token-key.util';
+  PluginTimeTrackingCtx,
+  PluginTimeTrackingCtxService,
+} from './plugin-time-tracking-ctx.service';
 
 /**
  * Picks the task to log time for after a task was marked done, or none.
@@ -50,15 +39,8 @@ export const getTimeTrackingDialogTask = (
   return !isForEachSubTask || !mainTask.subTaskIds.length ? mainTask : undefined;
 };
 
-interface TimeTrackingCtx {
-  cfg: IssueProviderPluginType;
-  definition: IssueProviderPluginDefinition;
+interface TimeTrackingCtx extends PluginTimeTrackingCtx {
   issueId: string;
-  timeTracking: PluginTimeTracking;
-  pluginConfig: Record<string, unknown>;
-  http: PluginHttp;
-  providerName: string;
-  icon: string | undefined;
 }
 
 @Injectable()
@@ -66,10 +48,8 @@ export class PluginTimeTrackingEffects {
   private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _store = inject(Store);
   private readonly _taskService = inject(TaskService);
-  private readonly _registry = inject(PluginIssueProviderRegistryService);
-  private readonly _pluginHttp = inject(PluginHttpService);
+  private readonly _ctxService = inject(PluginTimeTrackingCtxService);
   private readonly _matDialog = inject(MatDialog);
-  private readonly _snackService = inject(SnackService);
   private readonly _translateService = inject(TranslateService);
 
   openTrackTimeDialog$ = createEffect(
@@ -108,40 +88,12 @@ export class PluginTimeTrackingEffects {
       return of(undefined);
     }
     const issueId = mainTask.issueId;
-    return this._getCfgOnce$(mainTask.issueProviderId).pipe(
-      map((cfg) => (cfg ? this._buildCtx(cfg, issueId) : undefined)),
+    return this._ctxService.getCfgOnce$(mainTask.issueProviderId).pipe(
+      map((cfg) => {
+        const ctx = cfg && this._ctxService.buildCtx(cfg);
+        return ctx ? { ...ctx, issueId } : undefined;
+      }),
     );
-  }
-
-  private _buildCtx(
-    cfg: IssueProviderPluginType,
-    issueId: string,
-  ): TimeTrackingCtx | undefined {
-    const provider = this._registry.getProvider(cfg.issueProviderKey);
-    const timeTracking = provider?.definition.timeTracking;
-    if (!provider || !timeTracking) {
-      return undefined;
-    }
-    const pluginConfig = withPluginOAuthTokenKey(
-      provider.pluginId,
-      cfg.pluginConfig,
-      cfg.id,
-    );
-    const http = this._pluginHttp.createHttpHelper(
-      () => provider.definition.getHeaders(pluginConfig),
-      { allowPrivateNetwork: provider.allowPrivateNetwork },
-    );
-    const providerName = this._registry.getHumanReadableName(cfg.issueProviderKey);
-    return {
-      cfg,
-      definition: provider.definition,
-      issueId,
-      timeTracking,
-      pluginConfig,
-      http,
-      providerName,
-      icon: toPluginSvgIcon(provider.icon, provider.pluginId),
-    };
   }
 
   private async _openDialog(task: Task, ctx: TimeTrackingCtx): Promise<void> {
@@ -152,7 +104,7 @@ export class PluginTimeTrackingEffects {
       issueLabel = issue.title;
       issueUrl = issue.url;
     } catch (e) {
-      this._showError(ctx, e);
+      this._ctxService.showError(ctx, e);
       return;
     }
     try {
@@ -164,7 +116,7 @@ export class PluginTimeTrackingEffects {
       });
     } catch (e) {
       // e.g. lazy chunk failed to load while offline; `void` caller would drop it
-      this._showError(ctx, e);
+      this._ctxService.showError(ctx, e);
     }
   }
 
@@ -214,7 +166,7 @@ export class PluginTimeTrackingEffects {
         ).pipe(
           catchError((e) => {
             // the dialog stays open on error but shows nothing itself
-            this._showError(ctx, e);
+            this._ctxService.showError(ctx, e);
             throw e;
           }),
         ),
@@ -242,7 +194,7 @@ export class PluginTimeTrackingEffects {
     value: JiraWorklogExportDefaultTime,
   ): Promise<void> {
     // re-read so a config edited while the dialog was open is not overwritten
-    const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
+    const cfg = await firstValueFrom(this._ctxService.getCfgOnce$(issueProviderId));
     if (!cfg) {
       return;
     }
@@ -256,25 +208,5 @@ export class PluginTimeTrackingEffects {
         },
       }),
     );
-  }
-
-  private _getCfgOnce$(
-    issueProviderId: string,
-  ): Observable<IssueProviderPluginType | undefined> {
-    return this._store.select(selectIssueProviderState).pipe(
-      first(),
-      map(({ entities }) => {
-        const cfg = entities[issueProviderId] as IssueProviderPluginType | undefined;
-        return cfg?.pluginId && cfg.pluginConfig ? cfg : undefined;
-      }),
-    );
-  }
-
-  private _showError(ctx: TimeTrackingCtx, e: unknown): void {
-    this._snackService.open({
-      type: 'ERROR',
-      msg: T.F.ISSUE.S.ERR_GENERIC,
-      translateParams: { issueProviderName: ctx.providerName, errTxt: getErrorTxt(e) },
-    });
   }
 }

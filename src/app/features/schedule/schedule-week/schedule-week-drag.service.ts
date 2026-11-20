@@ -9,7 +9,10 @@ import {
   SVEType,
   T_ID_PREFIX,
 } from '../schedule.const';
-import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
+import {
+  millisecondsDiffToRemindOption,
+  remindOptionToMilliseconds,
+} from '../../tasks/util/remind-option-to-milliseconds';
 import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
@@ -42,6 +45,9 @@ interface CalendarDropParams {
 
 const DRAG_CLONE_CLASS = 'drag-clone';
 const DRAG_OVER_CLASS = 'drag-over';
+const TRAY_DAY_ATTR = 'data-tray-day';
+// the week header's slot below the date row (the day panel's overdue list)
+const HEADER_BELOW_ATTR = 'weekHeaderBelow';
 const HOUR_IN_MS = 60 * 60 * 1000;
 
 @Injectable()
@@ -76,9 +82,17 @@ export class ScheduleWeekDragService {
   private readonly _dragOverTaskId = signal<string | null>(null);
   readonly dragOverTaskId: Signal<string | null> = this._dragOverTaskId.asReadonly();
 
+  // Tray mode: the day whose header or tray the pointer is over. A drop there
+  // means "this day, no time".
+  private readonly _dragOverTrayDay = signal<string | null>(null);
+  readonly dragOverTrayDay: Signal<string | null> = this._dragOverTrayDay.asReadonly();
+
   private _prevDragOverEl: HTMLElement | null = null;
   private _dragCloneEl: HTMLElement | null = null;
   private _lastDropCol: HTMLElement | null = null;
+  // The pointer is over the sticky header's tray or the content below it: the
+  // grid goes on underneath, but what is on top is what the user sees.
+  private _isGridCovered = false;
   private _lastDropScheduleEvent: HTMLElement | null = null;
   private _lastPointerPosition: PointerPosition | null = null;
   private _lastCalculatedTimestamp: number | null = null;
@@ -155,8 +169,11 @@ export class ScheduleWeekDragService {
 
     const nativeEl = ev.source.element.nativeElement;
 
-    // Hide the original drag-preview element so only our custom preview is visible
-    nativeEl.style.opacity = '0';
+    // Hide the original drag-preview element so only our custom preview is visible.
+    // A tray chip stays: outside the grid there is no preview to stand in for it.
+    if (!ev.source.data.isInTray) {
+      nativeEl.style.opacity = '0';
+    }
     nativeEl.style.pointerEvents = 'none';
 
     const cloneEl = this._dragCloneEl;
@@ -191,6 +208,10 @@ export class ScheduleWeekDragService {
     const gridRect = gridContainer.getBoundingClientRect();
     const targetDay = this._getDayUnderPointer(pointer.x, pointer.y);
     const isWithinGrid = this._isWithinGrid(pointer, gridRect);
+    if (this._isWithoutPreview(isWithinGrid)) {
+      this._clearPreview();
+      return;
+    }
 
     const draggedCalendarEvent = this._pluckMovableCalendarEvent(
       this._currentDragEvent(),
@@ -218,6 +239,7 @@ export class ScheduleWeekDragService {
 
     this._isDragging.set(false);
     const nativeEl = ev.source.element.nativeElement;
+    const trayDay = this._dragOverTrayDay();
     const { columnTarget, scheduleEventTarget } = this._resolveDropTargets(ev, dropPoint);
 
     this._dragPreviewContext.set(null);
@@ -273,7 +295,10 @@ export class ScheduleWeekDragService {
     };
 
     // Handle drop scenarios in priority order using if-else chain:
-    if (this.isShiftMode() && canMoveBefore) {
+    if (trayDay) {
+      // 0. Dropped on a tray or its day header → that day, without a time
+      this._handleTrayDrop(task, trayDay);
+    } else if (this.isShiftMode() && canMoveBefore) {
       // 1. Shift mode + hovering over another task → reorder
       dispatchMoveBefore();
     } else if (columnTarget) {
@@ -286,8 +311,15 @@ export class ScheduleWeekDragService {
     } else if (canMoveBefore) {
       // 4. No column but hovering over another task → reorder
       dispatchMoveBefore();
-    } else if (dropPoint && this._isOutsideGrid(dropPoint)) {
-      // 5. Dropped outside grid → unschedule and remove from today
+    } else if (
+      dropPoint &&
+      this._isOutsideGrid(dropPoint) &&
+      !sourceEvent.isInTray &&
+      !this._isGridCovered
+    ) {
+      // 5. Dropped outside grid → unschedule and remove from today.
+      // A tray chip starts outside the grid, so for it this is a cancelled drag,
+      // and so is a release on the header's content, which shows no label for it.
       this._handleUnschedule(task, sourceEvent);
     }
 
@@ -353,6 +385,10 @@ export class ScheduleWeekDragService {
       this._lastDropCol ??
       this._lastDropScheduleEvent;
     const isWithinGrid = this._isWithinGrid(pointer, gridRect);
+    if (this._isWithoutPreview(isWithinGrid)) {
+      this._clearPreview();
+      return;
+    }
 
     const draggedCalendarEvent = this._pluckMovableCalendarEvent(
       this._currentDragEvent(),
@@ -366,6 +402,21 @@ export class ScheduleWeekDragService {
     } else {
       this._handleTimeDragMove(pointer, gridRect, targetDay, isWithinGrid);
     }
+  }
+
+  // Over the sticky header there is no time to preview, and a tray chip outside
+  // the grid is simply on its way back: no "unschedule" label for it.
+  private _isWithoutPreview(isWithinGrid: boolean): boolean {
+    return this._isGridCovered || (!isWithinGrid && !!this._currentDragEvent()?.isInTray);
+  }
+
+  private _clearPreview(): void {
+    this._dragPreviewStyle.set(null);
+    this._dragPreviewContext.set(null);
+    this._dragOverTaskId.set(null);
+    this._lastCalculatedTimestamp = null;
+    this._prevDragOverEl?.classList.remove(DRAG_OVER_CLASS);
+    this._prevDragOverEl = null;
   }
 
   private _gridContainer(): HTMLElement | null {
@@ -405,6 +456,8 @@ export class ScheduleWeekDragService {
     this._lastCalculatedTimestamp = null;
     this._prevDragOverEl = null;
     this._dragCloneEl = null;
+    this._dragOverTrayDay.set(null);
+    this._isGridCovered = false;
   }
 
   // Prevent treating drag preview elements as valid drop targets,
@@ -437,12 +490,32 @@ export class ScheduleWeekDragService {
       (el): el is HTMLElement => el instanceof HTMLElement && !this._isPreviewElement(el),
     );
 
+    const trayDay =
+      interactiveElements
+        .find((el) => el.hasAttribute(TRAY_DAY_ATTR))
+        ?.getAttribute(TRAY_DAY_ATTR) ?? null;
+    // Only a task can go to a day without a time: a calendar event over the
+    // tray gets no drop highlight, since its release there changes nothing.
+    this._dragOverTrayDay.set(
+      trayDay && this._pluckTaskFromEvent(this._currentDragEvent()) ? trayDay : null,
+    );
+    // Content below the date row is no target at all: released there, a task
+    // stays where it was instead of getting the hidden time underneath.
+    const isGridCovered =
+      !!trayDay || interactiveElements.some((el) => el.hasAttribute(HEADER_BELOW_ATTR));
+    this._isGridCovered = isGridCovered;
+
     if (interactiveElements.length) {
-      this._lastDropCol =
-        interactiveElements.find((el) => el.classList.contains('col')) || null;
-      const scheduleEventCandidate =
-        interactiveElements.find((el) => el.tagName.toLowerCase() === 'schedule-event') ||
-        null;
+      // The sticky header overlaps the scrolled grid, so a column and its events
+      // are under the pointer as well.
+      this._lastDropCol = isGridCovered
+        ? null
+        : interactiveElements.find((el) => el.classList.contains('col')) || null;
+      const scheduleEventCandidate = isGridCovered
+        ? null
+        : interactiveElements.find(
+            (el) => el.tagName.toLowerCase() === 'schedule-event',
+          ) || null;
       const sanitizedScheduleEvent =
         this._sanitizeScheduleEventTarget(scheduleEventCandidate);
       this._lastDropScheduleEvent = sanitizedScheduleEvent;
@@ -643,6 +716,10 @@ export class ScheduleWeekDragService {
     columnTarget: HTMLElement | null;
     scheduleEventTarget: HTMLElement | null;
   } {
+    if (this._isGridCovered) {
+      // nothing below the sticky header is a target (see _updatePointerCaches)
+      return { columnTarget: null, scheduleEventTarget: null };
+    }
     let columnTarget = this._lastDropCol;
     let scheduleEventTarget = this._lastDropScheduleEvent;
 
@@ -729,12 +806,18 @@ export class ScheduleWeekDragService {
     const hasReminder = !!(task?.remindAt ?? task?.reminderId);
     const defaultReminderOption = this._getDefaultReminderOption();
     // Smart reminder logic: if task is brand new to scheduling, add a reminder based on user's default setting.
-    // If it already has a reminder, update it. Otherwise, leave reminders unchanged.
+    // If it already has a reminder, move it along, keeping its option (e.g. 30 minutes before) like the planner.
+    // Otherwise, leave reminders unchanged.
     const remindAt =
       !hasExistingSchedule && !hasReminder
         ? remindOptionToMilliseconds(scheduleTime, defaultReminderOption)
         : hasReminder
-          ? scheduleTime
+          ? task.dueWithTime && typeof task.remindAt === 'number'
+            ? remindOptionToMilliseconds(
+                scheduleTime,
+                millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt),
+              )
+            : scheduleTime
           : undefined;
 
     const payload = {
@@ -866,6 +949,15 @@ export class ScheduleWeekDragService {
       }),
     );
     return true;
+  }
+
+  private _handleTrayDrop(task: TaskCopy, day: string): void {
+    // a chip dropped back on its own tray changes nothing
+    if (!task.dueWithTime && task.dueDay === day) {
+      return;
+    }
+    // one op: the reducer sets the day and clears time and reminder
+    this._store.dispatch(PlannerActions.planTaskForDay({ task, day, isAddToTop: false }));
   }
 
   private _handleUnschedule(task: TaskCopy, sourceEvent: ScheduleEvent): void {

@@ -23,6 +23,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { T } from '../../t.const';
 import { PluginMenuEntryCfg } from '../../plugins/plugin-api.model';
+import { selectAllBoards } from '../../features/boards/store/boards.selectors';
 
 /**
  * Below 600px this nav's panels menu is the ONLY route to every right-panel
@@ -108,12 +109,15 @@ describe('MobileBottomNavComponent', () => {
     dispatch = jasmine.createSpy('dispatch');
     activePluginId$ = new BehaviorSubject<string | null>(null);
     isShowPluginPanel$ = new BehaviorSubject(false);
+    const views$ = of([{ id: 'v1', title: 'Week focus', cols: 1 }]);
     const select = (selector: unknown): unknown =>
       selector === selectActivePluginId
         ? activePluginId$
         : selector === selectIsShowPluginPanel
           ? isShowPluginPanel$
-          : of(null);
+          : selector === selectAllBoards
+            ? views$
+            : of(null);
 
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -318,6 +322,15 @@ describe('MobileBottomNavComponent', () => {
       expect(navigateByUrl).toHaveBeenCalledOnceWith('/boards');
     });
 
+    it('opens a pinned view', async () => {
+      localStorage.setItem(LS.BOTTOM_NAV_SLOT, 'view:v1');
+      await renderSlot();
+
+      expect(slotBtn()?.getAttribute('aria-label')).toBe('Week focus');
+      slotBtn()?.click();
+      expect(navigateByUrl).toHaveBeenCalledOnceWith('/boards/v1');
+    });
+
     it('hides the slot when Planner is disabled and nothing else was chosen', async () => {
       await renderSlot({ isPlannerEnabled: false });
 
@@ -350,7 +363,8 @@ describe('MobileBottomNavComponent', () => {
       expect(document.activeElement).toBe(slotBtn());
     });
 
-    it('stores a picked destination and navigates to it afterwards', async () => {
+    // #11604: picking used to only rebind the slot, leaving the view unchanged.
+    it('stores a picked destination and navigates to it', async () => {
       const cmp = await renderSlot();
 
       cmp.openSlotMenu();
@@ -374,10 +388,32 @@ describe('MobileBottomNavComponent', () => {
 
       expect(localStorage.getItem(LS.BOTTOM_NAV_SLOT)).toBe('inbox');
       expect(cmp.slot()?.id).toBe('inbox');
-      slotBtn()?.click();
       expect(navigateByUrl).toHaveBeenCalledOnceWith(
         `/project/${INBOX_PROJECT.id}/tasks`,
       );
+    });
+
+    it('runs a picked plugin entry', async () => {
+      const onClick = jasmine.createSpy('onClick');
+      const cmp = await renderSlot({}, [
+        { pluginId: 'p1', label: 'Doc Mode', icon: 'description', onClick },
+      ]);
+
+      cmp.openSlotMenu();
+      fixture.detectChanges();
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '.mobile-bottom-nav-slot-menu [role="menuitemradio"]',
+        ),
+      ]
+        .find((el) => el.textContent?.includes('Doc Mode'))
+        ?.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(cmp.slot()?.id).toBe('plugin:p1:Doc Mode');
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(navigateByUrl).not.toHaveBeenCalled();
     });
   });
 });

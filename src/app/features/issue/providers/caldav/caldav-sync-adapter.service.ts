@@ -54,6 +54,12 @@ export class CaldavSyncAdapterService implements IssueSyncAdapter<CaldavCfg> {
 
   async fetchIssue(issueId: string, cfg: CaldavCfg): Promise<Record<string, unknown>> {
     const issue = await firstValueFrom(this._caldavClientService.getById$(issueId, cfg));
+    if (!issue) {
+      // Deleted on the server: there is nothing to push to, and the local edit
+      // stands. An expected skip keeps the push effect silent instead of
+      // raising an error on every edit of the task (#11583).
+      throw { isExpectedSyncSkip: true, reason: 'caldav-vtodo-gone' };
+    }
     return issue as unknown as Record<string, unknown>;
   }
 

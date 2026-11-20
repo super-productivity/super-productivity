@@ -301,6 +301,15 @@ a:hover {
   background-color: var(--success);
 }
 
+/* The code the user compares with the one in their app */
+.connect-code {
+  font-family: monospace;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-align: center;
+}
+
 /* Messages */
 #message-area {
   padding: 1rem;

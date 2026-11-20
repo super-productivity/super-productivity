@@ -17,12 +17,11 @@ import {
   selectAllTasks,
   selectOverdueTasksOnToday,
   selectTasksDueForDay,
-  selectTasksWithDueTimeForRange,
+  selectTasksWithDueTimeForDay,
 } from './task.selectors';
 import { SyncWrapperService } from '../../../imex/sync/sync-wrapper.service';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { AddTasksForTomorrowService } from '../../add-tasks-for-tomorrow/add-tasks-for-tomorrow.service';
-import { getDateRangeForDay } from '../../../util/get-date-range-for-day';
 import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
@@ -180,15 +179,9 @@ export class TaskDueEffects {
             this._store$.select(selectStartOfNextDayDiffMs),
           ),
           switchMap(([, todayStr, startOfNextDayDiffMs]) => {
-            // TODO(startOfNextDay): migrate to dateService.getLogicalTodayDate() once
-            // the spec (task-due.effects.spec.ts) is un-xdescribe'd. Deferred from the
-            // logical-clock centralization refactor because this effect is driven by
-            // selectors (replay-sensitive — see CLAUDE.md note #8) and the test suite
-            // can't verify the change.
-            const todayRange = getDateRangeForDay(Date.now() - startOfNextDayDiffMs);
             return combineLatest([
               this._store$.select(selectTasksDueForDay, { day: todayStr }),
-              this._store$.select(selectTasksWithDueTimeForRange, todayRange),
+              this._store$.select(selectTasksWithDueTimeForDay, { day: todayStr }),
               this._store$.select(selectAllTasks),
             ]).pipe(
               first(),

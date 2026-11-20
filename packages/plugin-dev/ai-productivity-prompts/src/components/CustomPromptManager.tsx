@@ -53,8 +53,8 @@ const CustomPromptManager: Component<CustomPromptManagerProps> = (props) => {
 
   return (
     <div class="page-fade">
-      <div class="custom-prompts-header">
-        <h2 class="text-primary">My Custom Prompts</h2>
+      <div class="page-header">
+        <h2>My Custom Prompts</h2>
         <CreatePromptButton />
       </div>
 
@@ -67,7 +67,7 @@ const CustomPromptManager: Component<CustomPromptManagerProps> = (props) => {
           action={<CreatePromptButton />}
         />
       ) : (
-        <div class="custom-prompts-list">
+        <div class="stack">
           <For each={prompts()}>
             {(prompt, index) => (
               <PromptCard
@@ -94,33 +94,43 @@ const PromptCard: Component<{
   onDelete: () => void;
 }> = (props) => {
   return (
-    <div class="custom-prompt-card card">
-      <div class="custom-prompt-header">
-        <h3 class="prompt-title">{props.prompt.title}</h3>
-        <div class="prompt-actions">
-          <Button
-            variant="secondary"
-            onClick={props.onEdit}
-            title="Edit prompt"
-          >
-            ✏️
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={props.onDelete}
-            title="Delete prompt"
-          >
-            🗑️
-          </Button>
+    <div class="card">
+      <div class="stack">
+        <div class="page-header">
+          <h3>{props.prompt.title}</h3>
+          <div class="row">
+            <Button
+              variant="icon"
+              onClick={props.onEdit}
+              title="Edit prompt"
+            >
+              <span
+                class="material-icons"
+                aria-hidden="true"
+              >
+                edit
+              </span>
+            </Button>
+            <Button
+              variant="icon"
+              onClick={props.onDelete}
+              title="Delete prompt"
+            >
+              <span
+                class="material-icons"
+                aria-hidden="true"
+              >
+                delete
+              </span>
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <div class="prompt-preview">
         <p class="text-muted">{truncateText(props.prompt.template)}</p>
-      </div>
 
-      <div class="prompt-card-actions">
-        <Button onClick={props.onSelect}>Use This Prompt</Button>
+        <div class="actions">
+          <Button onClick={props.onSelect}>Use This Prompt</Button>
+        </div>
       </div>
     </div>
   );

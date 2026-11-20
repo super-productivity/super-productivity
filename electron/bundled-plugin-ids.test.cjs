@@ -173,3 +173,45 @@ test('every BUNDLED_PLUGIN_PATHS plugin has a package.json so release builds inc
       'packages/build-packages.js skips them, so release builds would ship without the plugin.',
   );
 });
+
+// The setup dialog, install confirmation and plugin card show a bundled plugin's
+// dataSharing; a bundled plugin without one would silently show nothing. Its
+// allowedHosts must also be declared, or validatePluginManifest rejects the plugin at
+// load (hosts normalized as in validate-manifest.util.ts).
+test('every bundled plugin declares dataSharing covering its allowedHosts', () => {
+  const source = fs.readFileSync(BUNDLED_PLUGINS_CONST_PATH, 'utf8');
+  const bundledIds = extractStringLiteralList(
+    source,
+    'BUNDLED_PLUGIN_IDS = new Set<string>([',
+    ']',
+  );
+  assert.ok(bundledIds.length > 0, 'Parsed zero entries from BUNDLED_PLUGIN_IDS.');
+
+  const manifestsById = new Map();
+  for (const dirName of fs.readdirSync(PLUGIN_DEV_DIR)) {
+    const manifestPath = findManifestPath(dirName);
+    if (manifestPath) {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      manifestsById.set(manifest.id, manifest);
+    }
+  }
+  const normalizeHost = (h) => h.trim().toLowerCase().replace(/\.$/, '');
+
+  const problems = bundledIds.flatMap((id) => {
+    const manifest = manifestsById.get(id);
+    if (!manifest) {
+      return [`${id}: no manifest found`];
+    }
+    if (!Array.isArray(manifest.dataSharing)) {
+      return [`${id}: no dataSharing array (use [] if it sends nothing)`];
+    }
+    const declared = new Set(
+      manifest.dataSharing.flatMap((d) => d.hosts || []).map(normalizeHost),
+    );
+    return (manifest.allowedHosts || [])
+      .filter((h) => !declared.has(normalizeHost(h)))
+      .map((h) => `${id}: allowedHosts entry ${h} missing from dataSharing hosts`);
+  });
+
+  assert.deepEqual(problems, [], problems.join('\n'));
+});

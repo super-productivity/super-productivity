@@ -19,6 +19,7 @@ import { CollapsibleComponent } from './collapsible.component';
     </collapsible>
     <collapsible
       [title]="'Group Two'"
+      [count]="0"
       [isGroup]="true"
     ></collapsible>
     <collapsible
@@ -162,6 +163,13 @@ describe('CollapsibleComponent', () => {
 
     actionBtn.click();
     expect(collapsible.isExpanded).toBe(false);
+  });
+
+  it('shows a count after the title only when given, zero included', () => {
+    const counts = fixture.debugElement
+      .queryAll(By.css('.collapsible-count'))
+      .map((el) => (el.nativeElement as HTMLElement).textContent?.trim());
+    expect(counts).toEqual(['0']);
   });
 
   it('makes every header a keyboard button, groups or not', () => {

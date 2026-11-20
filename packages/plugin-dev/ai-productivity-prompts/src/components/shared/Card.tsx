@@ -1,4 +1,4 @@
-import { Component, JSX } from 'solid-js';
+import { Component, JSX, Show } from 'solid-js';
 
 interface CardProps {
   onClick?: () => void;
@@ -7,17 +7,20 @@ interface CardProps {
 }
 
 export const Card: Component<CardProps> = (props) => {
-  const baseClass = 'card';
-  const clickableClass = props.onClick ? 'card-clickable' : '';
-  const customClass = props.class || '';
+  const customClass = () => props.class || '';
 
+  // A static card must not be a (disabled) button: disabled styling would dim it.
   return (
-    <button
-      class={`${baseClass} ${clickableClass} ${customClass}`.trim()}
-      onClick={props.onClick}
-      disabled={!props.onClick}
+    <Show
+      when={props.onClick}
+      fallback={<div class={`card ${customClass()}`.trim()}>{props.children}</div>}
     >
-      {props.children}
-    </button>
+      <button
+        class={`card card-clickable ${customClass()}`.trim()}
+        onClick={props.onClick}
+      >
+        {props.children}
+      </button>
+    </Show>
   );
 };

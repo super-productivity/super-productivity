@@ -28,6 +28,8 @@ describe('MagicSideNavComponent', () => {
   let fixture: ComponentFixture<MagicSideNavComponent>;
   let isXs: ReturnType<typeof signal<boolean>>;
   let isMobileSideNavOpen: ReturnType<typeof signal<boolean>>;
+  let focusSideNavTrigger: ReturnType<typeof signal<number>>;
+  let toggleSideNavModeTrigger: ReturnType<typeof signal<number>>;
   let browserMatches: boolean;
   let navConfigServiceMock: {
     navConfig: ReturnType<typeof signal<NavConfig>>;
@@ -52,6 +54,8 @@ describe('MagicSideNavComponent', () => {
   beforeEach(async () => {
     isXs = signal(false);
     isMobileSideNavOpen = signal(false);
+    focusSideNavTrigger = signal(0);
+    toggleSideNavModeTrigger = signal(0);
     browserMatches = false;
     navConfigServiceMock = {
       navConfig: signal(navConfig),
@@ -91,8 +95,8 @@ describe('MagicSideNavComponent', () => {
           provide: LayoutService,
           useValue: {
             isXs,
-            focusSideNavTrigger: signal(0),
-            toggleSideNavModeTrigger: signal(0),
+            focusSideNavTrigger,
+            toggleSideNavModeTrigger,
             isMobileSideNavOpen,
           },
         },
@@ -514,6 +518,41 @@ describe('MagicSideNavComponent', () => {
       expect(ids(sections.top)).toEqual(['today', 'settings']);
       expect(sections.scroll).toEqual([]);
       expect(sections.bottom).toEqual([]);
+    });
+  });
+
+  describe('layout shortcut triggers', () => {
+    // LayoutService outlives the nav, which is rebuilt when focus mode closes;
+    // a press from before the rebuild must not replay on the new instance.
+    it('does not replay an earlier Ctrl+B or Shift+D press on creation', async () => {
+      const toggleModeSpy = spyOn(MagicSideNavComponent.prototype, 'toggleSideNavMode');
+      const toggleFocusSpy = spyOn(MagicSideNavComponent.prototype, 'toggleNavFocus');
+      toggleSideNavModeTrigger.set(1);
+      focusSideNavTrigger.set(1);
+
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+      fixture.detectChanges();
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(toggleModeSpy).not.toHaveBeenCalled();
+      expect(toggleFocusSpy).not.toHaveBeenCalled();
+    });
+
+    it('reacts to presses made after creation', async () => {
+      const toggleModeSpy = spyOn(MagicSideNavComponent.prototype, 'toggleSideNavMode');
+      const toggleFocusSpy = spyOn(MagicSideNavComponent.prototype, 'toggleNavFocus');
+      toggleSideNavModeTrigger.set(1);
+      focusSideNavTrigger.set(1);
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+      fixture.detectChanges();
+
+      toggleSideNavModeTrigger.set(2);
+      focusSideNavTrigger.set(2);
+      fixture.detectChanges();
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(toggleModeSpy).toHaveBeenCalledTimes(1);
+      expect(toggleFocusSpy).toHaveBeenCalledTimes(1);
     });
   });
 

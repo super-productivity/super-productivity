@@ -1,5 +1,6 @@
 import { getSyncService } from './sync.service';
 import { Logger } from '../logger';
+import { deleteExpiredConnectRequests } from '../connect/connect-request.store';
 import { DEFAULT_SYNC_CONFIG, MS_PER_DAY } from './sync.types';
 import { MIN_CHECKPOINT_SAFE_APP_VERSION } from './checkpoint-gate';
 import {
@@ -136,6 +137,17 @@ const runDailyCleanup = async (): Promise<void> => {
     }
   } catch (error) {
     Logger.error(`Cleanup [capture] failed: ${error}`);
+  }
+
+  // 8. Browser sign-in requests: also pruned on every create, this catches
+  // servers where nobody signs in for a while.
+  try {
+    const requests = await deleteExpiredConnectRequests();
+    if (requests > 0) {
+      Logger.info(`Cleanup [connect]: removed ${requests} requests`);
+    }
+  } catch (error) {
+    Logger.error(`Cleanup [connect] failed: ${error}`);
   }
 };
 

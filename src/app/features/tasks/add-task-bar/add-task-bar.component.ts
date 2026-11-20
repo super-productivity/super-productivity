@@ -19,7 +19,7 @@ import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-i
 import { FormsModule } from '@angular/forms';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { MentionModule } from '../../../ui/mentions';
-import { MatIconButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
@@ -58,10 +58,13 @@ import {
 } from '@angular/material/autocomplete';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { AddTaskSuggestion } from './add-task-suggestions.model';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagComponent } from '../../tag/tag/tag.component';
 import { truncate } from '../../../util/truncate';
 import { SnackService } from '../../../core/snack/snack.service';
+import type { ViewTaskPrefill } from '../view-task-list.token';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { rollWeekendDateForRepeat } from './roll-weekend-date-for-repeat';
@@ -119,6 +122,7 @@ export interface TaskAddEvent {
     FormsModule,
     CdkTextareaAutosize,
     MatIconButton,
+    MatButton,
     MatIcon,
     MatTooltip,
     AsyncPipe,
@@ -169,6 +173,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   isHideTagTitles = input<boolean>(false);
   tagsToRemove = input<string[]>([]);
   planForDay = input<string>();
+  /** A view's values, shown as chips the user can remove. */
+  viewPrefill = input<ViewTaskPrefill>();
 
   // Outputs
   afterTaskAdd = output<TaskAddEvent>();
@@ -216,6 +222,22 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   hasNewTags = computed(() => this.stateService.state().newTagTitles.length > 0);
+  /** The user's choices leave the new task outside the view it's added in. */
+  isHiddenInView = computed(() => {
+    const prefill = this.viewPrefill();
+    if (!prefill) {
+      return false;
+    }
+    const state = this.stateService.state();
+    const tagsToRemove = this.tagsToRemove();
+    return prefill.isHidden({
+      projectId: state.projectId ?? undefined,
+      tagIds: unique([...state.tagIds, ...state.tagIdsFromTxt]).filter(
+        (id) => !tagsToRemove.includes(id),
+      ),
+      dueDay: state.date ?? undefined,
+    });
+  });
   currentProject = computed(() =>
     this.projects().find((p) => p.id === this.stateService.state().projectId),
   );
@@ -373,6 +395,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this._setProjectInitially();
     this._setTagInitially();
     this._setupDefaultDate();
+    this.applyViewPrefill();
     this._setupTextParsing();
     this._setupSuggestions();
 
@@ -420,6 +443,29 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           this.stateService.updateTagIds(this._defaultTagIds);
         }
       });
+  }
+
+  /** Fills in the view's chips again (also the "Add back" of a hidden task). */
+  applyViewPrefill(): void {
+    const fields = this.viewPrefill()?.fields;
+    if (!fields) {
+      return;
+    }
+    if (fields.projectId) {
+      this.stateService.updateProjectId(fields.projectId);
+    }
+    if (fields.tagIds?.length) {
+      this._defaultTagIds = fields.tagIds;
+      this.stateService.updateTagIds(
+        unique([...this.stateService.state().tagIds, ...fields.tagIds]),
+      );
+    }
+    if (fields.dueDay) {
+      this.stateService.updateDate(fields.dueDay);
+    }
+    if (fields.deadlineDay) {
+      this.stateService.updateDeadline(fields.deadlineDay);
+    }
   }
 
   private _setupDefaultDate(): void {
@@ -751,7 +797,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const planForDay = this.planForDay();
     let didPlanForDay = false;
 
-    if (suggestion.taskId && this.isNoDefaults() && !suggestion.isArchivedTask) {
+    if (suggestion.taskId && this.isNoDefaults()) {
       taskId = suggestion.taskId;
     } else if (suggestion.taskId && suggestion.isFromOtherContextAndTagOnlySearch) {
       let isTaskFound = true;
@@ -796,13 +842,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         this._projectService.moveTaskToTodayList(suggestion.taskId, suggestion.projectId);
       }
 
-      if (suggestion.isArchivedTask) {
-        this._snackService.open({
-          ico: 'unarchive',
-          msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,
-          translateParams: { title: suggestion.title },
-        });
-      } else if (suggestion.projectId) {
+      if (suggestion.projectId) {
         this._snackService.open({
           ico: 'arrow_upward',
           msg: T.F.TASK.S.FOUND_MOVE_FROM_BACKLOG,
@@ -862,9 +902,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!this._markdownPasteService.isMarkdownTaskList(pastedText)) return;
 
     event.preventDefault();
-    this._markdownPasteService.handleMarkdownPaste(pastedText, null).then(() => {
-      this.stateService.updateInputTxt('');
-    });
+    this._markdownPasteService
+      .handleMarkdownPaste(pastedText, null, undefined, undefined, {
+        isAddToBacklog: this.isAddToBacklog(),
+        isAddToBottom: this.isAddToBottom(),
+      })
+      .then(() => {
+        this.stateService.updateInputTxt('');
+      });
   }
 
   @HostListener('document:click', ['$event'])
@@ -1031,6 +1076,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       .subscribe({
         next: async (task) => {
           const { DialogEditTaskRepeatCfgComponent } =
+            // eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
             await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
           this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
             data: { task, defaultRemindOption: remindOption },

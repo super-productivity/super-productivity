@@ -20,6 +20,7 @@ import { TaskFocusService } from '../tasks/task-focus.service';
 import { addSubTask, setCurrentTask } from '../tasks/store/task.actions';
 import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { selectUndoneTodayTaskIds } from '../work-context/store/work-context.selectors';
+import { getOffWantMoreFeatures } from './want-more-features.const';
 
 export type QuickTourStep =
   | 'track-time'
@@ -52,6 +53,8 @@ interface QuickTourStepsCtx {
   hasTask: boolean;
   /** The user opened the task menu during part 1, so touch skips its menu step. */
   isTaskMenuLearned: boolean;
+  /** The last card has something to say: a feature is still off or sync is not set up. */
+  isWantMoreShown: boolean;
 }
 
 /**
@@ -72,7 +75,7 @@ export const getQuickTourSteps = (ctx: QuickTourStepsCtx): QuickTourStep[] => {
     ...taskSteps,
     'organize',
     ...(ctx.isPlannerEnabled ? (['planner'] as const) : []),
-    'want-more',
+    ...(ctx.isWantMoreShown ? (['want-more'] as const) : []),
   ];
 };
 
@@ -288,6 +291,9 @@ export class QuickTourService {
       isPlannerEnabled: appFeatures.isPlannerEnabled,
       hasTask,
       isTaskMenuLearned,
+      isWantMoreShown:
+        getOffWantMoreFeatures(appFeatures).length > 0 ||
+        !this._globalConfigService.sync()?.isEnabled,
     });
   }
 

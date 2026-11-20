@@ -18,7 +18,12 @@ import {
   OperationSyncCapable,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
-import { ActionType, OperationLogEntry, OpType } from '../core/operation.types';
+import {
+  ActionType,
+  Operation,
+  OperationLogEntry,
+  OpType,
+} from '../core/operation.types';
 import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
@@ -100,10 +105,14 @@ describe('ServerMigrationService', () => {
     rejectedAt,
   });
 
+  const lastAppendedOp = (): Operation =>
+    opLogStoreSpy.appendMixedSourceBatchSkipDuplicates.calls.mostRecent().args[0][0]
+      .ops[0];
+
   beforeEach(() => {
     opLogStoreSpy = jasmine.createSpyObj('OperationLogStoreService', [
       'hasSyncedOps',
-      'append',
+      'appendMixedSourceBatchSkipDuplicates',
       'getOpsAfterSeq',
       'pruneClockForStorage',
     ]);
@@ -153,7 +162,10 @@ describe('ServerMigrationService', () => {
 
     // Default mock returns
     opLogStoreSpy.hasSyncedOps.and.returnValue(Promise.resolve(true));
-    opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+    opLogStoreSpy.appendMixedSourceBatchSkipDuplicates.and.resolveTo({
+      written: [],
+      skippedCount: 0,
+    });
     opLogStoreSpy.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
     vectorClockServiceSpy.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ 'test-client': 5 }),
@@ -219,7 +231,7 @@ describe('ServerMigrationService', () => {
       await service.checkAndHandleMigration(provider);
 
       expect(provider.downloadOps).not.toHaveBeenCalled();
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('should reuse an existing pending server-migration snapshot without probing again', async () => {
@@ -229,7 +241,7 @@ describe('ServerMigrationService', () => {
       await service.checkAndHandleMigration(provider);
 
       expect(provider.downloadOps).not.toHaveBeenCalled();
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('should block after a rejected server-migration snapshot instead of appending another', async () => {
@@ -239,7 +251,7 @@ describe('ServerMigrationService', () => {
       await expectAsync(service.checkAndHandleMigration(provider)).toBeRejected();
 
       expect(provider.downloadOps).not.toHaveBeenCalled();
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     describe('file-based provider with a rejected server-migration snapshot (#11344)', () => {
@@ -262,8 +274,15 @@ describe('ServerMigrationService', () => {
         await service.checkAndHandleMigration(provider);
 
         expect(provider.downloadOps).toHaveBeenCalled();
-        expect(opLogStoreSpy.append).toHaveBeenCalledTimes(1);
-        const [op, source] = opLogStoreSpy.append.calls.mostRecent().args;
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledTimes(
+          1,
+        );
+        const {
+          ops: [op],
+          source,
+        } =
+          opLogStoreSpy.appendMixedSourceBatchSkipDuplicates.calls.mostRecent()
+            .args[0][0];
         expect(source).toBe('local');
         expect(op.opType).toBe(OpType.SyncImport);
         expect(op.syncImportReason).toBe('SERVER_MIGRATION');
@@ -284,7 +303,7 @@ describe('ServerMigrationService', () => {
         await service.checkAndHandleMigration(provider);
 
         expect(matDialogSpy.open).toHaveBeenCalled();
-        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       });
 
       it('reuses the newer pending snapshot instead of seeding a third one', async () => {
@@ -305,7 +324,7 @@ describe('ServerMigrationService', () => {
         await service.checkAndHandleMigration(provider);
 
         expect(provider.downloadOps).not.toHaveBeenCalled();
-        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       });
 
       it('creates a new snapshot from the download-side seeding path too', async () => {
@@ -316,7 +335,7 @@ describe('ServerMigrationService', () => {
 
         expect(outcome).toEqual({
           kind: 'created',
-          opId: opLogStoreSpy.append.calls.mostRecent().args[0].id,
+          opId: lastAppendedOp().id,
         });
       });
 
@@ -345,7 +364,7 @@ describe('ServerMigrationService', () => {
 
         expect(provider.downloadOps).toHaveBeenCalled();
         expect(outcome).toEqual({ kind: 'reused_pending' });
-        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       });
     });
 
@@ -360,7 +379,7 @@ describe('ServerMigrationService', () => {
       await service.checkAndHandleMigration(provider);
 
       expect(matDialogSpy.open).not.toHaveBeenCalled();
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('should show confirmation dialog when server has data and client has synced ops', async () => {
@@ -377,7 +396,7 @@ describe('ServerMigrationService', () => {
       await service.checkAndHandleMigration(provider);
 
       expect(matDialogSpy.open).toHaveBeenCalled();
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('should create SYNC_IMPORT when user confirms migration to non-empty server', async () => {
@@ -393,8 +412,8 @@ describe('ServerMigrationService', () => {
 
       await service.checkAndHandleMigration(provider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
+      const appendedOp = lastAppendedOp();
       expect(appendedOp.opType).toBe(OpType.SyncImport);
       expect(appendedOp.syncImportReason).toBe('SERVER_MIGRATION');
     });
@@ -405,7 +424,7 @@ describe('ServerMigrationService', () => {
 
       await service.checkAndHandleMigration(provider);
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('should call handleServerMigration when all conditions are met', async () => {
@@ -418,8 +437,8 @@ describe('ServerMigrationService', () => {
 
       await service.checkAndHandleMigration(provider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
+      const appendedOp = lastAppendedOp();
       expect(appendedOp.opType).toBe(OpType.SyncImport);
     });
   });
@@ -445,7 +464,7 @@ describe('ServerMigrationService', () => {
 
       const outcome = await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       expect(outcome).toEqual({ kind: 'skipped', reason: 'empty_state' });
     });
 
@@ -461,7 +480,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('should skip if state only has the default INBOX project', async () => {
@@ -479,7 +498,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('should proceed if state has notes', async () => {
@@ -497,10 +516,10 @@ describe('ServerMigrationService', () => {
 
       const outcome = await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
       expect(outcome).toEqual({
         kind: 'created',
-        opId: opLogStoreSpy.append.calls.mostRecent().args[0].id,
+        opId: lastAppendedOp().id,
       });
     });
 
@@ -511,7 +530,7 @@ describe('ServerMigrationService', () => {
         const outcome = await service.handleServerMigration(defaultProvider);
 
         expect(outcome).toEqual({ kind: 'reused_pending' });
-        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       });
 
       it('never reports reused_pending for a FORCE_UPLOAD even when a migration import is pending', async () => {
@@ -523,7 +542,7 @@ describe('ServerMigrationService', () => {
         });
 
         expect(outcome.kind).toBe('created');
-        expect(opLogStoreSpy.append).toHaveBeenCalled();
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
       });
 
       // The invariant the widened gate rests on: hasMeaningfulStateData must stay a
@@ -560,10 +579,8 @@ describe('ServerMigrationService', () => {
         const outcome = await service.handleServerMigration(defaultProvider);
 
         expect(outcome.kind).toBe('created');
-        expect(opLogStoreSpy.append).toHaveBeenCalled();
-        expect(opLogStoreSpy.append.calls.mostRecent().args[0].opType).toBe(
-          OpType.SyncImport,
-        );
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
+        expect(lastAppendedOp().opType).toBe(OpType.SyncImport);
       });
     });
 
@@ -586,7 +603,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
     });
 
     it('should abort if state validation fails', async () => {
@@ -598,7 +615,7 @@ describe('ServerMigrationService', () => {
 
       const outcome = await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       expect(snackServiceSpy.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ type: 'ERROR' }),
       );
@@ -624,7 +641,7 @@ describe('ServerMigrationService', () => {
         });
 
         expect(snackServiceSpy.open).toHaveBeenCalledTimes(1);
-        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       });
 
       it('always shows the snack for a user-driven force upload and does not consume the automatic notice', async () => {
@@ -672,7 +689,9 @@ describe('ServerMigrationService', () => {
           wasRepaired: false,
         } as any);
         await service.handleServerMigration(defaultProvider);
-        expect(opLogStoreSpy.append).toHaveBeenCalledTimes(1);
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledTimes(
+          1,
+        );
 
         failValidation();
         await service.handleServerMigration(defaultProvider);
@@ -704,8 +723,8 @@ describe('ServerMigrationService', () => {
         loadAllData({ appDataComplete: repairedState as any }),
       );
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
+      const appendedOp = lastAppendedOp();
       expect(appendedOp.payload).toBe(repairedState);
     });
 
@@ -724,8 +743,8 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
+      const appendedOp = lastAppendedOp();
       expect(appendedOp.opType).toBe(OpType.SyncImport);
       expect(appendedOp.entityType).toBe('ALL');
       expect(appendedOp.clientId).toBe('test-client');
@@ -738,7 +757,7 @@ describe('ServerMigrationService', () => {
 
       const outcome = await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       expect(outcome).toEqual({ kind: 'skipped', reason: 'no_client_id' });
     });
 
@@ -753,7 +772,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
     });
 
     it('should proceed if state has projects', async () => {
@@ -767,7 +786,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
     });
 
     it('should proceed if state has user-created tags', async () => {
@@ -784,7 +803,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
     });
   });
 
@@ -796,7 +815,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('should treat undefined state as empty', async () => {
@@ -806,7 +825,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('should treat non-object state as empty', async () => {
@@ -816,7 +835,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
   });
 
@@ -839,9 +858,9 @@ describe('ServerMigrationService', () => {
         tag: { ids: [], entities: {} },
       } as unknown as AppStateSnapshot;
     });
-    opLogStoreSpy.append.and.callFake(async () => {
+    opLogStoreSpy.appendMixedSourceBatchSkipDuplicates.and.callFake(async () => {
       events.push('append');
-      return 1;
+      return { written: [], skippedCount: 0 };
     });
 
     await service.handleServerMigration(defaultProvider);
@@ -862,7 +881,7 @@ describe('ServerMigrationService', () => {
   describe('system-tag empty-state detection (tested via handleServerMigration)', () => {
     it('should identify system tags correctly', async () => {
       for (const systemTagId of SYSTEM_TAG_IDS) {
-        opLogStoreSpy.append.calls.reset();
+        opLogStoreSpy.appendMixedSourceBatchSkipDuplicates.calls.reset();
         stateSnapshotServiceSpy.getStateSnapshotAsync.and.returnValue(
           Promise.resolve({
             task: { ids: [], entities: {} },
@@ -873,7 +892,7 @@ describe('ServerMigrationService', () => {
 
         await service.handleServerMigration(defaultProvider);
 
-        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       }
     });
 
@@ -888,7 +907,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
     });
   });
 
@@ -974,8 +993,8 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
+      const appendedOp = lastAppendedOp();
       const payload = appendedOp.payload as {
         archiveYoung: { task: { ids: string[]; entities: Record<string, unknown> } };
         archiveOld: { task: { ids: string[]; entities: Record<string, unknown> } };
@@ -1007,7 +1026,7 @@ describe('ServerMigrationService', () => {
       const outcome = await service.handleServerMigration(defaultProvider);
 
       // Should not create SYNC_IMPORT because server is no longer empty
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
       expect(outcome).toEqual({ kind: 'skipped', reason: 'server_not_empty' });
     });
 
@@ -1019,7 +1038,7 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
     });
 
     it('should merge all local op clocks into SYNC_IMPORT vector clock', async () => {
@@ -1060,8 +1079,8 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
+      const appendedOp = lastAppendedOp();
 
       // SYNC_IMPORT's clock should dominate all local ops:
       // Merged: { test-client: 5 (current), other-client: 3, third-client: 5 }
@@ -1079,8 +1098,8 @@ describe('ServerMigrationService', () => {
 
       await service.handleServerMigration(defaultProvider);
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
+      const appendedOp = lastAppendedOp();
 
       // Should just increment current clock
       expect(appendedOp.vectorClock['test-client']).toBe(11);
@@ -1213,8 +1232,8 @@ describe('ServerMigrationService', () => {
 
       await forceUpload();
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalled();
+      const appendedOp = lastAppendedOp();
       expect(appendedOp.opType).toBe(OpType.SyncImport);
       expect(appendedOp.syncImportReason).toBe('FORCE_UPLOAD');
     });
@@ -1232,7 +1251,7 @@ describe('ServerMigrationService', () => {
       // reports skipped/empty_state, which forceUploadLocalState turns into
       // ForceUploadFailedError (it requires kind 'created') and a
       // FORCE_UPLOAD_FAILED snack — another dead end, just a non-destructive one.
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
     it('skips for a hydrated client with default config and no user data', async () => {
@@ -1245,7 +1264,7 @@ describe('ServerMigrationService', () => {
 
       await forceUpload();
 
-      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
   });
 });

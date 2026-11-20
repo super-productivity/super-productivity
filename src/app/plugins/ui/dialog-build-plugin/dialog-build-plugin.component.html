@@ -1,0 +1,216 @@
+<h1 mat-dialog-title>{{ T.PLUGINS.BUILD_DIALOG.TITLE | translate }}</h1>
+
+<mat-dialog-content>
+  @switch (step()) {
+    @case (1) {
+      <h3>{{ T.PLUGINS.BUILD_DIALOG.STEP_DESCRIBE | translate }}</h3>
+      <mat-form-field>
+        <mat-label>{{ T.PLUGINS.BUILD_DIALOG.IDEA_LABEL | translate }}</mat-label>
+        <textarea
+          #focusTarget
+          matInput
+          rows="4"
+          [placeholder]="T.PLUGINS.BUILD_DIALOG.IDEA_PLACEHOLDER | translate"
+          [value]="idea()"
+          (input)="idea.set($any($event.target).value)"
+        ></textarea>
+      </mat-form-field>
+      <div class="callout">
+        <mat-icon aria-hidden="true">science</mat-icon>
+        <p>{{ T.PLUGINS.BUILD_DIALOG.SAFETY_HINT | translate }}</p>
+      </div>
+    }
+    @case (2) {
+      <h3>{{ T.PLUGINS.BUILD_DIALOG.STEP_PASTE | translate }}</h3>
+      <p>{{ T.PLUGINS.BUILD_DIALOG.COPY_PROMPT_HINT | translate }}</p>
+      <mat-form-field>
+        <mat-label>{{ T.PLUGINS.BUILD_DIALOG.ANSWER_LABEL | translate }}</mat-label>
+        <textarea
+          #focusTarget
+          class="code"
+          matInput
+          rows="10"
+          spellcheck="false"
+          [readonly]="isInstalling()"
+          [value]="answer()"
+          (input)="onAnswerInput($any($event.target).value)"
+        ></textarea>
+        <mat-hint>{{ T.PLUGINS.BUILD_DIALOG.ANSWER_HINT | translate }}</mat-hint>
+      </mat-form-field>
+      @if (parseErrorMsg(); as msg) {
+        <div
+          class="callout callout--danger"
+          role="alert"
+        >
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <p>{{ msg | translate }}</p>
+        </div>
+      } @else if (files(); as files) {
+        <p>
+          {{
+            T.PLUGINS.BUILD_DIALOG.WILL_INSTALL
+              | translate
+                : {
+                    name: files.manifest.name,
+                    permissions:
+                      permissionsText() ||
+                      (T.PLUGINS.BUILD_DIALOG.NO_PERMISSIONS | translate),
+                  }
+          }}
+        </p>
+        @if (isReplacing()) {
+          <p>{{ T.PLUGINS.BUILD_DIALOG.REPLACES | translate }}</p>
+        }
+      }
+      @if (installError(); as error) {
+        <div
+          class="callout callout--danger"
+          role="alert"
+        >
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <p>{{ error }}</p>
+        </div>
+      }
+    }
+    @case (3) {
+      <h3>{{ T.PLUGINS.BUILD_DIALOG.STEP_TRY | translate }}</h3>
+      @if (installed(); as plugin) {
+        <!-- focused on arrival, so screen readers read the result -->
+        <div
+          #focusTarget
+          tabindex="-1"
+        >
+          @switch (plugin.status) {
+            @case ('error') {
+              <div
+                class="callout callout--danger"
+                role="alert"
+              >
+                <mat-icon aria-hidden="true">error</mat-icon>
+                <div>
+                  <p>
+                    {{
+                      T.PLUGINS.BUILD_DIALOG.LOAD_ERROR | translate: { name: plugin.name }
+                    }}
+                  </p>
+                  <pre class="code">{{ plugin.error }}</pre>
+                </div>
+              </div>
+            }
+            @case ('off') {
+              <div class="callout">
+                <mat-icon aria-hidden="true">info</mat-icon>
+                <p>
+                  {{
+                    T.PLUGINS.BUILD_DIALOG.INSTALLED_OFF
+                      | translate: { name: plugin.name }
+                  }}
+                </p>
+              </div>
+            }
+            @default {
+              <div class="callout callout--success">
+                <mat-icon aria-hidden="true">check_circle</mat-icon>
+                <p>
+                  {{
+                    T.PLUGINS.BUILD_DIALOG.INSTALLED | translate: { name: plugin.name }
+                  }}
+                </p>
+              </div>
+            }
+          }
+        </div>
+      }
+      @if (installed()?.status === 'running' && !isNativePlatform) {
+        <p>{{ T.PLUGINS.BUILD_DIALOG.LATER_ERRORS_HINT | translate }}</p>
+      }
+    }
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <a
+    mat-button
+    target="_blank"
+    [href]="guideUrl"
+    >{{ T.PLUGINS.BUILD_DIALOG.GUIDE | translate }}</a
+  >
+  <span class="spacer"></span>
+  @switch (step()) {
+    @case (1) {
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="step.set(2)"
+      >
+        {{ T.PLUGINS.BUILD_DIALOG.NEXT | translate }}
+      </button>
+      <button
+        mat-flat-button
+        color="primary"
+        type="button"
+        [disabled]="!idea().trim()"
+        (click)="copyPrompt()"
+      >
+        <mat-icon>content_copy</mat-icon>
+        {{ T.PLUGINS.BUILD_DIALOG.COPY_PROMPT | translate }}
+      </button>
+    }
+    @case (2) {
+      <button
+        mat-button
+        type="button"
+        [disabled]="isInstalling()"
+        (click)="step.set(1)"
+      >
+        {{ T.PLUGINS.BUILD_DIALOG.BACK | translate }}
+      </button>
+      @if (installError()) {
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="copyError()"
+        >
+          <mat-icon>content_copy</mat-icon>
+          {{ T.PLUGINS.BUILD_DIALOG.COPY_ERROR | translate }}
+        </button>
+      }
+      <button
+        mat-flat-button
+        color="primary"
+        type="button"
+        [disabled]="!files() || isInstalling()"
+        (click)="install()"
+      >
+        {{ T.PLUGINS.BUILD_DIALOG.INSTALL | translate }}
+      </button>
+    }
+    @case (3) {
+      <button
+        mat-button
+        type="button"
+        mat-dialog-close
+      >
+        {{ T.G.CLOSE | translate }}
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="pasteFixedCode()"
+      >
+        {{ T.PLUGINS.BUILD_DIALOG.PASTE_FIXED | translate }}
+      </button>
+      @if (installed()?.error) {
+        <button
+          mat-flat-button
+          color="primary"
+          type="button"
+          (click)="copyError()"
+        >
+          <mat-icon>content_copy</mat-icon>
+          {{ T.PLUGINS.BUILD_DIALOG.COPY_ERROR | translate }}
+        </button>
+      }
+    }
+  }
+</mat-dialog-actions>

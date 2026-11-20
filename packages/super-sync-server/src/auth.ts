@@ -134,6 +134,17 @@ export const verifyEmail = async (token: string): Promise<boolean> => {
 };
 
 /**
+ * A normal account token, the same as login issues. The caller must have read
+ * `tokenVersion` under a lock on the user row, so a concurrent sign-out wins.
+ */
+export const signAccountToken = (
+  userId: number,
+  email: string,
+  tokenVersion: number,
+): string =>
+  jwt.sign({ userId, email, tokenVersion }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+
+/**
  * Revoke all existing tokens for a user by incrementing their token version.
  * Call this when the user explicitly logs out all devices.
  */
@@ -273,6 +284,7 @@ export const verifyToken = async (token: string): Promise<TokenVerificationResul
  */
 export const requestLoginMagicLink = async (
   email: string,
+  connectRequestId?: string,
 ): Promise<{ message: string }> => {
   const successMessage = {
     message: 'If an account with that email exists, a login link has been sent.',
@@ -322,7 +334,7 @@ export const requestLoginMagicLink = async (
   });
   if (claim.count === 0) return successMessage;
 
-  const emailSent = await sendLoginMagicLinkEmail(email, loginToken);
+  const emailSent = await sendLoginMagicLinkEmail(email, loginToken, connectRequestId);
   if (!emailSent) {
     await prisma.user.updateMany({
       where: { id: user.id, loginToken },
@@ -402,6 +414,7 @@ export const verifyLoginMagicLink = async (
 export const registerWithMagicLink = async (
   email: string,
   termsAcceptedAt?: number,
+  connectRequestId?: string,
 ): Promise<{ message: string }> => {
   const normalizedEmail = email.toLowerCase();
 
@@ -430,7 +443,11 @@ export const registerWithMagicLink = async (
 
       if (!config.testMode?.autoVerifyUsers) {
         // Send email BEFORE updating DB to avoid invalidating the old token on failure
-        const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
+        const emailSent = await sendVerificationEmail(
+          normalizedEmail,
+          verificationToken,
+          connectRequestId,
+        );
         if (!emailSent) {
           return { message: REGISTRATION_SUCCESS_MESSAGE };
         }
@@ -480,7 +497,11 @@ export const registerWithMagicLink = async (
       if (!config.testMode?.autoVerifyUsers) {
         // Keep the unverified row on delivery failure. Deleting it can race a
         // concurrent registration that has already started using the same row.
-        const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
+        const emailSent = await sendVerificationEmail(
+          normalizedEmail,
+          verificationToken,
+          connectRequestId,
+        );
         if (!emailSent) {
           return { message: REGISTRATION_SUCCESS_MESSAGE };
         }
