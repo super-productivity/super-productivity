@@ -603,6 +603,7 @@ test('set_current_task refuses done tasks and parents without writing', async ()
     forward,
   );
   assert.match(done.content[0].text, /^TASK_DONE/);
+  assert.equal(calls.filter((c) => c.method === 'POST').length, 0);
   const parent = await tools.runTool(
     'set_current_task',
     { id: 't1' },
@@ -610,6 +611,28 @@ test('set_current_task refuses done tasks and parents without writing', async ()
     forward,
   );
   assert.match(parent.content[0].text, /^HAS_SUBTASKS/);
+  assert.equal(calls.filter((c) => c.method === 'POST').length, 0);
+});
+
+test('set_current_task does not switch when the grant is revoked during its lookups', async () => {
+  let scopes = ['tasks:track'];
+  const { forward, calls } = fakeForward({
+    '/task-control/current': (request) => {
+      if (request.method === 'GET') scopes = [];
+      return { status: 200, body: { ok: true, data: null } };
+    },
+  });
+  const result = await tools.runTool(
+    'set_current_task',
+    { id: 't3' },
+    () => scopes,
+    forward,
+  );
+  assert.match(result.content[0].text, /^NOT_PERMITTED/);
+  assert.equal(
+    calls.some((call) => call.method === 'POST'),
+    false,
+  );
 });
 
 test('tracking writes never claim nothing happened when the renderer fails', async () => {

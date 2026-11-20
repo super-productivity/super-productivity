@@ -555,6 +555,11 @@ const setCurrentTask: ToolSpec = {
     const previousTaskId =
       isRecord(previous) && typeof previous.id === 'string' ? previous.id : null;
 
+    if (!getScopes().includes('tasks:track')) {
+      // Revoked (or access switched off) during the lookups above.
+      return fail('NOT_PERMITTED', 'This connection may not use this tool.');
+    }
+
     let reply: RendererReply;
     try {
       reply = await forward({
