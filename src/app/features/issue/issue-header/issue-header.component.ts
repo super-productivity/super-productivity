@@ -24,6 +24,7 @@ export class IssueHeaderComponent {
   task = input.required<TaskWithSubTasks>();
 
   icon = computed(() => {
+    this._pluginRegistry.registrationVersion();
     const key = this.task().issueType as IssueProviderKey;
     if (!key) return '';
     if (this._pluginRegistry.hasProvider(key)) {
@@ -33,6 +34,7 @@ export class IssueHeaderComponent {
   });
 
   providerName = computed(() => {
+    this._pluginRegistry.registrationVersion();
     const key = this.task().issueType as IssueProviderKey;
     if (!key) return '';
     if (this._pluginRegistry.hasProvider(key)) {

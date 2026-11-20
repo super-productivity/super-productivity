@@ -1,5 +1,6 @@
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -13,13 +14,19 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { PluginService } from '../../plugins/plugin.service';
 import { TaskService } from '../tasks/task.service';
+import { IssueProvider } from '../issue/issue.model';
 
 describe('IssuePanelComponent', () => {
   let fixture: ComponentFixture<IssuePanelComponent>;
+  let providers$: BehaviorSubject<IssueProvider[]>;
+  let isRegistered: boolean;
+  const registrationVersion = signal(0);
 
   beforeEach(async () => {
+    providers$ = new BehaviorSubject<IssueProvider[]>([]);
+    isRegistered = false;
     const store = jasmine.createSpyObj<Store>('Store', ['select', 'dispatch']);
-    store.select.and.returnValue(of([]));
+    store.select.and.returnValue(providers$);
 
     await TestBed.configureTestingModule({
       imports: [
@@ -36,9 +43,9 @@ describe('IssuePanelComponent', () => {
         {
           provide: PluginIssueProviderRegistryService,
           useValue: {
-            hasProvider: () => false,
+            hasProvider: () => isRegistered,
             getAvailableProviders: () => [],
-            registrationVersion: () => 0,
+            registrationVersion,
           },
         },
         {
@@ -64,5 +71,25 @@ describe('IssuePanelComponent', () => {
 
   it('should not render the intro with no providers configured', () => {
     expect(fixture.nativeElement.querySelector('issue-panel-intro')).toBeNull();
+  });
+
+  it('stops marking a configured provider missing once its plugin registers', () => {
+    providers$.next([
+      {
+        id: 'provider-1',
+        issueProviderKey: 'plugin:github',
+        pluginId: 'github',
+        isEnabled: true,
+      } as unknown as IssueProvider,
+    ]);
+    const mapped = fixture.componentInstance.issueProvidersMapped;
+    expect(mapped()[0].missingPluginName).toBe('github');
+    expect(mapped()[0].issueProvider.isEnabled).toBe(false);
+
+    isRegistered = true;
+    registrationVersion.update((v) => v + 1);
+
+    expect(mapped()[0].missingPluginName).toBeUndefined();
+    expect(mapped()[0].issueProvider.isEnabled).toBe(true);
   });
 });

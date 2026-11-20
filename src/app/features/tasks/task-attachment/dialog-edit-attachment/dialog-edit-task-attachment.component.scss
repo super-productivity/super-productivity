@@ -18,6 +18,8 @@ mat-dialog-actions {
   flex-direction: column;
 
   @include mq(xs) {
-    min-width: 500px;
+    // fixed rather than min-width, so the repeat hint wraps instead of
+    // stretching the dialog to its max width
+    width: 500px;
   }
 }

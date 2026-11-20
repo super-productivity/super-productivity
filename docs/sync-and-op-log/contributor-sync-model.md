@@ -183,7 +183,7 @@ operations with stale vector clocks that immediately conflict.
   captured op's write attempt has completed (do not call it while holding the
   operation-log lock).
 
-⚠️ `local-rules/no-multi-entity-effect` (`warn`) flags this heuristically — it
+⚠️ `local-rules/no-multi-entity-effect` (`error`) flags this heuristically — it
 catches the array-literal fan-out shape (`map(() => [a(), b()])`), not every
 multi-entity dispatch (e.g. a `of(a(), b())` varargs fan-out slips past). The
 blessed pattern is a `task-shared-meta-reducers/` reducer.
@@ -254,11 +254,13 @@ added (measured 2026-09 in
    them: a child field that shadows one goes stale (review §4.2), and a new
    action that must update one should reuse the action that already maintains
    it. True multi-entity transitions that no child fact can express, such as a
-   delete cascade, still follow the atomicity rule above. One recorded
-   exception: an LWW recreate of a NOTE re-adds it to `project.noteIds` and,
+   delete cascade, still follow the atomicity rule above. Recorded
+   exceptions: an LWW recreate of a NOTE re-adds it to `project.noteIds` and,
    when pinned, `note.todayOrder` without declaring PROJECT, the inverse of
    `deleteNote`'s own undeclared write, as the TASK recreate does for
-   `project.taskIds` (#10380, decided on #10393).
+   `project.taskIds` (#10380, decided on #10393). An LWW Update of an existing
+   NOTE likewise keeps `project.noteIds` in step with its `projectId`, as the
+   local `moveNoteToOtherProject` does undeclared (#11656).
 3. **No new crossing may reach the fail-closed stop.** A PR that adds a
    multi-entity action, or changes what one declares or writes, names the path
    that resolves its conflicts with concurrent edits of every entity it
@@ -381,16 +383,18 @@ survives the wire, so a pull clears it with `null` (CalDAV, Plainspace).
 
 ## Decision table — "I'm writing an effect"
 
-| Question                                                        | Answer                                                                                                    | Linter                                           |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Does it inject the actions stream?                              | Use `LOCAL_ACTIONS` (not `Actions`)                                                                       | ✅ `no-actions-in-effects` (error)               |
-| Can a selector emission be safely retried by the next emission? | Drop it with `skipDuringSyncWindow()`                                                                     | ✅ `require-hydration-guard` (error)             |
-| Is the selector emission a sparse/unrecoverable edge?           | Enter through the required initial-sync gate, capture its state, then defer it with `waitForSyncWindow()` | ✅ window guard only; initial gate is convention |
-| Does one replay-atomic transition change **>1 entity**?         | Make it a meta-reducer, not an effect                                                                     | ⚠️ `no-multi-entity-effect` (warn)               |
-| Does it dispatch in a **loop of 50+**?                          | Yield once afterward for capture ordering; it is not batching                                             | — (convention)                                   |
+| Question                                                        | Answer                                                                                                                                            | Linter                                              |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Does it inject the actions stream?                              | Use `LOCAL_ACTIONS` (not `Actions`)                                                                                                               | ✅ `no-actions-in-effects` (error)                  |
+| Can a selector emission be safely retried by the next emission? | Drop it with `skipDuringSyncWindow()`                                                                                                             | ✅ `require-hydration-guard` (error)                |
+| Is the selector emission a sparse/unrecoverable edge?           | Enter through the required initial-sync gate, capture its state, then defer it with `waitForSyncWindow()`                                         | ✅ window guard only; initial gate is convention    |
+| Does one replay-atomic transition change **>1 entity**?         | Make it a meta-reducer, not an effect                                                                                                             | ✅ `no-multi-entity-effect` (error; one shape only) |
+| Does it dispatch in a **loop**?                                 | Prefer one meta-reducer action; a loop needs no yield. If a follow-up depends on its ops, await `OperationWriteFlushService.flushPendingWrites()` | — (convention)                                      |
 
-Two of the three are mechanically enforced — you do not need to memorize them,
-only understand _why_ (the invariant at the top).
+The first, second and fourth rows are lint errors (the fourth catches only the
+array-literal fan-out shape); the third enforces only the window guard, and the
+loop row is convention. You do not need to memorize the enforced ones, only
+understand _why_ (the invariant at the top).
 
 ---
 

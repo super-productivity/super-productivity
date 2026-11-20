@@ -294,6 +294,10 @@ Steps 1–3 ship as **one PR**: they rewrite the same dialog files, and separate
 - Attachment templates (§6).
 - #10903 rule families.
 
+The 2026 survey did not change this list; see
+[open feature gaps](2026-11-11-survey-feature-gaps.md), which also decides a
+detach action for single future occurrences.
+
 ## 8. Decisions (2026-10-20)
 
 1. **Fall behind:** one three-option select. "Wait" writes `skipOverdue=false`. Both-true legacy configs are preserved until touched.

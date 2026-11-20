@@ -1,26 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
-import { setCurrentTask } from '../../../tasks/store/task.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
-import {
-  concatMap,
-  filter,
-  map,
-  switchMap,
-  take,
-  tap,
-  withLatestFrom,
-} from 'rxjs/operators';
-import { select, Store } from '@ngrx/store';
+import { concatMap, filter, map, switchMap, take, tap } from 'rxjs/operators';
+import { Store } from '@ngrx/store';
 import { OPEN_PROJECT_TYPE } from '../../issue.const';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../../../tasks/task.model';
 import { isWontDoTask } from '../../../tasks/util/is-wont-do-task';
-import { OpenProjectCfg, OpenProjectTransitionOption } from './open-project.model';
-import { EMPTY, from, Observable, of, timer } from 'rxjs';
+import { OpenProjectOriginalStatus } from './open-project-api-responses';
+import { OpenProjectCfg } from './open-project.model';
+import { EMPTY, from, Observable, of } from 'rxjs';
 import { OpenProjectApiService } from './open-project-api.service';
 import { TaskService } from '../../../tasks/task.service';
-import { selectCurrentTaskParentOrCurrent } from 'src/app/features/tasks/store/task.selectors';
 import { isOpenProjectEnabled } from './is-open-project-enabled.util';
 import { IssueLocalState } from 'src/app/features/issue/issue.model';
 import { SnackService } from 'src/app/core/snack/snack.service';
@@ -35,6 +26,11 @@ import { formatOpenProjectWorkPackageSubjectForSnack } from './format-open-proje
 import { msToIsoDuration } from '../../../../util/ms-to-iso-duration';
 import { getDbDateStr } from 'src/app/util/get-db-date-str';
 import { TrackTimeSubmitParams } from '../../shared/dialog-track-time/track-time-dialog.model';
+import {
+  createDoneIssueTransitionStream$,
+  createStartIssueTransitionStream$,
+  IssueTransitionAdapter,
+} from '../../shared/issue-transition-helper';
 
 @Injectable()
 export class OpenProjectEffects {
@@ -101,74 +97,52 @@ export class OpenProjectEffects {
   );
 
   checkForStartTransition$ = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(setCurrentTask),
-        // only if a task is started
-        filter(({ id }) => !!id),
-        withLatestFrom(this._store$.pipe(select(selectCurrentTaskParentOrCurrent))),
-        filter(
-          (input): input is [(typeof input)[0], Readonly<TaskCopy>] =>
-            input[1] != null && input[1].issueType === OPEN_PROJECT_TYPE,
-        ),
-        concatMap(([, currentTaskOrParent]) => {
-          if (!currentTaskOrParent.issueProviderId) {
-            throw new Error('No issueProviderId for task');
-          }
-          return this._getCfgOnce$(currentTaskOrParent.issueProviderId).pipe(
-            map((openProjectCfg) => ({ openProjectCfg, currentTaskOrParent })),
-          );
-        }),
-        filter(
-          ({ openProjectCfg, currentTaskOrParent }) =>
-            isOpenProjectEnabled(openProjectCfg) &&
-            openProjectCfg.isTransitionIssuesEnabled,
-        ),
-        concatMap(({ openProjectCfg, currentTaskOrParent }) =>
-          this._handleTransitionForIssue(
-            IssueLocalState.IN_PROGRESS,
-            openProjectCfg,
-            currentTaskOrParent,
-          ),
-        ),
-      ),
+    () => createStartIssueTransitionStream$(this._getTransitionAdapter()),
     { dispatch: false },
   );
 
   checkForDoneTransition$ = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter(({ task }): boolean => !!task.changes.isDone),
-        // NOTE: as this is only a partial object we need to get the full one
-        concatMap(({ task }) => this._taskService.getByIdOnce$(task.id.toString())),
-        filter(
-          (task: Task) =>
-            task && task.issueType === OPEN_PROJECT_TYPE && !isWontDoTask(task),
-        ),
-        concatMap((task: Task) => {
-          if (!task.issueProviderId) {
-            throw new Error('No issueProviderId for task');
-          }
-          return this._getCfgOnce$(task.issueProviderId).pipe(
-            map((openProjectCfg) => ({ openProjectCfg, task })),
-          );
-        }),
-        filter(
-          ({ openProjectCfg, task }) =>
-            isOpenProjectEnabled(openProjectCfg) &&
-            openProjectCfg.isTransitionIssuesEnabled,
-        ),
-        concatMap(({ openProjectCfg, task }) => {
-          return this._handleTransitionForIssue(
-            IssueLocalState.DONE,
-            openProjectCfg,
-            task,
-          );
-        }),
-      ),
+    () => createDoneIssueTransitionStream$(this._getTransitionAdapter()),
     { dispatch: false },
   );
+
+  private _getTransitionAdapter(): IssueTransitionAdapter<
+    OpenProjectCfg,
+    OpenProjectWorkPackage,
+    OpenProjectOriginalStatus
+  > {
+    return {
+      issueType: OPEN_PROJECT_TYPE,
+      providerLabel: 'OpenProject',
+      actions$: this._actions$,
+      store$: this._store$,
+      taskService: this._taskService,
+      snackService: this._snackService,
+      issueService: this._issueService,
+      getCfgOnce$: (issueProviderId) => this._getCfgOnce$(issueProviderId),
+      isTransitionEnabled: (openProjectCfg) =>
+        isOpenProjectEnabled(openProjectCfg) && openProjectCfg.isTransitionIssuesEnabled,
+      getChosenTransition: (openProjectCfg, localState) =>
+        openProjectCfg.transitionConfig?.[localState],
+      fetchIssue$: (issueId, openProjectCfg) =>
+        this._openProjectApiService.getById$(
+          issueId as unknown as number,
+          openProjectCfg,
+        ),
+      isAlreadyInTargetStatus: (issue, transition) =>
+        !!issue._embedded.status && issue._embedded.status.name === transition.name,
+      transitionIssue$: (issue, transition, openProjectCfg) =>
+        this._openProjectApiService.transitionIssue$(
+          { ...issue, percentageDone: openProjectCfg.progressOnDone ?? 0 },
+          transition,
+          openProjectCfg,
+        ),
+      openTransitionDialog$: (issue, localState, task) =>
+        this._openTransitionDialog(issue, localState, task),
+      transitionSuccessMsg: T.F.OPEN_PROJECT.S.TRANSITION_SUCCESS,
+      getIssueKey: (issue) => issue.subject,
+    };
+  }
 
   private _openTrackTimeDialog(
     task: Task,
@@ -230,88 +204,10 @@ export class OpenProjectEffects {
     return this._issueProviderService.getCfgOnce$(issueProviderId, 'OPEN_PROJECT');
   }
 
-  private _handleTransitionForIssue(
-    localState: IssueLocalState,
-    openProjectCfg: OpenProjectCfg,
-    task: Task,
-  ): Observable<unknown> {
-    const chosenTransition: OpenProjectTransitionOption | undefined =
-      openProjectCfg.transitionConfig?.[localState];
-
-    if (!task.issueId) {
-      throw new Error('No issueId for task');
-    }
-
-    switch (chosenTransition) {
-      case 'DO_NOT':
-        return EMPTY;
-      case 'ALWAYS_ASK':
-        return this._openProjectApiService
-          .getById$(task.issueId as unknown as number, openProjectCfg)
-          .pipe(
-            concatMap((issue) => this._openTransitionDialog(issue, localState, task)),
-          );
-      default:
-        if (!chosenTransition || !chosenTransition.id) {
-          this._snackService.open({
-            msg: T.F.JIRA.S.NO_VALID_TRANSITION,
-            type: 'ERROR',
-          });
-          // NOTE: we would kill the whole effect chain if we do this
-          // return throwError({[HANDLED_ERROR_PROP_STR]: 'Jira: No valid transition configured'});
-          return timer(2000).pipe(
-            concatMap(() =>
-              this._openProjectApiService.getById$(
-                task.issueId as unknown as number,
-                openProjectCfg,
-              ),
-            ),
-            concatMap((issue: OpenProjectWorkPackage) =>
-              this._openTransitionDialog(issue, localState, task),
-            ),
-          );
-        }
-
-        return this._openProjectApiService
-          .getById$(task.issueId as unknown as number, openProjectCfg)
-          .pipe(
-            concatMap((issue) => {
-              if (
-                !issue._embedded.status ||
-                issue._embedded.status.name !== chosenTransition.name
-              ) {
-                return this._openProjectApiService
-                  .transitionIssue$(
-                    { ...issue, percentageDone: openProjectCfg.progressOnDone ?? 0 },
-                    chosenTransition,
-                    openProjectCfg,
-                  )
-                  .pipe(
-                    concatMap(() => {
-                      this._snackService.open({
-                        type: 'SUCCESS',
-                        msg: T.F.OPEN_PROJECT.S.TRANSITION_SUCCESS,
-                        translateParams: {
-                          issueKey: `${issue.subject}`,
-                          chosenTransition: `${chosenTransition.name}`,
-                        },
-                      });
-                      return this._issueService.refreshIssueTask(task, false, false);
-                    }),
-                  );
-              } else {
-                // no transition required
-                return EMPTY;
-              }
-            }),
-          );
-    }
-  }
-
   private _openTransitionDialog(
     issue: OpenProjectWorkPackage,
     localState: IssueLocalState,
-    task: Task,
+    task: TaskCopy,
   ): Observable<unknown> {
     return from(
       import('./open-project-view-components/dialog-openproject-transition/dialog-open-project-transition.component'),

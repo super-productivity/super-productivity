@@ -1,5 +1,5 @@
 /**
- * Tests for no-multi-entity-effect ESLint rule (heuristic, warn)
+ * Tests for no-multi-entity-effect ESLint rule (heuristic; configured as an error)
  */
 const { RuleTester } = require('eslint');
 const rule = require('./no-multi-entity-effect');
