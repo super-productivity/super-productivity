@@ -84,14 +84,7 @@ test.describe('Microsoft To Do import plugin', () => {
       .click();
 
     const frame = page.frameLocator('plugin-index iframe');
-    const notConfigured = frame.getByText('has no Microsoft sign-in configured');
-    const signIn = frame.getByRole('button', { name: 'Sign in with Microsoft' });
-    await expect(notConfigured.or(signIn)).toBeVisible();
-    // shortcut: the flow needs the Entra client ID in the plugin's oauth-config;
-    // drop this skip once it is set
-    test.skip(await notConfigured.isVisible(), 'Microsoft client ID not configured yet');
-
-    await signIn.click();
+    await frame.getByRole('button', { name: 'Sign in with Microsoft' }).click();
     await expect(frame.getByText(`${list} — tasks: 1, steps: 2`)).toBeVisible();
     expect(graphAuth.every((h) => h === 'Bearer fake-token')).toBe(true);
     await frame.getByRole('button', { name: 'Import' }).click();

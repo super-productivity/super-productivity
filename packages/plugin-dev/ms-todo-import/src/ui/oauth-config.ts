@@ -7,7 +7,7 @@ import { OAuthFlowConfig } from '@super-productivity/plugin-api';
  * "Mobile and desktop" (Electron loopback, any port) and
  * `<web origin>/assets/oauth-callback.html` under "Single-page application".
  */
-export const MS_CLIENT_ID = '';
+export const MS_CLIENT_ID = 'e5c744c8-8f76-48fd-a834-84c37f8b379e';
 
 const MS_LOGIN = 'https://login.microsoftonline.com/common/oauth2/v2.0';
 
