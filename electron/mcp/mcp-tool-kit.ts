@@ -2,6 +2,7 @@ import { LocalRestApiResponsePayload } from '../shared-with-frontend/local-rest-
 import {
   getTaskPriority,
   getTaskStatus,
+  pickTaskSummaryFields,
 } from '../shared-with-frontend/task-status-and-priority';
 import { AssistantAccessScope } from '../shared-with-frontend/assistant-access.model';
 import { McpToolDefinition, McpToolResult } from './mcp-protocol';
@@ -42,13 +43,12 @@ export const READ_ONLY_HINTS = {
  */
 
 export const DEFAULT_LIST_LIMIT = 50;
-export const MAX_LIST_LIMIT = 100;
 export const MAX_NAMED_ENTITIES = 500;
 export const MAX_NOTES_CHARS = 8 * 1024;
 export const MAX_TITLE_CHARS = 500;
 export const MAX_FILTER_CHARS = 200;
 export const MAX_RESPONSE_BYTES = 256 * 1024;
-// Task, project and tag ids are nanoids; a separator would change the route.
+// Project and tag filters retain their existing nanoid format.
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
 
 export interface RendererRequest {
@@ -156,35 +156,14 @@ export const optionalBoolean = (
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const TASK_SUMMARY_FIELDS = [
-  'id',
-  'title',
-  'isDone',
-  'projectId',
-  'tagIds',
-  'parentId',
-  'dueDay',
-  'dueWithTime',
-  'deadlineDay',
-  'deadlineWithTime',
-  'timeEstimate',
-  'timeSpent',
-] as const;
-
 /** Copies only the allowlisted fields; anything the route adds stays out. */
-export const toTaskSummary = (task: Record<string, unknown>): Record<string, unknown> => {
-  const summary: Record<string, unknown> = {
-    priority: getTaskPriority(task.priority),
-    status: getTaskStatus(task),
-  };
-  for (const field of TASK_SUMMARY_FIELDS) {
-    const value = task[field];
-    if (value !== undefined && value !== null) {
-      summary[field] = value;
-    }
-  }
-  return summary;
-};
+export const toTaskSummary = (
+  task: Record<string, unknown>,
+): Record<string, unknown> => ({
+  ...pickTaskSummaryFields(task),
+  priority: getTaskPriority(task.priority),
+  status: getTaskStatus(task),
+});
 
 export const toNamedEntity = (
   entity: Record<string, unknown>,
@@ -217,7 +196,7 @@ const RENDERER_ERRORS: Record<string, string> = {
 
 /**
  * Maps a failed renderer reply to a tool error. Only stable codes and fixed
- * messages leave the process вЂ” never the route's own message, which can echo
+ * messages leave the process. The route's own message can echo
  * input back.
  */
 export const failFromRenderer = (reply: RendererReply): McpToolResult => {

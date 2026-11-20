@@ -33,16 +33,23 @@ export interface AssistantAccessCredentialResult {
 }
 
 /**
- * Internal renderer routes for assistant writes. Main only forwards them for MCP calls and
+ * Internal renderer routes for assistant access. Main only forwards them for MCP calls and
  * marks them `source: 'mcp'`; the renderer rejects them from any other source, so
  * they are not reachable through the REST API.
  */
+export const ASSISTANT_TASK_PATH = '/assistant/task';
 export const ASSISTANT_UPDATE_PATH = '/assistant/update';
 export const ASSISTANT_CAPTURE_PATH = '/assistant/capture';
 
 // A capture waits for the op to reach IndexedDB, which can take longer than the
 // REST API's 15s budget when many writes are queued.
 export const ASSISTANT_CAPTURE_TIMEOUT_MS = 45000;
+export const MAX_ASSISTANT_LIST_LIMIT = 100;
+
+// Calendar and plugin task ids can contain punctuation, slashes and long UIDs.
+// They travel as data in MCP requests, never as part of a path.
+export const isAssistantTaskId = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0;
 
 export type AssistantCaptureResult =
   | { status: 'created'; id: string }
@@ -59,8 +66,7 @@ export const isAssistantTaskUpdate = (value: unknown): value is AssistantTaskUpd
   const input = value as Record<string, unknown>;
   return (
     Object.keys(input).every((key) => ['id', 'priority', 'status'].includes(key)) &&
-    typeof input.id === 'string' &&
-    /^[A-Za-z0-9_-]{1,200}$/.test(input.id) &&
+    isAssistantTaskId(input.id) &&
     (input.priority !== undefined || input.status !== undefined) &&
     (input.priority === undefined ||
       input.priority === null ||

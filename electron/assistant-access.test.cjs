@@ -183,9 +183,9 @@ const fakeForward = (overrides = {}) => {
       return overrides[request.path](request);
     }
     if (request.path === '/tasks') {
-      return { status: 200, body: { ok: true, data: TASKS } };
+      return { status: 200, body: { ok: true, data: { tasks: TASKS, hasMore: false } } };
     }
-    if (request.path === '/tasks/t1') {
+    if (request.path === '/assistant/task' && request.query.id === 't1') {
       return { status: 200, body: { ok: true, data: TASKS[0] } };
     }
     return {
@@ -284,12 +284,14 @@ test('list_tasks returns summaries only and forwards filters', async () => {
     includeDone: 'false',
     query: 'report',
     tagId: 'TODAY',
+    limit: '1',
   });
+  assert.equal(calls[0].source, 'mcp');
 });
 
 test('walks every filtered task across count and byte caps in renderer order', async () => {
   const rows = Array.from({ length: 245 }, (_, i) => ({
-    id: 'task-' + i,
+    id: i === 101 ? 'cal_' + 'a'.repeat(220) + '/.?uid@example.com' : 'task-' + i,
     title: 'x'.repeat(i === 101 ? 300000 : 6000),
     projectId: 'p1',
     priority: 'medium',
@@ -297,9 +299,17 @@ test('walks every filtered task across count and byte caps in renderer order', a
     doneOn: 10,
     wontDoOn: 10,
   }));
-  const forward = async ({ query }) => {
-    assert.deepEqual(query, { source: 'active', includeDone: 'true', projectId: 'p1' });
-    return { status: 200, body: { ok: true, data: rows } };
+  const forward = async ({ query: { limit, cursor, ...filters }, source }) => {
+    assert.deepEqual(filters, { source: 'active', includeDone: 'true', projectId: 'p1' });
+    assert.equal(source, 'mcp');
+    const start = cursor === undefined ? 0 : rows.findIndex((t) => t.id === cursor) + 1;
+    if (cursor !== undefined && !start)
+      return { status: 400, body: { ok: false, error: { code: 'INVALID_CURSOR' } } };
+    const tasks = rows.slice(start, start + Number(limit));
+    return {
+      status: 200,
+      body: { ok: true, data: { tasks, hasMore: start + tasks.length < rows.length } },
+    };
   };
   const seen = [];
   let cursor;
@@ -337,6 +347,16 @@ test('walks every filtered task across count and byte caps in renderer order', a
   }
 });
 
+test('list_tasks preserves the byte cap even when an id alone exceeds it', async () => {
+  const id = 'x'.repeat(256 * 1024);
+  const forward = async () => ({
+    status: 200,
+    body: { ok: true, data: { tasks: [{ id }], hasMore: true } },
+  });
+  const result = await tools.runTool('list_tasks', {}, () => READ, forward);
+  assert.match(result.content[0].text, /^RESPONSE_TOO_LARGE/);
+});
+
 test('existing scopes cannot update and invalid updates never reach the renderer', async () => {
   const { forward, calls } = fakeForward();
   const update = (args, scopes) =>
@@ -349,7 +369,7 @@ test('existing scopes cannot update and invalid updates never reach the renderer
   for (const input of [
     {},
     { id: 't1' },
-    { id: '../tasks', priority: 1 },
+    { id: '', priority: 1 },
     { id: 't1', status: 'archived' },
     { id: 't1', priority: 'high' },
     { id: 't1', priority: 4 },
@@ -364,7 +384,7 @@ test('existing scopes cannot update and invalid updates never reach the renderer
 });
 
 test('confirms only requested fields from readback and treats uncertainty explicitly', async () => {
-  const args = { id: 't1', priority: null };
+  const args = { id: 'cal_../a?event@example.com', priority: null };
   const scopes = () => ['tasks:update'];
   const result = (task) => ({
     status: 200,
@@ -415,7 +435,7 @@ test('arguments are validated strictly', async () => {
   assert.equal(unknownArg.isError, true);
   const badLimit = await tools.runTool('list_tasks', { limit: 101 }, () => READ, forward);
   assert.equal(badLimit.isError, true);
-  const badId = await tools.runTool('get_task', { id: '../status' }, () => READ, forward);
+  const badId = await tools.runTool('get_task', { id: '' }, () => READ, forward);
   assert.equal(badId.isError, true);
   assert.equal(calls.length, 0, 'nothing invalid may reach the renderer');
 });
@@ -445,12 +465,17 @@ test('get_task only returns notes with the notes scope', async () => {
   assert.equal(withNotes.structuredContent.task.notesTruncated, false);
 });
 
-test('get_task asks the renderer to hide tasks of archived projects', async () => {
-  // The renderer answers TASK_NOT_FOUND for those, as list_tasks leaves them out.
+test('get_task always passes the exact id as data on a fixed MCP-only route', async () => {
   const { forward, calls } = fakeForward();
-  await tools.runTool('get_task', { id: 't1' }, () => READ, forward);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].query, { source: 'active' });
+  for (const id of ['t1', '../status', '.', 'cal_a/%2F?event@example.com']) {
+    await tools.runTool('get_task', { id }, () => READ, forward);
+    assert.deepEqual(calls.at(-1), {
+      method: 'GET',
+      path: '/assistant/task',
+      source: 'mcp',
+      query: { id },
+    });
+  }
 });
 
 test('renderer errors never leak their message', async () => {
@@ -685,7 +710,7 @@ const win = {
       setTimeout(() => {
         const data =
           payload.path === '/tasks'
-            ? TASKS
+            ? { tasks: TASKS, hasMore: false }
             : payload.path === '/assistant/capture'
               ? { status: 'created', id: 'new1' }
               : { anything: true };
@@ -902,7 +927,7 @@ test('granted read scope serves projected tasks through the renderer routes', as
   assert.ok(!JSON.stringify(res.body).includes('SECRET NOTES'));
   const call = rendererCalls[rendererCalls.length - 1];
   assert.equal(call.path, '/tasks');
-  assert.equal(call.source, undefined);
+  assert.equal(call.source, 'mcp');
 });
 
 test('scopes are normalized: notes require read, unknown scopes are dropped', async () => {

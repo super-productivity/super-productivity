@@ -15,6 +15,12 @@ import { isValidDBDateStr } from '../../util/get-db-date-str';
 import { IssueLog } from '../../core/log';
 import { LocalRestApiFeatureBridgeService } from './local-rest-api-feature-bridge.service';
 import { TrackingPresenceService } from '../tracking-presence/tracking-presence.service';
+import {
+  ASSISTANT_TASK_PATH,
+  isAssistantTaskId,
+  MAX_ASSISTANT_LIST_LIMIT,
+} from '../../../../electron/shared-with-frontend/assistant-access.model';
+import { pickTaskSummaryFields } from '../../../../electron/shared-with-frontend/task-status-and-priority';
 import { LocalRestApiFeatureRoutes } from '../../core/electron/local-rest-api-feature-routes';
 import {
   createErrorResponse,
@@ -416,8 +422,15 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       return this._handleSetCurrentTask(requestId, body);
     }
 
+    if (method === 'GET' && path === ASSISTANT_TASK_PATH && payload.source === 'mcp') {
+      const id = getQueryParam(query, 'id');
+      if (!isAssistantTaskId(id))
+        return createErrorResponse(requestId, 400, 'INVALID_INPUT', 'Invalid task id');
+      return this._handleGetTask(requestId, id, { source: 'active' });
+    }
+
     if (method === 'GET' && path === '/tasks') {
-      return this._handleListTasks(requestId, query);
+      return this._handleListTasks(requestId, query, payload.source === 'mcp');
     }
 
     if (method === 'POST' && path === '/tasks') {
@@ -523,13 +536,14 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
   private async _handleListTasks(
     requestId: string,
     query: Record<string, string | string[]>,
+    isAssistant: boolean,
   ): Promise<LocalRestApiResponsePayload> {
     const queryText = getQueryParam(query, 'query');
     const projectId = getQueryParam(query, 'projectId');
     const tagId = getQueryParam(query, 'tagId');
     const includeDone = getQueryParamAsBoolean(query, 'includeDone', false);
     const VALID_SOURCES: TaskSource[] = ['active', 'archived', 'all'];
-    const rawSource = getQueryParam(query, 'source') || 'active';
+    const rawSource = isAssistant ? 'active' : getQueryParam(query, 'source') || 'active';
     const source: TaskSource = VALID_SOURCES.includes(rawSource as TaskSource)
       ? (rawSource as TaskSource)
       : 'active';
@@ -575,7 +589,26 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       filtered = filtered.filter((t) => !t.isDone);
     }
 
-    return createSuccessResponse(requestId, 200, filtered);
+    if (!isAssistant) return createSuccessResponse(requestId, 200, filtered);
+
+    const limit = Number(getQueryParam(query, 'limit'));
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_ASSISTANT_LIST_LIMIT)
+      return createErrorResponse(requestId, 400, 'INVALID_INPUT', 'Invalid list limit');
+    const cursor = getQueryParam(query, 'cursor');
+    const start =
+      cursor === undefined ? 0 : filtered.findIndex((t) => t.id === cursor) + 1;
+    if (cursor !== undefined && start === 0)
+      return createErrorResponse(requestId, 400, 'INVALID_CURSOR', 'Unknown cursor');
+    const page = filtered.slice(start, start + limit).map((task) => ({
+      ...pickTaskSummaryFields(task),
+      priority: task.priority,
+      doneOn: task.doneOn,
+      wontDoOn: task.wontDoOn,
+    }));
+    return createSuccessResponse(requestId, 200, {
+      tasks: page,
+      hasMore: start + page.length < filtered.length,
+    });
   }
 
   private async _handleCreateTask(
@@ -721,6 +754,30 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
     return createSuccessResponse(requestId, 201, createdTask);
   }
 
+  private async _handleGetTask(
+    requestId: string,
+    taskId: string,
+    query: Record<string, string | string[]>,
+  ): Promise<LocalRestApiResponsePayload> {
+    const task = await this._getTaskById(taskId);
+    // `source=active` hides a task of an archived project, as the list does.
+    const isHidden =
+      !!task?.projectId &&
+      getQueryParam(query, 'source') === 'active' &&
+      (await firstValueFrom(this._projectService.archived$)).some(
+        (p) => p.id === task.projectId,
+      );
+    if (!task || isHidden) {
+      return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
+    }
+    // Opt-in: some providers fetch the issue over the network to build
+    // the link, and most callers (e.g. frequent status polls) don't need it.
+    const issueUrl = isIncluded(query, 'issueUrl')
+      ? await this._getIssueUrl(task)
+      : undefined;
+    return createSuccessResponse(requestId, 200, issueUrl ? { ...task, issueUrl } : task);
+  }
+
   private async _handleTaskRoutes(
     method: string,
     segments: string[],
@@ -732,27 +789,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
 
     if (segments.length === 2) {
       if (method === 'GET') {
-        const task = await this._getTaskById(taskId);
-        // `source=active` hides a task of an archived project, as the list does.
-        const isHidden =
-          !!task?.projectId &&
-          getQueryParam(query, 'source') === 'active' &&
-          (await firstValueFrom(this._projectService.archived$)).some(
-            (p) => p.id === task.projectId,
-          );
-        if (!task || isHidden) {
-          return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
-        }
-        // Opt-in: some providers fetch the issue over the network to build
-        // the link, and most callers (e.g. frequent status polls) don't need it.
-        const issueUrl = isIncluded(query, 'issueUrl')
-          ? await this._getIssueUrl(task)
-          : undefined;
-        return createSuccessResponse(
-          requestId,
-          200,
-          issueUrl ? { ...task, issueUrl } : task,
-        );
+        return this._handleGetTask(requestId, taskId, query);
       }
 
       if (method === 'PATCH') {

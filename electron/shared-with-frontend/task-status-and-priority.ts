@@ -1,6 +1,32 @@
 export const TASK_STATUSES = ['open', 'done', 'wont-do'] as const;
 export type AssistantTaskStatus = (typeof TASK_STATUSES)[number];
 
+const SUMMARY_FIELDS = [
+  'id',
+  'title',
+  'isDone',
+  'projectId',
+  'tagIds',
+  'parentId',
+  'dueDay',
+  'dueWithTime',
+  'deadlineDay',
+  'deadlineWithTime',
+  'timeEstimate',
+  'timeSpent',
+] as const;
+
+/** Shared by the renderer's IPC projection and the main process's response allowlist. */
+export const pickTaskSummaryFields = (
+  task: Partial<Record<(typeof SUMMARY_FIELDS)[number], unknown>>,
+): Record<string, unknown> => {
+  const fields: Record<string, unknown> = {};
+  for (const key of SUMMARY_FIELDS) {
+    if (task[key] != null) fields[key] = task[key];
+  }
+  return fields;
+};
+
 export const getTaskStatus = (task: {
   isDone?: unknown;
   doneOn?: unknown;
