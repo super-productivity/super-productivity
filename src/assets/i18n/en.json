@@ -2607,6 +2607,7 @@
     "EXPORT_DATA": "Export Data",
     "IMPORT_FROM_FILE": "Import from File",
     "IMPORT_FROM_TICKTICK": "Import from TickTick",
+    "IMPORT_FROM_MS_TODO": "Import from Microsoft To Do",
     "IMPORT_FROM_TODOIST": "Import from Todoist",
     "IMPORT_FROM_URL": "Import from URL",
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Please enter the full URL of the Super Productivity backup JSON file to import.",
@@ -2621,6 +2622,7 @@
     "S_ERR_INVALID_URL": "Import failed: Invalid URL provided",
     "S_ERR_NETWORK": "Import failed: Network error while fetching data from URL",
     "S_ERR_TICKTICK_IMPORT_OPEN": "Could not open the TickTick importer",
+    "S_ERR_MS_TODO_IMPORT_OPEN": "Could not open the Microsoft To Do importer",
     "S_ERR_TODOIST_IMPORT_OPEN": "Could not open the Todoist importer",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Error: Could not decode the URL parameter for import. Please ensure it is correctly formatted.",
     "URL_PLACEHOLDER": "Enter URL to import from"
