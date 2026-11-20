@@ -45,6 +45,8 @@ import { HydrationStateService } from '../../../op-log/apply/hydration-state.ser
 import { DEFAULT_TASK } from '../../tasks/task.model';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { Action } from '@ngrx/store';
+import { FocusModeLocalSettingsService } from '../../config/focus-mode-local-settings.service';
+import { UiHelperService } from '../../ui-helper/ui-helper.service';
 
 describe('FocusModeEffects', () => {
   let actions$: Observable<any>;
@@ -3317,6 +3319,34 @@ describe('FocusModeEffects', () => {
       expect(eaMock.setProgressBar).toHaveBeenCalledWith({
         progress: 1,
         progressBarMode: 'none',
+      });
+    });
+
+    // #11094: users who miss the flash (or have no taskbar, e.g. tiling WMs)
+    // can opt back into raising the window on this device.
+    describe('with "bring window to front" enabled', () => {
+      let localSettings: FocusModeLocalSettingsService;
+
+      beforeEach(() => {
+        localSettings = TestBed.inject(FocusModeLocalSettingsService);
+        localSettings.update({ isFocusWindowOnSessionEnd: true });
+      });
+
+      afterEach(() => {
+        localSettings.update({ isFocusWindowOnSessionEnd: false });
+        localStorage.removeItem('sp_focus_mode_local_settings');
+      });
+
+      it('should raise the window and keep the flash as a fallback', () => {
+        const uiHelper = TestBed.inject(UiHelperService);
+        spyOn(uiHelper, 'focusAppAfterNotification');
+
+        (effects as any)._notifyUser();
+
+        expect(uiHelper.focusAppAfterNotification).toHaveBeenCalledWith({
+          isReminder: true,
+        });
+        expect(eaMock.flashFrame).toHaveBeenCalled();
       });
     });
   });

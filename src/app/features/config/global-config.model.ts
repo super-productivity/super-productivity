@@ -376,6 +376,7 @@ export type TaskWidgetConfig = Readonly<{
 export type FocusModeLocalConfig = Readonly<{
   isLoopBreakEndAlarm?: boolean;
   isNotifyOnSessionEnd?: boolean;
+  isFocusWindowOnSessionEnd?: boolean;
 }>;
 
 export type ClipboardImagesConfig = Readonly<{
