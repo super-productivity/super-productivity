@@ -37,8 +37,8 @@ During the migration, do not duplicate a fact in both `docs/public/` and `docs/w
 Convert a wiki note by creating the quadrant-pure public page first and then redirect the reader to the updated page.
 Never move or restructure `docs/wiki/` without warning: [`wiki-sync.yml`](../.github/workflows/wiki-sync.yml) mirrors it to the GitHub Wiki.
 
-Released app versions link some pages and cannot be updated (`rg 'super-productivity.com/docs' src`).
-When you rename, move, or convert one of those pages, keep its website route or add a redirect in the website's nginx config.
+Released app versions link some pages and cannot be updated (`rg 'super-productivity.com/docs' src packages`).
+When you rename, move, or convert one of those pages, keep its website route and linked headings, or add a redirect in `nginx/plesk-additional-directives.conf` in the landing-page repository.
 Keep the replaced wiki note as a stub that points to the new page, because older translations still link the GitHub Wiki.
 
 ## Legacy wiki rules
