@@ -4,6 +4,7 @@ import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of } from 'rxjs';
 import { LocalRestApiTaskRoutesService } from './local-rest-api-task-routes.service';
 import { TaskService } from './task.service';
+import { TaskArchiveOrchestratorService } from './task-archive-orchestrator.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { ProjectService } from '../project/project.service';
 import { Project } from '../project/project.model';
@@ -25,6 +26,7 @@ import { RemoteSessionView } from '../tracking-presence/tracking-presence.model'
 describe('LocalRestApiTaskRoutesService', () => {
   let service: LocalRestApiTaskRoutesService;
   let taskServiceMock: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestratorMock: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let taskArchiveServiceMock: jasmine.SpyObj<TaskArchiveService>;
   let archiveOperationHandlerMock: jasmine.SpyObj<ArchiveOperationHandler>;
   let projectServiceMock: jasmine.SpyObj<ProjectService>;
@@ -102,16 +104,7 @@ describe('LocalRestApiTaskRoutesService', () => {
 
     taskServiceMock = jasmine.createSpyObj(
       'TaskService',
-      [
-        'add',
-        'addSubTaskTo',
-        'update',
-        'remove',
-        'setCurrentId',
-        'moveToArchive',
-        'restoreTask',
-        'getAllTasksEverywhere',
-      ],
+      ['add', 'addSubTaskTo', 'update', 'remove', 'setCurrentId'],
       {
         allTasks$: of([]),
         currentTask$: of(null),
@@ -119,6 +112,11 @@ describe('LocalRestApiTaskRoutesService', () => {
         getByIdWithSubTaskData$: (_id: string) => of(undefined),
       },
     );
+    taskArchiveOrchestratorMock = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'moveToArchive',
+      'restoreTask',
+      'getAllTasksEverywhere',
+    ]);
     (taskServiceMock as any).add.and.returnValue('new-task-id');
     (taskServiceMock as any).addSubTaskTo.and.returnValue('new-subtask-id');
 
@@ -176,6 +174,10 @@ describe('LocalRestApiTaskRoutesService', () => {
       providers: [
         LocalRestApiTaskRoutesService,
         { provide: TaskService, useValue: taskServiceMock },
+        {
+          provide: TaskArchiveOrchestratorService,
+          useValue: taskArchiveOrchestratorMock,
+        },
         { provide: TaskArchiveService, useValue: taskArchiveServiceMock },
         { provide: ArchiveOperationHandler, useValue: archiveOperationHandlerMock },
         { provide: ProjectService, useValue: projectServiceMock },
@@ -538,7 +540,7 @@ describe('LocalRestApiTaskRoutesService', () => {
       });
 
       it('should return all tasks when source=all', async () => {
-        (taskServiceMock as any).getAllTasksEverywhere.and.returnValue(
+        taskArchiveOrchestratorMock.getAllTasksEverywhere.and.returnValue(
           Promise.resolve([
             createMockTask('task-1'),
             createMockTask('archivedTask1', { isDone: true }),
@@ -551,7 +553,7 @@ describe('LocalRestApiTaskRoutesService', () => {
 
         expect(response.body.ok).toBe(true);
         expectTaskIds(response, ['task-1']);
-        expect(taskServiceMock.getAllTasksEverywhere).toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.getAllTasksEverywhere).toHaveBeenCalled();
       });
     });
 
@@ -2837,14 +2839,14 @@ describe('LocalRestApiTaskRoutesService', () => {
         Object.defineProperty(taskServiceMock, 'getByIdWithSubTaskData$', {
           get: () => (_id: string) => of(createMockTaskWithSubTasks(mockTask)),
         });
-        (taskServiceMock as any).moveToArchive.and.returnValue(Promise.resolve());
+        taskArchiveOrchestratorMock.moveToArchive.and.returnValue(Promise.resolve());
 
         const response = await sendRequestAndWait(
           createRequest('POST', '/tasks/task-1/archive'),
         );
 
         expect(response.body.ok).toBe(true);
-        expect(taskServiceMock.moveToArchive).toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.moveToArchive).toHaveBeenCalled();
       });
 
       it('should return 404 for non-existent task', async () => {
@@ -2875,7 +2877,7 @@ describe('LocalRestApiTaskRoutesService', () => {
         expect(response.status).toBe(400);
         expect(response.body.ok).toBe(false);
         expect((response.body as any).error.code).toBe('INVALID_INPUT');
-        expect(taskServiceMock.moveToArchive).not.toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.moveToArchive).not.toHaveBeenCalled();
       });
     });
 
@@ -2891,7 +2893,7 @@ describe('LocalRestApiTaskRoutesService', () => {
 
         expect(response.status).toBe(400);
         expect(response.body.ok).toBe(false);
-        expect(taskServiceMock.restoreTask).not.toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.restoreTask).not.toHaveBeenCalled();
         expect(taskArchiveServiceMock.load).not.toHaveBeenCalled();
         expect(
           archiveOperationHandlerMock.whenLocalOperationsSettled,
@@ -2916,7 +2918,9 @@ describe('LocalRestApiTaskRoutesService', () => {
         );
 
         expect(response.status).toBe(200);
-        expect(taskServiceMock.restoreTask).toHaveBeenCalledOnceWith(parent, [subtask]);
+        expect(taskArchiveOrchestratorMock.restoreTask).toHaveBeenCalledOnceWith(parent, [
+          subtask,
+        ]);
       });
 
       it('should restore an archived task', async () => {
@@ -2937,7 +2941,7 @@ describe('LocalRestApiTaskRoutesService', () => {
         );
 
         expect(response.body.ok).toBe(true);
-        expect(taskServiceMock.restoreTask).toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.restoreTask).toHaveBeenCalled();
       });
 
       it('should not respond before the archive removal has settled (#9952)', async () => {
@@ -2960,7 +2964,7 @@ describe('LocalRestApiTaskRoutesService', () => {
         ).then((r) => (response = r));
         await new Promise((resolve) => setTimeout(resolve));
 
-        expect(taskServiceMock.restoreTask).toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.restoreTask).toHaveBeenCalled();
         expect(response).toBeUndefined();
 
         settleArchive();

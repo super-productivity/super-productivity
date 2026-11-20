@@ -1,4 +1,4 @@
-import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
+import { Action, MetaReducer } from '@ngrx/store';
 import { RootState } from '../../root-state';
 import { TaskSharedActions } from '../task-shared.actions';
 import {
@@ -6,7 +6,7 @@ import {
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
-import { ActionHandlerMap } from './task-shared-helpers';
+import { ActionHandlerMap, createActionHandlerMetaReducer } from './task-shared-helpers';
 import { isDBDateStr } from '../../../util/get-db-date-str';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { getTag, updateTags, removeTaskFromPlannerDays } from './task-shared-helpers';
@@ -279,17 +279,5 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   },
 });
 
-export const taskSharedDeadlineMetaReducer: MetaReducer = (
-  reducer: ActionReducer<RootState, Action>,
-) => {
-  return (state: unknown, action: Action) => {
-    if (!state) return reducer(state as RootState | undefined, action);
-
-    const rootState = state as RootState;
-    const actionHandlers = createActionHandlers(rootState, action);
-    const handler = actionHandlers[action.type];
-    const updatedState = handler ? handler(rootState) : rootState;
-
-    return reducer(updatedState, action);
-  };
-};
+export const taskSharedDeadlineMetaReducer: MetaReducer =
+  createActionHandlerMetaReducer(createActionHandlers);

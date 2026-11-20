@@ -23,4 +23,7 @@ export const DEFAULT_CALDAV_CFG: CaldavCfg = {
 };
 
 export const CALDAV_POLL_INTERVAL = 10 * 60 * 1000;
+export const CALDAV_POLL_INTERVAL_MINUTES_MIN = 1;
+// One day; well below setInterval's ~24.8-day overflow limit.
+export const CALDAV_POLL_INTERVAL_MINUTES_MAX = 24 * 60;
 export const CALDAV_INITIAL_POLL_DELAY = 8 * 1000;

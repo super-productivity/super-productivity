@@ -1,0 +1,58 @@
+{
+  "TITLE": "Fakturaer",
+  "LOADING": "Laster…",
+  "LIST": {
+    "EMPTY": "Ingen fakturaer ennå.",
+    "PRINT": "Skriv ut / PDF",
+    "CSV": "CSV",
+    "DELETE": "Slett",
+    "CONFIRM_DELETE": "Slette faktura {{number}}? Timene regnes som ufakturerte igjen."
+  },
+  "NEW": {
+    "TITLE": "Ny faktura",
+    "PROJECT": "Prosjekt",
+    "NO_PROJECTS": "Opprett et prosjekt først. Hvert prosjekt faktureres hver for seg.",
+    "FROM": "Fra",
+    "TO": "Til",
+    "RATE": "Timepris",
+    "LANGUAGE": "Fakturaspråk",
+    "CLIENT": "Faktureres til",
+    "CLIENT_HINT": "Kundens navn og adresse. Huskes for dette prosjektet.",
+    "INCLUDE": "Ta med",
+    "NO_HOURS": "Ingen ufakturert tid på dette prosjektet i denne perioden.",
+    "NUMBER": "Fakturanummer",
+    "ISSUE_DATE": "Fakturadato",
+    "ISSUE": "Utsted og skriv ut",
+    "BLOCK": {
+      "PERIOD": "Velg fra- og til-dato. Fra-datoen må komme først.",
+      "LINES": "Merk minst én linje med timer.",
+      "RATE": "Skriv inn en timepris.",
+      "NUMBER": "Skriv inn et fakturanummer.",
+      "NUMBER_USED": "Dette fakturanummeret er allerede i bruk.",
+      "DATE": "Skriv inn fakturadatoen."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Dine opplysninger",
+    "SELLER": "Navn, adresse og organisasjonsnummer",
+    "PAYMENT_NOTE": "Betalingsopplysninger",
+    "PAYMENT_NOTE_HINT": "Bankopplysninger eller betalingsvilkår, skrives ut nederst.",
+    "CURRENCY": "Valutakode",
+    "TAX": "MVA %",
+    "PAYMENT_DAYS": "Dager til forfall",
+    "ROUNDING": "Rund opp hver linje til",
+    "ROUNDING_NONE": "Ingen avrunding",
+    "ROUNDING_MIN": "{{min}} minutter",
+    "PREFIX": "Prefiks for fakturanummer",
+    "SAVE": "Lagre",
+    "SAVED": "Lagret."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Beskrivelse",
+    "HOURS": "Timer",
+    "TOTAL": "Totalt"
+  },
+  "ERROR": {
+    "GENERIC": "Noe gikk galt: {{error}}"
+  }
+}

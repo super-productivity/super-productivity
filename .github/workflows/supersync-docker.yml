@@ -73,9 +73,10 @@ jobs:
     # the suites were skipped. A push must therefore check both results itself: a
     # failed, cancelled or skipped suite publishes nothing. The ungated dispatch is
     # limited to master, like the release dispatch below: from another branch it
-    # would publish that branch's code as `latest`.
+    # would publish that branch's code as `latest`. Forks still run the gates, but
+    # cannot publish to the upstream repository's GHCR namespace.
     if: >-
-      !cancelled() && (
+      github.repository == 'super-productivity/super-productivity' && !cancelled() && (
         (github.event_name == 'push' && needs.server-tests.result == 'success' && needs.sync-e2e.result == 'success') ||
         (github.event_name == 'workflow_dispatch' && inputs.release_tag == '' && github.ref == 'refs/heads/master')
       )
@@ -196,7 +197,11 @@ jobs:
   # rebuilds and overwrites that tag.
   release-image:
     name: Build and Push release image to GHCR
-    if: (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && github.ref == 'refs/heads/master')
+    if: >-
+      github.repository == 'super-productivity/super-productivity' && (
+        (github.event_name == 'release' && !github.event.release.prerelease) ||
+        (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && github.ref == 'refs/heads/master')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read

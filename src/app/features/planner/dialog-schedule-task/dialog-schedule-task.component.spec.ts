@@ -29,6 +29,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { ScheduleConfig } from '../../config/global-config.model';
+import { selectTaskRepeatCfgByIdAllowUndefined } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 
 describe('DialogScheduleTaskComponent', () => {
   let component: DialogScheduleTaskComponent;
@@ -742,6 +743,59 @@ describe('DialogScheduleTaskComponent', () => {
       component.data = {} as any;
       component.remove();
       expect(dialogRefSpy.close).toHaveBeenCalledWith(false);
+    });
+  });
+
+  // #11816: a repeat config holds at most a 1h lead, so a repeating task must
+  // not be offered longer leads that would silently drop back to 1h.
+  describe('reminder options for a repeating task', () => {
+    const dueWithTime = new Date(2026, 2, 30, 9, 30).getTime();
+    const repeatingTask = {
+      id: 'repeating',
+      title: 'Standup',
+      tagIds: [] as string[],
+      projectId: 'DEFAULT',
+      timeSpentOnDay: {},
+      attachments: [],
+      timeEstimate: 0,
+      timeSpent: 0,
+      isDone: false,
+      created: Date.now(),
+      subTaskIds: [],
+      repeatCfgId: 'cfg1',
+      dueWithTime,
+      remindAt: dueWithTime - h(7 * 24),
+    } as unknown as TaskCopy;
+
+    beforeEach(() => {
+      (taskServiceSpy as unknown as { getByIdLive$: jasmine.Spy }).getByIdLive$ = jasmine
+        .createSpy('getByIdLive$')
+        .and.returnValue(of(repeatingTask));
+      // the module is already instantiated, so the provided data object is swapped in place
+      Object.assign(mockDialogData, { task: repeatingTask });
+      store.overrideSelector(selectTaskRepeatCfgByIdAllowUndefined, undefined);
+    });
+
+    afterEach(() => {
+      delete (mockDialogData as { task?: TaskCopy }).task;
+    });
+
+    it('offers reminders up to 1 hour and shows a 1-week lead as 1 hour', async () => {
+      const repeatFixture = TestBed.createComponent(DialogScheduleTaskComponent);
+      const repeatComponent = repeatFixture.componentInstance;
+      repeatFixture.detectChanges();
+      await repeatComponent.ngAfterViewInit();
+
+      expect(repeatComponent.remindAvailableOptions().map((o) => o.value)).toEqual([
+        TaskReminderOptionId.DoNotRemind,
+        TaskReminderOptionId.AtStart,
+        TaskReminderOptionId.m5,
+        TaskReminderOptionId.m10,
+        TaskReminderOptionId.m15,
+        TaskReminderOptionId.m30,
+        TaskReminderOptionId.h1,
+      ]);
+      expect(repeatComponent.selectedReminderCfgId).toBe(TaskReminderOptionId.h1);
     });
   });
 });
