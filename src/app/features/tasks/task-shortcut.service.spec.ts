@@ -1195,12 +1195,32 @@ describe('TaskShortcutService', () => {
       expect(mockBulkActions['deleteSelected']).toHaveBeenCalled();
     });
 
-    it('opens the bulk menu for menu keys', () => {
+    it('opens the plain bulk menu for the context menu key', () => {
       mockMultiSelect.isActive.set(true);
       setFocusedTask('task-1');
-      const ev = createKeyboardEvent('g', 'KeyG');
+      const ev = createKeyboardEvent('ContextMenu', 'ContextMenu');
       expect(service.handleTaskShortcuts(ev)).toBeTrue();
-      expect(mockMultiSelect.requestMenuOpen).toHaveBeenCalled();
+      expect(mockMultiSelect.requestMenuOpen).toHaveBeenCalledWith(
+        jasmine.any(Object),
+        undefined,
+      );
+    });
+
+    it('opens the bulk menu straight into the submenu a key names', () => {
+      mockMultiSelect.isActive.set(true);
+      setFocusedTask('task-1');
+      for (const [key, code, submenu] of [
+        ['g', 'KeyG', 'tags'],
+        ['p', 'KeyP', 'project'],
+        ['t', 'KeyT', 'estimate'],
+      ]) {
+        mockMultiSelect.requestMenuOpen.calls.reset();
+        expect(service.handleTaskShortcuts(createKeyboardEvent(key, code))).toBeTrue();
+        expect(mockMultiSelect.requestMenuOpen).toHaveBeenCalledWith(
+          jasmine.any(Object),
+          submenu,
+        );
+      }
     });
 
     it('leaves non-bulk shortcuts to the focused task', () => {
