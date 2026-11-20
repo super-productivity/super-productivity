@@ -312,10 +312,19 @@ describe('remote round-time-spent conflict resolution integration (#9601)', () =
 
     await resolver.autoResolveConflictsLWW(conflicts);
 
-    // Remote wins outright: the rounding applies once, the stale local edit is
-    // rejected, and nothing is left pending — no compensation is needed.
+    // Remote wins outright: the rounding applies once and the stale local edit
+    // is rejected. The rounding wrote time only, so the title survived and is
+    // re-sent alone (#11184); before, it stayed on this device.
     expect(appliedOps().map(({ id }) => id)).toContain(remoteRoundOp.id);
-    expect(await unsyncedOps()).toEqual([]);
+    const pending = await unsyncedOps();
+    expect(pending.map(({ payload }) => payload)).toEqual([
+      {
+        actionPayload: { title: 'Older local edit', id: TASK_A },
+        entityChanges: [],
+        lwwUpdateMode: 'patch',
+      },
+    ]);
+    expectDominates(pending[0], remoteRoundOp);
   });
 
   /**

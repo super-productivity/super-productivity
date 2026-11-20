@@ -84,6 +84,11 @@ export interface FuzzOptions {
   debug?: boolean;
   /** Sync through the real file-based adapter instead of the fake SuperSync server. */
   fileTransport?: FileTransportOptions;
+  /**
+   * How often a generated sync is killed mid-way (`x`; file transport only,
+   * default 0). Drawn from its own stream, so every other step stays the same.
+   */
+  killProbability?: number;
 }
 
 const DEVICES = ['A', 'B', 'C'];
@@ -91,6 +96,10 @@ const SYNC_PROBABILITY = 0.35;
 const COMPACT_PROBABILITY = 0.1;
 const RESTART_PROBABILITY = 0.1;
 const SETTLE_ROUNDS = 6;
+/** Seeds the `x` stream, as DIALOG_STREAM_SALT does for `k`. */
+const KILL_STREAM_SALT = 0x4b111ed5;
+/** A generated kill falls before one of the first this-many durable writes. */
+const MAX_KILL_WRITE = 12;
 /** How often a generated step keeps local data in a dialog (`k`). */
 const USE_LOCAL_PROBABILITY = 0.3;
 /**
@@ -701,13 +710,18 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     device: FuzzDevice,
     importAnswer?: ImportDialogAnswer,
     stopAnswer?: ImportDialogAnswer,
+    killAtWrite?: number,
   ): Promise<void> => {
     const before = harness.events.length;
     harness.importDialogAnswer = importAnswer;
     harness.stopDialogAnswer = stopAnswer;
-    await harness.sync(device);
+    const isKilled = killAtWrite
+      ? await harness.syncKilled(device, killAtWrite)
+      : (await harness.sync(device), false);
     syncCount++;
-    for (const entry of entries) {
+    // A killed sync whose upload never landed uploads at the next one.
+    const hasUploaded = !isKilled || !!harness.fileTransport?.hasLanded;
+    for (const entry of hasUploaded ? entries : []) {
       if (entry.device === device.name && entry.uploadedAt === Infinity) {
         entry.uploadedAt = syncCount;
       }
@@ -812,7 +826,7 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     }
     if (step.s) {
       const answer = answerOf(step.k);
-      await sync(device, answersImports() ? answer : undefined, answer);
+      await sync(device, answersImports() ? answer : undefined, answer, step.x);
     }
     if (step.c) await harness.compact(device);
     if (step.r) await harness.restart(device);
@@ -824,6 +838,7 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
         ...(step.c ? { c: 1 } : {}),
         ...(step.r ? { r: 1 } : {}),
         ...(step.s && step.k ? { k: step.k } : {}),
+        ...(step.s && step.x ? { x: step.x } : {}),
       });
     }
   };
@@ -838,6 +853,8 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     const dialogRandom = replaces
       ? random
       : createRandom((options.seed ?? 1) ^ DIALOG_STREAM_SALT);
+    const killRandom = createRandom((options.seed ?? 1) ^ KILL_STREAM_SALT);
+    const killProbability = options.killProbability ?? 0;
     let idCounter = 10;
     const nextId = (prefix: string): string => `${prefix}${++idCounter}`;
     for (let i = 0; i < (options.stepCount ?? 30); i++) {
@@ -861,9 +878,12 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
         }
         return generated;
       });
+      const isKill = killRandom() < killProbability;
+      const killAtWrite = 1 + Math.floor(killRandom() * MAX_KILL_WRITE);
       await runStep(
         {
           d: name,
+          ...(isKill ? { x: killAtWrite } : {}),
           ...(random() < SYNC_PROBABILITY ? { s: 1 } : {}),
           ...(random() < COMPACT_PROBABILITY ? { c: 1 } : {}),
           ...(random() < RESTART_PROBABILITY ? { r: 1 } : {}),
