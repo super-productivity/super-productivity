@@ -52,6 +52,13 @@ const MAX_RESULTS = 50;
 // common words too.
 const MIN_DELETED_RESULTS = 5;
 
+const normalizeSearchText = (text: string): string =>
+  text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
+    .normalize('NFC');
+
 @Component({
   selector: 'search-page',
   templateUrl: './search-page.component.html',
@@ -230,7 +237,7 @@ export class SearchPageComponent implements OnInit {
       const subTaskText = deletedEntry.subTasks.map((t) => t.title).join('\0');
       return {
         ...item,
-        searchText: `${item.searchText}\0${subTaskText.toLowerCase()}`,
+        searchText: `${item.searchText}\0${normalizeSearchText(subTaskText)}`,
         isDone: false,
         deletedEntry,
       };
@@ -262,7 +269,7 @@ export class SearchPageComponent implements OnInit {
         id: task.id,
         title: task.title,
         taskNotes,
-        searchText: `${task.title}\0${taskNotes}\0${attachmentUrls}`.toLowerCase(),
+        searchText: normalizeSearchText(`${task.title}\0${taskNotes}\0${attachmentUrls}`),
         projectId: task.projectId || null,
         parentId: task.parentId || null,
         parentTitle: parent?.title ?? null,
@@ -313,7 +320,7 @@ export class SearchPageComponent implements OnInit {
         id: note.id,
         title,
         taskNotes: note.content || '',
-        searchText: (note.content || '').toLowerCase(),
+        searchText: normalizeSearchText(note.content || ''),
         projectId: note.projectId || null,
         parentId: null,
         parentTitle: null,
@@ -338,7 +345,7 @@ export class SearchPageComponent implements OnInit {
       id: project.id,
       title: project.title,
       taskNotes: '',
-      searchText: project.title.toLowerCase(),
+      searchText: normalizeSearchText(project.title),
       projectId: project.id,
       parentId: null,
       parentTitle: null,
@@ -358,7 +365,7 @@ export class SearchPageComponent implements OnInit {
       id: tag.id,
       title: tag.title,
       taskNotes: '',
-      searchText: tag.title.toLowerCase(),
+      searchText: normalizeSearchText(tag.title),
       projectId: null,
       parentId: null,
       parentTitle: null,
@@ -438,7 +445,7 @@ export class SearchPageComponent implements OnInit {
       return [];
     }
 
-    const lowerSearchTerm = searchTerm.toLowerCase();
+    const lowerSearchTerm = normalizeSearchText(searchTerm);
     // Deleted items are mapped as not done and not archived, so they show
     // without "include completed".
     const result = searchableItems.filter(
