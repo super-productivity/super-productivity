@@ -875,6 +875,10 @@ const appCloseHandler = (app: App): void => {
       // The quit request can time out while the user answers the finish-day prompt
       setIsQuitRequested(true);
       mainWin.close();
+    } else if (mainWin && !mainWin.isDestroyed()) {
+      // Holds that wait for the others (sync before close) act once they are
+      // the last ones pending.
+      mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
     }
   });
 
