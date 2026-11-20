@@ -55,6 +55,7 @@ import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
 import { isAllowedSessionPermission } from './session-permissions';
 import { applyJiraImageAuth } from './jira-image-auth';
+import { createBeforeCloseActions } from './before-close-actions';
 
 // Long enough to outlast a resize or move gesture, so a drag records one
 // sample rather than one per frame.
@@ -851,9 +852,7 @@ function createMenu(quitApp: () => void): void {
 
 // TODO this is ugly as f+ck
 const appCloseHandler = (app: App): void => {
-  const pendingIds = new Set<string>();
-  const confirmationIds = new Set<string>();
-  let requestedConfirmations = new Set<string>();
+  const actions = createBeforeCloseActions();
 
   const _quitApp = (): void => {
     setIsQuiting(true);
@@ -863,36 +862,26 @@ const appCloseHandler = (app: App): void => {
   };
 
   const notifyBeforeClose = (): void => {
-    // Confirm the quit before sending any work that is only needed if it goes ahead.
-    requestedConfirmations = new Set(confirmationIds);
-    const ids = [
-      ...(requestedConfirmations.size > 0 ? requestedConfirmations : pendingIds),
-    ];
+    const ids = actions.start();
     log('Actions to wait for ', ids);
     mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
   };
 
   ipcMain.on(IPC.REGISTER_BEFORE_CLOSE, (ev, { id, isConfirmation }) => {
-    pendingIds.add(id);
-    if (isConfirmation) {
-      confirmationIds.add(id);
-    }
+    actions.register(id, isConfirmation);
   });
   ipcMain.on(IPC.UNREGISTER_BEFORE_CLOSE, (ev, { id }) => {
-    pendingIds.delete(id);
-    confirmationIds.delete(id);
+    actions.unregister(id);
   });
   ipcMain.on(IPC.BEFORE_CLOSE_DONE, (ev, { id }) => {
-    // The setting can change while the confirmation dialog is already open.
-    const wasConfirmation = requestedConfirmations.delete(id);
-    if (!pendingIds.delete(id) && !wasConfirmation) {
+    const next = actions.complete(id);
+    if (next === 'ignore') {
       return;
     }
-    confirmationIds.delete(id);
-    log(IPC.BEFORE_CLOSE_DONE, id, [...pendingIds]);
-    if (pendingIds.size === 0) {
+    log(IPC.BEFORE_CLOSE_DONE, id, [...actions.pendingIds]);
+    if (next === 'quit') {
       _quitApp();
-    } else if (wasConfirmation && confirmationIds.size === 0) {
+    } else if (next === 'notify') {
       notifyBeforeClose();
     }
   });
@@ -900,7 +889,7 @@ const appCloseHandler = (app: App): void => {
   mainWin.on('close', (event) => {
     // NOTE: this might not work if we run a second instance of the app
     log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', [
-      ...pendingIds,
+      ...actions.pendingIds,
     ]);
     if (!getIsQuiting()) {
       if (getIsMinimizeToTray() && !getIsQuitRequested()) {
@@ -917,7 +906,7 @@ const appCloseHandler = (app: App): void => {
 
       // A gone renderer (killed, oom, ...) never answers, so waiting for it
       // would leave no way to quit.
-      if (pendingIds.size > 0 && !mainWin.webContents.isCrashed()) {
+      if (actions.pendingIds.size > 0 && !mainWin.webContents.isCrashed()) {
         notifyBeforeClose();
       } else {
         _quitApp();

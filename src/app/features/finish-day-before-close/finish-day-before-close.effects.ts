@@ -73,36 +73,37 @@ export class FinishDayBeforeCloseEffects {
 
   warnToFinishDayBeforeClose$ =
     IS_ELECTRON &&
-    createEffect(
-      () =>
-        this._execBeforeCloseService.onBeforeClose$.pipe(
-          filter((ids) => ids.includes(EXEC_BEFORE_CLOSE_ID)),
-          withLatestFrom(this.isEnabled$),
-          switchMap(([, isEnabled]) => {
-            if (!isEnabled) {
-              if (this._isPromptOpen) {
-                this._uiHelperService.focusApp();
-              } else {
-                this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
-              }
-              return EMPTY;
-            }
-            return this._workContextService.mainWorkContext$.pipe(
-              first(),
-              switchMap((workContext) =>
-                this._taskService.getByIdsLive$(workContext.taskIds).pipe(first()),
-              ),
-            );
-          }),
-          tap((todayMainTasks) => {
-            this._handleCloseDecision(todayMainTasks).catch(() => {
-              // Don't let a dialog/router failure trap the user in close-pending state
-              this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
-            });
-          }),
-        ),
-      { dispatch: false },
+    createEffect(() => this._warnToFinishDayBeforeClose$(), { dispatch: false });
+
+  _warnToFinishDayBeforeClose$(): Observable<Task[]> {
+    return this._execBeforeCloseService.onBeforeClose$.pipe(
+      filter((ids) => ids.includes(EXEC_BEFORE_CLOSE_ID)),
+      withLatestFrom(this.isEnabled$),
+      switchMap(([, isEnabled]) => {
+        if (!isEnabled) {
+          // A quit request already queued by Electron still needs a response.
+          if (this._isPromptOpen) {
+            this._uiHelperService.focusApp();
+          } else {
+            this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+          }
+          return EMPTY;
+        }
+        return this._workContextService.mainWorkContext$.pipe(
+          first(),
+          switchMap((workContext) =>
+            this._taskService.getByIdsLive$(workContext.taskIds).pipe(first()),
+          ),
+        );
+      }),
+      tap((todayMainTasks) => {
+        this._handleCloseDecision(todayMainTasks).catch(() => {
+          // Don't let a dialog/router failure trap the user in close-pending state
+          this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+        });
+      }),
     );
+  }
 
   async _handleCloseDecision(todayMainTasks: Task[]): Promise<void> {
     // Finish Day archives every done task, won't-do ones too.

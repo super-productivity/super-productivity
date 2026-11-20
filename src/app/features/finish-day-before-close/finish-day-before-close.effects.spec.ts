@@ -9,7 +9,9 @@ import { TaskService } from '../tasks/task.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { UiHelperService } from '../ui-helper/ui-helper.service';
 import { DEFAULT_TASK, Task } from '../tasks/task.model';
-import { EMPTY } from 'rxjs';
+import { BehaviorSubject, EMPTY, of, Subject } from 'rxjs';
+
+type FinishDaySetting = { isConfirmBeforeExitWithoutFinishDay: boolean };
 
 describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
   let effects: FinishDayBeforeCloseEffects;
@@ -17,6 +19,8 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
   let router: jasmine.SpyObj<Router>;
   let showDialogSpy: jasmine.Spy;
   let uiHelperService: jasmine.SpyObj<UiHelperService>;
+  let closeNotifications: Subject<string[]>;
+  let miscConfig: BehaviorSubject<FinishDaySetting>;
 
   const doneTask: Task = {
     ...DEFAULT_TASK,
@@ -37,15 +41,19 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
       'unschedule',
       'setDone',
     ]);
-    execBeforeCloseServiceSpy.onBeforeClose$ = EMPTY;
+    closeNotifications = new Subject<string[]>();
+    execBeforeCloseServiceSpy.onBeforeClose$ = closeNotifications;
+    miscConfig = new BehaviorSubject<FinishDaySetting>({
+      isConfirmBeforeExitWithoutFinishDay: true,
+    });
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
-      misc$: EMPTY,
-      appFeatures$: EMPTY,
+      misc$: miscConfig,
+      appFeatures$: of({ isFinishDayEnabled: true }),
     });
 
     const dataInitStateServiceSpy = jasmine.createSpyObj('DataInitStateService', [], {
-      isAllDataLoadedInitially$: EMPTY,
+      isAllDataLoadedInitially$: of(undefined),
     });
 
     const taskServiceSpy = jasmine.createSpyObj('TaskService', ['getByIdsLive$']);
@@ -81,6 +89,21 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
     uiHelperService = TestBed.inject(UiHelperService) as jasmine.SpyObj<UiHelperService>;
 
     showDialogSpy = spyOn(effects, '_showDialog');
+  });
+
+  it('acknowledges a queued quit notification received after the setting is disabled', () => {
+    const subscription = effects._warnToFinishDayBeforeClose$().subscribe();
+    try {
+      miscConfig.next({ isConfirmBeforeExitWithoutFinishDay: false });
+      closeNotifications.next(['FINISH_DAY_BEFORE_CLOSE_EFFECT']);
+
+      expect(execBeforeCloseService.setDone).toHaveBeenCalledOnceWith(
+        'FINISH_DAY_BEFORE_CLOSE_EFFECT',
+      );
+      expect(showDialogSpy).not.toHaveBeenCalled();
+    } finally {
+      subscription.unsubscribe();
+    }
   });
 
   describe('when there are done tasks', () => {
