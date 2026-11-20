@@ -78,7 +78,7 @@ For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e
 
 These apply to all state-related work. **One user intent = one op; replayed/remote ops must not re-trigger effects.** Read [the contributor model](docs/sync-and-op-log/contributor-sync-model.md) before editing. Sync changes are high-risk: check replay determinism, concurrent/remote edits, vector-clock conflicts and data-loss modes; report material risks before marking work done.
 
-- **Released clients:** `master` auto-publishes to Play internal, Snap `edge` and `supersync:latest`. Prove release inclusion with `git tag --contains`; an unreproduced finding is not a false one. [Severity triage](docs/sync-and-op-log/sync-severity-triage.md).
+- **Released clients:** `master` auto-publishes to Play internal, Snap `edge` and `supersync:latest` (after green sync suites). Prove release inclusion with `git tag --contains`; an unreproduced finding is not a false one. [Severity triage](docs/sync-and-op-log/sync-severity-triage.md).
 - **Reproduce first:** every sync change starts from a reproducible failure with real data shapes, not a mocked seam. A sync bug fix needs an exact E2E reproduction written first (fails without the fix, passes with it); unit tests may supplement it. Only app-unreachable server internals or providers without an E2E harness may use the narrowest real-path test instead — say why in the PR. Question unreproducible hardening rather than adding guards.
 
 1. **Effects inject `LOCAL_ACTIONS`**, never `Actions` (`ALL_ACTIONS` only for the op-log capture effect; remote archive side effects → `ArchiveOperationHandler`). Lint: `no-actions-in-effects`. → `src/app/util/local-actions.token.ts`.

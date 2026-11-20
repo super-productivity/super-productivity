@@ -42,6 +42,12 @@ import {
   isResolvableTodayListAction,
 } from './conflict-resolution.util';
 
+/** Log detail for an LWW plan; only timestamp wins carry the compared timestamps. */
+const describeLwwPlan = (plan: LwwConflictResolutionPlan<EntityConflict>): string =>
+  plan.localMaxTimestamp === undefined
+    ? plan.reason
+    : `${plan.reason}, local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp}`;
+
 /**
  * Plans LWW winners per conflict and builds the local-win, field-patch and reconciliation ops.
  * Split out of `ConflictResolutionService`, which orchestrates the resolution.
@@ -175,12 +181,12 @@ export class ConflictResolutionPlannerService {
       } else if (plan.winner === 'local') {
         OpLog.normal(
           `ConflictResolutionService: LWW resolved ${plan.conflict.entityType}:${plan.conflict.entityId} as LOCAL ` +
-            `(local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
+            `(${describeLwwPlan(plan)})`,
         );
       } else {
         OpLog.normal(
           `ConflictResolutionService: LWW resolved ${plan.conflict.entityType}:${plan.conflict.entityId} as REMOTE ` +
-            `(local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
+            `(${describeLwwPlan(plan)})`,
         );
       }
     }

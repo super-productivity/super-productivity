@@ -359,8 +359,13 @@ export class ServerMigrationService {
         syncImportReason: options?.syncImportReason ?? 'SERVER_MIGRATION',
       };
 
-      // Append to operation log - will be uploaded via snapshot endpoint
-      await this.opLogStore.append(op, 'local');
+      // Append to operation log - will be uploaded via snapshot endpoint.
+      // The rebasing append also advances the stored vector clock; a plain
+      // append left it behind, so this device's next op reused the import's
+      // clock and peers that had applied the import skipped it (#11651).
+      await this.opLogStore.appendMixedSourceBatchSkipDuplicates([
+        { ops: [op], source: 'local' },
+      ]);
 
       OpLog.normal(
         'ServerMigrationService: Created SYNC_IMPORT operation for server migration. ' +

@@ -7,6 +7,7 @@ const STORAGE_KEY = 'sp_focus_mode_local_settings';
 const DEFAULT_FOCUS_MODE_LOCAL_CONFIG: Required<FocusModeLocalConfig> = {
   isLoopBreakEndAlarm: false,
   isNotifyOnSessionEnd: false,
+  isFocusWindowOnSessionEnd: false,
 };
 
 /**
@@ -19,6 +20,8 @@ const DEFAULT_FOCUS_MODE_LOCAL_CONFIG: Required<FocusModeLocalConfig> = {
  * differently per device. Mirrors TaskWidgetSettingsService. See #8593.
  * The session-end browser notification is local too: notification permission
  * is granted per browser, so a synced flag could not work elsewhere (#7550).
+ * Raising the window on session end is desktop-only and a per-machine habit
+ * (e.g. no taskbar to flash on a tiling WM), so it stays local too (#11094).
  */
 @Injectable({ providedIn: 'root' })
 export class FocusModeLocalSettingsService {

@@ -12,6 +12,7 @@ import {
   PluginAppState,
   PluginBaseCfg,
   PluginCreateTaskData,
+  PluginTaskRepeatCfgSchedule,
   PluginUpdateTaskOptions,
   PluginHeaderBtnCfg,
   PluginHookHandler,
@@ -305,6 +306,24 @@ export class PluginAPI implements PluginAPIInterface {
   async updateTag(tagId: string, updates: Partial<Tag>): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested to update tag ${tagId}`);
     return this.#pluginBridge.updateTag(tagId, updates as Partial<TagCopy>);
+  }
+
+  async addTaskRepeatCfg(
+    taskId: string,
+    schedule?: PluginTaskRepeatCfgSchedule,
+  ): Promise<string> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to add repeat config to ${taskId}`);
+    return this.#boundMethods.addTaskRepeatCfg(taskId, schedule);
+  }
+
+  async updateTaskRepeatCfg(
+    repeatCfgId: string,
+    updates: PluginTaskRepeatCfgSchedule,
+  ): Promise<void> {
+    PluginLog.log(
+      `Plugin ${this.#pluginId} requested to update repeat config ${repeatCfgId}`,
+    );
+    return this.#boundMethods.updateTaskRepeatCfg(repeatCfgId, updates);
   }
 
   async reorderTasks(

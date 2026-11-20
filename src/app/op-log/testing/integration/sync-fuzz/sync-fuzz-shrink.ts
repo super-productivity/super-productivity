@@ -1,5 +1,5 @@
 import { FuzzStep } from './sync-fuzz-actions';
-import { FuzzResult, runFuzz } from './sync-fuzz-runner';
+import { FuzzOptions, FuzzResult, runFuzz } from './sync-fuzz-runner';
 
 /**
  * Karma drops a browser that reports nothing for 30 s (browserNoActivityTimeout);
@@ -12,6 +12,10 @@ export const keepKarmaAlive = (tick: number): void => {
   karma?.info?.({ syncFuzzHeartbeat: tick });
 };
 
+export interface ShrinkOptions extends Pick<FuzzOptions, 'fileTransport'> {
+  maxRuns?: number;
+}
+
 /**
  * Delta debugging (ddmin) over steps, then a pass dropping single actions
  * and events. A candidate counts as failing only when `isSameFailure`
@@ -20,13 +24,13 @@ export const keepKarmaAlive = (tick: number): void => {
 export const shrinkTrace = async (
   steps: FuzzStep[],
   isSameFailure: (result: FuzzResult) => boolean,
-  maxRuns = 200,
+  { maxRuns = 200, fileTransport }: ShrinkOptions = {},
 ): Promise<FuzzStep[]> => {
   let runs = 0;
   const fails = async (candidate: FuzzStep[]): Promise<boolean> => {
     runs++;
     keepKarmaAlive(runs);
-    return isSameFailure(await runFuzz({ steps: candidate }));
+    return isSameFailure(await runFuzz({ steps: candidate, fileTransport }));
   };
 
   let current = steps;

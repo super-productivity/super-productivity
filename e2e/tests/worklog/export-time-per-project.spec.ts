@@ -21,8 +21,9 @@ test('worklog export lists the time per project for the range', async ({
 
   const dialog = page.locator('dialog-worklog-export');
   const header = dialog.locator('.collapsible-header', { hasText: 'Time per project' });
-  await header.focus();
-  await page.keyboard.press('Enter');
+  // click, not focus + Enter: the dialog's autoFocus lands on its first select
+  // after the open animation and would take the Enter
+  await header.click();
 
   const rows = dialog.locator('.project-totals tr');
   await expect(rows).toHaveCount(2);

@@ -100,13 +100,14 @@
 
   .checkbox {
     display: inline-block;
+    direction: inherit;
     font-size: 20px;
     width: 20px;
     line-height: 1;
     text-align: center;
-    margin-left: -28px;
+    margin-inline-start: -28px;
     vertical-align: middle;
-    padding-right: var(--s);
+    padding-inline-end: var(--s);
     position: relative;
     cursor: pointer;
 

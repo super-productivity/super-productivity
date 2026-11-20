@@ -19,6 +19,15 @@ describe('extractFirstEmoji', () => {
     expect(extractFirstEmoji('')).toBe('');
   });
 
+  it('should not treat non-ASCII text as emoji', () => {
+    expect(extractFirstEmoji('Über café')).toBe('');
+    expect(extractFirstEmoji('日本語')).toBe('');
+  });
+
+  it('should find an emoji after non-ASCII text', () => {
+    expect(extractFirstEmoji('café ☕')).toBe('☕');
+  });
+
   it('should not treat plain # or digits as emoji', () => {
     expect(extractFirstEmoji('#channel')).toBe('');
     expect(extractFirstEmoji('3 items')).toBe('');
@@ -102,6 +111,11 @@ describe('isSingleEmoji', () => {
     expect(isSingleEmoji('')).toBe(false);
   });
 
+  it('should return false for non-ASCII text', () => {
+    expect(isSingleEmoji('é')).toBe(false);
+    expect(isSingleEmoji('日')).toBe(false);
+  });
+
   it('should return false for plain # or digits', () => {
     expect(isSingleEmoji('#')).toBe(false);
     expect(isSingleEmoji('3')).toBe(false);
@@ -181,6 +195,11 @@ describe('containsEmoji', () => {
     expect(containsEmoji('folder')).toBe(false);
     expect(containsEmoji('')).toBe(false);
     expect(containsEmoji('   ')).toBe(false);
+  });
+
+  it('should return false for non-ASCII text', () => {
+    expect(containsEmoji('Über café')).toBe(false);
+    expect(containsEmoji('日本語')).toBe(false);
   });
 
   it('should return false for plain # or digits', () => {

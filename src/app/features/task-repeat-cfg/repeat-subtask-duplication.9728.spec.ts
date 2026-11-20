@@ -26,6 +26,7 @@ import { TaskRepeatCfgService } from './task-repeat-cfg.service';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from './task-repeat-cfg.model';
 import { getRepeatableTaskId } from './get-repeatable-task-id.util';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
 import { DEFAULT_TASK, Task } from '../tasks/task.model';
@@ -45,6 +46,7 @@ describe('Recurring task subtask duplication (#9728)', () => {
   let reducer: ActionReducer<any, Action>;
   let baseState: RootState;
   let nextTaskNr: number;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
 
   const CFG_ID = 'morning-routine-cfg';
   const DAY = new Date(2026, 7, 25, 8, 5, 0, 0);
@@ -81,6 +83,8 @@ describe('Recurring task subtask duplication (#9728)', () => {
       'createNewTaskWithDefaults',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getTasksByRepeatCfgId$',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
       'getArchiveTasksForRepeatCfgId',
     ]);
 
@@ -103,6 +107,7 @@ describe('Recurring task subtask duplication (#9728)', () => {
         provideMockStore({ initialState: { taskRepeatCfg: { ids: [], entities: {} } } }),
         { provide: MatDialog, useValue: jasmine.createSpyObj('MatDialog', ['open']) },
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         {
           provide: WorkContextService,
           useValue: jasmine.createSpyObj('WorkContextService', [], {
@@ -149,7 +154,7 @@ describe('Recurring task subtask duplication (#9728)', () => {
   it('creates the parent once with 15 subtasks on a single run', async () => {
     const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
     taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]) as any);
-    taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+    taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
 
     const state = applyAll(
       baseState,
@@ -165,7 +170,7 @@ describe('Recurring task subtask duplication (#9728)', () => {
     // Both callers read state BEFORE either has dispatched — the window that
     // updateStartDateOnComplete$ holds open across its task-archive load.
     taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]) as any);
-    taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+    taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
 
     const [actionsA, actionsB] = await Promise.all([
       service._getActionsForTaskRepeatCfg(cfg, DAY.getTime()),
@@ -204,7 +209,7 @@ describe('Recurring task subtask duplication (#9728)', () => {
     it('gives the two clients ONE parent entity key but 30 disjoint subtask keys', async () => {
       const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]) as any);
-      taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
 
       // Device 1 (e.g. Windows) and device 2 (e.g. Mac), each unaware of the other.
       const deviceA = await service._getActionsForTaskRepeatCfg(cfg, DAY.getTime());
@@ -235,7 +240,7 @@ describe('Recurring task subtask duplication (#9728)', () => {
     it('does NOT leave 30 subtasks after merging both devices op sets', async () => {
       const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]) as any);
-      taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
 
       const deviceA = await service._getActionsForTaskRepeatCfg(cfg, DAY.getTime());
       const deviceB = await service._getActionsForTaskRepeatCfg(cfg, DAY.getTime());
@@ -268,7 +273,7 @@ describe('Recurring task subtask duplication (#9728)', () => {
     it('produces identical task ids across two independent runs', async () => {
       const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]) as any);
-      taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
 
       const runA = await service._getActionsForTaskRepeatCfg(cfg, DAY.getTime());
       const runB = await service._getActionsForTaskRepeatCfg(cfg, DAY.getTime());
@@ -280,7 +285,7 @@ describe('Recurring task subtask duplication (#9728)', () => {
     it('derives every created task id from the repeat cfg and its due day', async () => {
       const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]) as any);
-      taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
 
       const ids = taskIdsOf(
         await service._getActionsForTaskRepeatCfg(cfg, DAY.getTime()),

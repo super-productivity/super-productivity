@@ -1,9 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { TaskCopy } from '../../tasks/task.model';
-import { MatDialog } from '@angular/material/dialog';
+import { TaskService } from '../../tasks/task.service';
 import { MatIcon } from '@angular/material/icon';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
-import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-deadline.component';
 
 @Component({
   selector: 'planner-deadline-task',
@@ -13,15 +12,13 @@ import { DialogDeadlineComponent } from '../../tasks/dialog-deadline/dialog-dead
   imports: [MatIcon, MsToStringPipe],
 })
 export class PlannerDeadlineTaskComponent {
-  private _matDialog = inject(MatDialog);
+  private _taskService = inject(TaskService);
 
   task = input.required<TaskCopy>();
 
-  editDeadline(): void {
-    this._matDialog.open(DialogDeadlineComponent, {
-      autoFocus: false,
-      restoreFocus: true,
-      data: { task: this.task() },
-    });
+  // Same as planner-task: open the task (detail panel, or bottom panel on
+  // mobile); the deadline is edited from there.
+  openTask(): void {
+    this._taskService.setSelectedId(this.task().id);
   }
 }

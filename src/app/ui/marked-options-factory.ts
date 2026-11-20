@@ -44,26 +44,82 @@ export const parseImageDimensionsFromTitle = (
   };
 };
 
+// Match: ![alt](url =WIDTHxHEIGHT) or ![alt](url =WIDTHx) or ![alt](url =xHEIGHT)
+// Capture groups: 1=alt, 2=url, 3=width, 4=height
+// The whitespace right after `\(` keeps this in sync with SIZED_IMAGE_RE in
+// live-markdown-ranges.ts, which already tolerates a leading space before the
+// URL — without it, `![a]( u =10x20)` parsed differently depending on which
+// renderer was on screen (#10153). It is horizontal whitespace only: the live
+// editor matches a single line (CodeMirror splits on `\r\n?|\n`), so an image
+// with a line break after the paren stays raw there and has to stay raw here.
+const SIZED_IMAGE_RE = /!\[([^\]]*)\]\([^\S\r\n]*([^\s)]+)\s+=(\d*)x(\d*)\)/g;
+
+/**
+ * An opening or closing code fence: up to three spaces, then ``` or ~~~.
+ * A backtick fence's info string may not contain a backtick (CommonMark,
+ * marked): ```` ```npm i``` ```` is an inline code span, not a fence.
+ */
+const FENCE_RE = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})(.*)$/;
+
+const rewriteSizedImages = (text: string): string =>
+  text.replace(SIZED_IMAGE_RE, (match, alt, url, width, height) => {
+    // Create title attribute with width|height format
+    const dimensions = `${width || ''}|${height || ''}`;
+    return `![${alt}](${url} "${dimensions}")`;
+  });
+
 /**
  * Preprocess markdown to convert image sizing syntax into title attributes.
  * Converts: ![alt](url =WIDTHxHEIGHT) -> ![alt](url "WIDTH|HEIGHT")
  * This allows marked.js to parse it as a valid image with a title.
  */
 export const preprocessMarkdown = (markdown: string): string => {
-  // Match: ![alt](url =WIDTHxHEIGHT) or ![alt](url =WIDTHx) or ![alt](url =xHEIGHT)
-  // Capture groups: 1=alt, 2=url, 3=width, 4=height
-  // The `\s*` right after `\(` keeps this in sync with SIZED_IMAGE_RE in
-  // live-markdown-ranges.ts, which already tolerates a leading space before the
-  // URL — without it, `![a]( u =10x20)` parsed differently depending on which
-  // renderer was on screen (#10153).
-  return markdown.replace(
-    /!\[([^\]]*)\]\(\s*([^\s)]+)\s+=(\d*)x(\d*)\)/g,
-    (match, alt, url, width, height) => {
-      // Create title attribute with width|height format
-      const dimensions = `${width || ''}|${height || ''}`;
-      return `![${alt}](${url} "${dimensions}")`;
-    },
-  );
+  // Fenced code is left verbatim: a note documenting the `=WxH` syntax should
+  // show what was typed, not the rewritten title form.
+  const out: string[] = [];
+  let pending: string[] = [];
+  let openFence: string | null = null;
+
+  const flushPending = (): void => {
+    if (pending.length > 0) {
+      out.push(rewriteSizedImages(pending.join('\n')));
+      pending = [];
+    }
+  };
+
+  // marked's lexer turns `\r\n` and a lone `\r` into `\n` only after this hook
+  // has run, so do the same first: otherwise a fence in a CRLF note is never
+  // seen and the code inside it is rewritten after all.
+  for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
+    const fence = FENCE_RE.exec(line);
+
+    if (openFence) {
+      out.push(line);
+      // a closing fence uses the same character and is at least as long,
+      // with nothing after it
+      if (
+        fence &&
+        fence[1][0] === openFence[0] &&
+        fence[1].length >= openFence.length &&
+        fence[2].trim() === ''
+      ) {
+        openFence = null;
+      }
+      continue;
+    }
+
+    if (fence) {
+      flushPending();
+      out.push(line);
+      openFence = fence[1];
+      continue;
+    }
+
+    pending.push(line);
+  }
+
+  flushPending();
+  return out.join('\n');
 };
 
 const WEBEX_TEAMS_URI_PREFIX = 'webexteams://';
