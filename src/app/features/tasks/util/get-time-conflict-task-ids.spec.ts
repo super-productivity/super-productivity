@@ -31,6 +31,34 @@ const conflictIds = (tasks: TaskWithDueTime[]): string[] =>
   [...getTimeConflictTaskIds(tasks)].sort();
 
 describe('getTimeConflictTaskIds', () => {
+  it('does not extend a sub-minute slot into an adjacent slot', () => {
+    const tasks = [
+      createTask({ id: 'first', dueWithTime: h(14), timeEstimate: m(0.5) }),
+      createTask({ id: 'second', dueWithTime: h(14) + m(0.5), timeEstimate: m(10) }),
+    ];
+
+    expect(getTimeConflictTaskIds(tasks, 'first', h(14) - m(1)).size).toBe(0);
+    expect(getTimeConflictTaskIds(tasks, 'first', h(14) + m(0.25)).size).toBe(0);
+  });
+
+  it('flags overlaps with the remaining part of a running booked slot', () => {
+    const tasks = [
+      createTask({
+        id: 'running',
+        dueWithTime: h(14),
+        timeEstimate: h(1),
+        timeSpent: m(40),
+      }),
+      createTask({ id: 'elapsed', dueWithTime: h(14), timeEstimate: m(5) }),
+      createTask({ id: 'overlap', dueWithTime: h(14) + m(45), timeEstimate: m(10) }),
+    ];
+
+    expect([...getTimeConflictTaskIds(tasks, 'running', h(14) + m(40))].sort()).toEqual([
+      'overlap',
+      'running',
+    ]);
+  });
+
   it('should handle empty and single-task schedules', () => {
     expect(conflictIds([])).toEqual([]);
     expect(conflictIds([createTask({ id: 'only', dueWithTime: h(9) })])).toEqual([]);

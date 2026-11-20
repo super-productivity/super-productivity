@@ -97,6 +97,7 @@ export const mapToScheduleDays = (
     dayDates.length,
     realNow,
     startOfNextDayDiffMs,
+    currentId,
   );
 
   if (trayCfg) {

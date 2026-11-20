@@ -1282,9 +1282,14 @@ describe('createBlockerBlocks()', () => {
         undefined,
         undefined,
         start + minutes(10),
+        undefined,
+        undefined,
+        undefined,
+        task.id,
       );
 
       expect(beforeTracking.entries[0].end).toBe(start + hours(1));
+      expect(duringTracking.entries[0].start).toBe(start + minutes(10));
       expect(duringTracking.entries[0].end).toBe(start + hours(1));
     });
 

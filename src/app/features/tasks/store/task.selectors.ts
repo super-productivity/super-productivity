@@ -1035,12 +1035,12 @@ export const selectAllTasksWithDueTimeSorted = createSelector(
 
 // NOTE: selectTimeConflictTaskIds intentionally keeps consuming the PUBLIC
 // selectAllTasksWithDueTimeSorted (LIVE refs) rather than the snapshot decision:
-// getTimeConflictTaskIds → getTimeLeftForTask READS `timeSpent`, so a tracked
-// due-time task's shrinking time-left can genuinely change conflicts each tick.
+// Live task refs let conflict warnings follow remaining duration and the running slot.
 // The live re-map yields a new array (with the tracked task's live ref) only when
 // a due-time member actually changed, so conflicts recompute exactly when needed.
 export const selectTimeConflictTaskIds = createSelector(
   selectAllTasksWithDueTimeSorted,
+  selectCurrentTaskId,
   getTimeConflictTaskIds,
 );
 

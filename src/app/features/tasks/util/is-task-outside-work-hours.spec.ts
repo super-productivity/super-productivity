@@ -31,6 +31,30 @@ const scheduleConfig = (partial: Partial<ScheduleConfig> = {}): ScheduleConfig =
   }) as ScheduleConfig;
 
 describe('isTaskOutsideWorkHours', () => {
+  it('does not extend a sub-minute slot beyond the end of work hours', () => {
+    const dueWithTime = new Date(2026, 3, 15, 16, 59, 30).getTime();
+    const task = createTask({ dueWithTime, timeEstimate: 30_000 });
+
+    expect(
+      isTaskOutsideWorkHours(task, scheduleConfig(), task.id, dueWithTime - h(1)),
+    ).toBe(false);
+    expect(
+      isTaskOutsideWorkHours(task, scheduleConfig(), task.id, dueWithTime + 5000),
+    ).toBe(false);
+  });
+
+  it('uses the booked end once the tracked task reaches its scheduled slot', () => {
+    const dueWithTime = new Date(2026, 3, 15, 16, 30).getTime();
+    const task = createTask({ dueWithTime, timeEstimate: h(1), timeSpent: h(0.75) });
+
+    expect(
+      isTaskOutsideWorkHours(task, scheduleConfig(), task.id, dueWithTime - h(1)),
+    ).toBe(false);
+    expect(
+      isTaskOutsideWorkHours(task, scheduleConfig(), task.id, dueWithTime + h(0.25)),
+    ).toBe(true);
+  });
+
   it('should return false when work hours are disabled', () => {
     const task = createTask({
       dueWithTime: new Date(2026, 3, 15, 7, 0).getTime(),
