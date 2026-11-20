@@ -59,6 +59,10 @@ export const TRACKING_INTERVAL = 1000;
 
 export const DRAG_DELAY_FOR_TOUCH = 500;
 
+// User docs on the website (built from docs/wiki/ and docs/public/). Never add
+// query params (utm, version, locale): they would turn a help link into telemetry.
+export const DOCS_URL = 'https://super-productivity.com/docs/';
+
 // Maximum wall-clock gap credited on iOS resume when the WebView was suspended
 // in the background. Larger gaps are capped to this value so an overnight
 // charge can't silently add 8 h to the active task.
