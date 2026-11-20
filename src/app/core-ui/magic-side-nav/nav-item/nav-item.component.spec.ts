@@ -1,22 +1,39 @@
-import { Component, signal } from '@angular/core';
+import { CUSTOM_ELEMENTS_SCHEMA, Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatMenu, MatMenuItem } from '@angular/material/menu';
+import { CdkDragPlaceholder } from '@angular/cdk/drag-drop';
+import { MatIconButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuModule } from '@angular/material/menu';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { By } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { provideRouter, RouterLink, RouterModule } from '@angular/router';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 
 import { NavItemComponent } from './nav-item.component';
 import { GlobalThemeService } from '../../../core/theme/global-theme.service';
 import { MagicNavConfigService } from '../magic-nav-config.service';
 import {
-  selectTaskSchedulingSnapshot,
   selectAllTasks,
+  selectOpenTaskIds,
 } from '../../../features/tasks/store/task.selectors';
 import { selectArchivedProjectIds } from '../../../features/project/store/project.selectors';
 import { DEFAULT_TASK, Task } from '../../../features/tasks/task.model';
+import {
+  WorkContextCommon,
+  WorkContextType,
+} from '../../../features/work-context/work-context.model';
 import { ContextMenuComponent } from '../../../ui/context-menu/context-menu.component';
+import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon.component';
+
+@Component({
+  selector: 'work-context-menu',
+  template: '',
+  standalone: true,
+})
+class WorkContextMenuStubComponent {
+  menu = (): MatMenu => ({}) as MatMenu;
+}
 
 @Component({
   template: `
@@ -49,7 +66,7 @@ describe('NavItemComponent group header', () => {
       imports: [HostComponent, NoopAnimationsModule, TranslateModule.forRoot()],
       providers: [
         provideMockStore({
-          selectors: [{ selector: selectTaskSchedulingSnapshot, value: [] }],
+          selectors: [{ selector: selectOpenTaskIds, value: new Set<string>() }],
         }),
         { provide: GlobalThemeService, useValue: { registerSvgIcon: () => undefined } },
         { provide: MagicNavConfigService, useValue: {} },
@@ -114,7 +131,7 @@ describe('NavItemComponent row menu', () => {
       providers: [
         provideRouter([]),
         provideMockStore({
-          selectors: [{ selector: selectTaskSchedulingSnapshot, value: [] }],
+          selectors: [{ selector: selectOpenTaskIds, value: new Set<string>() }],
         }),
         { provide: GlobalThemeService, useValue: { registerSvgIcon: () => undefined } },
         { provide: MagicNavConfigService, useValue: {} },
@@ -140,6 +157,143 @@ describe('NavItemComponent row menu', () => {
     const btn: HTMLButtonElement = fixture.nativeElement.querySelector('.additional-btn');
     expect(btn).not.toBeNull();
     expect(btn.getAttribute('aria-label')).toBeTruthy();
+  });
+});
+
+@Component({
+  template: `
+    <nav-item
+      [workContext]="project"
+      [type]="WorkContextType.PROJECT"
+    ></nav-item>
+    <nav-item
+      [workContext]="tag"
+      [type]="WorkContextType.TAG"
+    ></nav-item>
+  `,
+  imports: [NavItemComponent],
+})
+class WorkContextRowsHostComponent {
+  readonly WorkContextType = WorkContextType;
+  readonly project = {
+    id: 'project',
+    title: 'Project',
+    taskIds: ['open-task', 'another-open-task', 'done-task', 'missing-task'],
+    advancedCfg: {},
+    theme: {},
+  } as unknown as WorkContextCommon;
+  readonly tag = {
+    id: 'tag',
+    title: 'Tag',
+    taskIds: ['open-task'],
+    advancedCfg: {},
+    theme: {},
+  } as unknown as WorkContextCommon;
+}
+
+describe('NavItemComponent task count badges', () => {
+  let fixture: ComponentFixture<WorkContextRowsHostComponent>;
+  let store: MockStore;
+  const hideNavTaskCount = signal<boolean | undefined>(false);
+
+  beforeEach(async () => {
+    hideNavTaskCount.set(false);
+    await TestBed.configureTestingModule({
+      imports: [
+        WorkContextRowsHostComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
+      providers: [
+        provideMockStore({
+          selectors: [{ selector: selectOpenTaskIds, value: new Set(['open-task']) }],
+        }),
+        { provide: GlobalThemeService, useValue: {} },
+        {
+          provide: MagicNavConfigService,
+          useValue: { isHideNavTaskCount: hideNavTaskCount },
+        },
+        provideRouter([]),
+      ],
+    })
+      .overrideComponent(NavItemComponent, {
+        set: {
+          imports: [
+            RouterLink,
+            RouterModule,
+            CdkDragPlaceholder,
+            MatIconButton,
+            MatIcon,
+            MatMenuItem,
+            MatMenuModule,
+            TranslatePipe,
+            PluginIconComponent,
+            WorkContextMenuStubComponent,
+          ],
+          schemas: [CUSTOM_ELEMENTS_SCHEMA],
+        },
+      })
+      .compileComponents();
+    fixture = TestBed.createComponent(WorkContextRowsHostComponent);
+    store = TestBed.inject(MockStore);
+    fixture.detectChanges();
+  });
+
+  const badges = (): HTMLElement[] =>
+    Array.from(fixture.nativeElement.querySelectorAll('.task-count'));
+  const rows = (): HTMLElement[] =>
+    Array.from(fixture.nativeElement.querySelectorAll('button.nav-link'));
+  const rowTaskClasses = (): boolean[] =>
+    rows().map((row) => row.classList.contains('has-tasks'));
+
+  it('shows the correct open-task count for projects and tags when false', () => {
+    expect(badges().map((badge) => badge.textContent?.trim())).toEqual(['1', '1']);
+    expect(rowTaskClasses()).toEqual([true, true]);
+  });
+
+  it('shows badges for projects and tags when the setting is undefined', () => {
+    hideNavTaskCount.set(undefined);
+    fixture.detectChanges();
+    expect(badges().length).toBe(2);
+    expect(rowTaskClasses()).toEqual([true, true]);
+  });
+
+  it('hides badges for projects and tags when the setting is true', () => {
+    hideNavTaskCount.set(true);
+    fixture.detectChanges();
+    expect(badges().length).toBe(0);
+    expect(rowTaskClasses()).toEqual([false, false]);
+  });
+
+  it('reacts to setting and task count changes', () => {
+    hideNavTaskCount.set(true);
+    fixture.detectChanges();
+    expect(badges().length).toBe(0);
+    expect(rowTaskClasses()).toEqual([false, false]);
+
+    hideNavTaskCount.set(false);
+    fixture.detectChanges();
+    expect(badges().map((badge) => badge.textContent?.trim())).toEqual(['1', '1']);
+    expect(rowTaskClasses()).toEqual([true, true]);
+
+    store.overrideSelector(
+      selectOpenTaskIds,
+      new Set(['open-task', 'another-open-task']),
+    );
+    store.refreshState();
+    fixture.detectChanges();
+    expect(badges().map((badge) => badge.textContent?.trim())).toEqual(['2', '1']);
+    expect(rowTaskClasses()).toEqual([true, true]);
+
+    hideNavTaskCount.set(true);
+    fixture.detectChanges();
+    expect(badges().length).toBe(0);
+    expect(rowTaskClasses()).toEqual([false, false]);
+
+    hideNavTaskCount.set(false);
+    fixture.detectChanges();
+    expect(badges().map((badge) => badge.textContent?.trim())).toEqual(['2', '1']);
+    expect(rowTaskClasses()).toEqual([true, true]);
   });
 });
 

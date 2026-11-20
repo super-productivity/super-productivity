@@ -9,7 +9,13 @@ import {
 import { T } from '../../../t.const';
 import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { PlannerDay, ScheduleItem, ScheduleItemType } from '../planner.model';
-import { CdkDrag, CdkDragDrop, CdkDragStart, CdkDropList } from '@angular/cdk/drag-drop';
+import {
+  CdkDrag,
+  CdkDragDrop,
+  CdkDragPreview,
+  CdkDragStart,
+  CdkDropList,
+} from '@angular/cdk/drag-drop';
 import { TaskCopy } from '../../tasks/task.model';
 import { PlannerActions } from '../store/planner.actions';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
@@ -39,6 +45,9 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
 import { safeFormatDate } from '../../../util/safe-format-date';
+import { TaskMultiDragService } from '../../tasks/task-multi-drag.service';
+import { TaskGroupDragPreviewComponent } from '../../tasks/task-group-drag-preview/task-group-drag-preview.component';
+import { PlannerGroupDropService } from '../planner-group-drop.service';
 
 @Component({
   selector: 'planner-day',
@@ -50,6 +59,8 @@ import { safeFormatDate } from '../../../util/safe-format-date';
     CdkDropList,
     PlannerTaskComponent,
     CdkDrag,
+    CdkDragPreview,
+    TaskGroupDragPreviewComponent,
     PlannerRepeatProjectionComponent,
     PlannerDeadlineTaskComponent,
     AddTaskInlineComponent,
@@ -72,6 +83,8 @@ export class PlannerDayComponent {
   private _layoutService = inject(LayoutService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _externalDragService = inject(ScheduleExternalDragService);
+  protected readonly multiDrag = inject(TaskMultiDragService);
+  private _groupDrop = inject(PlannerGroupDropService);
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
@@ -126,6 +139,13 @@ export class PlannerDayComponent {
   // Register the drag so the side nav (projects, tags) and the schedule panel
   // can handle drops on them (#11210)
   onDragStarted(task: TaskCopy, ev: CdkDragStart): void {
+    this.multiDrag.start(task, 'PLANNER');
+    if (this._groupDrop.isGroupDrag()) {
+      // The side nav moves the whole group to a project (TaskMultiDragService);
+      // schedule-panel and tag drops stay single-card paths.
+      this._externalDragService.setActiveTask(null, ev.source._dragRef);
+      return;
+    }
     this._taskService
       .getByIdWithSubTaskData$(task.id)
       .subscribe((taskWithSubTasks) =>
@@ -137,8 +157,12 @@ export class PlannerDayComponent {
   }
 
   onDragEnded(): void {
+    this.multiDrag.finish();
     this._externalDragService.setActiveTask(null);
   }
+
+  // A group lands in a day's unscheduled list; times stay per-card edits.
+  readonly acceptSingleCard = (): boolean => !this._groupDrop.isGroupDrag();
 
   // TODO correct type
   drop(
@@ -154,6 +178,20 @@ export class PlannerDayComponent {
 
     const newDay = ev.container.data;
     const task = ev.item.data;
+
+    if (this._groupDrop.isGroupDrag()) {
+      // Released outside every list, CDK still drops into the last list the
+      // card entered (or its own): the group must stay where it was, not
+      // gather on that day.
+      if (targetList === 'TODO' && this._isReleasedOverList(ev)) {
+        const currentIds = (allItems as TaskCopy[]).map((item) => item.id);
+        // Where CDK put the leader alone, in this list or coming from another.
+        const orderedIds = currentIds.filter((id) => id !== task.id);
+        orderedIds.splice(ev.currentIndex, 0, task.id);
+        this._groupDrop.drop(newDay, task.id, orderedIds, currentIds);
+      }
+      return;
+    }
 
     if (targetList === 'SCHEDULED') {
       if (ev.previousContainer !== ev.container) {
@@ -191,6 +229,19 @@ export class PlannerDayComponent {
         );
       }
     }
+  }
+
+  // CDK checks the list bounds cached before its placeholder grew the list;
+  // the live bounds cover a release on the grown part.
+  private _isReleasedOverList(ev: CdkDragDrop<string, string, TaskCopy>): boolean {
+    if (ev.isPointerOverContainer) return true;
+    const bounds = ev.container.element.nativeElement.getBoundingClientRect();
+    return (
+      ev.dropPoint.x >= bounds.left &&
+      ev.dropPoint.x <= bounds.right &&
+      ev.dropPoint.y >= bounds.top &&
+      ev.dropPoint.y <= bounds.bottom
+    );
   }
 
   editTaskReminderOrReScheduleIfPossible(task: TaskCopy, newDay?: string): void {

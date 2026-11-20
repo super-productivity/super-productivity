@@ -125,6 +125,30 @@ describe('Decorators', () => {
       jasmine.clock().tick(100);
       expect(spy).toHaveBeenCalledTimes(1);
     });
+
+    // A busy main thread runs the trailing timer late; a stale replay moved
+    // schedule drags back to an earlier pointer position.
+    it('should not replay superseded args when the trailing timer runs late', () => {
+      const spy = jasmine.createSpy('method');
+
+      class TestClass {
+        @throttle(30)
+        method(arg: string): void {
+          spy(arg);
+        }
+      }
+
+      const instance = new TestClass();
+      instance.method('a');
+      instance.method('b'); // stored for the trailing call
+
+      // the window passes, but the timer has not fired yet
+      jasmine.clock().mockDate(new Date(Date.now() + 40));
+      instance.method('c');
+      jasmine.clock().tick(100);
+
+      expect(spy.calls.allArgs()).toEqual([['a'], ['c']]);
+    });
   });
 
   describe('debounce', () => {

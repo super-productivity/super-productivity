@@ -12,6 +12,9 @@ import { signal } from '@angular/core';
 import { T } from '../../t.const';
 import { INBOX_PROJECT } from '../project/project.const';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { Router } from '@angular/router';
+import { GlobalConfigService } from '../config/global-config.service';
+import { AppFeaturesConfig } from '../config/global-config.model';
 
 describe('MetricComponent', () => {
   let component: MetricComponent;
@@ -20,6 +23,9 @@ describe('MetricComponent', () => {
   let allTasksMetricsService: jasmine.SpyObj<AllTasksMetricsService>;
   let workContextService: jasmine.SpyObj<WorkContextService>;
   let activeWorkContext$: BehaviorSubject<WorkContext | null>;
+  let appFeatures: ReturnType<typeof signal<Partial<AppFeaturesConfig>>>;
+  let globalConfigService: jasmine.SpyObj<GlobalConfigService>;
+  let router: jasmine.SpyObj<Router>;
 
   const createMockWorkContext = (
     id: string,
@@ -95,9 +101,18 @@ describe('MetricComponent', () => {
     metricServiceSpy.getEvaluationMetrics$.and.returnValue(of(null));
     metricServiceSpy.hasData.and.returnValue(false);
 
+    appFeatures = signal<Partial<AppFeaturesConfig>>({ isFinishDayEnabled: true });
+    globalConfigService = jasmine.createSpyObj('GlobalConfigService', ['updateSection'], {
+      appFeatures: appFeatures.asReadonly(),
+    });
+    router = jasmine.createSpyObj('Router', ['navigate']);
+    router.navigate.and.resolveTo(true);
+
     TestBed.configureTestingModule({
       imports: [MetricComponent],
       providers: [
+        { provide: GlobalConfigService, useValue: globalConfigService },
+        { provide: Router, useValue: router },
         { provide: MetricService, useValue: metricServiceSpy },
         { provide: ProjectMetricsService, useValue: projectMetricsServiceSpy },
         { provide: AllTasksMetricsService, useValue: allTasksMetricsServiceSpy },
@@ -369,6 +384,38 @@ describe('MetricComponent', () => {
 
       expect(payload).toBeDefined();
       expect(payload.text).toContain('50'); // completed tasks
+    });
+  });
+
+  describe('openDailySummary', () => {
+    it('should navigate to the daily summary without touching config when enabled', () => {
+      component.openDailySummary();
+
+      expect(globalConfigService.updateSection).not.toHaveBeenCalled();
+      expect(router.navigate).toHaveBeenCalledWith(['/active/daily-summary']);
+    });
+
+    it('should enable the daily summary feature first when it is disabled', () => {
+      appFeatures.set({ isFinishDayEnabled: false });
+
+      component.openDailySummary();
+
+      expect(globalConfigService.updateSection).toHaveBeenCalledWith('appFeatures', {
+        isFinishDayEnabled: true,
+      } as Partial<AppFeaturesConfig>);
+      expect(router.navigate).toHaveBeenCalledWith(['/active/daily-summary']);
+    });
+  });
+
+  describe('dailySummaryBtnLabel computed', () => {
+    it('should say "open" when the daily summary is enabled', () => {
+      expect(component.dailySummaryBtnLabel()).toBe('F.METRIC.CMP.OPEN_DAILY_SUMMARY');
+    });
+
+    it('should say "turn on" when the daily summary is disabled', () => {
+      appFeatures.set({ isFinishDayEnabled: false });
+
+      expect(component.dailySummaryBtnLabel()).toBe('F.METRIC.CMP.ENABLE_DAILY_SUMMARY');
     });
   });
 });

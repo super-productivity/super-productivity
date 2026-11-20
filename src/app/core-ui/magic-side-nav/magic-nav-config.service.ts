@@ -121,6 +121,9 @@ export class MagicNavConfigService {
   private readonly isSearchEnabled = computed(
     () => this._configService.appFeatures().isSearchEnabled,
   );
+  readonly isHideNavTaskCount = computed(
+    () => this._configService.misc()?.isHideNavTaskCount ?? false,
+  );
   readonly areInitialTreesReady = computed(() => {
     const visibleProjects = this._visibleProjects();
     const tags = this._tags();

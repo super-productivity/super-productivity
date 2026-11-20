@@ -20,6 +20,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { T } from '../../t.const';
 import { first, take } from 'rxjs/operators';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { Task } from '../tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { addSubTask } from '../tasks/store/task.actions';
@@ -45,6 +46,7 @@ import {
   getRepeatableTaskId,
 } from './get-repeatable-task-id.util';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
+import { getRepeatDeadlineDay } from './store/get-repeat-deadline-day.util';
 import { getTaskPriority } from '../tasks/task-priority.const';
 import { addTaskToSection } from '../section/store/section.actions';
 import { selectSectionFeatureState } from '../section/store/section.selectors';
@@ -56,6 +58,7 @@ export class TaskRepeatCfgService {
   private _store$ = inject<Store<TaskRepeatCfgState>>(Store);
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _workContextService = inject(WorkContextService);
   private _dateService = inject(DateService);
 
@@ -308,9 +311,10 @@ export class TaskRepeatCfgService {
     // If waitForCompletion is enabled, only create the next task after the previous one is completed
     if (taskRepeatCfg.waitForCompletion) {
       // Check both live and archived instances for uncompleted tasks
-      const archivedInstances = await this._taskService.getArchiveTasksForRepeatCfgId(
-        taskRepeatCfg.id,
-      );
+      const archivedInstances =
+        await this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(
+          taskRepeatCfg.id,
+        );
       const allInstances = [...existingTaskInstances, ...archivedInstances];
       const hasUncompletedInstances = allInstances.some((task) => !task.isDone);
       if (hasUncompletedInstances) {
@@ -531,6 +535,7 @@ export class TaskRepeatCfgService {
         projectId: taskRepeatCfg.projectId || undefined,
         notes: taskRepeatCfg.notes || '',
         dueDay,
+        deadlineDay: getRepeatDeadlineDay(taskRepeatCfg, dueDay),
         tagIds: taskRepeatCfg.tagIds.filter((tagId) => tagId !== TODAY_TAG.id),
       },
     });

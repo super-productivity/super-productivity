@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { SuperSyncDownloadOpsQuerySchema } from '@sp/shared-schema/supersync-http-contract';
 import { authenticate, getAuthUser } from '../middleware';
 import { getSyncService } from './sync.service';
@@ -67,6 +67,24 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
       }
     },
   );
+
+  // #11672: Fastify's body-limit 413 (route bodyLimit or the raw-body
+  // preParsing hook) carries only `code`, and the client keeps a full-state op
+  // pending on a 413 without `errorCode`, since a reverse proxy's 413 looks the
+  // same. Tag ours; every other error goes on to the server-wide handler.
+  fastify.setErrorHandler((error: FastifyError, req, reply) => {
+    if (error.code !== 'FST_ERR_CTP_BODY_TOO_LARGE') {
+      throw error;
+    }
+    Logger.warn(`Request body too large ${req.method} ${req.routeOptions.url}`);
+    return reply.status(413).send({
+      statusCode: 413,
+      code: error.code,
+      error: 'Payload Too Large',
+      message: error.message,
+      errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    });
+  });
 
   // All sync routes require authentication
   fastify.addHook('preHandler', authenticate);
