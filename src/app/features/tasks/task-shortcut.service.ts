@@ -10,7 +10,7 @@ import { TaskContextMenuInnerComponent } from './task-context-menu/task-context-
 import { KeyboardConfig } from '@sp/keyboard-config';
 import { isInputElement } from '../../util/dom-element';
 import { getDomFocusedTaskId } from './get-dom-focused-task-id';
-import { TaskMultiSelectService } from './task-multi-select.service';
+import { BulkSubmenu, TaskMultiSelectService } from './task-multi-select.service';
 import { TaskBulkActionService } from './task-bulk-action.service';
 import { taskToMarkdownChecklist } from './task-to-markdown-checklist';
 import { GROUP_NAV_SELECTOR } from '../../ui/collapsible/collapsible.component';
@@ -474,9 +474,12 @@ export class TaskShortcutService {
       [keys.taskScheduleToday, () => this._bulkActions.addToToday()],
       [keys.taskUnschedule, () => this._bulkActions.unschedule()],
       [keys.moveToBacklog, () => this._bulkActions.moveToBacklog()],
-      [keys.taskMoveToProject, () => this._requestBulkMenu(focusedTaskId)],
-      [keys.taskEditTags, () => this._requestBulkMenu(focusedTaskId)],
-      [keys.taskOpenEstimationDialog, () => this._requestBulkMenu(focusedTaskId)],
+      [keys.taskMoveToProject, () => this._requestBulkMenu(focusedTaskId, 'project')],
+      [keys.taskEditTags, () => this._requestBulkMenu(focusedTaskId, 'tags')],
+      [
+        keys.taskOpenEstimationDialog,
+        () => this._requestBulkMenu(focusedTaskId, 'estimate'),
+      ],
       [keys.taskOpenContextMenu, () => this._requestBulkMenu(focusedTaskId)],
     ];
     for (const [combo, handler] of bulkHandlers) {
@@ -533,7 +536,7 @@ export class TaskShortcutService {
   }
 
   /** Opens the bulk actions menu next to the focused row (or the bar). */
-  private _requestBulkMenu(focusedTaskId: TaskId | null): void {
+  private _requestBulkMenu(focusedTaskId: TaskId | null, submenu?: BulkSubmenu): void {
     const rowEl = focusedTaskId
       ? (document.activeElement?.closest(
           'task, planner-task[data-task-selectable="true"]',
@@ -544,6 +547,7 @@ export class TaskShortcutService {
       rect
         ? { x: rect.left + Math.min(rect.width / 2, 200), y: rect.bottom }
         : { x: window.innerWidth / 2, y: window.innerHeight - 80 },
+      submenu,
     );
   }
 
