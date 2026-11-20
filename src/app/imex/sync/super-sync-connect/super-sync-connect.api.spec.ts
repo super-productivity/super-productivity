@@ -7,6 +7,8 @@ import {
   connectNativeHttp,
   createConnectRequest,
   MAX_SIGN_IN_WAIT_MS,
+  NATIVE_CONNECT_TIMEOUT_MS,
+  NATIVE_READ_TIMEOUT_MS,
   pollConnectRequest,
   PollLoopDeps,
   waitForApproval,
@@ -153,6 +155,8 @@ describe('SuperSync browser sign-in API', () => {
       expect(opts.url).toBe(`${BASE}/api/connect/requests`);
       expect(opts.method).toBe('POST');
       expect(JSON.parse(opts.data)).toEqual(DEVICE);
+      expect(opts.connectTimeout).toBe(NATIVE_CONNECT_TIMEOUT_MS);
+      expect(opts.readTimeout).toBe(NATIVE_READ_TIMEOUT_MS);
     });
 
     it('keeps the server-without-sign-in and HTML handling', async () => {
@@ -177,6 +181,9 @@ describe('SuperSync browser sign-in API', () => {
         status: 'approved',
         token: 'jwt',
       });
+      const firstOpts = httpSpy.calls.first().args[0];
+      expect(firstOpts.connectTimeout).toBe(NATIVE_CONNECT_TIMEOUT_MS);
+      expect(firstOpts.readTimeout).toBe(NATIVE_READ_TIMEOUT_MS);
       // eslint-disable-next-line @typescript-eslint/naming-convention
       httpSpy.and.resolveTo({ status: 429, data: {}, headers: { 'retry-after': '7' } });
       expect(await pollConnectRequest(BASE, request)).toEqual({
