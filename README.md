@@ -20,6 +20,12 @@
   <a href="https://lbesson.mit-license.org"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square"/></a>
   &nbsp;
   <a href="https://github.com/super-productivity/super-productivity/discussions"><img alt="GitHub Discussions" src="https://img.shields.io/badge/Community-Discussions-blue?style=flat-square&logo=github"/></a>
+  &nbsp;
+  <a href="https://github.com/super-productivity/super-productivity/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/super-productivity/super-productivity?style=flat-square"/></a>
+</p>
+
+<p align="center">
+  Free and open source since 2017 · No account · No tracking · Works offline
 </p>
 
 <p align="center">
@@ -33,6 +39,15 @@
 <p align="center">
   <a href="https://youtu.be/_mvMXWLsL-8"><img src="docs/screens/reel.gif" alt="Super Productivity: capture a task, plan it on the schedule, then focus on it"/></a>
 </p>
+
+## :bulb: How it works
+
+1. **Capture it.** Type `Call Anna @tomorrow 3pm` and the date is set. Pull in issues assigned to you from Jira, GitHub, GitLab and more.
+2. **Plan your day.** Pick today's tasks and see them on the schedule, next to your calendar events.
+3. **Focus.** Pick a task and start a Pomodoro, Flowtime or countdown session. Time is tracked on it, and a break reminder tells you when to step away.
+4. **Finish the day.** Review what you got done, then log it: export a timesheet or send worklogs to Jira, GitLab, OpenProject or Redmine.
+
+Built for one person's focused work, not team management. Your data stays on your device unless you choose to sync it.
 
 ## :computer: Downloads & Install
 
@@ -98,6 +113,21 @@
 - It's **free** and **open source** and always will be.
 
 And much more!
+
+## :scales: How it compares
+
+|                                                 | Super Productivity | Todoist | TickTick | Sunsama |
+| ----------------------------------------------- | ------------------ | ------- | -------- | ------- |
+| Open source                                     | ✅                 | ❌      | ❌       | ❌      |
+| No account needed                               | ✅                 | ❌      | ❌       | ❌      |
+| Offline-first, data stays on your device        | ✅                 | ❌      | ❌       | ❌      |
+| Time tracking on tasks, with timesheet export   | ✅                 | ❌      | ⚠️       | ⚠️      |
+| Focus timer and break reminders                 | ✅                 | ❌      | ✅       | ✅      |
+| Day planned on a schedule next to your calendar | ✅                 | ⚠️      | ✅       | ✅      |
+| Jira, GitHub and GitLab integration             | ✅                 | ❌      | ❌       | ⚠️      |
+| Every feature free                              | ✅                 | ❌      | ❌       | ❌      |
+
+`✅` yes · `⚠️` partial, limited or paid plan only · `❌` no. Based on each product's public information, checked November 2026. Spot something outdated? [Open an issue](https://github.com/super-productivity/super-productivity/issues) with a source.
 
 > [!NOTE]
 > The web version has some limitations: See the **[Web App vs Desktop comparison](https://github.com/super-productivity/super-productivity/wiki/3.05-Web-App-vs-Desktop)** for more details.

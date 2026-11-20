@@ -12,18 +12,23 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { JiraApiService } from './jira-api.service';
+import { JiraOriginalTransition } from './jira-api-responses';
 import { JiraIssueReduced } from './jira-issue.model';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { Task, TaskCopy } from '../../../tasks/task.model';
 import { isWontDoTask } from '../../../tasks/util/is-wont-do-task';
 import { TaskService } from '../../../tasks/task.service';
-import { EMPTY, from, Observable, of, throwError, timer } from 'rxjs';
+import { EMPTY, from, Observable, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { IssueLocalState, IssueProviderJira } from '../../issue.model';
 import { IssueService } from '../../issue.service';
 import { JIRA_TYPE } from '../../issue.const';
 import { T } from '../../../../t.const';
-import { JiraTransitionOption } from './jira.model';
+import {
+  createDoneIssueTransitionStream$,
+  createStartIssueTransitionStream$,
+  IssueTransitionAdapter,
+} from '../../shared/issue-transition-helper';
 import { setCurrentTask } from '../../../tasks/store/task.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { selectCurrentTaskParentOrCurrent } from '../../../tasks/store/task.selectors';
@@ -198,155 +203,45 @@ export class JiraIssueEffects {
   // POLLING & UPDATES
 
   checkForStartTransition$ = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(setCurrentTask),
-        // only if a task is started
-        filter(({ id }) => !!id),
-        withLatestFrom(this._store$.pipe(select(selectCurrentTaskParentOrCurrent))),
-        filter(
-          (input): input is [(typeof input)[0], Readonly<TaskCopy>] =>
-            input[1] != null && input[1].issueType === JIRA_TYPE,
-        ),
-        concatMap(([, currentTaskOrParent]) => {
-          if (!currentTaskOrParent.issueProviderId) {
-            // Log warning but don't crash - task has issue data but no provider ID
-            devError(
-              `Task ${currentTaskOrParent.id} has Jira issue ` +
-                `${currentTaskOrParent.issueId} but no issueProviderId. ` +
-                `Issue features will be disabled for this task.`,
-            );
-            return EMPTY;
-          }
-          return this._getCfgOnce$(currentTaskOrParent.issueProviderId).pipe(
-            map((jiraCfg) => ({ jiraCfg, currentTaskOrParent })),
-          );
-        }),
-        filter(
-          ({ jiraCfg, currentTaskOrParent }) =>
-            isJiraEnabled(jiraCfg) && jiraCfg.isTransitionIssuesEnabled,
-        ),
-        concatMap(({ jiraCfg, currentTaskOrParent }) =>
-          this._handleTransitionForIssue(
-            IssueLocalState.IN_PROGRESS,
-            jiraCfg,
-            currentTaskOrParent,
-          ),
-        ),
-      ),
+    () => createStartIssueTransitionStream$(this._getTransitionAdapter()),
     { dispatch: false },
   );
 
   checkForDoneTransition$ = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter(({ task }): boolean => !!task.changes.isDone),
-        // Guard against missing id and load full entity
-        filter(({ task }) => task.id != null && task.id !== undefined),
-        concatMap(({ task }) => this._taskService.getByIdOnce$(String(task.id))),
-        filter(
-          (task: Task) => task && task.issueType === JIRA_TYPE && !isWontDoTask(task),
-        ),
-        concatMap((task: Task) => {
-          if (!task.issueProviderId) {
-            // Log warning but don't crash - task has issue data but no provider ID
-            devError(
-              `Task ${task.id} has Jira issue ${task.issueId} but no issueProviderId. ` +
-                `Issue features will be disabled for this task.`,
-            );
-            return EMPTY;
-          }
-          return this._getCfgOnce$(task.issueProviderId).pipe(
-            map((jiraCfg) => ({ jiraCfg, task })),
-          );
-        }),
-        filter(
-          ({ jiraCfg, task }) =>
-            isJiraEnabled(jiraCfg) && jiraCfg.isTransitionIssuesEnabled,
-        ),
-        concatMap(({ jiraCfg, task }) => {
-          return this._handleTransitionForIssue(IssueLocalState.DONE, jiraCfg, task);
-        }),
-      ),
+    () => createDoneIssueTransitionStream$(this._getTransitionAdapter()),
     { dispatch: false },
   );
 
-  private _handleTransitionForIssue(
-    localState: IssueLocalState,
-    jiraCfg: IssueProviderJira,
-    task: Task,
-  ): Observable<unknown> {
-    const chosenTransition: JiraTransitionOption | undefined =
-      jiraCfg.transitionConfig[localState];
-
-    if (!task.issueId) {
-      throw new Error('No issueId for task');
-    }
-
-    switch (chosenTransition) {
-      case 'DO_NOT':
-        return EMPTY;
-      case 'ALWAYS_ASK':
-        return this._jiraApiService
-          .getReducedIssueById$(task.issueId, jiraCfg)
-          .pipe(
-            concatMap((issue) => this._openTransitionDialog(issue, localState, task)),
-          );
-      default:
-        if (
-          !chosenTransition ||
-          !(typeof chosenTransition === 'object' && chosenTransition?.id)
-        ) {
-          this._snackService.open({
-            msg: T.F.JIRA.S.NO_VALID_TRANSITION,
-            type: 'ERROR',
-          });
-          // NOTE: we would kill the whole effect chain if we do this
-          // return throwError({[HANDLED_ERROR_PROP_STR]: 'Jira: No valid transition configured'});
-          return timer(2000).pipe(
-            concatMap(() =>
-              this._jiraApiService.getReducedIssueById$(
-                assertTruthy(task.issueId),
-                jiraCfg,
-              ),
-            ),
-            concatMap((issue: JiraIssueReduced) =>
-              this._openTransitionDialog(issue, localState, task),
-            ),
-          );
-        }
-
-        return this._jiraApiService.getReducedIssueById$(task.issueId, jiraCfg).pipe(
-          concatMap((issue) => {
-            const isAlreadyInTargetStatus =
-              issue.status &&
-              (issue.status.id === chosenTransition.to.id ||
-                issue.status.name === chosenTransition.to.name);
-
-            if (!isAlreadyInTargetStatus) {
-              return this._jiraApiService
-                .transitionIssue$(issue.id, chosenTransition.id, jiraCfg)
-                .pipe(
-                  concatMap(() => {
-                    this._snackService.open({
-                      type: 'SUCCESS',
-                      msg: T.F.JIRA.S.TRANSITION_SUCCESS,
-                      translateParams: {
-                        issueKey: `${issue.key}`,
-                        chosenTransition: `${chosenTransition.name}`,
-                      },
-                    });
-                    return this._issueService.refreshIssueTask(task, false, false);
-                  }),
-                );
-            } else {
-              // no transition required
-              return EMPTY;
-            }
-          }),
-        );
-    }
+  private _getTransitionAdapter(): IssueTransitionAdapter<
+    IssueProviderJira,
+    JiraIssueReduced,
+    JiraOriginalTransition
+  > {
+    return {
+      issueType: JIRA_TYPE,
+      providerLabel: 'Jira',
+      actions$: this._actions$,
+      store$: this._store$,
+      taskService: this._taskService,
+      snackService: this._snackService,
+      issueService: this._issueService,
+      getCfgOnce$: (issueProviderId) => this._getCfgOnce$(issueProviderId),
+      isTransitionEnabled: (jiraCfg) =>
+        isJiraEnabled(jiraCfg) && jiraCfg.isTransitionIssuesEnabled,
+      getChosenTransition: (jiraCfg, localState) => jiraCfg.transitionConfig[localState],
+      fetchIssue$: (issueId, jiraCfg) =>
+        this._jiraApiService.getReducedIssueById$(issueId, jiraCfg),
+      isAlreadyInTargetStatus: (issue, transition) =>
+        !!issue.status &&
+        (issue.status.id === transition.to.id ||
+          issue.status.name === transition.to.name),
+      transitionIssue$: (issue, transition, jiraCfg) =>
+        this._jiraApiService.transitionIssue$(issue.id, transition.id, jiraCfg),
+      openTransitionDialog$: (issue, localState, task) =>
+        this._openTransitionDialog(issue, localState, task),
+      transitionSuccessMsg: T.F.JIRA.S.TRANSITION_SUCCESS,
+      getIssueKey: (issue) => issue.key,
+    };
   }
 
   private _openWorklogDialog(
@@ -399,7 +294,7 @@ export class JiraIssueEffects {
   private _openTransitionDialog(
     issue: JiraIssueReduced,
     localState: IssueLocalState,
-    task: Task,
+    task: TaskCopy,
   ): Observable<unknown> {
     return from(
       import('./jira-view-components/dialog-jira-transition/dialog-jira-transition.component'),

@@ -66,7 +66,16 @@
         [task]="task"
         [day]="day.dayDate"
         [focusable]="true"
-      ></planner-task>
+      >
+        @if (multiSelect.selectedIds().has(task.id) && multiSelect.count() > 1) {
+          <ng-template cdkDragPreview>
+            <task-group-drag-preview
+              [count]="multiDrag.ids().length || multiSelect.count()"
+              [tasks]="multiDrag.plannerPreviewTasks()"
+            ></task-group-drag-preview>
+          </ng-template>
+        }
+      </planner-task>
     }
 
     <!-- -->
@@ -115,6 +124,7 @@
     class="scheduled-items"
     cdkDropList
     cdkDropListSortingDisabled
+    [cdkDropListEnterPredicate]="acceptSingleCard"
     [cdkDropListData]="day.dayDate"
     [cdkDropListAutoScrollStep]="8"
     (cdkDropListDropped)="drop('SCHEDULED', day.scheduledIItems, $event)"
@@ -156,7 +166,19 @@
               (cdkDragEnded)="onDragEnded()"
               [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
               [cdkDragLockAxis]="isXs() ? 'y' : ''"
-            ></planner-task>
+            >
+              @if (
+                multiSelect.selectedIds().has(scheduledItem.task.id) &&
+                multiSelect.count() > 1
+              ) {
+                <ng-template cdkDragPreview>
+                  <task-group-drag-preview
+                    [count]="multiDrag.ids().length || multiSelect.count()"
+                    [tasks]="multiDrag.plannerPreviewTasks()"
+                  ></task-group-drag-preview>
+                </ng-template>
+              }
+            </planner-task>
           }
           @case (SCHEDULE_ITEM_TYPE.CalEvent) {
             <planner-calendar-event

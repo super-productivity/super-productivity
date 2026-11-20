@@ -879,6 +879,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       if (activeEl instanceof HTMLElement && isInputElement(activeEl)) {
         return;
       }
+      // Nor from a sub-task row the user focused in this panel meanwhile: the
+      // next task shortcut (move, done, …) would otherwise find no focused task.
+      if (
+        activeEl?.closest('task') &&
+        this._elementRef.nativeElement.contains(activeEl)
+      ) {
+        return;
+      }
       if (this.task().id === scheduledForTaskId) {
         focusFn();
       }

@@ -28,6 +28,8 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  /** Optional for compatibility with settings saved before this option existed. */
+  isHideNavTaskCount?: boolean;
   /** Desktop only; absent in older persisted settings, defaults to off. */
   isShowDueTaskBadge?: boolean;
   // Legacy: the local REST API switch is device-local now (Electron main's
@@ -374,6 +376,7 @@ export type TaskWidgetConfig = Readonly<{
 export type FocusModeLocalConfig = Readonly<{
   isLoopBreakEndAlarm?: boolean;
   isNotifyOnSessionEnd?: boolean;
+  isFocusWindowOnSessionEnd?: boolean;
 }>;
 
 export type ClipboardImagesConfig = Readonly<{
