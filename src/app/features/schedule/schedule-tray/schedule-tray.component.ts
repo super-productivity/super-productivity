@@ -10,6 +10,7 @@ import {
 import {
   CdkDrag,
   CdkDragMove,
+  CdkDragPreview,
   CdkDragRelease,
   CdkDragStart,
   CdkDropList,
@@ -39,7 +40,7 @@ const MAX_CHIPS_XS = 2;
  */
 @Component({
   selector: 'schedule-tray',
-  imports: [CdkDrag, CdkDropList, MatIcon, TranslatePipe],
+  imports: [CdkDrag, CdkDragPreview, CdkDropList, MatIcon, TranslatePipe],
   templateUrl: './schedule-tray.component.html',
   styleUrl: './schedule-tray.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

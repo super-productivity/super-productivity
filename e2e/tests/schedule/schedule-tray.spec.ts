@@ -113,14 +113,23 @@ test.describe('Schedule tray mode', () => {
       const day = (await targetCell.getAttribute('data-tray-day'))!;
       const column = schedule.locator(`.col[data-day="${day}"]:not(.end-of-day)`).first();
       const target = await centerOf(column);
+      const trayCenter = await centerOf(cell);
       await drag(page, chip, { x: target.x, y: 500 });
-      await expect(schedule.locator('.custom-drag-preview')).toBeVisible();
+      const gridPreview = schedule.locator('.custom-drag-preview');
+      const detachedPreview = page.locator('.cdk-drag-preview');
+      await expect(gridPreview).toBeVisible();
+      await expect(detachedPreview).toHaveCSS('opacity', '0');
+      await page.mouse.move(trayCenter.x, trayCenter.y, { steps: 15 });
+      await expect(gridPreview).toBeHidden();
+      await expect(detachedPreview).toHaveCSS('opacity', '1');
+      await page.mouse.move(target.x, 500, { steps: 15 });
+      await expect(gridPreview).toBeVisible();
+      await expect(detachedPreview).toHaveCSS('opacity', '0');
       const previewTime = (await schedule
         .locator('.drag-preview-time-badge')
         .textContent())!
         .trim()
         .split(' - ')[0];
-      const detachedPreview = page.locator('.cdk-drag-preview');
       await expect(detachedPreview).toBeAttached();
       expect(
         await detachedPreview.evaluate((element) => !!element.closest('schedule-tray')),
