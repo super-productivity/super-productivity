@@ -19,7 +19,7 @@ import { Store } from '@ngrx/store';
 import { GlobalConfigService } from 'src/app/features/config/global-config.service';
 import { DateTimeLocale, DateTimeLocales } from 'src/app/core/locale.constants';
 import { DateService } from '../../../../core/date/date.service';
-import { TaskReminderOptionId } from '../../task.model';
+import { TaskReminderOption, TaskReminderOptionId } from '../../task.model';
 import { INBOX_PROJECT } from '../../../project/project.const';
 
 const expectedLocaleTime = (timeStr: string, locale: string): string => {
@@ -765,6 +765,29 @@ describe('AddTaskBarActionsComponent', () => {
           targetTime: '10:30',
         },
       });
+    });
+
+    // #11816: a repeat config holds at most 1h, so longer leads are not offered
+    it('should offer reminders up to 1 hour once a repeat is set', () => {
+      (mockStateService as any)._mockStateSignal.set({
+        ...mockState,
+        repeat: { type: 'DIALOG' },
+      });
+
+      component.openScheduleDialog();
+
+      const data = mockMatDialog.open.calls.mostRecent().args[1]!.data as {
+        reminderOptions: TaskReminderOption[];
+      };
+      expect(data.reminderOptions.map((o) => o.value)).toEqual([
+        TaskReminderOptionId.DoNotRemind,
+        TaskReminderOptionId.AtStart,
+        TaskReminderOptionId.m5,
+        TaskReminderOptionId.m10,
+        TaskReminderOptionId.m15,
+        TaskReminderOptionId.m30,
+        TaskReminderOptionId.h1,
+      ]);
     });
 
     it('should open schedule dialog without targetDay when no date', () => {

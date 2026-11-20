@@ -29,9 +29,14 @@ import {
 } from '../../../util/white-noise';
 import { startLoopingAlarm, stopLoopingAlarm } from '../../../util/looping-alarm';
 import { FocusModeLocalSettingsService } from '../../config/focus-mode-local-settings.service';
+import { UiHelperService } from '../../ui-helper/ui-helper.service';
 import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { setCurrentTask, unsetCurrentTask } from '../../tasks/store/task.actions';
-import { selectLastCurrentTask, selectTaskById } from '../../tasks/store/task.selectors';
+import {
+  selectLastCurrentTask,
+  selectTaskById,
+  selectTaskEntities,
+} from '../../tasks/store/task.selectors';
 import { openIdleDialog } from '../../idle/store/idle.actions';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import {
@@ -54,6 +59,7 @@ import { NotifyService } from '../../../core/notify/notify.service';
 import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { T } from '../../../t.const';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
+import { CapacitorPlatformService } from '../../../core/platform/capacitor-platform.service';
 import { BannerService } from '../../../core/banner/banner.service';
 import { BannerId } from '../../../core/banner/banner.model';
 
@@ -74,7 +80,9 @@ export class FocusModeEffects {
   private notifyService = inject(NotifyService);
   private bannerService = inject(BannerService);
   private isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
+  private isIosNative = inject(CapacitorPlatformService).isIOS();
   private focusModeLocalSettingsService = inject(FocusModeLocalSettingsService);
+  private _uiHelperService = inject(UiHelperService);
   private _breakEndAlarm: Promise<number> | null = null;
 
   // Sync: When tracking starts → resume/skip-break or auto-spawn a new session.
@@ -233,8 +241,14 @@ export class FocusModeEffects {
         }
         return this.store.select(selectTaskById, { id: pausedTaskId }).pipe(
           take(1),
-          filter((task) => !!task),
-          map(() => setCurrentTask({ id: pausedTaskId })),
+          switchMap((task) => {
+            if (!task) return EMPTY;
+            if (!task.isDone) return of(setCurrentTask({ id: pausedTaskId }));
+            // Resume already restarted the timer; completed work needs task selection.
+            return timer.purpose === 'work'
+              ? of(actions.selectFocusTask(), actions.showFocusOverlay())
+              : EMPTY;
+          }),
         );
       }),
     ),
@@ -270,7 +284,7 @@ export class FocusModeEffects {
               ? of(setCurrentTask({ id: taskIdToResume }))
               : action.taskId
                 ? of(actions.selectFocusTask())
-                : of(actions.showFocusOverlay()),
+                : of(actions.selectFocusTask(), actions.showFocusOverlay()),
           ),
         );
       }),
@@ -540,7 +554,10 @@ export class FocusModeEffects {
   // banner/overlay + desktop window flash are alert enough, and it would fire
   // spuriously on idle-resume) and on Android, where the native foreground
   // service already posts its own completion notification (see
-  // FocusModeForegroundService.onTimerComplete), so this would duplicate.
+  // FocusModeForegroundService.onTimerComplete), so this would duplicate. iOS
+  // is skipped for the same reason: FocusModeIosNotificationEffects schedules
+  // the completion notification up front, and this effect only runs once the
+  // app is open again.
   surfaceSessionDoneOnCompletion$ = createEffect(
     () =>
       this.actions$.pipe(
@@ -552,7 +569,7 @@ export class FocusModeEffects {
         ),
         filter(([action, mode]) => mode === FocusModeMode.Countdown && !action.isManual),
         tap(([_action, _mode, duration, isOverlayShown]) => {
-          if (!document.hasFocus() && !this.isAndroidWebView) {
+          if (!document.hasFocus() && !this.isAndroidWebView && !this.isIosNative) {
             this.notifyService.notify({
               title: T.F.FOCUS_MODE.SESSION_COMPLETED,
               body: T.F.FOCUS_MODE.SESSION_COMPLETED_NOTIFICATION_BODY,
@@ -632,8 +649,16 @@ export class FocusModeEffects {
     this.actions$.pipe(
       ofType(actions.completeBreak),
       filter((action) => !!action.pausedTaskId),
-      withLatestFrom(this.taskService.currentTaskId$),
-      filter(([_, currentTaskId]) => !currentTaskId),
+      withLatestFrom(
+        this.taskService.currentTaskId$,
+        this.store.select(selectTaskEntities),
+      ),
+      filter(
+        ([action, currentTaskId, entities]) =>
+          !currentTaskId &&
+          !!entities[action.pausedTaskId!] &&
+          !entities[action.pausedTaskId!]!.isDone,
+      ),
       map(([action]) => setCurrentTask({ id: action.pausedTaskId! })),
     ),
   );
@@ -678,15 +703,19 @@ export class FocusModeEffects {
         this.store.select(selectors.selectMode),
         this.store.select(selectFocusModeConfig),
         this.taskService.currentTaskId$,
+        this.store.select(selectTaskEntities),
       ),
-      switchMap(([action, mode, config, currentTaskId]) => {
+      switchMap(([action, mode, config, currentTaskId, entities]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
         const actionsToDispatch: any[] = [];
 
         // Resume task tracking if we paused it during break
         // Bug #6726 fix: Don't override if user is already tracking a different task
-        if (action.pausedTaskId && !currentTaskId) {
-          actionsToDispatch.push(setCurrentTask({ id: action.pausedTaskId }));
+        const pausedTask = action.pausedTaskId
+          ? entities[action.pausedTaskId]
+          : undefined;
+        if (pausedTask && !pausedTask.isDone && !currentTaskId) {
+          actionsToDispatch.push(setCurrentTask({ id: pausedTask.id }));
         }
 
         // Auto-start next session if configured
@@ -1001,10 +1030,17 @@ export class FocusModeEffects {
       playSound(SESSION_DONE_SOUND, soundVolume);
     }
 
-    // Flash instead of focusing the window so a session or break end doesn't
-    // steal keyboard focus from whatever the user is working in (#10476)
+    // Flash by default so a session or break end doesn't steal keyboard focus
+    // from whatever the user is working in (#10476). Users who miss the flash
+    // can opt into raising the window (#11094). The delayed raise keeps
+    // keystrokes typed in another app out of SP (#5762); isReminder gets past
+    // Windows' focus-stealing prevention (#10410).
+    // The flash stays on as a fallback where the OS refuses the raise.
     if (this._isElectron) {
       window.ea.flashFrame();
+      if (this.focusModeLocalSettingsService.settings().isFocusWindowOnSessionEnd) {
+        this._uiHelperService.focusAppAfterNotification({ isReminder: true });
+      }
       window.ea.setProgressBar({
         progress: 1,
         progressBarMode: isHideBar ? 'none' : 'normal',

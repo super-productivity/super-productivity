@@ -116,24 +116,62 @@ ${error}${hint}
 Please fix it and send the complete files again, as code blocks like before.${keepId}`;
 };
 
-// a fence only closes at the start of a line, so backticks inside the code survive
-const CODE_BLOCK_REGEX = /```([\w-]*)[^\n]*\n([\s\S]*?)^[ \t]*```/gm;
+// a fence opens and closes only at the start of a line, so backticks inside the code
+// and inline ```code``` in the prose start nothing
+const CODE_BLOCK_REGEX = /^[ \t]*```([\w.-]*)[^\n`]*\n([\s\S]*?)^[ \t]*```/gm;
 
-const extractCodeBlocks = (answer: string): Map<string, string> => {
-  const blocks = new Map<string, string>();
-  for (const [, lang, body] of answer.matchAll(CODE_BLOCK_REGEX)) {
-    const kind = lang.toLowerCase() === 'javascript' ? 'js' : lang.toLowerCase();
-    // first block of a kind wins; later ones are usually usage examples
-    if (!blocks.has(kind)) {
-      blocks.set(kind, body);
-    }
-  }
-  return blocks;
+// AIs often label a file with a comment line, e.g. `// manifest.json`, which breaks JSON
+const stripLeadingComments = (code: string): string =>
+  code.replace(/^(\s*\/\/[^\n]*\n)+/, '');
+
+const TAG_ALIASES: Record<string, string> = {
+  javascript: 'js',
+  jsonc: 'json',
+  json5: 'json',
 };
+
+// a tag may name the file instead of the language; other file names like
+// `package.json` map to '' (never read), so they can't take a plugin file's slot
+const PLUGIN_FILE_KINDS = new Map([
+  ['manifest.json', 'json'],
+  ['plugin.js', 'js'],
+  ['index.html', 'html'],
+]);
+
+const kindOfTag = (tag: string): string => {
+  const lang = tag.toLowerCase();
+  if (lang.includes('.')) return PLUGIN_FILE_KINDS.get(lang) ?? '';
+  return TAG_ALIASES[lang] ?? lang;
+};
+
+// ChatGPT's copy button drops the language tags, so untagged blocks are sniffed
+const guessKind = (body: string): string => {
+  const code = stripLeadingComments(body).trimStart();
+  if (code.startsWith('{')) return 'json';
+  if (code.startsWith('<')) return 'html';
+  // '' is never read: a file tree or shell command must not become plugin.js
+  return code.includes('PluginAPI') ? 'js' : '';
+};
+
+const extractCodeBlocks = (answer: string): Map<string, string[]> => {
+  const tagged = new Map<string, string[]>();
+  const sniffed = new Map<string, string[]>();
+  for (const [, lang, body] of answer.matchAll(CODE_BLOCK_REGEX)) {
+    const [blocks, kind] = lang ? [tagged, kindOfTag(lang)] : [sniffed, guessKind(body)];
+    blocks.set(kind, [...(blocks.get(kind) ?? []), body]);
+  }
+  // a tagged block beats a sniffed one, which may be a file tree or shell command
+  return new Map([...sniffed, ...tagged]);
+};
+
+// the longest block of a kind is the complete file; shorter ones are usage examples or
+// the change a fix answer explains before resending the files
+const longest = (blocks: string[] | undefined): string | undefined =>
+  blocks?.reduce((a, b) => (b.length > a.length ? b : a));
 
 const parseManifest = (json: string): Record<string, unknown> | null => {
   try {
-    const parsed: unknown = JSON.parse(json);
+    const parsed: unknown = JSON.parse(stripLeadingComments(json));
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : null;
@@ -181,16 +219,22 @@ export const parsePluginAnswer = (
   if (blocks.size === 0) {
     return { errorKey: 'NO_CODE_BLOCKS' };
   }
-  const manifestJson = blocks.get('json');
-  if (manifestJson === undefined) {
+  const jsonBlocks = blocks.get('json');
+  if (jsonBlocks === undefined) {
     return { errorKey: 'NO_MANIFEST' };
   }
-  const rawManifest = parseManifest(manifestJson);
+  // a longer JSON block can be a sample API response
+  const manifestBlocks = jsonBlocks.filter(
+    (json) => typeof parseManifest(json)?.name === 'string',
+  );
+  const rawManifest = parseManifest(
+    longest(manifestBlocks.length ? manifestBlocks : jsonBlocks) ?? '',
+  );
   if (!rawManifest) {
     return { errorKey: 'INVALID_MANIFEST' };
   }
-  const pluginJs = blocks.get('js');
-  const indexHtml = blocks.get('html');
+  const pluginJs = longest(blocks.get('js'));
+  const indexHtml = longest(blocks.get('html'));
   if (pluginJs === undefined && indexHtml === undefined) {
     return { errorKey: 'NO_PLUGIN_CODE' };
   }

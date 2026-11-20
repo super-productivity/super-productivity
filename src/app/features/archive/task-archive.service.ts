@@ -7,6 +7,7 @@ import { taskSharedCrudMetaReducer } from '../../root-store/meta/task-shared-met
 import { tagSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/tag-shared.reducer';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { Task, TaskArchive, TaskState } from '../tasks/task.model';
+import { UNLINKED_ISSUE_FIELDS } from '../tasks/task-issue-fields';
 import { RoundTimeOption } from '../project/project.model';
 import { Update } from '@ngrx/entity';
 import { ArchiveModel } from './archive.model';
@@ -523,16 +524,7 @@ export class TaskArchiveService {
     if (tasksWithIssueProvider.length > 0) {
       const updates: Update<Task>[] = tasksWithIssueProvider.map((t) => ({
         id: t.id,
-        changes: {
-          issueId: undefined,
-          issueProviderId: undefined,
-          issueType: undefined,
-          issueWasUpdated: undefined,
-          issueLastUpdated: undefined,
-          issueAttachmentNr: undefined,
-          issueTimeTracked: undefined,
-          issuePoints: undefined,
-        },
+        changes: UNLINKED_ISSUE_FIELDS,
       }));
       await this._updateTasks(updates, {
         isSkipDispatch: true,

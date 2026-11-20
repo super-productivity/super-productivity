@@ -19,6 +19,9 @@ import {
 
 const authorization = `Basic ${Buffer.from('admin:admin').toString('base64')}`;
 const root = WEBDAV_CONFIG_TEMPLATE.baseUrl;
+// This spec pins #10459, a v2-only race: pin the format so the v3 leg of the
+// scheduled WebDAV job (E2E_WEBDAV_FORMAT=v3) still exercises the v2 path.
+const V2_CONFIG = { ...WEBDAV_CONFIG_TEMPLATE, isUseSplitSyncFiles: false };
 
 const remoteText = async (request: APIRequestContext, url: string): Promise<string> => {
   const response = await request.get(url, { headers: { Authorization: authorization } });
@@ -89,12 +92,12 @@ const seedSnapshotOnlyFolder = async (
     await work.addTask(seedTitle);
     await waitForStatePersistence(seed.page);
     await sync.setupWebdavSync({
-      ...WEBDAV_CONFIG_TEMPLATE,
+      ...V2_CONFIG,
       syncFolderPath: `/${seedFolder}`,
     });
     expect(await waitForSyncComplete(seed.page, sync)).toBe('success');
     await sync.setupWebdavSync(
-      { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${movedFolder}` },
+      { ...V2_CONFIG, syncFolderPath: `/${movedFolder}` },
       { isReconfigure: true },
     );
     expect(await waitForSyncComplete(seed.page, sync)).toBe('success');
@@ -249,7 +252,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
       await work.addTask(`Mover synced task ${folder}`);
       await waitForStatePersistence(mover.page);
       await sync.setupWebdavSync({
-        ...WEBDAV_CONFIG_TEMPLATE,
+        ...V2_CONFIG,
         syncFolderPath: `/${ownFolder}`,
       });
       expect(await waitForSyncComplete(mover.page, sync)).toBe('success');
@@ -274,7 +277,7 @@ test.describe('@webdav a late snapshot-only v2 file is loaded before uploading',
         await route.continue();
       });
       await sync.setupWebdavSync(
-        { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` },
+        { ...V2_CONFIG, syncFolderPath: `/${folder}` },
         { isReconfigure: true },
       );
       const prompt = mover.page.locator('dialog-server-migration-confirm');

@@ -1668,4 +1668,48 @@ describe('LocalBackupService', () => {
       });
     });
   });
+  describe('writeVerifiedAndroidBackup() (legacy online-mode handover, #8832)', () => {
+    type KvSeams = {
+      _nativeDbLoad: (key: string) => Promise<string | null>;
+      _nativeDbSave: (key: string, value: string) => Promise<void>;
+    };
+    const seams = (): KvSeams => service as unknown as KvSeams;
+    let kv: Map<string, string>;
+
+    beforeEach(() => {
+      kv = new Map();
+      spyOn(seams(), '_nativeDbLoad').and.callFake(async (k) => kv.get(k) ?? null);
+    });
+
+    it('returns true once the primary slot holds the current state', async () => {
+      spyOn(seams(), '_nativeDbSave').and.callFake(async (k, v) => {
+        kv.set(k, v);
+      });
+
+      expect(await service.writeVerifiedAndroidBackup()).toBe(true);
+      expect(JSON.parse(kv.get('backup') as string).task.ids).toEqual(['task1']);
+    });
+
+    it('returns false when the write did not land', async () => {
+      kv.set('backup', '{"task":{"ids":["stale"],"entities":{}}}');
+      spyOn(seams(), '_nativeDbSave').and.resolveTo();
+
+      expect(await service.writeVerifiedAndroidBackup()).toBe(false);
+    });
+
+    it('returns false and writes nothing for an empty store', async () => {
+      stateSnapshotServiceSpy.getAllSyncModelDataFromStoreAsync.and.resolveTo({
+        task: { ids: [], entities: {} },
+        project: { ids: [], entities: {} },
+        tag: { ids: [], entities: {} },
+        note: { ids: [], entities: {} },
+        archiveYoung: DEFAULT_ARCHIVE,
+        archiveOld: DEFAULT_ARCHIVE,
+      } as any);
+      const saveSpy = spyOn(seams(), '_nativeDbSave').and.resolveTo();
+
+      expect(await service.writeVerifiedAndroidBackup()).toBe(false);
+      expect(saveSpy).not.toHaveBeenCalled();
+    });
+  });
 });

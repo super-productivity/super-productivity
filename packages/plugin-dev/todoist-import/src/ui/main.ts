@@ -88,7 +88,12 @@ const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
     );
     try {
       const raw = await loadTodoistData(api(), token);
-      const model = parseSyncResponse(raw || {}, parseStrings());
+      const dayContext = await api().getDayContext?.();
+      const model = parseSyncResponse(
+        raw || {},
+        parseStrings(),
+        dayContext?.startOfNextDayDiffMs ?? 0,
+      );
       if (!model.projects.length) {
         renderTokenStep(t('TOKEN.NO_PROJECTS'), token);
         return;
@@ -302,6 +307,15 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
         }),
       ]
     : [];
+  const failedRepeats = result.failedRepeatCount
+    ? [
+        el('p', {
+          className: 'callout callout--warning',
+          role: 'status',
+          text: t('SUMMARY.REPEATS_FAILED', { count: result.failedRepeatCount }),
+        }),
+      ]
+    : [];
   const tagLine = result.createdTagTitles.length
     ? [
         el('p', {
@@ -331,6 +345,7 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
     }),
     el('ul', {}, items),
     ...unverified,
+    ...failedRepeats,
     ...tagLine,
     ...failure,
     ...lossy,

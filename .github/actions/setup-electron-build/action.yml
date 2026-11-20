@@ -26,16 +26,23 @@ runs:
 
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
       with:
-        # npm registry tarballs + electron's prebuilt binary. Caching the
-        # binary lets warm runs skip its GitHub download — the flaky step that
-        # times out (ETIMEDOUT) and fails the job. electron's cache dir is
-        # OS-specific, so list all three; actions/cache ignores the paths that
-        # don't exist on the current runner.
+        # npm registry tarballs, electron's prebuilt binary and
+        # electron-builder's packaging toolsets (icons, 7zip, AppImage, snap
+        # template, ...). All of these come from GitHub releases, which fail
+        # now and then: ETIMEDOUT on the electron zip, and a ~10 min run of
+        # 504s on the toolsets that outlasted every retry (runs 42465141114,
+        # 42468159099). Caching them lets warm runs skip those downloads;
+        # electron-builder re-verifies each cached toolset's checksum before
+        # use. Both cache dirs are OS-specific, so list every platform's;
+        # actions/cache ignores the paths that don't exist on the runner.
         path: |
           ${{ steps.npm-cache-dir.outputs.dir }}
           ~/.cache/electron
           ~/Library/Caches/electron
           ~/AppData/Local/electron/Cache
+          ~/.cache/electron-builder
+          ~/Library/Caches/electron-builder
+          ~/AppData/Local/electron-builder/Cache
         key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
         restore-keys: |
           ${{ runner.os }}-node22-

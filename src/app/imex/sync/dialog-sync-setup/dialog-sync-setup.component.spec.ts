@@ -15,6 +15,7 @@ import {
 } from '../super-sync-connect/super-sync-connect.service';
 import { DialogSyncCfgComponent } from '../dialog-sync-cfg/dialog-sync-cfg.component';
 import { DialogSyncSetupComponent } from './dialog-sync-setup.component';
+import { CertTrustService } from '../../../features/issue/cert-trust.service';
 
 const BASE = 'https://sync.example.com';
 const REQUEST: ConnectRequest = {
@@ -30,6 +31,7 @@ describe('DialogSyncSetupComponent', () => {
   let connect: jasmine.SpyObj<SuperSyncConnectService>;
   let dialogRef: jasmine.SpyObj<MatDialogRef<DialogSyncSetupComponent>>;
   let matDialog: jasmine.SpyObj<MatDialog>;
+  let certTrust: jasmine.SpyObj<CertTrustService>;
   // The pending wait: the test decides when and how the browser answers.
   let answer: (outcome: SignInOutcome) => void;
   let isCancelled: () => boolean;
@@ -60,6 +62,10 @@ describe('DialogSyncSetupComponent', () => {
     });
     dialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
     matDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    certTrust = jasmine.createSpyObj<CertTrustService>('CertTrustService', [
+      'setPendingConfig',
+    ]);
+    certTrust.setPendingConfig.and.resolveTo();
     spyOn(SyncLog, 'warn');
 
     await TestBed.configureTestingModule({
@@ -72,6 +78,7 @@ describe('DialogSyncSetupComponent', () => {
         { provide: SuperSyncConnectService, useValue: connect },
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MatDialog, useValue: matDialog },
+        { provide: CertTrustService, useValue: certTrust },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(DialogSyncSetupComponent);
@@ -197,6 +204,28 @@ describe('DialogSyncSetupComponent', () => {
     await settle();
     expect(connect.start).toHaveBeenCalledWith('https://own.example.com');
     expect(component.host()).toBe('own.example.com');
+  });
+
+  it('trusts the chosen server before the first request, until the dialog closes (#11097)', async () => {
+    let resolveTrust!: () => void;
+    certTrust.setPendingConfig.and.returnValue(
+      new Promise<void>((resolve) => (resolveTrust = resolve)),
+    );
+    component.editServer();
+    component.serverInput = 'https://own.example.com/';
+    void component.signIn();
+    await Promise.resolve();
+
+    expect(certTrust.setPendingConfig).toHaveBeenCalledWith(component, {
+      baseUrl: 'https://own.example.com',
+    });
+    expect(connect.start).not.toHaveBeenCalled();
+    resolveTrust();
+    await settle();
+    expect(connect.start).toHaveBeenCalledWith('https://own.example.com');
+
+    fixture.destroy();
+    expect(certTrust.setPendingConfig).toHaveBeenCalledWith(component, null);
   });
 
   it('leads to the settings for other providers', async () => {

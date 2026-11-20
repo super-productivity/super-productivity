@@ -297,13 +297,10 @@ finish-day-btn,
   margin-bottom: var(--s3);
 }
 
-// Section header layout: title left, actions right.
-.section-container {
-  // Style the action-slot menu trigger only — narrow scope avoids leaking
-  // resets into <task-list> descendants. The collapsible projects content
-  // via `[actions]`, which lands inside `.collapsible-header`; the next
-  // selector matches an icon-button that's a direct child of that header.
-  ::ng-deep > collapsible > .collapsible-header > button[mat-icon-button] {
+// Header icon buttons (section/group "+" and menu) stay hidden until the
+// header is hovered or focused, so long lists don't fill up with icons.
+@mixin header-buttons-on-hover($buttons) {
+  ::ng-deep #{$buttons} {
     background: transparent;
     box-shadow: none;
     color: var(--text-color-muted);
@@ -315,21 +312,38 @@ finish-day-btn,
   // Reveal on hover/focus on devices with hover capability.
   &:hover,
   &:focus-within {
-    ::ng-deep > collapsible > .collapsible-header > button[mat-icon-button] {
+    ::ng-deep #{$buttons} {
       opacity: 1;
     }
   }
 
   // Touch-only devices have no hover — keep controls always visible.
   :host-context(.isTouchOnly) & {
-    ::ng-deep > collapsible > .collapsible-header > button[mat-icon-button] {
+    ::ng-deep #{$buttons} {
       opacity: 1;
     }
   }
+}
+
+// Section header layout: title left, actions right. Narrow scope avoids
+// leaking resets into <task-list> descendants: the collapsible projects
+// `[actions]` into `.collapsible-header`, so only its direct icon-buttons match.
+.section-container {
+  @include header-buttons-on-hover(
+    '> collapsible > .collapsible-header > button[mat-icon-button]'
+  );
+}
+
+collapsible.is-group {
+  @include header-buttons-on-hover('> .collapsible-header > button[mat-icon-button]');
 }
 
 .empty-state-hint {
   max-width: 420px;
   margin: 0 auto var(--s2);
   color: var(--text-color-muted);
+}
+
+.inline-add-task-bar {
+  margin: var(--s);
 }

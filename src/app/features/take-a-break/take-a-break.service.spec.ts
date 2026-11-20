@@ -16,6 +16,7 @@ import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { BannerId } from '../../core/banner/banner.model';
 import { Tick } from '../../core/global-tracking-interval/tick.model';
 import { T } from '../../t.const';
+import { IS_ELECTRON_TOKEN } from '../../app.constants';
 
 describe('TakeABreakService', () => {
   let service: TakeABreakService;
@@ -26,7 +27,7 @@ describe('TakeABreakService', () => {
   let tick$: Subject<Tick>;
   let currentTaskId$: BehaviorSubject<string | null>;
 
-  const configure = (isTakeABreakEnabled = true): void => {
+  const configure = (isTakeABreakEnabled = true, isElectron = false): void => {
     actions$ = new Subject<Action>();
     tick$ = new Subject<Tick>();
     taskService = jasmine.createSpyObj<TaskService>('TaskService', [
@@ -54,6 +55,7 @@ describe('TakeABreakService', () => {
         { provide: SnackService, useValue: snackService },
         { provide: BannerService, useValue: bannerService },
         { provide: LOCAL_ACTIONS, useValue: actions$ },
+        { provide: IS_ELECTRON_TOKEN, useValue: isElectron },
         { provide: GlobalTrackingIntervalService, useValue: { tick$: tick$ } },
         { provide: IdleService, useValue: { isIdle$: of(false) } },
         {
@@ -386,6 +388,60 @@ describe('TakeABreakService', () => {
 
       expect(emitted[emitted.length - 1]).toBe(60000);
       sub.unsubscribe();
+    });
+  });
+
+  describe('waking from system sleep (desktop)', () => {
+    const SLEEP_GAP = 45 * 60000;
+    const WORK_BEFORE_SLEEP = 20 * 60000;
+    let emitted: number[];
+    let sub: { unsubscribe: () => void };
+    const current = (): number | undefined => emitted[emitted.length - 1];
+
+    const setUp = (isElectron: boolean): void => {
+      TestBed.resetTestingModule();
+      configure(true, isElectron);
+      taskService.currentTaskId.and.returnValue('task-1');
+      currentTaskId$.next('task-1');
+      emitted = [];
+      sub = service.timeWorkingWithoutABreak$.subscribe((v) => emitted.push(v));
+      service.otherNoBreakTIme$.next(WORK_BEFORE_SLEEP);
+    };
+
+    afterEach(() => sub.unsubscribe());
+
+    // The first interval tick after sleep carries the whole sleep gap and can
+    // arrive before Electron's idle IPC deselects the task. The renderer did
+    // not run, so the gap cannot be work; counting it fired the reminder at wake.
+    it('treats a tick spanning the sleep gap as a break, not working time', () => {
+      setUp(true);
+
+      tick$.next({ duration: SLEEP_GAP, date: '2026-11-19', timestamp: 0 });
+
+      expect(current()).toBe(0);
+      expect(bannerService.dismiss).toHaveBeenCalledWith(BannerId.TakeABreak);
+
+      // work after waking counts again
+      tick$.next({ duration: 1000, date: '2026-11-19', timestamp: 0 });
+      expect(current()).toBe(1000);
+    });
+
+    it('still counts normal ticks on desktop', () => {
+      setUp(true);
+
+      tick$.next({ duration: 60000, date: '2026-11-19', timestamp: 0 });
+
+      expect(current()).toBe(WORK_BEFORE_SLEEP + 60000);
+    });
+
+    // Mobile wake-up ticks legitimately cover time tracked in the background
+    // by the foreground service, so they must keep counting as work.
+    it('keeps counting a large tick as work outside Electron', () => {
+      setUp(false);
+
+      tick$.next({ duration: SLEEP_GAP, date: '2026-11-19', timestamp: 0 });
+
+      expect(current()).toBe(WORK_BEFORE_SLEEP + SLEEP_GAP);
     });
   });
 

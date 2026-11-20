@@ -15,6 +15,7 @@ import { SimpleCounterService } from '../../features/simple-counter/simple-count
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { Task } from '../../features/tasks/task.model';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { createTask } from '../../features/tasks/task.test-helper';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { WorkContextService } from '../../features/work-context/work-context.service';
@@ -210,6 +211,7 @@ describe('DailySummaryComponent', () => {
             MetricService,
             TranslateService,
             TranslateStore,
+            TaskArchiveOrchestratorService,
           ].map((provide) => ({ provide, useValue: {} })),
         ],
       });
@@ -325,7 +327,7 @@ describe('DailySummaryComponent', () => {
           doneTasks$: of([listed]),
           doneTasksToArchive$: of([listed, earlier]),
         },
-        _taskService: { moveToArchive },
+        _taskArchiveOrchestrator: { moveToArchive },
         _snackService: { open: jasmine.createSpy('open') },
         _translateService: { currentLang: 'en' },
         _translateStore: { getTranslations: () => ({}) },
@@ -336,6 +338,30 @@ describe('DailySummaryComponent', () => {
       )._moveDoneToArchive();
 
       expect(moveToArchive).toHaveBeenCalledOnceWith([listed, earlier]);
+    });
+
+    it('offers History, where the archived tasks can be found again', async () => {
+      const snackOpen = jasmine.createSpy('open');
+      const navigate = jasmine.createSpy('navigate');
+      const receiver = Object.assign(Object.create(DailySummaryComponent.prototype), {
+        workContextService: {
+          doneTasksToArchive$: of([createTask({ id: 'done', isDone: true })]),
+        },
+        _taskArchiveOrchestrator: { moveToArchive: jasmine.createSpy().and.resolveTo() },
+        _snackService: { open: snackOpen },
+        _router: { navigate },
+        _translateService: { currentLang: 'en' },
+        _translateStore: { getTranslations: () => ({}) },
+      }) as DailySummaryComponent;
+
+      await (
+        receiver as unknown as { _moveDoneToArchive: () => Promise<void> }
+      )._moveDoneToArchive();
+
+      const snack = snackOpen.calls.mostRecent().args[0];
+      expect(snack.actionStr).toBe('MH.HISTORY');
+      snack.actionFn();
+      expect(navigate).toHaveBeenCalledOnceWith(['/active/history']);
     });
   });
 
