@@ -64,7 +64,7 @@
 
 .share-btn {
   opacity: 0.8;
-  transition: opacity 0.2s;
+  transition: opacity var(--transition-duration-m);
 }
 
 .share-btn:hover:not(:disabled) {

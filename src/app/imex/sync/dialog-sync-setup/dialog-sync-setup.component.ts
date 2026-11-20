@@ -35,6 +35,7 @@ import {
   normalizeSuperSyncBaseUrl,
   SuperSyncConnectService,
 } from '../super-sync-connect/super-sync-connect.service';
+import { CertTrustService } from '../../../features/issue/cert-trust.service';
 
 /** choose = 1a, waiting = 1b, timed-out = 3c, manual = 3b (mockups v3). */
 type Step = 'choose' | 'waiting' | 'timed-out' | 'manual';
@@ -76,6 +77,7 @@ export class DialogSyncSetupComponent {
   private _connect = inject(SuperSyncConnectService);
   private _matDialog = inject(MatDialog);
   private _dialogRef = inject<MatDialogRef<DialogSyncSetupComponent>>(MatDialogRef);
+  private _certTrustService = inject(CertTrustService);
 
   readonly T = T;
   readonly step = signal<Step>('choose');
@@ -102,7 +104,10 @@ export class DialogSyncSetupComponent {
   private _attempt = 0;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this._attempt++);
+    inject(DestroyRef).onDestroy(() => {
+      this._attempt++;
+      void this._certTrustService.setPendingConfig(this, null);
+    });
   }
 
   editServer(): void {
@@ -190,6 +195,8 @@ export class DialogSyncSetupComponent {
     this.errorKey.set(null);
     this.isBusy.set(true);
     try {
+      // A self-hosted server with a self-signed cert must work before it is saved (#11097)
+      await this._certTrustService.setPendingConfig(this, { baseUrl });
       const request = await this._connect.start(baseUrl);
       if (attempt !== this._attempt) {
         tab?.close();

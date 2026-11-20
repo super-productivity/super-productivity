@@ -11,6 +11,7 @@ import {
   OpType,
 } from '../core/operation.types';
 import { OwnUploadsMissingConflictError } from '../core/errors/sync-errors';
+import { VectorClockService } from './vector-clock.service';
 
 type StateCache = NonNullable<
   Awaited<ReturnType<OperationLogStoreService['loadStateCache']>>
@@ -22,6 +23,7 @@ describe('SyncLocalStateService', () => {
   let stateSnapshotSpy: jasmine.SpyObj<StateSnapshotService>;
   let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
   let translateSpy: jasmine.SpyObj<TranslateService>;
+  let vectorClockSpy: jasmine.SpyObj<VectorClockService>;
 
   const entry = (
     entityType: EntityType,
@@ -86,6 +88,10 @@ describe('SyncLocalStateService', () => {
     ]);
     downloadServiceSpy.getUndecryptableRemoteOps.and.returnValue(null);
     translateSpy = jasmine.createSpyObj('TranslateService', ['instant']);
+    vectorClockSpy = jasmine.createSpyObj('VectorClockService', [
+      'getSnapshotVectorClock',
+    ]);
+    vectorClockSpy.getSnapshotVectorClock.and.resolveTo({ clientA: 3 });
     TestBed.configureTestingModule({
       providers: [
         SyncLocalStateService,
@@ -93,6 +99,7 @@ describe('SyncLocalStateService', () => {
         { provide: StateSnapshotService, useValue: stateSnapshotSpy },
         { provide: TranslateService, useValue: translateSpy },
         { provide: OperationLogDownloadService, useValue: downloadServiceSpy },
+        { provide: VectorClockService, useValue: vectorClockSpy },
       ],
     });
     service = TestBed.inject(SyncLocalStateService);
@@ -437,6 +444,45 @@ describe('SyncLocalStateService', () => {
           null,
         ),
       ).toBe(false);
+    });
+  });
+
+  describe('confirmSnapshotSkip (#10916)', () => {
+    const download = {
+      snapshotState: { task: {} },
+      snapshotVectorClock: { remote: 2 },
+      remoteLastModified: 1,
+    };
+    const skip = { shouldSkipHydration: true };
+
+    it('skips a covered snapshot when no own uploads are missing', async () => {
+      expect(await service.confirmSnapshotSkip(skip, download)).toBe(true);
+    });
+
+    it('does not skip when the plan hydrates, even with own uploads missing', async () => {
+      expect(
+        await service.confirmSnapshotSkip(
+          { shouldSkipHydration: false },
+          { ...download, ownUploadsMissing: true },
+        ),
+      ).toBe(false);
+    });
+
+    it('throws instead of skipping a remote that lost own uploads, counting pending ops', async () => {
+      opLogStoreSpy.getUnsynced.and.resolveTo([
+        entry('TASK', ActionType.TASK_SHARED_ADD, OpType.Create),
+      ]);
+      const error = await service
+        .confirmSnapshotSkip(skip, { ...download, ownUploadsMissing: true })
+        .then(
+          () => undefined,
+          (e: unknown) => e,
+        );
+      expect(error).toEqual(jasmine.any(OwnUploadsMissingConflictError));
+      expect((error as OwnUploadsMissingConflictError).unsyncedCount).toBe(1);
+      expect((error as OwnUploadsMissingConflictError).lastSyncedVectorClock).toEqual({
+        clientA: 3,
+      });
     });
   });
 });

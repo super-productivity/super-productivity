@@ -43,8 +43,8 @@ mat-dialog-content {
   text-decoration: none;
   cursor: pointer;
   transition:
-    background-color 0.15s,
-    border-color 0.15s;
+    background-color var(--transition-duration-s),
+    border-color var(--transition-duration-s);
 
   &:hover {
     background-color: rgba(127, 127, 127, 0.08);

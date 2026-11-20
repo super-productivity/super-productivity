@@ -28,7 +28,11 @@ import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { truncate } from '../../../util/truncate';
-import { TASK_REMINDER_OPTIONS } from './task-reminder-options.const';
+import {
+  TASK_REMINDER_OPTIONS,
+  TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD,
+  toPersistableRemindOption,
+} from './task-reminder-options.const';
 import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
 import { DateService } from '../../../core/date/date.service';
@@ -120,8 +124,13 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   readonly DO_NOT_REMIND = TaskReminderOptionId.DoNotRemind;
   minDate = this.data.minDate === undefined ? new Date() : this.data.minDate;
 
-  remindAvailableOptions: TaskReminderOption[] =
-    this.data.reminderOptions ?? TASK_REMINDER_OPTIONS;
+  // A repeating task takes its reminder from the repeat config, which holds at
+  // most a 1h lead; offering longer leads would silently drop back (#11816).
+  readonly remindAvailableOptions = computed<TaskReminderOption[]>(() =>
+    this._liveTask()?.repeatCfgId
+      ? TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD
+      : (this.data.reminderOptions ?? TASK_REMINDER_OPTIONS),
+  );
   task: TaskCopy | undefined = this.data.task;
 
   // Recurrence only applies to top-level, non-issue tasks (mirrors the panel's
@@ -301,7 +310,16 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       this.selectedTime = this.data.targetTime;
     }
 
+    this._capReminderForRepeat();
     this._cd.detectChanges();
+  }
+
+  // Shows the lead the repeat config will actually use instead of a longer one
+  // that is not on the list (and would be overwritten on the next series edit).
+  private _capReminderForRepeat(): void {
+    if (this._liveTask()?.repeatCfgId && this.selectedReminderCfgId) {
+      this.selectedReminderCfgId = toPersistableRemindOption(this.selectedReminderCfgId);
+    }
   }
 
   close(
@@ -363,6 +381,9 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
             task.repeatCfgId !== this._repeatCfgCreatedInDialogId,
           initialStartDate: targetDate,
           targetDate,
+          defaultRemindOption:
+            this.selectedReminderCfgId &&
+            toPersistableRemindOption(this.selectedReminderCfgId),
         },
       })
       .afterClosed()
@@ -371,6 +392,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         if (typeof createdRepeatCfgId === 'string') {
           this._repeatCfgCreatedInDialogId = createdRepeatCfgId;
         }
+        this._capReminderForRepeat();
+        this._cd.markForCheck();
       });
   }
 

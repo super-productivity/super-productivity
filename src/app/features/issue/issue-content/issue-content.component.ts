@@ -33,6 +33,7 @@ import { T } from '../../../t.const';
 import { devError } from '../../../util/dev-error';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { getByPath } from './get-by-path.util';
 
 @Component({
   selector: 'issue-content',
@@ -172,13 +173,7 @@ export class IssueContentComponent {
         return field.value(issue);
       }
 
-      // Handle nested fields like 'status.name'
-      const keys = field.value.split('.');
-      let value: any = issue;
-      for (const key of keys) {
-        value = value?.[key];
-      }
-      return value;
+      return getByPath(issue, field.value);
     } catch (error) {
       devError(error);
     }
@@ -195,12 +190,7 @@ export class IssueContentComponent {
 
   getCommentAuthor(comment: IssueComment | null, cfg: IssueContentConfig): string {
     if (!comment) return '';
-    const keys = cfg.comments!.authorField.split('.');
-    let value: any = comment;
-    for (const key of keys) {
-      value = value?.[key];
-    }
-    return value || '';
+    return (getByPath(comment, cfg.comments!.authorField) as string | undefined) || '';
   }
 
   getCommentBody(comment: IssueComment | null, cfg: IssueContentConfig): string {
@@ -219,12 +209,7 @@ export class IssueContentComponent {
   ): string | undefined {
     if (!comment || !cfg.comments?.avatarField) return undefined;
 
-    const keys = cfg.comments.avatarField.split('.');
-    let value: any = comment;
-    for (const key of keys) {
-      value = value?.[key];
-    }
-    return value;
+    return getByPath(comment, cfg.comments.avatarField) as string | undefined;
   }
 
   trackByIndex(index: number): number {

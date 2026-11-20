@@ -105,6 +105,19 @@ describe('ViewEditorSectionComponent', () => {
     expect(el.querySelector('view-add-rule-chip')).not.toBeNull();
   });
 
+  it('keeps the rules in place when a list switches to a board (only the bar is added)', async () => {
+    const el = await render({}, false);
+    const card = el.querySelector('.card');
+    const body = el.querySelector('.section-body');
+
+    fixture.componentRef.setInput('isShowTitle', true);
+    fixture.detectChanges();
+
+    expect(el.querySelector('.section-header')).not.toBeNull();
+    expect(el.querySelector('.card')).toBe(card);
+    expect(el.querySelector('.section-body')).toBe(body);
+  });
+
   it('shows a card with a drag handle and the title as text', async () => {
     const el = await render();
 

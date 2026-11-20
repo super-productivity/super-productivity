@@ -18,6 +18,7 @@ export const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/azure-devops-issue-provider',
   'assets/bundled-plugins/redmine-issue-provider',
   'assets/bundled-plugins/nextcloud-deck-issue-provider',
+  'assets/bundled-plugins/gitlab-issue-provider',
   'assets/bundled-plugins/brain-dump',
   'assets/bundled-plugins/voice-reminder',
   'assets/bundled-plugins/google-calendar-provider',
@@ -28,6 +29,7 @@ export const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/ticktick-import',
   'assets/bundled-plugins/parallel-code',
   'assets/bundled-plugins/ai-command',
+  'assets/bundled-plugins/invoicing',
 ] as const;
 
 // Reserved ids: an uploaded plugin may not reuse a bundled plugin's manifest id (it would
@@ -50,7 +52,9 @@ export const BUNDLED_PLUGIN_IDS = new Set<string>([
   'doc-mode',
   'gitea-issue-provider',
   'github-issue-provider',
+  'gitlab-issue-provider',
   'google-calendar-provider',
+  'invoicing',
   'linear-issue-provider',
   'nextcloud-deck-issue-provider',
   'parallel-code',

@@ -57,14 +57,11 @@ interface ShownPart {
   items: ReadonlyMap<string, TagComponentTag>;
 }
 
-/** How a section shows (`mode`). */
-type SectionMode = 'card' | 'flat';
-
 /**
  * One section (List) or column (Board) of the view editor. As a card (when
  * titles show): drag handle, title, count and, open, its rules as chips and
  * its sort; collapsed, a summary of its rules. The only section of a list
- * shows the rules without a card (`flat`). Phones show the same cards.
+ * shows as the open card without its bar. Phones show the same cards.
  * Edits are emitted as a new panel; the panel's other fields stay as they
  * are.
  */
@@ -157,9 +154,8 @@ export class ViewEditorSectionComponent {
     );
   });
 
-  readonly mode = computed<SectionMode>(() => (this.isShowTitle() ? 'card' : 'flat'));
   readonly isCollapsed = computed(
-    () => this.mode() === 'card' && this.isCollapsible() && !this.isOpen(),
+    () => this.isShowTitle() && this.isCollapsible() && !this.isOpen(),
   );
   readonly countLabel = computed(() => getCountLabel(this.count(), this.panel()));
   readonly groupLabel = computed(() =>

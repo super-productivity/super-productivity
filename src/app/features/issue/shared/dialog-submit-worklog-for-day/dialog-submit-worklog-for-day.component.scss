@@ -1,0 +1,8 @@
+table {
+  width: 100%;
+}
+
+th:not(:first-child),
+td:not(:first-child) {
+  text-align: end;
+}

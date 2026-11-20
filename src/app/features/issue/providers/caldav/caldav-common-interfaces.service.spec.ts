@@ -15,6 +15,7 @@ import { signal, WritableSignal } from '@angular/core';
 import { GlobalConfigService } from '../../../config/global-config.service';
 import { selectTaskEntities } from '../../../tasks/store/task.selectors';
 import { SyncConfig } from '../../../config/global-config.model';
+import { SnackService } from '../../../../core/snack/snack.service';
 
 const BASE_ISSUE: CaldavIssue = {
   id: 'uid-1',
@@ -68,6 +69,7 @@ describe('CaldavCommonInterfacesService', () => {
   let caldavClientSpy: jasmine.SpyObj<CaldavClientService>;
   let issueProviderServiceSpy: jasmine.SpyObj<IssueProviderService>;
   let store: MockStore;
+  let snackSpy: jasmine.SpyObj<SnackService>;
   let syncCfg: WritableSignal<Partial<SyncConfig> | undefined>;
 
   beforeEach(() => {
@@ -82,6 +84,7 @@ describe('CaldavCommonInterfacesService', () => {
     issueProviderServiceSpy = jasmine.createSpyObj('IssueProviderService', [
       'getCfgOnce$',
     ]);
+    snackSpy = jasmine.createSpyObj('SnackService', ['open']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -91,6 +94,7 @@ describe('CaldavCommonInterfacesService', () => {
         { provide: IssueProviderService, useValue: issueProviderServiceSpy },
         provideMockStore({ selectors: [{ selector: selectTaskEntities, value: {} }] }),
         { provide: GlobalConfigService, useValue: { sync: syncCfg } },
+        { provide: SnackService, useValue: snackSpy },
       ],
     });
     service = TestBed.inject(CaldavCommonInterfacesService);
@@ -207,6 +211,32 @@ describe('CaldavCommonInterfacesService', () => {
   });
 
   describe('remote refresh', () => {
+    // #11583: asked for by the user (context menu), so it says why nothing
+    // was refreshed — calmly, and naming the task rather than its UID.
+    it('should tell a manual refresh that the VTODO is gone, without an error snack', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getById$.and.returnValue(of(null));
+
+      await expectAsync(
+        service.getFreshDataForIssueTask(makeSpTask({ title: 'Buy milk' })),
+      ).toBeRejectedWith({ HANDLED_ERROR_PROP: 'Caldav: issue not found' });
+
+      expect(snackSpy.open).toHaveBeenCalledOnceWith({
+        msg: 'F.CALDAV.S.ISSUE_NOT_FOUND',
+        translateParams: { issueId: 'Buy milk' },
+      });
+    });
+
+    it('should not report a VTODO the batch poll no longer returns', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getByIds$.and.returnValue(of([]));
+
+      const updates = await service.getFreshDataForIssueTasks([makeSpTask()]);
+
+      expect(updates).toEqual([]);
+      expect(snackSpy.open).not.toHaveBeenCalled();
+    });
+
     it('should tick the task done when the server todo is completed (default direction)', async () => {
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
       caldavClientSpy.getById$.and.returnValue(

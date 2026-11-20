@@ -80,8 +80,7 @@
       }
     </task>
   }
+  @if (noTasksMsg() && !allTasksLength()) {
+    <div class="no-tasks">{{ noTasksMsg() }}</div>
+  }
 </div>
-
-@if (noTasksMsg() && !allTasksLength()) {
-  <div class="no-tasks">{{ noTasksMsg() }}</div>
-}

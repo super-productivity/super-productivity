@@ -10,6 +10,7 @@ import {
 import {
   ANI_ENTER_TIMING,
   ANI_ENTER_TIMING_,
+  ANI_LEAVE_TIMING,
   ANI_LONG_TIMING,
   ANI_STANDARD_TIMING_,
   TRANSITION_DURATION_L,
@@ -107,7 +108,7 @@ export const warpRouteAnimation = trigger('warpRoute', [
         ':leave',
         [
           style({ opacity: 1, transform: 'none' }),
-          animate(ANI_ENTER_TIMING, style({ opacity: 0, transform: 'translateX(-10%)' })),
+          animate(ANI_LEAVE_TIMING, style({ opacity: 0, transform: 'translateX(-10%)' })),
         ],
         { optional: true },
       ),

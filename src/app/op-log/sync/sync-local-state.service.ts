@@ -20,6 +20,7 @@ import {
   VectorClock,
 } from '../core/operation.types';
 import { FileSnapshotDownloadResult } from '../core/types/sync-results.types';
+import { VectorClockService } from './vector-clock.service';
 import {
   LocalDataConflictError,
   OwnUploadsMissingConflictError,
@@ -55,6 +56,7 @@ export class SyncLocalStateService {
   private stateSnapshotService = inject(StateSnapshotService);
   private translateService = inject(TranslateService);
   private downloadService = inject(OperationLogDownloadService);
+  private vectorClockService = inject(VectorClockService);
 
   async isWhollyFreshClient(): Promise<boolean> {
     const snapshot = await this.opLogStore.loadStateCache();
@@ -263,6 +265,36 @@ export class SyncLocalStateService {
       { opCount: undecryptable.opCount, isConfirmed },
     );
     return isConfirmed;
+  }
+
+  /**
+   * Whether to skip hydrating a snapshot the local clock already covers.
+   * Throws instead when the remote lost uploads this client already synced
+   * (#10916): skipping would leave them out of the remote for good, because
+   * their ops are marked synced and other devices only fetch new ops. Keep
+   * local's full-state upload restores them.
+   */
+  async confirmSnapshotSkip(
+    plan: { shouldSkipHydration: boolean },
+    result: Pick<
+      FileSnapshotDownloadResult,
+      'snapshotState' | 'snapshotVectorClock' | 'remoteLastModified' | 'ownUploadsMissing'
+    >,
+  ): Promise<boolean> {
+    if (!plan.shouldSkipHydration || !result.ownUploadsMissing) {
+      return plan.shouldSkipHydration;
+    }
+    OpLog.warn(
+      'SyncLocalStateService: Remote snapshot lost changes this client already ' +
+        'synced. Throwing OwnUploadsMissingConflictError instead of skipping hydration.',
+    );
+    throw new OwnUploadsMissingConflictError(
+      (await this.opLogStore.getUnsynced()).length,
+      result.snapshotState as Record<string, unknown>,
+      result.snapshotVectorClock,
+      (await this.vectorClockService.getSnapshotVectorClock()) ?? null,
+      result.remoteLastModified,
+    );
   }
 
   /**

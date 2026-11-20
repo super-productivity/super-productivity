@@ -12,6 +12,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { AsyncPipe } from '@angular/common';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagComponent } from '../../tag/tag/tag.component';
 
 interface TagWithTimeSpent {

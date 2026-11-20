@@ -405,6 +405,28 @@ describe('ScheduleComponent', () => {
     });
   });
 
+  describe('openDayView', () => {
+    // it saves the view like selectTimeView; later specs must not inherit it
+    afterEach(() => localStorage.removeItem('SELECTED_TIME_VIEW'));
+
+    it('opens the day view on a later day', () => {
+      component.openDayView('2026-01-22');
+
+      const d = component['_selectedDate']();
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+      expect([d?.getFullYear(), d?.getMonth(), d?.getDate()]).toEqual([2026, 0, 22]);
+    });
+
+    it('opens (logical) today in the "today" mode', () => {
+      component['_selectedDate'].set(new Date(2026, 0, 22));
+
+      component.openDayView('2026-01-20');
+
+      expect(mockLayoutService.selectedTimeView()).toBe('day');
+      expect(component['_selectedDate']()).toBeNull();
+    });
+  });
+
   describe('goToPreviousPeriod', () => {
     it('should go back exactly one day in day view', () => {
       mockLayoutService.selectedTimeView.set('day');

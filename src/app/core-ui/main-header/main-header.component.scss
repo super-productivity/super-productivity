@@ -465,8 +465,15 @@ button {
   flex-direction: column;
   z-index: 2;
   pointer-events: none;
-  // Many counters must stay reachable, #5999.
-  max-height: calc(100dvh - 120px);
+  // Many counters must stay reachable, #5999. The tray only exists below 600px,
+  // where the bottom nav is always shown, so it ends above that nav. The insets
+  // count too: on iOS the notch shifts the header down and the home indicator
+  // raises the nav, which hid the last counter behind it (#5936).
+  max-height: calc(
+    100dvh - var(--safe-area-top) - var(--bar-height) - var(--bottom-nav-height) - var(
+        --bottom-nav-safe-area
+      ) - var(--bottom-nav-extra-offset) - var(--s2)
+  );
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;

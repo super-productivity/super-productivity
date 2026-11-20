@@ -594,6 +594,58 @@ export interface PluginTaskRepeatCfg {
   lastTaskCreationDay?: string;
   quickSetting?: string;
   remindAt?: string;
+  skipOverdue?: boolean;
+  repeatFromCompletionDate?: boolean;
+  repeatUntilDay?: string;
+}
+
+/**
+ * The schedule of a repeat config, as the app's repeat dialog sets it.
+ * Accepted by `addTaskRepeatCfg` and `updateTaskRepeatCfg`; any other field
+ * is rejected.
+ *
+ * A preset `quickSetting` derives the cycle, interval and weekdays from
+ * `startDate` (e.g. `MONTHLY_NTH_WEEKDAY` with a start date on the second
+ * Tuesday repeats every second Tuesday). Only `'CUSTOM'` accepts
+ * `repeatCycle`, `repeatEvery` and the weekday flags; a weekly custom schedule
+ * needs at least one weekday.
+ */
+export interface PluginTaskRepeatCfgSchedule {
+  quickSetting?:
+    | 'DAILY'
+    | 'WEEKLY_CURRENT_WEEKDAY'
+    | 'MONTHLY_CURRENT_DATE'
+    | 'MONTHLY_FIRST_DAY'
+    | 'MONTHLY_LAST_DAY'
+    | 'MONTHLY_NTH_WEEKDAY'
+    | 'MONDAY_TO_FRIDAY'
+    | 'YEARLY_CURRENT_DATE'
+    | 'CUSTOM';
+  /** YYYY-MM-DD, the first day an instance may be created on. */
+  startDate?: string;
+  repeatCycle?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  /** Integer from 1 to 1000. */
+  repeatEvery?: number;
+  monday?: boolean;
+  tuesday?: boolean;
+  wednesday?: boolean;
+  thursday?: boolean;
+  friday?: boolean;
+  saturday?: boolean;
+  sunday?: boolean;
+  /**
+   * `'CUSTOM'` only: count the interval from the day a copy is completed
+   * ("every 3 days after I finish it"); the next copy is only created then.
+   * A weekly interval is stored as days. A `'CUSTOM'` schedule change without
+   * it keeps it; a preset or `false` turns it off, and new copies then no
+   * longer wait for completion.
+   */
+  repeatFromCompletionDate?: boolean;
+  isPaused?: boolean;
+  /** Skip missed (overdue) instances instead of creating them. */
+  skipOverdue?: boolean;
+  /** YYYY-MM-DD, the last day a copy may be created on; `null` removes it. */
+  repeatUntilDay?: string | null;
 }
 
 export interface PluginSimpleCounterFull {
@@ -722,13 +774,14 @@ export interface PluginAPI {
 
   // teardown signal — register a callback the host invokes when the plugin is
   // disabled, reloaded, or uninstalled. Code-based plugins run directly in the
-  // renderer, so timers/listeners they create survive unload unless cleared
-  // here (clearInterval, removeEventListener, speechSynthesis.cancel, …).
-  // The returned promise is NOT awaited — do synchronous cleanup before any
-  // await. In iframe plugins this is a no-op: the iframe is unmounted on
-  // unload and takes its timers with it. Registering again replaces the
-  // previous callback. Optional so older plugin API typings remain assignable;
-  // the host always provides it.
+  // renderer: the host stops plain setTimeout/setInterval timers and ignores
+  // API calls after unload, but listeners etc. survive unless cleared here
+  // (removeEventListener, speechSynthesis.cancel, …). The returned promise is
+  // NOT awaited — do cleanup and API calls before any await. In iframe
+  // plugins this is a no-op: the iframe is unmounted on unload and takes its
+  // timers with it. Registering again replaces the previous callback.
+  // Optional so older plugin API typings remain assignable; the host always
+  // provides it.
   onUnload?(fn: () => void | Promise<void>): void;
 
   // cross-process communication
@@ -820,6 +873,33 @@ export interface PluginAPI {
   addTag(tagData: Partial<Tag>): Promise<string>;
 
   updateTag(tagId: string, updates: Partial<Tag>): Promise<void>;
+
+  // task repeat configs (read them via getAppState().taskRepeatCfgs)
+
+  /**
+   * Makes an existing top-level task repeat, like "Repeat" in the task's
+   * schedule dialog: title, notes, tags, estimate, priority, day and time are
+   * taken from the task. Without a schedule the task repeats daily from its
+   * due day (or today). Rejects subtasks, tasks linked to an issue, tasks that
+   * already repeat, invalid fields and a `startDate` before the task's day or
+   * today. Resolves with the new repeat config's id.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  addTaskRepeatCfg(
+    taskId: string,
+    schedule?: PluginTaskRepeatCfgSchedule,
+  ): Promise<string>;
+
+  /**
+   * Changes a repeat config's schedule or flags. Changing the schedule
+   * requires `quickSetting`, since a preset is re-derived from the start date.
+   * Rejects unknown ids and invalid fields.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  updateTaskRepeatCfg(
+    repeatCfgId: string,
+    updates: PluginTaskRepeatCfgSchedule,
+  ): Promise<void>;
 
   // task ordering
   reorderTasks(

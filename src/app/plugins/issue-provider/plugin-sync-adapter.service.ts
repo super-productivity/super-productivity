@@ -9,11 +9,12 @@ import {
   IssueProviderPluginDefinition,
   PluginFieldMapping,
   PluginHttp,
+  PluginIssue,
 } from './plugin-issue-provider.model';
 import { Task } from '../../features/tasks/task.model';
 import { TagService } from '../../features/tag/tag.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
-import { sortTagLabels } from './plugin-tag-utils';
+import { extractPluginSyncValues } from './plugin-sync-values';
 import { withPluginOAuthTokenKey } from '../oauth/plugin-oauth-token-key.util';
 
 const normalizeSyncDirectionForCapabilities = (
@@ -88,10 +89,6 @@ export const createPluginSyncAdapter = (
     convertMapping(pm, tagService, isPushSupported),
   );
 
-  const tagIssueFields = new Set(
-    fieldMappings.filter((m) => m.taskField === 'tagIds').map((m) => m.issueField),
-  );
-
   const createHttp = (cfg: IssueProviderPluginType): PluginHttp =>
     createHttpHelper(() =>
       definition.getHeaders(withPluginOAuthTokenKey(pluginId, cfg.pluginConfig, cfg.id)),
@@ -142,31 +139,8 @@ export const createPluginSyncAdapter = (
       await definition.updateIssue(issueId, changes, cfg.pluginConfig, http);
     },
 
-    extractSyncValues: (issue: Record<string, unknown>): Record<string, unknown> => {
-      const data = definition.extractSyncValues
-        ? definition.extractSyncValues(
-            issue as Parameters<
-              NonNullable<IssueProviderPluginDefinition['extractSyncValues']>
-            >[0],
-          )
-        : issue;
-
-      const result: Record<string, unknown> = {};
-      for (const m of fieldMappings) {
-        const value = Object.prototype.hasOwnProperty.call(data, m.issueField)
-          ? data[m.issueField]
-          : issue[m.issueField];
-        if (value === undefined) {
-          continue;
-        }
-        if (tagIssueFields.has(m.issueField)) {
-          result[m.issueField] = sortTagLabels(value);
-        } else {
-          result[m.issueField] = value;
-        }
-      }
-      return result;
-    },
+    extractSyncValues: (issue: Record<string, unknown>): Record<string, unknown> =>
+      extractPluginSyncValues(definition, issue as PluginIssue),
 
     createIssue: async (
       title: string,

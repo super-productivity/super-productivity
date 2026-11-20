@@ -1,6 +1,6 @@
 # Survey 2026: bringing Planner and Schedule closer
 
-> **Status: Proposed**, direction decided 2026-10-28 (§ 11); nothing scheduled, the survey is still open
+> **Status: Option A implemented** (Planner cards onto the day panel in v20.0.0, overdue tasks in the panel in #11703). The rest of the direction decided 2026-10-28 (§ 11) is not scheduled; the survey is still open
 >
 > **Owner / tracking:** Unassigned; related open issues #10853, #5614, #8132.
 >
@@ -207,3 +207,8 @@ not build C unless A and B ship and confusion reports continue.
   which day, Schedule = what time; also deadline vs. scheduled date). A rename
   churns docs and screenshots, and other languages would lag.
 - **C declined.**
+
+Update 2026-11-11, after the survey closed: the decisions stand. Dragging a
+Planner card onto the day panel shipped in v20.0.0 (`4403b170c0`). Next are
+overdue tasks in the panel, then the tray wireframe. See
+[open feature gaps](2026-11-11-survey-feature-gaps.md).

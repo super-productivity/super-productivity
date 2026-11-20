@@ -6,6 +6,7 @@ import { JiraLinkComponent } from './jira-link/jira-link.component';
 import { TaskCopy } from '../../../tasks/task.model';
 import { CaldavTimeComponent } from './caldav-time/caldav-time.component';
 import { MatIcon } from '@angular/material/icon';
+import { getByPath } from '../get-by-path.util';
 
 @Component({
   selector: 'issue-content-custom',
@@ -30,12 +31,6 @@ export class IssueContentCustomComponent {
       return field.value(issue);
     }
 
-    // Handle nested fields like 'status.name'
-    const keys = field.value.split('.');
-    let value: any = issue;
-    for (const key of keys) {
-      value = value?.[key];
-    }
-    return value;
+    return getByPath(issue, field.value);
   }
 }

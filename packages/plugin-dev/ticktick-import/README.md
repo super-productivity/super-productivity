@@ -26,6 +26,7 @@ handled by other importers (e.g. Vikunja's TickTick migrator):
   row's `Timezone`, stored as UTC;
 - `Status` 0 = open; 1, 2 and -1 (completed, archived, won't do) are skipped;
 - checklist items are `Content` lines prefixed `▫` (open) or `▪` (checked);
+- an unterminated quoted field rejects the file before preview or task creation;
 - `taskId` / `parentId` link sub-tasks; older exports without them fall back
   to row ids.
 

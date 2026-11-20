@@ -380,11 +380,11 @@ import { LayoutService } from '../../layout/layout.service';
       .task-filter-btn {
         position: relative;
         color: var(--text-color-muted);
-        transition: all 0.2s ease;
+        transition: all var(--transition-duration-m) ease;
         overflow: visible !important;
 
         .mat-icon {
-          transition: transform 0.2s ease;
+          transition: transform var(--transition-duration-m) ease;
           display: block;
         }
 
@@ -435,6 +435,10 @@ export class PageTitleComponent {
   private _boardsService = inject(BoardsService);
 
   readonly T = T;
+
+  private _langChange = toSignal(this._translateService.onLangChange, {
+    initialValue: null,
+  });
 
   // On the work view; absent elsewhere (and on xxxs screens), where the
   // shortcut then does nothing — matching the button not being there to click.
@@ -551,6 +555,7 @@ export class PageTitleComponent {
     }
     const key = this._routeTitleKey();
     if (key) {
+      this._langChange();
       return this._translateService.instant(key);
     }
     const pluginId = this.pluginId();

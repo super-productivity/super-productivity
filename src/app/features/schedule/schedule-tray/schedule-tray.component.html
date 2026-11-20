@@ -1,0 +1,107 @@
+@if (hasItems()) {
+  <div class="filler"></div>
+  @for (cell of cells(); track cell.day) {
+    <div
+      class="tray-cell"
+      [class.drag-over]="dragOverDay() === cell.day"
+      [attr.data-tray-day]="cell.day"
+    >
+      @if (cell.count && isCompact()) {
+        <button
+          type="button"
+          class="summary"
+          [class.is-over]="cell.over"
+          (click)="openDay.emit(cell.day)"
+        >
+          {{ cell.count }}
+          @if (cell.over) {
+            · {{ T.F.SCHEDULE.TRAY_OVER | translate: { time: cell.over } }}
+          } @else if (cell.free) {
+            · {{ T.F.SCHEDULE.TRAY_FREE | translate: { time: cell.free } }}
+          }
+        </button>
+      } @else if (cell.count) {
+        @if (cell.planned || cell.free || cell.over) {
+          <div
+            class="capacity"
+            [class.is-over]="cell.over"
+          >
+            @if (cell.planned) {
+              {{ T.F.SCHEDULE.TRAY_PLANNED | translate: { time: cell.planned } }}
+            }
+            @if (cell.planned && (cell.free || cell.over)) {
+              ·
+            }
+            @if (cell.over) {
+              {{ T.F.SCHEDULE.TRAY_OVER | translate: { time: cell.over } }}
+            } @else if (cell.free) {
+              {{ T.F.SCHEDULE.TRAY_FREE | translate: { time: cell.free } }}
+            }
+          </div>
+        }
+        <!-- above the chips, so a long expanded list can always be closed again -->
+        @if (isExpanded()) {
+          <button
+            type="button"
+            class="toggle"
+            (click)="isExpanded.set(false)"
+          >
+            {{ T.F.SCHEDULE.TRAY_SHOW_LESS | translate }}
+          </button>
+        }
+        @for (chip of cell.chips; track chip.id) {
+          @if (chip.task; as task) {
+            <div
+              class="chip"
+              cdkDrag
+              [cdkDragData]="chip.dragData"
+              [cdkDragStartDelay]="dragDelayForTouch()"
+              [class.is-shown-in-grid]="chip.id === shownInGridId()"
+              (cdkDragStarted)="dragStarted($event)"
+              (cdkDragMoved)="dragMoved($event)"
+              (cdkDragReleased)="dragReleased($event)"
+            >
+              <button
+                type="button"
+                class="chip-main"
+                (click)="openTask(task)"
+                (keydown)="onChipKeydown($event, task, cell.day)"
+              >
+                <span class="chip-title">{{ chip.title }}</span>
+                @if (chip.time) {
+                  <span class="chip-time">{{ chip.time }}</span>
+                }
+              </button>
+              @if (isTouchActive()) {
+                <button
+                  type="button"
+                  class="chip-set-time"
+                  [attr.aria-label]="T.F.SCHEDULE.TRAY_SET_TIME | translate"
+                  (click)="openScheduleDialog(task, cell.day)"
+                >
+                  <mat-icon aria-hidden="true">schedule</mat-icon>
+                </button>
+              }
+            </div>
+          } @else {
+            <div class="chip is-projection">
+              <span class="chip-title">{{ chip.title }}</span>
+              @if (chip.time) {
+                <span class="chip-time">{{ chip.time }}</span>
+              }
+            </div>
+          }
+        }
+        @if (cell.hiddenCount) {
+          <button
+            type="button"
+            class="toggle"
+            (click)="isExpanded.set(true)"
+          >
+            {{ T.F.SCHEDULE.TRAY_MORE | translate: { count: cell.hiddenCount } }}
+          </button>
+        }
+      }
+    </div>
+  }
+}

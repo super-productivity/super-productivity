@@ -26,7 +26,7 @@
   background: transparent;
   border: none;
   padding: 0;
-  transition: transform 0.2s ease;
+  transition: transform var(--transition-duration-m) ease;
 }
 .impact-stars__star:hover:not(:disabled) {
   transform: scale(1.15);
