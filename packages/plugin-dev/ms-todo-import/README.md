@@ -23,6 +23,10 @@ live Microsoft To Do integration.
   under "Single-page application" (web). Native apps are not supported:
   Microsoft rejects the token request from a WebView with an `Origin` header
   for a custom-scheme redirect, so the settings button is hidden there.
+- Microsoft's API terms want a public privacy statement (with consent
+  revocation links) and a Microsoft no-warranty notice reachable in the app.
+  Both live in the wiki page's `#privacy` section, which the sign-in screen
+  links; it is also the Entra registration's privacy statement URL.
 - The import is list-by-list and is not transactional. A failure can leave the
   current project partial; the result tells the user which project to delete
   before retrying.

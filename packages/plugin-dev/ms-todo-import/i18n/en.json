@@ -11,7 +11,9 @@
     "HELP": "You sign in with Microsoft in a browser window. The import asks only to read your tasks; the access is used for this import and then forgotten.",
     "LOADING": "Loading your Microsoft To Do data…",
     "NO_LISTS": "No lists found for this Microsoft account.",
-    "NOT_CONFIGURED": "This build has no Microsoft sign-in configured."
+    "NOT_CONFIGURED": "This build has no Microsoft sign-in configured.",
+    "LEGAL": "Microsoft keeps your permission until you revoke it in your Microsoft account. Not affiliated with or endorsed by Microsoft; Microsoft provides no warranty and accepts no liability for this import.",
+    "PRIVACY_LINK": "Privacy details"
   },
   "ERROR": {
     "LOAD_FAILED": "Could not load data from Microsoft To Do: {{error}} — try signing in again and check your connection.",

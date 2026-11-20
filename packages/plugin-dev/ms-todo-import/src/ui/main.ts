@@ -21,6 +21,10 @@ declare global {
 
 const api = (): PluginApiType => window.PluginAPI;
 
+// Public copy of the privacy statement; also the Entra registration's privacy URL
+const PRIVACY_URL =
+  'https://github.com/super-productivity/super-productivity/wiki/2.27-Import-from-Microsoft-To-Do#privacy';
+
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props: Partial<HTMLElementTagNameMap[K]> & { text?: string } = {},
@@ -109,6 +113,17 @@ const renderSignInStep = (errorMsg?: string): void => {
     el('p', { text: t('SIGN_IN.INTRO') }),
     ...errorLine,
     el('p', { className: 'text-muted text-sm', text: t('SIGN_IN.HELP') }),
+    // Microsoft's API terms want the privacy statement and the no-warranty
+    // notice reachable in the app before the user consents
+    el('p', { className: 'text-muted text-sm' }, [
+      `${t('SIGN_IN.LEGAL')} `,
+      el('a', {
+        href: PRIVACY_URL,
+        target: '_blank',
+        rel: 'noopener',
+        text: t('SIGN_IN.PRIVACY_LINK'),
+      }),
+    ]),
     el('div', { className: 'actions' }, [signInBtn]),
   );
 };

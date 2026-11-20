@@ -1,7 +1,7 @@
 {
   "id": "ms-todo-import",
   "manifestVersion": 1,
-  "name": "Microsoft To Do Import",
+  "name": "Import from Microsoft To Do",
   "version": "1.0.0",
   "minSupVersion": "18.0.0",
   "description": "One-time import of your open Microsoft To Do lists, tasks, steps, notes, due dates and repeats. Additive \u2014 your existing Super Productivity data is never touched.",
