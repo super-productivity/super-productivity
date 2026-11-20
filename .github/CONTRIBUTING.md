@@ -32,9 +32,9 @@ I am not a designer. So there is probably a lot not to like. It would be absolut
 ### Documentation
 
 - Public-facing documentation lives in [`docs/public/`](../docs/public/); the [documentation guide](../docs/documentation-guide.md) covers the workflow and checks.
-- The legacy [wiki](https://github.com/super-productivity/super-productivity/wiki) is being migrated; read the guide before adding a new wiki note.
+- The legacy [wiki](https://github.com/super-productivity/super-productivity/wiki) is being migrated; read the guide before adding a new wiki note. Both are published at [super-productivity.com/docs](https://super-productivity.com/docs/).
 - Flagging outdated or incorrect documentation (or correcting via Pull Requests) is greatly appreciated.
-- Creating [guides and workflow examples](https://github.com/super-productivity/super-productivity/wiki/1.00-Quickstarts) with short videos or screenshots would be welcomed.
+- Creating [guides and workflow examples](https://super-productivity.com/docs/tutorials/) with short videos or screenshots would be welcomed.
 
 ## Commit Message Format
 
