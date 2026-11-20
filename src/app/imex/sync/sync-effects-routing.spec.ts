@@ -37,6 +37,7 @@ describe('SyncEffects routing (Task 3)', () => {
   let schedulerRequest: jasmine.Spy;
   let sync: jasmine.Spy;
   let syncCfg$: BehaviorSubject<{ isManualSyncOnly?: boolean }>;
+  let isEnabledAndReady$: BehaviorSubject<boolean>;
   let flushPendingWrites: jasmine.Spy;
   let subs: { unsubscribe: () => void }[];
 
@@ -56,6 +57,7 @@ describe('SyncEffects routing (Task 3)', () => {
       isManualSyncOnly: false,
     });
     flushPendingWrites = jasmine.createSpy('flushPendingWrites').and.resolveTo();
+    isEnabledAndReady$ = new BehaviorSubject(true);
 
     TestBed.configureTestingModule({
       providers: [
@@ -73,7 +75,7 @@ describe('SyncEffects routing (Task 3)', () => {
           provide: SyncWrapperService,
           useValue: {
             sync,
-            isEnabledAndReady$: new BehaviorSubject(true),
+            isEnabledAndReady$,
             syncInterval$: new BehaviorSubject(10000),
             syncProviderId$: new BehaviorSubject(SyncProviderId.WebDAV),
             syncCfg$,
@@ -347,6 +349,38 @@ describe('SyncEffects routing (Task 3)', () => {
       expect(taskService.setCurrentId).toHaveBeenCalledWith(null);
       expect(simpleCounterService.flushAccumulatedTime).toHaveBeenCalled();
       expect(flushPendingWrites).toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
+    it('persists tracked time on quit when sync is off', async () => {
+      // Sync off is the default: without the hold the main process quits at
+      // once and the running stopwatch counter time since the last batch is lost.
+      isEnabledAndReady$.next(false);
+      subs.push(effects._syncBeforeQuit$().subscribe());
+      expect(execBeforeClose.schedule).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(taskService.setCurrentId).toHaveBeenCalledWith(null);
+      expect(simpleCounterService.flushAccumulatedTime).toHaveBeenCalled();
+      expect(flushPendingWrites).toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
+    it('keeps the quit held when sync is turned off while the app runs', async () => {
+      subs.push(effects._syncBeforeQuit$().subscribe());
+      isEnabledAndReady$.next(false);
+
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(execBeforeClose.unschedule).not.toHaveBeenCalled();
+      expect(simpleCounterService.flushAccumulatedTime).toHaveBeenCalled();
       expect(sync).not.toHaveBeenCalled();
       expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
     });

@@ -121,6 +121,18 @@ describe('GlobalTrackingIntervalService', () => {
     expect(second.duration).toBe(100);
   }));
 
+  it('should count nothing for a tick after the clock stepped back', fakeAsync(() => {
+    const service = TestBed.inject(GlobalTrackingIntervalService);
+    tick(1000);
+    const stepBack = Date.now() - 60_000;
+    const now = spyOn(Date, 'now').and.returnValue(stepBack);
+
+    expect(service.consumeCurrentTick().duration).toBe(0);
+    // Counting resumes from the new clock reading.
+    now.and.returnValue(stepBack + 1000);
+    expect(service.consumeCurrentTick().duration).toBe(1000);
+  }));
+
   it('should avoid double-counting manually consumed time on the next tick', fakeAsync(() => {
     const service = TestBed.inject(GlobalTrackingIntervalService);
     const durations: number[] = [];

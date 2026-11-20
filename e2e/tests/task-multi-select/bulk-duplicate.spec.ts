@@ -237,6 +237,38 @@ test('keeps Inbox copies from a board out of the previously opened project', asy
   }
 });
 
+test('keeps undated board copies out of Today', async ({
+  page,
+  workViewPage,
+  testPrefix,
+}) => {
+  await page.goto('/#/project/INBOX_PROJECT/tasks');
+  await workViewPage.waitForTaskList();
+  const titles = [`${testPrefix} First`, `${testPrefix} Second`];
+  for (const title of titles) await workViewPage.addTask(title);
+
+  await page.goto('/#/tag/TODAY/tasks');
+  await workViewPage.waitForTaskList();
+  const todayList = page.locator('.task-list-inner[data-id="UNDONE"]');
+  for (const title of titles) await expect(todayList.getByText(title)).toHaveCount(0);
+
+  await page.goto('/#/boards/EISENHOWER_MATRIX');
+  await page.getByRole('button', { name: /Create.*Tags/i }).click();
+  const cards = page.locator('board-panel planner-task');
+  for (const title of titles) {
+    await cards.filter({ hasText: title }).click({ modifiers: ['Control'] });
+  }
+  await expect(page.locator('task-multi-select-bar .bar')).toContainText('2 selected');
+  await page.keyboard.press('Control+d');
+  for (const title of titles) {
+    await expect(cards.filter({ hasText: title })).toHaveCount(2);
+  }
+
+  await page.goto('/#/tag/TODAY/tasks');
+  await workViewPage.waitForTaskList();
+  for (const title of titles) await expect(todayList.getByText(title)).toHaveCount(0);
+});
+
 test('keeps section copies adjacent inside their section', async ({
   page,
   workViewPage,

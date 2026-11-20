@@ -15,6 +15,7 @@ import { SimpleCounterService } from '../../features/simple-counter/simple-count
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { Task } from '../../features/tasks/task.model';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { createTask } from '../../features/tasks/task.test-helper';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { WorkContextService } from '../../features/work-context/work-context.service';
@@ -210,6 +211,7 @@ describe('DailySummaryComponent', () => {
             MetricService,
             TranslateService,
             TranslateStore,
+            TaskArchiveOrchestratorService,
           ].map((provide) => ({ provide, useValue: {} })),
         ],
       });
@@ -325,7 +327,7 @@ describe('DailySummaryComponent', () => {
           doneTasks$: of([listed]),
           doneTasksToArchive$: of([listed, earlier]),
         },
-        _taskService: { moveToArchive },
+        _taskArchiveOrchestrator: { moveToArchive },
         _snackService: { open: jasmine.createSpy('open') },
         _translateService: { currentLang: 'en' },
         _translateStore: { getTranslations: () => ({}) },
@@ -345,7 +347,7 @@ describe('DailySummaryComponent', () => {
         workContextService: {
           doneTasksToArchive$: of([createTask({ id: 'done', isDone: true })]),
         },
-        _taskService: { moveToArchive: jasmine.createSpy().and.resolveTo() },
+        _taskArchiveOrchestrator: { moveToArchive: jasmine.createSpy().and.resolveTo() },
         _snackService: { open: snackOpen },
         _router: { navigate },
         _translateService: { currentLang: 'en' },

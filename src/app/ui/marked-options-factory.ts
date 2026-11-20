@@ -46,11 +46,13 @@ export const parseImageDimensionsFromTitle = (
 
 // Match: ![alt](url =WIDTHxHEIGHT) or ![alt](url =WIDTHx) or ![alt](url =xHEIGHT)
 // Capture groups: 1=alt, 2=url, 3=width, 4=height
-// The `\s*` right after `\(` keeps this in sync with SIZED_IMAGE_RE in
+// The whitespace right after `\(` keeps this in sync with SIZED_IMAGE_RE in
 // live-markdown-ranges.ts, which already tolerates a leading space before the
 // URL — without it, `![a]( u =10x20)` parsed differently depending on which
-// renderer was on screen (#10153).
-const SIZED_IMAGE_RE = /!\[([^\]]*)\]\(\s*([^\s)]+)\s+=(\d*)x(\d*)\)/g;
+// renderer was on screen (#10153). It is horizontal whitespace only: the live
+// editor matches a single line (CodeMirror splits on `\r\n?|\n`), so an image
+// with a line break after the paren stays raw there and has to stay raw here.
+const SIZED_IMAGE_RE = /!\[([^\]]*)\]\([^\S\r\n]*([^\s)]+)\s+=(\d*)x(\d*)\)/g;
 
 /**
  * An opening or closing code fence: up to three spaces, then ``` or ~~~.

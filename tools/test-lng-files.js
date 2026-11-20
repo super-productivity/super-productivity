@@ -2,6 +2,7 @@
 
 const { readdirSync, readFileSync } = require('node:fs');
 const { join, relative } = require('node:path');
+const { isLocaleOnlyPluralForm } = require('./clean-translations');
 
 const BASE_PATH = join(__dirname, '..', 'src', 'assets', 'i18n');
 const BASELINE_PATH = join(__dirname, 'test-lng-files.baseline.json');
@@ -30,10 +31,20 @@ const collectLeafKeys = (value) => {
 
 const compareKeyLists = (referenceKeys, referenceKeySet, translationKeys) => {
   const translationKeySet = new Set(translationKeys);
+  const notInReference = translationKeys.filter((key) => !referenceKeySet.has(key));
+
+  // A locale that needs FEW or MANY has plural forms en.json cannot contain.
+  // Those are live translations; reporting them beside genuinely dead keys is
+  // what let one get deleted in #9938.
+  const localePluralKeys = notInReference.filter((key) =>
+    isLocaleOnlyPluralForm(key, referenceKeys),
+  );
+  const localePluralKeySet = new Set(localePluralKeys);
 
   return {
     missingKeys: referenceKeys.filter((key) => !translationKeySet.has(key)),
-    unnecessaryKeys: translationKeys.filter((key) => !referenceKeySet.has(key)),
+    unnecessaryKeys: notInReference.filter((key) => !localePluralKeySet.has(key)),
+    localePluralKeys,
   };
 };
 
@@ -208,6 +219,10 @@ const inspectTranslationDirectory = (directory, baseline = {}) => {
       (total, file) => total + file.unnecessaryKeys.length,
       0,
     ),
+    totalLocalePlural: files.reduce(
+      (total, file) => total + file.localePluralKeys.length,
+      0,
+    ),
     totalPlaceholderMismatches: files.reduce(
       (total, file) => total + file.placeholderMismatches.length,
       0,
@@ -264,6 +279,8 @@ const printReport = (report) => {
   for (const file of report.files) {
     const missing = file.missingKeys.length;
     const unnecessary = file.unnecessaryKeys.length;
+    const localePluralKeys = file.localePluralKeys ?? [];
+    const localePlural = localePluralKeys.length;
     const mismatched = file.placeholderMismatches.length;
     const dropped = file.newDroppedPlaceholderKeys.length;
     const stale = file.staleBaselineKeys.length;
@@ -274,6 +291,7 @@ const printReport = (report) => {
     if (
       missing === 0 &&
       unnecessary === 0 &&
+      localePlural === 0 &&
       mismatched === 0 &&
       dropped === 0 &&
       stale === 0 &&
@@ -288,6 +306,7 @@ const printReport = (report) => {
     console.log(
       `${formatLogValue(file.file)}: ${missing} missing${formatExamples(file.missingKeys)}; ` +
         `${unnecessary} not in en.json${formatExamples(file.unnecessaryKeys)}; ` +
+        `${localePlural} locale-only plural forms${formatExamples(localePluralKeys)}; ` +
         `${mismatched} placeholder mismatches${formatExamples(file.placeholderMismatches)}; ` +
         `${dropped} dropped placeholders not in baseline${formatExamples(file.newDroppedPlaceholderKeys)}; ` +
         `${stale} stale baseline entries${formatExamples(file.staleBaselineKeys)}; ` +
@@ -301,6 +320,7 @@ const printReport = (report) => {
     `Checked ${report.files.length} translation files against en.json ` +
       `(${report.referenceKeyCount} keys): ${report.totalMissing} missing, ` +
       `${report.totalUnnecessary} not in en.json, ` +
+      `${report.totalLocalePlural ?? 0} locale-only plural forms, ` +
       `${report.totalPlaceholderMismatches} placeholder mismatches, ` +
       `${report.totalNewDroppedPlaceholders} dropped placeholders not in baseline, ` +
       `${report.totalStaleBaseline} stale baseline entries, ` +
@@ -312,6 +332,12 @@ const printReport = (report) => {
     'Key differences and baselined placeholder mismatches are informational; ' +
       'missing translations use the English fallback.',
   );
+  if ((report.totalLocalePlural ?? 0) > 0) {
+    console.log(
+      'Locale-only plural forms are live translations for CLDR categories ' +
+        'English does not have (FEW, MANY, ...). Do not delete them.',
+    );
+  }
   if (report.staleBaselineFiles.length > 0) {
     console.log(
       `Baseline lists files that do not exist${formatExamples(report.staleBaselineFiles)}.`,

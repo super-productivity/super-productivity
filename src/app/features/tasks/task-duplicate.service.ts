@@ -55,7 +55,7 @@ export class TaskDuplicateService {
       ...(task.priority !== undefined && { priority: task.priority }),
     };
     const timeData = {
-      ...(task.dueDay && { dueDay: task.dueDay }),
+      dueDay: task.dueDay || undefined,
       ...(task.dueWithTime && { dueWithTime: task.dueWithTime }),
       ...(task.timeEstimate && { timeEstimate: task.timeEstimate }),
     };

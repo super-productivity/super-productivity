@@ -292,6 +292,19 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       expect(createdCfg().startDate).toBe('2026-10-10');
     });
 
+    it("keeps the task's due→deadline gap, like the repeat dialog (#10983)", async () => {
+      tasks['due'] = { ...tasks['due'], deadlineDay: '2026-10-13' };
+      await handle(request('POST', '/task-repeat-cfgs', { taskId: 'due' }));
+
+      expect(createdCfg().deadlineOffsetDays).toBe(3);
+    });
+
+    it('sets no deadline offset for a task without deadline', async () => {
+      await handle(request('POST', '/task-repeat-cfgs', { taskId: 'due' }));
+
+      expect(createdCfg().deadlineOffsetDays).toBeUndefined();
+    });
+
     it("takes over the task's time with the default reminder", async () => {
       await handle(request('POST', '/task-repeat-cfgs', { taskId: 'timed' }));
 
