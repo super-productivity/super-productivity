@@ -232,6 +232,8 @@ export class ConflictLocalWinOpsService {
         row.timestamp,
         'patch',
         latestProjectMoveEntityIds(row.entityId!, touchingOps),
+        // Clears are safe from live state here: only fields that differ from
+        // the row are present, so an undefined key is a real remote clear.
         true,
       );
     });

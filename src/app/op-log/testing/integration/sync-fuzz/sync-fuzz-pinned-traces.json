@@ -2277,5 +2277,44 @@
     "primary": "divergence:.task.ids.*",
     "signatures": ["divergence:.task.ids.*", "restart-changed:.task.ids.*"],
     "rejections": []
+  },
+  {
+    "class": "whole-entity-lww-drops-fields",
+    "ref": "#11892 family: the deleting device's own done toggle sits beside its delete in the losing local side, so the newer tracked time restores the task whole-entity without it (fails with and without the same-sync snapshot patch)",
+    "name": "a newer tracked time restores a task without the deleting device's earlier done toggle",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["doneTask", "t1", true]
+      },
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "C",
+        "s": 1
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "recreated:field-reverted:task.isDone",
+    "signatures": [
+      "divergence:.task.entities.*.doneOn",
+      "divergence:.task.entities.*.isDone",
+      "divergence:.task.ids.*",
+      "recreated:field-reverted:task.isDone"
+    ],
+    "rejections": []
   }
 ]

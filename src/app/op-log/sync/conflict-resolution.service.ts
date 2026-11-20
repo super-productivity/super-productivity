@@ -1037,7 +1037,8 @@ export class ConflictResolutionService {
     // Finalize only after every chosen resolution entered state. If reducer or
     // archive work fails, the originals stay eligible for a clean retry. Local
     // fields that survived a remote resolution row are re-emitted in the same
-    // transaction as their originals' rejection.
+    // transaction as their originals' rejection, beside patches for local-win
+    // rows that same-batch remote edits made stale.
     const reemittedOps = [
       ...(await this.localWinOps._reemitSurvivingLocalFields(
         resolutions,
@@ -1054,7 +1055,7 @@ export class ConflictResolutionService {
         { rejectOpIds: remainingLocalOpsToReject },
       );
       OpLog.normal(
-        `ConflictResolutionService: Re-emitted ${reemittedOps.length} losing local edit(s) ` +
+        `ConflictResolutionService: Re-emitted ${reemittedOps.length} local edit(s) or stale-row patch(es) ` +
           `and rejected ${remainingLocalOpsToReject.length} local ops`,
       );
     } else if (remainingLocalOpsToReject.length > 0) {
