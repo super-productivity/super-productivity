@@ -671,6 +671,21 @@ describe('CaldavClientService._getXhrProvider – web platform', () => {
     expect(headers['X-Requested-With']).toBe('SuperProductivity');
   });
 
+  it('encodes non-ASCII credentials as UTF-8 in the Authorization header', () => {
+    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider({
+      ...MOCK_CFG,
+      password: 'pw-€',
+    });
+    const xhr = factory();
+    const headers: Record<string, string> = {};
+    spyOn(xhr, 'setRequestHeader').and.callFake(
+      (name: string, value: string) => (headers[name] = value),
+    );
+    xhr.open('REPORT', 'https://cal.example.com/');
+    // printf 'user:pw-€' | base64
+    expect(headers['Authorization']).toBe('Basic dXNlcjpwdy3igqw=');
+  });
+
   it('returns an empty DAV response header when the server does not expose it', () => {
     spyOn(XMLHttpRequest.prototype, 'getResponseHeader').and.returnValue(null);
     const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider(MOCK_CFG);

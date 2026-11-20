@@ -81,7 +81,10 @@ export class PollToBacklogEffects {
                   provider.isAutoAddToBacklog &&
                   provider.pollingMode !== 'always' &&
                   !this._pluginRegistry.getUseAgendaView(provider.issueProviderKey) &&
-                  this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+                  this._issueService.getPollInterval(
+                    provider.issueProviderKey,
+                    provider,
+                  ) > 0,
               );
               if (matchingProviders.length === 0) {
                 return EMPTY;
@@ -122,7 +125,10 @@ export class PollToBacklogEffects {
                   provider.isAutoAddToBacklog &&
                   !!provider.defaultProjectId &&
                   !this._pluginRegistry.getUseAgendaView(provider.issueProviderKey) &&
-                  this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+                  this._issueService.getPollInterval(
+                    provider.issueProviderKey,
+                    provider,
+                  ) > 0,
               );
               if (alwaysProviders.length === 0) {
                 return EMPTY;
@@ -148,7 +154,7 @@ export class PollToBacklogEffects {
       [
         timer(
           DELAY_BEFORE_ISSUE_POLLING,
-          this._issueService.getPollInterval(provider.issueProviderKey),
+          this._issueService.getPollInterval(provider.issueProviderKey, provider),
         ),
         getRefreshOnLook$(provider),
       ],
