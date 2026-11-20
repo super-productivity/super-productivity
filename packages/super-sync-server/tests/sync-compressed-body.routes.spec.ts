@@ -1179,6 +1179,31 @@ describe('Sync compressed body routes', () => {
     expect(mocks.syncService.cacheSnapshotIfReplayable).not.toHaveBeenCalled();
   }, 15000);
 
+  it('should leave non-body-limit errors to the server-wide error handler', async () => {
+    const parentApp = Fastify();
+    const parentHandler = vi.fn((error: { statusCode?: number }, _req, reply) =>
+      reply.status(error.statusCode ?? 500).send({ handledBy: 'parent' }),
+    );
+    parentApp.setErrorHandler(parentHandler);
+    await parentApp.register(syncRoutes, { prefix: '/api/sync' });
+
+    const response = await parentApp.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+        'content-encoding': 'br',
+      },
+      payload: '{}',
+    });
+    await parentApp.close();
+
+    expect(response.statusCode).toBe(415);
+    expect(response.json()).toEqual({ handledBy: 'parent' });
+    expect(parentHandler).toHaveBeenCalledTimes(1);
+  });
+
   it('should preserve the invalid gzip route response', async () => {
     const response = await app.inject({
       method: 'POST',
