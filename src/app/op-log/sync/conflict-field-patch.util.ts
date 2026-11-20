@@ -551,18 +551,25 @@ export const supersededPatchFields = (
 };
 
 /**
- * #10260 on a later round: pending readable edits that lost to a remote LWW
- * resolution row (a patch or snapshot another device built). The row is
- * opaque here (no re-merge, #10393 decision 5), so the plain remote-win path
- * rejects the local ops and their fields stay on this device only; a replace
- * row used to hide that by overwriting them.
+ * #10260: pending readable edits that lost whole-entity LWW to remote ops of
+ * this one entity the field patch cannot read: an LWW resolution row another
+ * device built (no re-merge, #10393 decision 5) or an opaque op such as
+ * `planTasksForToday` (decision 6). The plain remote-win path rejects the
+ * local ops, and their fields stay on this device only (#11184: a done lost to
+ * another device's add to today never reached it).
  *
- * Returns the fields to re-emit, read from state AFTER the row applied: those
- * still holding the local ops' values survived the row and must upload; the
- * row overwrote the others, and re-sending those would only echo it. Undefined
- * when nothing survived or the local side is not readable
- * (`supersededPatchFields`). A time delta keeps the plain path (#10408), and
- * opaque winners such as habit counts stay whole-entity (decision 6).
+ * The winners still apply as themselves; nothing reads their payload. Returns
+ * the fields to re-emit, read from state AFTER they applied: those still
+ * holding the local ops' values survived and must upload; the winners
+ * overwrote the others, and re-sending those would only echo them. Undefined
+ * when nothing survived, a winner deletes or spans several entities (whole-
+ * entity paths), or the local side is not readable (`supersededPatchFields`).
+ * A local time delta keeps the plain path (#10408).
+ *
+ * The local side may hold this device's own pending `'patch'` rows: re-sends
+ * of an earlier resolution that never uploaded (sync killed or failed before
+ * the upload, #11184). Their fields are this device's edits, so they count as
+ * readable here; a `'replace'` snapshot keeps the whole-entity path.
  */
 export const survivingLocalFields = (
   conflict: EntityConflict,
@@ -571,13 +578,18 @@ export const survivingLocalFields = (
 ): Record<string, unknown> | undefined => {
   const { localOps, remoteOps, entityType, entityId } = conflict;
   const readable = localOps.filter((op) => !isAdditiveTimeOp(op));
+  const edits = readable.filter((op) => !isEntityRow(op, entityId));
+  const written = writtenByLocalSide(readable, payloadKey, entityId);
   if (
-    !remoteOps.every((op) => isLwwUpdatePayload(op.payload)) ||
-    !supersededPatchFields(readable, entityType, payloadKey, entityId)
+    !written ||
+    !RECREATE_FALLBACK[entityType] ||
+    !remoteOps.every(
+      (op) => op.opType !== OpType.Delete && !isMultiEntityOperation(op),
+    ) ||
+    (edits.length > 0 && !supersededPatchFields(edits, entityType, payloadKey, entityId))
   ) {
     return undefined;
   }
-  const written = mergeChangedFields(readable, payloadKey, entityId);
   const surviving = Object.keys(written).filter(
     (field) => !NOISE_FIELDS.has(field) && deepEqual(entityState[field], written[field]),
   );
@@ -585,6 +597,37 @@ export const survivingLocalFields = (
   // A surviving done toggle carries its derived `doneOn` (`sideChanges`).
   const fields = surviving.includes('isDone') ? [...surviving, 'doneOn'] : surviving;
   return Object.fromEntries(fields.map((field) => [field, entityState[field]]));
+};
+
+/**
+ * The fields the local ops wrote, in op order, reading an own `'patch'` row
+ * by its keys and clears. Undefined for a `'replace'` row or a row that clears
+ * a reminder field (as `supersededPatchFields` refuses such clears).
+ */
+const writtenByLocalSide = (
+  ops: Operation[],
+  payloadKey: string,
+  entityId: string,
+): Record<string, unknown> | undefined => {
+  const written: Record<string, unknown> = {};
+  for (const op of ops) {
+    if (!isEntityRow(op, entityId)) {
+      Object.assign(written, mergeChangedFields([op], payloadKey, entityId));
+      continue;
+    }
+    const fields = rowFields(op);
+    const values = extractActionPayload(op.payload);
+    if (!fields) return undefined;
+    for (const field of fields) written[field] = values[field];
+    if (
+      REMINDER_FIELDS.some(
+        (field) => fields.includes(field) && values[field] === undefined,
+      )
+    ) {
+      return undefined;
+    }
+  }
+  return written;
 };
 
 /**

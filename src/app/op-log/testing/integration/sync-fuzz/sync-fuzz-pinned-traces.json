@@ -87,8 +87,8 @@
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260: divergence remains; the whole-entity winner carrying the creation baseline is an accepted residual (preservation oracle audit)",
-    "name": "a habit rename that loses to a count stays on its device only",
+    "ref": "fixed by #11184 (regression pin): the rename that loses whole-entity to the opaque count is re-sent as a patch of the fields the count left in state",
+    "name": "a habit rename that loses to a count reaches every device",
     "steps": [
       {
         "d": "C",
@@ -99,14 +99,13 @@
         "a": ["countHabit", "h1"]
       }
     ],
-    "primary": "divergence:.simpleCounter.entities.*.title",
-    "signatures": ["divergence:.simpleCounter.entities.*.title"],
+    "signatures": [],
     "rejections": []
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260: divergence remains; the whole-entity winner carrying the creation baseline is an accepted residual (preservation oracle audit)",
-    "name": "a task rename that loses to tracking stays on its device only",
+    "ref": "fixed by #11184 (regression pin): the rename that loses whole-entity to the opaque plan-for-today and its delta is re-sent as a patch of the fields they left in state",
+    "name": "a task rename that loses to tracking reaches every device",
     "steps": [
       {
         "d": "C",
@@ -126,8 +125,7 @@
         "a": ["track", "t13", 2000]
       }
     ],
-    "primary": "divergence:.task.entities.*.title",
-    "signatures": ["divergence:.task.entities.*.title"],
+    "signatures": [],
     "rejections": []
   },
   {
