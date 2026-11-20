@@ -1,0 +1,23 @@
+---
+# Generated from Harper's Albeit rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects this expression to the standard `albeit`.
+extends: existence
+message: "This should be written as a single word with a single `l`: `albeit`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "albeit"
+tokens:
+  - "all(?!\\s*\\n\\s*\\n)\\s+be(?!\\s*\\n\\s*\\n)\\s+it(?!['\\x{2019}]s\\b)"
+  - "al(?!\\s*\\n\\s*\\n)\\s+be(?!\\s*\\n\\s*\\n)\\s+it(?!['\\x{2019}]s\\b)"
+  - "all(?!\\s*\\n\\s*\\n)\\s+beit(?!['\\x{2019}]s\\b)"
+  - "allbe(?!\\s*\\n\\s*\\n)\\s+it(?!['\\x{2019}]s\\b)"
+  - "al(?!\\s*\\n\\s*\\n)\\s+beit(?!['\\x{2019}]s\\b)"

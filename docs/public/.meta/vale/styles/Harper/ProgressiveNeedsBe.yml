@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's ProgressiveNeedsBe: a progressive verb after
+# `have` needs `been` between them -- "I have been running", not "I have
+# running".
+#
+# The fix targets `have` alone, so the pronoun in front of it is left as the
+# writer had it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "A progressive verb after `have` needs `been`."
+level: warning
+ignorecase: true
+matchcase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "have been"
+tokens:
+  - pattern: 'i|we|you|they'
+  - pattern: 'have'
+    target: true
+  - tag: 'VBG'

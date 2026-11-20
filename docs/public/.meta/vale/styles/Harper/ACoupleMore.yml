@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ACoupleMore rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `a couple of more` to `a couple more`.
+extends: existence
+message: "The correct wording is `a couple more`, without the `of`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "a couple more"
+tokens:
+  - "a(?!\\s*\\n\\s*\\n)\\s+couple(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+more(?!['\\x{2019}]s\\b)"

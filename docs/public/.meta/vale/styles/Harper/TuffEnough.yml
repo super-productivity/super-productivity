@@ -1,0 +1,18 @@
+---
+# Generated from Harper's TuffEnough rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The adjective `tough` pairs with words like `enough` or `like`, so correct the common typo `tuff` in those constructions.
+extends: substitution
+message: "Swap `tuff` for `tough` when it describes strength or difficulty followed by 'enough' or 'like'."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "tuff(?!\\s*\\n\\s*\\n)\\s+enough(?!['\\x{2019}]s\\b)": "tough enough"
+  "tuff(?!\\s*\\n\\s*\\n)\\s+like(?!['\\x{2019}]s\\b)": "tough like"

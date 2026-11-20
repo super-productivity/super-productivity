@@ -1,0 +1,20 @@
+---
+# Generated from Harper's WasAloud linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reports the problem without a fix: Harper builds this correction in
+# code, from the text it matched, which the rule itself does not record.
+#
+# Ensures `was aloud` and `were aloud` are corrected to `was allowed` or
+# `were allowed` when referring to permission.
+extends: sequence
+message: "Did you mean `{verb} allowed`?"
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'been|were|was|be'
+  - pattern: 'aloud'

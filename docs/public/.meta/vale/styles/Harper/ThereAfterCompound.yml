@@ -1,0 +1,24 @@
+---
+# Generated from Harper's ThereAfterCompound rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Normalizes split `there after` to the closed form in adverbial contexts.
+extends: sequence
+message: "This two-word form is likely intended as the single adverb."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "thereafter"
+tokens:
+  - pattern: 'there'
+    target: true
+  - pattern: 'after'
+    target: true
+  - upos: VERB|AUX|ADV

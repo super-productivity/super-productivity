@@ -1,0 +1,21 @@
+---
+# Generated from Harper's VeryLess rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `very less`.
+extends: existence
+message: "English doesn't use `very` with `less`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "much less"
+    - "far less"
+    - "a lot less"
+tokens:
+  - "very(?!\\s*\\n\\s*\\n)\\s+less(?!['\\x{2019}]s\\b)"

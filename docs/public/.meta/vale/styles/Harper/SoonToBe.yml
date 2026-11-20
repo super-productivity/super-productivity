@@ -1,0 +1,32 @@
+---
+# Hand-written from Harper's SoonToBe: `soon to be` takes hyphens when it
+# modifies a noun.
+#
+# The hyphens are only right when a noun follows -- "the soon-to-be manager".
+# "The concert is soon to be over" and "they will soon to be moving" are not
+# modifying anything, and Harper leaves both alone. A substitution cannot see
+# what follows, so this is a sequence ending in the noun.
+#
+# Harper allows adverbs between the phrase and its noun, which this does not;
+# that is a recall gap, not a precision one.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use hyphens when `soon to be` modifies a noun."
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "soon-to-be"
+tokens:
+  - pattern: 'soon'
+    target: true
+  - pattern: 'to'
+    target: true
+  - pattern: 'be'
+    target: true
+  - tag: 'NNP?S?'
