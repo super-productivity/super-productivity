@@ -57,6 +57,7 @@ import { getTaskRepeatCfgChanges } from './get-task-repeat-cfg-changes';
 import { clockStringFromDate } from '../../../ui/duration/clock-string-from-date';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { MatButton, MatIconButton } from '@angular/material/button';
+import { RouterLink } from '@angular/router';
 import { MatFormField, MatLabel, MatSuffix } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { MatIcon } from '@angular/material/icon';
@@ -192,6 +193,7 @@ interface RuleSummary {
     ChipListInputComponent,
     MatDialogActions,
     MatButton,
+    RouterLink,
     MatIconButton,
     MatFormField,
     MatLabel,
@@ -1078,6 +1080,25 @@ export class DialogEditTaskRepeatCfgComponent {
     // which are discarded on close.
     void this._taskRepeatCfgService.detachTaskRepeatCfgInstance(repeatCfgId, targetDate);
     this.close();
+  }
+
+  closeForRecurringOverview(event: MouseEvent): void {
+    if (
+      event.button !== 0 ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    this.close();
+    this._matDialog.openDialogs
+      .find(
+        ({ componentInstance }) =>
+          componentInstance instanceof DialogScheduleTaskComponent,
+      )
+      ?.close();
   }
 
   close(createdRepeatCfgId?: string): void {
