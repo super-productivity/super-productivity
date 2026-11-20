@@ -138,6 +138,7 @@ async function launch() {
     const created = await call('create_task', {
       title: 'MCP smoke #literal',
       notes: 'smoke note',
+      dueDate: '2030-06-12',
     });
     assert.equal(created.structuredContent?.status, 'created');
     id = created.structuredContent.id;
@@ -159,10 +160,37 @@ async function launch() {
       (await call('get_task', { id, includeNotes: true })).structuredContent.task.notes,
       'smoke note',
     );
+    const sameTitle = await call('create_task', { title: task.title });
+    const keepId = sameTitle.structuredContent.id;
+    assert.equal(task.priority, null);
+    for (const priority of [1, 3, 2]) {
+      const desired = { id, priority };
+      assert.deepEqual((await call('update_task', desired)).structuredContent, desired);
+      assert.deepEqual((await call('get_task', { id })).structuredContent.task, {
+        ...task,
+        priority,
+      });
+      const list = await call('list_tasks', {
+        projectId: task.projectId,
+        query: task.title,
+      });
+      assert.equal(
+        list.structuredContent.tasks.find((row) => row.id === id).priority,
+        priority,
+      );
+    }
     for (const status of ['done', 'open', 'wont-do', 'wont-do']) {
-      const desired = { id, priority: 3, status };
+      const desired = { id, status };
       assert.deepEqual((await call('update_task', desired)).structuredContent, desired);
     }
+    const remaining = await call('list_tasks', {
+      query: task.title,
+      projectId: task.projectId,
+    });
+    assert.deepEqual(
+      remaining.structuredContent.tasks.map((row) => row.id),
+      [keepId],
+    );
     await page.evaluate(() => window.ea.setLocalRestApiEnabled(true));
     await app.close();
     app = undefined;
@@ -175,7 +203,7 @@ async function launch() {
     );
     const reopenedProfileTask = (await call('get_task', { id })).structuredContent.task;
     assert.equal(reopenedProfileTask.status, 'wont-do');
-    assert.equal(reopenedProfileTask.priority, 3);
+    assert.equal(reopenedProfileTask.priority, 2);
     await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0].minimize(),
     );
