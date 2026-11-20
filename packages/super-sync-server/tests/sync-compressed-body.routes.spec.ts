@@ -74,6 +74,7 @@ import {
   SYNC_ERROR_CODES,
 } from '../src/sync/sync.types';
 import { computeOpStorageBytes } from '../src/sync/sync.const';
+import { payloadTooLargeErrorHandler } from '../src/sync/sync.routes.payload';
 import { CURRENT_SCHEMA_VERSION, SUPER_SYNC_MAX_OPS_PER_UPLOAD } from '@sp/shared-schema';
 
 const gzipAsync = promisify(zlib.gzip);
@@ -705,6 +706,10 @@ describe('Sync compressed body routes', () => {
     });
 
     expect(response.statusCode).toBe(413);
+    expect(response.json()).toMatchObject({
+      code: 'FST_ERR_CTP_BODY_TOO_LARGE',
+      errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    });
     expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
   });
 
@@ -1119,8 +1124,61 @@ describe('Sync compressed body routes', () => {
     });
 
     expect(response.statusCode).toBe(413);
+    // #11672: the client keeps a full-state op pending on an uncoded 413 (it
+    // could be a reverse proxy's), so the server's own limit must be coded.
+    expect(response.json()).toMatchObject({
+      code: 'FST_ERR_CTP_BODY_TOO_LARGE',
+      errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    });
     expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
   });
+
+  it('should send PAYLOAD_TOO_LARGE when a compressed snapshot exceeds the limit', async () => {
+    // Only the base64 transport lets more than 30 MiB of gzip bytes past the raw
+    // body limit; the size check runs before gunzip, so the bytes need not be gzip.
+    const base64Payload = Buffer.alloc(30 * MiB + 1).toString('base64');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+        'content-encoding': 'gzip',
+        'content-transfer-encoding': 'base64',
+      },
+      payload: base64Payload,
+    });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toEqual({
+      error: 'Compressed payload too large',
+      errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    });
+    expect(mocks.syncService.cacheSnapshotIfReplayable).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('should send PAYLOAD_TOO_LARGE when a decompressed snapshot exceeds the limit', async () => {
+    const compressedPayload = await gzipAsync(Buffer.alloc(60 * MiB + 1, 0x20));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+        'content-encoding': 'gzip',
+      },
+      payload: compressedPayload,
+    });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toEqual({
+      error: 'Decompressed payload too large',
+      errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    });
+    expect(mocks.syncService.cacheSnapshotIfReplayable).not.toHaveBeenCalled();
+  }, 15000);
 
   it('should preserve the invalid gzip route response', async () => {
     const response = await app.inject({
@@ -1869,5 +1927,24 @@ describe('Sync compressed body routes', () => {
     // No cache write happened, so no post-commit counter delta either.
     expect(mocks.syncService.incrementStorageUsage).not.toHaveBeenCalled();
     expect(mocks.syncService.decrementStorageUsage).not.toHaveBeenCalled();
+  });
+});
+
+describe('payloadTooLargeErrorHandler', () => {
+  // The server's global handler hides 5xx details; other errors must still reach it.
+  it('passes non-413 errors to the parent error handler', async () => {
+    const app = Fastify();
+    app.setErrorHandler((_error, _request, reply) =>
+      reply.status(500).send({ sanitized: true }),
+    );
+    app.post('/fail', { errorHandler: payloadTooLargeErrorHandler }, async () => {
+      throw new Error('internal db detail');
+    });
+
+    const response = await app.inject({ method: 'POST', url: '/fail', payload: {} });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ sanitized: true });
+    await app.close();
   });
 });

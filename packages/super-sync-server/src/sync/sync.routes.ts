@@ -22,6 +22,7 @@ import {
   MAX_COMPRESSED_SIZE_SNAPSHOT,
   MAX_RAW_BODY_SIZE_OPS,
   MAX_RAW_BODY_SIZE_SNAPSHOT,
+  payloadTooLargeErrorHandler,
 } from './sync.routes.payload';
 import { uploadOpsHandler } from './sync.routes.ops-handler';
 import { uploadSnapshotHandler } from './sync.routes.snapshot-handler';
@@ -81,6 +82,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
       // `parseCompressedJsonBody` still enforces MAX_COMPRESSED_SIZE_OPS
       // against decoded gzip bytes.
       bodyLimit: MAX_RAW_BODY_SIZE_OPS,
+      errorHandler: payloadTooLargeErrorHandler,
       preParsing: createRawBodyLimitPreParsingHook(
         MAX_COMPRESSED_SIZE_OPS,
         MAX_RAW_BODY_SIZE_OPS,
@@ -203,6 +205,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
     '/snapshot',
     {
       bodyLimit: MAX_RAW_BODY_SIZE_SNAPSHOT,
+      errorHandler: payloadTooLargeErrorHandler,
       preParsing: createRawBodyLimitPreParsingHook(
         MAX_COMPRESSED_SIZE_SNAPSHOT,
         MAX_RAW_BODY_SIZE_SNAPSHOT,
