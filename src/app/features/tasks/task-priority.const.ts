@@ -26,6 +26,7 @@ export const TASK_PRIORITY_ICONS: Record<
     3: 'keyboard_double_arrow_up',
   },
   numbers: { 1: 'counter_1', 2: 'counter_2', 3: 'counter_3' },
+  numbersHighFirst: { 1: 'counter_3', 2: 'counter_2', 3: 'counter_1' },
 };
 
 /* eslint-enable @typescript-eslint/naming-convention */
