@@ -74,7 +74,6 @@ import {
   SYNC_ERROR_CODES,
 } from '../src/sync/sync.types';
 import { computeOpStorageBytes } from '../src/sync/sync.const';
-import { payloadTooLargeErrorHandler } from '../src/sync/sync.routes.payload';
 import { CURRENT_SCHEMA_VERSION, SUPER_SYNC_MAX_OPS_PER_UPLOAD } from '@sp/shared-schema';
 
 const gzipAsync = promisify(zlib.gzip);
@@ -1180,6 +1179,31 @@ describe('Sync compressed body routes', () => {
     expect(mocks.syncService.cacheSnapshotIfReplayable).not.toHaveBeenCalled();
   }, 15000);
 
+  it('should leave non-body-limit errors to the server-wide error handler', async () => {
+    const parentApp = Fastify();
+    const parentHandler = vi.fn((error: { statusCode?: number }, _req, reply) =>
+      reply.status(error.statusCode ?? 500).send({ handledBy: 'parent' }),
+    );
+    parentApp.setErrorHandler(parentHandler);
+    await parentApp.register(syncRoutes, { prefix: '/api/sync' });
+
+    const response = await parentApp.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+        'content-encoding': 'br',
+      },
+      payload: '{}',
+    });
+    await parentApp.close();
+
+    expect(response.statusCode).toBe(415);
+    expect(response.json()).toEqual({ handledBy: 'parent' });
+    expect(parentHandler).toHaveBeenCalledTimes(1);
+  });
+
   it('should preserve the invalid gzip route response', async () => {
     const response = await app.inject({
       method: 'POST',
@@ -1927,24 +1951,5 @@ describe('Sync compressed body routes', () => {
     // No cache write happened, so no post-commit counter delta either.
     expect(mocks.syncService.incrementStorageUsage).not.toHaveBeenCalled();
     expect(mocks.syncService.decrementStorageUsage).not.toHaveBeenCalled();
-  });
-});
-
-describe('payloadTooLargeErrorHandler', () => {
-  // The server's global handler hides 5xx details; other errors must still reach it.
-  it('passes non-413 errors to the parent error handler', async () => {
-    const app = Fastify();
-    app.setErrorHandler((_error, _request, reply) =>
-      reply.status(500).send({ sanitized: true }),
-    );
-    app.post('/fail', { errorHandler: payloadTooLargeErrorHandler }, async () => {
-      throw new Error('internal db detail');
-    });
-
-    const response = await app.inject({ method: 'POST', url: '/fail', payload: {} });
-
-    expect(response.statusCode).toBe(500);
-    expect(response.json()).toEqual({ sanitized: true });
-    await app.close();
   });
 });

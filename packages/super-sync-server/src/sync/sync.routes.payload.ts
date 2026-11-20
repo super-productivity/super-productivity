@@ -1,5 +1,4 @@
 import {
-  type FastifyError,
   FastifyReply,
   FastifyRequest,
   type RequestPayload,
@@ -132,33 +131,6 @@ export const createPayloadTooLargeError = (limitBytes: number): PayloadTooLargeE
     statusCode: 413,
   });
 
-/**
- * Route error handler that adds `errorCode` to Fastify's body-limit 413, whose
- * body carries only `code`. Clients read `errorCode` to tell the server's own
- * limit from a reverse proxy's 413 (#11672). Other errors go to the parent handler.
- */
-export const payloadTooLargeErrorHandler = (
-  error: FastifyError,
-  request: FastifyRequest,
-  reply: FastifyReply,
-): FastifyReply => {
-  if (error.code !== 'FST_ERR_CTP_BODY_TOO_LARGE') {
-    throw error;
-  }
-  // Keeps the log line the global handler wrote before; route pattern, not
-  // request URL, so no query string reaches logs.
-  Logger.warn(
-    `Request failed 413 ${request.method} ${request.routeOptions.url}: ${error.message}`,
-  );
-  return reply.status(413).send({
-    statusCode: 413,
-    code: error.code,
-    error: 'Payload Too Large',
-    message: error.message,
-    errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
-  });
-};
-
 export const getHeaderString = (
   value: string | string[] | number | undefined,
 ): string | undefined => {
@@ -273,10 +245,10 @@ export const sendCompressedBodyParseFailure = (
     );
   }
 
-  // #11672: clients keep a full-state op pending on an uncoded 413 (it may be a
-  // reverse proxy's), so the server's own size verdict must carry a code.
   return reply.status(failure.statusCode).send({
     error: failure.error,
+    // #11672: the client keeps a full-state op pending on an uncoded 413 (it may
+    // be a reverse proxy's), so the server's own size verdict must carry a code.
     ...(failure.statusCode === 413
       ? { errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE }
       : {}),
