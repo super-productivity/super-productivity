@@ -802,12 +802,14 @@ export class ConflictResolutionService {
     // STEP 3: Add non-conflicting remote ops to the batch
     // Duplicates are skipped atomically in the append transaction (issue #6343)
     // ─────────────────────────────────────────────────────────────────────────
+    let appliedNonConflictingOps: Operation[] = [];
     if (nonConflictingOps.length > 0) {
       const result = await this._filterAndAppendOpsWithRetry(
         nonConflictingOps,
         'remote',
         { pendingApply: true },
       );
+      appliedNonConflictingOps = result.ops;
       for (let i = 0; i < result.ops.length; i++) {
         allStoredOps.push({ id: result.ops[i].id, seq: result.seqs[i] });
         allOpsToApply.push(result.ops[i]);
@@ -1036,10 +1038,16 @@ export class ConflictResolutionService {
     // archive work fails, the originals stay eligible for a clean retry. Local
     // fields that survived a remote resolution row are re-emitted in the same
     // transaction as their originals' rejection.
-    const reemittedOps = await this.localWinOps._reemitSurvivingLocalFields(
-      resolutions,
-      new Set(remainingLocalOpsToReject),
-    );
+    const reemittedOps = [
+      ...(await this.localWinOps._reemitSurvivingLocalFields(
+        resolutions,
+        new Set(remainingLocalOpsToReject),
+      )),
+      ...(await this.localWinOps._reemitStaleLocalWinRows(
+        writtenLocalWinOps,
+        appliedNonConflictingOps,
+      )),
+    ];
     if (reemittedOps.length > 0) {
       await this.opLogStore.appendMixedSourceBatchSkipDuplicates(
         [{ ops: reemittedOps, source: 'local' }],
