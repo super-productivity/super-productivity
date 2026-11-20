@@ -177,8 +177,15 @@ describe('stringToMs', () => {
       expect(stringToMs('1,5h 2,5m')).toBe((90 + 2.5) * 60 * 1000);
     });
 
+    it('should read a spelled-out unit followed directly by the next number', () => {
+      expect(stringToMs('1hour30min')).toBe(90 * 60 * 1000);
+      expect(stringToMs('1hr30min')).toBe(90 * 60 * 1000);
+      expect(stringToMs('2hours30minutes')).toBe(150 * 60 * 1000);
+    });
+
     it('should still reject unknown words', () => {
       expect(stringToMs('2 days')).toBe(0);
+      expect(stringToMs('5 meters')).toBe(0);
       expect(stringToMs('abc')).toBe(0);
     });
   });
