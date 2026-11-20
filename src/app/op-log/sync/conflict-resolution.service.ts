@@ -802,14 +802,12 @@ export class ConflictResolutionService {
     // STEP 3: Add non-conflicting remote ops to the batch
     // Duplicates are skipped atomically in the append transaction (issue #6343)
     // ─────────────────────────────────────────────────────────────────────────
-    let appliedNonConflictingOps: Operation[] = [];
     if (nonConflictingOps.length > 0) {
       const result = await this._filterAndAppendOpsWithRetry(
         nonConflictingOps,
         'remote',
         { pendingApply: true },
       );
-      appliedNonConflictingOps = result.ops;
       for (let i = 0; i < result.ops.length; i++) {
         allStoredOps.push({ id: result.ops[i].id, seq: result.seqs[i] });
         allOpsToApply.push(result.ops[i]);
@@ -1044,9 +1042,11 @@ export class ConflictResolutionService {
         resolutions,
         new Set(remainingLocalOpsToReject),
       )),
+      // Local-win rows are never applied here, so every op applied in this
+      // batch (prefix, winners, nonconflicting) landed on top of them.
       ...(await this.localWinOps._reemitStaleLocalWinRows(
         writtenLocalWinOps,
-        appliedNonConflictingOps,
+        allOpsToApply,
       )),
     ];
     if (reemittedOps.length > 0) {

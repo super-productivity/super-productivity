@@ -2316,5 +2316,40 @@
       "recreated:field-reverted:task.isDone"
     ],
     "rejections": []
+  },
+  {
+    "class": "list-order-divergence",
+    "ref": "#10381, order only: the recreated task is appended to the task ids where the delete ran. The reverted done of this trace is fixed by this branch, also when a field merge of another task in the same sync puts the done toggle ahead of the snapshot",
+    "name": "a done toggle beside a delete survives the restoring snapshot when another task merges in the same sync",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["renameTask", "t2", "A2"]
+      },
+      {
+        "d": "A",
+        "a": ["doneTask", "t1", true]
+      },
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t2", "C2"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "divergence:.task.ids.*",
+    "signatures": ["divergence:.task.ids.*", "restart-changed:.task.ids.*"],
+    "rejections": []
   }
 ]
