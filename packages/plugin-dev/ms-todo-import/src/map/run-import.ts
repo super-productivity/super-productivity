@@ -1,8 +1,16 @@
 import { BatchOperation, PluginAPI, Task } from '@super-productivity/plugin-api';
-import { ImportPlan, ProjectImportPlan, TaskFollowUp } from './plan-import';
+import {
+  IMPORTANT_TAG_TITLE,
+  ImportPlan,
+  ProjectImportPlan,
+  TaskFollowUp,
+} from './plan-import';
 
 /** SP's virtual Today tag — must never land in task.tagIds (sync rule #5). */
 const TODAY_TAG_ID = 'TODAY';
+
+/** SP's built-in Eisenhower "important" tag (host `IMPORTANT_TAG.id`). */
+const IMPORTANT_TAG_ID = 'EM_IMPORTANT';
 
 /** Report follow-up progress in steps of this many tasks. */
 const DETAIL_PROGRESS_STEP = 25;
@@ -66,6 +74,11 @@ const ensureTags = async (
       continue;
     }
     tagIdByTitle.set(tag.title.toLowerCase(), tag.id);
+  }
+  // the built-in tag by id first: a renamed one is still the Eisenhower
+  // quadrant; only without it does the title match above apply
+  if (existing.some((tag) => tag.id === IMPORTANT_TAG_ID)) {
+    tagIdByTitle.set(IMPORTANT_TAG_TITLE, IMPORTANT_TAG_ID);
   }
   for (const title of tagTitles) {
     const key = title.toLowerCase();

@@ -180,6 +180,42 @@ describe('runImport', () => {
     expect(updates[0].changes.tagIds).toEqual(['tag-existing']);
   });
 
+  describe('the built-in important tag', () => {
+    const starredPlan = () =>
+      planImport(model([task({ extId: 'a', isImportant: true })]), {
+        isTagImportant: true,
+      });
+
+    it('reuses it by id even after the user renamed it', async () => {
+      const { api, updates, createdTags } = createFakeApi({
+        existingTags: [
+          { id: 'EM_IMPORTANT', title: 'Wichtig' },
+          // a user tag carrying the old title must not win over the built-in one
+          { id: 'tag-user', title: 'important' },
+        ],
+      });
+      await runImport(api, starredPlan(), () => {});
+      expect(createdTags).toEqual([]);
+      expect(updates[0].changes.tagIds).toEqual(['EM_IMPORTANT']);
+    });
+
+    it('falls back to a tag titled "important" when the built-in one is gone', async () => {
+      const { api, updates, createdTags } = createFakeApi({
+        existingTags: [{ id: 'tag-user', title: 'Important' }],
+      });
+      await runImport(api, starredPlan(), () => {});
+      expect(createdTags).toEqual([]);
+      expect(updates[0].changes.tagIds).toEqual(['tag-user']);
+    });
+
+    it('creates the tag when neither exists', async () => {
+      const { api, updates, createdTags } = createFakeApi();
+      await runImport(api, starredPlan(), () => {});
+      expect(createdTags).toEqual(['important']);
+      expect(updates[0].changes.tagIds).toEqual(['tag-1']);
+    });
+  });
+
   it('reports tags created before a later tag creation fails', async () => {
     const plan = planImport(
       model([task({ extId: 'a', categories: ['first', 'second'] })]),
