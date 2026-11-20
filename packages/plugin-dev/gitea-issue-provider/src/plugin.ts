@@ -195,7 +195,7 @@ const issuePager = (
   const repo = repoOf(cfg);
   const includedLabels = parseLabelList(cfg.filterLabels);
   const scoped = isScoped(cfg);
-  let user: Promise<GiteaUser> | undefined;
+  let user: GiteaUser | undefined;
   return async (page: number): Promise<GiteaIssue[]> => {
     const params: Record<string, string> = {
       limit: '100',
@@ -213,7 +213,7 @@ const issuePager = (
     }
     if (repo) {
       if (scoped) {
-        const me = await (user ??= http.get<GiteaUser>(`${base}/user`));
+        const me = (user ??= await http.get<GiteaUser>(`${base}/user`));
         params[cfg.scope === SCOPE_CREATED_BY_ME ? 'created_by' : 'assigned_by'] =
           me.username;
       }
@@ -317,10 +317,12 @@ registerIssueProvider({
     const { repo, number } = parseIssueId(issueId, cfg);
     const issueUrl = `${baseUrl(cfg)}/repos/${repo}/issues/${number}`;
     const issue = await http.get<GiteaIssue>(issueUrl);
+    // Built from the id, not the response: the repo is already known here.
+    const ref = `${repoOf(cfg) ? '' : repo}#${number}`;
 
     const result: PluginIssue = {
       id: issueId,
-      title: issue.title,
+      title: `${ref} ${issue.title}`,
       body: issue.body || '',
       url: issue.html_url,
       state: issue.state,
@@ -331,7 +333,7 @@ registerIssueProvider({
 
       // Extended fields for richer display
       number: issue.number,
-      summary: `${issueRef(issue, cfg)} ${issue.title}`,
+      summary: `${ref} ${issue.title}`,
       assignees: issueAssignees(issue),
       creator: issue.user?.login || issue.user?.username,
       creatorAvatarUrl: issue.user?.avatar_url,

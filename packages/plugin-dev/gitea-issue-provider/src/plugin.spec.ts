@@ -60,7 +60,10 @@ const makeHttp = (pages: GiteaIssueFixture[][]): { http: PluginHttp; urls: strin
       }
       const single = /\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)$/.exec(url);
       if (single) {
-        return makeIssue(Number(single[2]), single[1]);
+        // The single-issue endpoint is served without `repository` here so
+        // getById must not depend on it.
+        const { repository: _, ...issue } = makeIssue(Number(single[2]), single[1]);
+        return issue;
       }
       const match = /[?&]page=(\d+)/.exec(full);
       return match ? (pages[Number(match[1]) - 1] ?? []) : (pages[0] ?? []);
@@ -179,6 +182,17 @@ describe('Gitea Plugin - issue ids', () => {
 
     expect(urls[0]).toBe('https://gitea.example/api/v1/repos/a/x/issues/7');
     expect(issue.id).toBe('a/x#7');
+  });
+
+  // A refresh without a title mapping writes getById's title over the task
+  // title, so it must carry the same prefix as the search results.
+  it('getById keeps the issue ref prefix in the title', async () => {
+    const { http } = makeHttp([]);
+
+    expect((await definition.getById('7', perRepo, http)).title).toBe('#7 Issue 7');
+    expect((await definition.getById('a/x#7', instanceWide, http)).title).toBe(
+      'a/x#7 Issue 7',
+    );
   });
 
   it('getIssueLink handles both id forms', () => {
