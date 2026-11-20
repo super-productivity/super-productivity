@@ -3,7 +3,7 @@
   "name": "io.github.super-productivity/supersync",
   "title": "Super Productivity",
   "description": "Add tasks to your Super Productivity Inbox. Write-only: it cannot read your tasks.",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "websiteUrl": "https://super-productivity.com/docs/reference/api/#agent-task-capture-mcp",
   "repository": {
     "url": "https://github.com/super-productivity/super-productivity",

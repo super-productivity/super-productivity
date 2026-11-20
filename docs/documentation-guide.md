@@ -35,7 +35,7 @@ Public pages follow these rules:
 
 During the migration, do not duplicate a fact in both `docs/public/` and `docs/wiki/`.
 Convert a wiki note by creating the quadrant-pure public page first and then redirect the reader to the updated page.
-Never move or restructure `docs/wiki/` without warning: [`wiki-sync.yml`](../.github/workflows/wiki-sync.yml) mirrors it to the GitHub Wiki.
+Never move or restructure `docs/wiki/` without warning: [`wiki-sync.yml`](../.github/workflows/wiki-sync.yml) mirrors it to the GitHub Wiki, and super-productivity.com/docs publishes it under URLs that the app and README link (see [the wiki style guide](wiki/0.01-Style-Guide.md#published-website-docs)).
 
 ## Legacy wiki rules
 

@@ -141,7 +141,7 @@ And much more!
   <li><a href="https://www.youtube.com/watch?v=VoF2_RSdNXA">Video walkthrough</a> (YouTube)</li>
   <li><a href="https://dev.to/johannesjo/the-prioritising-scheme-how-to-eat-the-frog-with-super-productivity-mlk">Eat the frog prioritizing scheme</a></li>
 </ul>
-<p><strong>Starting point in the docs:</strong><br>
+<p><strong>Starting Point in the Docs:</strong><br>
   <a href="https://super-productivity.com/docs/tutorials/first-steps/">First steps</a> •
   <a href="https://super-productivity.com/docs/reference/">Reference</a> •
   <a href="https://super-productivity.com/docs/how-to/">How-To</a>
@@ -215,7 +215,7 @@ _(If you are, intend to or have been a sponsor and want to be shown here, [pleas
 
 ## Documentation: Manual versus Automated
 
-There are two wikis: the official one hosted by GitHub and the autonomously generated variant using [DeepWiki.com](https://deepwiki.com/super-productivity/super-productivity). The manually curated version is a more stable and approachable resource designed to help you understand the app from a more human-focused perspective whereas DeepWiki is optimized for explaining the code itself with little regard for context beyond that.
+There are two sets of docs: the official one, maintained in this repository, and the autonomously generated variant using [DeepWiki.com](https://deepwiki.com/super-productivity/super-productivity). The manually curated version is a more stable and approachable resource designed to help you understand the app from a more human-focused perspective whereas DeepWiki is optimized for explaining the code itself with little regard for context beyond that.
 
 <!-- Official Wiki -->
 <h3>Official Wiki</h3>
@@ -232,8 +232,8 @@ There are two wikis: the official one hosted by GitHub and the autonomously gene
   <a href="https://super-productivity.com/docs/">super-productivity.com/docs</a>.
 </p>
 <p>
-  Migrating to Docusaurus is a long-term goal once the content and structure of the wiki has matured
-  and the remaining "legacy docs" have either been reworked or removed. There are some automations in development to help reduce the difference between the published docs and the state of the code while retaining a human-in-the-loop.
+  The wiki is being rewritten page by page into <code>./docs/public</code>, following the
+  <a href="docs/documentation-guide.md">documentation guide</a>. There are some automations in development to help reduce the difference between the published docs and the state of the code while retaining a human-in-the-loop.
 </p>
 
 <!-- DeepWiki -->
