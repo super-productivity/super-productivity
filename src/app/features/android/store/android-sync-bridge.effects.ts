@@ -17,7 +17,8 @@ import type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../../op-log/sync-providers/file-based/file-based-sync.types';
 import { isShallowEqual } from '../../../util/is-shallow-equal';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { CaptureKeyConfig, ReminderConfig } from '../../config/global-config.model';
+import { CaptureKeyConfig, GlobalConfigState, ReminderConfig } from '../../config/global-config.model';
+import { getStartOfNextDayDiffMs } from '../../../util/start-of-next-day.util';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 
 const isNonNull = <T>(value: T | null): value is T => value !== null;
@@ -123,6 +124,17 @@ export const getBackgroundReminderSettings = (
 ): BackgroundReminderSettings => ({
   isDisabled: !!cfg?.disableReminders,
   useAlarmStyle: !!cfg?.useAlarmStyleReminders,
+});
+
+/** Settings plus the start-of-next-day offset the repeat-reminder port needs. */
+export const getBackgroundReminderBridgeSettings = (
+  cfg: Pick<GlobalConfigState, 'reminder' | 'misc'> | undefined,
+): BackgroundReminderSettings & { startOfNextDayDiffMs: number } => ({
+  ...getBackgroundReminderSettings(cfg?.reminder),
+  startOfNextDayDiffMs: getStartOfNextDayDiffMs(
+    cfg?.misc?.startOfNextDayTime,
+    cfg?.misc?.startOfNextDay,
+  ),
 });
 
 /**
@@ -261,14 +273,17 @@ export class AndroidSyncBridgeEffects {
     createEffect(
       () =>
         this._globalConfigService.cfg$.pipe(
-          map((cfg) => getBackgroundReminderSettings(cfg?.reminder)),
+          map((cfg) => getBackgroundReminderBridgeSettings(cfg)),
           distinctUntilChanged(
             (a, b) =>
-              a.isDisabled === b.isDisabled && a.useAlarmStyle === b.useAlarmStyle,
+              a.isDisabled === b.isDisabled &&
+              a.useAlarmStyle === b.useAlarmStyle &&
+              a.startOfNextDayDiffMs === b.startOfNextDayDiffMs,
           ),
-          tap(({ isDisabled, useAlarmStyle }) => {
-            // Optional chaining: old APKs don't have this method yet.
+          tap(({ isDisabled, useAlarmStyle, startOfNextDayDiffMs }) => {
+            // Optional chaining: old APKs don't have these methods yet.
             androidInterface.setBackgroundReminderSettings?.(isDisabled, useAlarmStyle);
+            androidInterface.setStartOfNextDayDiffMs?.(startOfNextDayDiffMs);
           }),
         ),
       { dispatch: false },

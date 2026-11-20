@@ -14,6 +14,7 @@ import {
   AndroidSyncBridgeEffects,
   BackgroundSyncBridgeCommand,
   bridgeCommandEqual,
+  getBackgroundReminderBridgeSettings,
   getBackgroundReminderSettings,
   getCapturePublicKeyForNative,
   getFileSyncCredentialBridgeCommand,
@@ -452,6 +453,23 @@ describe('AndroidSyncBridgeEffects - reminder settings mirroring logic', () => {
       getBackgroundReminderSettings(reminderCfg({ useAlarmStyleReminders: true }))
         .useAlarmStyle,
     ).toBe(true);
+  });
+
+  it('includes a zero start-of-next-day offset when misc is missing', () => {
+    expect(getBackgroundReminderBridgeSettings(undefined)).toEqual({
+      isDisabled: false,
+      useAlarmStyle: false,
+      startOfNextDayDiffMs: 0,
+    });
+  });
+
+  it('mirrors a start-of-next-day time as milliseconds', () => {
+    expect(
+      getBackgroundReminderBridgeSettings({
+        reminder: reminderCfg({}),
+        misc: { startOfNextDayTime: '04:00' } as never,
+      }).startOfNextDayDiffMs,
+    ).toBe(4 * 60 * 60 * 1000);
   });
 });
 

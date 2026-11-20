@@ -691,6 +691,20 @@ class JavaScriptInterface(
     }
 
     /**
+     * Mirrors the start-of-next-day offset used when a repeat clock falls
+     * before that boundary (#3378). A separate method so an old WebView that
+     * only calls [setBackgroundReminderSettings] keeps working, and so that
+     * call does not reset an offset already stored.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setStartOfNextDayDiffMs(diffMs: Int) {
+        safeCall("Failed to set start-of-next-day offset") {
+            BackgroundReminderSettingsStore.saveStartOfNextDayDiffMs(activity, diffMs.toLong())
+        }
+    }
+
+    /**
      * Mirrors the SuperSync E2EE password so background reminder sync can
      * decrypt op payloads (encrypted end-to-end since #8670). Separate method
      * from [setSuperSyncCredentials] so an old JS bundle paired with a new APK
