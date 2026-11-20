@@ -323,7 +323,7 @@ const createTask: ToolSpec = {
       "Adds a new task to the user's Inbox with the given title and optional notes, exactly as written. " +
       'It gets the same defaults as a task the user adds to the Inbox by hand; no project comes from ' +
       'the request, and #tags, +projects and dates in the title or notes are not parsed. ' +
-      'Pass tagIds for adding existing tags' +
+      'Pass tagIds (ids from list_tags) to add existing tags. ' +
       'Pass dueDate (and optionally dueTime) to schedule the task, and repeat to make it recurring. ' +
       'Pass deadlineDate (and optionally deadlineTime) when the work is due, and estimateMinutes ' +
       'for how long it takes. Retrying after an error can create a duplicate.',
