@@ -1,5 +1,5 @@
 import { Signal, untracked } from '@angular/core';
-import { getDbDateStr, isValidDBDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStrWithOffset, isValidDBDateStr } from '../../../util/get-db-date-str';
 import { Task } from '../task.model';
 
 export type ScheduledDateColor = 'overdue' | '';
@@ -13,7 +13,7 @@ export const getScheduledDateColor = (
 ): ScheduledDateColor => {
   if (task.isDone) return '';
   const dueDate = task.dueWithTime
-    ? getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs))
+    ? getDbDateStrWithOffset(task.dueWithTime, startOfNextDayDiffMs)
     : task.dueDay;
   if (!dueDate || !isValidDBDateStr(dueDate)) return '';
   if (dueDate < today || (task.dueWithTime && task.dueWithTime <= now)) {

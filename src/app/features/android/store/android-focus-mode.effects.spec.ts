@@ -8,7 +8,9 @@ import {
   parseNativeFocusModeData,
   shouldHandleNativeTimerComplete,
   getFocusServiceCall,
+  getNativeTimerCompleteAction,
 } from './android-focus-mode.effects';
+import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import { TimerState, FocusModeMode } from '../../focus-mode/focus-mode.model';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
 import { AndroidInterface } from '../android-interface';
@@ -191,7 +193,7 @@ describe('shouldHandleNativeTimerComplete (stale/duplicate completion guard, #88
 
   it('handles a break completion once the break has run its scheduled length', () => {
     // Break stopped in-app (isRunning false) with the arrow showing; the native
-    // completion still auto-advances because the break reached its duration.
+    // completion is still handled because the break reached its duration.
     const doneBreak = workTimer(0, {
       startedAt: START,
       isRunning: false,
@@ -216,6 +218,28 @@ describe('shouldHandleNativeTimerComplete (stale/duplicate completion guard, #88
     const flowtime = workTimer(0, { startedAt: START, duration: 0 });
     expect(shouldHandleNativeTimerComplete(false, flowtime, START + WORK_DURATION)).toBe(
       false,
+    );
+  });
+});
+
+// A break running out in the background must not start the next session on its
+// own, or a user who walks away gets endless Pomodoro cycles. Desktop already
+// stops on the break screen until the user leaves it.
+describe('getNativeTimerCompleteAction (break end waits for the user)', () => {
+  it('stops a finished break instead of skipping it', () => {
+    const getDuration = jasmine.createSpy('getDuration').and.returnValue(0);
+    expect(getNativeTimerCompleteAction(true, getDuration)).toEqual(
+      focusModeActions.tick(),
+    );
+    expect(getDuration).not.toHaveBeenCalled();
+  });
+
+  it('completes a finished work session automatically', () => {
+    expect(getNativeTimerCompleteAction(false, () => 25 * MIN)).toEqual(
+      focusModeActions.completeFocusSession({
+        isManual: false,
+        completedDuration: 25 * MIN,
+      }),
     );
   });
 });
@@ -261,7 +285,7 @@ describe('getFocusServiceCall (native service lost, #9531)', () => {
     expect(
       call({ wasFocusModeActive: false, timer: breakTimer(), isNativeServiceRunning }),
     ).toBe('start');
-    // Break completed natively; skipBreak auto-starts work, start refused again.
+    // Break skipped from the notification; work auto-starts, start refused again.
     expect(
       call({ wasFocusModeActive: false, timer: workTimer(0), isNativeServiceRunning }),
     ).toBe('start');

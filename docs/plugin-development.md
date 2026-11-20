@@ -474,7 +474,7 @@ Feature-detect `getDayContext`, `startTracking` and `stopTracking` on older host
 
 Read repeat configs from `getAppState().taskRepeatCfgs`. Both methods accept only the schedule fields of `PluginTaskRepeatCfgSchedule` and reject anything else with an error saying why; older app versions lack them, so check `typeof PluginAPI.addTaskRepeatCfg === 'function'` first.
 
-- `addTaskRepeatCfg(taskId, schedule?)` - Make an existing top-level task repeat, like "Repeat" in its schedule dialog (title, tags, estimate, day and time come from the task). Without a schedule it repeats daily. `repeatFromCompletionDate` (with `quickSetting: 'CUSTOM'`) counts the interval from completion; `repeatUntilDay` sets the last day. Resolves with the repeat config id.
+- `addTaskRepeatCfg(taskId, schedule?)` - Make an existing top-level task repeat, like "Repeat" in its schedule dialog (title, tags, estimate, day, time and the gap to its deadline day come from the task). Without a schedule it repeats daily. `repeatFromCompletionDate` (with `quickSetting: 'CUSTOM'`) counts the interval from completion; `repeatUntilDay` sets the last day. Resolves with the repeat config id.
 - `updateTaskRepeatCfg(repeatCfgId, updates)` - Change the schedule, `isPaused`, `skipOverdue` or the end day `repeatUntilDay` (`null` removes it). Changing the schedule requires `quickSetting`.
 
 ```js

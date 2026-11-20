@@ -1,4 +1,4 @@
-import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
+import { Action, MetaReducer } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-state';
 import { TaskSharedActions } from '../task-shared.actions';
@@ -7,7 +7,7 @@ import {
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
-import { ActionHandlerMap } from './task-shared-helpers';
+import { ActionHandlerMap, createActionHandlerMetaReducer } from './task-shared-helpers';
 import { UNLINKED_ISSUE_FIELDS } from '../../../features/tasks/task-issue-fields';
 
 // =============================================================================
@@ -31,8 +31,11 @@ const handleDeleteIssueProvider = (
     }
   }
 
-  // Filter to only existing tasks in current state
-  const existingTaskIds = [...idsToUnlink].filter((id) => !!taskState.entities[id]);
+  // A task listed by the origin may have been relinked before replay.
+  const existingTaskIds = [...idsToUnlink].filter((id) => {
+    const providerId = taskState.entities[id]?.issueProviderId;
+    return !!providerId && providerIds.has(providerId);
+  });
 
   if (existingTaskIds.length === 0) {
     return state;
@@ -68,17 +71,5 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   },
 });
 
-export const issueProviderSharedMetaReducer: MetaReducer = (
-  reducer: ActionReducer<unknown, Action>,
-) => {
-  return (state: unknown, action: Action) => {
-    if (!state) return reducer(state, action);
-
-    const rootState = state as RootState;
-    const actionHandlers = createActionHandlers(rootState, action);
-    const handler = actionHandlers[action.type];
-    const updatedState = handler ? handler(rootState) : rootState;
-
-    return reducer(updatedState, action);
-  };
-};
+export const issueProviderSharedMetaReducer: MetaReducer =
+  createActionHandlerMetaReducer(createActionHandlers);

@@ -229,6 +229,24 @@ describe('PluginService uploaded translations round-trip', () => {
     expect(i18n.translate(PLUGIN_ID, 'GREETING')).toBe('Hello');
   });
 
+  // Startup and a plugin view opened early both call initializePlugins(). A second
+  // run re-discovered the plugin, reset it to "not loaded" and ran its code again;
+  // an open iframe view's API calls were silently dropped during that window.
+  it('loads an uploaded plugin once when startup and a plugin view initialize concurrently', async () => {
+    await TestBed.inject(PluginService).loadPluginFromZip(pluginZip({ en: EN }));
+    TestBed.resetTestingModule();
+    configure();
+    const service = TestBed.inject(PluginService);
+    const runner = TestBed.inject(PluginRunner) as jasmine.SpyObj<PluginRunner>;
+
+    const startupInit = service.initializePlugins();
+    await service.initializePlugins(); // the plugin view's call
+    await startupInit;
+
+    expect(service.getPluginIndexHtml(PLUGIN_ID)).toBeTruthy();
+    expect(runner.loadPlugin).toHaveBeenCalledTimes(1);
+  });
+
   it('never persists a language whose json cannot be parsed', async () => {
     await TestBed.inject(PluginService).loadPluginFromZip(
       pluginZip({ en: EN, de: '{ not json ' }),

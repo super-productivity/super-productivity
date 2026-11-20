@@ -61,7 +61,7 @@ export class PollIssueUpdatesEffects {
               // Exclude 'always' providers (handled by pollIssueChangesAlways$), keep ICAL
               (provider.pollingMode !== 'always' ||
                 provider.issueProviderKey === ICAL_TYPE) &&
-              this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+              this._issueService.getPollInterval(provider.issueProviderKey, provider) > 0,
           );
 
           if (providers.length === 0) {
@@ -98,7 +98,10 @@ export class PollIssueUpdatesEffects {
                   provider.isAutoPoll &&
                   provider.pollingMode === 'always' &&
                   provider.issueProviderKey !== ICAL_TYPE &&
-                  this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+                  this._issueService.getPollInterval(
+                    provider.issueProviderKey,
+                    provider,
+                  ) > 0,
               );
 
               if (alwaysProviders.length === 0) {
@@ -123,7 +126,7 @@ export class PollIssueUpdatesEffects {
       [
         timer(
           DELAY_BEFORE_ISSUE_POLLING,
-          this._issueService.getPollInterval(provider.issueProviderKey),
+          this._issueService.getPollInterval(provider.issueProviderKey, provider),
         ),
         getRefreshOnLook$(provider),
       ],
