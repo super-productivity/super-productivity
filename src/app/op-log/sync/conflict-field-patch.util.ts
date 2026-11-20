@@ -551,19 +551,19 @@ export const supersededPatchFields = (
 };
 
 /**
- * #10260: pending readable edits that lost whole-entity LWW to remote ops of
- * this one entity the field patch cannot read: an LWW resolution row another
+ * #10260: pending readable edits that lost whole-entity LWW to remote ops on
+ * this entity the field patch cannot read: an LWW resolution row another
  * device built (no re-merge, #10393 decision 5) or an opaque op such as
- * `planTasksForToday` (decision 6). The plain remote-win path rejects the
- * local ops, and their fields stay on this device only (#11184: a done lost to
- * another device's add to today never reached it).
+ * `planTasksForToday`, also one planning several tasks (decision 6). The
+ * plain remote-win path rejects the local ops, and their fields stay on this
+ * device only (#11184: a done lost to another device's add to today never
+ * reached it).
  *
  * The winners still apply as themselves; nothing reads their payload. Returns
  * the fields to re-emit, read from state AFTER they applied: those still
  * holding the local ops' values survived and must upload; the winners
  * overwrote the others, and re-sending those would only echo them. Undefined
- * when nothing survived, a winner deletes or spans several entities (whole-
- * entity paths), or the local side is not readable (`supersededPatchFields`).
+ * when nothing survived, a winner deletes (whole-entity path), or the local side is not readable (`supersededPatchFields`).
  * A local time delta keeps the plain path (#10408).
  *
  * The local side may hold this device's own pending `'patch'` rows: re-sends
@@ -583,9 +583,7 @@ export const survivingLocalFields = (
   if (
     !written ||
     !RECREATE_FALLBACK[entityType] ||
-    !remoteOps.every(
-      (op) => op.opType !== OpType.Delete && !isMultiEntityOperation(op),
-    ) ||
+    remoteOps.some((op) => op.opType === OpType.Delete) ||
     (edits.length > 0 && !supersededPatchFields(edits, entityType, payloadKey, entityId))
   ) {
     return undefined;

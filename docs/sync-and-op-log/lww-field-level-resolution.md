@@ -308,8 +308,8 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    by decisions 5a and 5a extended below: a conflict may read a row's keys,
    never its values.
 6. **Opaque ops:** stay on whole-entity LWW, with the narrow time-preserving
-   exception below. Narrowed by #11184: when a single-entity opaque op wins
-   remotely, the losing device re-emits the local fields that survived it
+   exception below. Narrowed by #11184: when an opaque op wins remotely
+   (also one planning several tasks), the losing device re-emits the local fields that survived it
    (see "A later round").
 7. **Time on a remote win:** ~~local-win direction only, for now.~~ Replaced
    on 2026-10-01 ([#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5936659621)):
@@ -472,12 +472,12 @@ holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op
   applied are re-emitted as a patch, in the same transaction as their
   rejection (`survivingLocalFields`). That path reads no part of the row (decision
   5); a replace row used to hide this case by overwriting the fields
-  everywhere. Since #11184 the same applies when a single-entity opaque op
-  (a habit count, `planTasksForToday`, tracking) wins: a done lost to another
+  everywhere. Since #11184 the same applies when an opaque op (a habit
+  count, `planTasksForToday` for one or several tasks, tracking) wins: a done lost to another
   device's add to Today never reached that device. The device's own pending
   patch rows (a re-send whose upload failed or was killed) are read by key,
-  like its edits; a replace row, a reminder clear, a remote delete or a
-  multi-entity winner keep the whole-entity path.
+  like its edits; a replace row, a reminder clear or a remote delete keep the
+  whole-entity path.
 - **Content banner:** a patch reports a content field only where both sides
   wrote it (`findPatchContentConflicts`).
 
@@ -508,9 +508,8 @@ holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op
   path (`_buildNoPendingConcurrentConflict`, #9073), still resolve as before.
   The WebDAV E2E converges in both directions without it, so no guard is
   added (no evidence of harm).
-- **NOTE, deletes, archives and multi-entity ops** keep whole-entity LWW, so
-  the note pins of #10379 and #10260 stay. A remote single-entity opaque
-  winner re-emits the surviving local fields (#11184); an opaque local side
+- **NOTE, deletes and archives** keep whole-entity LWW, so the note pins of
+  #10379 and #10260 stay. A remote opaque winner re-emits the surviving local fields (#11184); an opaque local side
   that wins still sends its snapshot.
 - **Released resolvers:** a v19.1.0 device that resolves still emits replace
   snapshots; patches take over as clients update.

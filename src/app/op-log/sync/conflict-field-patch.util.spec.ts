@@ -847,20 +847,28 @@ describe('conflict-field-patch.util', () => {
         .toEqual({ isDone: true, doneOn: 5 });
     });
 
-    it('leaves delete and multi-entity winners to the whole-entity path', () => {
+    it('leaves a delete winner to the whole-entity path', () => {
       const local = edit({ isDone: true }, { id: 'l' });
-      const state = { isDone: true };
       const remove = op({ opType: OpType.Delete });
+      expect(
+        survivingLocalFields(conflictOf([local], [remove]), { isDone: true }, 'task'),
+      ).toBeUndefined();
+    });
+
+    it('re-emits what survived a winner that also plans other tasks (#11184)', () => {
+      const local = edit({ isDone: true, doneOn: 5 }, { id: 'l' });
       const bulkPlan = op({
         actionType: '[Task Shared] planTasksForToday' as ActionType,
         entityIds: ['task-1', 'task-2'],
         payload: { taskIds: ['task-1', 'task-2'] },
       });
-      for (const winner of [remove, bulkPlan]) {
-        expect(survivingLocalFields(conflictOf([local], [winner]), state, 'task'))
-          .withContext(winner.opType)
-          .toBeUndefined();
-      }
+      expect(
+        survivingLocalFields(
+          conflictOf([local], [bulkPlan]),
+          { isDone: true, doneOn: 5, dueDay: '2026-11-20' },
+          'task',
+        ),
+      ).toEqual({ isDone: true, doneOn: 5 });
     });
 
     describe("this device's own pending patch rows (#11184)", () => {
