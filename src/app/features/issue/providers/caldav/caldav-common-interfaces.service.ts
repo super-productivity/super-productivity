@@ -47,8 +47,17 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
   readonly providerKey = 'CALDAV' as const;
 
   get pollInterval(): number {
-    return this._cachedCfg?.pollIntervalMinutes
-      ? this._cachedCfg.pollIntervalMinutes * 60 * 1000
+    return this._cachedCfg
+      ? this.getPollIntervalForCfg(this._cachedCfg)
+      : CALDAV_POLL_INTERVAL;
+  }
+
+  // The poll effects pass the provider they build the timer for, so its own
+  // interval applies from the first timer after start, before any request has
+  // filled `_cachedCfg`, and each CalDAV provider keeps its own interval.
+  getPollIntervalForCfg(cfg: CaldavCfg): number {
+    return cfg.pollIntervalMinutes
+      ? cfg.pollIntervalMinutes * 60 * 1000
       : CALDAV_POLL_INTERVAL;
   }
 
