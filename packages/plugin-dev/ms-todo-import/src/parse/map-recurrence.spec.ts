@@ -60,6 +60,43 @@ describe('mapRecurrence', () => {
     expect(mapRecurrence({ pattern, range: { type: 'noEnd' } }, START)).toEqual(expected);
   });
 
+  it('maps the full shape Graph actually returns (zero-filled fields, placeholder end)', () => {
+    // captured from a real account: unused fields are 0 / [] and noEnd still
+    // carries endDate 0001-01-01 and a startDate older than the due day
+    const range = {
+      type: 'noEnd',
+      startDate: '2024-03-05',
+      endDate: '0001-01-01',
+      numberOfOccurrences: 0,
+      recurrenceTimeZone: 'UTC',
+    };
+    const zeroed = { dayOfMonth: 0, month: 0, index: 'first', firstDayOfWeek: 'sunday' };
+    expect(
+      mapRecurrence(
+        {
+          pattern: { ...zeroed, type: 'weekly', interval: 1, daysOfWeek: ['tuesday'] },
+          range,
+        },
+        START,
+      ),
+    ).toEqual({ quickSetting: 'WEEKLY_CURRENT_WEEKDAY' });
+    expect(
+      mapRecurrence(
+        {
+          pattern: {
+            ...zeroed,
+            type: 'absoluteMonthly',
+            interval: 1,
+            dayOfMonth: 1,
+            daysOfWeek: [],
+          },
+          range,
+        },
+        START,
+      ),
+    ).toEqual({ quickSetting: 'MONTHLY_CURRENT_DATE' });
+  });
+
   it.each([
     ['a monthly day other than the due day', { type: 'absoluteMonthly', dayOfMonth: 15 }],
     [
