@@ -21,9 +21,10 @@ declare global {
 
 const api = (): PluginApiType => window.PluginAPI;
 
-// Public copy of the privacy statement; also the Entra registration's privacy URL
+// Public copy of the privacy statement. The Entra app registration's privacy URL should point
+// here too; it is set in the Azure portal, not in code.
 const PRIVACY_URL =
-  'https://github.com/super-productivity/super-productivity/wiki/2.27-Import-from-Microsoft-To-Do#privacy';
+  'https://super-productivity.com/docs/how-to/import-from-microsoft-to-do/#privacy';
 
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,

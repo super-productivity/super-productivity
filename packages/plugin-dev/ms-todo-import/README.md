@@ -25,8 +25,10 @@ live Microsoft To Do integration.
   for a custom-scheme redirect, so the settings button is hidden there.
 - Microsoft's API terms want a public privacy statement (with consent
   revocation links) and a Microsoft no-warranty notice reachable in the app.
-  Both live in the wiki page's `#privacy` section, which the sign-in screen
-  links; it is also the Entra registration's privacy statement URL.
+  Both live in the `#privacy` section of `docs/wiki/2.27-Import-from-Microsoft-To-Do.md`,
+  published at <https://super-productivity.com/docs/how-to/import-from-microsoft-to-do/#privacy>,
+  which the sign-in screen links. The Entra registration's privacy statement
+  URL should point there too (set in the Azure portal).
 - The import is list-by-list and is not transactional. A failure can leave the
   current project partial; the result tells the user which project to delete
   before retrying.
