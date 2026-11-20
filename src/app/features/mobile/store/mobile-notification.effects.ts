@@ -9,7 +9,6 @@ import { generateNotificationId } from '../../android/android-notification-id.ut
 import { hasTypedReminderActions } from '../../android/android-interface';
 import { Store } from '@ngrx/store';
 import {
-  selectCurrentTaskId,
   selectAllTasksWithReminder,
   selectAllTasksWithDeadlineReminder,
   selectUndoneTasksWithDueDayNoReminder,
@@ -179,14 +178,9 @@ export class MobileNotificationEffects {
             combineLatest([
               this._store.select(selectAllTasksWithReminder),
               this._reminderCfg$,
-              this._store.select(selectCurrentTaskId),
             ]),
           ),
-          tap(async ([allTasksWithReminders, reminderCfg, currentTaskId]) => {
-            // A task being tracked must not ring; it is re-armed once tracking stops
-            const tasksWithReminders = (allTasksWithReminders || []).filter(
-              (t) => t.id !== currentTaskId,
-            );
+          tap(async ([tasksWithReminders, reminderCfg]) => {
             try {
               // Without this, alarms scheduled on prior ticks keep firing on Android
               // via AlarmManager even after the user disables reminders.

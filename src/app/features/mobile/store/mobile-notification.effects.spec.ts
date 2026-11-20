@@ -9,7 +9,6 @@ import { CapacitorPlatformService } from '../../../core/platform/capacitor-platf
 import { GlobalConfigService } from '../../config/global-config.service';
 import { ReminderConfig } from '../../config/global-config.model';
 import {
-  selectCurrentTaskId,
   selectAllTasksWithReminder,
   selectAllTasksWithDeadlineReminder,
   selectUndoneTasksWithDueDayNoReminder,
@@ -173,7 +172,6 @@ describe('MobileNotificationEffects', () => {
           provideMockStore({
             initialState: {},
             selectors: [
-              { selector: selectCurrentTaskId, value: null },
               { selector: selectAllTasksWithReminder, value: [] },
               { selector: selectAllTasksWithDeadlineReminder, value: [] },
               { selector: selectUndoneTasksWithDueDayNoReminder, value: [] },
@@ -276,7 +274,6 @@ describe('MobileNotificationEffects', () => {
           provideMockStore({
             initialState: {},
             selectors: [
-              { selector: selectCurrentTaskId, value: null },
               { selector: selectAllTasksWithReminder, value: [] },
               { selector: selectAllTasksWithDeadlineReminder, value: [] },
               { selector: selectUndoneTasksWithDueDayNoReminder, value: [] },
@@ -317,20 +314,6 @@ describe('MobileNotificationEffects', () => {
 
       expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
       expect(reminderServiceSpy.cancelReminder).not.toHaveBeenCalled();
-    }));
-
-    it('does not arm and cancels the alarm for the task being tracked (#6823)', fakeAsync(() => {
-      store.overrideSelector(selectAllTasksWithReminder, [futureReminder('a')]);
-      subscribeScheduleNotifications();
-      tick(EFFECT_DELAY_MS + 1);
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
-
-      store.overrideSelector(selectCurrentTaskId, 'a');
-      store.refreshState();
-      tick(EFFECT_DELAY_MS + 1);
-
-      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
-      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledTimes(1);
     }));
 
     it('never opens the exact alarm settings page while scheduling (#10684)', fakeAsync(() => {
@@ -469,7 +452,6 @@ describe('MobileNotificationEffects', () => {
           provideMockStore({
             initialState: {},
             selectors: [
-              { selector: selectCurrentTaskId, value: null },
               { selector: selectAllTasksWithReminder, value: [] },
               { selector: selectAllTasksWithDeadlineReminder, value: [] },
               {
@@ -674,7 +656,6 @@ describe('MobileNotificationEffects', () => {
           provideMockStore({
             initialState: {},
             selectors: [
-              { selector: selectCurrentTaskId, value: null },
               { selector: selectAllTasksWithReminder, value: [] },
               {
                 selector: selectAllTasksWithDeadlineReminder,
@@ -911,7 +892,6 @@ describe('MobileNotificationEffects', () => {
             initialState: {},
             selectors: [
               { selector: selectActiveTaskRepeatCfgs, value: [] },
-              { selector: selectCurrentTaskId, value: null },
               { selector: selectAllTasksWithReminder, value: [] },
               { selector: selectAllTasksWithDeadlineReminder, value: [] },
               { selector: selectUndoneTasksWithDueDayNoReminder, value: [] },
