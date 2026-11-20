@@ -1,0 +1,22 @@
+---
+# Hand-written from Harper's BeAllowed: `will not allowed` is missing its
+# `be`.
+#
+# The generated rule keyed on punctuation. The fix inserts a word, which a
+# `sequence` cannot do, so this is a substitution that rewrites the pair.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Add `be` so this reads `be allowed`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\bwill\s)not\s+allowed(?=\s+to\b)': "not be allowed"
+  '(?<=\bwo(?:n''t|nt)\s)allowed(?=\s+to\b)': "be allowed"
+  '(?<=\bwill\s)never\s+allowed(?=\s+to\b)': "never be allowed"

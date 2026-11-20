@@ -696,6 +696,63 @@ describe('TaskRepeatCleanupEffects', () => {
       sub.unsubscribe();
     }));
 
+    [
+      {
+        name: 'deletes an overdue instance whose deadline came from the template',
+        yesterdayDeadlineMs: todayMs,
+        expectedDeleteIds: ['dl-yesterday'],
+      },
+      {
+        name: 'keeps an overdue instance whose template deadline the user moved',
+        yesterdayDeadlineMs: tomorrowMs,
+        expectedDeleteIds: [],
+      },
+    ].forEach(({ name, yesterdayDeadlineMs, expectedDeleteIds }) => {
+      it(`${name} (#10983)`, fakeAsync(() => {
+        repeatCfgs$.next([
+          skipOverdueCfg('cfg-dl', '', { title: 'Water plants', deadlineOffsetDays: 1 }),
+        ]);
+        const yesterdayInstance: Task = {
+          ...DEFAULT_TASK,
+          projectId: 'p1',
+          id: 'dl-yesterday',
+          title: 'Water plants',
+          repeatCfgId: 'cfg-dl',
+          created: yesterdayMs,
+          dueDay: getDbDateStr(yesterdayMs),
+          deadlineDay: getDbDateStr(yesterdayDeadlineMs),
+          isDone: false,
+          timeSpent: 0,
+        };
+        const todayInstance: Task = {
+          ...DEFAULT_TASK,
+          projectId: 'p1',
+          id: 'dl-today',
+          title: 'Water plants',
+          repeatCfgId: 'cfg-dl',
+          created: todayMs,
+          dueDay: getDbDateStr(todayMs),
+          deadlineDay: getDbDateStr(tomorrowMs),
+          isDone: false,
+          timeSpent: 0,
+        };
+
+        repeatableTasks$.next([
+          wrapWithSubTasks(yesterdayInstance),
+          wrapWithSubTasks(todayInstance),
+        ]);
+
+        const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+        tick(3001);
+
+        expect(getDispatchedDeleteIds())
+          .withContext('only an untouched template deadline may be reaped')
+          .toEqual(expectedDeleteIds);
+
+        sub.unsubscribe();
+      }));
+    });
+
     it('ignores TODAY_TAG when checking whether tags match the template', fakeAsync(() => {
       repeatCfgs$.next([
         skipOverdueCfg('cfg-today-tag', '', {

@@ -1,0 +1,20 @@
+---
+# Generated from Harper's OneFellSwoop rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `one foul swoop` to `one fell swoop`, preserving the phrase’s original meaning of sudden and complete action.
+extends: existence
+message: "Use the correct phrase for something happening suddenly."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "one fell swoop"
+tokens:
+  - "one(?!\\s*\\n\\s*\\n)\\s+foul(?!\\s*\\n\\s*\\n)\\s+swoop(?!['\\x{2019}]s\\b)"
+  - "one(?!\\s*\\n\\s*\\n)\\s+fowl(?!\\s*\\n\\s*\\n)\\s+swoop(?!['\\x{2019}]s\\b)"

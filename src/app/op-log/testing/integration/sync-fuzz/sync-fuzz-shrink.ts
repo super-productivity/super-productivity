@@ -1,5 +1,5 @@
 import { FuzzStep } from './sync-fuzz-actions';
-import { FuzzResult, runFuzz } from './sync-fuzz-runner';
+import { FuzzOptions, FuzzResult, runFuzz } from './sync-fuzz-runner';
 
 /**
  * Karma drops a browser that reports nothing for 30 s (browserNoActivityTimeout);
@@ -12,6 +12,10 @@ export const keepKarmaAlive = (tick: number): void => {
   karma?.info?.({ syncFuzzHeartbeat: tick });
 };
 
+export interface ShrinkOptions extends Pick<FuzzOptions, 'fileTransport'> {
+  maxRuns?: number;
+}
+
 /**
  * Delta debugging (ddmin) over steps, then a pass dropping single actions
  * and events. A candidate counts as failing only when `isSameFailure`
@@ -20,13 +24,13 @@ export const keepKarmaAlive = (tick: number): void => {
 export const shrinkTrace = async (
   steps: FuzzStep[],
   isSameFailure: (result: FuzzResult) => boolean,
-  maxRuns = 200,
+  { maxRuns = 200, fileTransport }: ShrinkOptions = {},
 ): Promise<FuzzStep[]> => {
   let runs = 0;
   const fails = async (candidate: FuzzStep[]): Promise<boolean> => {
     runs++;
     keepKarmaAlive(runs);
-    return isSameFailure(await runFuzz({ steps: candidate }));
+    return isSameFailure(await runFuzz({ steps: candidate, fileTransport }));
   };
 
   let current = steps;
@@ -51,13 +55,15 @@ export const shrinkTrace = async (
 
   // Then try each step without its action or one of its events.
   for (let i = 0; i < current.length && runs < maxRuns; i++) {
-    const { d, a, s, c, r, k } = current[i];
-    // A dialog answer (`k`) applies only to the step's sync, so it goes with it.
+    const { d, a, s, c, r, k, x } = current[i];
+    // A dialog answer (`k`) and a kill (`x`) apply only to the step's sync, so
+    // they go with it. The kill is tried first: one that survives is needed.
     const variants: [unknown, FuzzStep][] = [
-      [a, { d, s, c, r, k }],
+      [x, { d, a, s, c, r, k }],
+      [a, { d, s, c, r, k, x }],
       [s, { d, a, c, r }],
-      [c, { d, a, s, r, k }],
-      [r, { d, a, s, c, k }],
+      [c, { d, a, s, r, k, x }],
+      [r, { d, a, s, c, k, x }],
     ];
     for (const [dropped, simpler] of variants) {
       const { a: action, s: sync, c: compact, r: restart } = simpler;

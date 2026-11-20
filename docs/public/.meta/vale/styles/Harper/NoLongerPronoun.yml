@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's NoLongerPronoun: the pronoun comes first.
+#
+# Harper reorders the two, which a `sequence` cannot do, so each subject
+# pronoun gets its own swap.
+#
+# `I` is left out. "It is no longer I who live" is the emphatic construction
+# and correct as it stands, and Harper leaves it alone; none of the findings
+# in the corpus needs it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Put the subject before `no longer`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bno\s+longer\s+you\b': "you no longer"
+  '\bno\s+longer\s+we\b': "we no longer"
+  '\bno\s+longer\s+they\b': "they no longer"
+  '\bno\s+longer\s+he\b': "he no longer"
+  '\bno\s+longer\s+she\b': "she no longer"
+  '\bno\s+longer\s+it\b': "it no longer"

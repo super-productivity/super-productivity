@@ -97,3 +97,46 @@ describe('CaldavSyncAdapterService.createIssue', () => {
     expect(client.createTask$).not.toHaveBeenCalled();
   });
 });
+
+describe('CaldavSyncAdapterService.fetchIssue', () => {
+  let adapter: CaldavSyncAdapterService;
+  let client: jasmine.SpyObj<CaldavClientService>;
+
+  beforeEach(() => {
+    client = jasmine.createSpyObj('CaldavClientService', ['getById$']);
+    TestBed.configureTestingModule({
+      providers: [
+        CaldavSyncAdapterService,
+        { provide: CaldavClientService, useValue: client },
+      ],
+    });
+    adapter = TestBed.inject(CaldavSyncAdapterService);
+  });
+
+  it('returns the VTODO', async () => {
+    client.getById$.and.returnValue(
+      of({
+        id: 'uid-1',
+        completed: false,
+        item_url: 'https://cal.example.com/uid-1.ics',
+        summary: 'Buy milk',
+        labels: [],
+        etag_hash: 7,
+      }),
+    );
+
+    const issue = await adapter.fetchIssue('uid-1', BASE_CFG);
+
+    expect(issue['summary']).toBe('Buy milk');
+  });
+
+  // #11583: the push effect stays silent on an expected skip, so an edit of a
+  // task whose VTODO was deleted on the server stands without an error.
+  it('skips the push as expected when the VTODO is gone on the server', async () => {
+    client.getById$.and.returnValue(of(null));
+
+    await expectAsync(adapter.fetchIssue('uid-1', BASE_CFG)).toBeRejectedWith(
+      jasmine.objectContaining({ isExpectedSyncSkip: true }),
+    );
+  });
+});

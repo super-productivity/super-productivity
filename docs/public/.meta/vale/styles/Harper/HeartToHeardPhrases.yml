@@ -1,0 +1,22 @@
+---
+# Generated from Harper's HeartToHeardPhrases rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `heart` or `herd` to `heard` in common `have ... heard of/about` questions.
+extends: existence
+message: "Did you mean the verb `heard` (= past tense of `hear`)?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "heard"
+nonword: true
+tokens:
+  - "(?<=\\b(?:have|had|has)(?!\\s*\\n\\s*\\n)\\s+(?:n't)(?!\\s*\\n\\s*\\n)\\s+(?:they|she|you|he|it|we|I)(?!\\s*\\n\\s*\\n)\\s+)(?:heart|herd)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|from|with|for|in|of|on|to)\\b)"
+  - "(?<=\\b(?:haven't|hadn't|hasn't)(?!\\s*\\n\\s*\\n)\\s+(?:they|she|you|he|it|we|I)(?!\\s*\\n\\s*\\n)\\s+)(?:heart|herd)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|from|with|for|in|of|on|to)\\b)"
+  - "(?<=\\b(?:have|had|has)(?!\\s*\\n\\s*\\n)\\s+(?:they|she|you|he|it|we|I)(?!\\s*\\n\\s*\\n)\\s+)(?:heart|herd)(?=(?!\\s*\\n\\s*\\n)\\s+(?:about|from|with|for|in|of|on|to)\\b)"

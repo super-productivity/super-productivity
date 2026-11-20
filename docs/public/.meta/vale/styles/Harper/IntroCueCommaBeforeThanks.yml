@@ -1,0 +1,19 @@
+---
+# Generated from Harper's IntroCueCommaBeforeThanks rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Normalizes the common refusal phrase by inserting the missing comma.
+extends: existence
+message: "Set off `no` with a comma in the response phrase `no, thanks`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "no, thanks"
+tokens:
+  - "no(?!\\s*\\n\\s*\\n)\\s+thanks(?!['\\x{2019}]s\\b)"

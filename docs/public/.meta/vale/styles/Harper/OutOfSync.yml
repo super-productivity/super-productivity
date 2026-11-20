@@ -1,0 +1,20 @@
+---
+# Generated from Harper's OutOfSync rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `out of sink` to `out of sync` or `out of synch`.
+extends: existence
+message: "Did you mean `out of sync` or `out of synch`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "out of sync"
+    - "out of synch"
+tokens:
+  - "out(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+sink(?!['\\x{2019}]s\\b)"

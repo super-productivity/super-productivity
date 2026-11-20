@@ -1,0 +1,58 @@
+{
+  "TITLE": "Facturi",
+  "LOADING": "Se încarcă…",
+  "LIST": {
+    "EMPTY": "Nicio factură încă.",
+    "PRINT": "Tipărește / PDF",
+    "CSV": "CSV",
+    "DELETE": "Șterge",
+    "CONFIRM_DELETE": "Ștergi factura {{number}}? Orele ei vor conta din nou ca nefacturate."
+  },
+  "NEW": {
+    "TITLE": "Factură nouă",
+    "PROJECT": "Proiect",
+    "NO_PROJECTS": "Creează mai întâi un proiect. Fiecare proiect se facturează separat.",
+    "FROM": "De la",
+    "TO": "Până la",
+    "RATE": "Tarif orar",
+    "LANGUAGE": "Limba facturii",
+    "CLIENT": "Facturat către",
+    "CLIENT_HINT": "Numele și adresa clientului. Se reține pentru acest proiect.",
+    "INCLUDE": "Include",
+    "NO_HOURS": "Nicio oră nefacturată la acest proiect în această perioadă.",
+    "NUMBER": "Număr factură",
+    "ISSUE_DATE": "Data facturii",
+    "ISSUE": "Emite și tipărește",
+    "BLOCK": {
+      "PERIOD": "Alege datele De la și Până la; De la trebuie să fie prima.",
+      "LINES": "Bifează cel puțin o linie cu ore.",
+      "RATE": "Introdu un tarif orar.",
+      "NUMBER": "Introdu un număr de factură.",
+      "NUMBER_USED": "Acest număr de factură este deja folosit.",
+      "DATE": "Introdu data facturii."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Datele tale",
+    "SELLER": "Numele, adresa și codul tău fiscal",
+    "PAYMENT_NOTE": "Detalii de plată",
+    "PAYMENT_NOTE_HINT": "Date bancare sau condiții de plată, tipărite în partea de jos.",
+    "CURRENCY": "Codul monedei",
+    "TAX": "Taxă / TVA %",
+    "PAYMENT_DAYS": "Zile până la scadență",
+    "ROUNDING": "Rotunjește fiecare linie în sus la",
+    "ROUNDING_NONE": "Fără rotunjire",
+    "ROUNDING_MIN": "{{min}} minute",
+    "PREFIX": "Prefix număr factură",
+    "SAVE": "Salvează",
+    "SAVED": "Salvat."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Descriere",
+    "HOURS": "Ore",
+    "TOTAL": "Total"
+  },
+  "ERROR": {
+    "GENERIC": "Ceva nu a mers bine: {{error}}"
+  }
+}

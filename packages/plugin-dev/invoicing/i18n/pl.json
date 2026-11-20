@@ -1,0 +1,58 @@
+{
+  "TITLE": "Faktury",
+  "LOADING": "Wczytywanie…",
+  "LIST": {
+    "EMPTY": "Brak faktur.",
+    "PRINT": "Drukuj / PDF",
+    "CSV": "CSV",
+    "DELETE": "Usuń",
+    "CONFIRM_DELETE": "Usunąć fakturę {{number}}? Jej godziny znów będą liczone jako niezafakturowane."
+  },
+  "NEW": {
+    "TITLE": "Nowa faktura",
+    "PROJECT": "Projekt",
+    "NO_PROJECTS": "Najpierw utwórz projekt. Każdy projekt jest rozliczany osobno.",
+    "FROM": "Od",
+    "TO": "Do",
+    "RATE": "Stawka godzinowa",
+    "LANGUAGE": "Język faktury",
+    "CLIENT": "Nabywca",
+    "CLIENT_HINT": "Nazwa i adres klienta. Zapamiętane dla tego projektu.",
+    "INCLUDE": "Uwzględnij",
+    "NO_HOURS": "Brak niezafakturowanego czasu w tym projekcie w tym okresie.",
+    "NUMBER": "Numer faktury",
+    "ISSUE_DATE": "Data wystawienia",
+    "ISSUE": "Wystaw i drukuj",
+    "BLOCK": {
+      "PERIOD": "Wybierz daty Od i Do; data Od musi być wcześniejsza.",
+      "LINES": "Zaznacz co najmniej jedną pozycję z godzinami.",
+      "RATE": "Podaj stawkę godzinową.",
+      "NUMBER": "Podaj numer faktury.",
+      "NUMBER_USED": "Ten numer faktury jest już używany.",
+      "DATE": "Podaj datę wystawienia."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Twoje dane",
+    "SELLER": "Imię i nazwisko, adres i NIP",
+    "PAYMENT_NOTE": "Dane do płatności",
+    "PAYMENT_NOTE_HINT": "Dane bankowe lub warunki płatności, drukowane na dole.",
+    "CURRENCY": "Kod waluty",
+    "TAX": "Podatek / VAT %",
+    "PAYMENT_DAYS": "Dni do terminu płatności",
+    "ROUNDING": "Zaokrąglaj każdą pozycję w górę do",
+    "ROUNDING_NONE": "Bez zaokrąglania",
+    "ROUNDING_MIN": "{{min}} min",
+    "PREFIX": "Prefiks numeru faktury",
+    "SAVE": "Zapisz",
+    "SAVED": "Zapisano."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Opis",
+    "HOURS": "Godziny",
+    "TOTAL": "Razem"
+  },
+  "ERROR": {
+    "GENERIC": "Coś poszło nie tak: {{error}}"
+  }
+}

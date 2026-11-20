@@ -1,0 +1,44 @@
+---
+# Hand-written from Harper's ThenThan: `than` compares, `then` sequences.
+#
+# The generated rule was a `sequence` matching `tag: JJR|RBR` followed by
+# `then`, which is a faithful reading of Harper's chain and yet caught almost
+# nothing -- 12 missed findings, including "One was better then the other".
+#
+# The reason is worth recording, because it applies to every ported rule whose
+# trigger is a misspelling and whose match depends on a tag. `model: harper` is
+# not a tagger: it is a lexicon laid over prose's perceptron. Where the
+# dictionary lists one tag for a word it decides; where it lists several the
+# perceptron's answer stands, because context is what tells them apart. Harper's
+# dictionary gives `better` three readings -- NN, VB, JJR -- so the perceptron
+# decides, and the perceptron reads the following word:
+#
+#   "better than the other"   ->  better/JJR    the rule would fire
+#   "better then the other"   ->  better/NN     the rule does not
+#
+# The misspelling the rule exists to catch is what stops it matching. Naming the
+# comparatives outright sidesteps the tagger, which is the only reliable fix
+# short of pruning the dictionary.
+#
+# Bare `-er` is deliberately not used: "other", "under", "never", "either" and
+# "computer" would all qualify.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Use `than` for comparisons."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+  params:
+    - "than"
+tokens:
+  - '(?<=\b(?:better|worse|worst|bigger|smaller|larger|faster|slower|higher|lower|greater|lesser|older|younger|newer|longer|shorter|cheaper|costlier|safer|stronger|weaker|closer|further|farther|sooner|later|earlier|deeper|shallower|wider|narrower|richer|poorer|happier|simpler|easier|harder|cleaner|dirtier|nicer|warmer|cooler|colder|hotter|brighter|darker|heavier|lighter|quicker|slimmer|taller|thicker|thinner|smoother|rougher|stranger|rarer|busier|louder|quieter|softer|harsher|milder|denser|sparser|broader|tighter|looser|fewer|more|less)\s)then\b'
+  - '(?<=\b(?:more|less)\s\w+\s)then\b'
+  - '(?<=\brather\s)then\b'
+  - '(?<=\bother\s)then\b'
+  - '(?<=\b(?:crazier|stupider|dumber|smarter|kinder|meaner|prouder|calmer|braver|wilder|milder|humbler|nobler|purer|rarer|ruder|safer|saner|sorer|surer|truer|vaguer|wiser|worthier|angrier|hungrier|thirstier|sleepier|lonelier|luckier|lazier|healthier|wealthier|friendlier|uglier|prettier|scarier|tastier|trickier|riskier|steadier|readier|heavier|noisier|dirtier|emptier|likelier|unlikelier|said)\s)then\b'

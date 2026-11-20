@@ -10,6 +10,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../task.service';
 import { MatDialog } from '@angular/material/dialog';
 import { WorklogService } from '../../worklog/worklog.service';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogWorklogExportComponent } from '../../worklog/dialog-worklog-export/dialog-worklog-export.component';
 import { Project, RoundTimeOption } from '../../project/project.model';
 import { Task } from '../task.model';

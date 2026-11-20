@@ -1,0 +1,20 @@
+---
+# Generated from Harper's OnceInAWhile rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects two common malapropisms of `once in a while`.
+extends: existence
+message: "The correct idiom is `once in a while`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "once in a while"
+tokens:
+  - "once(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+a(?!\\s*\\n\\s*\\n)\\s+while(?!['\\x{2019}]s\\b)"
+  - "once(?!\\s*\\n\\s*\\n)\\s+a(?!\\s*\\n\\s*\\n)\\s+while(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's InsteadOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the archaic or mistaken separation `in stead of` to `instead of` in everyday usage.
+extends: existence
+message: "Use the modern single word `instead of` to indicate a replacement."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "instead of"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+stead(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"
