@@ -21,7 +21,10 @@ describe('PluginIndexComponent', () => {
   let pluginService: jasmine.SpyObj<PluginService>;
   let pluginBridge: jasmine.SpyObj<PluginBridgeService>;
 
-  const setup = async (): Promise<void> => {
+  const setup = async (taskDetailContext?: {
+    taskId: string;
+    blockId: string;
+  }): Promise<void> => {
     pluginService = jasmine.createSpyObj<PluginService>('PluginService', [
       'isInitialized',
       'initializePlugins',
@@ -76,6 +79,9 @@ describe('PluginIndexComponent', () => {
     fixture.componentRef.setInput('directPluginId', PLUGIN_ID);
     fixture.componentRef.setInput('showFullUI', false);
     fixture.componentRef.setInput('useSidePanelConfig', true);
+    if (taskDetailContext) {
+      fixture.componentRef.setInput('taskDetailContext', taskDetailContext);
+    }
     // contentWindow only exists for a connected iframe.
     document.body.appendChild(fixture.nativeElement);
 
@@ -95,6 +101,14 @@ describe('PluginIndexComponent', () => {
     await setup();
     expect(getIframe()).toBeTruthy();
     expect(component.isLoading()).toBe(false);
+    expect(getIframe().srcdoc).not.toContain('"taskDetail":');
+  });
+
+  it('sets the task context on the embedded iframe', async () => {
+    await setup({ taskId: 'task<1', blockId: 'summary' });
+    const match = getIframe().srcdoc.match(/"taskDetail":(\{[^}]+\})/);
+    expect(match?.[1]).toContain('\\u003c');
+    expect(JSON.parse(match![1])).toEqual({ taskId: 'task<1', blockId: 'summary' });
   });
 
   // A theme switch between building srcdoc and its load hits about:blank, so

@@ -13,6 +13,7 @@ import {
 import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
+import type { PluginTaskDetailContext } from '@super-productivity/plugin-api';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { ANI_ENTER_TIMING } from '../../../ui/animations/animation.const';
 import { PAGE_ENTER_FROM } from '../../../ui/animations/warp-route';
@@ -81,6 +82,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   // Set true when embedding the component repeatedly (e.g. work-view embed
   // toggled on/off), so the plugin keeps its registrations across mounts.
   @Input() skipCleanupOnDestroy: boolean = false;
+  @Input() taskDetailContext?: PluginTaskDetailContext;
 
   private readonly _route = inject(ActivatedRoute);
   private readonly _router = inject(Router);
@@ -281,7 +283,9 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       pluginId,
       manifest: plugin.manifest,
       indexHtml: indexContent,
-      baseCfg,
+      baseCfg: this.taskDetailContext
+        ? { ...baseCfg, taskDetail: this.taskDetailContext }
+        : baseCfg,
       pluginBridge: this._pluginBridge,
       bridgeToken: this._createBridgeToken(),
       bridgeGeneration: this._pluginService.getPluginIframeGeneration(pluginId),
@@ -364,7 +368,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     // Clear iframe reference from cleanup service (but don't remove from DOM).
     // Skip when embedding (work-view, side panel) so the plugin keeps its hook
     // and button registrations across embed mount/unmount cycles.
-    if (currentPluginId && !this.skipCleanupOnDestroy) {
+    if (currentPluginId && !this.skipCleanupOnDestroy && !this.taskDetailContext) {
       this._cleanupService.cleanupPlugin(currentPluginId);
       PluginLog.log(`Cleaned up plugin references for: ${currentPluginId}`);
     }
@@ -383,7 +387,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     // which uses _getPluginIframeWindow()): this fires on the iframe's `load`
     // event, by which point the ViewChild is assigned, and registration is not
     // race-sensitive. Do not "unify" this with the listener's DOM lookup.
-    if (this.iframeRef?.nativeElement && this.pluginId()) {
+    if (this.iframeRef?.nativeElement && this.pluginId() && !this.taskDetailContext) {
       this._cleanupService.registerIframe(this.pluginId(), this.iframeRef.nativeElement);
     }
     // A theme switch before load reached the initial about:blank document

@@ -647,6 +647,33 @@ most 80 characters; add a short plugin-specific prefix yourself when disambiguat
 needed. Re-registering the same `id` replaces the previous entry, and all entries are
 removed when the plugin unloads.
 
+#### Task Detail Blocks
+
+Register a block in `plugin.js`. Include `index.html` and set `"iFrame": true`
+in the manifest. Set `"isSkipMenuEntry": true` if the plugin has no standalone
+view. Feature-detect the registration method when supporting older versions.
+
+```javascript
+PluginAPI.registerTaskDetailBlock?.({ id: 'summary', label: 'Task summary' });
+```
+
+In `index.html`, use the task ID supplied to this iframe.
+
+```html
+<p id="summary"></p>
+<script>
+  const context = PluginAPI.cfg.taskDetail;
+  if (context?.blockId === 'summary') {
+    document.getElementById('summary').textContent = `Task ID: ${context.taskId}`;
+  }
+</script>
+```
+
+The section appears after tags and starts collapsed. Opening it mounts an iframe.
+Closing it or switching tasks destroys the iframe. The registration lasts
+until the plugin unloads. Reusing an ID within a plugin replaces its label.
+Inside a task detail block, `getConfig()` reads that plugin's saved settings.
+
 #### Side Panel Button
 
 ```javascript
