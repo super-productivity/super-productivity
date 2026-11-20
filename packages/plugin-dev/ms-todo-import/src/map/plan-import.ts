@@ -13,9 +13,9 @@ export const BATCH_CHUNK_SIZE = 50;
  * references with this prefix; anything else orphans (= deletes) sub-tasks. */
 const tempId = (extId: string): string => `temp-${extId}`;
 
-/** SP's built-in Eisenhower tag; reused by title (`ensureTags` matches
- * case-insensitively), so starred tasks land in the existing quadrant. */
-const IMPORTANT_TAG_TITLE = 'important';
+/** Title of SP's built-in Eisenhower tag. `ensureTags` reuses that tag by its
+ * id (it may have been renamed), so starred tasks land in the existing quadrant. */
+export const IMPORTANT_TAG_TITLE = 'important';
 
 export interface TaskFollowUp {
   tempId: string;

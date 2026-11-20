@@ -57,4 +57,82 @@ describe('loadGraphData', () => {
     );
     expect(urls).toEqual([LISTS]);
   });
+
+  describe('transient failures', () => {
+    // the host error as it arrives through the iframe bridge: message only
+    const bridgeError = (status: number): Error =>
+      new Error(`[PluginHttp] Request failed with status ${status}`);
+
+    /** Fails the lists request with `failures`, then serves an empty account. */
+    const flakyApi = (failures: unknown[]) => {
+      const remaining = [...failures];
+      const request = jest.fn(async (url: string) => {
+        if (remaining.length) {
+          throw remaining.shift();
+        }
+        if (url !== LISTS) {
+          throw new Error(`unexpected ${url}`);
+        }
+        return { value: [] };
+      });
+      return {
+        api: { request } as unknown as Parameters<typeof loadGraphData>[0],
+        request,
+      };
+    };
+
+    it('retries 429 and 503 with a growing backoff, then succeeds', async () => {
+      const { api, request } = flakyApi([bridgeError(429), bridgeError(503)]);
+      const sleep = jest.fn(async () => {});
+
+      await expect(loadGraphData(api, 'tok', { sleep })).resolves.toEqual({
+        lists: [],
+        tasksByListId: {},
+      });
+      expect(request).toHaveBeenCalledTimes(3);
+      expect(sleep.mock.calls).toEqual([[2000], [4000]]);
+    });
+
+    it('reads the status from an in-process error object too', async () => {
+      const inProcess = Object.assign(new Error('Gateway Timeout'), { status: 504 });
+      const { api, request } = flakyApi([inProcess]);
+
+      await loadGraphData(api, 'tok', { sleep: async () => {} });
+      expect(request).toHaveBeenCalledTimes(2);
+    });
+
+    it('gives up after 3 retries and surfaces the last error', async () => {
+      const { api, request } = flakyApi([
+        bridgeError(429),
+        bridgeError(429),
+        bridgeError(429),
+        bridgeError(429),
+      ]);
+      const sleep = jest.fn(async () => {});
+
+      await expect(loadGraphData(api, 'tok', { sleep })).rejects.toThrow('status 429');
+      expect(request).toHaveBeenCalledTimes(4);
+      expect(sleep.mock.calls).toEqual([[2000], [4000], [8000]]);
+    });
+
+    it.each([401, 403, 404, 500])('does not retry status %i', async (status) => {
+      const { api, request } = flakyApi([bridgeError(status)]);
+      const sleep = jest.fn(async () => {});
+
+      await expect(loadGraphData(api, 'tok', { sleep })).rejects.toThrow(
+        `status ${status}`,
+      );
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(sleep).not.toHaveBeenCalled();
+    });
+
+    it('does not retry an error without a status', async () => {
+      const { api, request } = flakyApi([new Error('[PluginHttp] request failed: x')]);
+
+      await expect(loadGraphData(api, 'tok', { sleep: async () => {} })).rejects.toThrow(
+        'request failed',
+      );
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+  });
 });
