@@ -895,6 +895,28 @@ describe('conflict-field-patch.util', () => {
         ).toEqual({ isDone: true, doneOn: 5 });
       });
 
+      it('re-sends only declared clears, not undefined keys of a row', () => {
+        // the re-send lists its undefined keys as clears: an accidental
+        // `parentId: undefined` would detach the task on every device
+        const row = ownRow(
+          { id: 'task-1', isDone: true, parentId: undefined, notes: undefined },
+          {
+            payload: {
+              actionPayload: { id: 'task-1', isDone: true, parentId: undefined },
+              entityChanges: [],
+              lwwUpdateMode: 'patch',
+              clearedFields: ['notes'],
+            },
+          },
+        );
+        const fields = survivingLocalFields(
+          conflictOf([row], [lwwRow]),
+          { id: 'task-1', title: 'row', isDone: true, doneOn: 5 },
+          'task',
+        );
+        expect(Object.keys(fields ?? {}).sort()).toEqual(['doneOn', 'isDone', 'notes']);
+      });
+
       it('re-emits nothing for a field the winner overwrote', () => {
         const row = ownRow({ id: 'task-1', title: 'mine' });
         expect(

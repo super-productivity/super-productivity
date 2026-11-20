@@ -109,6 +109,12 @@ const isEntityRow = (op: Operation, entityId: string): boolean =>
   !isMultiEntityOperation(op) &&
   isLwwUpdatePayload(op.payload);
 
+/** The fields a row declares cleared (JSON drops undefined keys). */
+const clearedFieldsOf = (op: Operation): string[] =>
+  isLwwUpdatePayload(op.payload) && Array.isArray(op.payload.clearedFields)
+    ? op.payload.clearedFields
+    : [];
+
 /**
  * The top-level fields a row writes or clears: a `'patch'` row's keys, or
  * undefined for a `'replace'` row, which `setOne` applies to every field.
@@ -120,7 +126,7 @@ const rowFields = (op: Operation): string[] | undefined => {
   }
   return [
     ...Object.keys(payload.actionPayload).filter((key) => key !== 'id'),
-    ...(Array.isArray(payload.clearedFields) ? payload.clearedFields : []),
+    ...clearedFieldsOf(op),
   ];
 };
 
@@ -563,7 +569,8 @@ export const supersededPatchFields = (
  * the fields to re-emit, read from state AFTER they applied: those still
  * holding the local ops' values survived and must upload; the winners
  * overwrote the others, and re-sending those would only echo them. Undefined
- * when nothing survived, a winner deletes (whole-entity path), or the local side is not readable (`supersededPatchFields`).
+ * when nothing survived, a winner deletes (whole-entity path), or the local
+ * side is not readable (`supersededPatchFields`).
  * A local time delta keeps the plain path (#10408).
  *
  * The local side may hold this device's own pending `'patch'` rows: re-sends
@@ -599,8 +606,9 @@ export const survivingLocalFields = (
 
 /**
  * The fields the local ops wrote, in op order, reading an own `'patch'` row
- * by its keys and clears. Undefined for a `'replace'` row or a row that clears
- * a reminder field (as `supersededPatchFields` refuses such clears).
+ * by its defined keys and declared clears. Undefined for a `'replace'` row or
+ * a row that clears a reminder field (as `supersededPatchFields` refuses such
+ * clears).
  */
 const writtenByLocalSide = (
   ops: Operation[],
@@ -613,8 +621,12 @@ const writtenByLocalSide = (
       Object.assign(written, mergeChangedFields([op], payloadKey, entityId));
       continue;
     }
-    const fields = rowFields(op);
     const values = extractActionPayload(op.payload);
+    // The re-send lists its undefined keys as clears; an undeclared one is an
+    // accident of the producer (e.g. `parentId` on a root task), not a clear.
+    const fields = rowFields(op)?.filter(
+      (field) => values[field] !== undefined || clearedFieldsOf(op).includes(field),
+    );
     if (!fields) return undefined;
     for (const field of fields) written[field] = values[field];
     if (
