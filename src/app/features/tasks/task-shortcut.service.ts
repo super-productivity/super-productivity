@@ -459,13 +459,33 @@ export class TaskShortcutService {
     // A shortcut on a focused row that is *not* part of the selection acts on
     // that row alone (file-manager rule): drop the selection and fall through.
     if (focusedTaskId && !this._multiSelect.has(focusedTaskId)) {
-      if (this._isBulkShortcut(ev, keys)) {
+      if (this._findBulkHandler(ev, keys, focusedTaskId) || isNativeContextMenuKey(ev)) {
         this._multiSelect.clear();
       }
       return false;
     }
 
-    // Bulk allowlist. Everything else keeps acting on the focused task only.
+    const bulkHandler = this._findBulkHandler(ev, keys, focusedTaskId);
+    if (bulkHandler) {
+      bulkHandler();
+      ev.preventDefault();
+      ev.stopPropagation();
+      return true;
+    }
+    if (isNativeContextMenuKey(ev)) {
+      this._requestBulkMenu(focusedTaskId);
+      ev.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
+  /** Bulk allowlist: only these shortcuts act on the whole selection. */
+  private _findBulkHandler(
+    ev: KeyboardEvent,
+    keys: KeyboardConfig,
+    focusedTaskId: TaskId | null,
+  ): (() => unknown) | undefined {
     const bulkHandlers: [string | null | undefined, () => unknown][] = [
       [keys.taskToggleDone, () => this._bulkActions.toggleDone()],
       [keys.taskDelete, () => this._bulkActions.deleteSelected()],
@@ -482,44 +502,13 @@ export class TaskShortcutService {
       ],
       [keys.taskOpenContextMenu, () => this._requestBulkMenu(focusedTaskId)],
     ];
-    for (const [combo, handler] of bulkHandlers) {
-      if (combo && checkKeyCombo(ev, combo)) {
-        handler();
-        ev.preventDefault();
-        ev.stopPropagation();
-        return true;
-      }
-    }
-    if (isNativeContextMenuKey(ev)) {
-      this._requestBulkMenu(focusedTaskId);
-      ev.preventDefault();
-      return true;
-    }
-    return false;
+    return bulkHandlers.find(([combo]) => combo && checkKeyCombo(ev, combo))?.[1];
   }
 
   /** True when any configured combo (task, global or plugin) matches `ev`. */
   private _isAnyConfiguredCombo(ev: KeyboardEvent, keys: KeyboardConfig): boolean {
     return Object.values(keys).some(
       (combo) => typeof combo === 'string' && !!combo && checkKeyCombo(ev, combo),
-    );
-  }
-
-  private _isBulkShortcut(ev: KeyboardEvent, keys: KeyboardConfig): boolean {
-    return (
-      [
-        keys.taskToggleDone,
-        keys.taskDelete,
-        keys.taskSchedule,
-        keys.taskScheduleDeadline,
-        keys.taskScheduleToday,
-        keys.taskUnschedule,
-        keys.moveToBacklog,
-        keys.taskMoveToProject,
-        keys.taskEditTags,
-        keys.taskOpenEstimationDialog,
-        keys.taskOpenContextMenu,
-      ].some((combo) => !!combo && checkKeyCombo(ev, combo)) || isNativeContextMenuKey(ev)
     );
   }
 
