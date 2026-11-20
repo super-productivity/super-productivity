@@ -3,7 +3,6 @@ import { createEffect } from '@ngrx/effects';
 import {
   concatMap,
   delay,
-  distinctUntilChanged,
   exhaustMap,
   filter,
   first,
@@ -85,26 +84,19 @@ export class SyncEffects {
   );
 
   /**
-   * Holds the quit while sync is enabled, to persist tracked time and sync.
+   * Holds the quit to persist tracked time and, when enabled, to sync.
    * Kept out of the Electron-only effect above so specs can drive it.
    */
   _syncBeforeQuit$(): Observable<void> {
     return this._dataInitStateService.isAllDataLoadedInitially$.pipe(
-      // Scheduled under "Only sync manually" too: the hold also persists the
-      // tracked time that is only written in batches. Without it the main
-      // process quits at once and that time is lost; the sync itself is
-      // skipped on request instead (#11831).
-      concatMap(() => this._syncWrapperService.isEnabledAndReady$),
-      distinctUntilChanged(),
-      tap((isEnabled) =>
-        isEnabled
-          ? this._execBeforeCloseService.schedule(SYNC_BEFORE_CLOSE_ID)
-          : this._execBeforeCloseService.unschedule(SYNC_BEFORE_CLOSE_ID),
-      ),
-      switchMap((isEnabled) =>
-        isEnabled
-          ? this._syncBeforeQuitOnRequest$(this._execBeforeCloseService.onBeforeClose$)
-          : EMPTY,
+      take(1),
+      // Scheduled with sync off and under "Only sync manually" too: the hold
+      // also persists the task and counter time that is only written in
+      // batches. Without it the main process quits at once and that time is
+      // lost; the sync itself is skipped on request instead (#11831).
+      tap(() => this._execBeforeCloseService.schedule(SYNC_BEFORE_CLOSE_ID)),
+      switchMap(() =>
+        this._syncBeforeQuitOnRequest$(this._execBeforeCloseService.onBeforeClose$),
       ),
     );
   }
@@ -138,10 +130,13 @@ export class SyncEffects {
           // because the op-log persistence effects schedule their writes in
           // the same tick; we just need to let them execute.
           await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          const isEnabled = await firstValueFrom(
+            this._syncWrapperService.isEnabledAndReady$,
+          );
           const syncCfg = await firstValueFrom(this._syncWrapperService.syncCfg$);
-          if (syncCfg?.isManualSyncOnly) {
-            // "Only sync manually": no sync on quit (#11831), but wait until
-            // the time flushed above is written, or the quit drops it.
+          if (!isEnabled || syncCfg?.isManualSyncOnly) {
+            // Sync off or "Only sync manually": no sync on quit (#11831), but
+            // wait until the time flushed above is written, or the quit drops it.
             await this._writeFlushService.flushPendingWrites().catch((e: unknown) => {
               SyncLog.err(e);
             });

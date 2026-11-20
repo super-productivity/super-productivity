@@ -44,6 +44,7 @@ describe('TaskRepeatCfgFormConfig', () => {
     expect(keys(TASK_REPEAT_CFG_ADVANCED_FORM_CFG)).toEqual([
       'priority',
       'defaultEstimate',
+      'deadlineOffsetDays',
       'notes',
       'shouldInheritSubtasks',
       'disableAutoUpdateSubtasks',
