@@ -23,6 +23,7 @@ const PLUGIN_API_MEMBERS: Record<keyof PluginAPIInterface, true> = {
   closeWorkContextView: true,
   onReady: true,
   onUnload: true,
+  onBeforeAppClose: true,
   onMessage: true,
   showSnack: true,
   notify: true,
