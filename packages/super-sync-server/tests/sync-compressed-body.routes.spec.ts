@@ -705,6 +705,10 @@ describe('Sync compressed body routes', () => {
     });
 
     expect(response.statusCode).toBe(413);
+    expect(response.json()).toMatchObject({
+      code: 'FST_ERR_CTP_BODY_TOO_LARGE',
+      errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    });
     expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
   });
 
@@ -1119,7 +1123,85 @@ describe('Sync compressed body routes', () => {
     });
 
     expect(response.statusCode).toBe(413);
+    // #11672: the client keeps a full-state op pending on an uncoded 413 (it
+    // could be a reverse proxy's), so the server's own limit must be coded.
+    expect(response.json()).toMatchObject({
+      code: 'FST_ERR_CTP_BODY_TOO_LARGE',
+      errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    });
     expect(mocks.syncService.uploadOps).not.toHaveBeenCalled();
+  });
+
+  it('should send PAYLOAD_TOO_LARGE when a compressed snapshot exceeds the limit', async () => {
+    // Only the base64 transport lets more than 30 MiB of gzip bytes past the raw
+    // body limit; the size check runs before gunzip, so the bytes need not be gzip.
+    const base64Payload = Buffer.alloc(30 * MiB + 1).toString('base64');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+        'content-encoding': 'gzip',
+        'content-transfer-encoding': 'base64',
+      },
+      payload: base64Payload,
+    });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toEqual({
+      error: 'Compressed payload too large',
+      errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    });
+    expect(mocks.syncService.cacheSnapshotIfReplayable).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('should send PAYLOAD_TOO_LARGE when a decompressed snapshot exceeds the limit', async () => {
+    const compressedPayload = await gzipAsync(Buffer.alloc(60 * MiB + 1, 0x20));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+        'content-encoding': 'gzip',
+      },
+      payload: compressedPayload,
+    });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toEqual({
+      error: 'Decompressed payload too large',
+      errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE,
+    });
+    expect(mocks.syncService.cacheSnapshotIfReplayable).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('should leave non-body-limit errors to the server-wide error handler', async () => {
+    const parentApp = Fastify();
+    const parentHandler = vi.fn((error: { statusCode?: number }, _req, reply) =>
+      reply.status(error.statusCode ?? 500).send({ handledBy: 'parent' }),
+    );
+    parentApp.setErrorHandler(parentHandler);
+    await parentApp.register(syncRoutes, { prefix: '/api/sync' });
+
+    const response = await parentApp.inject({
+      method: 'POST',
+      url: '/api/sync/snapshot',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+        'content-encoding': 'br',
+      },
+      payload: '{}',
+    });
+    await parentApp.close();
+
+    expect(response.statusCode).toBe(415);
+    expect(response.json()).toEqual({ handledBy: 'parent' });
+    expect(parentHandler).toHaveBeenCalledTimes(1);
   });
 
   it('should preserve the invalid gzip route response', async () => {

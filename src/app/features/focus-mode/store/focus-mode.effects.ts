@@ -29,6 +29,7 @@ import {
 } from '../../../util/white-noise';
 import { startLoopingAlarm, stopLoopingAlarm } from '../../../util/looping-alarm';
 import { FocusModeLocalSettingsService } from '../../config/focus-mode-local-settings.service';
+import { UiHelperService } from '../../ui-helper/ui-helper.service';
 import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { setCurrentTask, unsetCurrentTask } from '../../tasks/store/task.actions';
 import {
@@ -81,6 +82,7 @@ export class FocusModeEffects {
   private isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
   private isIosNative = inject(CapacitorPlatformService).isIOS();
   private focusModeLocalSettingsService = inject(FocusModeLocalSettingsService);
+  private _uiHelperService = inject(UiHelperService);
   private _breakEndAlarm: Promise<number> | null = null;
 
   // Sync: When tracking starts → resume/skip-break or auto-spawn a new session.
@@ -1028,10 +1030,17 @@ export class FocusModeEffects {
       playSound(SESSION_DONE_SOUND, soundVolume);
     }
 
-    // Flash instead of focusing the window so a session or break end doesn't
-    // steal keyboard focus from whatever the user is working in (#10476)
+    // Flash by default so a session or break end doesn't steal keyboard focus
+    // from whatever the user is working in (#10476). Users who miss the flash
+    // can opt into raising the window (#11094). The delayed raise keeps
+    // keystrokes typed in another app out of SP (#5762); isReminder gets past
+    // Windows' focus-stealing prevention (#10410).
+    // The flash stays on as a fallback where the OS refuses the raise.
     if (this._isElectron) {
       window.ea.flashFrame();
+      if (this.focusModeLocalSettingsService.settings().isFocusWindowOnSessionEnd) {
+        this._uiHelperService.focusAppAfterNotification({ isReminder: true });
+      }
       window.ea.setProgressBar({
         progress: 1,
         progressBarMode: isHideBar ? 'none' : 'normal',

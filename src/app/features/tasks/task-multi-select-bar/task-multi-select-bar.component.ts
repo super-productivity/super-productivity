@@ -28,7 +28,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { getPluralKey } from '../../../util/get-plural-key';
 import { T } from '../../../t.const';
-import { TaskMultiSelectService } from '../task-multi-select.service';
+import { BulkSubmenu, TaskMultiSelectService } from '../task-multi-select.service';
 import { TaskBulkActionService } from '../task-bulk-action.service';
 import { TaskFocusService } from '../task-focus.service';
 import { ProjectService } from '../../project/project.service';
@@ -133,6 +133,13 @@ export class TaskMultiSelectBarComponent {
   readonly menuPosition = signal<{ x: number; y: number }>({ x: 0, y: 0 });
   readonly positionedTrigger = viewChild('positionedTrigger', { read: MatMenuTrigger });
   readonly actionsTrigger = viewChild('actionsTrigger', { read: MatMenuTrigger });
+  private readonly _estimateTrigger = viewChild('estimateTrigger', {
+    read: MatMenuTrigger,
+  });
+  private readonly _tagTrigger = viewChild('tagTrigger', { read: MatMenuTrigger });
+  private readonly _projectTrigger = viewChild('projectTrigger', {
+    read: MatMenuTrigger,
+  });
 
   constructor() {
     // Lifecycle of the selection: it belongs to one view, so it clears on
@@ -160,8 +167,20 @@ export class TaskMultiSelectBarComponent {
       // Let the trigger element move to its new position first; a clear in
       // between (Esc) must not open an empty menu.
       setTimeout(() => {
-        if (this.multiSelect.isActive()) {
-          this.positionedTrigger()?.openMenu();
+        if (!this.multiSelect.isActive()) {
+          return;
+        }
+        this.positionedTrigger()?.openMenu();
+        // A submenu shortcut (tags, project, estimate) goes straight to that
+        // submenu, as it does for a single task. If the selection can't use it
+        // (no trigger rendered), the bulk menu stays open instead.
+        if (request.submenu) {
+          const submenuTriggers: Record<BulkSubmenu, MatMenuTrigger | undefined> = {
+            estimate: this._estimateTrigger(),
+            tags: this._tagTrigger(),
+            project: this._projectTrigger(),
+          };
+          submenuTriggers[request.submenu]?.openMenu();
         }
       });
     });

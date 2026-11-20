@@ -43,10 +43,16 @@
   },
   {
     "name": "QuestArc",
-    "shortDescription": "Turn your workflow into an adventure! Gamify your tasks with Atomic Habit quests, epic boss fights, earnable badges, and a customizable hero profile.",
-    "url": "https://codeberg.org/Nexumia/QuestArc",
+    "shortDescription": "Habits as journeys: walk a path of small habit steps.",
+    "url": "https://github.com/nexumia-de/quest-arc",
     "author": "Nexumia",
-    "authorUrl": "https://codeberg.org/Nexumia"
+    "authorUrl": "https://github.com/nexumia-de",
+    "id": "questarc",
+    "release": {
+      "version": "4.3.1",
+      "downloadUrl": "https://github.com/nexumia-de/quest-arc/releases/download/v4.3.1/questarc-4.3.1.zip",
+      "sha256": "5d414d6124fb0ab1396d02e19470fe50249b64637f9edd4a8e456b71303a1884"
+    }
   },
   {
     "name": "AutoPlan",
