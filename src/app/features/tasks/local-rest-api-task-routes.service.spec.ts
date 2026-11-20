@@ -1327,6 +1327,17 @@ describe('LocalRestApiTaskRoutesService', () => {
           } as unknown as Partial<Task>);
         });
 
+        it('should unplan a task with an empty dueDay', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { dueDay: '' } }),
+          );
+
+          expect(response.status).toBe(200);
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            dueDay: null,
+          } as unknown as Partial<Task>);
+        });
+
         for (const dueDay of ['tomorrow', '2026-02-30', '13/05/2026']) {
           it(`should reject the dueDay "${dueDay}"`, async () => {
             expectInvalidDueDay(

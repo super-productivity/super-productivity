@@ -78,6 +78,11 @@ const pickAllowedFields = (
       result[key] = body[key];
     }
   }
+  // An empty dueDay is no date, so it removes the planned day like null
+  // instead of being stored.
+  if (result.dueDay === '') {
+    result.dueDay = null;
+  }
   return result as Partial<WritableTaskFields>;
 };
 
@@ -146,7 +151,7 @@ const hasOwn = (value: object, key: string): boolean =>
 const validateDateFields = (fields: Partial<WritableTaskFields>): string | undefined => {
   // A stored dueDay that is no date shows as "planned for -/-" (#6908) and
   // data repair has to clear it.
-  if (fields.dueDay && !isValidDBDateStr(fields.dueDay)) {
+  if (typeof fields.dueDay === 'string' && !isValidDBDateStr(fields.dueDay)) {
     return 'dueDay must be a valid YYYY-MM-DD date';
   }
   if (fields.deadlineDay != null && fields.deadlineWithTime != null) {
