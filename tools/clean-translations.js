@@ -28,7 +28,8 @@ const CLDR_PLURAL_CATEGORIES = new Set(['ZERO', 'ONE', 'TWO', 'FEW', 'MANY', 'OT
 // True for e.g. `F.SCHEDULE.MORE_EVENTS.FEW` when en.json has
 // `F.SCHEDULE.MORE_EVENTS.OTHER`, i.e. the string is still in use as a plural
 // and this is one of its forms. Requiring the parent's OTHER (every plural has
-// it) keeps a stale `X.ONE` beside a non-plural `X.OTHER` key from surviving.
+// it) rather than any key under the parent drops plural-looking leftovers in
+// namespaces that hold no plural.
 function isLocaleOnlyPluralForm(fullKey, validKeys) {
   const lastDot = fullKey.lastIndexOf('.');
   if (lastDot === -1) return false;
