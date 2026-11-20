@@ -407,6 +407,43 @@ describe('TaskMultiDragService', () => {
         expect(service.ids()).toEqual(['s', 'b', 'a']);
         expect(service.canDrop('PARENT', 'UNDONE')).toBeTrue();
       });
+
+      it('refuses a Today section, as a single subtask drag does', () => {
+        service.start(tasks()['a']);
+        expect(service.ids()).toEqual(['s', 'b', 'a']);
+        expect(service.canDrop('PARENT', 'focus')).toBeFalse();
+        expect(service.canDrop('PARENT', 'UNDONE')).toBeTrue();
+      });
+    });
+
+    describe('with an overdue subtask nested under a parent due today', () => {
+      beforeEach(() => {
+        // The overdue list shows `n` on its own, but in the main list it renders
+        // nested under its parent row `a`.
+        tasks.update((value) => ({ ...value, n: task('n', { parentId: 'a' }) }));
+        overdue.set([task('n', { parentId: 'a' })]);
+        selection.toggle('a');
+        selection.toggle('b');
+        selection.toggle('n');
+      });
+
+      it('keeps the nested subtask out of the group', async () => {
+        service.start(tasks()['a']);
+        expect(service.ids()).toEqual(['b', 'a']);
+        expect(service.selectionSize()).toBe(2);
+
+        await service.drop('UNDONE', 'a', ['c', 'a']);
+        const actions = dispatch.calls.allArgs().map(([action]) => action);
+        expect(actions.map((action) => action.type)).not.toContain(
+          TaskSharedActions.planTasksForToday.type,
+        );
+        expect(actions.map((action) => action.taskId)).toEqual(['b', 'a']);
+      });
+
+      it('does not start a group from the nested subtask', () => {
+        service.start(tasks()['n']);
+        expect(service.ids()).toEqual([]);
+      });
     });
 
     it('stops watching the undone list when the drag is cleared', () => {
