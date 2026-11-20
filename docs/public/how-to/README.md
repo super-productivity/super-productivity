@@ -1,10 +1,10 @@
 ---
-title: How-to guides
-type: index
+title: Work with tasks
+type: how-to
 domain: super-productivity
 ---
 
-# How-to guides
+# Work with tasks
 
 - [Complete tasks from global search](complete-tasks-from-search.md)
 
