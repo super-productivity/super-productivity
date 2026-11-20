@@ -44,8 +44,8 @@
 
 1. **Capture it.** Type `Call Anna @tomorrow 3pm` and the date is set. Pull in issues assigned to you from Jira, GitHub, GitLab and more.
 2. **Plan your day.** Pick today's tasks and see them on the schedule, next to your calendar events.
-3. **Focus.** Start a Pomodoro, Flowtime or countdown session. Time is tracked on the task, and a break reminder tells you when to step away.
-4. **Finish the day.** See what you got done, then export a timesheet or send worklogs to Jira, GitLab, OpenProject or Redmine.
+3. **Focus.** Pick a task and start a Pomodoro, Flowtime or countdown session. Time is tracked on it, and a break reminder tells you when to step away.
+4. **Finish the day.** Review what you got done, then log it: export a timesheet or send worklogs to Jira, GitLab, OpenProject or Redmine.
 
 Built for one person's focused work, not team management. Your data stays on your device unless you choose to sync it.
 
@@ -119,14 +119,15 @@ And much more!
 |                                                 | Super Productivity | Todoist | TickTick | Sunsama |
 | ----------------------------------------------- | ------------------ | ------- | -------- | ------- |
 | Open source                                     | ✅                 | ❌      | ❌       | ❌      |
-| No account needed, works offline                | ✅                 | ❌      | ❌       | ❌      |
+| No account needed                               | ✅                 | ❌      | ❌       | ❌      |
+| Offline-first, data stays on your device        | ✅                 | ❌      | ❌       | ❌      |
 | Time tracking on tasks, with timesheet export   | ✅                 | ❌      | ⚠️       | ⚠️      |
-| Focus timer and break reminders                 | ✅                 | ❌      | ✅       | ⚠️      |
+| Focus timer and break reminders                 | ✅                 | ❌      | ✅       | ✅      |
 | Day planned on a schedule next to your calendar | ✅                 | ⚠️      | ✅       | ✅      |
-| Built-in Jira, GitHub and GitLab integration    | ✅                 | ❌      | ❌       | ⚠️      |
+| Jira, GitHub and GitLab integration             | ✅                 | ❌      | ❌       | ⚠️      |
 | Every feature free                              | ✅                 | ❌      | ❌       | ❌      |
 
-`✅` yes · `⚠️` partial or paid only · `❌` no. Based on each product's public information, checked November 2026. Spot something outdated? [Open an issue](https://github.com/super-productivity/super-productivity/issues) with a source.
+`✅` yes · `⚠️` partial, limited or paid plan only · `❌` no. Based on each product's public information, checked November 2026. Spot something outdated? [Open an issue](https://github.com/super-productivity/super-productivity/issues) with a source.
 
 > [!NOTE]
 > The web version has some limitations: See the **[Web App vs Desktop comparison](https://github.com/super-productivity/super-productivity/wiki/3.05-Web-App-vs-Desktop)** for more details.
