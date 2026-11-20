@@ -1,6 +1,8 @@
 package com.superproductivity.superproductivity.service
 
 import java.util.Calendar
+import java.util.GregorianCalendar
+import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.min
 
@@ -340,7 +342,8 @@ private fun isSameDay(a: JsDate, b: JsDate): Boolean =
     a.dayOfMonth == b.dayOfMonth && a.month == b.month && a.year == b.year
 
 private fun getDbDateStr(date: JsDate): String =
-    "%04d-%02d-%02d".format(date.year, date.month + 1, date.dayOfMonth)
+    // Locale.ROOT: a fa/ar default locale would write non-ASCII digits and break id matching.
+    String.format(Locale.ROOT, "%04d-%02d-%02d", date.year, date.month + 1, date.dayOfMonth)
 
 private fun dateStrToLocalDate(dateStr: String, zone: TimeZone): JsDate? {
     val match = Regex("^(\\d{4})-(\\d{1,2})-(\\d{1,2})").find(dateStr) ?: return null
@@ -359,7 +362,9 @@ private fun dateStrToLocalDate(dateStr: String, zone: TimeZone): JsDate? {
  * lenient, matching JS (a day of 0 is the last day of the previous month).
  */
 private class JsDate(timeMs: Long, private val zone: TimeZone) {
-    private val cal: Calendar = Calendar.getInstance(zone).apply {
+    // Gregorian and Locale.ROOT like JS Date: a Thai default locale would
+    // otherwise give Buddhist-era years on some JVMs.
+    private val cal: Calendar = GregorianCalendar(zone, Locale.ROOT).apply {
         // Pin every field before the first read. A bare epoch of 0 is fine;
         // callers that parse a calendar day overwrite Y-M-D next.
         timeInMillis = timeMs

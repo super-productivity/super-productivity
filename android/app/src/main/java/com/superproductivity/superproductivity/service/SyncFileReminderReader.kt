@@ -218,7 +218,7 @@ object SyncFileReminderReader {
     }
 
     private val repeatCfgKeys = setOf(
-        "id", "title", "projectId", "lastTaskCreation", "lastTaskCreationDay",
+        "id", "title", "projectId", "tagIds", "lastTaskCreation", "lastTaskCreationDay",
         "startTime", "remindAt", "isPaused", "repeatCycle", "startDate", "repeatUntilDay",
         "repeatEvery", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday",
         "saturday", "monthlyWeekOfMonth", "monthlyWeekday", "monthlyLastDay",

@@ -25,6 +25,7 @@ import com.superproductivity.superproductivity.service.FocusModeForegroundServic
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
+import com.superproductivity.superproductivity.service.RepeatReminderCache
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.share.CaptureKeyStore
@@ -701,6 +702,19 @@ class JavaScriptInterface(
     fun setStartOfNextDayDiffMs(diffMs: Int) {
         safeCall("Failed to set start-of-next-day offset") {
             BackgroundReminderSettingsStore.saveStartOfNextDayDiffMs(activity, diffMs.toLong())
+        }
+    }
+
+    /**
+     * Mirrors the open app's repeat configs to the background repeat-reminder
+     * cache (RepeatReminderCache.replaceFromApp). Optional on the JS side so
+     * an old bundle paired with this APK keeps working.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setRepeatCfgSnapshot(json: String) {
+        safeCall("Failed to store repeat configs") {
+            RepeatReminderCache.replaceFromApp(activity, json)
         }
     }
 

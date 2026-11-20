@@ -460,6 +460,282 @@
       ]
     },
     {
+      "name": "monthly day 31 clamps to June 30",
+      "timeZone": "UTC",
+      "now": 1781967600000,
+      "startOfNextDayDiffMs": 0,
+      "soonestFirst": false,
+      "archivedProjectIds": [],
+      "cfgs": [
+        {
+          "id": "m31",
+          "title": "Standup",
+          "projectId": null,
+          "isPaused": false,
+          "repeatCycle": "MONTHLY",
+          "startDate": "2026-01-31",
+          "repeatEvery": 1,
+          "startTime": "09:00",
+          "remindAt": "AtStart",
+          "lastTaskCreationDay": "2026-05-31",
+          "waitForCompletion": false,
+          "repeatFromCompletionDate": false,
+          "monthlyLastDay": false,
+          "deletedInstanceDates": [],
+          "sunday": false,
+          "monday": false,
+          "tuesday": false,
+          "wednesday": false,
+          "thursday": false,
+          "friday": false,
+          "saturday": false
+        }
+      ],
+      "expect": [
+        {
+          "taskId": "rpt_m31_2026-06-30",
+          "triggerAtMs": 1782810000000,
+          "title": "Standup"
+        }
+      ]
+    },
+    {
+      "name": "monthly day 31 clamps to February 28",
+      "timeZone": "UTC",
+      "now": 1771599600000,
+      "startOfNextDayDiffMs": 0,
+      "soonestFirst": false,
+      "archivedProjectIds": [],
+      "cfgs": [
+        {
+          "id": "m31",
+          "title": "Standup",
+          "projectId": null,
+          "isPaused": false,
+          "repeatCycle": "MONTHLY",
+          "startDate": "2026-01-31",
+          "repeatEvery": 1,
+          "startTime": "09:00",
+          "remindAt": "AtStart",
+          "lastTaskCreationDay": "2026-01-31",
+          "waitForCompletion": false,
+          "repeatFromCompletionDate": false,
+          "monthlyLastDay": false,
+          "deletedInstanceDates": [],
+          "sunday": false,
+          "monday": false,
+          "tuesday": false,
+          "wednesday": false,
+          "thursday": false,
+          "friday": false,
+          "saturday": false
+        }
+      ],
+      "expect": [
+        {
+          "taskId": "rpt_m31_2026-02-28",
+          "triggerAtMs": 1772269200000,
+          "title": "Standup"
+        }
+      ]
+    },
+    {
+      "name": "yearly February 29 in a non-leap year",
+      "timeZone": "UTC",
+      "now": 1803135600000,
+      "startOfNextDayDiffMs": 0,
+      "soonestFirst": false,
+      "archivedProjectIds": [],
+      "cfgs": [
+        {
+          "id": "leap",
+          "title": "Standup",
+          "projectId": null,
+          "isPaused": false,
+          "repeatCycle": "YEARLY",
+          "startDate": "2024-02-29",
+          "repeatEvery": 1,
+          "startTime": "09:00",
+          "remindAt": "AtStart",
+          "lastTaskCreationDay": "2026-02-28",
+          "waitForCompletion": false,
+          "repeatFromCompletionDate": false,
+          "monthlyLastDay": false,
+          "deletedInstanceDates": [],
+          "sunday": false,
+          "monday": false,
+          "tuesday": false,
+          "wednesday": false,
+          "thursday": false,
+          "friday": false,
+          "saturday": false
+        }
+      ],
+      "expect": [
+        {
+          "taskId": "rpt_leap_2027-02-28",
+          "triggerAtMs": 1803805200000,
+          "title": "Standup"
+        }
+      ]
+    },
+    {
+      "name": "monthly last Friday",
+      "timeZone": "UTC",
+      "now": 1781967600000,
+      "startOfNextDayDiffMs": 0,
+      "soonestFirst": false,
+      "archivedProjectIds": [],
+      "cfgs": [
+        {
+          "id": "lastfri",
+          "title": "Standup",
+          "projectId": null,
+          "isPaused": false,
+          "repeatCycle": "MONTHLY",
+          "startDate": "2026-01-30",
+          "repeatEvery": 1,
+          "startTime": "09:00",
+          "remindAt": "AtStart",
+          "lastTaskCreationDay": "2026-05-29",
+          "waitForCompletion": false,
+          "repeatFromCompletionDate": false,
+          "monthlyLastDay": false,
+          "deletedInstanceDates": [],
+          "sunday": false,
+          "monday": false,
+          "tuesday": false,
+          "wednesday": false,
+          "thursday": false,
+          "friday": false,
+          "saturday": false,
+          "monthlyWeekOfMonth": -1,
+          "monthlyWeekday": 5
+        }
+      ],
+      "expect": [
+        {
+          "taskId": "rpt_lastfri_2026-06-26",
+          "triggerAtMs": 1782464400000,
+          "title": "Standup"
+        }
+      ]
+    },
+    {
+      "name": "monthly every 2 months skips the off month",
+      "timeZone": "UTC",
+      "now": 1781103600000,
+      "startOfNextDayDiffMs": 0,
+      "soonestFirst": false,
+      "archivedProjectIds": [],
+      "cfgs": [
+        {
+          "id": "m2",
+          "title": "Standup",
+          "projectId": null,
+          "isPaused": false,
+          "repeatCycle": "MONTHLY",
+          "startDate": "2026-01-15",
+          "repeatEvery": 2,
+          "startTime": "09:00",
+          "remindAt": "AtStart",
+          "lastTaskCreationDay": "2026-05-15",
+          "waitForCompletion": false,
+          "repeatFromCompletionDate": false,
+          "monthlyLastDay": false,
+          "deletedInstanceDates": [],
+          "sunday": false,
+          "monday": false,
+          "tuesday": false,
+          "wednesday": false,
+          "thursday": false,
+          "friday": false,
+          "saturday": false
+        }
+      ],
+      "expect": []
+    },
+    {
+      "name": "monthly every 2 months fires in the on month",
+      "timeZone": "UTC",
+      "now": 1783695600000,
+      "startOfNextDayDiffMs": 0,
+      "soonestFirst": false,
+      "archivedProjectIds": [],
+      "cfgs": [
+        {
+          "id": "m2",
+          "title": "Standup",
+          "projectId": null,
+          "isPaused": false,
+          "repeatCycle": "MONTHLY",
+          "startDate": "2026-01-15",
+          "repeatEvery": 2,
+          "startTime": "09:00",
+          "remindAt": "AtStart",
+          "lastTaskCreationDay": "2026-05-15",
+          "waitForCompletion": false,
+          "repeatFromCompletionDate": false,
+          "monthlyLastDay": false,
+          "deletedInstanceDates": [],
+          "sunday": false,
+          "monday": false,
+          "tuesday": false,
+          "wednesday": false,
+          "thursday": false,
+          "friday": false,
+          "saturday": false
+        }
+      ],
+      "expect": [
+        {
+          "taskId": "rpt_m2_2026-07-15",
+          "triggerAtMs": 1784106000000,
+          "title": "Standup"
+        }
+      ]
+    },
+    {
+      "name": "monthly late evening in America/Los_Angeles",
+      "timeZone": "America/Los_Angeles",
+      "now": 1782849600000,
+      "startOfNextDayDiffMs": 0,
+      "soonestFirst": false,
+      "archivedProjectIds": [],
+      "cfgs": [
+        {
+          "id": "la",
+          "title": "Standup",
+          "projectId": null,
+          "isPaused": false,
+          "repeatCycle": "MONTHLY",
+          "startDate": "2026-01-01",
+          "repeatEvery": 1,
+          "startTime": "23:30",
+          "remindAt": "AtStart",
+          "lastTaskCreationDay": "2026-06-01",
+          "waitForCompletion": false,
+          "repeatFromCompletionDate": false,
+          "monthlyLastDay": false,
+          "deletedInstanceDates": [],
+          "sunday": false,
+          "monday": false,
+          "tuesday": false,
+          "wednesday": false,
+          "thursday": false,
+          "friday": false,
+          "saturday": false
+        }
+      ],
+      "expect": [
+        {
+          "taskId": "rpt_la_2026-07-01",
+          "triggerAtMs": 1782973800000,
+          "title": "Standup"
+        }
+      ]
+    },
+    {
       "name": "paused wait missing time DoNotRemind and repeatEvery 0 schedule nothing",
       "timeZone": "UTC",
       "now": 1781535600000,

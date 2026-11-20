@@ -143,6 +143,78 @@ class RepeatCfgSyncTest {
     }
 
     @Test
+    fun `deleting a project removes its configs and keeps others`() {
+        val other = JSONObject(daily.toString()).put("id", "other").put("projectId", "p2")
+        val created = provider.parseResponse(page(createOp(daily), createOp(other))).nextRepeatState
+        val deleted = provider.parseResponse(
+            page(
+                op(
+                    "DEL",
+                    "[Task Shared] deleteProject",
+                    "p1",
+                    action(JSONObject().put("projectId", "p1")),
+                    entityType = "PROJECT",
+                ),
+            ),
+            created,
+        )
+        assertEquals(null, deleted.nextRepeatState.byId("cfg"))
+        assertTrue(deleted.nextRepeatState.byId("other")!!.isArmable())
+        assertEquals(setOf("cfg"), deleted.repeatCfgIdsRemoved)
+        assertTrue(deleted.isAlarmStale("rpt_cfg_2026-06-16", 1L, "TASK"))
+    }
+
+    @Test
+    fun `deleting tags removes tag-only configs and strips the tag from the rest`() {
+        val tagOnlyCfg = JSONObject(daily.toString())
+        tagOnlyCfg.remove("projectId")
+        tagOnlyCfg.put("id", "tagOnly").put("tagIds", JSONArray().put("t1"))
+        val twoTags = JSONObject(daily.toString()).put("id", "twoTags")
+        twoTags.remove("projectId")
+        twoTags.put("tagIds", JSONArray().put("t1").put("t2"))
+        val withProject = JSONObject(daily.toString()).put("id", "withProject")
+            .put("tagIds", JSONArray().put("t1"))
+        val created = provider.parseResponse(
+            page(createOp(tagOnlyCfg), createOp(twoTags), createOp(withProject)),
+        ).nextRepeatState
+        assertEquals(listOf("t1", "t2"), created.byId("twoTags")!!.tagIds)
+
+        val single = provider.parseResponse(
+            page(op("DEL", "[Tag] Delete Tag", "t1", action(JSONObject().put("id", "t1")), entityType = "TAG")),
+            created,
+        )
+        assertEquals(null, single.nextRepeatState.byId("tagOnly"))
+        assertEquals(listOf("t2"), single.nextRepeatState.byId("twoTags")!!.tagIds)
+        assertEquals(emptyList<String>(), single.nextRepeatState.byId("withProject")!!.tagIds)
+        assertTrue(single.nextRepeatState.byId("withProject")!!.isArmable())
+        assertEquals(setOf("tagOnly"), single.repeatCfgIdsRemoved)
+
+        val bulk = provider.parseResponse(
+            page(
+                op("DEL", "[Tag] Delete multiple Tags", "", null, entityType = "TAG")
+                    .put("entityIds", JSONArray().put("t1").put("t2")),
+            ),
+            created,
+        )
+        assertEquals(null, bulk.nextRepeatState.byId("tagOnly"))
+        assertEquals(null, bulk.nextRepeatState.byId("twoTags"))
+        assertTrue(bulk.nextRepeatState.byId("withProject") != null)
+        assertEquals(setOf("tagOnly", "twoTags"), bulk.repeatCfgIdsRemoved)
+    }
+
+    @Test
+    fun `a full-state import keeps cached configs armed`() {
+        val created = provider.parseResponse(page(createOp(daily))).nextRepeatState
+        val imported = provider.parseResponse(
+            page(op("SYNC_IMPORT", "[SP_ALL] Load(import) all data", "x", null, entityType = "ALL")),
+            created,
+        )
+        assertTrue(imported.nextRepeatState.byId("cfg")!!.isArmable())
+        assertTrue(imported.repeatCfgIdsRemoved.isEmpty())
+        assertFalse(imported.isAlarmStale("rpt_cfg_2026-06-16", 1L, "TASK"))
+    }
+
+    @Test
     fun `a task reminder at the same occurrence id is not stale`() {
         val created = provider.parseResponse(page(createOp(daily)))
         val paused = provider.parseResponse(
@@ -193,8 +265,13 @@ class RepeatCfgSyncTest {
         return op
     }
 
-    private fun page(op: JSONObject) = JSONObject()
-        .put("ops", JSONArray().put(JSONObject().put("op", op).put("serverSeq", 1)))
+    private fun page(vararg ops: JSONObject) = JSONObject()
+        .put(
+            "ops",
+            JSONArray().apply {
+                ops.forEachIndexed { i, op -> put(JSONObject().put("op", op).put("serverSeq", i + 1)) }
+            },
+        )
         .put("latestSeq", 1)
         .put("hasMore", false)
         .toString()

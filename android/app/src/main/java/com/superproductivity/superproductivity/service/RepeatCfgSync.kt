@@ -10,7 +10,8 @@ import org.json.JSONObject
  *
  * Action strings are the NgRx types in task-repeat-cfg.actions.ts and
  * project.actions.ts. A type missing here is ignored, the same way an unknown
- * task action is ignored, until the app is opened.
+ * task action is ignored, until the app is opened and mirrors its configs
+ * (RepeatReminderCache.replaceFromApp).
  */
 internal object RepeatCfgSync {
     private const val ACTION_ADD = "[TaskRepeatCfg][Task] Add TaskRepeatCfg to Task"
@@ -26,35 +27,47 @@ internal object RepeatCfgSync {
     private const val ACTION_REOPEN_PROJECT = "[Project] Reopen Project"
     private const val ACTION_UPDATE_PROJECT = "[Project] Update Project"
     private const val ACTION_PROJECT_LWW = "[PROJECT] LWW Update"
+    // Full-state imports (entityType ALL) are not folded: emptying the cache
+    // would silently stop every repeat alarm until the app is opened, while
+    // keeping it risks only a stale alarm that the next app snapshot removes.
+    val ENTITY_TYPES = setOf("TASK_REPEAT_CFG", "PROJECT", "TAG")
 
+    /** Lazy [payload]: tag and project deletes are read from the envelope alone. */
     fun fold(
         state: RepeatCfgSyncState,
         op: JSONObject,
-        payload: JSONObject?,
+        payload: Lazy<JSONObject?>,
         removed: MutableSet<String>,
     ): RepeatCfgSyncState {
         val entityType = op.optString("entityType", "")
         val actionType = op.optString("actionType", "")
         val opType = op.optString("opType", "")
-        if (entityType == "PROJECT") return foldProject(state, op, payload, actionType, removed)
+        if (entityType == "TAG") {
+            return if (opType == "DEL") state.deleteTags(entityIds(op, null).toSet(), removed) else state
+        }
+        if (entityType == "PROJECT") {
+            if (opType == "DEL") return state.deleteProject(op.optString("entityId", ""), removed)
+            return foldProject(state, op, payload.value, actionType, removed)
+        }
         if (entityType != "TASK_REPEAT_CFG") return state
 
         if (opType == "DEL" || actionType == ACTION_DELETE || actionType == ACTION_DELETE_MANY) {
             var next = state
-            for (id in entityIds(op, payload)) {
+            for (id in entityIds(op, payload.value)) {
                 next = next.remove(id)
                 removed.add(id)
             }
             return next
         }
 
-        val actionPayload = payload?.optJSONObject("actionPayload")
+        val resolved = payload.value
+        val actionPayload = resolved?.optJSONObject("actionPayload")
         return when (actionType) {
             ACTION_ADD -> upsertSnapshot(state, actionPayload?.optJSONObject("taskRepeatCfg"), removed)
-            ACTION_UPDATE -> applyUpdate(state, actionPayload, payload, removed)
+            ACTION_UPDATE -> applyUpdate(state, actionPayload, resolved, removed)
             ACTION_UPDATE_MANY -> applyBulkUpdate(state, actionPayload, removed)
             ACTION_DELETE_INSTANCE -> deleteInstance(state, actionPayload)
-            ACTION_LWW -> applyLww(state, op, payload, actionPayload, removed)
+            ACTION_LWW -> applyLww(state, op, resolved, actionPayload, removed)
             else -> state
         }
     }

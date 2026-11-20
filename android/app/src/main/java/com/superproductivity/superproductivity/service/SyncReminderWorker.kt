@@ -55,6 +55,7 @@ class SyncReminderWorker(
         var hasMore = true
         var iterations = 0
         val maxIterations = 100
+        var repeatGeneration = RepeatReminderCache.getGeneration(applicationContext)
         var repeatState = RepeatReminderCache.getState(applicationContext)
         val protectedRepeatIds = HashSet<String>()
 
@@ -97,7 +98,14 @@ class SyncReminderWorker(
             // seq cursor, and before it: a retried page is idempotent, a page
             // whose seq advanced without the fold would be lost.
             repeatState = result.nextRepeatState
-            RepeatReminderCache.saveState(applicationContext, repeatState)
+            if (!RepeatReminderCache.saveStateIfUnchanged(applicationContext, repeatState, repeatGeneration)) {
+                // The open app sent its configs mid-run. Re-fetch this page onto
+                // them without moving the cursor, so none of its ops are lost;
+                // re-scheduling its task alarms is idempotent (same ids).
+                repeatGeneration = RepeatReminderCache.getGeneration(applicationContext)
+                repeatState = RepeatReminderCache.getState(applicationContext)
+                continue
+            }
 
             // Update sequence cursor.
             // Also reset if server's latestSeq is lower (server was wiped/reset).

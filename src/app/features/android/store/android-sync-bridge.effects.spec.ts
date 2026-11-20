@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideMockStore } from '@ngrx/store/testing';
 import { BehaviorSubject } from 'rxjs';
 import { distinctUntilChanged, filter, map } from 'rxjs/operators';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
@@ -261,6 +262,7 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
       TestBed.configureTestingModule({
         providers: [
           AndroidSyncBridgeEffects,
+          provideMockStore(),
           {
             provide: SyncProviderManager,
             useValue: { getProviderById: () => Promise.resolve(provider) },
@@ -311,6 +313,7 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
       TestBed.configureTestingModule({
         providers: [
           AndroidSyncBridgeEffects,
+          provideMockStore(),
           {
             provide: SyncProviderManager,
             useValue: {

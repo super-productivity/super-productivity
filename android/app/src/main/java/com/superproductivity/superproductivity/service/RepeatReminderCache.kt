@@ -22,6 +22,7 @@ internal object RepeatReminderCache {
     private const val KEY_STATE = "STATE"
     private const val KEY_SLOTS = "SLOTS"
     private const val KEY_SLOTS_KNOWN = "SLOTS_KNOWN"
+    private const val KEY_GENERATION = "GENERATION"
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -36,8 +37,24 @@ internal object RepeatReminderCache {
         }
     }
 
+    @Synchronized
     fun saveState(context: Context, state: RepeatCfgSyncState) {
         prefs(context).edit().putString(KEY_STATE, encodeState(state).toString()).commit()
+    }
+
+    /** Bumped by every [replaceFromApp]; read it before [getState]. */
+    fun getGeneration(context: Context): Long = prefs(context).getLong(KEY_GENERATION, 0L)
+
+    /**
+     * Saves a state folded from [getState] unless the app replaced the cache
+     * since [generation] was read: its snapshot is the newer full list, so the
+     * fold result is dropped and the caller continues from the snapshot.
+     */
+    @Synchronized
+    fun saveStateIfUnchanged(context: Context, state: RepeatCfgSyncState, generation: Long): Boolean {
+        if (getGeneration(context) != generation) return false
+        saveState(context, state)
+        return true
     }
 
     /** Null until this worker has armed repeat alarms once. */
@@ -61,8 +78,48 @@ internal object RepeatReminderCache {
             .commit()
     }
 
+    /**
+     * Replaces the cached configs with the open app's full list
+     * (getRepeatCfgSnapshotForNative). Kept only while a background-sync login
+     * is stored, as [clear] would drop it anyway. The worker's op cursor is
+     * untouched, so it may re-fold ops the app already applied; config ops
+     * end in the same state.
+     */
+    @Synchronized
+    fun replaceFromApp(context: Context, json: String) {
+        if (!BackgroundSyncCredentialStore.hasAnyCredentials(context)) return
+        val state = parseAppSnapshot(json)
+        if (state == null) {
+            Log.w(TAG, "Repeat config snapshot unreadable, keeping cache")
+            return
+        }
+        prefs(context).edit()
+            .putString(KEY_STATE, encodeState(state).toString())
+            .putLong(KEY_GENERATION, getGeneration(context) + 1)
+            .commit()
+    }
+
+    /** Null on malformed input, so a bad bridge call never wipes the cache. */
+    internal fun parseAppSnapshot(json: String): RepeatCfgSyncState? {
+        val decoded = try {
+            JSONObject(json)
+        } catch (e: JSONException) {
+            return null
+        }
+        val arr = decoded.optJSONArray("cfgs") ?: return null
+        val cfgs = ArrayList<RepeatCfg>(arr.length())
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            RepeatCfg.fromJson(obj, complete = true)?.let { cfgs.add(it) }
+        }
+        return RepeatCfgSyncState(cfgs, readArchivedIds(decoded))
+    }
+
+    /** Keeps the generation counting up, so a run that read before the clear cannot save. */
+    @Synchronized
     fun clear(context: Context) {
-        prefs(context).edit().clear().commit()
+        val next = getGeneration(context) + 1
+        prefs(context).edit().clear().putLong(KEY_GENERATION, next).commit()
     }
 
     private fun encodeState(state: RepeatCfgSyncState): JSONObject = JSONObject().apply {
@@ -79,14 +136,16 @@ internal object RepeatReminderCache {
                 RepeatCfg.fromJson(obj, complete = false)?.let { cfgs.add(it) }
             }
         }
+        return RepeatCfgSyncState(cfgs, readArchivedIds(json))
+    }
+
+    private fun readArchivedIds(json: JSONObject): Set<String> {
         val archived = HashSet<String>()
-        val ids = json.optJSONArray("archivedProjectIds")
-        if (ids != null) {
-            for (i in 0 until ids.length()) {
-                val id = ids.optString(i, "")
-                if (id.isNotEmpty()) archived.add(id)
-            }
+        val ids = json.optJSONArray("archivedProjectIds") ?: return archived
+        for (i in 0 until ids.length()) {
+            val id = ids.optString(i, "")
+            if (id.isNotEmpty()) archived.add(id)
         }
-        return RepeatCfgSyncState(cfgs, archived)
+        return archived
     }
 }

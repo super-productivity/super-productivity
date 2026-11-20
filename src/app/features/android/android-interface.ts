@@ -230,6 +230,9 @@ export interface AndroidInterface {
   // Start-of-next-day offset in ms, so a background repeat reminder uses the
   // same clock shift as the open app. Optional: older APKs don't have it.
   setStartOfNextDayDiffMs?(diffMs: number): void;
+  // Repeat configs' schedule fields as JSON (getRepeatCfgSnapshotForNative),
+  // replacing the background worker's cache. Optional: older APKs.
+  setRepeatCfgSnapshot?(json: string): void;
 }
 
 export type ForegroundServiceStartFailure = {

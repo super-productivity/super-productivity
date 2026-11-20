@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 import java.util.TimeZone
 
 /**
@@ -85,6 +86,46 @@ class RepeatReminderScheduleTest {
         assertTrue(isLiveRepeatInstance("rpt_cfg_2026-06-16", state, zone))
         assertEquals(false, isLiveRepeatInstance("rpt_cfg_2026-06-17", state, zone))
         assertEquals(false, isLiveRepeatInstance("task-1", state, zone))
+    }
+
+    @Test
+    fun `occurrence ids use ASCII digits on a Persian-locale device`() {
+        assertFirstIdUnderLocale("fa-IR")
+    }
+
+    @Test
+    fun `occurrence ids use Gregorian years on a Thai-locale device`() {
+        assertFirstIdUnderLocale("th-TH")
+    }
+
+    private fun assertFirstIdUnderLocale(tag: String) {
+        val previous = Locale.getDefault()
+        Locale.setDefault(Locale.forLanguageTag(tag))
+        try {
+            val state = RepeatCfgSyncState(
+                listOf(
+                    RepeatCfg(
+                        id = "cfg",
+                        isComplete = true,
+                        repeatCycle = "DAILY",
+                        repeatEvery = 1,
+                        startDate = "2026-01-01",
+                        startTime = "09:00",
+                        remindAt = "AtStart",
+                        lastTaskCreationDay = "2026-06-15",
+                    ),
+                ),
+            )
+            val got = upcomingRepeatReminders(
+                state,
+                now = 1_781_535_600_000L, // 2026-06-15T15:00:00Z
+                zone = TimeZone.getTimeZone("UTC"),
+                startOfNextDayDiffMs = 0L,
+            )
+            assertEquals("rpt_cfg_2026-06-16", got.first().taskId)
+        } finally {
+            Locale.setDefault(previous)
+        }
     }
 
     @Test

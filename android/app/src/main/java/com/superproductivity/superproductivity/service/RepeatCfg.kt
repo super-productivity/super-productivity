@@ -15,6 +15,8 @@ data class RepeatCfg(
     val id: String,
     val title: String = "",
     val projectId: String? = null,
+    /** Needed so a tag delete can drop a config that had only that tag (tag-shared.reducer.ts). */
+    val tagIds: List<String> = emptyList(),
     val lastTaskCreation: Long? = null,
     val lastTaskCreationDay: String? = null,
     val startTime: String? = null,
@@ -68,6 +70,9 @@ data class RepeatCfg(
         }
         if (changes.has("projectId") || "projectId" in cleared) {
             next = next.copy(projectId = if (clearedOrNull("projectId")) null else changes.optString("projectId", "").ifEmpty { null })
+        }
+        if (changes.has("tagIds") || "tagIds" in cleared) {
+            next = next.copy(tagIds = if (clearedOrNull("tagIds")) emptyList() else readIds(changes.optJSONArray("tagIds")))
         }
         if (changes.has("lastTaskCreation") || "lastTaskCreation" in cleared) {
             next = next.copy(lastTaskCreation = if (clearedOrNull("lastTaskCreation")) null else positiveLong(changes, "lastTaskCreation"))
@@ -141,6 +146,7 @@ data class RepeatCfg(
         put("id", id)
         put("title", title)
         put("projectId", projectId ?: JSONObject.NULL)
+        put("tagIds", JSONArray(tagIds))
         put("lastTaskCreation", lastTaskCreation ?: JSONObject.NULL)
         put("lastTaskCreationDay", lastTaskCreationDay ?: JSONObject.NULL)
         put("startTime", startTime ?: JSONObject.NULL)
@@ -191,6 +197,28 @@ data class RepeatCfgSyncState(
         if (idx < 0) return copy(cfgs = cfgs + cfg)
         val next = cfgs.toMutableList()
         next[idx] = cfg
+        return copy(cfgs = next)
+    }
+
+    /** Mirrors cleanupTaskRepeatCfgsForProject: every config of the project goes. */
+    fun deleteProject(id: String, removed: MutableSet<String>): RepeatCfgSyncState {
+        val gone = cfgs.filter { it.projectId == id }
+        gone.forEach { removed.add(it.id) }
+        return copy(cfgs = cfgs - gone.toSet(), archivedProjectIds = archivedProjectIds - id)
+    }
+
+    /** Mirrors tag-shared.reducer.ts cleanupTaskRepeatCfgs: orphaned configs go, the rest lose the tags. */
+    fun deleteTags(tagIds: Set<String>, removed: MutableSet<String>): RepeatCfgSyncState {
+        val next = cfgs.mapNotNull { cfg ->
+            if (cfg.tagIds.none { it in tagIds }) return@mapNotNull cfg
+            val remaining = cfg.tagIds.filter { it !in tagIds }
+            if (remaining.isEmpty() && cfg.projectId == null) {
+                removed.add(cfg.id)
+                null
+            } else {
+                cfg.copy(tagIds = remaining)
+            }
+        }
         return copy(cfgs = next)
     }
 
@@ -248,6 +276,19 @@ private fun wholeRepeatEvery(obj: JSONObject): Int {
 }
 
 private fun dateOrNull(value: String): String? = value.takeIf { DATE_STR.matches(it) }
+
+private const val MAX_IDS = 200
+
+private fun readIds(arr: JSONArray?): List<String> {
+    if (arr == null) return emptyList()
+    val out = ArrayList<String>(minOf(arr.length(), MAX_IDS))
+    for (i in 0 until arr.length()) {
+        if (out.size >= MAX_IDS) break
+        val value = arr.optString(i, "")
+        if (value.isNotEmpty() && value.length <= 200 && value !in out) out.add(value)
+    }
+    return out
+}
 
 private fun readDeletedDates(arr: JSONArray?): List<String> {
     if (arr == null) return emptyList()

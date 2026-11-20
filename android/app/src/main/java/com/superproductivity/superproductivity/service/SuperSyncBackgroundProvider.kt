@@ -189,14 +189,8 @@ class SuperSyncBackgroundProvider(
             // Lazy so envelope-only ops (e.g. DEL) never pay for decryption
             val payload = lazy(LazyThreadSafetyMode.NONE) { resolvePayload(op) }
 
-            val entityType = op.optString("entityType", "")
-            if (entityType == "TASK_REPEAT_CFG" || entityType == "PROJECT") {
-                nextRepeatState = RepeatCfgSync.fold(
-                    nextRepeatState,
-                    op,
-                    payload.value,
-                    repeatCfgIdsRemoved,
-                )
+            if (op.optString("entityType", "") in RepeatCfgSync.ENTITY_TYPES) {
+                nextRepeatState = RepeatCfgSync.fold(nextRepeatState, op, payload, repeatCfgIdsRemoved)
             }
 
             val tempMap = mutableMapOf<Pair<String, Boolean>, ReminderToSchedule>()
