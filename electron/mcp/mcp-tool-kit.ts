@@ -1,18 +1,23 @@
 import { LocalRestApiResponsePayload } from '../shared-with-frontend/local-rest-api.model';
+import {
+  getTaskPriority,
+  getTaskStatus,
+} from '../shared-with-frontend/task-status-and-priority';
 import { AssistantAccessScope } from '../shared-with-frontend/assistant-access.model';
 import { McpToolDefinition, McpToolResult } from './mcp-protocol';
 
 /**
- * A tool's title and behaviour hints. Every tool here works on the user's own
- * task list, so none is open-world; an issue integration the user set up acts
- * on a captured task as on one added by hand. A tool that edits existing tasks
- * would not qualify: two-way issue sync pushes those edits to linked issues.
- * A write is destructive when it can overwrite something; one that only adds
- * is not.
+ * Editing an existing task can overwrite a value and trigger two-way issue sync.
+ * Capture only adds a task. Reads and capture otherwise target a closed task list.
  */
 export const describeTool = (
   title: string,
-  hints: { readOnly: boolean; destructive: boolean; idempotent: boolean },
+  hints: {
+    readOnly: boolean;
+    destructive: boolean;
+    idempotent: boolean;
+    openWorld?: boolean;
+  },
 ): Pick<McpToolDefinition, 'title' | 'annotations'> => ({
   title,
   annotations: {
@@ -20,7 +25,7 @@ export const describeTool = (
     readOnlyHint: hints.readOnly,
     destructiveHint: hints.destructive,
     idempotentHint: hints.idempotent,
-    openWorldHint: false,
+    openWorldHint: hints.openWorld ?? false,
   },
 });
 
@@ -168,7 +173,10 @@ const TASK_SUMMARY_FIELDS = [
 
 /** Copies only the allowlisted fields; anything the route adds stays out. */
 export const toTaskSummary = (task: Record<string, unknown>): Record<string, unknown> => {
-  const summary: Record<string, unknown> = {};
+  const summary: Record<string, unknown> = {
+    priority: getTaskPriority(task.priority),
+    status: getTaskStatus(task),
+  };
   for (const field of TASK_SUMMARY_FIELDS) {
     const value = task[field];
     if (value !== undefined && value !== null) {
@@ -209,7 +217,7 @@ const RENDERER_ERRORS: Record<string, string> = {
 
 /**
  * Maps a failed renderer reply to a tool error. Only stable codes and fixed
- * messages leave the process — never the route's own message, which can echo
+ * messages leave the process вЂ” never the route's own message, which can echo
  * input back.
  */
 export const failFromRenderer = (reply: RendererReply): McpToolResult => {

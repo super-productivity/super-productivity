@@ -219,7 +219,12 @@ test('only granted tools are listed', () => {
 });
 
 test('every tool has a title and explicit behaviour hints', () => {
-  const all = tools.listGrantedTools([...READ, 'tasks:read_notes', 'tasks:capture']);
+  const all = tools.listGrantedTools([
+    ...READ,
+    'tasks:read_notes',
+    'tasks:capture',
+    'tasks:update',
+  ]);
   for (const tool of all) {
     assert.ok(tool.title, `${tool.name} needs a title`);
     assert.equal(tool.annotations.title, tool.title);
@@ -231,7 +236,7 @@ test('every tool has a title and explicit behaviour hints', () => {
     ]) {
       assert.equal(typeof tool.annotations[hint], 'boolean', `${tool.name}.${hint}`);
     }
-    assert.equal(tool.annotations.openWorldHint, false);
+    assert.equal(tool.annotations.openWorldHint, tool.name === 'update_task');
     if (tool.annotations.readOnlyHint) {
       assert.equal(tool.annotations.destructiveHint, false);
     }
@@ -263,12 +268,15 @@ test('list_tasks returns summaries only and forwards filters', async () => {
       {
         id: 't1',
         title: 'Write report',
+        priority: null,
+        status: 'open',
         isDone: false,
         projectId: 'p1',
         tagIds: ['tg1'],
       },
     ],
     truncated: true,
+    nextCursor: 't1',
   });
   assert.doesNotMatch(result.content[0].text, /SECRET|JIRA|attachments/);
   assert.deepEqual(calls[0].query, {
@@ -277,6 +285,128 @@ test('list_tasks returns summaries only and forwards filters', async () => {
     query: 'report',
     tagId: 'TODAY',
   });
+});
+
+test('walks every filtered task across count and byte caps in renderer order', async () => {
+  const rows = Array.from({ length: 245 }, (_, i) => ({
+    id: 'task-' + i,
+    title: 'x'.repeat(i === 101 ? 300000 : 6000),
+    projectId: 'p1',
+    priority: 'medium',
+    isDone: true,
+    doneOn: 10,
+    wontDoOn: 10,
+  }));
+  const forward = async ({ query }) => {
+    assert.deepEqual(query, { source: 'active', includeDone: 'true', projectId: 'p1' });
+    return { status: 200, body: { ok: true, data: rows } };
+  };
+  const seen = [];
+  let cursor;
+  do {
+    const result = await tools.runTool(
+      'list_tasks',
+      { cursor, projectId: 'p1', includeDone: true, limit: 100 },
+      () => READ,
+      forward,
+    );
+    const page = result.structuredContent;
+    assert.ok(
+      page.tasks.length && Buffer.byteLength(result.content[0].text) <= 256 * 1024,
+    );
+    assert.equal(Boolean(page.nextCursor), page.truncated);
+    seen.push(...page.tasks);
+    cursor = page.nextCursor;
+    assert.ok(seen.length <= rows.length);
+  } while (cursor);
+  assert.deepEqual(
+    seen.map((t) => t.id),
+    rows.map((t) => t.id),
+  );
+  assert.deepEqual(seen[101], { id: rows[101].id, summaryTruncated: true });
+  assert.equal(seen[0].priority, 2);
+  assert.equal(seen[0].status, 'wont-do');
+  for (const cursor of ['missing', '../invalid']) {
+    const result = await tools.runTool(
+      'list_tasks',
+      { cursor, projectId: 'p1', includeDone: true },
+      () => READ,
+      forward,
+    );
+    assert.match(result.content[0].text, /^INVALID_ARGUMENTS/);
+  }
+});
+
+test('existing scopes cannot update and invalid updates never reach the renderer', async () => {
+  const { forward, calls } = fakeForward();
+  const update = (args, scopes) =>
+    tools.runTool('update_task', args, () => scopes, forward);
+  assert.match(
+    (await update({ id: 't1', status: 'open' }, [...READ, 'tasks:capture'])).content[0]
+      .text,
+    /^NOT_PERMITTED/,
+  );
+  for (const input of [
+    {},
+    { id: 't1' },
+    { id: '../tasks', priority: 1 },
+    { id: 't1', status: 'archived' },
+    { id: 't1', priority: 'high' },
+    { id: 't1', priority: 4 },
+    { id: 't1', priority: 2, notes: 'no' },
+  ]) {
+    assert.match(
+      (await update(input, ['tasks:update'])).content[0].text,
+      /^INVALID_ARGUMENTS/,
+    );
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('confirms only requested fields from readback and treats uncertainty explicitly', async () => {
+  const args = { id: 't1', priority: null };
+  const scopes = () => ['tasks:update'];
+  const result = (task) => ({
+    status: 200,
+    body: { ok: true, data: { status: 'verified', task } },
+  });
+  const saved = await tools.runTool('update_task', args, scopes, async (req) => {
+    assert.equal(req.path, '/assistant/update');
+    assert.equal(req.source, 'mcp');
+    assert.deepEqual(req.body, args);
+    return result({ ...args, status: 'open', notes: 'private' });
+  });
+  assert.deepEqual(saved.structuredContent, args);
+  for (const forward of [
+    async () => result({ ...args, priority: 1 }),
+    async () => result({ ...args, id: 'other' }),
+    async () => {
+      throw Error('timeout');
+    },
+  ]) {
+    assert.match(
+      (await tools.runTool('update_task', args, scopes, forward)).content[0].text,
+      /^OUTCOME_UNKNOWN/,
+    );
+  }
+});
+
+test('revocation while saving reports an uncertain outcome without a readback', async () => {
+  let scopes = ['tasks:update'];
+  const result = await tools.runTool(
+    'update_task',
+    { id: 't1', priority: 3 },
+    () => scopes,
+    async () => {
+      scopes = [];
+      return {
+        status: 200,
+        body: { ok: true, data: { status: 'verified', task: { id: 't1', priority: 3 } } },
+      };
+    },
+  );
+  assert.match(result.content[0].text, /^OUTCOME_UNKNOWN/);
+  assert.equal(result.structuredContent, undefined);
 });
 
 test('arguments are validated strictly', async () => {

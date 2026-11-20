@@ -1,8 +1,8 @@
 import { T } from '../../t.const';
 import { TaskPriorityIconPreset } from '../config/global-config.model';
-import { Task, TaskPriority } from './task.model';
+import { TaskPriority } from './task.model';
 
-/** Every priority level, lowest first — the order menus and previews list them in. */
+/** Every priority level, lowest first вЂ” the order menus and previews list them in. */
 export const TASK_PRIORITY_LEVELS: readonly TaskPriority[] = [1, 2, 3];
 
 // Records keyed by the numeric `TaskPriority` levels.
@@ -32,19 +32,4 @@ export const TASK_PRIORITY_ICONS: Record<
 
 export const DEFAULT_TASK_PRIORITY_ICON_PRESET: TaskPriorityIconPreset = 'chevrons';
 
-/** Read either historical encoding without rewriting the persisted task. */
-export const getTaskPriority = (priority: Task['priority']): TaskPriority | null => {
-  switch (priority) {
-    case 'high':
-    case 3:
-      return 3;
-    case 'medium':
-    case 2:
-      return 2;
-    case 'low':
-    case 1:
-      return 1;
-    default:
-      return null;
-  }
-};
+export { getTaskPriority } from '../../../../electron/shared-with-frontend/task-status-and-priority';

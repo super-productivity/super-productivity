@@ -1,9 +1,12 @@
 import {
   AssistantAccessScope,
   ASSISTANT_CAPTURE_PATH,
+  ASSISTANT_UPDATE_PATH,
   ASSISTANT_CAPTURE_TIMEOUT_MS,
   AssistantCaptureResult,
+  isAssistantTaskUpdate,
 } from '../shared-with-frontend/assistant-access.model';
+import { TASK_STATUSES } from '../shared-with-frontend/task-status-and-priority';
 import { McpToolDefinition, McpToolResult } from './mcp-protocol';
 import {
   DUE_DATE_PATTERN,
@@ -88,7 +91,7 @@ const listTasks: ToolSpec = {
     description:
       'Lists active (not archived) tasks as summaries, open tasks only unless includeDone is set. ' +
       'Filter by a title search, a project id or a tag id (use tagId "TODAY" for today\'s tasks). ' +
-      `Returns at most ${MAX_LIST_LIMIT} tasks; "truncated" means there are more, so narrow the filter. ` +
+      `Returns up to ${MAX_LIST_LIMIT} tasks. If truncated, pass nextCursor as cursor with the same filters. ` +
       UNTRUSTED_NOTE,
     inputSchema: {
       type: 'object',
@@ -101,6 +104,7 @@ const listTasks: ToolSpec = {
         projectId: { type: 'string', description: 'Only tasks of this project.' },
         tagId: { type: 'string', description: 'Only tasks with this tag, or "TODAY".' },
         includeDone: { type: 'boolean', description: 'Also include completed tasks.' },
+        cursor: { type: 'string', description: 'Continuation from the preceding page.' },
         limit: {
           type: 'integer',
           minimum: 1,
@@ -118,6 +122,7 @@ const listTasks: ToolSpec = {
       'tagId',
       'includeDone',
       'limit',
+      'cursor',
     ]);
     if (unknownArg) {
       return invalid(unknownArg);
@@ -131,6 +136,8 @@ const listTasks: ToolSpec = {
         return invalid(value.message);
       }
     }
+    const cursor = optionalId(args, 'cursor');
+    if (cursor instanceof Error) return invalid(cursor.message);
     const rawLimit = args.limit;
     if (
       rawLimit !== undefined &&
@@ -163,9 +170,19 @@ const listTasks: ToolSpec = {
       return failFromRenderer(reply);
     }
     const all = reply.body.data.filter(isRecord);
-    const page = all.slice(0, limit).map(toTaskSummary);
-    const fitted = fitToResponseCap(page, (tasks) => ({ tasks, truncated: true }));
-    return ok({ tasks: fitted, truncated: all.length > fitted.length });
+    const start = cursor ? all.findIndex((task) => task.id === cursor) + 1 : 0;
+    if (cursor && !start)
+      return invalid('Cursor is no longer in this list. Restart with the same filters.');
+    const page = all.slice(start, start + limit).map(toTaskSummary);
+    const wrap = (tasks: typeof page): Record<string, unknown> => {
+      const truncated = start + tasks.length < all.length;
+      return { tasks, truncated, ...(truncated && { nextCursor: tasks.at(-1)?.id }) };
+    };
+    const fitted = fitToResponseCap(page, wrap);
+    // Even a single enormous title must not prevent reaching later tasks.
+    if (page.length && !fitted.length)
+      return ok(wrap([{ id: page[0].id, summaryTruncated: true }]));
+    return ok(wrap(fitted));
   },
 };
 
@@ -452,6 +469,78 @@ const createTask: ToolSpec = {
   },
 };
 
+const updateTask: ToolSpec = {
+  scope: 'tasks:update',
+  definition: {
+    name: 'update_task',
+    ...describeTool('Update task priority or status', {
+      readOnly: false,
+      destructive: true,
+      idempotent: true,
+      openWorld: true,
+    }),
+    description:
+      'Set the priority or status of an active task by id. Omitted fields stay unchanged. Use null to clear priority. Linked issues may also change through configured integrations.',
+    inputSchema: {
+      type: 'object',
+      required: ['id'],
+      additionalProperties: false,
+      properties: {
+        id: { type: 'string' },
+        priority: {
+          enum: [1, 2, 3, null],
+          description: '1 low, 2 medium, 3 high, or null to clear.',
+        },
+        status: { type: 'string', enum: [...TASK_STATUSES] },
+      },
+    },
+  },
+  run: async (args, _scopes, forward) => {
+    if (!isAssistantTaskUpdate(args))
+      return invalid('Expected id and at least one of priority or status.');
+    const unknownOutcome = (): McpToolResult =>
+      fail(
+        'OUTCOME_UNKNOWN',
+        'Check the task before retrying. Its final state could not be verified.',
+      );
+    let reply: RendererReply;
+    try {
+      reply = await forward({
+        method: 'POST',
+        path: ASSISTANT_UPDATE_PATH,
+        source: 'mcp',
+        body: args,
+        timeoutMs: ASSISTANT_CAPTURE_TIMEOUT_MS,
+      });
+    } catch {
+      return unknownOutcome();
+    }
+    if (!reply.body.ok) {
+      return reply.status === 404 || reply.status === 503
+        ? failFromRenderer(reply)
+        : unknownOutcome();
+    }
+    const result = reply.body.data;
+    if (!isRecord(result)) return unknownOutcome();
+    if (result.status === 'APP_BUSY') return fail('APP_BUSY', CAPTURE_MESSAGES.APP_BUSY);
+    if (result.status === 'PERSIST_DEGRADED')
+      return fail('PERSIST_DEGRADED', 'Super Productivity cannot save changes.');
+    if (result.status !== 'verified' || !isRecord(result.task)) return unknownOutcome();
+    const task = result.task;
+    if (
+      task.id !== args.id ||
+      (args.status !== undefined && args.status !== task.status) ||
+      (args.priority !== undefined && args.priority !== task.priority)
+    )
+      return unknownOutcome();
+    return ok({
+      id: args.id,
+      ...(args.status !== undefined && { status: task.status }),
+      ...(args.priority !== undefined && { priority: task.priority }),
+    });
+  },
+};
+
 const ALL_TOOLS: ToolSpec[] = [
   getStatus,
   listTasks,
@@ -459,6 +548,7 @@ const ALL_TOOLS: ToolSpec[] = [
   listProjects,
   listTags,
   createTask,
+  updateTask,
 ];
 
 const isGranted = (tool: ToolSpec, scopes: readonly AssistantAccessScope[]): boolean =>
@@ -497,6 +587,12 @@ export const runTool = async (
   // must not still hand out the data. A capture that already ran is reported
   // as such, since withholding it would invite a duplicate.
   if (tool.scope !== 'tasks:capture' && !isGranted(tool, getScopes())) {
+    if (tool.scope === 'tasks:update') {
+      return fail(
+        'OUTCOME_UNKNOWN',
+        'Permission changed during the update. Check the task before retrying.',
+      );
+    }
     return fail('NOT_PERMITTED', 'This connection may not use this tool.');
   }
   return result;

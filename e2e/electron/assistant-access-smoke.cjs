@@ -151,6 +151,7 @@ async function launch() {
       window.ea.setAssistantAccessScopes([
         'tasks:read',
         'tasks:read_notes',
+        'tasks:update',
         'tasks:capture',
       ]),
     );
@@ -158,6 +159,10 @@ async function launch() {
       (await call('get_task', { id, includeNotes: true })).structuredContent.task.notes,
       'smoke note',
     );
+    for (const status of ['done', 'open', 'wont-do', 'wont-do']) {
+      const desired = { id, priority: 3, status };
+      assert.deepEqual((await call('update_task', desired)).structuredContent, desired);
+    }
     await page.evaluate(() => window.ea.setLocalRestApiEnabled(true));
     await app.close();
     app = undefined;
@@ -168,6 +173,9 @@ async function launch() {
       (await call('get_task', { id })).structuredContent.task.title,
       'MCP smoke #literal',
     );
+    const reopenedProfileTask = (await call('get_task', { id })).structuredContent.task;
+    assert.equal(reopenedProfileTask.status, 'wont-do');
+    assert.equal(reopenedProfileTask.priority, 3);
     await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0].minimize(),
     );
