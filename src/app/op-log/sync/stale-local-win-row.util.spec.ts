@@ -115,6 +115,16 @@ describe('staleLocalWinRowPatches', () => {
     expect(result).toEqual([]);
   });
 
+  it('skips a row that was itself applied in the batch', async () => {
+    const result = await staleLocalWinRowPatches(
+      [row()],
+      [row(), doneOp],
+      stateOf({ ...snapshot, isDone: true }),
+    );
+
+    expect(result).toEqual([]);
+  });
+
   it('skips a row whose entity is gone after the apply', async () => {
     const result = await staleLocalWinRowPatches([row()], [doneOp], stateOf(undefined));
 

@@ -1042,8 +1042,9 @@ export class ConflictResolutionService {
         resolutions,
         new Set(remainingLocalOpsToReject),
       )),
-      // Local-win rows are never applied here, so every op applied in this
-      // batch (prefix, winners, nonconflicting) landed on top of them.
+      // Plain local-win rows are not applied here, so every op applied in this
+      // batch (prefix, winners, nonconflicting) landed on top of them; applied
+      // rows (compensations, recreations) are skipped inside.
       ...(await this.localWinOps._reemitStaleLocalWinRows(
         writtenLocalWinOps,
         allOpsToApply,

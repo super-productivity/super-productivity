@@ -67,7 +67,10 @@ const staleFields = (
 
 /**
  * One `StaleRowPatch` per local-win task LWW row that a same-batch applied
- * op declares and whose written fields differ from post-apply state.
+ * op declares and whose written fields differ from post-apply state. Rows
+ * that are themselves in `appliedOps` (compensations, recreations) are
+ * skipped: they entered state here, so a difference is reducer shaping, not a
+ * lost remote edit.
  */
 export const staleLocalWinRowPatches = async (
   rows: Operation[],
@@ -75,7 +78,9 @@ export const staleLocalWinRowPatches = async (
   getState: (entityType: EntityType, entityId: string) => Promise<unknown>,
 ): Promise<StaleRowPatch[]> => {
   const patches: StaleRowPatch[] = [];
+  const appliedIds = new Set(appliedOps.map((op) => op.id));
   for (const row of rows) {
+    if (appliedIds.has(row.id)) continue;
     const entityId = row.entityId;
     // shortcut: tasks only (the observed loss) — other adapter types share the
     // shape, but singletons read the whole feature state and need their own diff
