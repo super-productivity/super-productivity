@@ -382,7 +382,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
             }, '*');
 
             // Timeout after 30 seconds; sign-in waits on the user, so it gets
-            // the host's own 5-minute OAuth limit plus a margin.
+            // the host's OAUTH_REDIRECT_TIMEOUT_MS (5 min, plugin-oauth.service) plus a margin.
             setTimeout(() => {
               if (pendingCalls.has(id)) {
                 pendingCalls.delete(id);
