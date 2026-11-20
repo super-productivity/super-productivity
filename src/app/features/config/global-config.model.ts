@@ -28,7 +28,7 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
-  /** Desktop only; absent in older persisted settings, defaults to off. */
+  /** @deprecated Now device-local (DueTaskBadgeLocalSettingsService). Kept so synced data from earlier builds keeps validating; never read. */
   isShowDueTaskBadge?: boolean;
   // Legacy: the local REST API switch is device-local now (Electron main's
   // simple store), because a synced switch started the listener on every
