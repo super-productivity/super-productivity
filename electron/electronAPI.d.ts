@@ -232,7 +232,7 @@ export interface ElectronAPI {
 
   informAboutAppReady(): void;
 
-  scheduleRegisterBeforeClose(id: string): void;
+  scheduleRegisterBeforeClose(id: string, isConfirmation?: boolean): void;
 
   unscheduleRegisterBeforeClose(id: string): void;
 

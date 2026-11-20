@@ -8,10 +8,12 @@ import { GlobalConfigService } from '../config/global-config.service';
 import {
   concatMap,
   distinctUntilChanged,
+  filter,
   first,
   map,
   switchMap,
   tap,
+  withLatestFrom,
 } from 'rxjs/operators';
 import { IS_ELECTRON } from '../../app.constants';
 import { combineLatest, EMPTY, Observable } from 'rxjs';
@@ -62,7 +64,7 @@ export class FinishDayBeforeCloseEffects {
         this.isEnabled$.pipe(
           tap((isEnabled) =>
             isEnabled
-              ? this._execBeforeCloseService.schedule(EXEC_BEFORE_CLOSE_ID)
+              ? this._execBeforeCloseService.schedule(EXEC_BEFORE_CLOSE_ID, true)
               : this._execBeforeCloseService.unschedule(EXEC_BEFORE_CLOSE_ID),
           ),
         ),
@@ -73,18 +75,25 @@ export class FinishDayBeforeCloseEffects {
     IS_ELECTRON &&
     createEffect(
       () =>
-        this.isEnabled$.pipe(
-          switchMap((isEnabled) =>
-            isEnabled ? this._execBeforeCloseService.onBeforeClose$ : EMPTY,
-          ),
-          switchMap(() =>
-            this._workContextService.mainWorkContext$.pipe(
+        this._execBeforeCloseService.onBeforeClose$.pipe(
+          filter((ids) => ids.includes(EXEC_BEFORE_CLOSE_ID)),
+          withLatestFrom(this.isEnabled$),
+          switchMap(([, isEnabled]) => {
+            if (!isEnabled) {
+              if (this._isPromptOpen) {
+                this._uiHelperService.focusApp();
+              } else {
+                this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+              }
+              return EMPTY;
+            }
+            return this._workContextService.mainWorkContext$.pipe(
               first(),
               switchMap((workContext) =>
                 this._taskService.getByIdsLive$(workContext.taskIds).pipe(first()),
               ),
-            ),
-          ),
+            );
+          }),
           tap((todayMainTasks) => {
             this._handleCloseDecision(todayMainTasks).catch(() => {
               // Don't let a dialog/router failure trap the user in close-pending state

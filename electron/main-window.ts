@@ -851,7 +851,9 @@ function createMenu(quitApp: () => void): void {
 
 // TODO this is ugly as f+ck
 const appCloseHandler = (app: App): void => {
-  let ids: string[] = [];
+  const pendingIds = new Set<string>();
+  const confirmationIds = new Set<string>();
+  let requestedConfirmations = new Set<string>();
 
   const _quitApp = (): void => {
     setIsQuiting(true);
@@ -860,27 +862,46 @@ const appCloseHandler = (app: App): void => {
     mainWin.close();
   };
 
-  ipcMain.on(IPC.REGISTER_BEFORE_CLOSE, (ev, { id }) => {
-    ids.push(id);
+  const notifyBeforeClose = (): void => {
+    // Confirm the quit before sending any work that is only needed if it goes ahead.
+    requestedConfirmations = new Set(confirmationIds);
+    const ids = [
+      ...(requestedConfirmations.size > 0 ? requestedConfirmations : pendingIds),
+    ];
+    log('Actions to wait for ', ids);
+    mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
+  };
+
+  ipcMain.on(IPC.REGISTER_BEFORE_CLOSE, (ev, { id, isConfirmation }) => {
+    pendingIds.add(id);
+    if (isConfirmation) {
+      confirmationIds.add(id);
+    }
   });
   ipcMain.on(IPC.UNREGISTER_BEFORE_CLOSE, (ev, { id }) => {
-    ids = ids.filter((idIn) => idIn !== id);
+    pendingIds.delete(id);
+    confirmationIds.delete(id);
   });
   ipcMain.on(IPC.BEFORE_CLOSE_DONE, (ev, { id }) => {
-    ids = ids.filter((idIn) => idIn !== id);
-    log(IPC.BEFORE_CLOSE_DONE, id, ids);
-    if (ids.length === 0) {
-      // Destroy task widget before closing main window
-      destroyTaskWidget();
-      // The quit request can time out while the user answers the finish-day prompt
-      setIsQuitRequested(true);
-      mainWin.close();
+    // The setting can change while the confirmation dialog is already open.
+    const wasConfirmation = requestedConfirmations.delete(id);
+    if (!pendingIds.delete(id) && !wasConfirmation) {
+      return;
+    }
+    confirmationIds.delete(id);
+    log(IPC.BEFORE_CLOSE_DONE, id, [...pendingIds]);
+    if (pendingIds.size === 0) {
+      _quitApp();
+    } else if (wasConfirmation && confirmationIds.size === 0) {
+      notifyBeforeClose();
     }
   });
 
   mainWin.on('close', (event) => {
     // NOTE: this might not work if we run a second instance of the app
-    log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', ids);
+    log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', [
+      ...pendingIds,
+    ]);
     if (!getIsQuiting()) {
       if (getIsMinimizeToTray() && !getIsQuitRequested()) {
         const indicator = ensureIndicator();
@@ -896,9 +917,8 @@ const appCloseHandler = (app: App): void => {
 
       // A gone renderer (killed, oom, ...) never answers, so waiting for it
       // would leave no way to quit.
-      if (ids.length > 0 && !mainWin.webContents.isCrashed()) {
-        log('Actions to wait for ', ids);
-        mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
+      if (pendingIds.size > 0 && !mainWin.webContents.isCrashed()) {
+        notifyBeforeClose();
       } else {
         _quitApp();
       }
