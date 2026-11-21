@@ -1,0 +1,50 @@
+<resources>
+  <string name="webview_block_message">Uppdatera Android System WebView till version %1$d eller senare.</string>
+  <string name="webview_init_failure_message">Super Productivity kunde inte starta Android System WebView.</string>
+  <string name="webview_init_failure_details_with_provider">Felet beror inte på en för gammal version av WebView. Android kan se vilken app som tillhandahåller WebView, men appen startar inte. Oftast hjälper det att återställa den appen. Öppna dess appinställningar nedan, tryck på Lagring → Rensa lagringsutrymme och öppna sedan Super Productivity igen. Det kan också hjälpa att uppdatera Android System WebView eller byta från en betaversion till en stabil version. Om du rensar lagringsutrymmet påverkas inte dina uppgifter i Super Productivity, men den andra appens egna webbläsar- eller appdata kan påverkas. Exportera gärna en säkerhetskopia först.</string>
+  <string name="webview_init_failure_details_without_provider">Det här är ingen varning om en för gammal version av WebView. Android kunde inte starta WebView och hann inte ta reda på vilken app som tillhandahåller det. Oftast hjälper det att återställa den appen. Öppna dess appinställningar nedan, tryck på Lagring → Rensa lagringsutrymme och öppna sedan Super Productivity igen. Det kan också hjälpa att uppdatera Android System WebView eller byta från en betaversion till en stabil version. Om du rensar lagringsutrymmet påverkas inte dina uppgifter i Super Productivity, men den andra appens egna webbläsar- eller appdata kan påverkas. Exportera gärna en säkerhetskopia först.</string>
+  <string name="webview_block_detected_major">Identifierad huvudversion av Chromium: %1$d</string>
+  <string name="webview_block_detected_full">Identifierad WebView-version: %1$s</string>
+  <string name="webview_block_provider">Paket som tillhandahåller WebView: %1$s</string>
+  <string name="webview_block_source">Källa till versionsuppgiften: %1$s</string>
+  <string name="webview_block_update">Uppdatera WebView</string>
+  <string name="webview_block_retry">Försök igen</string>
+  <string name="webview_block_open_settings">Öppna WebView-inställningarna</string>
+  <string name="webview_block_open_app_settings">Öppna WebViews appinställningar</string>
+  <string name="webview_block_close">Stäng appen</string>
+  <string name="webview_block_try_anyway">Försök ändå (rekommenderas inte)</string>
+  <string name="webview_manage_warning_title">Vill du hantera Android WebView?</string>
+  <string name="webview_manage_warning_message">Android kan bland annat erbjuda dig att ta bort uppdateringar av WebView. På vissa enheter rensas då även WebViews lagringsutrymme. Fortsätt bara om du har exporterat eller säkerhetskopierat dina data från Super Productivity. Även om du har synkroniserat dina data kan du behöva ansluta dina konton igen. Lokala ändringar som ännu inte har synkroniserats kan gå förlorade.</string>
+  <string name="webview_manage_warning_continue">Fortsätt</string>
+  <string name="webview_clear_storage_warning_title">Återställ appen som tillhandahåller WebView</string>
+  <string name="webview_clear_storage_warning_message">Det här öppnar appinställningarna för %1$s. Kontrollera appnamnet innan du fortsätter. Vi tror att det är den appen som tillhandahåller WebView, men vi kan inte alltid avgöra det säkert. Tryck på Lagring → Rensa lagringsutrymme och öppna sedan Super Productivity igen.\n\nDina uppgifter i Super Productivity sparas separat och raderas inte. Den andra appens egna webbläsar- eller appdata kan däremot påverkas. Exportera en säkerhetskopia först om du kan.</string>
+  <string name="webview_override_warning_title">Fortsätt på egen risk</string>
+  <string name="webview_override_warning_message">Din version av Android System WebView verkar vara äldre än %1$d.\n\nOm versionsuppgiften ovan stämmer kan följande hända om du fortsätter:\n• Appen kraschar eller går inte att öppna\n• Data visas felaktigt eller inte alls\n• Synkroniseringen misslyckas och data kan gå förlorade\n\nPå vissa enheter kan fel version visas. Om du är säker på att WebView är uppdaterat kan du fortsätta. Uppdatera helst Android System WebView från Play Butik först om det är möjligt.</string>
+  <string name="webview_override_warning_continue">Jag förstår risken och vill fortsätta</string>
+  <string name="webview_override_warning_cancel">Avbryt</string>
+
+  <string name="share_saved">Sparat i Super Productivity</string>
+  <string name="share_empty">Inget att spara</string>
+  <string name="share_failed">Det gick inte att spara det delade innehållet</string>
+
+  <string name="widget_title">Dagens uppgifter</string>
+  <string name="widget_header_title">Idag</string>
+  <string name="widget_header_outdated">%1$s (inaktuell)</string>
+  <string name="widget_header_outdated_unknown">Inaktuell lista</string>
+  <string name="widget_description">Visar dagens uppgifter och låter dig snabbt markera dem som klara</string>
+  <string name="widget_empty">Inga uppgifter idag</string>
+  <string name="widget_task_done">Markera uppgiften som klar eller inte klar</string>
+  <string name="widget_tracking_title">Tidtagning pågår: %1$s</string>
+  <string name="widget_tracking_device">på %1$s</string>
+  <string name="widget_add_task">Lägg till uppgift</string>
+
+  <string name="quick_add_title">Ny uppgift</string>
+  <string name="quick_add_hint">Uppgiftens titel</string>
+  <string name="quick_add_save">Lägg till</string>
+  <string name="quick_add_saved">Uppgiften har sparats</string>
+  <string name="quick_add_failed">Det gick inte att spara uppgiften</string>
+
+  <string name="shortcut_add_task">Ny uppgift</string>
+  <string name="shortcut_today">Idag</string>
+  <string name="shortcut_inbox">Inkorgen</string>
+</resources>

@@ -19,6 +19,6 @@
   "isSkipMenuEntry": false,
   "icon": "icon.svg",
   "i18n": {
-    "languages": ["en", "de"]
+    "languages": ["en", "de", "sv"]
   }
 }

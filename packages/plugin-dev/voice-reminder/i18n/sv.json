@@ -1,0 +1,18 @@
+{
+  "SETTINGS": {
+    "TITLE": "Inställningar för röstpåminnelser",
+    "ENABLE": "Aktivera röstpåminnelser",
+    "TEXT_LABEL": "Text (använd ${currentTaskTitle} för uppgiftens namn)",
+    "INTERVAL_LABEL": "Intervall (sekunder)",
+    "VOLUME_LABEL": "Volym",
+    "VOICE_LABEL": "Röst",
+    "VOICE_DEFAULT": "Standardröst",
+    "TEST": "Prova",
+    "SAVE": "Spara",
+    "CANCEL": "Avbryt",
+    "SAVED_MSG": "Inställningarna för röstpåminnelser har sparats",
+    "TEST_NO_TEXT": "Ange först en text för röstpåminnelsen",
+    "TEST_PLACEHOLDER": "den aktuella uppgiftens namn",
+    "DESCRIPTION": "Läser upp den angivna texten med jämna mellanrum när du tar tid på en uppgift."
+  }
+}

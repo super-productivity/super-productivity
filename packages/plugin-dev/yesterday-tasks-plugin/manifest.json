@@ -9,7 +9,7 @@
   "permissions": ["getTasks", "getArchivedTasks", "showIndexHtmlAsView", "openDialog"],
   "dataSharing": [],
   "i18n": {
-    "languages": ["en", "de"]
+    "languages": ["en", "de", "sv"]
   },
   "iFrame": true,
   "sidePanel": true,

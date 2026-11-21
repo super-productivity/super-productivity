@@ -1,23 +1,28 @@
 {
   "CFG": {
-    "HOST": "Host (organization or collection URL)",
-    "HOST_DESC": "Use the full Azure DevOps URL, for example https://dev.azure.com/your-org or https://server:8080/tfs/DefaultCollection.",
-    "PROJECT": "Project",
-    "TOKEN": "Personal Access Token",
-    "SCOPE": "Scope (Auto Import only)",
-    "SCOPE_ALL": "All",
-    "SCOPE_CREATED": "Created by me",
-    "SCOPE_ASSIGNED": "Assigned to me",
-    "AUTO_IMPORT_LIMIT": "Auto import limit",
-    "AUTO_IMPORT_LIMIT_DESC": "Maximum number of Azure DevOps work items to fetch for automatic backlog import. Max {{max}}."
+    "HOST": "Värd (webbadress till organisationen eller samlingen)",
+    "HOST_DESC": "Ange hela webbadressen till Azure DevOps, till exempel https://dev.azure.com/your-org eller https://server:8080/tfs/DefaultCollection.",
+    "PROJECT": "Projekt",
+    "TOKEN": "Personlig åtkomsttoken",
+    "SCOPE": "Urval (endast vid automatisk import)",
+    "SCOPE_ALL": "Alla",
+    "SCOPE_CREATED": "Skapade av mig",
+    "SCOPE_ASSIGNED": "Tilldelade mig",
+    "AUTO_IMPORT_LIMIT": "Gräns för automatisk import",
+    "AUTO_IMPORT_LIMIT_DESC": "Högsta antal arbetsobjekt som hämtas från Azure DevOps vid automatisk import till backloggen. Högsta tillåtna värde är {{max}}.",
+    "AUTO_IMPORT_WIQL": "WIQL-fråga (endast vid automatisk import)",
+    "AUTO_IMPORT_WIQL_DESC": "Valfritt. Frågan ersätter hela frågan för automatisk import. Du väljer själv urval, statusfilter och sortering. Inställningen Urval ovan används då inte. Du kan till exempel filtrera efter iteration, område eller typ av arbetsobjekt, eller matcha egna namn på slutstatusar. Lämna fältet tomt för att använda inställningen Urval. Använd en fråga som ger en enkel lista över arbetsobjekt, till exempel Select [System.Id] From WorkItems Where [System.TeamProject] = 'MyProject' AND [System.IterationPath] = 'MyProject\\Sprint 1' AND [System.State] <> 'Closed'."
   },
   "DISPLAY": {
     "SUMMARY": "Sammanfattning",
     "STATUS": "Status",
-    "ASSIGNEE": "Mottagare",
-    "DUE_DATE": "Två datum",
+    "ASSIGNEE": "Ansvarig",
+    "DUE_DATE": "Förfallodatum",
     "PRIORITY": "Prioritet",
     "DESCRIPTION": "Beskrivning"
   },
-  "FORM_HELP": "<p>Here you can configure Super Productivity to list Azure DevOps work items for a project in the task creation panel. They are shown as suggestions and link back to the work item.</p><p>In addition, you can automatically import open work items. Provide a Personal Access Token with work-item read access.</p>"
+  "FORM_HELP": "<p>När du skapar en uppgift i Super Productivity kan du få förslag på arbetsobjekt från ett projekt i Azure DevOps. Varje förslag länkar till arbetsobjektet.</p><p>Du kan också importera öppna arbetsobjekt automatiskt. Ange en personlig åtkomsttoken som ger läsbehörighet till arbetsobjekten.</p><p>Om du vill att ett arbetsobjekt ska markeras som klart eller aktivt när du slutför eller öppnar uppgiften igen väljer du <b>synkriktning för status</b> under Tvåvägssynkronisering. Välj <b>Åt båda hållen</b> eller <b>Skicka endast</b> och ge din token både läs- och skrivbehörighet till arbetsobjekten.</p>",
+  "ERRORS": {
+    "NO_TARGET_STATE": "Det finns ingen status att flytta arbetsobjekt av typen ”{{type}}” till i Azure DevOps."
+  }
 }

@@ -1,0 +1,65 @@
+{
+  "TITLE": {
+    "IMPORT": "Importera från Microsoft To Do",
+    "PREVIEW": "Förhandsvisning",
+    "IMPORTING": "Importerar…",
+    "FINISHED": "Importen är klar",
+    "INCOMPLETE": "Importen är ofullständig"
+  },
+  "SIGN_IN": {
+    "INTRO": "Importera öppna listor, uppgifter, steg, anteckningar, förfallodatum och upprepningar från Microsoft To Do till Super Productivity. Importen lägger till nya uppgifter och listor. Det som redan finns i Super Productivity ligger kvar som förut.",
+    "HELP": "Du loggar in med Microsoft i ett webbläsarfönster. Importen ber bara om att få läsa dina uppgifter. Inloggningen används enbart för den här importen och sparas inte.",
+    "LOADING": "Hämtar dina uppgifter från Microsoft To Do…",
+    "NO_LISTS": "Inga listor hittades för det här Microsoft-kontot.",
+    "NOT_CONFIGURED": "Inloggning med Microsoft har inte konfigurerats i den här versionen.",
+    "LEGAL": "Microsoft behåller ditt godkännande tills du återkallar det i ditt Microsoft-konto. Tillägget är fristående från Microsoft och har inte godkänts av företaget. Microsoft lämnar inga garantier och tar inget ansvar för importen.",
+    "PRIVACY_LINK": "Mer om integritet"
+  },
+  "ERROR": {
+    "LOAD_FAILED": "Det gick inte att hämta uppgifter från Microsoft To Do: {{error}}. Försök logga in igen och kontrollera anslutningen.",
+    "IMPORT_FAILED": "Importen misslyckades: {{error}}",
+    "IMPORT_STOPPED": "Importen avbröts vid ”{{project}}”: {{error}}. Bara en del av projektet skapades. Ta bort ”{{project}}” innan du försöker igen och välj sedan den listan och de återstående listorna på nytt."
+  },
+  "BUTTON": {
+    "SIGN_IN": "Logga in med Microsoft",
+    "IMPORT": "Importera",
+    "BACK": "Tillbaka"
+  },
+  "PREVIEW": {
+    "CHOOSE_PROJECTS": "Välj vilka listor du vill importera. Varje lista blir ett projekt:",
+    "PROJECT_COUNTS": "{{title}} – uppgifter: {{taskCount}}, steg: {{subTaskCount}}",
+    "ALREADY_EXISTS": "finns redan och kan ha importerats tidigare",
+    "TAG_IMPORTANT": "Ge viktiga (stjärnmärkta) uppgifter taggen ”important”",
+    "LOSS_HEADING": "Det här ändras eller utelämnas vid importen",
+    "SELECT_PROJECT": "Välj minst en lista att importera."
+  },
+  "LOSS": {
+    "RECURRING": "Upprepningar som Super Productivity saknar stöd för: {{count}}. Regeln sparas i uppgiftens anteckningar.",
+    "REMINDERS": "Påminnelser som inte importeras: {{count}}.",
+    "ATTACHMENTS": "Uppgifter som importeras utan sina bifogade filer: {{count}}.",
+    "TRUNCATED_FIELDS": "Ovanligt långa värden som kortas av för att rymmas vid importen: {{count}}.",
+    "ALWAYS": "Slutförda uppgifter, Min dag och länkade e-postmeddelanden eller filer importeras inte."
+  },
+  "IMPORT": {
+    "STARTING": "Startar…",
+    "PHASE_PROJECT": "skapar projekt",
+    "PHASE_TASKS": "skapar uppgifter",
+    "PHASE_DETAILS": "lägger till datum, taggar och upprepningar ({{current}}/{{total}})",
+    "PROGRESS": "Lista {{current}} av {{total}}: {{title}} – {{detail}}"
+  },
+  "SUMMARY": {
+    "PROJECT_RESULT": "{{title}}: {{landedTasks}} av {{plannedTasks}} uppgifter, {{landedSubTasks}} av {{plannedSubTasks}} steg",
+    "SHORTFALL": "vissa poster saknas, kontrollera resultatet",
+    "UNVERIFIED": "Det gick inte att kontrollera hur många poster som importerades. Antalet ovan kan därför vara 0 även om uppgifter har importerats.",
+    "REPEATS_FAILED": "Återkommande uppgifter där upprepningen inte kunde ställas in: {{count}}. Regeln finns i uppgiftens anteckningar.",
+    "CREATED_TAGS": "Skapade taggar: {{tags}}",
+    "NOT_CARRIED_OVER": "Följde inte med",
+    "SNACK_FINISHED": "Importen från Microsoft To Do är klar",
+    "UNDO": "Ta bort de projekt som skapades för att ångra importen."
+  },
+  "PARSE": {
+    "UNTITLED_LIST": "Lista utan namn",
+    "UNTITLED_TASK": "Uppgift utan namn",
+    "REPEATS": "Upprepning: {{rule}}"
+  }
+}
