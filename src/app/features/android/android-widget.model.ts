@@ -36,6 +36,18 @@ export interface AndroidWidgetCurrentTask {
   expiresAt?: number;
 }
 
+/** A project that can be selected by an individual Android home-screen widget. */
+export interface AndroidWidgetProject {
+  id: string;
+  title: string;
+  /**
+   * Up to 20 open tasks (the project list, then its backlog) plus the 5 most
+   * recently done, all in stored order. The done ones serve only the native
+   * five-second grace after a widget checkbox tap.
+   */
+  tasks: AndroidWidgetTask[];
+}
+
 export interface AndroidWidgetData {
   v: 1;
   /**
@@ -77,4 +89,10 @@ export interface AndroidWidgetData {
    * for today.
    */
   currentTask: AndroidWidgetCurrentTask | null;
+  /**
+   * Projects a widget instance can be pointed at. An old persisted v:1 snapshot may
+   * lack this additive field. Native treats a missing project selection or
+   * unavailable project as the `tasks` list.
+   */
+  projects: AndroidWidgetProject[];
 }
