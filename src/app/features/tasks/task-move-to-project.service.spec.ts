@@ -124,6 +124,26 @@ describe('TaskMoveToProjectService', () => {
     expect(taskService.moveToProject).not.toHaveBeenCalled();
   });
 
+  it('leaves live instances, archived instances and the repeat config unchanged on cancel', async () => {
+    const t = task({ repeatCfgId: 'cfg' });
+    repeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+      of({ id: 'cfg' } as TaskRepeatCfg),
+    );
+    taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([t]));
+    taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([
+      { ...DEFAULT_TASK, id: 'arch', projectId: 'p1', subTaskIds: ['arch-sub'] },
+    ]);
+    dialogResult = false;
+    const dialog = TestBed.inject(MatDialog);
+    spyOn(dialog, 'open').and.callThrough();
+
+    expect(await service.moveToProject(t, 'p2')).toBeFalse();
+    expect(dialog.open).toHaveBeenCalledTimes(1);
+    expect(taskService.moveToProject).not.toHaveBeenCalled();
+    expect(repeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+    expect(taskService.updateArchiveTasks).not.toHaveBeenCalled();
+  });
+
   // Plugin callers have no user to answer the dialog (#10489).
   it('moves every instance without a dialog when isSkipConfirm is set', async () => {
     const t1 = task({ id: 'a', repeatCfgId: 'cfg' });
