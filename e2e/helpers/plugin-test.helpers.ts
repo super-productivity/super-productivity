@@ -122,7 +122,7 @@ export const waitForPluginManagementInit = async (
 
     const result = await page.waitForFunction(
       () => {
-        const cards = document.querySelectorAll('plugin-management mat-card');
+        const cards = document.querySelectorAll('plugin-management .plugin-row');
         return cards.length > 0;
       },
       { timeout: 10000 },
@@ -145,6 +145,42 @@ export const waitForPluginManagementInit = async (
 };
 
 /**
+ * Settings → Plugins renders only the selected tab (Features, Integrations or
+ * Community), so a plugin's row exists only while its tab is open. Opens the
+ * tabs in turn until the row shows up or the timeout runs out; plugins load one
+ * by one, so a tab may need a second look.
+ */
+const openTabWithPlugin = async (
+  page: Page,
+  pluginName: string,
+  timeout: number,
+): Promise<void> => {
+  const name = page.locator('plugin-management .plugin-row-name', {
+    hasText: pluginName,
+  });
+  const tabs = page.locator('plugin-management [role="tab"]');
+  const deadline = Date.now() + timeout;
+  if ((await name.count()) > 0 || (await tabs.count()) === 0) {
+    return;
+  }
+  while (Date.now() < deadline) {
+    for (const tab of await tabs.all()) {
+      await tab.click();
+      const isShown = await name
+        .first()
+        .waitFor({ state: 'attached', timeout: 500 })
+        .then(
+          () => true,
+          () => false,
+        );
+      if (isShown) {
+        return;
+      }
+    }
+  }
+};
+
+/**
  * Enable a plugin with robust verification
  */
 export const enablePluginWithVerification = async (
@@ -153,14 +189,17 @@ export const enablePluginWithVerification = async (
   timeout: number = 8000, // Reduced from 10s to 8s // Reduced from 15s to 10s
 ): Promise<boolean> => {
   const startTime = Date.now();
+  await openTabWithPlugin(page, pluginName, timeout / 2);
 
   // First, verify the plugin card exists
   const pluginCardResult = await page
     .waitForFunction(
       (name) => {
-        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        const cards = Array.from(
+          document.querySelectorAll('plugin-management .plugin-row'),
+        );
         const targetCard = cards.find((card) => {
-          const title = card.querySelector('mat-card-title')?.textContent || '';
+          const title = card.querySelector('.plugin-row-name')?.textContent || '';
           return title.includes(name);
         });
 
@@ -181,9 +220,9 @@ export const enablePluginWithVerification = async (
 
   // Enable the plugin
   const enableResult = await page.evaluate((name) => {
-    const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+    const cards = Array.from(document.querySelectorAll('plugin-management .plugin-row'));
     const targetCard = cards.find((card) => {
-      const title = card.querySelector('mat-card-title')?.textContent || '';
+      const title = card.querySelector('.plugin-row-name')?.textContent || '';
       return title.includes(name);
     });
 
@@ -215,9 +254,11 @@ export const enablePluginWithVerification = async (
   // Wait for the toggle state to update
   await page.waitForFunction(
     (name) => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+      const cards = Array.from(
+        document.querySelectorAll('plugin-management .plugin-row'),
+      );
       const targetCard = cards.find((card) => {
-        const title = card.querySelector('mat-card-title')?.textContent || '';
+        const title = card.querySelector('.plugin-row-name')?.textContent || '';
         return title.includes(name);
       });
 
@@ -296,14 +337,17 @@ export const disablePluginWithVerification = async (
   timeout: number = 10000,
 ): Promise<boolean> => {
   const startTime = Date.now();
+  await openTabWithPlugin(page, pluginName, timeout / 2);
 
   // First, verify the plugin card exists and is enabled
   const pluginCardResult = await page
     .waitForFunction(
       (name) => {
-        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        const cards = Array.from(
+          document.querySelectorAll('plugin-management .plugin-row'),
+        );
         const targetCard = cards.find((card) => {
-          const title = card.querySelector('mat-card-title')?.textContent || '';
+          const title = card.querySelector('.plugin-row-name')?.textContent || '';
           return title.includes(name);
         });
         return !!targetCard;
@@ -320,9 +364,9 @@ export const disablePluginWithVerification = async (
 
   // Check current state and click to disable if needed
   const disableResult = await page.evaluate((name) => {
-    const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+    const cards = Array.from(document.querySelectorAll('plugin-management .plugin-row'));
     const targetCard = cards.find((card) => {
-      const title = card.querySelector('mat-card-title')?.textContent || '';
+      const title = card.querySelector('.plugin-row-name')?.textContent || '';
       return title.includes(name);
     });
 
@@ -373,9 +417,11 @@ export const disablePluginWithVerification = async (
   try {
     await page.waitForFunction(
       (name) => {
-        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        const cards = Array.from(
+          document.querySelectorAll('plugin-management .plugin-row'),
+        );
         const targetCard = cards.find((card) => {
-          const title = card.querySelector('mat-card-title')?.textContent || '';
+          const title = card.querySelector('.plugin-row-name')?.textContent || '';
           return title.includes(name);
         });
 
