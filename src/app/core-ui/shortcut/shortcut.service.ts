@@ -23,6 +23,7 @@ import { firstValueFrom, fromEvent, merge, Observable, of } from 'rxjs';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
+import { INBOX_PROJECT } from '../../features/project/project.const';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { TaskViewCustomizerService } from '../../features/task-view-customizer/task-view-customizer.service';
 import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
@@ -251,6 +252,8 @@ export class ShortcutService {
       });
     } else if (checkKeyCombo(ev, keys.goToTimeline)) {
       this._router.navigate(['/tag/' + TODAY_TAG.id + '/tasks']);
+    } else if (checkKeyCombo(ev, keys.goToInbox)) {
+      this._router.navigate(['/project/' + INBOX_PROJECT.id + '/tasks']);
     } else if (checkKeyCombo(ev, keys.goToSettings)) {
       this._router.navigate(['/config']);
     } else if (
