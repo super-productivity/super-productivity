@@ -73,19 +73,21 @@ describe('PriorityIconPresetSelectComponent', () => {
   });
 
   it('previews Low, Medium and High, in that order, for every preset option', () => {
-    const [chevrons, numbers] = openOptions(fixture);
+    const [chevrons, numbers, numbersHighFirst] = openOptions(fixture);
 
     expect(iconsOf(chevrons)).toEqual(levelIcons('chevrons'));
     expect(iconsOf(numbers)).toEqual(levelIcons('numbers'));
+    expect(iconsOf(numbersHighFirst)).toEqual(levelIcons('numbersHighFirst'));
   });
 
   // MatSelect announces an option's textContent (viewValue) on arrow keys.
-  it('keeps each option label free of icon names or digits', () => {
+  it('announces each option label without appending icon names', () => {
     const options = openOptions(fixture);
 
     expect(options.map((o) => o.textContent?.trim())).toEqual([
       T.GCF.TASKS.PRIORITY_ICON_PRESET_CHEVRONS,
       T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS,
+      T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS_HIGH_FIRST,
     ]);
   });
 
@@ -160,5 +162,19 @@ describe('PriorityIconPresetSelectComponent in the tasks settings form', () => {
     expect(fixture.componentInstance.model.priorityIconPreset).toBe('numbers');
     expect(trigger.textContent).toContain(T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS);
     expect(iconsOf(trigger)).toEqual(levelIcons('numbers'));
+  });
+
+  it('persists the high-first numeric preset and previews its icons in level order', async () => {
+    const options = openOptions(fixture);
+    expect(options.length).toBe(3);
+    options[2].click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const trigger: HTMLElement =
+      fixture.nativeElement.querySelector('mat-select-trigger');
+    expect(fixture.componentInstance.model.priorityIconPreset).toBe('numbersHighFirst');
+    expect(iconsOf(trigger)).toEqual(['counter_3', 'counter_2', 'counter_1']);
   });
 });
