@@ -1510,6 +1510,18 @@ describe('ScheduleComponent', () => {
         } as any),
       ).toBe('feeds.example.com');
     });
+
+    it('shows a colon-containing iCal name verbatim, not as a sanitized scheme', () => {
+      expect(
+        component.calProviderLabel({
+          id: 'p',
+          isEnabled: true,
+          issueProviderKey: 'ICAL',
+          name: 'Team:Work',
+          icalUrl: 'https://feeds.example.com/cal.ics',
+        } as any),
+      ).toBe('Team:Work');
+    });
   });
 
   describe('weeksToShow computed', () => {
