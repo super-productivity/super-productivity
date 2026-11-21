@@ -26,7 +26,8 @@ export type ConditionType =
   | 'titleStartsWith'
   | 'projectIs'
   | 'hasTag'
-  | 'weekdayIs';
+  | 'weekdayIs'
+  | 'priorityIs';
 
 export interface Condition {
   type: ConditionType;
@@ -40,13 +41,14 @@ export type ActionType =
   | 'addTag'
   | 'removeTag'
   | 'moveToProject'
+  | 'setPriority'
   | 'displaySnack'
   | 'displayDialog'
   | 'webhook';
 
 export interface Action {
   type: ActionType;
-  value: string; // For createTask: title; For addTag/moveToProject: tag/project identifier; For deleteTask: unused
+  value: string; // For createTask: title; For addTag/moveToProject: tag/project identifier; For setPriority: high/medium/low/none; For deleteTask: unused
 }
 
 export interface AutomationRule {
