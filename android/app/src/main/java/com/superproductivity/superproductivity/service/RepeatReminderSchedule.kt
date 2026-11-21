@@ -57,7 +57,11 @@ internal fun planRepeatReminderSlots(
     if (previous == null) {
         return RepeatSlotPlan(emptySet(), derived.filter { it.remindAt > now }, slots)
     }
-    val toCancel = previous.keys.filterTo(HashSet()) { id -> slots[id] != previous[id] }
+    // A slot that is past and no longer derived already fired: cancelling it
+    // would dismiss the notification the user has not seen yet.
+    val toCancel = previous.filter { (id, at) ->
+        slots[id] != at && (at > now || id in slots)
+    }.keys
     val toSchedule = derived.filter { it.remindAt > now && previous[it.taskId] != it.remindAt }
     return RepeatSlotPlan(toCancel, toSchedule, slots)
 }
