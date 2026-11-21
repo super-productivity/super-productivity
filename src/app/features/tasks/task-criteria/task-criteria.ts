@@ -449,12 +449,15 @@ export type TaskSortKey =
   | 'estimate'
   | 'timeSpent'
   | 'priority'
-  | 'tag';
+  | 'tag'
+  | 'project';
 
 export interface TaskSortCtx {
   collator: Intl.Collator;
   /** Side-menu position per tag id (only needed for the `tag` key). */
   tagRankById?: ReadonlyMap<string, number>;
+  /** Side-menu position per project id (only needed for the `project` key). */
+  projectRankById?: ReadonlyMap<string, number>;
 }
 
 /** A date-only value means "by the end of that day" for sorting (#9828). */
@@ -482,7 +485,8 @@ const compareNullableTs = (a: number | null, b: number | null): number => {
  * Ascending comparator for a sort key; callers multiply by -1 for descending.
  * Priority ascending lists high priority first; the tag key orders by the
  * task's first tag in side-menu order and keeps manual order within a tag
- * (descending flips only the group order, #8486).
+ * (descending flips only the group order, #8486). The project key does the
+ * same by project.
  */
 export const buildTaskComparator = (
   key: TaskSortKey,
@@ -524,6 +528,13 @@ export const buildTaskComparator = (
         }
         return min;
       };
+      return (a, b) => rankOf(a) - rankOf(b);
+    }
+    case 'project': {
+      const ranks = sortCtx.projectRankById ?? new Map<string, number>();
+      const unknownRank = ranks.size;
+      const rankOf = (task: TaskCopy): number =>
+        task.projectId ? (ranks.get(task.projectId) ?? unknownRank) : unknownRank + 1;
       return (a, b) => rankOf(a) - rankOf(b);
     }
   }
