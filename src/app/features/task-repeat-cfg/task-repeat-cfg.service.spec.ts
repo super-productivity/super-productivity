@@ -861,7 +861,7 @@ describe('TaskRepeatCfgService', () => {
       expect(scheduleAction).toBeDefined();
 
       // What scheduleRepeatReminders$ computes for the same (cfg, day) — see
-      // _getUpcomingRepeatReminders in mobile-notification.effects.ts.
+      // getUpcomingRepeatReminders in get-upcoming-repeat-reminders.ts.
       const dueDayStr = getDbDateStr(targetDayDate);
       const expectedId = getRepeatableTaskId(cfg.id, dueDayStr);
       const expectedDueWithTime = getDateTimeFromClockString('09:00', targetDayDate);

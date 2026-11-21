@@ -10,6 +10,7 @@ import com.superproductivity.superproductivity.service.BackgroundSyncCredentialS
 import com.superproductivity.superproductivity.service.QuickFetchCoalescer
 import com.superproductivity.superproductivity.service.ReminderChangeResult
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.RepeatReminderCache
 import com.superproductivity.superproductivity.service.SuperSyncBackgroundProvider
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.service.buildPayloadDecryptor
@@ -163,8 +164,11 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             // goAsync() window. Ops with unknown salts degrade to envelope-only
             // parsing and are reported in unreadableTaskIds.
             val decryptor = buildPayloadDecryptor(context, TAG, deriveOnMiss = false)
+            // The cached configs let a project or tag delete mark its repeat
+            // alarms stale; with an empty state only config deletes would.
             SuperSyncBackgroundProvider(decryptor).fetchQuick(
-                credentials.baseUrl, credentials.accessToken, lastSeq
+                credentials.baseUrl, credentials.accessToken, lastSeq,
+                repeatState = RepeatReminderCache.getState(context),
             )
         } ?: return false  // Error -> fail-open
 
@@ -192,7 +196,10 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val decryptor = buildPayloadDecryptor(context, TAG) ?: return null
         val derived = derivingScope.async {
             derivingFetches.get(cacheKey) {
-                SuperSyncBackgroundProvider(decryptor).fetchQuick(baseUrl, accessToken, lastSeq)
+                SuperSyncBackgroundProvider(decryptor).fetchQuick(
+                    baseUrl, accessToken, lastSeq,
+                    repeatState = RepeatReminderCache.getState(context),
+                )
             }
         }
         val waitMs = deadlineMs - SystemClock.elapsedRealtime()

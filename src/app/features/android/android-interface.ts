@@ -227,6 +227,12 @@ export interface AndroidInterface {
   // Mirrors the reminder settings the background worker must honor when it
   // schedules alarms from synced ops. Optional: older APKs don't have it.
   setBackgroundReminderSettings?(isDisabled: boolean, useAlarmStyle: boolean): void;
+  // Start-of-next-day offset in ms, so a background repeat reminder uses the
+  // same clock shift as the open app. Optional: older APKs don't have it.
+  setStartOfNextDayDiffMs?(diffMs: number): void;
+  // Repeat configs' schedule fields as JSON (getRepeatCfgSnapshotForNative),
+  // replacing the background worker's cache. Optional: older APKs.
+  setRepeatCfgSnapshot?(json: string): void;
 }
 
 export type ForegroundServiceStartFailure = {
