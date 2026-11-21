@@ -8,7 +8,7 @@ The [Diátaxis skill](../.agents/skills/diataxis/SKILL.md) owns how a public pag
 | Set             | Location                  | Role                                                           |
 | --------------- | ------------------------- | -------------------------------------------------------------- |
 | Public docs     | [`docs/public/`](public/) | User, contributor, and integrator docs, organized by Diátaxis. |
-| Legacy wiki     | [`docs/wiki/`](wiki/)     | GitHub Wiki source; migration to public docs is in progress.   |
+| Legacy wiki     | [`docs/wiki/`](wiki/)     | Website docs source; migration to public docs is in progress.  |
 | Maintainer docs | [`docs/`](README.md)      | Internal guides, decisions, runbooks, plans, and research.     |
 
 Canonical prose lives in `docs/public/` once a page exists; until then, the legacy wiki owns the user-facing description.
@@ -35,7 +35,7 @@ Public pages follow these rules:
 
 During the migration, do not duplicate a fact in both `docs/public/` and `docs/wiki/`.
 Convert a wiki note by creating the quadrant-pure public page first and then redirect the reader to the updated page.
-Never move or restructure `docs/wiki/` without warning: [`wiki-sync.yml`](../.github/workflows/wiki-sync.yml) mirrors it to the GitHub Wiki, and super-productivity.com/docs publishes it under URLs that the app and README link (see [the wiki style guide](wiki/0.01-Style-Guide.md#published-website-docs)).
+Never move or restructure `docs/wiki/` without warning: super-productivity.com/docs publishes it under URLs that the app and README link (see [the wiki style guide](wiki/0.01-Style-Guide.md#published-website-docs)), and [`wiki-sync.yml`](../.github/workflows/wiki-sync.yml) replaces each GitHub Wiki page with a stub linking to that URL ([`tools/wiki-stubs.js`](../tools/wiki-stubs.js), which follows the website's URL rules).
 
 Updating links in the same PR does not reach app versions already released, which keep their URLs.
 For a page the app links, keep its website route and linked headings, or add a redirect in `nginx/plesk-additional-directives.conf` in the landing-page repository.
@@ -73,7 +73,7 @@ If you are unsure which note to edit, ask before writing.
 
 ### Wiki checks
 
-Wiki notes are linted in CI before they are synced to the GitHub Wiki.
+Wiki notes are linted in CI before the GitHub Wiki stubs are updated.
 Run the local checks before submitting:
 
 ```bash

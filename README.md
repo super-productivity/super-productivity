@@ -226,10 +226,10 @@ There are two sets of docs: the official one, maintained in this repository, and
   <a href="https://github.com/super-productivity/super-productivity/commit/7a51d4b06e414fdcc48e4999197a93eee9cd09da">this commit</a>.
 </p>
 <p>
-  Changes to files within <code>./docs/wiki</code> are linted in CI before being automatically
-  sync'd to the repository's official Wiki hosted by GitHub. The same pages, together with the
-  rewritten pages in <code>./docs/public</code>, are published at
-  <a href="https://super-productivity.com/docs/">super-productivity.com/docs</a>.
+  Changes to files within <code>./docs/wiki</code> are linted in CI and published, together with the
+  rewritten pages in <code>./docs/public</code>, at
+  <a href="https://super-productivity.com/docs/">super-productivity.com/docs</a>. The GitHub Wiki
+  only keeps one stub per page that links to its new address.
 </p>
 <p>
   The wiki is being rewritten page by page into <code>./docs/public</code>, following the
