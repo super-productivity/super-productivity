@@ -15,6 +15,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { provideMockStore } from '@ngrx/store/testing';
 import { Observable, of, Subject } from 'rxjs';
 import { ReactiveFormsModule } from '@angular/forms';
+import { provideRouter } from '@angular/router';
 // FormlyConfigModule (not FormlyModule) is needed here to register custom
 // field types and validation within the TestBed injector.
 import { FormlyConfigModule } from '../../../ui/formly-config.module';
@@ -154,6 +155,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       ],
       schemas: [NO_ERRORS_SCHEMA],
       providers: [
+        provideRouter([]),
         provideMockStore(),
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MatDialog, useValue: mockMatDialog },
