@@ -1,5 +1,5 @@
 import { Log } from '../../core/log';
-import { isChecklistItemLine } from './checklist-operations';
+import { getChecklistItemLineIndices, isChecklistItemLine } from './checklist-operations';
 
 /*
 we want to match:
@@ -20,14 +20,15 @@ export const isMarkdownChecklistLine = (line: string): boolean =>
 
 export const isMarkdownChecklist = (text: string): boolean => {
   try {
-    const lines = text.split('\n').filter((it) => it.trim() !== '');
+    const lines = text.split('\n');
+    const nonemptyLineCount = lines.filter((it) => it.trim() !== '').length;
 
-    if (lines.length === 0) {
+    if (nonemptyLineCount === 0) {
       return false;
     }
 
-    const items = lines.filter(isMarkdownChecklistLine);
-    return items.length === lines.length || items.length >= 2;
+    const items = getChecklistItemLineIndices(lines);
+    return items.length === nonemptyLineCount || items.length >= 2;
   } catch (e) {
     Log.err('Checklist parsing failed');
     Log.err(e);
