@@ -388,7 +388,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private _focusTimeout?: number;
   private _autocompleteTimeout?: number;
   private _processingAutocompleteSelection = false;
-  private _isAddingTask = false;
+  private _activeSubmission?: { inputText: string };
   private _defaultTagIds: string[] = [];
 
   ngOnInit(): void {
@@ -534,7 +534,13 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // Public methods
   async addTask(): Promise<void> {
-    if (this._processingAutocompleteSelection || this._isAddingTask) {
+    const inputText = this.stateService.inputTxt();
+    // A second Enter on the same draft is a duplicate. One on an edited draft
+    // takes over from a submission still waiting for the earlier draft's parse.
+    if (
+      this._processingAutocompleteSelection ||
+      this._activeSubmission?.inputText === inputText
+    ) {
       return;
     }
 
@@ -548,16 +554,28 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
-    const currentState = this.stateService.state();
-    const rawInput = this.stateService.inputTxt().trim();
-    if (!rawInput) return;
+    if (!inputText.trim()) return;
 
-    const title = currentState.cleanText || rawInput;
-    if (!title) return;
-
-    this._isAddingTask = true;
+    const submission = { inputText };
+    this._activeSubmission = submission;
     try {
-      const state = currentState;
+      // Create the task from the parse of exactly this text, so the title and
+      // the parsed fields land in the one addTask op. Until it lands the state
+      // holds an earlier draft's result: Enter can beat inputTxt$ to the
+      // parser, and the first date waits for the date-parser chunk.
+      while (!this._parserService.isParsed(inputText)) {
+        // Editing the draft or closing the bar meanwhile drops this submit.
+        if (
+          !(await this._parserService.nextParseLanded()) ||
+          this._activeSubmission !== submission ||
+          this.stateService.inputTxt() !== inputText
+        ) {
+          return;
+        }
+      }
+      const state = this.stateService.state();
+      const title = state.cleanText || inputText.trim();
+      if (!title) return;
       let finalTagIds = [...state.tagIds, ...state.tagIdsFromTxt];
 
       if (this.hasNewTags()) {
@@ -756,7 +774,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       });
       this._resetAfterAdd();
     } finally {
-      this._isAddingTask = false;
+      // A dropped submit must not unlock the one that took over from it.
+      if (this._activeSubmission === submission) {
+        this._activeSubmission = undefined;
+      }
     }
   }
 

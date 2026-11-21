@@ -1,4 +1,6 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, OnDestroy } from '@angular/core';
+import { firstValueFrom, Subject } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { Project } from '../../project/project.model';
 import { Tag } from '../../tag/tag.model';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
@@ -20,6 +22,7 @@ import {
   DateInputLocale,
   DEFAULT_DATE_INPUT_LOCALE,
 } from '../../../core/date-time-format/date-input-locale';
+import { Log } from '../../../core/log';
 
 interface PreviousParseResult {
   cleanText: string | null;
@@ -61,7 +64,7 @@ const isSameRepeat = (
 };
 
 @Injectable()
-export class AddTaskBarParserService {
+export class AddTaskBarParserService implements OnDestroy {
   private readonly _stateService = inject(AddTaskBarStateService);
   private _previousParseResult: PreviousParseResult | null = null;
   private _parseRunId = 0;
@@ -71,6 +74,26 @@ export class AddTaskBarParserService {
   // for the current input has not landed yet and callers fall back.
   private _lastParsedRanges: { forText: string; ranges: ShortSyntaxRange[] } | null =
     null;
+  private readonly _parseLanded$ = new Subject<void>();
+
+  ngOnDestroy(): void {
+    this._parseLanded$.complete();
+  }
+
+  /**
+   * Whether the last parse that landed was for exactly `text`, so the state
+   * holds that parse's result: the cleaned title and the parsed fields.
+   */
+  isParsed(text: string): boolean {
+    return this._lastParsedRanges?.forText === text;
+  }
+
+  /** Resolves true once the next parse lands, false if the bar goes away first. */
+  nextParseLanded(): Promise<boolean> {
+    return firstValueFrom(this._parseLanded$.pipe(map(() => true)), {
+      defaultValue: false,
+    });
+  }
 
   private _arraysEqual<T>(a: T[], b: T[]): boolean {
     return a.length === b.length && a.every((val, i) => val === b[i]);
@@ -115,17 +138,25 @@ export class AddTaskBarParserService {
       return;
     }
 
-    // Get current tags from state to preserve pre-selected tags
-    const parseResult = await shortSyntax(
-      { title: text, tagIds: this._stateService.state().tagIdsFromTxt },
-      config,
-      allTags,
-      allProjects,
-      undefined,
-      'replace',
-      true,
-      dateLocale,
-    );
+    let parseResult: Awaited<ReturnType<typeof shortSyntax>>;
+    try {
+      // Get current tags from state to preserve pre-selected tags
+      parseResult = await shortSyntax(
+        { title: text, tagIds: this._stateService.state().tagIdsFromTxt },
+        config,
+        allTags,
+        allProjects,
+        undefined,
+        'replace',
+        true,
+        dateLocale,
+      );
+    } catch (e) {
+      // e.g. the date-parser chunk failed to load. A submit waits for this
+      // parse, so land it as "no syntax" instead of leaving Enter dead.
+      Log.err('Add task bar: short syntax parse failed', e);
+      parseResult = undefined;
+    }
 
     if (parseRunId !== this._parseRunId) {
       return;
@@ -416,6 +447,7 @@ export class AddTaskBarParserService {
 
     // Store current result as previous for next comparison
     this._previousParseResult = currentResult;
+    this._parseLanded$.next();
   }
 
   resetPreviousResult(): void {
