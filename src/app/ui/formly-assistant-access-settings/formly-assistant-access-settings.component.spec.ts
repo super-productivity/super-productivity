@@ -113,6 +113,32 @@ describe('FormlyAssistantAccessSettingsComponent', () => {
     expect(setAssistantAccessScopes).toHaveBeenCalledOnceWith(['tasks:capture']);
   });
 
+  it('grants time tracking from its own checkbox, without read access', async () => {
+    const setAssistantAccessScopes = jasmine
+      .createSpy()
+      .and.callFake(async (scopes) => state({ scopes }));
+    setEa({
+      getAssistantAccessState: jasmine
+        .createSpy()
+        .and.resolveTo(state({ scopes: ['tasks:capture'] })),
+      setAssistantAccessScopes,
+    });
+    fixture.detectChanges();
+    await settle();
+
+    const checkbox = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('mat-checkbox'),
+    ).find((el) => el.textContent?.includes(T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_TRACK));
+    expect(checkbox).toBeDefined();
+    checkbox?.querySelector('input')?.click();
+    await settle();
+
+    expect(setAssistantAccessScopes).toHaveBeenCalledOnceWith([
+      'tasks:capture',
+      'tasks:track',
+    ]);
+  });
+
   it('shows a generated key once and puts it into the setup snippets', async () => {
     setEa({
       rotateAssistantAccessCredential: jasmine.createSpy().and.resolveTo({

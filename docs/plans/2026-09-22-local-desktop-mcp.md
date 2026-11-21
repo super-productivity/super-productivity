@@ -85,7 +85,7 @@ REST and MCP reads return `APP_NOT_READY` until `DataInitStateService.isAllDataL
 
 ### Settings and credential
 
-- **simpleStore** `ASSISTANT_ACCESS` holds `{isEnabled, scopes: ('tasks:read' | 'tasks:read_notes' | 'tasks:capture')[]}`. All scopes default off. `read_notes` requires `read`.
+- **simpleStore** `ASSISTANT_ACCESS` holds `{isEnabled, scopes: ('tasks:read' | 'tasks:read_notes' | 'tasks:capture' | 'tasks:track')[]}`. All scopes default off. `read_notes` requires `read`.
 - **Credential.** 32 random bytes, base64url, shown in settings. Only a SHA-256 verifier is stored, in `userData/assistant-access-verifier` (0600). Because only the verifier is stored, **the credential is shown only right after it is generated or rotated.** Rotating replaces the verifier.
 - **Revoking.** Rotating the credential or disabling access persists first, then swaps state, then calls `closeAllConnections()` if the listener is no longer needed. Scopes are re-checked after the body is read and before forwarding.
 - Nothing here syncs, and nothing is in backups.
@@ -112,6 +112,9 @@ Reads are forwarded to the existing REST routes. The MCP module in main then app
 | `get_task`                    | `{id, includeNotes?}` → `{task}`. Notes are capped at 8 KB, with a `notesTruncated` flag.                      | `tasks:read` (+notes) |
 | `list_projects` / `list_tags` | `{}` → `{projects \| tags: {id, title}[], truncated}`                                                          | `tasks:read`          |
 | `create_task`                 | `{title (1–500), notes? (≤8 KB)}` → `{id, status}`                                                             | `tasks:capture`       |
+| `get_current_task`            | `{}` → `{task: TaskSummary \| null}`                                                                           | `tasks:read`          |
+| `set_current_task`            | `{id}` → `{currentTaskId, previousTaskId}`. Open tasks without subtasks only. #11729                           | `tasks:track`         |
+| `stop_tracking`               | `{}` → `{currentTaskId: null}`                                                                                 | `tasks:track`         |
 
 - `TaskSummary` = id, title, isDone, projectId, tagIds, parentId, dueDay, dueWithTime, deadlineDay, deadlineWithTime, timeEstimate, timeSpent.
 - Only active tasks. The response is capped at 256 KB.

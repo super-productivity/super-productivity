@@ -2994,6 +2994,7 @@
       "ASSISTANT_ACCESS_SCOPE_READ": "Read tasks: titles, status, dates, projects and tags",
       "ASSISTANT_ACCESS_SCOPE_READ_NOTES": "Also read task notes",
       "ASSISTANT_ACCESS_SCOPE_CAPTURE": "Add new tasks to the Inbox",
+      "ASSISTANT_ACCESS_SCOPE_TRACK": "Start, switch and stop time tracking",
       "ASSISTANT_ACCESS_KEY": "Access key",
       "ASSISTANT_ACCESS_KEY_GENERATE": "Generate access key",
       "ASSISTANT_ACCESS_KEY_REPLACE": "Replace access key",

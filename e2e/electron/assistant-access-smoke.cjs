@@ -158,6 +158,16 @@ async function launch() {
       (await call('get_task', { id, includeNotes: true })).structuredContent.task.notes,
       'smoke note',
     );
+    await page.evaluate(() =>
+      window.ea.setAssistantAccessScopes(['tasks:read', 'tasks:track']),
+    );
+    assert.deepEqual((await call('set_current_task', { id })).structuredContent, {
+      currentTaskId: id,
+      previousTaskId: null,
+    });
+    assert.equal((await call('get_current_task')).structuredContent.task.id, id);
+    assert.equal((await call('stop_tracking')).isError, undefined);
+    assert.equal((await call('get_current_task')).structuredContent.task, null);
     await page.evaluate(() => window.ea.setLocalRestApiEnabled(true));
     await app.close();
     app = undefined;
@@ -182,7 +192,7 @@ async function launch() {
     await page.evaluate(() => window.ea.rotateAssistantAccessCredential());
     assert.equal((await rpc('ping', {})).status, 401);
     console.log(
-      'PASS: real Electron capture, scopes, auth, persisted dual-switch startup, minimize, hide/show, reload and rotation',
+      'PASS: real Electron capture, tracking, scopes, auth, persisted dual-switch startup, minimize, hide/show, reload and rotation',
     );
   } finally {
     if (app) await app.close();

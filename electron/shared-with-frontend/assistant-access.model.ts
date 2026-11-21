@@ -10,6 +10,7 @@ export const ASSISTANT_ACCESS_SCOPES = [
   'tasks:read',
   'tasks:read_notes',
   'tasks:capture',
+  'tasks:track',
 ] as const;
 
 export type AssistantAccessScope = (typeof ASSISTANT_ACCESS_SCOPES)[number];
