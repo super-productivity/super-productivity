@@ -322,5 +322,18 @@
       "downloadUrl": "https://github.com/ptrckmgl/sp-gamify/releases/download/v1.1.1/sp-gamify.zip",
       "sha256": "6471e6b58b6557bf957772aec9afaa0529fc05554a7048fce19bca50845d728e"
     }
+  },
+  {
+    "name": "Liquid Glass UI",
+    "shortDescription": "Liquid Glass look in light and dark mode for Mac, iPhone and more: bundled theme, wallpapers, accent colour, floating tab bar and scroll edge effect. Requires Super Productivity 20.0.0.",
+    "url": "https://github.com/nkte-X/sp-liquid-glass-ui",
+    "author": "nkte-X",
+    "authorUrl": "https://github.com/nkte-X",
+    "id": "liquid-glass-ui",
+    "release": {
+      "version": "1.1.0",
+      "downloadUrl": "https://github.com/nkte-X/sp-liquid-glass-ui/releases/download/v1.1.0/liquid-glass-ui-1.1.0.zip",
+      "sha256": "54674668aab97b0ed328e9570610ac495e827c8f412ee07fc3422e74bf03c42d"
+    }
   }
 ]
