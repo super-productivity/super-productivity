@@ -97,6 +97,7 @@ import { LocalRestApiTaskRoutesService } from './app/features/tasks/local-rest-a
 import { LocalRestApiFocusRoutesService } from './app/features/focus-mode/local-rest-api-focus-routes.service';
 import { LocalRestApiTaskRepeatCfgRoutesService } from './app/features/task-repeat-cfg/local-rest-api-task-repeat-cfg-routes.service';
 import { LocalRestApiAssistantCaptureRoutesService } from './app/features/tasks/assistant-capture/local-rest-api-assistant-capture-routes.service';
+import { LocalRestApiAssistantEditRoutesService } from './app/features/tasks/assistant-edit/local-rest-api-assistant-edit-routes.service';
 import { LocalRestApiNoteRoutesService } from './app/features/note/local-rest-api-note-routes.service';
 import { LocalRestApiSimpleCounterRoutesService } from './app/features/simple-counter/local-rest-api-simple-counter-routes.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
@@ -266,6 +267,11 @@ bootstrapApplication(AppComponent, {
     {
       provide: LOCAL_REST_API_FEATURE_ROUTES,
       useClass: LocalRestApiAssistantCaptureRoutesService,
+      multi: true,
+    },
+    {
+      provide: LOCAL_REST_API_FEATURE_ROUTES,
+      useClass: LocalRestApiAssistantEditRoutesService,
       multi: true,
     },
     {

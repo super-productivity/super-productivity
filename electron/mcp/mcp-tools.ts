@@ -43,7 +43,19 @@ import {
   failFromRenderer,
   forwardSafely,
   isToolResult,
+  WriteCap,
+  defaultWriteCap,
 } from './mcp-tool-kit';
+import {
+  getCurrentTask,
+  getFocus,
+  logTime,
+  startTask,
+  stopTracking,
+  updateTask,
+} from './mcp-task-tools';
+import { getRepeatConfig, listRepeatConfigs } from './mcp-repeat-tools';
+import { getCounter, getNote, listCounters, listNotes } from './mcp-note-counter-tools';
 
 /**
  * The assistant tools, mapped onto the renderer routes the local REST API
@@ -58,6 +70,8 @@ export type { ForwardToRenderer } from './mcp-tool-kit';
 
 export const MCP_API_VERSION = '1';
 
+const DUE_DATE_RE = new RegExp(DUE_DATE_PATTERN);
+
 // --- tools -----------------------------------------------------------------------
 
 const getStatus: ToolSpec = {
@@ -65,7 +79,9 @@ const getStatus: ToolSpec = {
     name: 'get_status',
     ...describeTool('Check connection', READ_ONLY_HINTS),
     description:
-      'Reports whether Super Productivity is ready and which permissions this connection has. Returns no task data.',
+      'Reports whether Super Productivity is ready, which permissions this connection has, and ' +
+      "today's date in the user's calendar as YYYY-MM-DD (the app's day can start after midnight). " +
+      'Returns no task data.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   run: async (args, scopes, forward) => {
@@ -73,10 +89,22 @@ const getStatus: ToolSpec = {
     if (unknownArg) {
       return invalid(unknownArg);
     }
-    // Only the status code is used; the route's payload is discarded.
+    // Only the status code and the logical day are used; the rest is discarded.
     const reply = await forwardSafely(forward, { method: 'GET', path: '/status' });
     const isReady = !isToolResult(reply) && reply.status === 200;
-    return ok({ isReady, apiVersion: MCP_API_VERSION, grantedScopes: [...scopes] });
+    const data = !isToolResult(reply) && reply.body.ok ? reply.body.data : undefined;
+    const today =
+      isRecord(data) &&
+      typeof data.todayStr === 'string' &&
+      DUE_DATE_RE.test(data.todayStr)
+        ? data.todayStr
+        : undefined;
+    return ok({
+      isReady,
+      apiVersion: MCP_API_VERSION,
+      grantedScopes: [...scopes],
+      ...(today ? { today } : {}),
+    });
   },
 };
 
@@ -452,13 +480,26 @@ const createTask: ToolSpec = {
   },
 };
 
+// Listed in this order: reads, then capture, then edits.
 const ALL_TOOLS: ToolSpec[] = [
   getStatus,
   listTasks,
   getTask,
   listProjects,
   listTags,
+  getCurrentTask,
+  getFocus,
+  listRepeatConfigs,
+  getRepeatConfig,
+  listNotes,
+  getNote,
+  listCounters,
+  getCounter,
   createTask,
+  updateTask,
+  startTask,
+  stopTracking,
+  logTime,
 ];
 
 const isGranted = (tool: ToolSpec, scopes: readonly AssistantAccessScope[]): boolean =>
@@ -484,6 +525,7 @@ export const runTool = async (
   args: Record<string, unknown>,
   getScopes: () => readonly AssistantAccessScope[],
   forward: ForwardToRenderer,
+  writeCap: WriteCap = defaultWriteCap,
 ): Promise<McpToolResult> => {
   const scopes = getScopes();
   const tool = ALL_TOOLS.find(
@@ -492,11 +534,12 @@ export const runTool = async (
   if (!tool) {
     return fail('NOT_PERMITTED', 'This connection may not use this tool.');
   }
-  const result = await tool.run(args, scopes, forward, getScopes);
+  const result = await tool.run(args, scopes, forward, getScopes, writeCap);
   // A grant revoked (or access switched off) while the renderer was answering
-  // must not still hand out the data. A capture that already ran is reported
-  // as such, since withholding it would invite a duplicate.
-  if (tool.scope !== 'tasks:capture' && !isGranted(tool, getScopes())) {
+  // must not still hand out the data. A write that already ran is reported as
+  // such, since withholding it would invite a retry (and, for an add, a
+  // duplicate); an edit leaves out the task it read back (editedTask).
+  if (tool.definition.annotations.readOnlyHint && !isGranted(tool, getScopes())) {
     return fail('NOT_PERMITTED', 'This connection may not use this tool.');
   }
   return result;

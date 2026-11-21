@@ -36,7 +36,7 @@ const DUE_TIME_RE = new RegExp(DUE_TIME_PATTERN);
 const REPEAT_KEYS = ['cycle', 'every', 'weekdays'];
 
 /** Rejects 2026-02-30 and years before 1000, which the app writes unpadded. */
-const isCalendarDay = (day: string): boolean => {
+export const isCalendarDay = (day: string): boolean => {
   const [year, month, date] = day.split('-').map(Number);
   const utc = new Date(Date.UTC(year, month - 1, date));
   return (
