@@ -1,6 +1,7 @@
 import { app, ipcMain, ProgressBarOptions } from 'electron';
 import { existsSync } from 'fs';
-import { dirname, join } from 'path';
+import { mkdir, readFile, rm, writeFile } from 'fs/promises';
+import { dirname, isAbsolute, join } from 'path';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { getWin } from '../main-window';
 import { raiseForReminder, quitApp, showOrFocus } from '../various-shared';
@@ -16,6 +17,10 @@ import { errorHandlerWithFrontendInform } from '../error-handler-with-frontend-i
 import { GlobalConfigState } from '../../src/app/features/config/global-config.model';
 import { saveSimpleStore } from '../simple-store';
 import { SimpleStoreKey } from '../shared-with-frontend/simple-store.const';
+import {
+  getDistChannel,
+  LOGIN_ITEM_CHANNELS,
+} from '../shared-with-frontend/get-dist-channel';
 import { setDueTaskBadge } from '../due-task-badge';
 
 // On Linux, packaged builds ship a shell wrapper (`superproductivity`) next
@@ -28,6 +33,38 @@ const getRelaunchExecPath = (): string | undefined => {
   if (process.platform !== 'linux') return undefined;
   const wrapperPath = join(dirname(process.execPath), 'superproductivity');
   return existsSync(wrapperPath) ? wrapperPath : undefined;
+};
+
+const getLinuxAutostartPath = (): string => {
+  const configHome = process.env.XDG_CONFIG_HOME;
+  return join(
+    configHome && isAbsolute(configHome)
+      ? configHome
+      : join(app.getPath('home'), '.config'),
+    'autostart',
+    'superproductivity.desktop',
+  );
+};
+
+const getOpenAtLogin = async (): Promise<boolean> => {
+  const distChannel = getDistChannel();
+  if (!distChannel || !LOGIN_ITEM_CHANNELS.includes(distChannel)) {
+    return false;
+  }
+  if (distChannel.startsWith('linux-')) {
+    try {
+      const entry = await readFile(getLinuxAutostartPath(), 'utf8');
+      return !/^[ \t]*(Hidden[ \t]*=[ \t]*true|X-GNOME-Autostart-enabled[ \t]*=[ \t]*false)[ \t]*\r?$/m.test(
+        entry,
+      );
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return false;
+      }
+      throw err;
+    }
+  }
+  return app.getLoginItemSettings().openAtLogin;
 };
 
 export const initAppControlIpc = (): void => {
@@ -71,6 +108,47 @@ export const initAppControlIpc = (): void => {
 
   ipcMain.on(IPC.TRANSFER_SETTINGS_TO_ELECTRON, updateSettings);
   ipcMain.on(IPC.UPDATE_SETTINGS, updateSettings);
+
+  // Start on system startup (#5572) is this device's OS login item, read and
+  // written directly, never synced: a synced value would apply on every desktop.
+  ipcMain.handle(IPC.GET_OPEN_AT_LOGIN, getOpenAtLogin);
+  ipcMain.handle(IPC.SET_OPEN_AT_LOGIN, async (ev, isOpenAtLogin: unknown) => {
+    const distChannel = getDistChannel();
+    if (!distChannel || !LOGIN_ITEM_CHANNELS.includes(distChannel)) {
+      return false;
+    }
+    if (distChannel.startsWith('linux-')) {
+      const entryPath = getLinuxAutostartPath();
+      if (isOpenAtLogin === true) {
+        // AppImage's execPath is inside a temporary mount. Native packages must
+        // use the sibling launcher installed by afterPack, just like relaunch.
+        const executable = (
+          process.env.APPIMAGE ||
+          getRelaunchExecPath() ||
+          process.execPath
+        )
+          // Desktop Entry string escaping is applied before Exec quoting.
+          .replace(/\\/g, '\\\\\\\\')
+          .replace(/(["`$])/g, '\\\\$1')
+          .replace(/%/g, '%%')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r')
+          .replace(/\t/g, '\\t');
+        await mkdir(dirname(entryPath), { recursive: true });
+        await writeFile(
+          entryPath,
+          `[Desktop Entry]\nType=Application\nName=Super Productivity\nExec="${executable}"\nTerminal=false\n`,
+          'utf8',
+        );
+      } else {
+        await rm(entryPath, { force: true });
+      }
+    } else {
+      app.setLoginItemSettings({ openAtLogin: isOpenAtLogin === true });
+    }
+    // Report the actual state, including an OS refusal or an external change.
+    return getOpenAtLogin();
+  });
 
   ipcMain.on(IPC.SHOW_OR_FOCUS, (ev, opts?: { isReminder?: boolean }) => {
     const mainWin = getWin();
