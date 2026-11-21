@@ -302,7 +302,9 @@ export class MobileNotificationEffects {
                 now,
                 this._dateService.getStartOfNextDayDiffMs(),
                 {
-                  lookaheadDays: isIOS ? IOS_REPEAT_LOOKAHEAD_DAYS : REPEAT_LOOKAHEAD_DAYS,
+                  lookaheadDays: isIOS
+                    ? IOS_REPEAT_LOOKAHEAD_DAYS
+                    : REPEAT_LOOKAHEAD_DAYS,
                   maxScheduled: isIOS ? IOS_REMINDER_BUDGET : REPEAT_MAX_SCHEDULED,
                   soonestFirst: isIOS,
                 },
