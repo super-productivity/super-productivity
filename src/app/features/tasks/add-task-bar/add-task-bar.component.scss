@@ -1,5 +1,51 @@
 @use '../../../../styles/_globals.scss' as *;
 
+.draft-images {
+  display: flex;
+  gap: var(--s);
+  padding: var(--s);
+  overflow-x: auto;
+}
+
+.draft-image {
+  position: relative;
+  flex: 0 0 72px;
+}
+
+.draft-image-preview {
+  display: block;
+  width: 72px;
+  height: 48px;
+  border: 0;
+  padding: 0;
+  border-radius: var(--s-half);
+  overflow: hidden;
+  background: var(--card-bg);
+  color: var(--text-color);
+  cursor: pointer;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  span {
+    font-size: var(--font-size-xs);
+  }
+}
+
+.draft-image-remove {
+  position: absolute;
+  top: calc(-1 * var(--s-half));
+  right: calc(-1 * var(--s-half));
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--card-bg);
+  color: var(--text-color);
+  cursor: pointer;
+}
+
 :host {
   display: block;
   text-align: start;

@@ -155,10 +155,7 @@ export class TaskAttachmentListComponent {
 
   private _isResolvableClipboardUrl(url: string | undefined): boolean {
     if (!url) return false;
-    return (
-      url.startsWith('indexeddb://clipboard-images/') ||
-      (url.startsWith('file:///') && url.includes('/clipboard-images/'))
-    );
+    return this._clipboardImageService.isResolvableClipboardImageUrl(url);
   }
 
   openEditDialog(attachment?: TaskAttachment): void {

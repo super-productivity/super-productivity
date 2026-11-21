@@ -25,7 +25,14 @@ describe('TaskAttachmentListComponent', () => {
     const clipboardImageServiceSpy = jasmine.createSpyObj('ClipboardImageService', [
       'resolveIndexedDbUrl',
       'resolveClipboardImageUrl',
+      'isResolvableClipboardImageUrl',
     ]);
+
+    clipboardImageServiceSpy.isResolvableClipboardImageUrl.and.callFake(
+      (url: string) =>
+        url.startsWith('indexeddb://clipboard-images/') ||
+        (url.startsWith('file:///') && url.includes('/clipboard-images/')),
+    );
 
     await TestBed.configureTestingModule({
       imports: [TaskAttachmentListComponent, NoopAnimationsModule],
@@ -40,6 +47,22 @@ describe('TaskAttachmentListComponent', () => {
     fixture = TestBed.createComponent(TaskAttachmentListComponent);
     component = fixture.componentInstance;
     snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
+  });
+
+  it('loads a custom-folder image as a blob for the saved task attachment', async () => {
+    const path = 'file:///C:/app-data/TesGambarTask/clip-123-abc.png';
+    const clipboard = TestBed.inject(
+      ClipboardImageService,
+    ) as jasmine.SpyObj<ClipboardImageService>;
+    clipboard.isResolvableClipboardImageUrl.and.callFake((url) => url === path);
+    clipboard.resolveClipboardImageUrl.and.resolveTo('blob:custom-image');
+    fixture.componentRef.setInput('attachments', [{ id: 'a', type: 'IMG', path }]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(clipboard.resolveClipboardImageUrl).toHaveBeenCalledWith(path);
+    expect(component.resolvedAttachments()[0].resolvedOriginalPath).toBe(
+      'blob:custom-image',
+    );
   });
 
   describe('resolvedAttachments img src safety (GHSA-hr87-735w-hfq3)', () => {
