@@ -14,12 +14,24 @@
 }
 
 @if (isConfigReady()) {
-  <mat-calendar
-    (keydown)="onKeyDownOnCalendar($event)"
-    [selected]="selectedDate()"
-    [minDate]="minDate()"
-    (selectedChange)="dateSelected.emit($event)"
-  ></mat-calendar>
+  <div class="calendar-week-number-wrapper">
+    @if (calendarView === 'month' && showWeekNumbers()) {
+      <div class="week-number-col">
+        <div class="week-number-header">{{ T.G.WEEK | translate }}</div>
+        @for (weekNum of weekNumbersWithNulls; track $index) {
+          <div class="week-number-cell">{{ weekNum ?? '' }}</div>
+        }
+      </div>
+    }
+    <div class="calendar-wrapper">
+      <mat-calendar
+        (keydown)="onKeyDownOnCalendar($event)"
+        [selected]="selectedDate()"
+        [minDate]="minDate()"
+        (selectedChange)="dateSelected.emit($event)"
+      ></mat-calendar>
+    </div>
+  </div>
 }
 
 @if (isShowEnterMsg) {
