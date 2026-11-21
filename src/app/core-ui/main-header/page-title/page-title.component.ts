@@ -42,6 +42,12 @@ import {
 import { BoardCfg } from '../../../features/boards/boards.model';
 import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
 import { BoardsService } from '../../../features/boards/boards.service';
+import { MatDialog } from '@angular/material/dialog';
+import { ProjectService } from '../../../features/project/project.service';
+import { TagService } from '../../../features/tag/tag.service';
+import { openWorkContextSettingsDialog } from '../../../features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
+import { firstValueFrom } from 'rxjs';
+import { first } from 'rxjs/operators';
 import { LayoutService } from '../../layout/layout.service';
 
 @Component({
@@ -69,13 +75,18 @@ import { LayoutService } from '../../layout/layout.service';
            through to onTitleClick(). -->
       <div
         [matTooltip]="
-          (viewBoard() ? T.F.BOARDS.V.EDIT_BOARD : T.MH.GO_TO_TASK_LIST) | translate
+          (viewBoard()
+            ? T.F.BOARDS.V.EDIT_BOARD
+            : isWorkViewPage()
+              ? T.MH.PROJECT_SETTINGS
+              : T.MH.GO_TO_TASK_LIST
+          ) | translate
         "
         class="page-title"
         mat-ripple
         tabindex="0"
-        [routerLink]="viewBoard() ? null : '/active/tasks'"
-        [attr.role]="viewBoard() ? 'button' : null"
+        [routerLink]="opensDialog() ? null : '/active/tasks'"
+        [attr.role]="opensDialog() ? 'button' : null"
         (click)="onTitleClick()"
         (keydown.enter)="onTitleClick()"
         (keydown.space)="onTitleClick($event)"
@@ -433,6 +444,9 @@ export class PageTitleComponent {
   private _pluginBridge = inject(PluginBridgeService);
   private _pluginService = inject(PluginService);
   private _boardsService = inject(BoardsService);
+  private _matDialog = inject(MatDialog);
+  private _projectService = inject(ProjectService);
+  private _tagService = inject(TagService);
 
   readonly T = T;
 
@@ -622,14 +636,35 @@ export class PageTitleComponent {
    * Click, Enter or Space on the title: opens the editor on a view page,
    * where the title is a button; elsewhere the router link (click) is all.
    */
+  /** The title is a button (not a link) on a view page and on a task list. */
+  opensDialog = computed(() => !!this.viewBoard() || this.isWorkViewPage());
+
   onTitleClick(ev?: Event): void {
     const board = this.viewBoard();
     if (!board) {
+      if (this.isWorkViewPage()) {
+        ev?.preventDefault();
+        void this._openContextSettings();
+      }
       return;
     }
     // Space would scroll the page.
     ev?.preventDefault();
     void this._boardsService.editBoard(board);
+  }
+
+  private async _openContextSettings(): Promise<void> {
+    const ctx = this.activeWorkContextTypeAndId();
+    if (!ctx) {
+      return;
+    }
+    const isProject = ctx.activeType === WorkContextType.PROJECT;
+    const entity = isProject
+      ? await firstValueFrom(this._projectService.getByIdOnce$(ctx.activeId))
+      : await firstValueFrom(this._tagService.getTagById$(ctx.activeId).pipe(first()));
+    if (entity) {
+      await openWorkContextSettingsDialog(this._matDialog, { isProject, entity });
+    }
   }
 
   /** A list-layout view's filter button (and its shortcut): the editor. */

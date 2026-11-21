@@ -1,3 +1,5 @@
+import { ProjectService } from '../../../features/project/project.service';
+import { TagService } from '../../../features/tag/tag.service';
 import {
   Component,
   EnvironmentProviders,
@@ -119,6 +121,8 @@ describe('PageTitleComponent', () => {
     },
     // The phone breakpoint (LayoutService); the smallest one (350px) is the
     // page title's own.
+    { provide: ProjectService, useValue: { getByIdOnce$: () => of(undefined) } },
+    { provide: TagService, useValue: { getTagById$: () => of(undefined) } },
     { provide: LayoutService, useValue: { isXs: () => isXs() } },
     { provide: BreakpointObserver, useValue: { observe: () => isXxxs$ } },
     {
@@ -739,10 +743,15 @@ describe('PageTitleComponent', () => {
       });
     });
 
-    [
-      ['the task list', '/active/tasks'],
-      ['/boards without a view', '/boards'],
-    ].forEach(([label, url]) => {
+    it('is a settings button on the task list, not a link', async () => {
+      await renderTitle('/active/tasks');
+      title.click();
+      expect(navigateSpy).not.toHaveBeenCalled();
+      expect(title.getAttribute('role')).toBe('button');
+      expect(tooltip.message).toBe(T.MH.PROJECT_SETTINGS);
+    });
+
+    [['/boards without a view', '/boards']].forEach(([label, url]) => {
       it(`still links to the task list on ${label}`, async () => {
         await renderTitle(url);
         title.click();
