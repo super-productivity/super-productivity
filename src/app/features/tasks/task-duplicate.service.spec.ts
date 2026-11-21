@@ -1,5 +1,15 @@
 import { TestBed } from '@angular/core/testing';
-import { Store } from '@ngrx/store';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectActiveWorkContext } from '../work-context/store/work-context.selectors';
+import { selectSectionsByContextIdMap } from '../section/store/section.selectors';
+import { selectPlannerState } from '../planner/store/planner.selectors';
+import { plannerInitialState } from '../planner/store/planner.reducer';
+import { DEFAULT_PROJECT } from '../project/project.const';
+import { WorkContextType } from '../work-context/work-context.model';
+import { moveTaskInTodayList } from '../work-context/store/work-context-meta.actions';
+import { moveProjectTaskToBacklogList } from '../project/store/project.actions';
+import { addTaskToSection } from '../section/store/section.actions';
+import { PlannerActions } from '../planner/store/planner.actions';
 import { TaskDuplicateService } from './task-duplicate.service';
 import { TaskService } from './task.service';
 import { DEFAULT_TASK, Task, TaskWithSubTasks } from './task.model';
@@ -8,7 +18,14 @@ import { addSubTask } from './store/task.actions';
 describe('TaskDuplicateService', () => {
   let service: TaskDuplicateService;
   let taskService: jasmine.SpyObj<TaskService>;
-  let store: jasmine.SpyObj<Store>;
+  let store: MockStore;
+  const context = {
+    ...DEFAULT_PROJECT,
+    id: 'project-1',
+    type: WorkContextType.PROJECT,
+    routerLink: 'project/project-1',
+    taskIds: ['parent-task'],
+  };
 
   const subTask: Task = {
     ...DEFAULT_TASK,
@@ -49,16 +66,23 @@ describe('TaskDuplicateService', () => {
       'add',
       'createNewTaskWithDefaults',
     ]);
-    store = jasmine.createSpyObj<Store>('Store', ['dispatch']);
 
     TestBed.configureTestingModule({
       providers: [
         TaskDuplicateService,
         { provide: TaskService, useValue: taskService },
-        { provide: Store, useValue: store },
+        provideMockStore({
+          selectors: [
+            { selector: selectActiveWorkContext, value: context },
+            { selector: selectSectionsByContextIdMap, value: new Map() },
+            { selector: selectPlannerState, value: plannerInitialState },
+          ],
+        }),
       ],
     });
 
+    store = TestBed.inject(MockStore);
+    spyOn(store, 'dispatch');
     service = TestBed.inject(TaskDuplicateService);
   });
 
@@ -82,7 +106,7 @@ describe('TaskDuplicateService', () => {
 
     expect(result).toBe('new-parent-task');
     expect(taskService.add).toHaveBeenCalledWith(
-      'Parent task (copy)',
+      'Parent task',
       false,
       {
         isDone: false,
@@ -94,6 +118,7 @@ describe('TaskDuplicateService', () => {
         timeEstimate: 7_200_000,
       },
       false,
+      true,
     );
     expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
       title: 'Sub task',
@@ -167,12 +192,24 @@ describe('TaskDuplicateService', () => {
     );
     expect(additional?.dueDay).toBeUndefined();
     expect(additional?.dueWithTime).toBeUndefined();
-    expect(store.dispatch).toHaveBeenCalledOnceWith(
-      addSubTask({
-        task: newSubTask,
-        parentId: 'new-parent-task',
-      }),
-    );
+    expect((store.dispatch as jasmine.Spy).calls.allArgs()).toEqual([
+      [
+        addSubTask({
+          task: newSubTask,
+          parentId: 'new-parent-task',
+        }),
+      ],
+      [
+        moveTaskInTodayList({
+          taskId: 'new-parent-task',
+          afterTaskId: parentTask.id,
+          workContextId: context.id,
+          workContextType: context.type,
+          src: 'UNDONE',
+          target: 'UNDONE',
+        }),
+      ],
+    ]);
   });
 
   it('keeps timed parent and all-day child deadlines', () => {
@@ -299,4 +336,102 @@ describe('TaskDuplicateService', () => {
     expect(taskService.add).not.toHaveBeenCalled();
     expect(store.dispatch).not.toHaveBeenCalled();
   });
+
+  it('keeps short-syntax tokens literal when copying a title', () => {
+    taskService.add.and.returnValue('copy');
+    service.duplicate({ ...parentTask, title: 'Literal @tomorrow #tag', subTasks: [] });
+    expect(taskService.add).toHaveBeenCalledWith(
+      'Literal @tomorrow #tag',
+      false,
+      jasmine.objectContaining({ dueDay: parentTask.dueDay }),
+      false,
+      true,
+    );
+  });
+
+  it('places the copy after the original in the active list', () => {
+    taskService.add.and.returnValue('copy');
+    service.duplicate({ ...parentTask, subTasks: [] });
+    expect(store.dispatch).toHaveBeenCalledWith(
+      moveTaskInTodayList({
+        taskId: 'copy',
+        afterTaskId: parentTask.id,
+        workContextId: context.id,
+        workContextType: context.type,
+        src: 'UNDONE',
+        target: 'UNDONE',
+      }),
+    );
+  });
+
+  it('keeps a backlog copy in the backlog beside its original', () => {
+    store.overrideSelector(selectActiveWorkContext, {
+      ...context,
+      taskIds: [],
+      backlogTaskIds: [parentTask.id],
+    });
+    taskService.add.and.returnValue('copy');
+    service.duplicate({ ...parentTask, subTasks: [] });
+    expect(store.dispatch).toHaveBeenCalledWith(
+      moveProjectTaskToBacklogList({
+        taskId: 'copy',
+        afterTaskId: parentTask.id,
+        workContextId: context.id,
+      }),
+    );
+  });
+
+  it('uses only the original section in the active context', () => {
+    const section = {
+      id: 'section',
+      contextId: context.id,
+      contextType: context.type,
+      title: 'Section',
+      taskIds: [parentTask.id],
+    };
+    store.overrideSelector(
+      selectSectionsByContextIdMap,
+      new Map([
+        ['other-project', [{ ...section, id: 'foreign', contextId: 'other-project' }]],
+        [context.id, [section]],
+      ]),
+    );
+    taskService.add.and.returnValue('copy');
+    service.duplicate({ ...parentTask, subTasks: [] });
+    expect(store.dispatch).toHaveBeenCalledWith(
+      addTaskToSection({
+        sectionId: section.id,
+        taskId: 'copy',
+        afterTaskId: parentTask.id,
+        sourceSectionId: null,
+      }),
+    );
+    expect(store.dispatch).not.toHaveBeenCalledWith(
+      jasmine.objectContaining({ sectionId: 'foreign' }),
+    );
+  });
+
+  for (const ids of [
+    ['copy', 'before', 'parent-task', 'after'],
+    ['before', 'parent-task', 'after', 'copy'],
+  ]) {
+    it(`keeps future Planner placement when the copy starts at index ${ids.indexOf('copy')}`, () => {
+      const day = '2099-01-01';
+      store.overrideSelector(selectPlannerState, {
+        ...plannerInitialState,
+        days: { [day]: ids },
+      });
+      taskService.add.and.returnValue('copy');
+      service.duplicate({ ...parentTask, dueDay: '2099-01-01', subTasks: [] });
+      expect(store.dispatch).toHaveBeenCalledWith(
+        PlannerActions.moveInList({
+          targetDay: '2099-01-01',
+          fromIndex: ids.indexOf('copy'),
+          toIndex:
+            ids.indexOf('parent-task') +
+            (ids.indexOf('copy') > ids.indexOf('parent-task') ? 1 : 0),
+        }),
+      );
+    });
+  }
 });
