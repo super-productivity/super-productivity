@@ -11,6 +11,7 @@ import com.superproductivity.superproductivity.service.QuickFetchCoalescer
 import com.superproductivity.superproductivity.service.ReminderChangeResult
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.SuperSyncBackgroundProvider
+import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.service.buildPayloadDecryptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +93,19 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         // reached this phone are not tracked by the app and would still ring.
         if (BackgroundReminderSettingsStore.get(context).isDisabled) {
             Log.d(TAG, "Reminders disabled, dropping alarm: id=$notificationId")
+            ReminderNotificationHelper.cancelReminder(context, notificationId)
+            return
+        }
+
+        // Checked when the alarm fires, not by cancelling it when tracking starts:
+        // tracking can end natively (notification Pause/Done with the app swiped
+        // away) where no JS runs to re-arm a cancelled alarm (#6823). Memory
+        // only: a fresh process after a kill has none, and then it rings.
+        val trackedTaskId = TrackingForegroundService.currentTaskId.takeIf {
+            TrackingForegroundService.isTracking && TrackingForegroundService.resumeAfterRestore
+        }
+        if (isReminderForTrackedTask(reminderType, relatedId, trackedTaskId)) {
+            Log.d(TAG, "Task is being tracked, dropping alarm: id=$notificationId")
             ReminderNotificationHelper.cancelReminder(context, notificationId)
             return
         }
@@ -187,3 +201,13 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         return result
     }
 }
+
+/**
+ * A task's own reminder is pointless while its timer runs (#6823). Deadline and
+ * due-date reminders still ring, as before.
+ */
+internal fun isReminderForTrackedTask(
+    reminderType: String,
+    relatedId: String,
+    trackedTaskId: String?,
+): Boolean = reminderType == "TASK" && trackedTaskId != null && trackedTaskId == relatedId
