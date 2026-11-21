@@ -329,6 +329,38 @@ describe('workContext selectors', () => {
         },
       ] as Partial<TaskCopy>[] as TaskCopy[]);
     });
+
+    it('prefers in-progress tasks while preserving order, and falls back when none exist', () => {
+      const todo1 = {
+        id: 'todo1',
+        tagIds: [],
+        isDone: false,
+      } as Partial<TaskCopy> as TaskCopy;
+      const doing1 = {
+        id: 'doing1',
+        tagIds: ['KANBAN_IN_PROGRESS'],
+        isDone: false,
+      } as Partial<TaskCopy> as TaskCopy;
+      const doing2 = {
+        id: 'doing2',
+        tagIds: ['KANBAN_IN_PROGRESS'],
+        isDone: false,
+      } as Partial<TaskCopy> as TaskCopy;
+      const done = {
+        id: 'done',
+        tagIds: ['KANBAN_IN_PROGRESS'],
+        isDone: true,
+      } as Partial<TaskCopy> as TaskCopy;
+
+      expect(
+        selectStartableTasksForActiveContext
+          .projector([todo1, doing1, done, doing2])
+          .map((t) => t.id),
+      ).toEqual(['doing1', 'doing2', 'todo1']);
+      expect(
+        selectStartableTasksForActiveContext.projector([todo1]).map((t) => t.id),
+      ).toEqual(['todo1']);
+    });
   });
 
   describe('selectTrackableTasksActiveContextFirst', () => {
