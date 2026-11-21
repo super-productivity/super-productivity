@@ -18,7 +18,10 @@ import { PluginLog } from '../../core/log';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 import { selectAll } from '../../features/issue/store/issue-provider.selectors';
 import { waitForSyncWindow } from '../../util/wait-for-sync-window.operator';
-import { GOOGLE_CALENDAR_PLUGIN_ID } from './plugin-oauth-token-key.util';
+import {
+  GOOGLE_CALENDAR_PLUGIN_ID,
+  shouldScopePluginOAuth,
+} from './plugin-oauth-token-key.util';
 import { PluginOAuthBridgeService } from './plugin-oauth-bridge.service';
 
 const sameIds = (a: string[], b: string[]): boolean =>
@@ -31,14 +34,16 @@ export class PluginOAuthLifecycleEffects {
   private readonly _hydrationState = inject(HydrationStateService);
   private readonly _pluginOAuthBridge = inject(PluginOAuthBridgeService);
 
-  private readonly _googleProviderIds$ = this._store.select(selectAll).pipe(
+  private readonly _scopedProviderEntries$ = this._store.select(selectAll).pipe(
     map((providers) =>
       providers
         .filter(
-          (provider) =>
-            'pluginId' in provider && provider.pluginId === GOOGLE_CALENDAR_PLUGIN_ID,
+          (provider): provider is typeof provider & { pluginId: string } =>
+            'pluginId' in provider &&
+            typeof provider.pluginId === 'string' &&
+            shouldScopePluginOAuth(provider.pluginId),
         )
-        .map((provider) => provider.id)
+        .map((provider) => `${provider.pluginId}::${provider.id}`)
         .sort(),
     ),
     distinctUntilChanged(sameIds),
@@ -54,25 +59,33 @@ export class PluginOAuthLifecycleEffects {
         filter(Boolean),
         take(1),
         switchMap(() =>
-          this._googleProviderIds$.pipe(
+          this._scopedProviderEntries$.pipe(
             startWith(null),
             pairwise(),
             // Serialize moves and deletes, preserving every removed id even if
             // several provider changes arrive while an IndexedDB write is pending.
-            concatMap(([previousIds, ids]) =>
-              of(ids!).pipe(
+            concatMap(([previousEntries, entries]) =>
+              of(entries!).pipe(
                 waitForSyncWindow(this._hydrationState, 'pluginOAuthLifecycle'),
-                concatMap(async (bootIds) => {
-                  const currentIds = await firstValueFrom(this._googleProviderIds$);
-                  if (previousIds === null) {
+                concatMap(async (bootEntries) => {
+                  const currentEntries = await firstValueFrom(
+                    this._scopedProviderEntries$,
+                  );
+                  const currentSet = new Set(currentEntries);
+                  if (previousEntries === null) {
+                    const bootCalendarIds = bootEntries
+                      .filter((e) => e.startsWith(`${GOOGLE_CALENDAR_PLUGIN_ID}::`))
+                      .map((e) => e.slice(GOOGLE_CALENDAR_PLUGIN_ID.length + 2));
                     if (
                       !this._hydrationState.isHydrationFallbackActive() &&
-                      bootIds.length === 1 &&
-                      currentIds.includes(bootIds[0])
+                      bootCalendarIds.length === 1 &&
+                      currentSet.has(
+                        `${GOOGLE_CALENDAR_PLUGIN_ID}::${bootCalendarIds[0]}`,
+                      )
                     ) {
                       await this._pluginOAuthBridge.migrateLegacyOAuthTokenToScopedKey(
                         GOOGLE_CALENDAR_PLUGIN_ID,
-                        bootIds[0],
+                        bootCalendarIds[0],
                       );
                     } else {
                       // No unambiguous local owner: require reconnection rather
@@ -82,12 +95,12 @@ export class PluginOAuthLifecycleEffects {
                       );
                     }
                   }
-                  for (const id of previousIds ?? bootIds) {
-                    if (!currentIds.includes(id)) {
-                      await this._pluginOAuthBridge.clearOAuthToken(
-                        GOOGLE_CALENDAR_PLUGIN_ID,
-                        id,
-                      );
+                  for (const entry of previousEntries ?? bootEntries) {
+                    if (!currentSet.has(entry)) {
+                      const sepIdx = entry.indexOf('::');
+                      const pluginId = entry.slice(0, sepIdx);
+                      const id = entry.slice(sepIdx + 2);
+                      await this._pluginOAuthBridge.clearOAuthToken(pluginId, id);
                     }
                   }
                 }),

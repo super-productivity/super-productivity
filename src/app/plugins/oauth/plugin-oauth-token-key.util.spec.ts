@@ -1,17 +1,19 @@
 import {
   GOOGLE_CALENDAR_PLUGIN_ID,
+  GOOGLE_TASKS_PLUGIN_ID,
   PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY,
   shouldScopePluginOAuth,
   withPluginOAuthTokenKey,
 } from './plugin-oauth-token-key.util';
 
 describe('plugin-oauth-token-key.util', () => {
-  it('scopes OAuth only for the bundled Google Calendar plugin', () => {
+  it('scopes OAuth only for the bundled Google OAuth plugins', () => {
     expect(shouldScopePluginOAuth(GOOGLE_CALENDAR_PLUGIN_ID)).toBeTrue();
+    expect(shouldScopePluginOAuth(GOOGLE_TASKS_PLUGIN_ID)).toBeTrue();
     expect(shouldScopePluginOAuth('uploaded-oauth-plugin')).toBeFalse();
   });
 
-  it('adds the transient token key only for Google Calendar', () => {
+  it('adds the transient token key only for scoped Google OAuth plugins', () => {
     expect(
       withPluginOAuthTokenKey(
         GOOGLE_CALENDAR_PLUGIN_ID,
@@ -21,6 +23,17 @@ describe('plugin-oauth-token-key.util', () => {
     ).toEqual({
       readCalendarIds: [],
       [PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY]: 'provider-a',
+    });
+
+    expect(
+      withPluginOAuthTokenKey(
+        GOOGLE_TASKS_PLUGIN_ID,
+        { taskListId: '@default' },
+        'provider-b',
+      ),
+    ).toEqual({
+      taskListId: '@default',
+      [PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY]: 'provider-b',
     });
 
     expect(
