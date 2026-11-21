@@ -1,6 +1,6 @@
 import { TaskWithDueTime } from '../../tasks/task.model';
+import { getScheduledTaskInterval } from '../../tasks/util/get-scheduled-task-interval';
 
-import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { devError } from '../../../util/dev-error';
@@ -28,12 +28,17 @@ export const createSortedBlockerBlocks = (
   nrOfDays: number = PROJECTION_DAYS,
   realNow?: number,
   startOfNextDayDiffMs: number = 0,
+  currentTaskId: string | null = null,
 ): BlockedBlock[] => {
   if (typeof now !== 'number') {
     throw new Error('No valid now given');
   }
   let blockedBlocks: BlockedBlock[] = [
-    ...createBlockerBlocksForScheduledTasks(scheduledTasks),
+    ...createBlockerBlocksForScheduledTasks(
+      scheduledTasks,
+      currentTaskId,
+      realNow ?? now,
+    ),
     ...createBlockerBlocksForCalendarEvents(icalEventMap),
     ...createBlockerBlocksForScheduledRepeatProjections(
       now,
@@ -256,12 +261,12 @@ const createBlockerBlocksForLunchBreak = (
 
 const createBlockerBlocksForScheduledTasks = (
   scheduledTasks: TaskWithDueTime[],
+  currentTaskId: string | null,
+  now: number,
 ): BlockedBlock[] => {
   const blockedBlocks: BlockedBlock[] = [];
   scheduledTasks.forEach((task) => {
-    const start = task.dueWithTime;
-    // const end = task.due + Math.max(getTimeLeftForTask(task), 1);
-    const end = task.dueWithTime + getTimeLeftForTask(task);
+    const { start, end } = getScheduledTaskInterval(task, currentTaskId, now);
 
     let wasMerged = false;
     for (const blockedBlock of blockedBlocks) {
