@@ -232,6 +232,7 @@ export class WorklogExportComponent implements OnInit, OnDestroy {
 
   addCol(colOpt: WorklogColTypes): void {
     this.options.cols.push(colOpt);
+    this.onOptionsChange();
   }
 
   async copyToClipboard(): Promise<void> {
