@@ -1,5 +1,9 @@
 import { Action, ActionReducer } from '@ngrx/store';
+import { TranslateService } from '@ngx-translate/core';
 import { TestBed } from '@angular/core/testing';
+import { computed, signal } from '@angular/core';
+import { initialNoteState } from '../../../features/note/store/note.reducer';
+import { initialSectionState } from '../../../features/section/store/section.reducer';
 import { Store } from '@ngrx/store';
 import { TaskDuplicateService } from '../../../features/tasks/task-duplicate.service';
 import { TaskService } from '../../../features/tasks/task.service';
@@ -23,6 +27,7 @@ import { RootState } from '../../root-state';
 import { createCombinedTaskSharedMetaReducer } from './test-helpers';
 import { createBaseState } from './test-utils';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { selectActiveWorkContext } from '../../../features/work-context/store/work-context.selectors';
 
 describe('Task duplication Planner membership integration', () => {
   let service: TaskDuplicateService;
@@ -36,8 +41,18 @@ describe('Task duplication Planner membership integration', () => {
       'add',
       'createNewTaskWithDefaults',
     ]);
-    store = jasmine.createSpyObj<Store>('Store', ['dispatch']);
-    state = createBaseState();
+    store = jasmine.createSpyObj<Store>('Store', ['dispatch', 'selectSignal']);
+    const initialState = {
+      ...createBaseState(),
+      workContext: { activeId: 'project1', activeType: WorkContextType.PROJECT },
+      section: initialSectionState,
+      note: initialNoteState,
+    };
+    state = initialState;
+    const stateSignal = signal(state);
+    store.selectSignal.and.callFake(<K>(selector: (value: object) => K) =>
+      computed(() => selector(stateSignal())),
+    );
 
     const coreReducer: ActionReducer<RootState, Action> = (currentState, action) => {
       const rootState = currentState ?? state;
@@ -52,6 +67,7 @@ describe('Task duplication Planner membership integration', () => {
     reducer = createCombinedTaskSharedMetaReducer(coreReducer);
     store.dispatch.and.callFake((action) => {
       state = reducer(state, action);
+      stateSignal.set(state);
       return action;
     });
 
@@ -86,6 +102,7 @@ describe('Task duplication Planner membership integration', () => {
     TestBed.configureTestingModule({
       providers: [
         TaskDuplicateService,
+        { provide: TranslateService, useValue: { instant: () => ' (copy)' } },
         { provide: TaskService, useValue: taskService },
         { provide: Store, useValue: store },
       ],
@@ -118,4 +135,54 @@ describe('Task duplication Planner membership integration', () => {
     expect(state[TASK_FEATURE_NAME].entities['new-subtask']?.dueDay).toBe(futureDay);
     expect(state[plannerFeatureKey].days[futureDay]).toEqual(['new-subtask']);
   });
+
+  for (const stored of [[], ['hidden']]) {
+    it(`keeps a Today copy adjacent with stored order ${JSON.stringify(stored)}`, () => {
+      const today = getDbDateStr();
+      const tasks = ['before', 'original', 'after'].map((id) => ({
+        ...DEFAULT_TASK,
+        id,
+        title: id,
+        projectId: 'project1',
+        dueDay: today,
+      }));
+      const hidden = {
+        ...DEFAULT_TASK,
+        id: 'hidden',
+        title: 'Future',
+        projectId: 'project1',
+        dueDay: '2099-12-31',
+      };
+      state = {
+        ...state,
+        workContext: { activeId: 'TODAY', activeType: WorkContextType.TAG },
+        tasks: {
+          ...state.tasks,
+          ids: [...tasks.map((task) => task.id), hidden.id],
+          entities: Object.fromEntries([...tasks, hidden].map((task) => [task.id, task])),
+        },
+        tag: {
+          ...state.tag,
+          entities: {
+            ...state.tag.entities,
+            TODAY: { ...state.tag.entities['TODAY']!, taskIds: stored },
+          },
+        },
+      };
+      service.duplicate({ ...tasks[1], subTasks: [] });
+      expect(selectActiveWorkContext(state).taskIds).toEqual([
+        'before',
+        'original',
+        'new-parent',
+        'after',
+      ]);
+      expect(state.tag.entities['TODAY']!.taskIds).toEqual([
+        ...stored,
+        'before',
+        'original',
+        'new-parent',
+        'after',
+      ]);
+    });
+  }
 });

@@ -4,10 +4,11 @@ import { expect, test } from '../fixtures/test.fixture';
 import { expectNoGlobalError, expectTaskVisible } from '../utils/assertions';
 import { waitForAppReady, waitForStatePersistence } from '../utils/waits';
 
-// Installs from before #10715 registered ngsw-worker.js directly. The test
-// server's "legacy" version is this build with only that registration changed;
-// "v2" is the current build, which registers the sw.js entry point.
+// The legacy fixture retains ngsw-worker.js registration and shares the blob
+// transport fix to isolate this migration from Chromium's stream/GC bug (#10715).
 type PwaVersion = 'legacy' | 'v2';
+
+const GC_PRESSURE = { collections: 100, intervalMs: 1 };
 
 const setPwaVersion = async (
   request: APIRequestContext,
@@ -81,6 +82,23 @@ test.describe('Production PWA service worker script switch', () => {
     await waitForStatePersistence(page);
 
     await setPwaVersion(page.request, 'v2');
+
+    // Exercise cached imports under worker GC, the transport failure from #10715.
+    const legacyWorker = isolatedContext
+      .serviceWorkers()
+      .find((worker) => worker.url().endsWith('/ngsw-worker.js'));
+    expect(legacyWorker).toBeDefined();
+    await legacyWorker!.evaluate(({ collections, intervalMs }) => {
+      const collect = (globalThis as unknown as { gc: () => void }).gc;
+      if (typeof collect !== 'function') {
+        throw new Error('PWA regression requires --js-flags=--expose-gc');
+      }
+      let remaining = collections;
+      const timer = setInterval(() => {
+        collect();
+        if (--remaining === 0) clearInterval(timer);
+      }, intervalMs);
+    }, GC_PRESSURE);
 
     // The app's own update flow: confirm, then reload into the new version.
     const updateDialogPromise = page.waitForEvent('dialog', { timeout: 30000 });

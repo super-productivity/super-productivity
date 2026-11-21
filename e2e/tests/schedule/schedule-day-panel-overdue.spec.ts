@@ -88,7 +88,7 @@ const openDesktopPanel = async (
   const taskId = await addOverdueTask(page, workViewPage);
   await page.locator('.e2e-toggle-schedule-day-panel').first().click();
   const dayPanel = page.locator('right-panel schedule-day-panel');
-  await expect(dayPanel.locator('schedule-week')).toBeVisible();
+  await expect(dayPanel.locator(`${CURRENT_PAGE} schedule-week`)).toBeVisible();
   return { dayPanel, taskId };
 };
 

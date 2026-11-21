@@ -4,6 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { TaskService } from './task.service';
+import { TaskDuplicateService } from './task-duplicate.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { ProjectService } from '../project/project.service';
@@ -81,6 +82,7 @@ interface DateTimePick {
 export class TaskBulkActionService {
   private readonly _store = inject(Store);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskDuplicateService = inject(TaskDuplicateService);
   private readonly _multiSelect = inject(TaskMultiSelectService);
   private readonly _moveToProjectService = inject(TaskMoveToProjectService);
   private readonly _projectService = inject(ProjectService);
@@ -124,6 +126,30 @@ export class TaskBulkActionService {
   readonly hasEstimatable = computed(() =>
     this.selectedTasks().some((t) => !t.subTaskIds.length),
   );
+
+  async duplicateSelected(): Promise<void> {
+    const tasks = dedupeSubtasksOfSelectedParents(this._resolveInVisualOrder());
+    if (!tasks.length) {
+      this._snackNothingToDo();
+      return;
+    }
+    await this._runSuppressed(() => {
+      for (const selectedTask of tasks) {
+        const entities = this._taskEntities();
+        const task = entities[selectedTask.id];
+        if (!task) continue;
+        this._taskDuplicateService.duplicate(
+          {
+            ...task,
+            subTasks: task.subTaskIds
+              .map((id) => entities[id])
+              .filter((child): child is Task => !!child),
+          },
+          true,
+        );
+      }
+    });
+  }
 
   // ---- DONE -------------------------------------------------------------
 

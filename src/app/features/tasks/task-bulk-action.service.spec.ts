@@ -4,6 +4,8 @@ import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { defer, Observable, of } from 'rxjs';
 import { TaskBulkActionService } from './task-bulk-action.service';
+import { TaskDuplicateService } from './task-duplicate.service';
+import { WorkContextType } from '../work-context/work-context.model';
 import { TaskService } from './task.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
@@ -50,6 +52,7 @@ describe('TaskBulkActionService', () => {
   let dialogResult: unknown;
   let isConfirmBeforeDelete: boolean;
   let isEnableBacklog: boolean;
+  let duplicateService: jasmine.SpyObj<TaskDuplicateService>;
 
   const t = (id: string, overrides: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -71,6 +74,8 @@ describe('TaskBulkActionService', () => {
     store.dispatch.calls.allArgs().map(([action]) => (action as { type: string }).type);
 
   beforeEach(() => {
+    duplicateService = jasmine.createSpyObj('TaskDuplicateService', ['duplicate']);
+    duplicateService.duplicate.and.callFake((task) => `copy-${task.id}`);
     entities = signal<Record<string, Task>>({});
     selectedIds = signal<ReadonlySet<string>>(new Set());
     dialogResult = true;
@@ -134,6 +139,7 @@ describe('TaskBulkActionService', () => {
     TestBed.configureTestingModule({
       providers: [
         TaskBulkActionService,
+        { provide: TaskDuplicateService, useValue: duplicateService },
         { provide: Store, useValue: store },
         { provide: TaskService, useValue: taskService },
         { provide: TaskMultiSelectService, useValue: multiSelect },
@@ -166,7 +172,15 @@ describe('TaskBulkActionService', () => {
           provide: WorkContextService,
           useValue: {
             flatDoneTodayNr$: of(0),
-            activeWorkContext$: defer(() => of({ isEnableBacklog })),
+            activeWorkContext$: defer(() =>
+              of({
+                id: 'p1',
+                type: WorkContextType.PROJECT,
+                taskIds: [],
+                backlogTaskIds: [],
+                isEnableBacklog,
+              }),
+            ),
           },
         },
         {
@@ -182,6 +196,48 @@ describe('TaskBulkActionService', () => {
       ],
     });
     service = TestBed.inject(TaskBulkActionService);
+  });
+
+  describe('duplicateSelected', () => {
+    it('delegates each selected root once in visual order and keeps the selection', async () => {
+      select([t('a'), t('b')]);
+      await service.duplicateSelected();
+      expect(
+        duplicateService.duplicate.calls
+          .allArgs()
+          .map(([task, isBulk]) => [task.id, isBulk]),
+      ).toEqual([
+        ['a', true],
+        ['b', true],
+      ]);
+      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(multiSelect.clear).not.toHaveBeenCalled();
+      expect([...selectedIds()]).toEqual(['a', 'b']);
+    });
+
+    it('copies a selected parent and its child only once', async () => {
+      select([
+        t('parent', { subTaskIds: ['child'] }),
+        t('child', { parentId: 'parent' }),
+      ]);
+      await service.duplicateSelected();
+      expect(duplicateService.duplicate).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({
+          id: 'parent',
+          subTasks: [jasmine.objectContaining({ id: 'child' })],
+        }),
+        true,
+      );
+    });
+
+    it('delegates a selected standalone subtask', async () => {
+      select([t('child', { parentId: 'parent' })]);
+      await service.duplicateSelected();
+      expect(duplicateService.duplicate).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ id: 'child', parentId: 'parent', subTasks: [] }),
+        true,
+      );
+    });
   });
 
   describe('markDone', () => {
