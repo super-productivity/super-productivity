@@ -12,6 +12,12 @@ name: Electron Packaging Smoke Test
 # The static check catches missing require() targets. The packaged renderer
 # also runs a task-create-and-reload flow under xvfb on every invocation, so
 # pull requests prove the native shell can perform and persist a core action.
+#
+# The same job also runs the Playwright `_electron` regression from
+# e2e/electron/idle-resume.spec.ts (#11895). It needs the production renderer
+# and the compiled main process this job already builds, and it drives the real
+# main-process powerMonitor suspend/resume path, which the CDP smoke tests above
+# cannot emit.
 
 on:
   pull_request:
@@ -133,6 +139,33 @@ jobs:
               '.tmp/app-builds/# packaged app/superproductivity' \
             2>&1 | tee .tmp/smoke/assistant-access.log
 
+      - name: Install the Electron runtime for the Playwright regression
+        # Electron 42+ no longer downloads its runtime during `npm i`, so
+        # node_modules/electron has no binary here (electron-builder fetches its
+        # own copy while packaging). The regression launches the app from the
+        # repository instead of the package, so it needs that runtime. Retry like
+        # the other downloads in this job: @electron/get fetches from GitHub
+        # releases, which fails now and then.
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 15
+          shell: bash
+          command: node node_modules/electron/install.js
+
+      - name: Run the Electron idle-resume regression
+        # No ELECTRON_PATH: without it Playwright injects its own Electron loader
+        # (`-r .../server/electron/loader.js`) and manages the app's teardown.
+        # Pointing it at the binary directly skips the loader, whose Chromium
+        # switches keep helper processes from outliving the app.
+        run: |
+          set -o pipefail
+          mkdir -p .tmp/smoke
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            npm run e2e:electron \
+            2>&1 | tee .tmp/smoke/idle-resume.log
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -140,6 +173,7 @@ jobs:
           name: electron-smoke-logs
           path: |
             .tmp/smoke/
+            .tmp/electron-e2e-results/
             .tmp/app-builds/builder-debug.yml
             .tmp/app-builds/builder-effective-config.yaml
           retention-days: 7
