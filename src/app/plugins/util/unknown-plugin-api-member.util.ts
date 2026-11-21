@@ -9,6 +9,7 @@ const PLUGIN_API_MEMBERS: Record<keyof PluginAPIInterface, true> = {
   registerHeaderButton: true,
   registerMenuEntry: true,
   registerTaskContextMenuEntry: true,
+  registerTaskDetailBlock: true,
   registerConfigHandler: true,
   registerShortcut: true,
   unregisterShortcut: true,

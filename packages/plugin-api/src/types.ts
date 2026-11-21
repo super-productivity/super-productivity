@@ -67,7 +67,22 @@ export enum PluginHooks {
 
 export type Hooks = PluginHooks;
 
+/** Displays the plugin's index.html in the task details panel. */
+export interface PluginTaskDetailBlockCfg {
+  /** Unique within this plugin. Use 1–64 lowercase letters, digits, hyphens or underscores. Start with a letter or digit. */
+  id: string;
+  /** Plain-text panel title of at most 80 characters. */
+  label: string;
+}
+
+export interface PluginTaskDetailContext {
+  readonly taskId: string;
+  readonly blockId: string;
+}
+
 export interface PluginBaseCfg {
+  /** Present only inside a task detail block. */
+  taskDetail?: PluginTaskDetailContext;
   theme: 'light' | 'dark';
   appVersion: string;
   platform: 'web' | 'desktop' | 'android' | 'ios';
@@ -686,6 +701,9 @@ export interface PluginAPI {
 
   /** Register an action in the task context menu's plugin submenu. */
   registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void;
+
+  /** Register from plugin.js. Requires an iframe with index.html. Replaces the same ID on re-registration. */
+  registerTaskDetailBlock(cfg: PluginTaskDetailBlockCfg): void;
 
   registerConfigHandler(handler: () => void): void;
 

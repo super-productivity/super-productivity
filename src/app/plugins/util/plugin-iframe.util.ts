@@ -400,7 +400,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
 
         // Create the PluginAPI object with all methods
         const pluginApi = {
-          cfg: ${JSON.stringify(config.baseCfg)},
+          cfg: ${JSON.stringify(config.baseCfg).replace(/</g, '\\u003c')},
 
           // Add Hooks enum (kept in sync with PluginHooks via JSON.stringify
           // of the real source — no hand-edited mirror to drift).
@@ -466,6 +466,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           persistDataSynced: (data, key) => callApi('persistDataSynced', [data, key]),
           loadPersistedData: (key) => callApi('loadPersistedData', [key]),
           loadSyncedData: (key) => callApi('loadPersistedData', [key]), // Alias
+          ...(${Boolean(config.baseCfg.taskDetail)} ? { getConfig: () => callApi('getConfig') } : {}),
           triggerSync: () => callApi('triggerSync'),
           listSyncedDataKeys: (prefix) => callApi('listSyncedDataKeys', [prefix]),
 
@@ -474,6 +475,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton'),
           registerMenuEntry: unsupportedIframeRegistration('registerMenuEntry'),
           registerTaskContextMenuEntry: unsupportedIframeRegistration('registerTaskContextMenuEntry'),
+          registerTaskDetailBlock: unsupportedIframeRegistration('registerTaskDetailBlock'),
           registerConfigHandler: unsupportedIframeRegistration('registerConfigHandler'),
           registerShortcut: unsupportedIframeRegistration('registerShortcut'),
           unregisterShortcut: unsupportedIframeRegistration('unregisterShortcut'),
@@ -667,7 +669,10 @@ export const handlePluginMessage = async (
     const { method, args = [], callId } = data;
 
     try {
-      if (!ALLOWED_IFRAME_API_METHODS.has(method)) {
+      if (
+        !ALLOWED_IFRAME_API_METHODS.has(method) &&
+        !(method === 'getConfig' && config.baseCfg.taskDetail)
+      ) {
         throw new Error(`Unknown API method: ${method}`);
       }
 

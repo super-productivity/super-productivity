@@ -2,6 +2,7 @@ import { computed, inject, Injectable, Injector, OnDestroy, signal } from '@angu
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
+import { PluginTaskDetailBlockRegistryService } from './plugin-task-detail-block-registry.service';
 import { SnackService } from '../core/snack/snack.service';
 import { NotifyService } from '../core/notify/notify.service';
 import {
@@ -172,6 +173,7 @@ export class PluginBridgeService implements OnDestroy {
   private _dataInitService = inject(DataInitService);
   private _globalConfigService = inject(GlobalConfigService);
   private _dateService = inject(DateService);
+  private readonly _taskDetailBlocks = inject(PluginTaskDetailBlockRegistryService);
   private _taskContextMenuRegistry = inject(PluginTaskContextMenuRegistryService);
   private _contextBridge = inject(PluginBridgeContextService);
   private _repeatCfgBridge = inject(PluginBridgeRepeatCfgService);
@@ -304,9 +306,9 @@ export class PluginBridgeService implements OnDestroy {
     formatDate: (date: Date | string | number, format: PluginDateFormat) => string;
     getCurrentLanguage: () => string;
     log: ReturnType<typeof Log.withContext>;
-  } {
+  } & ReturnType<PluginTaskDetailBlockRegistryService['bind']> {
     return {
-      // Data persistence
+      ...this._taskDetailBlocks.bind(pluginId, manifest?.iFrame === true),
       persistDataSynced: (dataStr: string, key?: string) =>
         this._persistDataSynced(pluginId, dataStr, key),
       loadPersistedData: (key?: string) =>
@@ -334,7 +336,6 @@ export class PluginBridgeService implements OnDestroy {
         this._unregisterShortcut(pluginId, shortcutId),
       registerConfigHandler: (handler: () => void) =>
         this._configHandlers.set(pluginId, handler),
-
       // Navigation
       showIndexHtmlAsView: () => this._showIndexHtmlAsView(pluginId),
       showInWorkContext: () => this._showInWorkContext(pluginId),
@@ -343,14 +344,11 @@ export class PluginBridgeService implements OnDestroy {
       ...this._repeatCfgBridge.createBoundMethods(),
       getSelectedTask: () => this.getSelectedTask(),
       getFocusedTask: () => this.getFocusedTask(),
-
       // Sync
       triggerSync: () => this._triggerSync(pluginId),
-
       // Actions
       dispatchAction: (action: { type: string; [key: string]: unknown }) =>
         this._dispatchAction(pluginId, action),
-
       // Node execution
       executeNodeScript: (request: PluginNodeScriptRequest) =>
         this._executeNodeScript(pluginId, manifest || null, request),
@@ -1449,6 +1447,7 @@ export class PluginBridgeService implements OnDestroy {
     this._removePluginSidePanelButtons(pluginId);
     this._removePluginWorkContextHeaderButtons(pluginId);
     this._taskContextMenuRegistry.unregisterPlugin(pluginId);
+    this._taskDetailBlocks.unregisterPlugin(pluginId);
     this.unregisterPluginShortcuts(pluginId);
     this._configHandlers.delete(pluginId);
 

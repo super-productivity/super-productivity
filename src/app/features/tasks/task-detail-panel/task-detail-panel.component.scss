@@ -6,6 +6,12 @@
 // "Repeat" prefix on the recurrence line (encapsulation-scoped, not global).
 @include cdk.a11y-visually-hidden();
 
+.plugin-task-detail-block {
+  display: block;
+  height: 360px;
+  max-height: 60vh;
+}
+
 :host {
   position: relative;
   z-index: 1;
