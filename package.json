@@ -97,6 +97,7 @@
     "video:mobile": "cross-env REEL_VARIANT=mobile npm run video",
     "video:updates": "cross-env REEL_VARIANT=updates SP_SCREENSHOT_BG_DISABLE=1 npm run video",
     "video:time": "cross-env REEL_VARIANT=time npm run video",
+    "video:ms-todo": "cross-env REEL_VARIANT=ms-todo npm run video",
     "video:hero": "cross-env REEL_VARIANT=hero npm run video",
     "video:hero-light": "cross-env REEL_VARIANT=hero-light npm run video",
     "electron": "NODE_ENV=PROD electron .",
