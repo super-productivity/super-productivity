@@ -117,6 +117,9 @@ test.describe('@supersync a restored task keeps edits from the same sync', () =>
       for (const client of clients) await blockBackgroundSync(client);
 
       await markTaskDone(clientA, taskName);
+      // The done move animates the task out of the open list; until it leaves,
+      // two elements match and the delete's locator is ambiguous.
+      await expect(clientA.page.locator('task', { hasText: taskName })).toHaveCount(1);
       await deleteTask(clientA, taskName);
       await expect.poll(() => getTaskTitleFromState(clientA, taskName)).toBeNull();
       await sync(clientA);
