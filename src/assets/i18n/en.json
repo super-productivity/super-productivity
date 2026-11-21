@@ -1751,7 +1751,7 @@
         "NETWORK_ERROR": "Sync request failed because of a temporary network problem. Your changes remain local and sync will retry.",
         "NEWER_VERSION_AVAILABLE": "Some changes are from a newer app version. Consider updating for full compatibility.",
         "OAUTH_STATE_INVALID": "OAuth state mismatch — the callback URL did not match this device's request. Please try authenticating again.",
-        "ONEDRIVE_AUTH_FAILED": "OneDrive sign-in failed at the token step ({{error}}). This usually means your Microsoft Entra app registration isn't set up as a public client. See the OneDrive setup guide in the docs.",
+        "ONEDRIVE_AUTH_FAILED": "OneDrive sign-in failed at the token step ({{error}}). This usually means your Microsoft Entra app registration isn't set up as a public client. See the <a href=\"https://super-productivity.com/docs/how-to/configure-sync-backend/#onedrive\" target=\"_blank\" rel=\"noopener\">OneDrive setup guide</a>.",
         "OPERATION_PERMANENTLY_FAILED": "Some sync operations failed and could not be applied. Data may be incomplete.",
         "OVERWRITE_SERVER_FAILED": "Failed to overwrite server data: {{message}}",
         "PARTIAL_APPLY_FAILURE": "Some downloaded changes could not be applied. Sync is paused to protect your data. Restart the app to retry.",
