@@ -146,7 +146,7 @@ export class SearchPageComponent implements OnInit {
             tagFolderMap,
           };
           this._cachedArchiveItems = this._mapTasksToSearchItems(
-            true,
+            'archive',
             archiveTasks,
             projects,
             tags,
@@ -161,7 +161,7 @@ export class SearchPageComponent implements OnInit {
           ...this._mapProjectsToSearchItems(projects),
           ...this._mapTagsToSearchItems(tags),
           ...this._mapTasksToSearchItems(
-            false,
+            'live',
             allTasks,
             projects,
             tags,
@@ -215,7 +215,7 @@ export class SearchPageComponent implements OnInit {
     const projectIds = new Set(projects.map((p) => p.id));
     // Shown where restoring puts it (list$ holds only unarchived projects).
     const items = this._mapTasksToSearchItems(
-      false,
+      'deleted',
       liveEntries.map(
         (entry) => getRestoreTaskPayload(entry, (id) => projectIds.has(id)).task,
       ),
@@ -238,7 +238,7 @@ export class SearchPageComponent implements OnInit {
   }
 
   private _mapTasksToSearchItems(
-    isArchiveTask: boolean,
+    source: 'live' | 'archive' | 'deleted',
     tasks: Task[],
     projects: Project[],
     tags: Tag[],
@@ -278,7 +278,8 @@ export class SearchPageComponent implements OnInit {
           projectFolderMap,
           tagFolderMap,
         ),
-        isArchiveTask,
+        isLiveTask: source === 'live',
+        isArchiveTask: source === 'archive',
         isDone: !!task.isDone,
       };
     });
@@ -454,6 +455,11 @@ export class SearchPageComponent implements OnInit {
       MAX_RESULTS - Math.min(deleted.length, MIN_DELETED_RESULTS),
     );
     return [...head, ...deleted.slice(0, MAX_RESULTS - head.length)];
+  }
+
+  completeTask(id: string, event: MouseEvent): void {
+    event.stopPropagation();
+    this._taskService.setDone(id);
   }
 
   navigateToItem(item: SearchItem): void {
