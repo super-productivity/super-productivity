@@ -29,21 +29,6 @@ export const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 export const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
-// Same built-in Google OAuth credentials as google-calendar-provider.
-// Users may also supply their own Desktop OAuth Client ID and Secret under Advanced Config
-// (`oauthOverrides.clientId`, `oauthOverrides.clientSecret`, `oauthOverrides.redirectUri`).
-export const DEFAULT_CLIENT_ID =
-  '637968426975-p6bu3f76b9cbk927k6281lb30bris19o.apps.googleusercontent.com';
-// NOT A SECRET — this is a "Desktop" OAuth client type (RFC 8252).
-// Google classifies these as public clients where the secret cannot be kept
-// confidential (it ships in the binary users download). PKCE + server-side
-// redirect URI restrictions are the actual security mechanisms.
-export const DEFAULT_CLIENT_SECRET = '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';
-export const DEFAULT_MOBILE_CLIENT_ID =
-  '637968426975-ks6oveqe619324pimp8f7e1uqovfg65b.apps.googleusercontent.com';
-export const DEFAULT_IOS_CLIENT_ID =
-  '637968426975-ka1muro7mee1go0m7hhog49fm7svr4os.apps.googleusercontent.com';
-
 // Transient host config paired with getOAuthToken(tokenKey), never synced or public.
 const SP_OAUTH_TOKEN_KEY_CFG_KEY = '__spOAuthTokenKey';
 const DEFAULT_TASK_LIST_ID = '@default';
@@ -155,6 +140,21 @@ export const formatDueDayToGoogleDue = (dueDay: unknown): string | null => {
   return null;
 };
 
+/**
+ * Convert a local epoch timestamp (`dueWithTime`) to its local YYYY-MM-DD date string
+ * so timed scheduling changes in Super Productivity push their date to Google Tasks.
+ */
+export const formatTimestampToLocalDueDay = (ms: unknown): string | null => {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) {
+    return null;
+  }
+  const d = new Date(ms);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const parseStartMsFromDue = (due: string | null | undefined): number | undefined => {
   const dueDay = parseGoogleDueToDueDay(due);
   if (!dueDay) {
@@ -173,7 +173,7 @@ export const mapTaskToSearchResult = (
   const dueDay = parseGoogleDueToDueDay(task.due);
   return {
     id: toCompoundId(taskListId, task.id),
-    title: task.title || '(No title)',
+    title: task.title || t('FALLBACK.NO_TITLE'),
     status: task.deleted ? 'deleted' : task.status || 'needsAction',
     url: task.webViewLink || 'https://tasks.google.com/',
     description: task.notes || '',
@@ -191,16 +191,17 @@ export const mapTaskToPluginIssue = (
   const state = task.deleted ? 'deleted' : isCompleted ? 'completed' : 'needsAction';
   const dueDay = parseGoogleDueToDueDay(task.due);
   const start = parseStartMsFromDue(task.due);
+  const title = task.title || t('FALLBACK.NO_TITLE');
 
   return {
     id: compoundId,
-    title: task.title || '(No title)',
+    title,
     body: task.notes || '',
     url: task.webViewLink || 'https://tasks.google.com/',
     state,
     lastUpdated: task.updated ? new Date(task.updated).getTime() : undefined,
-    summary: task.title || '(No title)',
-    statusLabel: isCompleted ? 'Completed' : 'Needs action',
+    summary: title,
+    statusLabel: isCompleted ? t('STATUS.COMPLETED') : t('STATUS.NEEDS_ACTION'),
     dueDay,
     ...(start !== undefined ? { start } : {}),
   };
@@ -251,8 +252,8 @@ const loadTaskLists = async (
   if (lists.length === 0) {
     return [{ label: t('CFG.DEFAULT_TASK_LIST'), value: DEFAULT_TASK_LIST_ID }];
   }
-  return lists.map((list, idx) => ({
-    label: idx === 0 ? `${list.title} (Default)` : list.title,
+  return lists.map((list) => ({
+    label: list.title,
     value: list.id,
   }));
 };
@@ -260,16 +261,27 @@ const loadTaskLists = async (
 PluginAPI.registerIssueProvider({
   configFields: [
     {
+      key: 'oauthOverrides.clientId',
+      type: 'input',
+      label: t('CFG.CUSTOM_CLIENT_ID'),
+      description: t('CFG.CUSTOM_CLIENT_ID_DESC'),
+      required: true,
+    },
+    {
+      key: 'oauthOverrides.clientSecret',
+      type: 'password',
+      label: t('CFG.CUSTOM_CLIENT_SECRET'),
+      description: t('CFG.CUSTOM_CLIENT_SECRET_DESC'),
+      required: true,
+    },
+    {
       key: 'oauth',
       type: 'oauthButton',
       label: t('CFG.CONNECT_ACCOUNT'),
       oauthConfig: {
         authUrl: GOOGLE_AUTH_URL,
         tokenUrl: GOOGLE_TOKEN_URL,
-        clientId: DEFAULT_CLIENT_ID,
-        clientSecret: DEFAULT_CLIENT_SECRET,
-        mobileClientId: DEFAULT_MOBILE_CLIENT_ID,
-        iosClientId: DEFAULT_IOS_CLIENT_ID,
+        clientId: '',
         scopes: [GOOGLE_TASKS_SCOPE],
         extraAuthParams: { access_type: 'offline', prompt: 'consent' },
       },
@@ -288,20 +300,6 @@ PluginAPI.registerIssueProvider({
       type: 'checkbox',
       label: t('CFG.INCLUDE_COMPLETED'),
       description: t('CFG.INCLUDE_COMPLETED_DESC'),
-      advanced: true,
-    },
-    {
-      key: 'oauthOverrides.clientId',
-      type: 'input',
-      label: t('CFG.CUSTOM_CLIENT_ID'),
-      description: t('CFG.CUSTOM_CLIENT_ID_DESC'),
-      advanced: true,
-    },
-    {
-      key: 'oauthOverrides.clientSecret',
-      type: 'password',
-      label: t('CFG.CUSTOM_CLIENT_SECRET'),
-      description: t('CFG.CUSTOM_CLIENT_SECRET_DESC'),
       advanced: true,
     },
     {
@@ -415,6 +413,16 @@ PluginAPI.registerIssueProvider({
         typeof issueValue === 'string' && issueValue.trim()
           ? issueValue.trim()
           : undefined,
+    },
+    {
+      taskField: 'dueWithTime',
+      issueField: 'dueDay',
+      defaultDirection: 'pushOnly',
+      mutuallyExclusive: ['dueDay'],
+      toIssueValue: (taskValue: unknown): string | null =>
+        formatTimestampToLocalDueDay(taskValue),
+      // The import path runs every mapping regardless of direction.
+      toTaskValue: (): undefined => undefined,
     },
   ] satisfies PluginFieldMapping[],
 

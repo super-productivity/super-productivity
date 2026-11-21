@@ -32,7 +32,7 @@
   },
   "issueProvider": {
     "pollIntervalMs": 300000,
-    "icon": "sp",
+    "icon": "task_alt",
     "humanReadableName": "Google Tasks",
     "issueStrings": {
       "singular": "Task",

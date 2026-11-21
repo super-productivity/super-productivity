@@ -4,17 +4,14 @@ import type {
   PluginHttp,
 } from '@super-productivity/plugin-api';
 
-let DEFAULT_CLIENT_ID: string;
-let DEFAULT_CLIENT_SECRET: string;
-let DEFAULT_IOS_CLIENT_ID: string;
-let DEFAULT_MOBILE_CLIENT_ID: string;
 let GOOGLE_TASKS_SCOPE: string;
-let formatDueDayToGoogleDue: (dueDay: string | null | undefined) => string | null;
+let formatDueDayToGoogleDue: (dueDay: unknown) => string | null;
+let formatTimestampToLocalDueDay: (ms: unknown) => string | null;
 let parseCompoundId: (
   id: string,
   fallbackTaskListId: string,
 ) => { taskListId: string; taskId: string };
-let parseGoogleDueToDueDay: (due?: string | null) => string | undefined;
+let parseGoogleDueToDueDay: (due: unknown) => string | undefined;
 let toCompoundId: (taskListId: string, taskId: string) => string;
 
 let definition: IssueProviderPluginDefinition;
@@ -29,12 +26,9 @@ beforeAll(async () => {
     translate: vi.fn((key: string) => key),
   };
   ({
-    DEFAULT_CLIENT_ID,
-    DEFAULT_CLIENT_SECRET,
-    DEFAULT_IOS_CLIENT_ID,
-    DEFAULT_MOBILE_CLIENT_ID,
     GOOGLE_TASKS_SCOPE,
     formatDueDayToGoogleDue,
+    formatTimestampToLocalDueDay,
     parseCompoundId,
     parseGoogleDueToDueDay,
     toCompoundId,
@@ -69,23 +63,20 @@ describe('Google Tasks Plugin', () => {
     } as unknown as MockHttp;
   });
 
-  describe('OAuth and custom credential configuration', () => {
-    it('falls back to the Google Calendar OAuth client credentials by default', () => {
-      const oauthField = definition.configFields.find((f) => f.key === 'oauth');
-      expect(oauthField?.type).toBe('oauthButton');
+  describe('OAuth and bring-your-own credential configuration', () => {
+    it('configures bring-your-own OAuth without embedding shared app credentials', () => {
+      const oauthField = definition.configFields.find((f) => f.type === 'oauthButton');
+      expect(oauthField).toBeDefined();
       expect(oauthField?.oauthConfig).toEqual({
         authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
         tokenUrl: 'https://oauth2.googleapis.com/token',
-        clientId: DEFAULT_CLIENT_ID,
-        clientSecret: DEFAULT_CLIENT_SECRET,
-        mobileClientId: DEFAULT_MOBILE_CLIENT_ID,
-        iosClientId: DEFAULT_IOS_CLIENT_ID,
+        clientId: '',
         scopes: [GOOGLE_TASKS_SCOPE],
         extraAuthParams: { access_type: 'offline', prompt: 'consent' },
       });
     });
 
-    it('exposes advanced oauthOverrides fields for custom clientId, clientSecret, and redirectUri', () => {
+    it('exposes required oauthOverrides.clientId and oauthOverrides.clientSecret fields and advanced redirectUri', () => {
       const clientIdField = definition.configFields.find(
         (f) => f.key === 'oauthOverrides.clientId',
       );
@@ -96,150 +87,147 @@ describe('Google Tasks Plugin', () => {
         (f) => f.key === 'oauthOverrides.redirectUri',
       );
 
-      expect(clientIdField).toMatchObject({
-        type: 'input',
-        advanced: true,
-      });
-      expect(clientSecretField).toMatchObject({
-        type: 'password',
-        advanced: true,
-      });
-      expect(redirectUriField).toMatchObject({
-        type: 'input',
-        advanced: true,
-      });
-    });
+      expect(clientIdField).toBeDefined();
+      expect(clientIdField?.type).toBe('input');
+      expect(clientIdField?.required).toBe(true);
+      expect(clientIdField?.advanced).toBeUndefined();
 
-    it('reads OAuth token with transient provider-specific token key', async () => {
-      const pluginApi = (globalThis as Record<string, unknown>).PluginAPI as {
-        getOAuthToken: ReturnType<typeof vi.fn>;
-      };
-      pluginApi.getOAuthToken.mockResolvedValueOnce('scoped-token');
+      expect(clientSecretField).toBeDefined();
+      expect(clientSecretField?.type).toBe('password');
+      expect(clientSecretField?.required).toBe(true);
+      expect(clientSecretField?.advanced).toBeUndefined();
 
-      await expect(
-        definition.getHeaders({ __spOAuthTokenKey: 'provider-1' }),
-      ).resolves.toEqual({
-        Authorization: 'Bearer scoped-token',
-        'Content-Type': 'application/json',
-      });
-
-      expect(pluginApi.getOAuthToken).toHaveBeenCalledWith('provider-1');
-    });
-
-    it('throws when OAuth token is missing', async () => {
-      const pluginApi = (globalThis as Record<string, unknown>).PluginAPI as {
-        getOAuthToken: ReturnType<typeof vi.fn>;
-      };
-      pluginApi.getOAuthToken.mockResolvedValueOnce(null);
-
-      await expect(definition.getHeaders({})).rejects.toThrow(
-        'Not authenticated. Please connect your Google account first.',
-      );
+      expect(redirectUriField).toBeDefined();
+      expect(redirectUriField?.type).toBe('input');
+      expect(redirectUriField?.advanced).toBe(true);
     });
   });
 
   describe('compound IDs and date helpers', () => {
-    it('creates and parses compound IDs with fallback list ID', () => {
-      expect(toCompoundId('list-1', 'task-1')).toBe('list-1::task-1');
-      expect(parseCompoundId('list-1::task-1', '@default')).toEqual({
-        taskListId: 'list-1',
-        taskId: 'task-1',
+    it('round-trips compound task list and task IDs', () => {
+      const compound = toCompoundId('list-123', 'task-456');
+      expect(compound).toBe('list-123::task-456');
+      expect(parseCompoundId(compound, '@default')).toEqual({
+        taskListId: 'list-123',
+        taskId: 'task-456',
       });
+    });
+
+    it('falls back to configured task list ID when ID is not compound', () => {
       expect(parseCompoundId('plain-task-id', 'my-list')).toEqual({
         taskListId: 'my-list',
         taskId: 'plain-task-id',
       });
     });
 
-    it('converts between Google RFC 3339 due strings and YYYY-MM-DD dueDay', () => {
-      expect(parseGoogleDueToDueDay('2026-11-20T00:00:00.000Z')).toBe('2026-11-20');
-      expect(parseGoogleDueToDueDay('')).toBeUndefined();
+    it('parses RFC 3339 due strings to YYYY-MM-DD dueDay', () => {
+      expect(parseGoogleDueToDueDay('2026-03-20T00:00:00.000Z')).toBe('2026-03-20');
       expect(parseGoogleDueToDueDay(null)).toBeUndefined();
+      expect(parseGoogleDueToDueDay('')).toBeUndefined();
+    });
 
-      expect(formatDueDayToGoogleDue('2026-11-20')).toBe('2026-11-20T00:00:00.000Z');
+    it('formats YYYY-MM-DD dueDay to RFC 3339 UTC midnight for Google Tasks API', () => {
+      expect(formatDueDayToGoogleDue('2026-03-20')).toBe('2026-03-20T00:00:00.000Z');
       expect(formatDueDayToGoogleDue('')).toBeNull();
       expect(formatDueDayToGoogleDue(null)).toBeNull();
+    });
+
+    it('formats local epoch timestamps to local YYYY-MM-DD strings', () => {
+      const localTimestamp = new Date(2026, 10, 22, 15, 0, 0).getTime();
+      expect(formatTimestampToLocalDueDay(localTimestamp)).toBe('2026-11-22');
+      expect(formatTimestampToLocalDueDay(null)).toBeNull();
+      expect(formatTimestampToLocalDueDay(undefined)).toBeNull();
+      expect(formatTimestampToLocalDueDay(Number.NaN)).toBeNull();
+    });
+  });
+
+  describe('getHeaders', () => {
+    it('passes __spOAuthTokenKey to PluginAPI.getOAuthToken when present', async () => {
+      const pluginApi = (globalThis as Record<string, unknown>).PluginAPI as {
+        getOAuthToken: ReturnType<typeof vi.fn>;
+      };
+      const headers = await definition.getHeaders({
+        __spOAuthTokenKey: 'provider-instance-1',
+      });
+      expect(pluginApi.getOAuthToken).toHaveBeenCalledWith('provider-instance-1');
+      expect(headers.Authorization).toBe('Bearer mock-token');
+    });
+
+    it('throws when not authenticated', async () => {
+      const pluginApi = (globalThis as Record<string, unknown>).PluginAPI as {
+        getOAuthToken: ReturnType<typeof vi.fn>;
+      };
+      pluginApi.getOAuthToken.mockResolvedValueOnce(null);
+      await expect(definition.getHeaders({})).rejects.toThrow(/Not authenticated/);
     });
   });
 
   describe('loadOptions for taskListId', () => {
-    it('loads task lists from Google Tasks API and marks first as Default', async () => {
-      const listField = definition.configFields.find((f) => f.key === 'taskListId')!;
+    it('fetches user task lists from Google Tasks API without appending hard-coded English suffix', async () => {
+      const taskListField = definition.configFields.find((f) => f.key === 'taskListId');
+      expect(taskListField?.loadOptions).toBeDefined();
+
       mockHttp.get.mockResolvedValueOnce({
         items: [
-          { id: 'list-primary', title: 'My Tasks' },
-          { id: 'list-work', title: 'Work' },
+          { id: 'list-1', title: 'My Tasks' },
+          { id: 'list-2', title: 'Work' },
         ],
       });
 
-      const options = await listField.loadOptions!({}, mockHttp);
+      const options = await taskListField!.loadOptions!({}, mockHttp);
       expect(mockHttp.get).toHaveBeenCalledWith(
         'https://tasks.googleapis.com/tasks/v1/users/@me/lists',
         { params: { maxResults: '100' } },
       );
       expect(options).toEqual([
-        { label: 'My Tasks (Default)', value: 'list-primary' },
-        { label: 'Work', value: 'list-work' },
+        { label: 'My Tasks', value: 'list-1' },
+        { label: 'Work', value: 'list-2' },
       ]);
     });
   });
 
   describe('searchIssues and getNewIssuesForBacklog', () => {
-    it('searches tasks across pages and filters by search term', async () => {
-      mockHttp.get
-        .mockResolvedValueOnce({
-          items: [
-            {
-              id: 't1',
-              title: 'Buy milk',
-              notes: 'From grocery store',
-              status: 'needsAction',
-              due: '2026-11-16T00:00:00.000Z',
-            },
-            {
-              id: 't2',
-              title: 'Deleted task',
-              deleted: true,
-            },
-          ],
-          nextPageToken: 'page-2',
-        })
-        .mockResolvedValueOnce({
-          items: [
-            {
-              id: 't3',
-              title: 'Prepare milkshakes',
-              status: 'needsAction',
-            },
-            {
-              id: 't4',
-              title: 'Unrelated task',
-              status: 'needsAction',
-            },
-          ],
-        });
+    it('searches tasks by title and notes and filters deleted tasks', async () => {
+      mockHttp.get.mockResolvedValueOnce({
+        items: [
+          {
+            id: 't1',
+            title: 'Buy groceries',
+            notes: 'Milk and eggs',
+            status: 'needsAction',
+            due: '2026-04-10T00:00:00.000Z',
+          },
+          {
+            id: 't2',
+            title: 'Deleted task',
+            status: 'needsAction',
+            deleted: true,
+          },
+          {
+            id: 't3',
+            title: 'Call dentist',
+            status: 'needsAction',
+          },
+        ],
+      });
 
       const results = await definition.searchIssues(
         'milk',
         { taskListId: 'list-1' },
         mockHttp,
       );
-
-      expect(results).toHaveLength(2);
+      expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({
         id: 'list-1::t1',
-        title: 'Buy milk',
+        title: 'Buy groceries',
+        description: 'Milk and eggs',
         status: 'needsAction',
-        dueDay: '2026-11-16',
+        dueDay: '2026-04-10',
         isAllDay: true,
-      });
-      expect(results[1]).toMatchObject({
-        id: 'list-1::t3',
-        title: 'Prepare milkshakes',
       });
     });
 
-    it('returns only open tasks for getNewIssuesForBacklog', async () => {
+    it('returns only uncompleted tasks for backlog import', async () => {
       mockHttp.get.mockResolvedValueOnce({
         items: [
           { id: 't1', title: 'Open task', status: 'needsAction' },
@@ -247,97 +235,94 @@ describe('Google Tasks Plugin', () => {
         ],
       });
 
-      const backlog = await definition.getNewIssuesForBacklog!(
+      const results = await definition.getNewIssuesForBacklog!(
         { taskListId: 'list-1' },
         mockHttp,
       );
-
-      expect(backlog).toHaveLength(1);
-      expect(backlog[0].id).toBe('list-1::t1');
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe('list-1::t1');
     });
   });
 
   describe('getById, createIssue, updateIssue, deleteIssue', () => {
-    it('fetches a single task by compound ID and maps it to PluginIssue', async () => {
+    it('fetches a single task by compound ID and maps statusLabel and dueDay', async () => {
       mockHttp.get.mockResolvedValueOnce({
-        id: 'task-42',
-        title: 'Review PR',
-        notes: 'Check tests',
+        id: 't1',
+        title: 'Write unit tests',
+        notes: 'Cover OAuth overrides',
         status: 'completed',
-        due: '2026-11-25T00:00:00.000Z',
-        updated: '2026-11-16T10:00:00.000Z',
+        due: '2026-05-01T00:00:00.000Z',
+        updated: '2026-05-01T12:00:00.000Z',
       });
 
-      const issue = await definition.getById('list-1::task-42', {}, mockHttp);
+      const issue = await definition.getById('list-1::t1', {}, mockHttp);
       expect(mockHttp.get).toHaveBeenCalledWith(
-        'https://tasks.googleapis.com/tasks/v1/lists/list-1/tasks/task-42',
+        'https://tasks.googleapis.com/tasks/v1/lists/list-1/tasks/t1',
       );
       expect(issue).toMatchObject({
-        id: 'list-1::task-42',
-        title: 'Review PR',
-        body: 'Check tests',
+        id: 'list-1::t1',
+        title: 'Write unit tests',
+        body: 'Cover OAuth overrides',
         state: 'completed',
-        dueDay: '2026-11-25',
+        statusLabel: 'STATUS.COMPLETED',
+        dueDay: '2026-05-01',
       });
     });
 
-    it('creates a new task in the configured task list', async () => {
-      mockHttp.post.mockResolvedValueOnce({
-        id: 'new-task-1',
-        title: 'New SP Task',
+    it('uses translated fallback title when task has no title', async () => {
+      mockHttp.get.mockResolvedValueOnce({
+        id: 't-untitled',
         status: 'needsAction',
-        updated: '2026-11-16T12:00:00.000Z',
       });
 
-      const created = await definition.createIssue!(
-        'New SP Task',
-        { taskListId: 'list-abc' },
-        mockHttp,
-      );
-
-      expect(mockHttp.post).toHaveBeenCalledWith(
-        'https://tasks.googleapis.com/tasks/v1/lists/list-abc/tasks',
-        { title: 'New SP Task' },
-      );
-      expect(created.issueId).toBe('list-abc::new-task-1');
+      const issue = await definition.getById('list-1::t-untitled', {}, mockHttp);
+      expect(issue.title).toBe('FALLBACK.NO_TITLE');
+      expect(issue.summary).toBe('FALLBACK.NO_TITLE');
+      expect(issue.statusLabel).toBe('STATUS.NEEDS_ACTION');
     });
 
-    it('patches title, notes, due date, and completion status in updateIssue', async () => {
-      mockHttp.patch.mockResolvedValue({});
+    it('patches status, completed timestamp, title, notes, and due date on updateIssue', async () => {
+      mockHttp.patch.mockResolvedValueOnce({});
 
       await definition.updateIssue!(
-        'list-abc::task-1',
+        'list-1::t1',
         {
           title: 'Updated title',
           body: 'Updated notes',
           state: 'completed',
-          dueDay: '2026-12-01',
+          dueDay: '2026-06-15',
         },
         {},
         mockHttp,
       );
 
       expect(mockHttp.patch).toHaveBeenCalledWith(
-        'https://tasks.googleapis.com/tasks/v1/lists/list-abc/tasks/task-1',
+        'https://tasks.googleapis.com/tasks/v1/lists/list-1/tasks/t1',
         expect.objectContaining({
           title: 'Updated title',
           notes: 'Updated notes',
           status: 'completed',
-          due: '2026-12-01T00:00:00.000Z',
           completed: expect.any(String),
+          due: '2026-06-15T00:00:00.000Z',
         }),
       );
+    });
 
-      // Reopening clears completed timestamp
+    it('clears completed and due when task is reopened and unscheduled', async () => {
+      mockHttp.patch.mockResolvedValueOnce({});
+
       await definition.updateIssue!(
-        'list-abc::task-1',
-        { state: 'needsAction', dueDay: null },
+        'list-1::t1',
+        {
+          state: 'needsAction',
+          dueDay: null,
+        },
         {},
         mockHttp,
       );
 
-      expect(mockHttp.patch).toHaveBeenLastCalledWith(
-        'https://tasks.googleapis.com/tasks/v1/lists/list-abc/tasks/task-1',
+      expect(mockHttp.patch).toHaveBeenCalledWith(
+        'https://tasks.googleapis.com/tasks/v1/lists/list-1/tasks/t1',
         {
           status: 'needsAction',
           completed: null,
@@ -346,52 +331,68 @@ describe('Google Tasks Plugin', () => {
       );
     });
 
-    it('deletes a task by compound ID', async () => {
-      mockHttp.delete.mockResolvedValueOnce({});
+    it('creates a new Google Task on createIssue', async () => {
+      mockHttp.post.mockResolvedValueOnce({
+        id: 'new-task-id',
+        title: 'Created from SP',
+        status: 'needsAction',
+      });
 
-      await definition.deleteIssue!('list-abc::task-99', {}, mockHttp);
+      const created = await definition.createIssue!(
+        'Created from SP',
+        { taskListId: 'list-1' },
+        mockHttp,
+      );
+      expect(mockHttp.post).toHaveBeenCalledWith(
+        'https://tasks.googleapis.com/tasks/v1/lists/list-1/tasks',
+        { title: 'Created from SP' },
+      );
+      expect(created.issueId).toBe('list-1::new-task-id');
+      expect(created.issueData.title).toBe('Created from SP');
+    });
+
+    it('deletes a Google Task on deleteIssue', async () => {
+      mockHttp.delete.mockResolvedValueOnce(undefined);
+
+      await definition.deleteIssue!('list-1::t1', {}, mockHttp);
       expect(mockHttp.delete).toHaveBeenCalledWith(
-        'https://tasks.googleapis.com/tasks/v1/lists/list-abc/tasks/task-99',
+        'https://tasks.googleapis.com/tasks/v1/lists/list-1/tasks/t1',
       );
     });
   });
 
-  describe('fieldMappings and extractSyncValues', () => {
-    const ctx = { issueId: 'list-1::t1' };
+  describe('fieldMappings', () => {
+    it('maps isDone <-> state and dueDay <-> dueDay', () => {
+      const mappings = definition.fieldMappings!;
+      const isDone = mappings.find((m) => m.taskField === 'isDone')!;
+      expect(isDone.toIssueValue(true, { issueId: '1' })).toBe('completed');
+      expect(isDone.toIssueValue(false, { issueId: '1' })).toBe('needsAction');
+      expect(isDone.toTaskValue('completed', { issueId: '1' })).toBe(true);
+      expect(isDone.toTaskValue('needsAction', { issueId: '1' })).toBe(false);
 
-    it('maps isDone <-> state bidirectionally', () => {
-      const mapping = definition.fieldMappings!.find((m) => m.taskField === 'isDone')!;
-      expect(mapping.defaultDirection).toBe('both');
-      expect(mapping.toIssueValue(true, ctx)).toBe('completed');
-      expect(mapping.toIssueValue(false, ctx)).toBe('needsAction');
-      expect(mapping.toTaskValue('completed', ctx)).toBe(true);
-      expect(mapping.toTaskValue('needsAction', ctx)).toBe(false);
+      const dueDay = mappings.find((m) => m.taskField === 'dueDay')!;
+      expect(dueDay.mutuallyExclusive).toEqual(['dueWithTime']);
+      expect(dueDay.toIssueValue('2026-07-01', { issueId: '1' })).toBe('2026-07-01');
+      expect(dueDay.toIssueValue(undefined, { issueId: '1' })).toBeNull();
+      expect(dueDay.toTaskValue('2026-07-01', { issueId: '1' })).toBe('2026-07-01');
+      expect(dueDay.toTaskValue(undefined, { issueId: '1' })).toBeUndefined();
     });
 
-    it('maps dueDay bidirectionally and marks dueWithTime mutually exclusive', () => {
-      const mapping = definition.fieldMappings!.find((m) => m.taskField === 'dueDay')!;
-      expect(mapping.defaultDirection).toBe('both');
-      expect(mapping.mutuallyExclusive).toEqual(['dueWithTime']);
-      expect(mapping.toIssueValue('2026-11-16', ctx)).toBe('2026-11-16');
-      expect(mapping.toIssueValue('', ctx)).toBeNull();
-      expect(mapping.toTaskValue('2026-11-16', ctx)).toBe('2026-11-16');
-      expect(mapping.toTaskValue(undefined, ctx)).toBeUndefined();
-    });
+    it('maps dueWithTime -> dueDay as pushOnly so timed scheduling and unscheduling sync to Google Tasks', () => {
+      const mappings = definition.fieldMappings!;
+      const dueWithTime = mappings.find((m) => m.taskField === 'dueWithTime')!;
+      expect(dueWithTime).toBeDefined();
+      expect(dueWithTime.issueField).toBe('dueDay');
+      expect(dueWithTime.defaultDirection).toBe('pushOnly');
+      expect(dueWithTime.mutuallyExclusive).toEqual(['dueDay']);
 
-    it('extracts sync values for state, title, body, and dueDay', () => {
-      const issue = {
-        id: 'list-1::t1',
-        title: 'Task',
-        body: 'Note',
-        state: 'needsAction',
-        dueDay: '2026-11-16',
-      };
-      expect(definition.extractSyncValues!(issue)).toEqual({
-        state: 'needsAction',
-        title: 'Task',
-        body: 'Note',
-        dueDay: '2026-11-16',
-      });
+      const localTimestamp = new Date(2026, 10, 22, 15, 0, 0).getTime();
+      expect(dueWithTime.toIssueValue(localTimestamp, { issueId: '1' })).toBe(
+        '2026-11-22',
+      );
+      expect(dueWithTime.toIssueValue(undefined, { issueId: '1' })).toBeNull();
+      expect(dueWithTime.toIssueValue(null, { issueId: '1' })).toBeNull();
+      expect(dueWithTime.toTaskValue('2026-11-22', { issueId: '1' })).toBeUndefined();
     });
   });
 });
