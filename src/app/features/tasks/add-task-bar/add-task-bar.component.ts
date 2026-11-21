@@ -561,11 +561,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       let finalTagIds = [...state.tagIds, ...state.tagIdsFromTxt];
 
       if (this.hasNewTags()) {
-        const shouldCreateNewTags = await this._confirmNewTags();
-        if (shouldCreateNewTags) {
-          const newTagIds = await this._createNewTags(state.newTagTitles);
-          finalTagIds = [...finalTagIds, ...newTagIds];
+        // Cancel keeps the input as typed so a mistyped tag can be fixed;
+        // saving anyway applied the rest, such as a schedule, and moved the
+        // task out of view (#11917).
+        if (!(await this._confirmNewTags())) {
+          return;
         }
+        const newTagIds = await this._createNewTags(state.newTagTitles);
+        finalTagIds = [...finalTagIds, ...newTagIds];
       }
 
       // Filter out tags to remove if specified
