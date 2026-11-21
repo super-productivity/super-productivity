@@ -95,8 +95,8 @@ npm run video:ms-todo
 ```
 
 A 1920×1080 reel in `scenarios/ms-todo.spec.ts` for people leaving Microsoft To Do:
-open the importer in Settings, sign in, pick lists (the preview names what will not
-carry over), import, then see an imported list with its subtasks and repeat, and a
+open the importer in Settings, sign in, review the preview of lists and what will not
+carry over, import, then see an imported list with its subtasks and repeat, and a
 task due today in Today. Microsoft's sign-in and Graph API are faked with the same
 helper as the E2E import test (`e2e/helpers/fake-microsoft-todo.ts`), so no account
 is needed and the sign-in popup never appears on screen. The importer needs the
@@ -111,7 +111,7 @@ bundled plugins: run `npm run plugins:build` once before capturing. Outputs
 2. Use `helpers.ts` for pacing (`hold`) and covered setup dispatches;
    see [`../video-kit/README.md`](../video-kit/README.md) for the building blocks.
 3. Unknown variants record 1024×1024 at DPR 2 with the ring cursor; add a branch in
-   `fixture.ts` for another size or look.
+   `profile.ts` for another size and in `fixture.ts` for another look.
 
 While iterating, skip the slow webm and gif encodes:
 

@@ -38,11 +38,16 @@ export const installCursor = async (
 ): Promise<void> => {
   await page.addInitScript(
     (args) => {
+      // A second call would add a second set of listeners: two ripples per click.
+      const installed = window as unknown as { vkCursorInstalled?: boolean };
+      if (installed.vkCursorInstalled) return;
+      installed.vkCursorInstalled = true;
       const isArrow = args.style === 'arrow';
-      // Pointer events from this document and, through `relay`, from its iframes.
-      // Only the top page draws a cursor: an iframe (a plugin page, say) forwards
-      // its events up, so one cursor follows the mouse across frame borders and
-      // `setCursorVisible`, which reaches the top page only, hides all of it.
+      // Pointer events from this document and, through the `message` listener
+      // below, from its iframes. Only the top page draws a cursor: an iframe (a
+      // plugin page, say) forwards its events up, so one cursor follows the mouse
+      // across frame borders and `setCursorVisible`, which reaches the top page
+      // only, hides all of it.
       let apply: (type: string, x: number, y: number) => void;
       if (window !== window.top) {
         apply = (type, x, y) =>
@@ -82,7 +87,8 @@ export const installCursor = async (
           { passive: true, capture: true },
         );
       }
-      // An iframe reports in its own viewport; shift by the frame's position.
+      // An iframe reports in its own viewport: map that onto this one through the
+      // frame's position and any scale above it (the camera's transform).
       window.addEventListener('message', (e) => {
         const event = (e.data as Record<string, unknown> | null)?.[args.messageKey] as
           | { type: string; x: number; y: number }
@@ -93,11 +99,11 @@ export const installCursor = async (
         );
         if (!frame) return;
         const rect = frame.getBoundingClientRect();
-        apply(
-          event.type,
-          event.x + rect.left + frame.clientLeft,
-          event.y + rect.top + frame.clientTop,
-        );
+        const scaleX = frame.offsetWidth ? rect.width / frame.offsetWidth : 1;
+        const scaleY = frame.offsetHeight ? rect.height / frame.offsetHeight : 1;
+        const offsetX = (frame.clientLeft + event.x) * scaleX;
+        const offsetY = (frame.clientTop + event.y) * scaleY;
+        apply(event.type, rect.left + offsetX, rect.top + offsetY);
       });
       if (window !== window.top) return;
 

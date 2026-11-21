@@ -41,11 +41,13 @@ export const fakeMicrosoftTodo = async (
   });
   await context.route(`${GRAPH_LISTS}**`, (route) => {
     graphAuth.push(route.request().headers()['authorization']);
+    // The importer URL-encodes list ids, which in real Graph data contain `=`.
     const listId = /^\/([^/?]+)\/tasks/.exec(
       route.request().url().slice(GRAPH_LISTS.length),
     )?.[1];
     return json(route, {
-      value: listId === undefined ? lists : (tasksByListId[listId] ?? []),
+      value:
+        listId === undefined ? lists : (tasksByListId[decodeURIComponent(listId)] ?? []),
     });
   });
   return graphAuth;

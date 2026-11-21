@@ -1,7 +1,7 @@
 /**
  * Microsoft To Do migration reel (`REEL_VARIANT=ms-todo`): open the importer
- * from Settings, sign in, pick lists, import, then land on an imported list
- * and in Today. Microsoft is faked as in the E2E import test, so the reel
+ * from Settings, sign in, review the preview, import, then land on an imported
+ * list and in Today. Microsoft is faked as in the E2E import test, so the reel
  * shows realistic lists without a real account, and the sign-in popup is
  * never on screen.
  */
@@ -10,6 +10,7 @@ import { expect, test } from '../fixture';
 import { hold } from '../helpers';
 import { fakeMicrosoftTodo } from '../../helpers/fake-microsoft-todo';
 import { ImportPage } from '../../pages/import.page';
+import { SCREENSHOT_BASE_DATE } from '../../store-screenshots/matrix';
 import {
   createCamera,
   createPointer,
@@ -20,11 +21,14 @@ import {
   showEndCard,
 } from '../../video-kit';
 
-/** Raw Graph due date on a day relative to the seed's pinned Wednesday. */
-const due = (day: string): { dateTime: string; timeZone: string } => ({
-  dateTime: `${day}T00:00:00.0000000`,
-  timeZone: 'UTC',
-});
+/** Raw Graph due date `offsetDays` after the seed's pinned "today". */
+const due = (offsetDays: number): { dateTime: string; timeZone: string } => {
+  const day = new Date(SCREENSHOT_BASE_DATE);
+  day.setDate(day.getDate() + offsetDays);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const ymd = `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+  return { dateTime: `${ymd}T00:00:00.0000000`, timeZone: 'UTC' };
+};
 const weekly = (day: string): object => ({
   pattern: { type: 'weekly', interval: 1, daysOfWeek: [day] },
   range: { type: 'noEnd' },
@@ -42,7 +46,7 @@ const TASKS: Record<string, unknown[]> = {
     {
       id: 'T-passport',
       title: 'Renew passport',
-      dueDateTime: due('2026-05-20'),
+      dueDateTime: due(14),
       isReminderOn: true,
     },
     { id: 'T-bank', title: 'Call the bank about the card' },
@@ -51,7 +55,7 @@ const TASKS: Record<string, unknown[]> = {
     {
       id: 'T-bike',
       title: 'Fix the bike light',
-      dueDateTime: due('2026-05-06'),
+      dueDateTime: due(0),
       body: { content: '<p>Front light flickers.</p>', contentType: 'html' },
       checklistItems: [
         { id: 's-battery', displayName: 'Buy a new battery', isChecked: true },
@@ -62,12 +66,12 @@ const TASKS: Record<string, unknown[]> = {
       id: 'T-dentist',
       title: 'Book the dentist',
       importance: 'high',
-      dueDateTime: due('2026-05-08'),
+      dueDateTime: due(2),
     },
     {
       id: 'T-plants',
       title: 'Water the plants',
-      dueDateTime: due('2026-05-10'),
+      dueDateTime: due(4),
       recurrence: weekly('sunday'),
     },
   ],
@@ -76,7 +80,7 @@ const TASKS: Record<string, unknown[]> = {
       id: 'T-shop',
       title: 'Weekly shop',
       categories: ['errand'],
-      dueDateTime: due('2026-05-09'),
+      dueDateTime: due(3),
       recurrence: weekly('saturday'),
       checklistItems: [
         { id: 's-milk', displayName: 'Milk', isChecked: false },
@@ -118,7 +122,7 @@ test.describe('@video Microsoft To Do migration reel', () => {
   test.use({ locale: 'en', theme: 'dark' });
 
   test('move from Microsoft To Do', async ({ seededPage: page, markBeatsStart }) => {
-    const graphAuth = await fakeMicrosoftTodo(page.context(), LISTS, TASKS);
+    await fakeMicrosoftTodo(page.context(), LISTS, TASKS);
     const pointer = createPointer(page);
     const camera = createCamera(page, 'app-root');
     const frame = page.frameLocator('plugin-index iframe');
@@ -166,7 +170,6 @@ test.describe('@video Microsoft To Do migration reel', () => {
     await hold(300);
     await signIn.click();
     await expect(frame.getByText('Home — tasks: 3, steps: 2')).toBeVisible();
-    expect(graphAuth.every((h) => h === 'Bearer fake-token')).toBe(true);
     await pointer.park();
     await hold(600);
 

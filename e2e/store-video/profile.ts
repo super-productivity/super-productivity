@@ -30,9 +30,9 @@ const getVideoProfile = (variant: string): VideoProfile => {
 
   if (variant === 'ms-todo') {
     return {
-      // 1920x1080 for YouTube and the docs. The importer runs in an iframe,
-      // whose hit-testing ignores an ancestor's CSS zoom, so DPR, not zoom,
-      // enlarges the 1280x720 layout.
+      // 1920x1080 landscape. Playwright cannot click inside an iframe (the
+      // importer) under an ancestor's CSS zoom, so DPR, not zoom, enlarges
+      // the 1280x720 layout.
       size: { width: 1280, height: 720 },
       deviceScaleFactor: 1.5,
     };

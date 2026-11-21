@@ -236,7 +236,8 @@ export const test = base.extend<VideoFixtures>({
         }
         /* Mobile and hero use small CSS viewports that activate SP's
            responsive layouts; DPR, not zoom, gives them their pixels.
-           ms-todo does the same because its importer is an iframe. */
+           ms-todo does too: Playwright cannot click inside an iframe
+           under an ancestor's CSS zoom. */
         body[data-sp-video-variant="mobile"] app-root,
         body[data-sp-video-variant="ms-todo"] app-root,
         body[data-sp-video-variant="hero"] app-root,
