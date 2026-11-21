@@ -41,6 +41,21 @@ Updating links in the same PR does not reach app versions already released, whic
 For a page the app links, keep its website route and linked headings, or add a redirect in `nginx/plesk-additional-directives.conf` in the landing-page repository.
 Keep a replaced wiki note as a stub that points to the new page, because older translations still link the GitHub Wiki.
 
+### Features not in a release yet
+
+super-productivity.com/docs publishes `master` every day, but users run the latest stable release.
+When a page documents behavior that no release contains yet, add this note after the page's opening summary or first paragraph, or under the heading of the section that covers the new behavior:
+
+```markdown
+> [!NOTE]
+> Not released yet: <what> ships in the first stable release after vX.Y.Z.
+```
+
+Use the exact words `Not released yet` so the release step can find every note.
+Keep the note apart from other blockquotes by a paragraph; two adjacent blockquotes fail markdownlint (MD028), and a note before a public page's summary line hides the summary from the website's meta description.
+Write the rest of the page for the released state; do not hedge every sentence.
+The release step removes the notes: see [the release runbook](release-and-publishing.md#prepare-a-version).
+
 ## Legacy wiki rules
 
 Until a note is migrated, the old wiki rules still apply.
