@@ -296,6 +296,70 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    // #11263: REST clients often POST both dueDay and dueWithTime. dueWithTime
+    // wins; the task must not also land in planner.days (that caused a second,
+    // untimed block packed into free space next to the timed one).
+    it('should not add a timed task to planner days when dueDay is also set (#11263)', () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = getDbDateStr(tomorrow);
+      const dueWithTime = new Date(tomorrow).setHours(16, 0, 0, 0);
+
+      const action = createAddTaskAction({
+        dueDay: tomorrowStr,
+        dueWithTime: dueWithTime,
+      });
+
+      const result = metaReducer(baseState, action);
+      const stored = result[TASK_FEATURE_NAME].entities['task1'] as Task;
+      expect(stored.dueWithTime).toBe(dueWithTime);
+      expect(stored.dueDay).toBeUndefined();
+      expect(result.planner.days[tomorrowStr] ?? []).not.toContain('task1');
+    });
+
+    it('should honour startOfNextDayDiffMs for a timed task after midnight (#11263)', () => {
+      const stateWithOffset = {
+        ...baseState,
+        [appStateFeatureKey]: {
+          ...baseState[appStateFeatureKey],
+          todayStr: '2024-06-15',
+          startOfNextDayDiffMs: 4 * 60 * 60 * 1000,
+        },
+      };
+      // 02:00 on the next calendar day still belongs to the logical day 2024-06-15
+      const dueWithTime = new Date(2024, 5, 16, 2, 0, 0, 0).getTime();
+
+      const result = metaReducer(
+        stateWithOffset,
+        createAddTaskAction({ dueWithTime, dueDay: undefined }),
+      );
+
+      expect(result[TAG_FEATURE_NAME].entities['TODAY']!.taskIds).toContain('task1');
+    });
+
+    it('should not add to Today or planner days when dueDay is today but dueWithTime is tomorrow (#11263)', () => {
+      const stateToday = {
+        ...baseState,
+        [appStateFeatureKey]: {
+          ...baseState[appStateFeatureKey],
+          todayStr: '2024-06-15',
+          startOfNextDayDiffMs: 0,
+        },
+      };
+      const dueWithTime = new Date(2024, 5, 16, 16, 0, 0, 0).getTime();
+
+      const result = metaReducer(
+        stateToday,
+        createAddTaskAction({ dueDay: '2024-06-15', dueWithTime }),
+      );
+
+      expect(result[TAG_FEATURE_NAME].entities['TODAY']!.taskIds).not.toContain('task1');
+      expect(result.planner.days['2024-06-15'] ?? []).not.toContain('task1');
+      expect(
+        (result[TASK_FEATURE_NAME].entities['task1'] as Task).dueDay,
+      ).toBeUndefined();
+    });
+
     it('should not add task to planner days when due today (should go to TODAY tag instead)', () => {
       const today = getDbDateStr();
       const action = createAddTaskAction({ dueDay: today });
@@ -1898,6 +1962,26 @@ describe('taskSharedCrudMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+
+    it('should clear dueDay when dueWithTime is set (#11263)', () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const testState = createStateWithExistingTasks(['task1'], [], []);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        dueDay: getDbDateStr(tomorrow),
+      });
+      const dueWithTime = new Date(tomorrow).setHours(16, 0, 0, 0);
+
+      const result = metaReducer(
+        testState,
+        createUpdateTaskAction('task1', { dueWithTime }),
+      );
+
+      const stored = result[TASK_FEATURE_NAME].entities['task1'] as Task;
+      expect(stored.dueWithTime).toBe(dueWithTime);
+      expect(stored.dueDay).toBeUndefined();
     });
 
     it('should atomically move a task and its subtasks to another project', () => {
