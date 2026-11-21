@@ -81,6 +81,34 @@ class RepeatReminderScheduleTest {
     }
 
     @Test
+    fun `later plan leaves a slot that already fired, so its notification stays`() {
+        val now = 10_000L
+        val previous = mapOf("rpt_a_2026-06-16" to 9_000L, "rpt_a_2026-06-17" to 20_000L)
+        val derived = listOf(ReminderToSchedule("rpt_a_2026-06-17", "A", 20_000L, false))
+        val plan = planRepeatReminderSlots(previous, derived, now)
+        assertEquals(emptySet<String>(), plan.toCancel)
+        assertEquals(emptyList<String>(), plan.toSchedule.map { it.taskId })
+    }
+
+    @Test
+    fun `later plan re-arms a fired slot whose occurrence moved to a later time`() {
+        val now = 10_000L
+        val previous = mapOf("rpt_a_2026-06-16" to 9_000L)
+        val derived = listOf(ReminderToSchedule("rpt_a_2026-06-16", "A", 20_000L, false))
+        val plan = planRepeatReminderSlots(previous, derived, now)
+        assertEquals(setOf("rpt_a_2026-06-16"), plan.toCancel)
+        assertEquals(listOf("rpt_a_2026-06-16"), plan.toSchedule.map { it.taskId })
+    }
+
+    @Test
+    fun `later plan cancels a future slot that is no longer derived`() {
+        val now = 10_000L
+        val previous = mapOf("rpt_a_2026-06-17" to 20_000L)
+        val plan = planRepeatReminderSlots(previous, emptyList(), now)
+        assertEquals(setOf("rpt_a_2026-06-17"), plan.toCancel)
+    }
+
+    @Test
     fun `a day on or before last creation is a live instance`() {
         val zone = TimeZone.getTimeZone("UTC")
         val state = RepeatCfgSyncState(
