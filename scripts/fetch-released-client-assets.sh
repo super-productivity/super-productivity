@@ -19,6 +19,7 @@ apk_sha256() {
     v18.14.0) echo 1dab9bb1124200f0b2c3dc51e464a4bba38f951cb4325091e1cc4fcfb5b6126e ;;
     v19.0.1) echo 9ba64b5cb0b043f442187250ac0e2e91a44f79ebdcc8dd3dc2b10588a7037530 ;;
     v19.1.0) echo 127af90995763d88a502eae428af9dc395dcdf17d3f8f1be498f56dfa4aab9dc ;;
+    v19.2.0) echo 8c876be35a3bb9464ecb35e234d96518590ec4b28414055d3957d8a72328c8d0 ;;
     *) return 1 ;;
   esac
 }
