@@ -1,5 +1,6 @@
 import { TASK_REPEAT_WEEKDAY_MAP, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import {
   findMonthlyNthWeekdayOccurrence,
   hasNthWeekdayAnchor,
@@ -27,6 +28,30 @@ import { isAfterRepeatUntilDay } from './repeat-until-day.util';
 export const getFirstRepeatOccurrence = (taskRepeatCfg: TaskRepeatCfg): Date | null => {
   const first = getFirstRepeatOccurrenceIgnoringEnd(taskRepeatCfg);
   return first && isAfterRepeatUntilDay(taskRepeatCfg, first) ? null : first;
+};
+
+/**
+ * The `startDate` a repeat config should be persisted with.
+ *
+ * A WEEKLY mask can exclude its own startDate — Workdays picked on a
+ * Saturday, or a custom Wednesday-only mask anchored on a Monday — and the
+ * repeat dialog re-derives every later quick setting from the stored value,
+ * so a weekend anchor turns a later "weekly on current weekday" switch into a
+ * Saturday-only recurrence (#9488). Persisting the first day the schedule
+ * actually lands on keeps that anchor on a real occurrence.
+ *
+ * Every other cycle starts on its startDate by definition, and a config with
+ * no valid occurrence (invalid config, or an empty finite window — #10091)
+ * keeps its startDate: both are returned unchanged.
+ */
+export const getFirstOccurrenceStartDate = (
+  taskRepeatCfg: Omit<TaskRepeatCfg, 'id'>,
+): string | undefined => {
+  if (taskRepeatCfg.repeatCycle !== 'WEEKLY' || !taskRepeatCfg.startDate) {
+    return taskRepeatCfg.startDate;
+  }
+  const first = getFirstRepeatOccurrence(taskRepeatCfg as TaskRepeatCfg);
+  return first ? getDbDateStr(first) : taskRepeatCfg.startDate;
 };
 
 /**

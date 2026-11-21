@@ -1,5 +1,6 @@
 import { getDefaultSkipOverdue } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-default-skip-overdue';
 import { getIntervalRepeatUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-interval-repeat-updates';
+import { getFirstOccurrenceStartDate } from '../../task-repeat-cfg/store/get-first-repeat-occurrence.util';
 import {
   DEFAULT_TASK_REPEAT_CFG,
   RepeatCycleOption,
@@ -104,5 +105,9 @@ export const toCaptureRepeatCfg = (
     startTime: opts.startTime,
     remindAt: opts.startTime ? opts.remindOption : undefined,
   };
-  return { ...cfg, skipOverdue: getDefaultSkipOverdue(cfg) };
+  // The same anchor rule as TaskRepeatCfgService.addTaskRepeatCfgToTask: a
+  // WEEKLY mask that excludes its own start day (a weekday list without the
+  // capture's due day) persists the first day the schedule lands on (#9488).
+  const anchoredCfg = { ...cfg, startDate: getFirstOccurrenceStartDate(cfg) };
+  return { ...anchoredCfg, skipOverdue: getDefaultSkipOverdue(anchoredCfg) };
 };
