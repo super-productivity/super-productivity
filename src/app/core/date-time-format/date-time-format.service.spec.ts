@@ -319,6 +319,51 @@ describe('DateTimeFormatService', () => {
     });
   });
 
+  describe('Dutch locale (nl)', () => {
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [MatNativeDateModule],
+        providers: [
+          DateTimeFormatService,
+          { provide: DateAdapter, useClass: CustomDateAdapter },
+          {
+            provide: TranslateService,
+            useValue: { currentLang: 'en', defaultLang: 'en' },
+          },
+          provideMockStore({
+            initialState: {
+              globalConfig: {
+                ...DEFAULT_GLOBAL_CONFIG,
+                localization: {
+                  ...DEFAULT_GLOBAL_CONFIG.localization,
+                  dateTimeLocale: DateTimeLocales.nl,
+                },
+              },
+            },
+          }),
+        ],
+      });
+      service = TestBed.inject(DateTimeFormatService);
+    });
+
+    it('detects a day-first DD-MM-YYYY format and 24h clock', () => {
+      expect(service.dateFormat().raw).toBe('dd-MM-yyyy');
+      expect(service.is24HourFormat()).toBe(true);
+    });
+
+    it('round-trips a Dutch date string through the detected format', () => {
+      const parsed = service.parseStringToDate('20-12-2026', service.dateFormat().raw);
+      expect(parsed?.getFullYear()).toBe(2026);
+      expect(parsed?.getMonth()).toBe(11);
+      expect(parsed?.getDate()).toBe(20);
+    });
+
+    it('reads short-syntax dates day-first', () => {
+      expect(service.dateInputLocale().isDayFirst).toBe(true);
+    });
+  });
+
   describe('dateTimeLocale config fallback', () => {
     let mockStore: MockStore;
 
