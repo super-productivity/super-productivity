@@ -380,14 +380,20 @@ describe('Email Verification Page', () => {
     }
   });
 
-  it('should await verifyEmail before sending response', async () => {
-    // Mock the verifyEmail function to track if it was awaited
-    let verifyEmailCompleted = false;
+  it('should render a confirmation page without verifying on GET (#9032)', async () => {
+    let verifyEmailCalled = false;
+    let previewCalled = false;
     vi.doMock('../src/auth', () => ({
+      getVerificationPreview: vi.fn().mockImplementation(async () => {
+        previewCalled = true;
+        return {
+          kind: 'passkey',
+          email: 'me@example.com',
+          matchCode: 'AB2-DEF',
+        };
+      }),
       verifyEmail: vi.fn().mockImplementation(async () => {
-        // Simulate async work
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        verifyEmailCompleted = true;
+        verifyEmailCalled = true;
         return true;
       }),
     }));
@@ -403,14 +409,19 @@ describe('Email Verification Page', () => {
       url: '/verify-email?token=valid-token',
     });
 
-    // The response should only be sent after verifyEmail completes
+    // GET must not consume the token; the explicit POST confirm does.
     expect(response.statusCode).toBe(200);
-    expect(verifyEmailCompleted).toBe(true);
-    expect(response.body).toContain('Email Verified');
+    expect(previewCalled).toBe(true);
+    expect(verifyEmailCalled).toBe(false);
+    expect(response.body).toContain('Verify your SuperSync account');
+    expect(response.body).toContain('AB2-DEF');
+    expect(response.body).toContain('Only confirm if this code matches');
+    expect(response.body).not.toContain('Email Verified!');
   });
 
   it('should handle verification errors properly', async () => {
     vi.doMock('../src/auth', () => ({
+      getVerificationPreview: vi.fn().mockResolvedValue(null),
       verifyEmail: vi.fn().mockRejectedValue(new Error('Invalid verification token')),
     }));
 

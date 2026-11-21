@@ -228,6 +228,31 @@ describeWithDb('Registration races (PostgreSQL)', () => {
     expect(storedUser?.isVerified).toBe(1);
   });
 
+  it('keeps the owner delivered link valid after a later foreign registration (#9032)', async () => {
+    const email = `${EMAIL_PREFIX}-owner-before-foreign@test.local`;
+    const ownerCredentialId = Buffer.from(`owner-${RUN_ID}`);
+    const foreignCredentialId = Buffer.from(`foreign-${RUN_ID}`);
+
+    await registerPasskey(email, ownerCredentialId);
+    const ownerToken = mockSendVerificationEmail.mock.calls[0][1] as string;
+
+    // Someone else submits their own passkey for the same unverified address
+    // after the owner's link was delivered. Registration must not invalidate
+    // the owner's pending link (ADR #6).
+    await registerPasskey(email, foreignCredentialId);
+
+    await verifyEmail(ownerToken);
+
+    const storedUser = await observer.user.findUniqueOrThrow({
+      where: { email },
+      include: { passkeys: true, pendingPasskeyRegistrations: true },
+    });
+    expect(storedUser.isVerified).toBe(1);
+    expect(storedUser.passkeys).toHaveLength(1);
+    expect(storedUser.passkeys[0].credentialId).toEqual(ownerCredentialId);
+    expect(storedUser.pendingPasskeyRegistrations).toHaveLength(0);
+  });
+
   it('does not let a later passkey attempt invalidate a magic-link verification', async () => {
     const email = `${EMAIL_PREFIX}-magic-before-passkey@test.local`;
     await registerWithMagicLink(email, Date.now());

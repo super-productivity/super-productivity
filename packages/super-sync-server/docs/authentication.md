@@ -68,6 +68,15 @@ other pending or active credentials for that account, and promotes only the
 credential bound to that link. This is the active architecture recorded in
 [ADR #6](../../../ARCHITECTURE-DECISIONS.md#6-passkeys-stay-pending-until-email-verification).
 
+Only one pending registration is activatable at a time (#9032): the emailed
+link disambiguates what it authorizes — registration returns the same short
+match code shown on the confirmation page, `GET /verify-email` renders that
+code plus the credential fingerprint, creation time and transports and does
+not consume the token; only the explicit POST confirm activates it, which
+also prevents email link prefetchers from verifying the account. Pending
+registrations stay independent (ADR #6): a later registration for the same
+address never invalidates an already-delivered link.
+
 ### Magic-Link Registration and Login
 
 Magic-link registration creates an unverified account with no password or

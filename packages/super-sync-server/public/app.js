@@ -539,9 +539,15 @@ async function registerWithPasskey() {
     }
 
     // Success - show message and prompt to verify email
+    // #9032: the same short code appears on the email confirmation page, so
+    // the owner can tell their link from one staged by someone else.
+    const codeHint = verifyData.matchCode
+      ? ` Your registration code: ${verifyData.matchCode} — only confirm the verification link that shows this code.`
+      : '';
     showMessage(
-      verifyData.message ||
-        'Registration successful! Please check your email to verify your account.',
+      (verifyData.message ||
+        'Registration successful! Please check your email to verify your account.') +
+        codeHint,
       'success',
     );
 
@@ -551,7 +557,8 @@ async function registerWithPasskey() {
       document.getElementById('login-email').value = email;
       showMessage(
         'Important: You must click the verification link in your email BEFORE logging in. ' +
-          'Login will NOT work until your email is verified.',
+          'Login will NOT work until your email is verified.' +
+          codeHint,
         'success',
       );
     }, 3000);

@@ -18,6 +18,7 @@ import { getWsConnectionService } from './sync/services/websocket-connection.ser
 import { revokeAllCaptureGrants } from './capture/capture-grant.store';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv, isConsentRequired } from './config';
+import { matchCodeForCredentialId } from './match-code';
 import {
   VERIFICATION_TOKEN_EXPIRY_MS,
   MAX_VERIFICATION_RESEND_COUNT,
@@ -151,7 +152,7 @@ export const verifyRegistration = async (
   email: string,
   credential: RegistrationResponseJSON,
   { termsAcceptedAt, connectRequestId }: RegistrationExtras = {},
-): Promise<{ message: string }> => {
+): Promise<{ message: string; matchCode: string }> => {
   const { rpID, origin } = getWebAuthnConfig();
 
   const expectedChallenge = getAndClearChallenge('registration', email);
@@ -183,6 +184,11 @@ export const verifyRegistration = async (
   // We need to decode it to get the actual raw credential ID bytes
   const credentialIdBase64url = Buffer.from(credentialInfo.id).toString('utf-8');
   const credentialIdRawBytes = Buffer.from(credentialIdBase64url, 'base64url');
+  // #9032: the same short code is shown after registering (app.js) and on
+  // the email confirmation page, so the owner can tell their link from one
+  // staged by someone else. Derived from the credential only, so every
+  // response — including the neutral ones — carries it.
+  const matchCode = matchCodeForCredentialId(credentialIdRawBytes);
   Logger.debug(`Registration credentialId base64url: ${credentialIdBase64url}`);
   Logger.debug(
     `Registration credentialId raw bytes (hex): ${credentialIdRawBytes.toString('hex')}`,
@@ -208,12 +214,12 @@ export const verifyRegistration = async (
 
     if (existingUser) {
       if (existingUser.isVerified === 1) {
-        return { message: REGISTRATION_SUCCESS_MESSAGE };
+        return { message: REGISTRATION_SUCCESS_MESSAGE, matchCode };
       }
 
       if (existingUser.verificationResendCount >= MAX_VERIFICATION_RESEND_COUNT) {
         Logger.warn(`Verification resend cap reached (ID: ${existingUser.id})`);
-        return { message: REGISTRATION_SUCCESS_MESSAGE };
+        return { message: REGISTRATION_SUCCESS_MESSAGE, matchCode };
       }
     }
 
@@ -261,7 +267,7 @@ export const verifyRegistration = async (
       });
       return true;
     });
-    if (!pendingCreated) return { message: REGISTRATION_SUCCESS_MESSAGE };
+    if (!pendingCreated) return { message: REGISTRATION_SUCCESS_MESSAGE, matchCode };
 
     // In TEST_MODE with autoVerifyUsers, skip email and auto-verify
     if (config.testMode?.autoVerifyUsers) {
@@ -269,6 +275,7 @@ export const verifyRegistration = async (
       Logger.info(`[TEST_MODE] Auto-verified passkey user`);
       return {
         message: 'Registration successful. Your account has been automatically verified.',
+        matchCode,
       };
     }
 
@@ -278,13 +285,13 @@ export const verifyRegistration = async (
       verificationToken,
       connectRequestId,
     );
-    if (!emailSent) return { message: REGISTRATION_SUCCESS_MESSAGE };
+    if (!emailSent) return { message: REGISTRATION_SUCCESS_MESSAGE, matchCode };
 
     Logger.info(`Passkey registration initiated`);
-    return { message: REGISTRATION_SUCCESS_MESSAGE };
+    return { message: REGISTRATION_SUCCESS_MESSAGE, matchCode };
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      return { message: REGISTRATION_SUCCESS_MESSAGE };
+      return { message: REGISTRATION_SUCCESS_MESSAGE, matchCode };
     }
     throw err;
   }
