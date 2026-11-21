@@ -234,6 +234,22 @@ export interface IssueProviderPluginDefinition {
       config: Record<string, unknown>,
       http: PluginHttp,
     ): Promise<void>;
+    /** Optional: create or update an all-day event for a task planned for a day
+     *  (`dueDay`, `YYYY-MM-DD`) without a time. Use the same per-task event as
+     *  `upsertEvent`, so moving a task between a time and a day replaces it and
+     *  `deleteEvent` removes either. The host calls it only while the well-known
+     *  config key `isAutoTimeBlockAllDay` (checkbox) is on as well as
+     *  `isAutoTimeBlock` — the plugin should expose it as a config field. */
+    upsertAllDayEvent?(
+      taskId: string,
+      eventData: {
+        title: string;
+        dueDay: string;
+        isDone: boolean;
+      },
+      config: Record<string, unknown>,
+      http: PluginHttp,
+    ): Promise<void>;
     /** Delete the time-block event for the given task. */
     deleteEvent(
       taskId: string,

@@ -1620,6 +1620,107 @@ END:VCALENDAR`);
     });
   });
 
+  describe('timeBlock.upsertAllDayEvent', () => {
+    const cfg = {
+      serverUrl: 'https://dav.example.com/',
+      timeBlockCalendarId: 'https://dav.example.com/cal/',
+    };
+    let mockHttp: { get: any; post: any; put: any; patch: any; delete: any };
+
+    beforeEach(() => {
+      mockHttp = {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn().mockResolvedValue(''),
+        patch: vi.fn(),
+        delete: vi.fn(),
+      };
+    });
+
+    it('is offered as an opt-in checkbox under auto time blocking', () => {
+      const field = definition.configFields.find(
+        (f) => f.key === 'isAutoTimeBlockAllDay',
+      );
+      expect(field?.type).toBe('checkbox');
+      expect(field?.showIf).toBe('isAutoTimeBlock');
+    });
+
+    it('PUTs a date-only event spanning the planned day', async () => {
+      await definition.timeBlock!.upsertAllDayEvent!(
+        'task-1',
+        { title: 'My Task', dueDay: '2026-05-14', isDone: false },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put).toHaveBeenCalledTimes(1);
+      const ics = mockHttp.put.mock.calls[0][1] as string;
+      expect(ics).toContain('UID:sp-task-1@super-productivity');
+      expect(ics).toContain('SUMMARY:My Task');
+      expect(ics).toContain('DTSTART;VALUE=DATE:20260514');
+      expect(ics).toContain('DTEND;VALUE=DATE:20260515');
+      expect(ics).not.toMatch(/DTSTART:\d{8}T/);
+    });
+
+    it('ends on the next day across a year boundary', async () => {
+      await definition.timeBlock!.upsertAllDayEvent!(
+        'task-1',
+        { title: 'My Task', dueDay: '2026-12-31', isDone: false },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      const ics = mockHttp.put.mock.calls[0][1] as string;
+      expect(ics).toContain('DTSTART;VALUE=DATE:20261231');
+      expect(ics).toContain('DTEND;VALUE=DATE:20270101');
+    });
+
+    it('marks a done task like a timed block does', async () => {
+      await definition.timeBlock!.upsertAllDayEvent!(
+        'task-1',
+        { title: 'My Task', dueDay: '2026-05-14', isDone: true },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put.mock.calls[0][1]).toContain('SUMMARY:[DONE] My Task');
+    });
+
+    it('writes to the same event URL as the timed block, so it replaces it', async () => {
+      await definition.timeBlock!.upsertEvent(
+        'task-1',
+        {
+          title: 'My Task',
+          dueWithTime: new Date('2026-05-14T15:00:00Z').getTime(),
+          durationMs: 30 * 60 * 1000,
+          isDone: false,
+        },
+        cfg as any,
+        mockHttp as any,
+      );
+      await definition.timeBlock!.upsertAllDayEvent!(
+        'task-1',
+        { title: 'My Task', dueDay: '2026-05-14', isDone: false },
+        cfg as any,
+        mockHttp as any,
+      );
+
+      expect(mockHttp.put.mock.calls[1][0]).toBe(mockHttp.put.mock.calls[0][0]);
+    });
+
+    it('throws when no calendar is configured', async () => {
+      await expect(
+        definition.timeBlock!.upsertAllDayEvent!(
+          'task-1',
+          { title: 'My Task', dueDay: '2026-05-14', isDone: false },
+          { serverUrl: 'https://dav.example.com/' } as any,
+          mockHttp as any,
+        ),
+      ).rejects.toThrow('No write calendar configured');
+      expect(mockHttp.put).not.toHaveBeenCalled();
+    });
+  });
+
   describe('timeBlock.deleteEvent', () => {
     const cfg = {
       serverUrl: 'https://dav.example.com/',

@@ -530,7 +530,7 @@ The boundary today:
 
 **Implementation**:
 
-- Contract: `timeBlock: { upsertEvent, deleteEvent, logWorkSession? }` in
+- Contract: `timeBlock: { upsertEvent, upsertAllDayEvent?, deleteEvent, logWorkSession? }` in
   [`packages/plugin-api/src/issue-provider-types.ts`](packages/plugin-api/src/issue-provider-types.ts)
 - Driver: [`time-block-sync.effects.ts`](src/app/features/calendar-integration/time-block/time-block-sync.effects.ts),
   registered in [`feature-stores.module.ts`](src/app/root-store/feature-stores.module.ts)
