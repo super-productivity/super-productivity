@@ -1,0 +1,17 @@
+{
+  "CFG": {
+    "API_KEY": "API Key",
+    "HOW_TO_GET_TOKEN": "How to get an API key",
+    "WORKSPACE_URL": "Workspace URL",
+    "WORKSPACE_URL_HELP": "Open your workspace in Plane and copy the address from your browser, e.g. https://app.plane.so/<workspace>/ or https://plane.example.com/<workspace>/",
+    "PROJECT": "Project"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "STATE": "State",
+    "PRIORITY": "Priority",
+    "ASSIGNEE": "Assignee",
+    "DUE": "Due date",
+    "DESCRIPTION": "Description"
+  }
+}

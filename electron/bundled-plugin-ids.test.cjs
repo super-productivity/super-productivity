@@ -215,3 +215,83 @@ test('every bundled plugin declares dataSharing covering its allowedHosts', () =
 
   assert.deepEqual(problems, [], problems.join('\n'));
 });
+
+// UI INVARIANT (cross-layer regression guard)
+// -------------------------------------------
+// A bundled issue-provider plugin's chip is rendered by passing
+// `manifest.issueProvider.icon` only when it is a registered built-in SVG
+// (`toPluginSvgIcon`); any other name silently falls back to the generic icon,
+// and a registration pointing at a file that isn't there renders a blank box.
+// Either way nothing fails. That is invisible in CI and easy to miss in review.
+//
+// This lives here rather than beside the Angular spec for the same reason the
+// test above does: it needs the filesystem, both to enumerate the real manifests
+// instead of a hand-copied list, and to confirm the SVG actually exists.
+const BUILT_IN_SVG_ICONS_PATH = path.join(
+  REPO_ROOT,
+  'src/app/core/theme/built-in-svg-icons.const.ts',
+);
+
+test('every bundled issue-provider icon is registered and its svg exists', () => {
+  const pluginSource = fs.readFileSync(BUNDLED_PLUGINS_CONST_PATH, 'utf8');
+  const themeSource = fs.readFileSync(BUILT_IN_SVG_ICONS_PATH, 'utf8');
+
+  const bundledPaths = extractStringLiteralList(
+    pluginSource,
+    'BUNDLED_PLUGIN_PATHS = [',
+    ']',
+  );
+
+  // `BUILT_IN_SVG_ICONS` holds `[name, path]` pairs. Slicing to the closing `];` keeps
+  // the parse anchored to that literal alone.
+  const iconsIdx = themeSource.indexOf('BUILT_IN_SVG_ICONS: readonly (readonly [string, string])[] = [');
+  assert.notEqual(
+    iconsIdx,
+    -1,
+    'Could not find the icons literal in built-in-svg-icons.const.ts — it may have been renamed; update this test.',
+  );
+  const iconsEnd = themeSource.indexOf('];', iconsIdx);
+  const iconsSlice = themeSource.slice(iconsIdx, iconsEnd);
+  const iconPairs = [...iconsSlice.matchAll(/\[\s*'([^']+)'\s*,\s*'([^']+)'\s*\]/g)];
+  assert.ok(
+    iconPairs.length > 0,
+    'Parsed zero icon registrations from built-in-svg-icons.const.ts — the source format likely changed; update this test.',
+  );
+  const iconAssetByName = new Map(iconPairs.map(([, name, asset]) => [name, asset]));
+
+  const problems = [];
+
+  for (const assetPath of bundledPaths) {
+    const dirName = assetPath.split('/').pop();
+    const manifestPath = findManifestPath(dirName);
+    if (!manifestPath) {
+      continue; // already reported by the test above
+    }
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const iconName = manifest.issueProvider && manifest.issueProvider.icon;
+    if (!iconName) {
+      continue; // not an issue provider, or intentionally iconless
+    }
+    // The documented placeholder for a provider that ships no brand icon.
+    if (iconName === 'extension') {
+      continue;
+    }
+
+    const asset = iconAssetByName.get(iconName);
+    if (!asset) {
+      problems.push(
+        `${dirName}: issueProvider.icon "${iconName}" is not registered in built-in-svg-icons.const.ts`,
+      );
+      continue;
+    }
+    if (!fs.existsSync(path.join(REPO_ROOT, 'src', asset))) {
+      problems.push(`${dirName}: icon "${iconName}" points at missing file src/${asset}`);
+    }
+  }
+
+  assert.equal(
+    problems.length,
+    0,
+    `Bundled issue-provider icons that would render wrong:\n  ${problems.join('\n  ')}`,
+  );
+});
