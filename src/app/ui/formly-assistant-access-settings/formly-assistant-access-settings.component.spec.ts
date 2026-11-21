@@ -113,6 +113,29 @@ describe('FormlyAssistantAccessSettingsComponent', () => {
     expect(setAssistantAccessScopes).toHaveBeenCalledOnceWith(['tasks:capture']);
   });
 
+  it('grants and revokes updates independently of capture', async () => {
+    const setAssistantAccessScopes = jasmine
+      .createSpy()
+      .and.callFake(async (scopes) => state({ scopes }));
+    setEa({
+      getAssistantAccessState: jasmine
+        .createSpy()
+        .and.resolveTo(state({ scopes: ['tasks:capture'] })),
+      setAssistantAccessScopes,
+    });
+    fixture.detectChanges();
+    await settle();
+    expect(component.hasScope('tasks:update')).toBe(false);
+    await component.setScope('tasks:update', true);
+    expect(component.hasScope('tasks:update')).toBe(true);
+    await component.setScope('tasks:update', false);
+    expect(setAssistantAccessScopes).toHaveBeenCalledWith([
+      'tasks:capture',
+      'tasks:update',
+    ]);
+    expect(component.state()?.scopes).toEqual(['tasks:capture']);
+  });
+
   it('shows a generated key once and puts it into the setup snippets', async () => {
     setEa({
       rotateAssistantAccessCredential: jasmine.createSpy().and.resolveTo({

@@ -96,6 +96,7 @@ import { LOCAL_REST_API_FEATURE_ROUTES } from './app/core/electron/local-rest-ap
 import { LocalRestApiTaskRoutesService } from './app/features/tasks/local-rest-api-task-routes.service';
 import { LocalRestApiFocusRoutesService } from './app/features/focus-mode/local-rest-api-focus-routes.service';
 import { LocalRestApiTaskRepeatCfgRoutesService } from './app/features/task-repeat-cfg/local-rest-api-task-repeat-cfg-routes.service';
+import { LocalRestApiAssistantUpdateRoutesService } from './app/features/tasks/assistant-capture/local-rest-api-assistant-update-routes.service';
 import { LocalRestApiAssistantCaptureRoutesService } from './app/features/tasks/assistant-capture/local-rest-api-assistant-capture-routes.service';
 import { LocalRestApiNoteRoutesService } from './app/features/note/local-rest-api-note-routes.service';
 import { LocalRestApiSimpleCounterRoutesService } from './app/features/simple-counter/local-rest-api-simple-counter-routes.service';
@@ -261,6 +262,11 @@ bootstrapApplication(AppComponent, {
     {
       provide: LOCAL_REST_API_FEATURE_ROUTES,
       useClass: LocalRestApiTaskRepeatCfgRoutesService,
+      multi: true,
+    },
+    {
+      provide: LOCAL_REST_API_FEATURE_ROUTES,
+      useClass: LocalRestApiAssistantUpdateRoutesService,
       multi: true,
     },
     {

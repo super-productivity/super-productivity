@@ -1,3 +1,4 @@
+import { getTaskStatus } from '../../../../../electron/shared-with-frontend/task-status-and-priority';
 import { Task } from '../task.model';
 
 type DoneFields = Pick<Task, 'isDone' | 'doneOn' | 'wontDoOn'>;
@@ -10,7 +11,7 @@ type DoneFields = Pick<Task, 'isDone' | 'doneOn' | 'wontDoOn'>;
  * after the plugin batch update, which toggles `isDone` but keeps `doneOn`).
  */
 export const isWontDoTask = (task: DoneFields): boolean =>
-  !!task.isDone && task.wontDoOn != null && task.wontDoOn === task.doneOn;
+  getTaskStatus(task) === 'wont-do';
 
 /** Whether a task was actually completed: done, and not finished as "won't do". */
 export const isCompletedTask = (task: DoneFields): boolean =>
