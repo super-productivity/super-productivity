@@ -1,6 +1,7 @@
 /**
  * Regenerates android/app/src/test/resources/repeat-reminder-fixtures.json
- * from getUpcomingRepeatReminders, the same function the open app uses.
+ * from getUpcomingRepeatReminders, the same function the open app uses, and
+ * stores each case's configs as getRepeatCfgSnapshotForNative sends them.
  *
  *   node tools/generate-repeat-reminder-fixtures.mjs          # write
  *   node tools/generate-repeat-reminder-fixtures.mjs --check  # fail if drift
@@ -475,7 +476,16 @@ async function bundle() {
   };
   await esbuild.build({
     absWorkingDir: root,
-    entryPoints: ['src/app/features/task-repeat-cfg/get-upcoming-repeat-reminders.ts'],
+    // Both functions in one bundle: cases reach Kotlin through the app's own
+    // snapshot, so the bridge format is checked along with the schedule.
+    stdin: {
+      contents: [
+        "export { getUpcomingRepeatReminders } from './src/app/features/task-repeat-cfg/get-upcoming-repeat-reminders';",
+        "export { getRepeatCfgSnapshotForNative } from './src/app/features/android/store/get-repeat-cfg-snapshot-for-native';",
+      ].join('\n'),
+      resolveDir: root,
+      loader: 'ts',
+    },
     bundle: true,
     platform: 'node',
     format: 'esm',
@@ -564,7 +574,16 @@ async function workerMain(bundlePath) {
         );
       }
     }
-    return got.map(({ taskId, triggerAtMs, title }) => ({ taskId, triggerAtMs, title }));
+    return {
+      snapshot: JSON.parse(
+        mod.getRepeatCfgSnapshotForNative(entry.cfgs, new Set(entry.archivedProjectIds)),
+      ),
+      expect: got.map(({ taskId, triggerAtMs, title }) => ({
+        taskId,
+        triggerAtMs,
+        title,
+      })),
+    };
   });
   process.stdout.write(JSON.stringify(results));
 }
@@ -588,7 +607,7 @@ async function buildFixture() {
       timeZone,
       group.map((item) => item.entry),
     );
-    results.forEach((expect, i) => {
+    results.forEach(({ snapshot, expect }, i) => {
       const { entry } = group[i];
       solved[group[i].index] = {
         name: entry.name,
@@ -596,8 +615,7 @@ async function buildFixture() {
         now: Date.parse(entry.now),
         startOfNextDayDiffMs: entry.startOfNextDayDiffMs,
         soonestFirst: entry.soonestFirst,
-        archivedProjectIds: entry.archivedProjectIds,
-        cfgs: entry.cfgs,
+        snapshot,
         expect,
       };
     });
@@ -618,7 +636,7 @@ if (workerFlag !== -1) {
   if (process.argv.includes('--check')) {
     const current = fs.readFileSync(fixturePath, 'utf8');
     if (current !== text) {
-      console.error('repeat-reminder-fixtures.json does not match getUpcomingRepeatReminders');
+      console.error('repeat-reminder-fixtures.json does not match the app functions; regenerate it');
       process.exit(1);
     }
     console.log(`repeat reminder fixtures match (${fixture.cases.length} cases)`);

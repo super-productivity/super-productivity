@@ -122,12 +122,12 @@ internal object RepeatReminderCache {
         prefs(context).edit().clear().putLong(KEY_GENERATION, next).commit()
     }
 
-    private fun encodeState(state: RepeatCfgSyncState): JSONObject = JSONObject().apply {
+    internal fun encodeState(state: RepeatCfgSyncState): JSONObject = JSONObject().apply {
         put("cfgs", JSONArray().apply { state.cfgs.forEach { put(it.toJson()) } })
         put("archivedProjectIds", JSONArray(state.archivedProjectIds.toList()))
     }
 
-    private fun decodeState(json: JSONObject): RepeatCfgSyncState {
+    internal fun decodeState(json: JSONObject): RepeatCfgSyncState {
         val cfgs = ArrayList<RepeatCfg>()
         val arr = json.optJSONArray("cfgs")
         if (arr != null) {

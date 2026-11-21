@@ -1,6 +1,5 @@
 package com.superproductivity.superproductivity.service
 
-import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -12,6 +11,8 @@ import java.util.TimeZone
 /**
  * The Kotlin port of getUpcomingRepeatReminders must match the timestamps
  * tools/generate-repeat-reminder-fixtures.mjs produced from that function.
+ * Each case's configs arrive as the app's own snapshot
+ * (getRepeatCfgSnapshotForNative), so the bridge format is covered too.
  */
 class RepeatReminderScheduleTest {
 
@@ -27,11 +28,13 @@ class RepeatReminderScheduleTest {
         for (i in 0 until cases.length()) {
             val entry = cases.getJSONObject(i)
             val name = entry.getString("name")
-            val cfgs = entry.getJSONArray("cfgs").toCfgList()
-            val state = RepeatCfgSyncState(
-                cfgs,
-                entry.getJSONArray("archivedProjectIds").toStringSet(),
-            )
+            val snapshot = entry.getJSONObject("snapshot")
+            val parsed = RepeatReminderCache.parseAppSnapshot(snapshot.toString())
+                ?: error("$name: snapshot unreadable")
+            // A config the parser drops would vanish silently in no-reminder cases.
+            assertEquals("$name: cfgs parsed", snapshot.getJSONArray("cfgs").length(), parsed.cfgs.size)
+            // The worker reads the stored copy, so a field lost on save must fail too.
+            val state = RepeatReminderCache.decodeState(RepeatReminderCache.encodeState(parsed))
             val got = upcomingRepeatReminders(
                 state,
                 entry.getLong("now"),
@@ -135,18 +138,4 @@ class RepeatReminderScheduleTest {
         assertEquals("2026-06-16", parsed?.day)
         assertNull(parseRepeatOccurrenceId("task-1"))
     }
-}
-
-private fun JSONArray.toCfgList(): List<RepeatCfg> {
-    val out = ArrayList<RepeatCfg>(length())
-    for (i in 0 until length()) {
-        out.add(RepeatCfg.fromJson(getJSONObject(i), complete = true)!!)
-    }
-    return out
-}
-
-private fun JSONArray.toStringSet(): Set<String> {
-    val out = HashSet<String>()
-    for (i in 0 until length()) out.add(getString(i))
-    return out
 }
