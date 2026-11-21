@@ -273,6 +273,25 @@ describe('MobileBottomNavComponent', () => {
     PANEL_ITEMS.forEach(([, sel]) => expect(nav().querySelector(sel)).toBeFalsy());
   });
 
+  it('hides the add-task button on views without tasks', async () => {
+    await render({});
+    const router = TestBed.inject(Router);
+    router.resetConfig([{ path: '**', children: [] }]);
+
+    for (const [url, isShown] of [
+      ['/project/p1/tasks', true],
+      ['/config', false],
+      ['/config?tab=x', false],
+      ['/tag/TODAY/metrics', false],
+      ['/project/p1/metrics', false],
+      ['/planner', true],
+    ] as const) {
+      await router.navigateByUrl(url);
+      fixture.detectChanges();
+      expect(!!nav().querySelector('.add-task-button')).withContext(url).toBe(isShown);
+    }
+  });
+
   describe('configurable second slot', () => {
     const slotBtn = (): HTMLElement | null =>
       nav().querySelector<HTMLElement>('.e2e-bottom-nav-slot');
