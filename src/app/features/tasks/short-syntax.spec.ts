@@ -940,27 +940,27 @@ describe('shortSyntax', () => {
       expect(r).toEqual(undefined);
     });
 
-    it('should remove tags not existing on title', async () => {
+    it('should remove tags with #-', async () => {
       const t = {
         ...TASK,
-        title: 'Fun title #blu #bla',
+        title: 'Fun title #-blu #-bla',
         tagIds: ['blu_id', 'bla_id', 'hihi_id'],
       };
-      const r = await shortSyntax(t, CONFIG, ALL_TAGS, undefined, undefined, 'replace');
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS, undefined, undefined);
 
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
         repeat: null,
         parsedRanges: expectedRanges(t.title, [
-          ['tag', '#blu'],
-          ['tag', '#bla'],
+          ['tag', '#-blu'],
+          ['tag', '#-bla'],
         ]),
         projectId: undefined,
         attachments: [],
         taskChanges: {
           title: 'Fun title',
-          tagIds: ['blu_id', 'bla_id'],
+          tagIds: ['hihi_id'],
         },
       });
     });
@@ -1069,30 +1069,6 @@ describe('shortSyntax', () => {
       const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
-    });
-
-    it('should remove tag from title if task already has tag', async () => {
-      const t = {
-        ...TASK,
-        title: 'Test tag #testing',
-        tagIds: ['testing_id'],
-      };
-      const r = await shortSyntax(t, CONFIG, [
-        ...ALL_TAGS,
-        { ...DEFAULT_TAG, id: 'testing_id', title: 'testing' },
-      ]);
-
-      expect(r).toEqual({
-        newTagTitles: [],
-        remindAt: null,
-        repeat: null,
-        parsedRanges: expectedRanges(t.title, [['tag', '#testing']]),
-        projectId: undefined,
-        attachments: [],
-        taskChanges: {
-          title: 'Test tag',
-        },
-      });
     });
 
     it('should create new tag and remove both from title if task already has one given tag', async () => {
@@ -2770,7 +2746,6 @@ describe('shortSyntax priority (p1-p3)', () => {
     title: string,
     taskOverrides: Partial<TaskCopy> = {},
     config: ShortSyntaxConfig = PRIORITY_CONFIG,
-    mode: 'combine' | 'replace' = 'combine',
   ): ReturnType<typeof shortSyntax> =>
     shortSyntax(
       { ...TASK, title, ...taskOverrides },
@@ -2778,7 +2753,6 @@ describe('shortSyntax priority (p1-p3)', () => {
       ALL_TAGS,
       undefined,
       undefined,
-      mode,
     );
 
   it('should be enabled by default', async () => {
@@ -2901,30 +2875,20 @@ describe('shortSyntax priority (p1-p3)', () => {
 
   describe('title edits (replace mode)', () => {
     it('should set priority from an edited title, overwriting the old one', async () => {
-      const r = await parse(
-        'Fix login bug p1',
-        { priority: 1 },
-        PRIORITY_CONFIG,
-        'replace',
-      );
+      const r = await parse('Fix login bug p1', { priority: 1 }, PRIORITY_CONFIG);
       expect(r?.taskChanges.priority).toBe(3);
       expect(r?.taskChanges.title).toBe('Fix login bug');
     });
 
     it('should leave the priority alone when the edited title has no token', async () => {
-      const r = await parse(
-        'Fix login bug #blu',
-        { priority: 3 },
-        PRIORITY_CONFIG,
-        'replace',
-      );
+      const r = await parse('Fix login bug #blu', { priority: 3 }, PRIORITY_CONFIG);
       expect(r?.taskChanges.tagIds).toEqual(['blu_id']);
       expect('priority' in (r?.taskChanges ?? {})).toBe(false);
     });
 
     it('should not parse when the flag is off', async () => {
       expect(
-        await parse('Fix login bug p1', { priority: 1 }, OFF_CONFIG, 'replace'),
+        await parse('Fix login bug p1', { priority: 1 }, OFF_CONFIG),
       ).toBeUndefined();
     });
   });
@@ -2935,7 +2899,7 @@ describe('shortSyntax recurrence', () => {
   const NOW = new Date(2024, 0, 17, 10, 0, 0, 0);
 
   const parse = async (title: string, now: Date = NOW): ReturnType<typeof shortSyntax> =>
-    shortSyntax({ ...TASK, title }, CONFIG, [], [], now, 'combine', true);
+    shortSyntax({ ...TASK, title }, CONFIG, [], [], now, true);
 
   // Quick setting of a parsed preset recurrence; null for anything else (no
   // recurrence at all, or an interval — which has no preset by definition)
@@ -3286,7 +3250,6 @@ describe('shortSyntax recurrence', () => {
       ALL_TAGS,
       [],
       NOW,
-      'combine',
       true,
     );
     expect(presetOf(r)).toBe('WEEKLY_CURRENT_WEEKDAY');
@@ -3321,7 +3284,6 @@ describe('shortSyntax recurrence', () => {
       [],
       [],
       NOW,
-      'combine',
       true,
     );
     expect(r?.repeat).toBeNull();
@@ -3486,12 +3448,8 @@ describe('shortSyntax nth weekday (@2monday)', () => {
   // Wed Jan 17 2024, 10:00 local time
   const NOW = new Date(2024, 0, 17, 10, 0, 0, 0);
 
-  const parse = async (
-    title: string,
-    now: Date = NOW,
-    mode: 'combine' | 'replace' = 'combine',
-  ): ReturnType<typeof shortSyntax> =>
-    shortSyntax({ ...TASK, title }, CONFIG, [], [], now, mode);
+  const parse = async (title: string, now: Date = NOW): ReturnType<typeof shortSyntax> =>
+    shortSyntax({ ...TASK, title }, CONFIG, [], [], now);
 
   const dueOf = (r: Awaited<ReturnType<typeof shortSyntax>>): Date =>
     new Date(r?.taskChanges.dueWithTime as number);
@@ -3853,7 +3811,6 @@ describe('shortSyntax nth weekday (@2monday)', () => {
       [],
       [],
       NOW,
-      'combine',
       true,
     );
     expect(r?.repeat).toEqual({
@@ -3869,7 +3826,7 @@ describe('shortSyntax nth weekday (@2monday)', () => {
     const r = await parse(title);
     expect(r?.parsedRanges).toEqual(expectedRanges(title, [['due', '@2monday']]));
 
-    const cleared = await parse(title, NOW, 'replace');
+    const cleared = await parse(title, NOW);
     expect(cleared?.taskChanges.title).toBe('Water plants');
   });
 
@@ -3936,7 +3893,6 @@ describe('shortSyntax nth weekday (@2monday)', () => {
       [],
       [],
       NOW,
-      'combine',
       true,
     );
     expect(r?.repeat?.type).toBe('PRESET');
@@ -4088,7 +4044,7 @@ describe('shortSyntax localized dates', () => {
     cfg = CONFIG,
     isParseRepeat = false,
   ): ReturnType<typeof shortSyntax> =>
-    shortSyntax({ ...TASK, title }, cfg, [], [], NOW, 'combine', isParseRepeat, locale);
+    shortSyntax({ ...TASK, title }, cfg, [], [], NOW, isParseRepeat, locale);
 
   const dueOf = (r: Awaited<ReturnType<typeof shortSyntax>>): Date =>
     new Date(r?.taskChanges.dueWithTime as number);

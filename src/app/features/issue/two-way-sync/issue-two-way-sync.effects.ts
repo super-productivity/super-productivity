@@ -720,7 +720,6 @@ export class IssueTwoWaySyncEffects {
       tags,
       projects,
       undefined,
-      'combine',
       false,
       this._dateTimeFormatService.dateInputLocale(),
     );

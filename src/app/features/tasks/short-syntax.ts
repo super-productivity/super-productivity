@@ -75,13 +75,18 @@ const CH_DUE = '@';
 const CH_DEADLINE = '!';
 const ALL_SPECIAL = `(\\${CH_PRO}|\\${CH_TAG}|\\${CH_DUE}|\\${CH_DEADLINE})`;
 
+const CH_TAG_REM = '-';
+
 // The following project name extraction pattern attempts to improve on the
 // previous version by not immediately terminating upon encountering a short
 // syntax delimiting character and looks ahead to consider usage context
 const SHORT_SYNTAX_PROJECT_REG_EX = new RegExp(
   `\\${CH_PRO}(?!\\s)((?:(?!\\s+(?:\\${CH_TAG}|\\${CH_DUE}|t?\\d+[mh]\\b)).)+)`,
 );
-const SHORT_SYNTAX_TAGS_REG_EX = new RegExp(`\\${CH_TAG}[^${ALL_SPECIAL}|\\s]+`, 'gi');
+const SHORT_SYNTAX_TAGS_REG_EX = new RegExp(
+  `\\${CH_TAG}[^(\\${CH_TAG}|\\${CH_DUE}|\\${CH_DEADLINE})|\\s]+`,
+  'gi',
+);
 
 // Literal notation: /\@[^\+|\#|\@]/gi
 // Match string starting with the literal @ and followed by 1 or more of the characters
@@ -440,7 +445,6 @@ export const shortSyntax = async (
   allTags?: Tag[],
   allProjects?: Project[],
   now = new Date(),
-  mode: 'combine' | 'replace' = 'combine',
   // Recurrence syntax ("@every friday") is only meaningful where a repeat cfg
   // can be created for the result — the add-task bar. Title edits of existing
   // tasks keep parsing it as a plain date.
@@ -539,7 +543,7 @@ export const shortSyntax = async (
   }
 
   if (config.isEnableTag) {
-    const tagResult = parseTagChanges(task, tracked, allTags, mode);
+    const tagResult = parseTagChanges(task, tracked, allTags);
     taskChanges = {
       ...taskChanges,
       ...tagResult.taskChanges,
@@ -732,6 +736,11 @@ const parseProjectTracked = (
   return null;
 };
 
+interface TagModifiers {
+  addTitles: string[];
+  removeTitles: string[];
+  isClearAll: boolean;
+}
 const isTokenBoundary = (ch: string): boolean => ch === '' || /\s/.test(ch);
 
 // The tag regex stops at whitespace, but the autocomplete inserts full titles
@@ -744,19 +753,20 @@ const consumeMultiWordTags = (
   allTags: Tag[],
   ranges: TextRange[],
 ): string[] => {
-  const tagIds: string[] = [];
+  const tagTitles: string[] = [];
   const multiWordTags = allTags
     .map((tag) => ({ id: tag.id, title: tag.title.trim() }))
     .filter((tag) => /\s/.test(tag.title))
     .sort((a, b) => b.title.length - a.title.length);
   if (!multiWordTags.length) {
-    return tagIds;
+    return tagTitles;
   }
 
   let start = tracked.text.indexOf(CH_TAG);
   while (start !== -1) {
     const text = tracked.text;
-    const titleStart = start + CH_TAG.length;
+    const isSubtract = text.charAt(start + CH_TAG.length) == CH_TAG_REM;
+    const titleStart = start + CH_TAG.length + (isSubtract ? CH_TAG_REM.length : 0);
     const tag = isTokenBoundary(text.charAt(start - 1))
       ? multiWordTags.find(
           (t) =>
@@ -769,105 +779,139 @@ const consumeMultiWordTags = (
       const end = titleStart + tag.title.length;
       ranges.push(...tracked.rawRanges(start, end));
       tracked.remove(start, end);
-      if (!tagIds.includes(tag.id)) {
-        tagIds.push(tag.id);
-      }
+      tagTitles.push((isSubtract ? '-' : '') + tag.title);
       start = tracked.text.indexOf(CH_TAG, start);
     } else {
       start = text.indexOf(CH_TAG, start + 1);
     }
   }
-  return tagIds;
+  return tagTitles;
 };
 
 const parseTagChanges = (
   task: Partial<TaskCopy>,
   tracked: TrackedTitle,
   allTags?: Tag[],
-  mode: 'combine' | 'replace' = 'combine',
 ): TagChanges => {
   const taskChanges: Partial<TaskCopy> = {};
+  const modifiers: TagModifiers = {
+    addTitles: [],
+    removeTitles: [],
+    isClearAll: false,
+  };
 
   const newTagTitlesToCreate: string[] = [];
   const ranges: TextRange[] = [];
   let isTitleChanged = false;
+  // ids of existing tags typed as plain #tag
+  const addTagIDs: string[] = [];
+  const remTagIDs: string[] = [];
   // only exec if previous ones are also passed
   if (Array.isArray(task.tagIds) && Array.isArray(allTags)) {
-    const multiWordTagIds = consumeMultiWordTags(tracked, allTags, ranges);
+    const multiWordTagTitles = consumeMultiWordTags(tracked, allTags, ranges);
     const initialTitle = tracked.text;
     const regexTagTitles = initialTitle.match(SHORT_SYNTAX_TAGS_REG_EX) || [];
 
-    if (regexTagTitles.length || multiWordTagIds.length) {
-      const regexTagTitlesTrimmedAndFiltered: string[] = regexTagTitles
-        .map((title) => title.trim().replace(CH_TAG, ''))
-        .filter((newTagTitle) => {
-          const charBeforeTag = initialTitle.charAt(
-            initialTitle.lastIndexOf(CH_TAG + newTagTitle) - 1,
-          );
-          // don't parse Fun title#blu as tag
-          if (charBeforeTag && charBeforeTag !== ' ') {
-            return false;
+    if ((regexTagTitles && regexTagTitles.length) || multiWordTagTitles.length) {
+      const tagTitles = regexTagTitles
+        .map((title: string) => title.trim().replace(CH_TAG, ''))
+        .concat(multiWordTagTitles);
+      tagTitles.forEach((newTagTitle) => {
+        const charBeforeTag = initialTitle.charAt(
+          initialTitle.lastIndexOf(CH_TAG + newTagTitle) - 1,
+        );
+        // don't parse Fun title#blu as tag
+        if (charBeforeTag && charBeforeTag !== ' ') {
+          return false;
+        }
+
+        const isNumericOnly = /^[0-9]+$/.test(newTagTitle);
+        if (isNumericOnly) {
+          return false;
+        }
+
+        if (newTagTitle.startsWith(CH_TAG_REM)) {
+          if (newTagTitle[1]) {
+            modifiers.removeTitles.push(newTagTitle.substring(1));
           }
+        } else {
+          modifiers.addTitles.push(newTagTitle);
+        }
+        return true;
+      });
 
-          const trimmedTitle = initialTitle.trim();
-          const tagStartIndex = trimmedTitle.lastIndexOf(`${CH_TAG}${newTagTitle}`);
-          const isNumericOnly = /^[0-9]+$/.test(newTagTitle);
-
-          return (
-            newTagTitle.length >= 1 &&
-            tagStartIndex !== -1 &&
-            // NOTE: block numeric tags at the start, and any numeric tag on issue tasks
-            (!isNumericOnly || (tagStartIndex > 0 && !task.issueId))
-          );
-        });
-
-      const matchingTagIds: string[] = [...multiWordTagIds];
-      regexTagTitlesTrimmedAndFiltered.forEach((newTagTitle) => {
-        const existingTag = allTags.find(
+      const getExistingTag = (newTagTitle: string): Tag | undefined => {
+        return allTags.find(
           (tag) => newTagTitle.toLowerCase() === tag.title.toLowerCase(),
         );
-        if (existingTag) {
-          matchingTagIds.push(existingTag.id);
+      };
+      let existingTag: Tag | undefined;
+
+      modifiers.addTitles.forEach((newTagTitle) => {
+        if ((existingTag = getExistingTag(newTagTitle))) {
+          addTagIDs.push(existingTag.id);
         } else {
           newTagTitlesToCreate.push(newTagTitle);
         }
+
+        // Check if the tag with 1 less letter was an existing tag.
+        // If so, we'll need to remove that, as it was probably
+        // typed during the last iteration. Otherwise, it'll be
+        // within addTagIDs
+        if (
+          (existingTag = getExistingTag(newTagTitle.substring(0, newTagTitle.length - 1)))
+        ) {
+          if (!addTagIDs.includes(existingTag?.id)) {
+            remTagIDs.push(existingTag.id);
+          }
+        }
       });
 
-      if (mode === 'replace') {
-        // Check if arrays arent the same
-        if (
-          !(
-            task.tagIds.length === matchingTagIds.length &&
-            task.tagIds.every((val, i) => val === matchingTagIds[i])
-          )
-        ) {
-          taskChanges.tagIds = matchingTagIds;
+      modifiers.removeTitles.forEach((newTagTitle) => {
+        const i = newTagTitlesToCreate.indexOf(newTagTitle);
+        if (i != -1) {
+          newTagTitlesToCreate.splice(i, 1);
         }
-      } else {
-        const tagIdsToAdd: string[] = [];
-        matchingTagIds.forEach((id) => {
-          if (!task.tagIds?.includes(id)) {
-            tagIdsToAdd.push(id);
-          }
-        });
-        if (tagIdsToAdd.length) {
-          taskChanges.tagIds = [...(task.tagIds as string[]), ...tagIdsToAdd];
+        if ((existingTag = getExistingTag(newTagTitle))) {
+          remTagIDs.push(existingTag.id);
         }
-      }
+      });
 
-      if (regexTagTitlesTrimmedAndFiltered.length || multiWordTagIds.length) {
-        regexTagTitlesTrimmedAndFiltered.forEach((tagTitle) => {
-          const matchedText = `${CH_TAG}${tagTitle}`;
-          const start = tracked.text.indexOf(matchedText);
-          if (start !== -1) {
-            ranges.push(...tracked.rawRanges(start, start + matchedText.length));
-            tracked.remove(start, start + matchedText.length);
-          }
-        });
-        tracked.trim();
-        isTitleChanged = true;
+      const existingIDs: string[] = modifiers.isClearAll ? [] : (task.tagIds as string[]);
+      const tagIds: string[] = [
+        ...existingIDs,
+        ...addTagIDs.filter((id) => !existingIDs?.includes(id)),
+      ].filter((id) => {
+        return !remTagIDs.includes(id);
+      });
+
+      // Spec expects no tagIds field to be present if no tagID changes on task.
+      if (
+        tagIds.length !== (task.tagIds as string[]).length ||
+        !tagIds.every((id, i) => id === (task.tagIds as string[])[i])
+      ) {
+        taskChanges.tagIds = tagIds;
       }
     }
+  }
+
+  if (modifiers.addTitles.length || modifiers.removeTitles.length) {
+    [...modifiers.addTitles, ...modifiers.removeTitles].forEach((tagTitle) => {
+      const candidates = [`${CH_TAG}${tagTitle}`, `${CH_TAG}${CH_TAG_REM}${tagTitle}`];
+
+      const matchedText = candidates.find((candidate) =>
+        tracked.text.includes(candidate),
+      );
+      if (matchedText) {
+        const start = tracked.text.indexOf(matchedText);
+        if (start !== -1) {
+          ranges.push(...tracked.rawRanges(start, start + matchedText.length));
+          tracked.remove(start, start + matchedText.length);
+        }
+      }
+    });
+    tracked.trim();
+    isTitleChanged = true;
   }
 
   return {

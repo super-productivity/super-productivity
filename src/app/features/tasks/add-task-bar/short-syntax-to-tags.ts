@@ -47,7 +47,6 @@ export const shortSyntaxToTags = async ({
     tags,
     projects,
     undefined,
-    'combine',
     true,
     dateLocale,
   );
