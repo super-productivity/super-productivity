@@ -4,6 +4,7 @@ import { CaldavClientService } from './caldav-client.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { CaldavCfg } from './caldav.model';
 import { CaldavIssue } from './caldav-issue.model';
+import { toBasicAuthHeader } from '../../../../util/to-basic-auth-header';
 
 // ─── _getParentRelatedTo ──────────────────────────────────────────────────────
 
@@ -528,7 +529,7 @@ describe('CaldavClientService exact-UID lookup', () => {
   });
 });
 
-// ─── _getXhrProvider / _getAndroidXhrProvider ─────────────────────────────────
+// ─── shared CalDAV fixtures ───────────────────────────────────────────────────
 
 const MOCK_CFG: CaldavCfg = {
   caldavUrl: 'https://cal.example.com',
@@ -634,7 +635,7 @@ class TestableCaldavClientService extends CaldavClientService {
   }
 }
 
-describe('CaldavClientService._getXhrProvider – web platform', () => {
+describe('CaldavClientService HTTP helpers (cdav-library v2)', () => {
   let svc: TestableCaldavClientService;
 
   beforeEach(() => {
@@ -653,51 +654,31 @@ describe('CaldavClientService._getXhrProvider – web platform', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
-  it('returns a real XMLHttpRequest on the web platform', () => {
-    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider(MOCK_CFG);
-    const xhr = factory();
-    expect(xhr instanceof XMLHttpRequest).toBeTrue();
-  });
-
-  it('injects Authorization and X-Requested-With headers when open() is called', () => {
-    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider(MOCK_CFG);
-    const xhr = factory();
-    const headers: Record<string, string> = {};
-    spyOn(xhr, 'setRequestHeader').and.callFake(
-      (name: string, value: string) => (headers[name] = value),
-    );
-    xhr.open('REPORT', 'https://cal.example.com/');
-    expect(headers['Authorization']).toBe(EXPECTED_AUTH);
-    expect(headers['X-Requested-With']).toBe('SuperProductivity');
-  });
-
-  it('encodes non-ASCII credentials as UTF-8 in the Authorization header', () => {
-    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider({
-      ...MOCK_CFG,
-      password: 'pw-€',
+  it('stringifies header values for the native Capacitor HTTP bridge (#11232)', () => {
+    const headers = (CaldavClientService as any)._stringifyHeaders({
+      Depth: 0,
+      Authorization: EXPECTED_AUTH,
     });
-    const xhr = factory();
+    expect(headers['Depth']).toBe('0');
+    expect(headers['Authorization']).toBe(EXPECTED_AUTH);
+    expect(Object.values(headers).every((v) => typeof v === 'string')).toBeTrue();
+  });
+
+  it('synthesizes a DAV feature header when the server/proxy omits it', () => {
     const headers: Record<string, string> = {};
-    spyOn(xhr, 'setRequestHeader').and.callFake(
-      (name: string, value: string) => (headers[name] = value),
-    );
-    xhr.open('REPORT', 'https://cal.example.com/');
+    (CaldavClientService as any)._applyDavHeaderFallback(headers);
+    expect(headers['dav']).toBe('1, calendar-access');
+  });
+
+  it('leaves an existing DAV header untouched', () => {
+    const headers: Record<string, string> = { dav: '1, calendar-access, addressbook' };
+    (CaldavClientService as any)._applyDavHeaderFallback(headers);
+    expect(headers['dav']).toBe('1, calendar-access, addressbook');
+  });
+
+  it('encodes non-ASCII credentials as UTF-8 in Basic auth', () => {
     // printf 'user:pw-€' | base64
-    expect(headers['Authorization']).toBe('Basic dXNlcjpwdy3igqw=');
-  });
-
-  it('returns an empty DAV response header when the server does not expose it', () => {
-    spyOn(XMLHttpRequest.prototype, 'getResponseHeader').and.returnValue(null);
-    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider(MOCK_CFG);
-    const xhr = factory();
-    expect(xhr.getResponseHeader('DAV')).toBe('');
-  });
-
-  it('preserves non-DAV missing response headers as null', () => {
-    spyOn(XMLHttpRequest.prototype, 'getResponseHeader').and.returnValue(null);
-    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider(MOCK_CFG);
-    const xhr = factory();
-    expect(xhr.getResponseHeader('content-type')).toBeNull();
+    expect(toBasicAuthHeader('user', 'pw-€')).toBe('Basic dXNlcjpwdy3igqw=');
   });
 });
 
@@ -914,9 +895,9 @@ describe('CaldavClientService._getCalendar', () => {
 
 // Regression test for servers (e.g. Rustical) that omit <principal-collection-set>
 // from the principal PROPFIND response entirely instead of returning it empty.
-// @nextcloud/cdav-library reads that prop unguarded, so connect() throws
-// "Cannot read properties of undefined (reading 'map')" and _get_client surfaces
-// it as a generic CALDAV NETWORK ERROR.
+// Upstream still reads that prop unguarded (patched in
+// patches/@nextcloud+cdav-library+2.8.2.patch); without the patch connect()
+// throws and _get_client surfaces a generic CALDAV NETWORK ERROR.
 describe('CaldavClientService._get_client', () => {
   let svc: TestableCaldavClientService;
 
@@ -975,28 +956,45 @@ describe('CaldavClientService._get_client', () => {
 </multistatus>`;
 
   it('connects when the server omits principal-collection-set from the principal response', async () => {
-    let requestCount = 0;
-    svc.webDavRequestSpy.and.callFake(async () => {
-      requestCount++;
-      return {
-        status: 207,
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        headers: { 'content-type': 'application/xml' },
-        data: requestCount === 1 ? CURRENT_USER_PRINCIPAL_XML : PRINCIPAL_PROPS_XML,
-      };
-    });
+    // v2 connect(): discover PROPFIND, then principal PROPFIND + OPTIONS in parallel.
+    svc.webDavRequestSpy.and.callFake(
+      async (opts: {
+        method: string;
+        data?: string;
+      }): Promise<{ status: number; headers: Record<string, string>; data: string }> => {
+        const method = opts.method.toUpperCase();
+        if (method === 'OPTIONS') {
+          return {
+            status: 200,
+            headers: { dav: '1, calendar-access' },
+            data: '',
+          };
+        }
+        const body = opts.data ?? '';
+        const isDiscover =
+          body.includes('current-user-principal') &&
+          !body.includes('principal-collection-set');
+        return {
+          status: 207,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          headers: { 'content-type': 'application/xml' },
+          data: isDiscover ? CURRENT_USER_PRINCIPAL_XML : PRINCIPAL_PROPS_XML,
+        };
+      },
+    );
 
     const clientCache = await (svc as any)._get_client(MOCK_CFG);
 
     expect(clientCache.client.currentUserPrincipal).toBeTruthy();
-    expect(requestCount).toBe(2);
+    expect(svc.webDavRequestSpy).toHaveBeenCalled();
   });
 });
 
-describe('CaldavClientService._getNativeXhrProvider – native platform', () => {
+describe('CaldavClientService native axios adapter', () => {
   let svc: TestableCaldavClientService;
+  let previousAdapter: unknown;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: CaldavClientService, useClass: TestableCaldavClientService },
@@ -1008,253 +1006,99 @@ describe('CaldavClientService._getNativeXhrProvider – native platform', () => 
     });
     svc = TestBed.inject(CaldavClientService) as TestableCaldavClientService;
     svc.setIsNativePlatform(true);
+    // @ts-ignore – transitive dep of cdav-library@2
+    const axios = (await import('@nextcloud/axios')).default;
+    previousAdapter = axios.defaults.adapter;
+    await (svc as any)._prepareHttpTransport();
   });
 
-  afterEach(() => TestBed.resetTestingModule());
-
-  const getFakeXhr = (cfg = MOCK_CFG): XMLHttpRequest =>
-    (svc as any)._getNativeXhrProvider(cfg)();
-
-  it('_getXhrProvider routes to native provider and returns a fake XHR', () => {
-    const factory: () => XMLHttpRequest = (svc as any)._getXhrProvider(MOCK_CFG);
-    const xhr = factory();
-    expect(xhr instanceof XMLHttpRequest).toBeFalse();
+  afterEach(async () => {
+    // @ts-ignore
+    const axios = (await import('@nextcloud/axios')).default;
+    axios.defaults.adapter = previousAdapter as typeof axios.defaults.adapter;
+    TestBed.resetTestingModule();
   });
 
-  // ── cdav-library contract: onreadystatechange is the sole completion handler ──
+  const runAdapter = async (
+    config: Record<string, unknown>,
+  ): Promise<{ status: number; data: unknown; headers: Record<string, unknown> }> => {
+    const adapter = (svc as any)._createNativeAxiosAdapter();
+    return adapter(config);
+  };
 
-  it('fires onreadystatechange with readyState=4 on success (cdav-library v1.5.3 contract)', async () => {
-    const xhr = getFakeXhr();
-    let capturedReadyState = -1;
-    // Mirrors the pattern in @nextcloud/cdav-library/dist/index.mjs:876
-    xhr.onreadystatechange = (): void => {
-      if (xhr.readyState !== 4) return;
-      capturedReadyState = xhr.readyState;
-    };
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
-    expect(capturedReadyState).toBe(4);
-  });
-
-  it('fires onreadystatechange with readyState=4 on network error', async () => {
-    svc.webDavRequestSpy.and.rejectWith(new Error('network failure'));
-    const xhr = getFakeXhr();
-    let capturedReadyState = -1;
-    xhr.onreadystatechange = (): void => {
-      if (xhr.readyState !== 4) return;
-      capturedReadyState = xhr.readyState;
-    };
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
-    expect(capturedReadyState).toBe(4);
-  });
-
-  it('fake XHR exposes the required XHR interface', () => {
-    const xhr = getFakeXhr();
-    expect(typeof xhr.open).toBe('function');
-    expect(typeof xhr.send).toBe('function');
-    expect(typeof xhr.setRequestHeader).toBe('function');
-    expect(typeof xhr.getResponseHeader).toBe('function');
-    expect(typeof xhr.getAllResponseHeaders).toBe('function');
-    expect(typeof xhr.addEventListener).toBe('function');
-    expect(typeof xhr.removeEventListener).toBe('function');
-    expect(typeof xhr.abort).toBe('function');
-  });
-
-  it('getResponseHeader returns null before any response', () => {
-    const xhr = getFakeXhr();
-    expect(xhr.getResponseHeader('content-type')).toBeNull();
-  });
-
-  it('getAllResponseHeaders returns empty string before any response', () => {
-    const xhr = getFakeXhr();
-    expect(xhr.getAllResponseHeaders()).toBe('');
-  });
-
-  it('send() passes Authorization and X-Requested-With headers to _webDavRequest', async () => {
-    const xhr = getFakeXhr();
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
+  it('routes requests through _webDavRequest with auth headers', async () => {
+    await runAdapter({
+      url: 'https://cal.example.com/',
+      method: 'REPORT',
+      headers: {
+        Authorization: EXPECTED_AUTH,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'X-Requested-With': 'SuperProductivity',
+      },
+      data: null,
+    });
     const callArgs = svc.webDavRequestSpy.calls.mostRecent().args[0];
     expect(callArgs.headers?.['Authorization']).toBe(EXPECTED_AUTH);
     expect(callArgs.headers?.['X-Requested-With']).toBe('SuperProductivity');
   });
 
-  it('send() passes extra headers set via setRequestHeader()', async () => {
-    const xhr = getFakeXhr();
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.setRequestHeader('Depth', '1');
-    xhr.send('<body/>');
-    await Promise.resolve();
-    const callArgs = svc.webDavRequestSpy.calls.mostRecent().args[0];
-    expect(callArgs.headers?.['Depth']).toBe('1');
-    expect(callArgs.data).toBe('<body/>');
-  });
-
-  // #11232: cdav-library's propFind() and principal REPORTs set a numeric Depth
-  // (`headers.Depth = 0`). The iOS plugin casts headers to [String: String], so
-  // one non-string value made it drop every header and Nextcloud returned 404.
-  it('send() stringifies numeric header values like a real XHR', async () => {
-    const xhr = getFakeXhr();
-    xhr.open('PROPFIND', 'https://cal.example.com/');
-    xhr.setRequestHeader('Depth', 0 as unknown as string);
-    xhr.send('<body/>');
-    await Promise.resolve();
+  // #11232: cdav-library still sets numeric Depth on some REPORT/PROPFIND calls.
+  it('stringifies numeric Depth before calling the Capacitor plugin', async () => {
+    await runAdapter({
+      url: 'https://cal.example.com/',
+      method: 'PROPFIND',
+      headers: { Depth: 0 },
+      data: '<body/>',
+    });
     const callArgs = svc.webDavRequestSpy.calls.mostRecent().args[0];
     expect(callArgs.headers?.['Depth']).toBe('0');
+    expect(callArgs.data).toBe('<body/>');
     expect(
       Object.values(callArgs.headers ?? {}).every((v) => typeof v === 'string'),
     ).toBeTrue();
   });
 
-  it('fires onload and sets status/responseText after send() resolves', async () => {
+  it('returns status/body from _webDavRequest', async () => {
     svc.webDavRequestSpy.and.resolveTo({
       status: 207,
       // eslint-disable-next-line @typescript-eslint/naming-convention
       headers: { 'content-type': 'application/xml' },
       data: '<multistatus/>',
     });
-    const xhr = getFakeXhr();
-    let loadFired = false;
-    xhr.onload = () => (loadFired = true);
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
-    expect(loadFired).toBeTrue();
-    expect(xhr.status).toBe(207);
-    expect(xhr.responseText).toBe('<multistatus/>');
-    expect(xhr.readyState).toBe(4);
+    const res = await runAdapter({
+      url: 'https://cal.example.com/',
+      method: 'REPORT',
+      headers: {},
+    });
+    expect(res.status).toBe(207);
+    expect(res.data).toBe('<multistatus/>');
   });
 
-  it('fires load event listeners registered via addEventListener()', async () => {
-    const xhr = getFakeXhr();
-    const listener = jasmine.createSpy('loadListener');
-    xhr.addEventListener('load', listener);
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
-    expect(listener).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not fire removed event listeners', async () => {
-    const xhr = getFakeXhr();
-    const listener = jasmine.createSpy('loadListener');
-    xhr.addEventListener('load', listener);
-    xhr.removeEventListener('load', listener);
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
-    expect(listener).not.toHaveBeenCalled();
-  });
-
-  it('fires onerror and readyState=4 when _webDavRequest rejects', async () => {
-    svc.webDavRequestSpy.and.rejectWith(new Error('network failure'));
-    const xhr = getFakeXhr();
-    let errorFired = false;
-    xhr.onerror = () => (errorFired = true);
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
-    expect(errorFired).toBeTrue();
-    expect(xhr.readyState).toBe(4);
-  });
-
-  it('populates responseHeaders accessible via getResponseHeader after send()', async () => {
+  it('synthesizes a DAV header when native HTTP omits it', async () => {
     svc.webDavRequestSpy.and.resolveTo({
-      status: 207,
+      status: 200,
       // eslint-disable-next-line @typescript-eslint/naming-convention
-      headers: { 'content-type': 'application/xml; charset=utf-8' },
+      headers: { 'content-type': 'text/plain' },
       data: '',
     });
-    const xhr = getFakeXhr();
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
-    expect(xhr.getResponseHeader('content-type')).toBe('application/xml; charset=utf-8');
-  });
-
-  it('returns an empty DAV response header when native HTTP omits it', async () => {
-    svc.webDavRequestSpy.and.resolveTo({
-      status: 207,
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      headers: { 'content-type': 'application/xml' },
-      data: '',
+    const res = await runAdapter({
+      url: 'https://cal.example.com/',
+      method: 'OPTIONS',
+      headers: {},
     });
-    const xhr = getFakeXhr();
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
-    expect(xhr.getResponseHeader('DAV')).toBe('');
+    expect(res.headers['dav']).toBe('1, calendar-access');
   });
 
-  it('getAllResponseHeaders returns formatted header string after send()', async () => {
-    svc.webDavRequestSpy.and.resolveTo({
-      status: 207,
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      headers: { 'content-type': 'text/xml', etag: '"abc"' },
-      data: '',
-    });
-    const xhr = getFakeXhr();
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    await Promise.resolve();
-    const all = xhr.getAllResponseHeaders();
-    expect(all).toContain('content-type: text/xml');
-    expect(all).toContain('etag: "abc"');
-  });
-
-  it('removeEventListener is idempotent (does not throw when listener absent)', () => {
-    const xhr = getFakeXhr();
-    const cb = jasmine.createSpy('cb');
-    xhr.addEventListener('load', cb);
-    xhr.removeEventListener('load', cb);
-    expect(() => xhr.removeEventListener('load', cb)).not.toThrow();
-  });
-
-  // ── abort() ───────────────────────────────────────────────────────────────────
-
-  it('abort() does not throw', () => {
-    const xhr = getFakeXhr();
-    expect(() => xhr.abort()).not.toThrow();
-  });
-
-  it('abort() fires onabort immediately', () => {
-    const xhr = getFakeXhr();
-    let abortFired = false;
-    (xhr as any).onabort = (): void => {
-      abortFired = true;
-    };
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.abort();
-    expect(abortFired).toBeTrue();
-  });
-
-  it('abort() prevents onload from firing after send() resolves', async () => {
-    const xhr = getFakeXhr();
-    let loadFired = false;
-    xhr.onload = (): void => {
-      loadFired = true;
-    };
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    xhr.abort();
-    await Promise.resolve();
-    expect(loadFired).toBeFalse();
-  });
-
-  it('abort() prevents onreadystatechange from firing after send() resolves', async () => {
-    const xhr = getFakeXhr();
-    let rscFired = false;
-    xhr.onreadystatechange = (): void => {
-      rscFired = true;
-    };
-    xhr.open('REPORT', 'https://cal.example.com/');
-    xhr.send(null);
-    xhr.abort();
-    await Promise.resolve();
-    expect(rscFired).toBeFalse();
+  it('rejects when the abort signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expectAsync(
+      runAdapter({
+        url: 'https://cal.example.com/',
+        method: 'GET',
+        headers: {},
+        signal: controller.signal,
+      }),
+    ).toBeRejected();
   });
 });
