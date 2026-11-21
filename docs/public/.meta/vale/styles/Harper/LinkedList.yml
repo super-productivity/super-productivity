@@ -1,0 +1,18 @@
+---
+# Generated from Harper's LinkedList rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `link lists` to `linked lists`.
+extends: substitution
+message: "If you mean the low-level data structure, use %[1]s instead of %[2]s."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "link(?!\\s*\\n\\s*\\n)\\s+list(?!['\\x{2019}]s\\b)": "linked list"
+  "link(?!\\s*\\n\\s*\\n)\\s+lists(?!['\\x{2019}]s\\b)": "linked lists"

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's QuiteMany rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `quite many` to `quite a few`, which is the more natural and idiomatic phrase in standard English. `Quite many` is considered nonstandard usage.
+extends: existence
+message: "Use `quite a few` instead of `quite many`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "quite a few"
+tokens:
+  - "quite(?!\\s*\\n\\s*\\n)\\s+many(?!['\\x{2019}]s\\b)"

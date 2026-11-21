@@ -1,0 +1,22 @@
+---
+# Generated from Harper's LastButNotLeast rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects common errors in the phrase `last but not least`.
+extends: existence
+message: "Use the more idiomatic phrasing."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "last but not least"
+tokens:
+  - "last,(?!\\s*\\n\\s*\\n)\\s+but(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+least(?!['\\x{2019}]s\\b)"
+  - "last(?!\\s*\\n\\s*\\n)\\s+but(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+least(?!['\\x{2019}]s\\b)"
+  - "last(?!\\s*\\n\\s*\\n)\\s+but,(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+least(?!['\\x{2019}]s\\b)"
+  - "last(?!\\s*\\n\\s*\\n)\\s+but(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+last(?!['\\x{2019}]s\\b)"

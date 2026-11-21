@@ -1,0 +1,24 @@
+# WCAG 2.4.4: the purpose of a link is clear from its text. Screen reader
+# users pull up a list of a page's links; "click here" six times is six
+# links to nowhere.
+# https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context
+extends: existence
+message: "'%s' says nothing about where the link goes. Name the page or the action."
+link: https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context
+level: warning
+scope: link
+nonword: true
+raw:
+  - '(?i)^\s*(?:click here|click|here|this|that|this link|this page|the link|link|more|read more|learn more|see more|find out more|more info|more information|details|continue|go|website|web site|page|url|source)\s*[.!]?\s*$'
+
+tests:
+  - name: fires
+    input: |
+      [Click here](https://example.com/pricing) for prices, or [read more](https://example.com/docs).
+    want: |
+      1:2:A11y.LinkGeneric:'Click here' says nothing about where the link goes. Name the page or the action.
+      1:59:A11y.LinkGeneric:'read more' says nothing about where the link goes. Name the page or the action.
+  - name: clean
+    input: |
+      See the [pricing page](https://example.com/pricing) or the [documentation](https://example.com/docs).
+    want: ""

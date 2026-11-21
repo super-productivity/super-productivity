@@ -1,0 +1,58 @@
+{
+  "TITLE": "Fakturor",
+  "LOADING": "Laddar…",
+  "LIST": {
+    "EMPTY": "Inga fakturor ännu.",
+    "PRINT": "Skriv ut / PDF",
+    "CSV": "CSV",
+    "DELETE": "Radera",
+    "CONFIRM_DELETE": "Radera faktura {{number}}? Dess timmar räknas som ofakturerade igen."
+  },
+  "NEW": {
+    "TITLE": "Ny faktura",
+    "PROJECT": "Projekt",
+    "NO_PROJECTS": "Skapa först ett projekt. Varje projekt faktureras separat.",
+    "FROM": "Från",
+    "TO": "Till",
+    "RATE": "Timpris",
+    "LANGUAGE": "Fakturaspråk",
+    "CLIENT": "Faktureras till",
+    "CLIENT_HINT": "Kundens namn och adress. Sparas för det här projektet.",
+    "INCLUDE": "Inkludera",
+    "NO_HOURS": "Ingen ofakturerad tid i det här projektet under perioden.",
+    "NUMBER": "Fakturanummer",
+    "ISSUE_DATE": "Fakturadatum",
+    "ISSUE": "Skapa och skriv ut",
+    "BLOCK": {
+      "PERIOD": "Välj datum för Från och Till; Från måste vara först.",
+      "LINES": "Markera minst en rad med timmar.",
+      "RATE": "Ange ett timpris.",
+      "NUMBER": "Ange ett fakturanummer.",
+      "NUMBER_USED": "Det här fakturanumret används redan.",
+      "DATE": "Ange fakturadatum."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Dina uppgifter",
+    "SELLER": "Ditt namn, din adress och ditt skatte-ID",
+    "PAYMENT_NOTE": "Betalningsuppgifter",
+    "PAYMENT_NOTE_HINT": "Bankuppgifter eller betalningsvillkor, skrivs ut längst ned.",
+    "CURRENCY": "Valutakod",
+    "TAX": "Skatt / moms %",
+    "PAYMENT_DAYS": "Dagar till förfallodatum",
+    "ROUNDING": "Avrunda varje rad uppåt till",
+    "ROUNDING_NONE": "Ingen avrundning",
+    "ROUNDING_MIN": "{{min}} minuter",
+    "PREFIX": "Prefix för fakturanummer",
+    "SAVE": "Spara",
+    "SAVED": "Sparat."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Beskrivning",
+    "HOURS": "Timmar",
+    "TOTAL": "Totalt"
+  },
+  "ERROR": {
+    "GENERIC": "Något gick fel: {{error}}"
+  }
+}

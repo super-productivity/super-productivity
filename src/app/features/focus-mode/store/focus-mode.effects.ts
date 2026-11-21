@@ -29,6 +29,7 @@ import {
 } from '../../../util/white-noise';
 import { startLoopingAlarm, stopLoopingAlarm } from '../../../util/looping-alarm';
 import { FocusModeLocalSettingsService } from '../../config/focus-mode-local-settings.service';
+import { UiHelperService } from '../../ui-helper/ui-helper.service';
 import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { setCurrentTask, unsetCurrentTask } from '../../tasks/store/task.actions';
 import {
@@ -81,6 +82,7 @@ export class FocusModeEffects {
   private isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
   private isIosNative = inject(CapacitorPlatformService).isIOS();
   private focusModeLocalSettingsService = inject(FocusModeLocalSettingsService);
+  private _uiHelperService = inject(UiHelperService);
   private _breakEndAlarm: Promise<number> | null = null;
 
   // Sync: When tracking starts → resume/skip-break or auto-spawn a new session.
@@ -312,7 +314,10 @@ export class FocusModeEffects {
           mode !== FocusModeMode.Flowtime &&
           !_isOvertimeEnabled,
       ),
-
+      // Raise here, not in notifyOnSessionComplete$: completeFocusSession is
+      // also dispatched by user actions (manual complete, Flowtime end, idle
+      // dialog), where the window is already in front (#11094).
+      tap(() => this._raiseWindowIfEnabled()),
       map(() => actions.completeFocusSession({ isManual: false })),
     ),
   );
@@ -332,6 +337,7 @@ export class FocusModeEffects {
           // sound (breakEndAlarmSound$); skip the one-shot here so they don't
           // double up. The window flash still fires.
           this._notifyUser(false, this._isLoopBreakEndAlarmOn());
+          this._raiseWindowIfEnabled();
         }),
       ),
     { dispatch: false },
@@ -630,7 +636,11 @@ export class FocusModeEffects {
                 timer.elapsed >= timer.duration,
             ),
             take(1),
-            tap(() => this._notifyUser()),
+            tap(() => {
+              this._notifyUser();
+              // With overtime the session never auto-completes; this is its end.
+              this._raiseWindowIfEnabled();
+            }),
           ),
         ),
       ),
@@ -1020,6 +1030,24 @@ export class FocusModeEffects {
     );
   }
 
+  /**
+   * Opt-in raise for users who miss the flash (#11094). Called only where the
+   * timer itself ends a session or break, once per end: not on the startBreak
+   * that follows a session end, and not on user-dispatched completions, where
+   * the window is already in front and the delayed blur would kick the user
+   * out of the field they just started typing in. The delay keeps keystrokes
+   * typed in another app out of SP (#5762); isReminder gets past Windows'
+   * focus-stealing prevention (#10410).
+   */
+  private _raiseWindowIfEnabled(): void {
+    if (
+      this._isElectron &&
+      this.focusModeLocalSettingsService.settings().isFocusWindowOnSessionEnd
+    ) {
+      this._uiHelperService.focusAppAfterNotification({ isReminder: true });
+    }
+  }
+
   private _notifyUser(isHideBar = false, isSkipSound = false): void {
     const soundVolume = this.globalConfigService.sound()?.volume || 0;
 
@@ -1029,7 +1057,9 @@ export class FocusModeEffects {
     }
 
     // Flash instead of focusing the window so a session or break end doesn't
-    // steal keyboard focus from whatever the user is working in (#10476)
+    // steal keyboard focus from whatever the user is working in (#10476).
+    // The opt-in raise is _raiseWindowIfEnabled(); the flash stays on as a
+    // fallback where the OS refuses it.
     if (this._isElectron) {
       window.ea.flashFrame();
       window.ea.setProgressBar({

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's GoingTo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `gong to` to the intended phrase `going to`.
+extends: existence
+message: "Did you mean `going to`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "going to"
+tokens:
+  - "gong(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"

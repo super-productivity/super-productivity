@@ -1,0 +1,24 @@
+---
+# Generated from Harper's GoodAt linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Checks for `good in` used instead of `good at` to describe proficiency
+# with a skill.
+extends: sequence
+message: "Use 'good at' to describe proficiency with a skill."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "at"
+tokens:
+  - pattern: 'great|good|okay|bad|OK'
+  - pattern: 'in'
+    target: true
+  - pattern: 'mathematics|programming|javascript|chemistry|debugging|japanese|biology|chinese|english|laravel|physics|spanish|coding|french|german|python|java|math|ruby|go|c'

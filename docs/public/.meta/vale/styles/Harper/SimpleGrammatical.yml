@@ -1,0 +1,19 @@
+---
+# Generated from Harper's SimpleGrammatical rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `simply grammatical` to `simple grammatical` for proper adjective usage.
+extends: existence
+message: "Use `simple grammatical` for correct adjective usage."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "simple grammatical"
+tokens:
+  - "simply(?!\\s*\\n\\s*\\n)\\s+grammatical(?!['\\x{2019}]s\\b)"

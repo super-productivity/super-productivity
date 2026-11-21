@@ -123,6 +123,7 @@ describe('PluginService', () => {
           useValue: {
             darkMode$: new BehaviorSubject('light'),
             darkMode: () => 'light',
+            isDarkTheme: () => false,
           },
         },
         { provide: PluginMetaPersistenceService, useValue: pluginMetaPersistenceService },
@@ -200,6 +201,16 @@ describe('PluginService', () => {
     expect(service.isInitialized()).toBe(false);
     expect(service.getLoadedPlugins()).toEqual([]);
   });
+
+  for (const isDark of [true, false]) {
+    it(`reports the resolved ${isDark ? 'dark' : 'light'} system theme`, async () => {
+      const theme = TestBed.inject(GlobalThemeService);
+      spyOn(theme, 'darkMode').and.returnValue('system');
+      spyOn(theme, 'isDarkTheme').and.returnValue(isDark);
+
+      expect((await service.getBaseCfg()).theme).toBe(isDark ? 'dark' : 'light');
+    });
+  }
 
   it('returns only loaded plugins from getLoadedPlugin', async () => {
     (service as unknown as { _loadedPlugins: PluginInstance[] })._loadedPlugins = [

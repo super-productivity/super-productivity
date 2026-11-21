@@ -1,0 +1,21 @@
+# Long sentences are hard to hold for anyone reading with a screen reader,
+# a cognitive disability, or a second language.
+# https://www.w3.org/WAI/WCAG22/Understanding/reading-level
+extends: occurrence
+message: "This sentence is %d words. The soft limit is 25; split it."
+link: https://www.w3.org/WAI/WCAG22/Understanding/reading-level
+level: suggestion
+scope: sentence
+max: 25
+token: '\b\w+\b'
+
+tests:
+  - name: fires
+    input: |
+      When you have finished the installation and confirmed that the service starts, open the settings page, choose the account you want to connect, and then paste the token you copied earlier into the field at the bottom.
+    want: |
+      1:1:Plain.Sentence:This sentence is 37 words. The soft limit is 25; split it.
+  - name: clean
+    input: |
+      When the service starts, open the settings page. Paste the token into the field.
+    want: ""

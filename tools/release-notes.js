@@ -7,7 +7,7 @@ const ROOT_DIR = path.join(__dirname, '..');
 const PLAY_STORE_MAX_CHARS = 500;
 const DEFAULT_CHANGELOG = 'Bug fixes and improvements';
 const DOWNLOADS_NOTE =
-  'For all current downloads, package links, and platform-specific notes: [check the wiki](https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install).';
+  'For all current downloads, package links, and platform-specific notes: [see the docs](https://super-productivity.com/docs/how-to/downloads-and-install/).';
 
 const GENERATED_RELEASE_NOTES_DIR = path.join(
   ROOT_DIR,

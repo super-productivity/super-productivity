@@ -1,0 +1,26 @@
+# Words that the spelling rule accepts. One entry per line.
+# Entries are plain words, matched case-sensitively as whole words.
+#
+# Common technical words are filtered inside the rules, not here.
+# Do not list a word that another rule matches, because Vale then skips
+# the rules that match that word. Add project and product names here.
+#
+# Do not use regular expressions: they break the built-in Vale.Terms rule
+# (Vale 3.24), which flags every matching word and suggests the pattern itself.
+automatable
+frontmatter
+monospaced
+onboarding
+quickstarts
+READMEs
+repo
+roadmap
+subagents
+subpackages
+triaged
+unassessed
+uncited
+walkthroughs
+dia
+markdownlint
+inlining

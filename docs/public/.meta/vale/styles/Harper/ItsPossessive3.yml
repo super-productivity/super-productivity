@@ -1,0 +1,46 @@
+---
+# Hand-written companion to ItsPossessive: `it's` starting a sentence.
+#
+# Harper's linter is an ExprMap of four branches. ItsPossessive.yml and
+# ItsPossessive2.yml are the mid-sentence pair, with and without an adjective
+# before the noun, and both require a verb or preposition ahead of `it's`.
+# Nothing at the start of a sentence can match either, so "It's ancestor is
+# still around" went unreported.
+#
+# This is Harper's `start_of_sentence_noun_subject`: `it's`, a noun, then a
+# verb or auxiliary. Harper anchors it to the sentence start and a Vale
+# `sequence` has no anchor, so the anchor is dropped. That widens the rule, and
+# the corpus says the widening costs nothing -- what it adds mid-sentence is a
+# shape the other two branches already report, since they ask for a verb before
+# `it's` where this asks for one after the noun.
+#
+# Harper's fourth branch, `start_of_sentence_noun`, is not ported. It fires on
+# a sentence-initial `it's` followed by a noun and *nothing* of a long list of
+# parts of speech, which without the anchor would be a rule that matches on the
+# absence of context rather than its presence.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use the possessive `its` here."
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "its"
+tokens:
+  - pattern: 'it'
+    target: true
+  - pattern: "'s"
+    target: true
+  # The indefinite pronouns are ItsPossessive.yml's exclusion, for its reason:
+  # "It's someone elses problem" is the contraction, not the possessive. The
+  # wh-words are this branch's own -- Vale tags the `what` of "it's what's
+  # accessible everywhere" as a noun where Harper calls it a pronoun, and the
+  # `'s` that follows then reads as the verb this rule is looking for.
+  - pattern: '^(?!(?:(?:some|any|every|no)(?:body|one|thing)|what|which|who|whom|whose)$).+$'
+    tag: 'NNP?S?'
+  - tag: 'VB[DGNPZ]?'

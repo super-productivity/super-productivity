@@ -1,0 +1,22 @@
+# Alt text that names the kind of thing and nothing else. "image" tells a
+# screen reader user exactly what they already knew.
+extends: existence
+message: "Alt text '%s' describes nothing. Say what the image shows."
+link: https://webaim.org/techniques/alttext/
+level: warning
+scope: alt
+nonword: true
+raw:
+  - '(?i)^\s*(?:image|img|photo|picture|graphic|icon|logo|screenshot|screen shot|figure|diagram|alt|alt text|todo|tbd|placeholder|untitled|spacer|banner|thumbnail)\s*\.?\s*$'
+
+tests:
+  - name: fires
+    input: |
+      ![image](a.png) and ![alt text](b.png)
+    want: |
+      1:3:A11y.AltPlaceholder:Alt text 'image' describes nothing. Say what the image shows.
+      1:23:A11y.AltPlaceholder:Alt text 'alt text' describes nothing. Say what the image shows.
+  - name: clean
+    input: |
+      ![The Vale logo](logo.png)
+    want: ""

@@ -17,6 +17,7 @@ import { Task, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskService } from '../../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { TaskRepeatCfg, TaskRepeatCfgCopy } from '../task-repeat-cfg.model';
 import { MatDialog } from '@angular/material/dialog';
@@ -49,11 +50,13 @@ import {
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { clampPastTimedOccurrence } from './clamp-past-timed-occurrence.util';
 import { SCHEDULE_AFFECTING_FIELDS } from './schedule-affecting-fields.const';
+import { getRepeatDeadlineDay } from './get-repeat-deadline-day.util';
 
 @Injectable()
 export class TaskRepeatCfgEffects {
   private _localActions$ = inject(LOCAL_ACTIONS);
   private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _taskArchiveService = inject(TaskArchiveService);
@@ -203,6 +206,13 @@ export class TaskRepeatCfgEffects {
         const isFirstOccurrenceToday_ = firstOccurrence
           ? this._dateService.isToday(firstOccurrence)
           : true;
+        // The task itself is the first occurrence, so it gets the cfg deadline
+        // too; a deadline with a time is left alone (#10983).
+        const deadlineDay = getRepeatDeadlineDay(taskRepeatCfg, firstOccurrenceStr);
+        const deadlineUpdate: Partial<TaskCopy> =
+          deadlineDay && !task.deadlineWithTime && task.deadlineDay !== deadlineDay
+            ? { deadlineDay }
+            : {};
 
         // Update repeat config with subtask templates AND the correct lastTaskCreationDay
         this._taskRepeatCfgService.updateTaskRepeatCfg(taskRepeatCfg.id, {
@@ -226,6 +236,7 @@ export class TaskRepeatCfgEffects {
           this._taskService.update(task.id, {
             created: firstOccurrence.getTime(),
             ...(isTimedTask ? {} : { dueDay: firstOccurrenceStr }),
+            ...deadlineUpdate,
           });
           // planTaskForDay (below) also sets dueDay redundantly, plus handles
           // planner days and TODAY_TAG removal
@@ -233,7 +244,7 @@ export class TaskRepeatCfgEffects {
           // TODAY FIRST OCCURRENCE:
           // Keep the stable occurrence identity aligned even if the task was
           // originally created before it became repeatable.
-          const update: Partial<TaskCopy> = {};
+          const update: Partial<TaskCopy> = { ...deadlineUpdate };
           if (firstOccurrence && getDbDateStr(task.created) !== firstOccurrenceStr) {
             update.created = firstOccurrence.getTime();
           }
@@ -649,7 +660,9 @@ export class TaskRepeatCfgEffects {
 
                 // fallback to archive
                 return from(
-                  this._taskService.getArchiveTasksForRepeatCfgId(repeatCfgId),
+                  this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(
+                    repeatCfgId,
+                  ),
                 ).pipe(
                   switchMap((arch) => {
                     if (!arch || arch.length === 0) {
@@ -771,7 +784,7 @@ export class TaskRepeatCfgEffects {
           return forkJoin([
             rxOf(taskRepeatCfg),
             this._taskService.getTasksByRepeatCfgId$(id).pipe(first()),
-            this._taskService.getArchiveTasksForRepeatCfgId(id),
+            this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(id),
           ]);
         }),
         concatMap(([{ id, changes }, todayTasks, archiveTasks]) => {
@@ -840,7 +853,7 @@ export class TaskRepeatCfgEffects {
                     }
                     return { id: task.id, changes: changesForArchiveTask };
                   });
-                  this._taskService.updateArchiveTasks(archiveUpdates);
+                  this._taskArchiveOrchestrator.updateArchiveTasks(archiveUpdates);
                 }
               }),
             );

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's StrikeChord rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The phrase about resonating with someone is spelled with a chord, not a cord, so fix the typo and keep the idiom intact.
+extends: existence
+message: "Use the idiom with `chord` when describing a feeling or reaction."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "strike a chord"
+tokens:
+  - "strike(?!\\s*\\n\\s*\\n)\\s+a(?!\\s*\\n\\s*\\n)\\s+cord(?!['\\x{2019}]s\\b)"

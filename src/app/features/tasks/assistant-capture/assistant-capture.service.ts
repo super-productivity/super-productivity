@@ -14,12 +14,16 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const'
 import { DateService } from '../../../core/date/date.service';
 import { addTaskRepeatCfgToTask } from '../../task-repeat-cfg/store/task-repeat-cfg.actions';
 import {
+  CaptureDeadline,
   CaptureDue,
   parseDueDay,
   parseDueTime,
+  parseEstimateMinutes,
+  toDeadline,
   toSchedule,
   toStartTime,
 } from '../agent-capture/capture-schedule';
+import { getDeadlineAutoPlanFields } from '../util/get-deadline-auto-plan-fields';
 import {
   CaptureRepeat,
   parseCaptureRepeat,
@@ -30,20 +34,31 @@ import { nanoid } from 'nanoid';
 export const MAX_CAPTURE_TITLE_LENGTH = 500;
 export const MAX_CAPTURE_NOTES_LENGTH = 8 * 1024;
 
-export interface AssistantCaptureInput extends CaptureDue {
+export interface AssistantCaptureInput extends CaptureDue, CaptureDeadline {
   title: string;
   notes?: string;
   repeat?: CaptureRepeat;
+  /** Whole minutes; replaces the default estimate. */
+  estimateMinutes?: number;
 }
 
-const INPUT_KEYS = ['title', 'notes', 'dueDate', 'dueTime', 'repeat'];
+const INPUT_KEYS = [
+  'title',
+  'notes',
+  'dueDate',
+  'dueTime',
+  'repeat',
+  'deadlineDate',
+  'deadlineTime',
+  'estimateMinutes',
+];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
- * Accepts exactly `{title, notes?, dueDate?, dueTime?, repeat?}` within the
- * limits the main process enforces. Unlike the hosted import, an invalid
+ * Accepts exactly `{title, notes?, dueDate?, dueTime?, repeat?, deadlineDate?,
+ * deadlineTime?, estimateMinutes?}` within the limits the main process enforces. Unlike the hosted import, an invalid
  * scheduling field rejects the whole request: the caller is still there to
  * fix it. The main process is the strict gate; `parseCaptureRepeat` here still
  * drops duplicate weekdays and unknown repeat keys.
@@ -71,10 +86,19 @@ export const parseAssistantCaptureInput = (
   const dueDay = parseDueDay(dueDate);
   const time = parseDueTime(dueTime);
   const repeat = parseCaptureRepeat(body.repeat);
+  const { deadlineDate, deadlineTime, estimateMinutes } = body;
+  const deadlineDay = parseDueDay(deadlineDate);
+  const deadlineClock = parseDueTime(deadlineTime);
+  const estimate = parseEstimateMinutes(estimateMinutes);
   if (
     (dueDate !== undefined && !dueDay) ||
     (dueTime !== undefined && (!dueDay || !time)) ||
-    (body.repeat !== undefined && !repeat)
+    (body.repeat !== undefined && !repeat) ||
+    (deadlineDate !== undefined && !deadlineDay) ||
+    (deadlineTime !== undefined && (!deadlineDay || !deadlineClock)) ||
+    // A repeat config has no deadline, so later occurrences could not keep it.
+    (deadlineDay && repeat) ||
+    (estimateMinutes !== undefined && !estimate)
   ) {
     return undefined;
   }
@@ -84,6 +108,9 @@ export const parseAssistantCaptureInput = (
     ...(dueDay ? { dueDay } : {}),
     ...(time ? { dueTime: time } : {}),
     ...(repeat ? { repeat } : {}),
+    ...(deadlineDay ? { deadlineDay } : {}),
+    ...(deadlineClock ? { deadlineTime: deadlineClock } : {}),
+    ...(estimate ? { estimateMinutes: estimate } : {}),
   };
 };
 
@@ -125,7 +152,9 @@ export class AssistantCaptureService {
 
     // TaskInternalEffects otherwise dispatches a second persistent updateTask
     // for this default. Include it in the creation op so capture stays one op.
-    const defaultEstimate = this._globalConfig.cfg()?.timeTracking.defaultEstimate || 0;
+    const estimate = input.estimateMinutes
+      ? input.estimateMinutes * 60000
+      : this._globalConfig.cfg()?.timeTracking.defaultEstimate || 0;
     const remindOption =
       this._globalConfig.cfg()?.reminder.defaultTaskRemindOption ??
       DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
@@ -135,8 +164,10 @@ export class AssistantCaptureService {
       title: input.title,
       additional: {
         ...(input.notes ? { notes: input.notes } : {}),
-        ...(defaultEstimate > 0 ? { timeEstimate: defaultEstimate } : {}),
+        ...(estimate > 0 ? { timeEstimate: estimate } : {}),
         ...toSchedule(input, remindOption),
+        // In the addTask as in the add-task bar, so the deadline adds no op.
+        ...toDeadline(input),
       },
       workContextType: WorkContextType.PROJECT,
       workContextId: INBOX_PROJECT.id,
@@ -150,7 +181,7 @@ export class AssistantCaptureService {
           projectId: INBOX_PROJECT.id,
           startDay: input.dueDay ?? this._dateService.todayStr(),
           startTime: toStartTime(input.dueTime),
-          defaultEstimate,
+          defaultEstimate: estimate,
           remindOption,
         })
       : undefined;
@@ -165,6 +196,15 @@ export class AssistantCaptureService {
         isAddToBacklog: false,
         isAddToBottom: false,
         isIgnoreShortSyntax: true,
+        // A deadline today plans the task for today, as when added by hand.
+        // Only with a deadline, so other captures dispatch the same action as before.
+        ...(input.deadlineDay
+          ? getDeadlineAutoPlanFields(
+              this._dateService,
+              task.deadlineDay,
+              task.deadlineWithTime,
+            )
+          : {}),
       }),
     );
     if (repeatCfg) {

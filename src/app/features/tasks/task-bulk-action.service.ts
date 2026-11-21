@@ -21,6 +21,10 @@ import { PlannerActions } from '../planner/store/planner.actions';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 // eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../planner/dialog-schedule-task/dialog-schedule-task.component';
+import {
+  TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD,
+  toPersistableRemindOption,
+} from '../planner/dialog-schedule-task/task-reminder-options.const';
 import { DialogDeadlineComponent } from './dialog-deadline/dialog-deadline.component';
 import { T } from '../../t.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
@@ -346,7 +350,14 @@ export class TaskBulkActionService {
       this._matDialog
         .open(DialogScheduleTaskComponent, {
           autoFocus: false,
-          data: { isSelectDueOnly: true },
+          data: {
+            isSelectDueOnly: true,
+            // repeat configs hold at most a 1h lead (#11816); a mixed selection
+            // keeps every option and scheduleFor caps the repeating tasks
+            ...(tasks.every((task) => task.repeatCfgId)
+              ? { reminderOptions: TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD }
+              : {}),
+          },
         })
         .afterClosed(),
     );
@@ -374,10 +385,12 @@ export class TaskBulkActionService {
       tasks.forEach((task) => {
         if (hasTime) {
           const due = getDateTimeFromClockString(pick.time as string, pick.date as Date);
+          const remindOption = pick.remindOption ?? TaskReminderOptionId.DoNotRemind;
+          // repeating tasks stay on the leads their series can hold (#11816)
           this._taskService.scheduleTask(
             task,
             due,
-            pick.remindOption ?? TaskReminderOptionId.DoNotRemind,
+            task.repeatCfgId ? toPersistableRemindOption(remindOption) : remindOption,
             false,
           );
           applied++;

@@ -1,0 +1,30 @@
+---
+# Hand-written from Harper's OfCourse: the phrase is `of course`.
+#
+# The generated rule keyed on punctuation and missed "o course" and
+# "Ofcourse". Harper's four branches are all here: `of curse`/`of corse`,
+# `off course`/`off coarse`, `o course`, and the closed-up `ofcourse`.
+#
+# Two guards from Harper's match_to_lint rather than its expression, which
+# is why the generator could not have found them. `of curse` after `kind` or
+# `sort` is left alone -- "this kind of curse is dangerous" means what it
+# says. And `off course` fires only when no word precedes it: a sailboat
+# "driven off course by the storm" is correct, so Harper requires the phrase
+# to open a sentence before it will call it a typo.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Did you mean `of course`?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bofcourse\b': "of course"
+  '\bo\s+course\b': "of course"
+  '(?<!\b(?:kind|sort)\s)\bof\s+(?:curse|corse)\b': "of course"
+  '(?<![A-Za-z0-9]\s{0,4})\boff\s+(?:course|coarse)\b': "of course"

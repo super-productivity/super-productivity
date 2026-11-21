@@ -366,6 +366,7 @@ describe('ConfigPageComponent', () => {
       for (const key of [
         T.FILE_IMEX.IMPORT_FROM_TODOIST,
         T.FILE_IMEX.IMPORT_FROM_TICKTICK,
+        T.FILE_IMEX.IMPORT_FROM_MS_TODO,
       ]) {
         component.onSearchChange(key);
         const hit = component.searchResults.find((r) => r.labelKey === key);

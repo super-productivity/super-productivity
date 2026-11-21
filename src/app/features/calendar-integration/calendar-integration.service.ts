@@ -65,7 +65,7 @@ import { PluginSearchResult } from '../../plugins/issue-provider/plugin-issue-pr
 import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { passesCalendarEventRegexFilter } from './calendar-event-regex-filter';
-import { NotIcalResponseError } from '../schedule/ical/is-likely-ical';
+import { isLikelyIcal, NotIcalResponseError } from '../schedule/ical/is-likely-ical';
 import { sanitizeIcalUrlForDisplay } from '../issue/mapping-helper/get-issue-provider-tooltip';
 import { isCalendarProviderDisabledOnCurrentPlatform } from '../issue/providers/calendar/is-calendar-provider-disabled-on-current-platform.util';
 import { withPluginOAuthTokenKey } from '../../plugins/oauth/plugin-oauth-token-key.util';
@@ -412,7 +412,6 @@ export class CalendarIntegrationService {
   }
 
   testConnection(cfg: CalendarProviderCfg): Promise<boolean> {
-    //  simple http get request
     return this._http
       .get(cfg.icalUrl, {
         responseType: 'text',
@@ -420,7 +419,18 @@ export class CalendarIntegrationService {
           ...CORS_SKIP_EXTRA_HEADERS,
         },
       })
-      .pipe(map((v) => !!v))
+      .pipe(
+        map((v) => {
+          if (!v) {
+            return false;
+          }
+          // Same check as requestEvents$, so a URL that passes here also loads.
+          if (!isLikelyIcal(v)) {
+            throw new NotIcalResponseError();
+          }
+          return true;
+        }),
+      )
       .toPromise()
       .then((result) => result ?? false);
   }

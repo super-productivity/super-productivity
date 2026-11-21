@@ -1,0 +1,19 @@
+---
+# Generated from Harper's NotTo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `no to` to `not to`, ensuring proper negation.
+extends: existence
+message: "Did you mean `not to`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "not to"
+tokens:
+  - "no(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"

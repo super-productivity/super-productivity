@@ -1,0 +1,39 @@
+# Words that make a disability the metaphor. Each has a plainer word that
+# says what was meant.
+extends: substitution
+message: "Consider '%s' instead of '%s'."
+level: suggestion
+ignorecase: true
+action:
+  name: replace
+swap:
+  crazy: surprising
+  insane: unexpected
+  lame: weak
+  crippled: broken
+  cripples: breaks
+  falls on deaf ears: is ignored
+  tone[- ]deaf: insensitive
+  sanity check: check
+  handicapped: disabled
+  wheelchair[- ]bound: uses a wheelchair
+  confined to a wheelchair: uses a wheelchair
+  suffers? from: has
+  suffering from: with
+  the disabled: disabled people
+  differently[- ]abled: disabled
+  hearing[- ]impaired: deaf or hard of hearing
+  normal (?:people|users): people without disabilities
+
+tests:
+  - name: fires
+    input: |
+      Run a sanity check; the results are crazy, and the request falls on deaf ears.
+    want: |
+      1:7:Inclusive.Ableist:Consider 'check' instead of 'sanity check'.
+      1:37:Inclusive.Ableist:Consider 'surprising' instead of 'crazy'.
+      1:60:Inclusive.Ableist:Consider 'is ignored' instead of 'falls on deaf ears'.
+  - name: clean
+    input: |
+      Run a check; the results are surprising, and the request is ignored.
+    want: ""

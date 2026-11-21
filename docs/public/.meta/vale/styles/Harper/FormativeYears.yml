@@ -1,0 +1,19 @@
+---
+# Generated from Harper's FormativeYears rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags the misuse of `formidable years` when `formative years` is likely intended. This rule distinguishes between the shaping of character (`formative`) and the inspiring of fear or awe (`formidable`).
+extends: existence
+message: "Did you mean `formative years`? Use `formative` to describe a period of growth or influence. `Formidable` is typically used for something intimidating."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "formative years"
+tokens:
+  - "formidable(?!\\s*\\n\\s*\\n)\\s+years(?!['\\x{2019}]s\\b)"

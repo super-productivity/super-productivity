@@ -1,0 +1,24 @@
+---
+# Generated from Harper's ThreatenVerb rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Normalize `threat` to `threaten` when it is used after modals (or their contractions) because the noun form is being mistaken for a verb.
+extends: sequence
+message: "Modal verbs followed by `threat` almost always intend the verb `threaten`."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "threaten"
+tokens:
+  - pattern: 'shouldn''t|couldn''t|wouldn''t|mustn''t|should|can''t|could|might|shall|won''t|would|must|will|can|may'
+  - upos: DET
+  - upos: NOUN
+  - pattern: 'threat'
+    target: true
