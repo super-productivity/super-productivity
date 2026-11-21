@@ -1,0 +1,21 @@
+---
+# Generated from Harper's LeavingInDroves linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "`Drones` is an eggcorn. The correct word is `droves`."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "droves"
+tokens:
+  - pattern: 'leaving|leaves|leave|left'
+  - pattern: 'in'
+  - pattern: 'drones'
+    target: true

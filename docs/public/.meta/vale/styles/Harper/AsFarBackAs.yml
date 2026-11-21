@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AsFarBackAs rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects nonstandard `as early back as` to `as far back as`.
+extends: existence
+message: "Use `as far back as` for referring to a time in the past."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "as far back as"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+early(?!\\s*\\n\\s*\\n)\\s+back(?!\\s*\\n\\s*\\n)\\s+as(?!['\\x{2019}]s\\b)"

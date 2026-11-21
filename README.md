@@ -63,11 +63,11 @@ Built for one person's focused work, not team management. Your data stays on you
 
 <p align="center">
   <strong>For all current downloads, package links, and platform-specific notes:
-    <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install" target="_blank">
-      check the wiki
+    <a href="https://super-productivity.com/docs/how-to/downloads-and-install/" target="_blank">
+      see the docs
     </a>
   </strong><br/>
-  <a href="https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install" target="_blank">
+  <a href="https://github.com/super-productivity/super-productivity/releases/latest" target="_blank">
     <img
       src="docs/screens/get-it-on-github.webp"
       alt="Get it on GitHub"
@@ -108,7 +108,7 @@ Built for one person's focused work, not team management. Your data stays on you
 - Back up and synchronize your data across multiple devices with **SuperSync**, **Dropbox** and **WebDAV** support. SuperSync is our own sync service, end-to-end encrypted with a password only you hold, which you can also [host yourself](https://github.com/super-productivity/super-productivity/tree/master/packages/super-sync-server).
 - Attach context information to tasks and projects. Create **notes**, attach **files** or create **project-level bookmarks** for links, files, and even commands.
 - Super Productivity **respects your privacy** and **does NOT collect any data**. No account or registration is required. **You decide where you store your data!**
-- Extend and restyle the app with **[plugins](https://github.com/super-productivity/super-productivity/wiki/2.15-Develop-a-Plugin)** and **[custom themes](https://github.com/super-productivity/super-productivity/wiki/3.09-Theming)**.
+- Extend and restyle the app with **[plugins](https://super-productivity.com/docs/contributing/develop-a-plugin/)** and **[custom themes](https://super-productivity.com/docs/reference/theming/)**.
 - Runs on **Linux**, **macOS**, **Windows**, **Android**, **iOS** and in the **browser**.
 - It's **free** and **open source** and always will be.
 
@@ -130,7 +130,7 @@ And much more!
 `✅` yes · `⚠️` partial, limited or paid plan only · `❌` no. Based on each product's public information, checked November 2026. Spot something outdated? [Open an issue](https://github.com/super-productivity/super-productivity/issues) with a source.
 
 > [!NOTE]
-> The web version has some limitations: See the **[Web App vs Desktop comparison](https://github.com/super-productivity/super-productivity/wiki/3.05-Web-App-vs-Desktop)** for more details.
+> The web version has some limitations: See the **[Web App vs Desktop comparison](https://super-productivity.com/docs/reference/web-app-vs-desktop/)** for more details.
 
 ## :book: Documentation and Guides
 
@@ -141,14 +141,14 @@ And much more!
   <li><a href="https://www.youtube.com/watch?v=VoF2_RSdNXA">Video walkthrough</a> (YouTube)</li>
   <li><a href="https://dev.to/johannesjo/the-prioritising-scheme-how-to-eat-the-frog-with-super-productivity-mlk">Eat the frog prioritizing scheme</a></li>
 </ul>
-<p><strong>Starting Point in Wiki:</strong><br>
-  <a href="https://github.com/super-productivity/super-productivity/wiki/1.01-First-Steps">First steps</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/3.00-Reference">Reference</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/2.00-How_To">How-To</a>
+<p><strong>Starting Point in the Docs:</strong><br>
+  <a href="https://super-productivity.com/docs/tutorials/first-steps/">First steps</a> •
+  <a href="https://super-productivity.com/docs/reference/">Reference</a> •
+  <a href="https://super-productivity.com/docs/how-to/">How-To</a>
 </p>
 <p><strong>Productivity Tips:</strong><br>
-  <a href="https://github.com/super-productivity/super-productivity/wiki/3.03-Keyboard-Shortcuts">Keyboard Shortcuts</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/3.04-Short-Syntax">Short Syntax</a>
+  <a href="https://super-productivity.com/docs/reference/keyboard-shortcuts/">Keyboard Shortcuts</a> •
+  <a href="https://super-productivity.com/docs/reference/short-syntax/">Short Syntax</a>
 </p>
 <p><strong>Need Help?</strong><br>
   <a href="https://github.com/super-productivity/super-productivity/discussions">Visit the discussions page</a>
@@ -158,27 +158,27 @@ And much more!
 <!-- Advanced Topics -->
 <h3>Advanced Topics</h3>
 <p>Here are some other topics covered in the
-  <a href="https://github.com/super-productivity/super-productivity/wiki">official wiki</a>:
+  <a href="https://super-productivity.com/docs/">documentation</a>:
 </p>
 <p><strong>Development:</strong><br>
-  <a href="https://github.com/super-productivity/super-productivity/wiki/2.11-Run-the-Development-Server">Run dev server</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/2.12-Package-the-App">Package the app</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/2.14-Build-for-Android">Build for Android</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/2.13-Run-with-Docker">Run with Docker</a>
+  <a href="https://super-productivity.com/docs/contributing/run-the-development-server/">Run dev server</a> •
+  <a href="https://super-productivity.com/docs/contributing/package-the-app/">Package the app</a> •
+  <a href="https://super-productivity.com/docs/contributing/build-for-android/">Build for Android</a> •
+  <a href="https://super-productivity.com/docs/how-to/run-with-docker/">Run with Docker</a>
 </p>
 <p><strong>Data Management:</strong><br>
-  <a href="https://github.com/super-productivity/super-productivity/wiki/4.23-Managing-Your-Data">User Data</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/3.07-Issue-Integration-Comparison">Issue Providers</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/3.08-Sync-Integration-Comparison">Sync Providers</a>
+  <a href="https://super-productivity.com/docs/explanation/managing-your-data/">User Data</a> •
+  <a href="https://super-productivity.com/docs/reference/issue-integration-comparison/">Issue Providers</a> •
+  <a href="https://super-productivity.com/docs/reference/sync-integration-comparison/">Sync Providers</a>
 </p>
 <p><strong>Customization:</strong><br>
-  <a href="https://github.com/super-productivity/super-productivity/wiki/2.15-Develop-a-Plugin">Plugins</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/3.09-Theming">Themes</a>
+  <a href="https://super-productivity.com/docs/contributing/develop-a-plugin/">Plugins</a> •
+  <a href="https://super-productivity.com/docs/reference/theming/">Themes</a>
 </p>
 <p><strong>APIs:</strong><br>
-  <a href="https://github.com/super-productivity/super-productivity/wiki/3.01-API#1-sync-server-rest-api">Sync Server</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/3.01-API#2-plugin-api">Plugins</a> •
-  <a href="https://github.com/super-productivity/super-productivity/wiki/3.01-API#3-local-rest-api">REST</a>
+  <a href="https://super-productivity.com/docs/reference/api/#1-sync-server-rest-api">Sync Server</a> •
+  <a href="https://super-productivity.com/docs/reference/api/#2-plugin-api">Plugins</a> •
+  <a href="https://super-productivity.com/docs/reference/api/#3-local-rest-api">REST</a>
 </p>
 
 ## Community
@@ -194,7 +194,7 @@ The development of Super Productivity is driven by a wonderful community of user
 
 ### :hearts: Contributing
 
-You don't have to be a programmer to help: spread the word, [answer questions](https://github.com/super-productivity/super-productivity/discussions), [report bugs](https://github.com/super-productivity/super-productivity/issues/new), [contribute translations](https://github.com/super-productivity/super-productivity/wiki/2.18-Contribute-Translations), build [plugins](https://github.com/super-productivity/super-productivity/wiki/2.15-Develop-a-Plugin) or [themes](https://github.com/super-productivity/super-productivity/wiki/3.09-Theming), or [sponsor the project](https://github.com/sponsors/johannesjo).
+You don't have to be a programmer to help: spread the word, [answer questions](https://github.com/super-productivity/super-productivity/discussions), [report bugs](https://github.com/super-productivity/super-productivity/issues/new), [contribute translations](https://super-productivity.com/docs/contributing/contribute-translations/), build [plugins](https://super-productivity.com/docs/contributing/develop-a-plugin/) or [themes](https://super-productivity.com/docs/reference/theming/), or [sponsor the project](https://github.com/sponsors/johannesjo).
 
 Before opening a pull request, read [CONTRIBUTING.md](CONTRIBUTING.md) and follow the [commit message format](.github/CONTRIBUTING.md#commit-message-format).
 
@@ -215,7 +215,7 @@ _(If you are, intend to or have been a sponsor and want to be shown here, [pleas
 
 ## Documentation: Manual versus Automated
 
-There are two wikis: the official one hosted by GitHub and the autonomously generated variant using [DeepWiki.com](https://deepwiki.com/super-productivity/super-productivity). The manually curated version is a more stable and approachable resource designed to help you understand the app from a more human-focused perspective whereas DeepWiki is optimized for explaining the code itself with little regard for context beyond that.
+There are two sets of docs: the official one, maintained in this repository, and the autonomously generated variant using [DeepWiki.com](https://deepwiki.com/super-productivity/super-productivity). The manually curated version is a more stable and approachable resource designed to help you understand the app from a more human-focused perspective whereas DeepWiki is optimized for explaining the code itself with little regard for context beyond that.
 
 <!-- Official Wiki -->
 <h3>Official Wiki</h3>
@@ -226,12 +226,14 @@ There are two wikis: the official one hosted by GitHub and the autonomously gene
   <a href="https://github.com/super-productivity/super-productivity/commit/7a51d4b06e414fdcc48e4999197a93eee9cd09da">this commit</a>.
 </p>
 <p>
-  Changes to files within <code>./docs/wiki</code> are linted in CI before being automatically
-  sync'd to the repository's official Wiki hosted by GitHub.
+  Changes to files within <code>./docs/wiki</code> are linted in CI and published, together with the
+  rewritten pages in <code>./docs/public</code>, at
+  <a href="https://super-productivity.com/docs/">super-productivity.com/docs</a>. The GitHub Wiki
+  only keeps one stub per page that links to its new address.
 </p>
 <p>
-  Migrating to Docusaurus is a long-term goal once the content and structure of the wiki has matured
-  and the remaining "legacy docs" have either been reworked or removed. There are some automations in development to help reduce the difference between the published docs and the state of the code while retaining a human-in-the-loop.
+  The wiki is being rewritten page by page into <code>./docs/public</code>, following the
+  <a href="docs/documentation-guide.md">documentation guide</a>. There are some automations in development to help reduce the difference between the published docs and the state of the code while retaining a human-in-the-loop.
 </p>
 
 <!-- DeepWiki -->

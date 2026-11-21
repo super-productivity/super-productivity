@@ -571,7 +571,8 @@ export const supersededPatchFields = (
  * overwrote the others, and re-sending those would only echo them. Undefined
  * when nothing survived, a winner deletes (whole-entity path), or the local
  * side is not readable (`supersededPatchFields`).
- * A local time delta keeps the plain path (#10408).
+ * A local time delta is never a field of the patch (#10408): kept, it stays
+ * pending as it is; losing, it is rejected with the edits.
  *
  * The local side may hold this device's own pending `'patch'` rows: re-sends
  * of an earlier resolution that never uploaded (sync killed or failed before
@@ -642,7 +643,9 @@ const writtenByLocalSide = (
 
 /**
  * One `survivingLocalFields` patch per entity whose losing local ops are all
- * pending (a no-pending crossing's retained ops already uploaded).
+ * pending (a no-pending crossing's retained ops already uploaded). Pending
+ * includes the time deltas kept beside a remote win: they stay as they are and
+ * the patch never carries them (`survivingLocalFields` skips additive time).
  */
 export const buildSurvivingFieldPatches = async (
   resolutions: { conflict: EntityConflict; winner: 'local' | 'remote' }[],

@@ -1036,11 +1036,13 @@ export class ConflictResolutionService {
     // archive work fails, the originals stay eligible for a clean retry. Local
     // fields that survived a remote resolution row are re-emitted in the same
     // transaction as their originals' rejection, beside patches for local-win
-    // rows that same-batch remote edits made stale.
+    // rows that same-batch remote edits made stale. A kept time delta stays
+    // pending beside them and is no field of the re-send, so it must not keep
+    // the rejected edits from being re-sent (#11184: a done tracked before it).
     const reemittedOps = [
       ...(await this.localWinOps._reemitSurvivingLocalFields(
         resolutions,
-        new Set(remainingLocalOpsToReject),
+        new Set([...remainingLocalOpsToReject, ...keptDeltas.opIds]),
       )),
       // Plain local-win rows are not applied here, so every op applied in this
       // batch (prefix, winners, nonconflicting) landed on top of them; applied

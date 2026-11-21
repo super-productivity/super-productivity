@@ -1,0 +1,25 @@
+# WCAG 1.3.1: a data table has a header row, so a screen reader can announce
+# the column with each cell. Markdown tables always have one; an HTML table
+# can leave it out.
+# https://www.w3.org/WAI/tutorials/tables/
+extends: existence
+message: "A table without a header row. A screen reader announces the header with each cell; give the first row th cells."
+link: https://www.w3.org/WAI/tutorials/tables/
+level: error
+scope: 'doc(table:not(:has(th)))'
+nonword: true
+raw:
+  - '^\S'
+
+tests:
+  - name: fires
+    format: html
+    input: |
+      <table><tr><td>Name</td><td>Price</td></tr><tr><td>Basic</td><td>$5</td></tr></table>
+    want: |
+      1:16:A11y.TableHeader:A table without a header row. A screen reader announces the header with each cell; give the first row th cells.
+  - name: clean
+    format: html
+    input: |
+      <table><tr><th>Name</th><th>Price</th></tr><tr><td>Basic</td><td>$5</td></tr></table>
+    want: ""

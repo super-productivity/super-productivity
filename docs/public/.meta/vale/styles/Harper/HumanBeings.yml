@@ -1,0 +1,20 @@
+---
+# Generated from Harper's HumanBeings rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Eliminates the incorrect possessive/plural usage like `human's beings` or `humans beings`.
+extends: existence
+message: "Use `human beings` to refer to people collectively."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "human beings"
+tokens:
+  - "human's(?!\\s*\\n\\s*\\n)\\s+beings(?!['\\x{2019}]s\\b)"
+  - "humans(?!\\s*\\n\\s*\\n)\\s+beings(?!['\\x{2019}]s\\b)"

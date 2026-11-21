@@ -1,0 +1,20 @@
+---
+# Generated from Harper's EveryOnceAndAgain rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `every once and again` to `every once in a while` or `once again`.
+extends: existence
+message: "For things that happen only occasionaly use `every once in a while. For things that persistently happen use `once again`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "every once in a while"
+    - "once again"
+tokens:
+  - "every(?!\\s*\\n\\s*\\n)\\s+once(?!\\s*\\n\\s*\\n)\\s+and(?!\\s*\\n\\s*\\n)\\s+again(?!['\\x{2019}]s\\b)"

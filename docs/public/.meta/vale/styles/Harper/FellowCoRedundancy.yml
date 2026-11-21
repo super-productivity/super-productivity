@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's FellowCoRedundancy: `fellow` and the `co-` prefix
+# say the same thing twice.
+#
+# The generated rule was a seven-token `sequence`. Harper's expression is
+# `fellow`, then either `co` + separator + a word from a set, or one of the
+# same words already carrying the prefix -- an alternation of two branches of
+# different lengths. The generator laid the branches out end to end instead of
+# side by side, producing a rule that required all seven tokens at once and so
+# matched nothing at all: 10 missed findings, every example the linter has.
+#
+# One regex covers both branches, because the separator is optional:
+# `co[\s-]?worker` reads `coworker`, `co-worker` and `co worker` alike.
+#
+# No `action`: Harper offers two corrections here -- drop `fellow` or drop
+# `co` -- and builds them in code from the text it matched. A rule that had to
+# pick one would be picking for the writer.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Using `fellow` with `co` is redundant."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '\bfellow\s+co[\s-]?(?:admins?|chairs?|conspirators?|equals?|founders?|hosts?|interns?|leaders?|organisers?|organizers?|pilots?|workers?)\b'

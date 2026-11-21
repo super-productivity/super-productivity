@@ -43,6 +43,8 @@ const MAX_POLL_DELAY_MS = 60_000;
 // wait first; this bound only matters while the server can't be reached. Not
 // taken from the server's expiresAt, because device clocks drift.
 export const MAX_SIGN_IN_WAIT_MS = 11 * 60 * 1000;
+export const NATIVE_CONNECT_TIMEOUT_MS = 10_000;
+export const NATIVE_READ_TIMEOUT_MS = 30_000;
 
 /** The page the browser opens; the server's index page has a Connect mode. */
 export const connectLink = (baseUrl: string, requestId: string): string =>
@@ -90,6 +92,8 @@ const nativePostJson = async (url: string, body: object): Promise<ConnectRespons
     // eslint-disable-next-line @typescript-eslint/naming-convention
     headers: { 'Content-Type': 'application/json' },
     data: JSON.stringify(body),
+    connectTimeout: NATIVE_CONNECT_TIMEOUT_MS,
+    readTimeout: NATIVE_READ_TIMEOUT_MS,
   });
   const headers = res.headers ?? {};
   const retryKey = Object.keys(headers).find((k) => k.toLowerCase() === 'retry-after');

@@ -474,7 +474,9 @@ holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op
   5); a replace row used to hide this case by overwriting the fields
   everywhere. Since #11184 the same applies when an opaque op (a habit
   count, `planTasksForToday` for one or several tasks, tracking) wins: a done lost to another
-  device's add to Today never reached that device. The device's own pending
+  device's add to Today never reached that device. A local time delta kept
+  pending beside the winner (decision 7) does not block the re-send: it stays
+  as it is and the patch never carries time. The device's own pending
   patch rows (a re-send whose upload failed or was killed) are read by key,
   like its edits; a replace row, a reminder clear or a remote delete keep the
   whole-entity path.

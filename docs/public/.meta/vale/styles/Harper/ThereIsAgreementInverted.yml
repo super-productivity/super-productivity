@@ -1,0 +1,28 @@
+---
+# Hand-written companion to ThereIsAgreement: the inverted question form,
+# where the verb comes before `there`.
+#
+#   Is there ideas    ->  Are there ideas
+#
+# Matched on the verb itself rather than its tag: at the start of a sentence
+# the tagger reads `Was` as a proper noun, and a tag-based rule would miss
+# exactly the questions this is for.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "There is disagreement in number between the verb and the noun."
+level: warning
+ignorecase: true
+matchcase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "are"
+tokens:
+  - pattern: 'is'
+    target: true
+  - pattern: 'there'
+  - tag: 'NNS'

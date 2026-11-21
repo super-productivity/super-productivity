@@ -1,0 +1,18 @@
+---
+# Generated from Harper's AllThough rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Nobody means to write the two-word phrase `all though` when the single word `although` is intended.
+extends: existence
+message: "Merge `all` and `though` into the conjunction `although`."
+level: error
+ignorecase: true
+action:
+  name: replace
+  params:
+    - "although"
+tokens:
+  - "all(?!\\s*\\n\\s*\\n)\\s+though(?!['\\x{2019}]s\\b)"

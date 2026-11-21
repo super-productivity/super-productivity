@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's SoonToBe -- the case with a modifier between the
+# phrase and its noun, "soon to be 5-year-old son". Harper allows a run of
+# them; this allows one, which is what the corpus shows.
+#
+# Two modifiers were tried and recovered nothing, so there is no third rule.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use hyphens when `soon to be` modifies a noun."
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "soon-to-be"
+tokens:
+  - pattern: 'soon'
+    target: true
+  - pattern: 'to'
+    target: true
+  - pattern: 'be'
+    target: true
+  - tag: 'JJ[RS]?|RB[RS]?|CD|VBN'
+  - tag: 'NNP?S?'

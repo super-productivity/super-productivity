@@ -1,0 +1,19 @@
+---
+# Generated from Harper's OnesSelf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the generic reflexive pronoun `one's self` to `oneself`.
+extends: existence
+message: "If you mean the reflexive pronoun for a generic or unspecified person, use `oneself`. Ignore this if you 're referring to an individual's distinct identity or ego."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "oneself"
+tokens:
+  - "one's(?!\\s*\\n\\s*\\n)\\s+self(?!['\\x{2019}]s\\b)"

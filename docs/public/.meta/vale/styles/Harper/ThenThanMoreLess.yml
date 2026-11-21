@@ -1,0 +1,22 @@
+---
+# Hand-written companion to ThenThan: the analytic comparative, where `more`
+# or `less` carries the comparison instead of an inflected ending.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use `than` for comparisons."
+level: warning
+ignorecase: true
+matchcase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "than"
+tokens:
+  - pattern: 'more|less'
+  - tag: 'JJ|RB'
+  - pattern: 'then'
+    target: true
