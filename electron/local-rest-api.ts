@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron';
-import { log, warn } from 'electron-log/main';
+import { debug, log, warn } from 'electron-log/main';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
 import { once } from 'events';
 import { randomBytes, randomUUID } from 'crypto';
@@ -131,13 +131,97 @@ const regenerateToken = (): string => {
 const compareToken = (input: string, expected: string): boolean =>
   timingSafeEqualLenient(Buffer.from(input, 'utf8'), Buffer.from(expected, 'utf8'));
 
+// The envelope's error code of each response, so the request log can say why a
+// request failed and not just its status.
+const responseErrorCodes = new WeakMap<ServerResponse, string>();
+
+/** Writes an API envelope. Every response of the REST API goes through here. */
+const respond = (
+  res: ServerResponse,
+  status: number,
+  body: LocalRestApiResponsePayload['body'],
+  extraHeaders?: Record<string, string>,
+): void => {
+  if ('error' in body) {
+    responseErrorCodes.set(res, body.error.code);
+  }
+  writeJsonResponse(res, status, body, extraHeaders);
+};
+
+// The routes the API serves, as the request log names them. The app log can be
+// exported, so a request is logged as the route it matches and never as the
+// path it sent: that keeps ids out of the log, and with them anything else a
+// client puts into a path — unauthenticated requests are logged too. A route
+// missing here is still served, but logged as UNMATCHED_ROUTE: add new routes.
+const ID_SEGMENT = ':id';
+const UNMATCHED_ROUTE = '<unmatched>';
+const LOGGED_ROUTES = [
+  '/health',
+  '/status',
+  '/task-control/current',
+  '/task-control/stop',
+  '/focus',
+  '/projects',
+  '/tags',
+  '/tasks',
+  '/tasks/:id',
+  '/tasks/:id/start',
+  '/tasks/:id/time',
+  '/tasks/:id/archive',
+  '/tasks/:id/restore',
+  '/task-repeat-cfgs',
+  '/task-repeat-cfgs/:id',
+  '/notes',
+  '/notes/:id',
+  '/simple-counters',
+  '/simple-counters/:id',
+  '/simple-counters/:id/value',
+  '/simple-counters/:id/increment',
+].map((route) => route.split('/').filter(Boolean));
+
+const toLoggedRoute = (pathname: string | undefined): string => {
+  // Split the way the renderer's routes do, so what it serves finds its route.
+  const segments = pathname?.split('/').filter(Boolean) ?? [];
+  const route = LOGGED_ROUTES.find(
+    (candidate) =>
+      candidate.length === segments.length &&
+      candidate.every((part, i) => part === ID_SEGMENT || part === segments[i]),
+  );
+  return route ? `/${route.join('/')}` : UNMATCHED_ROUTE;
+};
+
+/**
+ * Logs one line per request once it is over, also for a request that is
+ * rejected before it reaches the renderer:
+ *   [local-rest-api] POST /tasks/:id/archive 200 3ms
+ *   [local-rest-api] GET /tasks/:id 404 TASK_NOT_FOUND 2ms
+ * Never the Authorization header, the query string or the body.
+ */
+const logRequestOnClose = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  pathname?: string,
+): void => {
+  const startedAt = Date.now();
+  const route = toLoggedRoute(pathname);
+  // 'close' rather than 'finish', so a client that hangs up is logged too.
+  res.once('close', () => {
+    const errorCode = responseErrorCodes.get(res);
+    const answer = errorCode ? `${res.statusCode} ${errorCode}` : `${res.statusCode}`;
+    const outcome = res.writableFinished ? answer : 'aborted';
+    debug(
+      `[local-rest-api] ${req.method ?? 'GET'} ${route} ${outcome} ${Date.now() - startedAt}ms`,
+    );
+  });
+};
+
 // The 401's WWW-Authenticate header (see UNAUTHORIZED_HEADERS in http-utils)
 // tells the scripts written against the unauthenticated API (v18.1.0 onwards)
 // what to do, since this 401 is the only thing they will see after upgrading.
 const TOKEN_LOCATION_HINT = 'Find the token in Settings → Misc → Access Token.';
 
 const respondUnauthorized = (res: ServerResponse, message: string): void => {
-  writeJsonResponse(
+  respond(
     res,
     401,
     {
@@ -152,7 +236,7 @@ const respondUnauthorized = (res: ServerResponse, message: string): void => {
 };
 
 const respondDisabled = (res: ServerResponse): void =>
-  writeJsonResponse(res, 503, {
+  respond(res, 503, {
     ok: false,
     error: { code: 'API_DISABLED', message: 'Local REST API is disabled' },
   });
@@ -333,7 +417,8 @@ const handleHttpRequest = async (
 ): Promise<void> => {
   const requestUrl = parseRequestUrl(req);
   if (!requestUrl) {
-    writeJsonResponse(res, 400, {
+    logRequestOnClose(req, res);
+    respond(res, 400, {
       ok: false,
       error: { code: 'INVALID_URL', message: 'Invalid request target' },
     });
@@ -342,10 +427,13 @@ const handleHttpRequest = async (
 
   // The assistant endpoint shares this listener but not its switch, its
   // credential or its (looser) Origin rule, so it is routed before any of them.
+  // It is not part of the REST request log either.
   if (requestUrl.pathname === ASSISTANT_ACCESS_PATH) {
     await handleMcpHttpRequest(req, res, mcpDeps);
     return;
   }
+
+  logRequestOnClose(req, res, requestUrl.pathname);
 
   // Reject everything while disabled. server.close() stops accepting new
   // sockets, but an in-flight keep-alive connection could still be served
@@ -358,7 +446,7 @@ const handleHttpRequest = async (
   // Block DNS rebinding: reject requests with unexpected Host headers
   const host = req.headers.host;
   if (!host || !ALLOWED_HOSTS.has(host)) {
-    writeJsonResponse(res, 403, {
+    respond(res, 403, {
       ok: false,
       error: {
         code: 'FORBIDDEN',
@@ -375,7 +463,7 @@ const handleHttpRequest = async (
   // closes that gap on top of the Host-header check above.
   const origin = req.headers.origin;
   if (origin && origin !== 'null') {
-    writeJsonResponse(res, 403, {
+    respond(res, 403, {
       ok: false,
       error: {
         code: 'FORBIDDEN',
@@ -386,7 +474,7 @@ const handleHttpRequest = async (
   }
 
   if (pendingRequests.size >= LOCAL_REST_API_MAX_CONCURRENT_REQUESTS) {
-    writeJsonResponse(res, 429, {
+    respond(res, 429, {
       ok: false,
       error: {
         code: 'TOO_MANY_REQUESTS',
@@ -399,7 +487,7 @@ const handleHttpRequest = async (
   const method = req.method ?? 'GET';
 
   if (method === 'GET' && requestUrl.pathname === '/health') {
-    writeJsonResponse(res, 200, {
+    respond(res, 200, {
       ok: true,
       data: {
         server: 'up',
@@ -426,7 +514,7 @@ const handleHttpRequest = async (
   }
 
   if (!getIsAppReady()) {
-    writeJsonResponse(res, 503, {
+    respond(res, 503, {
       ok: false,
       error: {
         code: 'APP_NOT_READY',
@@ -440,7 +528,7 @@ const handleHttpRequest = async (
   try {
     body = await readJsonBody(req);
   } catch (error) {
-    writeJsonResponse(res, 400, {
+    respond(res, 400, {
       ok: false,
       error: {
         code: 'INVALID_REQUEST_BODY',
@@ -477,12 +565,12 @@ const handleHttpRequest = async (
       query: getQueryObject(requestUrl),
       body,
     });
-    writeJsonResponse(res, rendererResponse.status, rendererResponse.body);
+    respond(res, rendererResponse.status, rendererResponse.body);
   } catch (error) {
     warn('[local-rest-api] Request failed', requestUrl.pathname, error);
     const isTimeout =
       error instanceof Error && error.message === 'Renderer request timed out';
-    writeJsonResponse(res, isTimeout ? 504 : 500, {
+    respond(res, isTimeout ? 504 : 500, {
       ok: false,
       error: {
         code: isTimeout ? 'RENDERER_TIMEOUT' : 'INTERNAL_ERROR',
@@ -556,7 +644,7 @@ export const initLocalRestApi = (): void => {
       if (req.destroyed || res.headersSent) {
         return;
       }
-      writeJsonResponse(res, 500, {
+      respond(res, 500, {
         ok: false,
         error: { code: 'INTERNAL_ERROR', message: 'Internal error' },
       });
