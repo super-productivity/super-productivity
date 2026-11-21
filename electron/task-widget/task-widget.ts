@@ -6,12 +6,27 @@ import {
 } from 'electron';
 import { join } from 'path';
 import { assertSecureWebPreferences } from '../web-preferences-guard';
-import { TaskCopy } from '../../src/app/features/tasks/task.model';
 import { TaskWidgetConfig } from '../../src/app/features/config/global-config.model';
 import { info } from 'electron-log/main';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
+import { TaskWidgetView } from '../shared-with-frontend/task-widget-view.model';
 import { loadSimpleStoreAll, saveSimpleStore } from '../simple-store';
 import { IS_MAC } from '../common.const';
+import { createTaskWidgetDockHint } from './task-widget-dock-hint';
+import {
+  BAR_HEIGHT,
+  clampWidth,
+  DEFAULT_WIDTH,
+  FLOAT_HEIGHT,
+  TaskWidgetEdge,
+  TaskWidgetResizeSide,
+} from './task-widget-layout';
+import {
+  createTaskWidgetPlacement,
+  getTaskWidgetWindowBounds,
+  TaskWidgetPlacement,
+  TaskWidgetPlacementState,
+} from './task-widget-placement';
 
 let taskWidgetWin: BrowserWindow | null = null;
 let isTaskWidgetEnabled = false;
@@ -24,11 +39,8 @@ let isAlwaysShow = false;
 // a sticky "user-forced visible" effect instead of being immediately undone by
 // the next focus event.
 let isUserForcedVisible = false;
-let currentTask: TaskCopy | null = null;
-let isPomodoroEnabled = false;
-let currentPomodoroSessionTime = 0;
-let isFocusModeEnabled = false;
-let currentFocusSessionTime = 0;
+let latestView: TaskWidgetView | null = null;
+let placement: TaskWidgetPlacement | null = null;
 let initTimeoutId: NodeJS.Timeout | null = null;
 let currentOpacity = 95;
 let listenersRegistered = false;
@@ -39,7 +51,24 @@ let pendingShowAfterCreateInactive = false;
 
 const TASK_WIDGET_BOUNDS_KEY = 'taskWidgetBounds';
 const LEGACY_BOUNDS_KEY = 'overlayBounds';
-let boundsDebounceTimer: NodeJS.Timeout | null = null;
+const IPC_SHOW_MAIN_WINDOW = 'task-widget-show-main-window';
+const IPC_TOGGLE_TASK = 'task-widget-toggle-task';
+const IPC_MARK_DONE = 'task-widget-mark-done';
+const IPC_TIME_WIDTH = 'task-widget-time-width';
+const IPC_TOGGLE_DETAILS = 'task-widget-toggle-details';
+const IPC_RESIZE_START = 'task-widget-resize-start';
+const IPC_RESIZE = 'task-widget-resize';
+const IPC_RESIZE_END = 'task-widget-resize-end';
+const BAR_HALF_HEIGHT = BAR_HEIGHT / 2;
+const FALLBACK_PRIMARY = '#6495ed';
+
+type SavedPlacement = Readonly<{
+  x: number;
+  y: number;
+  edge?: TaskWidgetEdge | null;
+  centerY?: number;
+  width?: number;
+}>;
 
 type ShowTaskWidgetOptions = Readonly<{
   inactive?: boolean;
@@ -63,15 +92,13 @@ export const updateTaskWidgetEnabled = (isEnabled: boolean): void => {
         updateTaskWidgetOpacity(currentOpacity);
       }
       // Request current task state after window is ready
-      const mainWindow = BrowserWindow.getAllWindows().find(
-        (win) => win !== taskWidgetWin,
-      );
-      if (mainWindow) {
-        mainWindow.webContents.send(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET);
-      }
+      getMainWindow()?.webContents.send(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET);
     });
   }
 };
+
+const getMainWindow = (): BrowserWindow | undefined =>
+  BrowserWindow.getAllWindows().find((win) => win !== taskWidgetWin);
 
 const clearPendingTaskWidgetCreation = (): void => {
   taskWidgetCreationGeneration += 1;
@@ -87,11 +114,8 @@ export const destroyTaskWidget = (): void => {
     initTimeoutId = null;
   }
 
-  // Clear bounds debounce timer
-  if (boundsDebounceTimer) {
-    clearTimeout(boundsDebounceTimer);
-    boundsDebounceTimer = null;
-  }
+  placement?.destroy();
+  placement = null;
 
   // Disable task widget to prevent close event prevention
   isTaskWidgetEnabled = false;
@@ -99,7 +123,14 @@ export const destroyTaskWidget = (): void => {
   clearPendingTaskWidgetCreation();
 
   // Remove IPC listeners
-  ipcMain.removeAllListeners('task-widget-show-main-window');
+  ipcMain.removeAllListeners(IPC_SHOW_MAIN_WINDOW);
+  ipcMain.removeAllListeners(IPC_TOGGLE_TASK);
+  ipcMain.removeAllListeners(IPC_MARK_DONE);
+  ipcMain.removeAllListeners(IPC_TIME_WIDTH);
+  ipcMain.removeAllListeners(IPC_TOGGLE_DETAILS);
+  ipcMain.removeAllListeners(IPC_RESIZE_START);
+  ipcMain.removeAllListeners(IPC_RESIZE);
+  ipcMain.removeAllListeners(IPC_RESIZE_END);
   listenersRegistered = false;
 
   if (taskWidgetWin && !taskWidgetWin.isDestroyed()) {
@@ -127,6 +158,72 @@ export const destroyTaskWidget = (): void => {
 
     taskWidgetWin = null;
   }
+};
+
+const getDefaultPlacement = (): TaskWidgetPlacementState => {
+  const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
+  const y = 20;
+  return {
+    x: screenWidth - DEFAULT_WIDTH - 20,
+    y,
+    edge: null,
+    centerY: y + BAR_HALF_HEIGHT,
+    width: DEFAULT_WIDTH,
+  };
+};
+
+const loadPlacement = async (): Promise<TaskWidgetPlacementState> => {
+  const defaultPlacement = getDefaultPlacement();
+  try {
+    const store = await loadSimpleStoreAll();
+    // Try new key first, fall back to legacy key for migration
+    const saved = (store[TASK_WIDGET_BOUNDS_KEY] || store[LEGACY_BOUNDS_KEY]) as
+      | SavedPlacement
+      | undefined;
+    if (!saved || typeof saved.x !== 'number' || typeof saved.y !== 'number') {
+      return defaultPlacement;
+    }
+
+    const width = Number.isFinite(saved.width)
+      ? clampWidth(saved.width as number)
+      : DEFAULT_WIDTH;
+
+    // Validate saved position is visible on any connected display
+    const matchingDisplay = screen.getDisplayMatching({
+      x: saved.x,
+      y: saved.y,
+      width,
+      height: FLOAT_HEIGHT,
+    });
+    const isOnScreen =
+      matchingDisplay &&
+      saved.x + width > matchingDisplay.bounds.x &&
+      saved.x < matchingDisplay.bounds.x + matchingDisplay.bounds.width &&
+      saved.y >= matchingDisplay.bounds.y &&
+      saved.y < matchingDisplay.bounds.y + matchingDisplay.bounds.height;
+    if (!isOnScreen) {
+      return defaultPlacement;
+    }
+
+    return {
+      x: saved.x,
+      y: saved.y,
+      edge:
+        saved.edge === 'left' || saved.edge === 'right' || saved.edge === 'top'
+          ? saved.edge
+          : null,
+      centerY:
+        typeof saved.centerY === 'number' ? saved.centerY : saved.y + BAR_HALF_HEIGHT,
+      width,
+    };
+  } catch (_e) {
+    // Use defaults (file may not exist on first run)
+    return defaultPlacement;
+  }
+};
+
+const persistPlacement = (state: TaskWidgetPlacementState): void => {
+  saveSimpleStore(TASK_WIDGET_BOUNDS_KEY, { ...state, height: FLOAT_HEIGHT });
 };
 
 const createTaskWidgetWindow = (): Promise<void> => {
@@ -158,45 +255,7 @@ const createTaskWidgetWindowForGeneration = async (
     return;
   }
 
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width: screenWidth } = primaryDisplay.workAreaSize;
-  const defaultBounds = { width: 300, height: 80, x: screenWidth - 320, y: 20 };
-
-  // Restore persisted bounds or use defaults
-  let bounds = defaultBounds;
-  try {
-    const store = await loadSimpleStoreAll();
-    // Try new key first, fall back to legacy key for migration
-    const saved = (store[TASK_WIDGET_BOUNDS_KEY] || store[LEGACY_BOUNDS_KEY]) as
-      | { width: number; height: number; x: number; y: number }
-      | undefined;
-    if (
-      saved &&
-      typeof saved.width === 'number' &&
-      saved.width > 0 &&
-      typeof saved.height === 'number' &&
-      saved.height > 0 &&
-      typeof saved.x === 'number' &&
-      typeof saved.y === 'number'
-    ) {
-      // Validate saved bounds are visible on any connected display
-      const matchingDisplay = screen.getDisplayMatching({
-        x: saved.x,
-        y: saved.y,
-        width: saved.width,
-        height: saved.height,
-      });
-      const isOnScreen =
-        matchingDisplay &&
-        saved.x + saved.width > matchingDisplay.bounds.x &&
-        saved.x < matchingDisplay.bounds.x + matchingDisplay.bounds.width &&
-        saved.y >= matchingDisplay.bounds.y &&
-        saved.y < matchingDisplay.bounds.y + matchingDisplay.bounds.height;
-      bounds = isOnScreen ? saved : defaultBounds;
-    }
-  } catch (_e) {
-    // Use defaults (file may not exist on first run)
-  }
+  const placementState = await loadPlacement();
 
   if (
     taskWidgetWin ||
@@ -222,28 +281,21 @@ const createTaskWidgetWindowForGeneration = async (
   // Keep the widget renderer's IPC boundary as tight as the main window's.
   assertSecureWebPreferences(webPreferences, 'task-widget');
 
+  const isIdle = isIdleView();
+
   // On macOS, transparent + frameless windows do not support native window
-  // dragging or edge resizing (see Electron's BrowserWindow docs: "Transparent
-  // windows are not resizable. Setting `resizable` to `true` may make a
-  // transparent window stop working on some platforms."). Use a solid window
-  // instead and rely on BrowserWindow.setOpacity() for the user-set opacity so
-  // the OS keeps native drag/resize behavior intact.
+  // dragging. Use a solid window instead and rely on BrowserWindow.setOpacity()
+  // for the user-set opacity so the OS keeps native drag behavior intact.
   taskWidgetWin = new BrowserWindow({
-    width: bounds.width,
-    height: bounds.height,
-    x: bounds.x,
-    y: bounds.y,
+    ...getTaskWidgetWindowBounds(placementState, false, isIdle),
     title: 'Super Productivity Task Widget',
     frame: false,
     transparent: !IS_MAC,
     backgroundColor: IS_MAC ? '#00000000' : undefined,
     alwaysOnTop: true,
     skipTaskbar: true,
-    resizable: true,
-    minWidth: 60,
-    minHeight: 24,
-    maxWidth: 700,
-    maxHeight: 120,
+    // The window keeps one size; the shape inside it does the moving.
+    resizable: false,
     minimizable: false,
     maximizable: false,
     closable: true, // Ensure window is closable
@@ -253,19 +305,39 @@ const createTaskWidgetWindowForGeneration = async (
     webPreferences,
   });
 
+  placement = createTaskWidgetPlacement(
+    taskWidgetWin,
+    placementState,
+    isIdle,
+    persistPlacement,
+    () =>
+      createTaskWidgetDockHint(
+        () => latestView?.theme.primary || FALLBACK_PRIMARY,
+        () => {
+          if (taskWidgetWin && !taskWidgetWin.isDestroyed()) {
+            taskWidgetWin.moveTop();
+          }
+        },
+      ),
+  );
+
   taskWidgetWin.loadFile(join(__dirname, 'task-widget.html'));
 
-  // Re-apply opacity once the page loads. On Windows/Linux opacity is a CSS variable driven
-  // by IPC; sends before did-finish-load are dropped. Uses 'on' (not 'once') so a DevTools
-  // reload also restores the correct opacity. macOS re-calls setOpacity() idempotently.
+  // Re-apply opacity and content once the page loads. On Windows/Linux opacity is a CSS
+  // variable driven by IPC; sends before did-finish-load are dropped. Uses 'on' (not 'once')
+  // so a DevTools reload also restores them. macOS re-calls setOpacity() idempotently.
   taskWidgetWin.webContents.on('did-finish-load', () => {
     updateTaskWidgetOpacity(currentOpacity);
+    sendLayout();
+    sendView();
   });
 
   // Set visible on all workspaces immediately after creation
   taskWidgetWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   taskWidgetWin.on('closed', () => {
+    placement?.destroy();
+    placement = null;
     taskWidgetWin = null;
     // Tie "user-forced visible" to the window's lifetime: once the window is
     // gone the sticky flag has no widget to keep visible, so don't let it
@@ -279,24 +351,9 @@ const createTaskWidgetWindowForGeneration = async (
     taskWidgetWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
     // Request current task state from main window
-    const mainWindow = BrowserWindow.getAllWindows().find((win) => win !== taskWidgetWin);
-    if (mainWindow) {
-      mainWindow.webContents.send(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET);
-    }
+    getMainWindow()?.webContents.send(IPC.REQUEST_CURRENT_TASK_FOR_TASK_WIDGET);
     // Don't show task widget here - it should only show when main window is minimized
   });
-
-  const persistBoundsDebounced = (): void => {
-    if (boundsDebounceTimer) clearTimeout(boundsDebounceTimer);
-    boundsDebounceTimer = setTimeout(() => {
-      if (taskWidgetWin && !taskWidgetWin.isDestroyed()) {
-        saveSimpleStore(TASK_WIDGET_BOUNDS_KEY, taskWidgetWin.getBounds());
-      }
-    }, 300);
-  };
-
-  taskWidgetWin.on('resize', persistBoundsDebounced);
-  taskWidgetWin.on('move', persistBoundsDebounced);
 
   // Prevent context menu on right-click to avoid crashes
   taskWidgetWin.webContents.on('context-menu', (e) => {
@@ -307,12 +364,6 @@ const createTaskWidgetWindowForGeneration = async (
   taskWidgetWin.on('system-context-menu', (e) => {
     e.preventDefault();
   });
-
-  // Don't make window click-through initially to allow dragging
-  // The renderer process will handle mouse events dynamically
-
-  // Update initial state
-  updateTaskWidgetContent();
 
   // macOS: setOpacity() works immediately. Windows/Linux: IPC send is dropped before the
   // page loads; the did-finish-load handler above re-delivers it reliably.
@@ -412,9 +463,42 @@ const initListeners = (): void => {
   }
   listenersRegistered = true;
 
+  ipcMain.on(IPC_TOGGLE_TASK, () => {
+    getMainWindow()?.webContents.send(IPC.TASK_TOGGLE_START);
+  });
+
+  ipcMain.on(IPC_MARK_DONE, () => {
+    getMainWindow()?.webContents.send(IPC.TASK_WIDGET_MARK_DONE);
+  });
+
+  ipcMain.on(IPC_TOGGLE_DETAILS, () => {
+    placement?.toggleDetails();
+  });
+
+  ipcMain.on(IPC_RESIZE_START, (_ev, side: TaskWidgetResizeSide) => {
+    if (side === 'left' || side === 'right') {
+      placement?.startResize(side);
+    }
+  });
+
+  ipcMain.on(IPC_RESIZE, () => {
+    placement?.resize();
+  });
+
+  ipcMain.on(IPC_RESIZE_END, () => {
+    placement?.endResize();
+  });
+
+  // The pill fits its time, and only the widget can measure the rendered text.
+  ipcMain.on(IPC_TIME_WIDTH, (_ev, timeWidth: number) => {
+    if (Number.isFinite(timeWidth) && timeWidth > 0) {
+      placement?.setTimeWidth(timeWidth);
+    }
+  });
+
   // Listen for show main window request
-  ipcMain.on('task-widget-show-main-window', () => {
-    const mainWindow = BrowserWindow.getAllWindows().find((win) => win !== taskWidgetWin);
+  ipcMain.on(IPC_SHOW_MAIN_WINDOW, () => {
+    const mainWindow = getMainWindow();
     if (mainWindow) {
       // Mirror showOrFocus() logic: restore() before show() to handle the case where
       // the window is minimized+hidden (e.g. minimize-to-tray on Linux where
@@ -440,58 +524,27 @@ const initListeners = (): void => {
   });
 };
 
-export const updateTaskWidgetTask = (
-  task: TaskCopy | null,
-  pomodoroEnabled: boolean,
-  pomodoroTime: number,
-  focusModeEnabled: boolean,
-  focusTime: number,
-): void => {
-  currentTask = task;
-  isPomodoroEnabled = pomodoroEnabled;
-  currentPomodoroSessionTime = pomodoroTime;
-  isFocusModeEnabled = focusModeEnabled;
-  currentFocusSessionTime = focusTime;
+const isIdleView = (): boolean => !latestView || latestView.mode === 'idle';
 
-  updateTaskWidgetContent();
+const sendLayout = (): void => {
+  if (taskWidgetWin && placement) {
+    taskWidgetWin.webContents.send('update-layout', placement.getLayout());
+  }
 };
 
-const updateTaskWidgetContent = (): void => {
-  if (!taskWidgetWin || !isTaskWidgetEnabled) {
+const sendView = (): void => {
+  if (taskWidgetWin && latestView) {
+    taskWidgetWin.webContents.send('update-view', latestView);
+  }
+};
+
+export const updateTaskWidgetView = (view: TaskWidgetView): void => {
+  latestView = view;
+  if (!isTaskWidgetEnabled) {
     return;
   }
-
-  let title = '';
-  let timeStr = '';
-  let mode: 'pomodoro' | 'focus' | 'task' | 'idle' = 'idle';
-
-  if (currentTask && currentTask.title) {
-    title = currentTask.title;
-    if (title.length > 40) {
-      title = title.substring(0, 37) + '...';
-    }
-
-    if (isPomodoroEnabled) {
-      mode = 'pomodoro';
-      timeStr = formatTime(currentPomodoroSessionTime);
-    } else if (isFocusModeEnabled) {
-      mode = 'focus';
-      timeStr = formatTime(currentFocusSessionTime);
-    } else if (currentTask.timeEstimate) {
-      mode = 'task';
-      const remainingTime = Math.max(currentTask.timeEstimate - currentTask.timeSpent, 0);
-      timeStr = formatTime(remainingTime);
-    } else if (currentTask.timeSpent) {
-      mode = 'task';
-      timeStr = formatTime(currentTask.timeSpent);
-    }
-  }
-
-  taskWidgetWin.webContents.send('update-content', {
-    title,
-    time: timeStr,
-    mode,
-  });
+  placement?.setIdle(isIdleView());
+  sendView();
 };
 
 export const updateTaskWidgetAlwaysShow = (alwaysShow: boolean): void => {
@@ -536,18 +589,7 @@ export const initTaskWidgetSettingsListener = (): void => {
   ipcMain.on(IPC.UPDATE_TASK_WIDGET_SETTINGS, (_ev, cfg: TaskWidgetConfig) => {
     applyTaskWidgetSettings(cfg);
   });
-};
-
-const formatTime = (timeMs: number): string => {
-  const totalSeconds = Math.floor(timeMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds
-      .toString()
-      .padStart(2, '0')}`;
-  }
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  ipcMain.on(IPC.UPDATE_TASK_WIDGET_VIEW, (_ev, view: TaskWidgetView) => {
+    updateTaskWidgetView(view);
+  });
 };

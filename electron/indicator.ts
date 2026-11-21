@@ -12,10 +12,7 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
 import { release } from 'os';
-import {
-  initTaskWidgetSettingsListener,
-  updateTaskWidgetTask,
-} from './task-widget/task-widget';
+import { initTaskWidgetSettingsListener } from './task-widget/task-widget';
 import { getWin } from './main-window';
 
 type IndicatorConfig = {
@@ -266,14 +263,6 @@ function initListeners(): void {
       _lastIsFocusModeEnabled = isFocusModeEnabled;
       _lastCurrentFocusSessionTime = currentFocusSessionTime;
       _lastFocusModeMode = focusModeMode;
-
-      updateTaskWidgetTask(
-        currentTask,
-        isPomodoroEnabled,
-        currentPomodoroSessionTime,
-        isFocusModeEnabled || false,
-        currentFocusSessionTime || 0,
-      );
 
       const isTrayShowCurrentTask = getIsTrayShowCurrentTask();
       const isTrayShowCurrentCountdown = getIsTrayShowCurrentCountdown();

@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Super Productivity Task Widget Dock Hint</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      #hint {
+        --accent: #6495ed;
+        --p: 0;
+        position: absolute;
+        inset: 0;
+      }
+
+      .glow,
+      .ghost {
+        position: absolute;
+      }
+
+      .glow {
+        opacity: var(--p);
+      }
+
+      .ghost {
+        background: color-mix(in srgb, var(--accent) 24%, transparent);
+        box-shadow: inset 0 0 0 1.5px var(--accent);
+        transition:
+          transform 0.08s linear,
+          background-color 0.12s;
+      }
+
+      [data-locked='true'] .ghost {
+        background: color-mix(in srgb, var(--accent) 46%, transparent);
+      }
+
+      [data-edge='right'] .glow,
+      [data-edge='left'] .glow {
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: linear-gradient(
+          to bottom,
+          transparent,
+          var(--accent) 24%,
+          var(--accent) 76%,
+          transparent
+        );
+      }
+
+      [data-edge='right'] .glow {
+        right: 0;
+      }
+
+      [data-edge='left'] .glow {
+        left: 0;
+      }
+
+      [data-edge='top'] .glow {
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(
+          to right,
+          transparent,
+          var(--accent) 16%,
+          var(--accent) 84%,
+          transparent
+        );
+      }
+
+      [data-edge='right'] .ghost {
+        top: 24px;
+        bottom: 24px;
+        right: 0;
+        left: 0;
+        border-radius: 26px 0 0 26px;
+        transform: translateX(calc((1 - var(--p)) * 100%));
+      }
+
+      [data-edge='left'] .ghost {
+        top: 24px;
+        bottom: 24px;
+        right: 0;
+        left: 0;
+        border-radius: 0 26px 26px 0;
+        transform: translateX(calc((var(--p) - 1) * 100%));
+      }
+
+      [data-edge='top'] .ghost {
+        top: 0;
+        bottom: 0;
+        left: 24px;
+        right: 24px;
+        border-radius: 0 0 28px 28px;
+        transform: translateY(calc((var(--p) - 1) * 100%));
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .ghost {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hint">
+      <i class="ghost"></i>
+      <i class="glow"></i>
+    </div>
+    <script src="task-widget-dock-hint-renderer.js"></script>
+  </body>
+</html>

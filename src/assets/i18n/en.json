@@ -101,6 +101,19 @@
     }
   },
   "F": {
+    "TASK_WIDGET": {
+      "FOCUS_SESSION": "Focus session",
+      "MARK_DONE": "Mark as done",
+      "NO_ACTIVE_TASK": "No active task",
+      "NO_ESTIMATE": "No estimate",
+      "OPEN_APP": "Open Super Productivity",
+      "OVER_ESTIMATE": "Over estimate",
+      "PAUSE": "Pause",
+      "PAUSED": "Paused",
+      "SHOW_DETAILS": "Show details",
+      "START": "Start",
+      "TIME_LEFT": "left of {{estimate}}"
+    },
     "IOS_SHARE": {
       "SAVE": "Save",
       "DESTINATION": "Inbox",
