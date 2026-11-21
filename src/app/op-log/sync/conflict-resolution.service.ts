@@ -1035,20 +1035,30 @@ export class ConflictResolutionService {
     // Finalize only after every chosen resolution entered state. If reducer or
     // archive work fails, the originals stay eligible for a clean retry. Local
     // fields that survived a remote resolution row are re-emitted in the same
-    // transaction as their originals' rejection. A kept time delta stays
+    // transaction as their originals' rejection, beside patches for local-win
+    // rows that same-batch remote edits made stale. A kept time delta stays
     // pending beside them and is no field of the re-send, so it must not keep
     // the rejected edits from being re-sent (#11184: a done tracked before it).
-    const reemittedOps = await this.localWinOps._reemitSurvivingLocalFields(
-      resolutions,
-      new Set([...remainingLocalOpsToReject, ...keptDeltas.opIds]),
-    );
+    const reemittedOps = [
+      ...(await this.localWinOps._reemitSurvivingLocalFields(
+        resolutions,
+        new Set([...remainingLocalOpsToReject, ...keptDeltas.opIds]),
+      )),
+      // Plain local-win rows are not applied here, so every op applied in this
+      // batch (prefix, winners, nonconflicting) landed on top of them; applied
+      // rows (compensations, recreations) are skipped inside.
+      ...(await this.localWinOps._reemitStaleLocalWinRows(
+        writtenLocalWinOps,
+        allOpsToApply,
+      )),
+    ];
     if (reemittedOps.length > 0) {
       await this.opLogStore.appendMixedSourceBatchSkipDuplicates(
         [{ ops: reemittedOps, source: 'local' }],
         { rejectOpIds: remainingLocalOpsToReject },
       );
       OpLog.normal(
-        `ConflictResolutionService: Re-emitted ${reemittedOps.length} losing local edit(s) ` +
+        `ConflictResolutionService: Re-emitted ${reemittedOps.length} local edit(s) or stale-row patch(es) ` +
           `and rejected ${remainingLocalOpsToReject.length} local ops`,
       );
     } else if (remainingLocalOpsToReject.length > 0) {
