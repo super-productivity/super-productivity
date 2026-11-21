@@ -1,5 +1,6 @@
+import { getTextDirection } from '../../../util/get-text-direction';
 import { syntaxTree } from '@codemirror/language';
-import type { EditorState, Extension } from '@codemirror/state';
+import type { EditorState, Extension, Range } from '@codemirror/state';
 import { Lexer } from 'marked';
 import {
   Decoration,
@@ -21,6 +22,8 @@ import {
 } from './live-markdown-ranges';
 
 const HIDE = Decoration.replace({});
+const RTL_DIRECTION = Decoration.line({ attributes: { dir: 'rtl' } });
+const CODE_DIRECTION = Decoration.line({ attributes: { dir: 'ltr' } });
 const markCache = new Map<string, Decoration>();
 const lineCache = new Map<string, Decoration>();
 
@@ -46,6 +49,8 @@ class TaskCheckboxWidget extends WidgetType {
     // (marked-options-factory), so a checklist looks identical whether it is
     // shown in the editor or by ngx-markdown elsewhere in the app.
     const el = document.createElement('span');
+    // Keep the icon font's Latin ligature in its own LTR run.
+    el.dir = 'ltr';
     el.className = `${TASK_CHECKBOX_CLASS} material-icons${this.isChecked ? ' isChecked' : ''}`;
     el.textContent = this.isChecked ? 'check_box' : 'check_box_outline_blank';
     return el;
@@ -290,40 +295,66 @@ const buildDecorations = (
     doc,
     revealedLines,
   });
+  const codeLines = new Set(
+    ranges
+      .filter((range) => range.type === 'line' && range.cls === 'cm-md-code-block')
+      .map((range) => range.from),
+  );
+  const directionRanges: Range<Decoration>[] = [];
+  let lastLineFrom = -1;
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = doc.lineAt(from).from; pos <= to; ) {
+      const line = doc.lineAt(pos);
+      if (line.from !== lastLineFrom) {
+        directionRanges.push(
+          (codeLines.has(line.from) || getTextDirection(line.text) === 'ltr'
+            ? CODE_DIRECTION
+            : RTL_DIRECTION
+          ).range(line.from),
+        );
+        lastLineFrom = line.from;
+      }
+      if (line.to === doc.length) break;
+      pos = line.to + 1;
+    }
+  }
   // `Decoration.set(_, true)` sorts for us; the tree yields parents before
   // children, which a RangeSetBuilder would reject.
   return Decoration.set(
-    ranges.flatMap(({ from, to, type, cls, isChecked, image }) => {
-      if (type === 'image') {
-        // An unsafe src is left as plain `![alt](src)` source rather than
-        // rendered or silently dropped, so the user can still see and fix it.
-        if (!image || !isPathSafeToOpen(image.src)) {
-          return [];
+    [
+      ...directionRanges,
+      ...ranges.flatMap(({ from, to, type, cls, isChecked, image }) => {
+        if (type === 'image') {
+          // An unsafe src is left as plain `![alt](src)` source rather than
+          // rendered or silently dropped, so the user can still see and fix it.
+          if (!image || !isPathSafeToOpen(image.src)) {
+            return [];
+          }
+          return [
+            Decoration.replace({
+              widget: new ImageWidget(
+                image.src,
+                image.alt,
+                image.width,
+                image.height,
+                resolveImageSrc,
+              ),
+            }).range(from, to),
+          ];
         }
-        return [
-          Decoration.replace({
-            widget: new ImageWidget(
-              image.src,
-              image.alt,
-              image.width,
-              image.height,
-              resolveImageSrc,
-            ),
-          }).range(from, to),
-        ];
-      }
-      const dec =
-        type === 'hide'
-          ? HIDE
-          : type === 'checkbox'
-            ? isChecked
-              ? CHECKBOX_CHECKED
-              : CHECKBOX_UNCHECKED
-            : type === 'line'
-              ? lineFor(cls!)
-              : markFor(cls!);
-      return [dec.range(from, to)];
-    }),
+        const dec =
+          type === 'hide'
+            ? HIDE
+            : type === 'checkbox'
+              ? isChecked
+                ? CHECKBOX_CHECKED
+                : CHECKBOX_UNCHECKED
+              : type === 'line'
+                ? lineFor(cls!)
+                : markFor(cls!);
+        return [dec.range(from, to)];
+      }),
+    ],
     true,
   );
 };
@@ -365,6 +396,7 @@ const liveMarkdownPlugin = (resolveImageSrc: ResolveImageSrc | undefined): Exten
 
 export const liveMarkdown = (resolveImageSrc?: ResolveImageSrc): Extension => [
   markdownLanguage,
+  EditorView.perLineTextDirection.of(true),
   liveMarkdownPlugin(resolveImageSrc),
   taskCheckboxToggle,
   linkOpen(),

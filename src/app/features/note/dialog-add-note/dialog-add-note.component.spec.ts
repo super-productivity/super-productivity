@@ -121,6 +121,22 @@ describe('DialogAddNoteComponent', () => {
     expect(mockDialogRef.close).toHaveBeenCalled();
   });
 
+  it('uses the shared editor direction rule for new notes and updates while typing', async () => {
+    sessionStorage.setItem(SS.NOTE_TMP, 'Docker را بررسی کن');
+    createComponent();
+    component.viewMode = 'TEXT_ONLY';
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const editor = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    expect(getComputedStyle(editor).direction).toBe('rtl');
+
+    editor.value = 'English only';
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(getComputedStyle(editor).direction).toBe('ltr');
+  });
+
   it('should add the note and clear the storage on save', () => {
     createComponent();
     component.data.content = 'new note content';

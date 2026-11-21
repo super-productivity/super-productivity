@@ -1,3 +1,4 @@
+import { TextDirectionDirective } from '../../../ui/text-direction/text-direction.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -48,6 +49,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
   styleUrls: ['./select-task.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    TextDirectionDirective,
     MatFormField,
     MatLabel,
     MatInput,

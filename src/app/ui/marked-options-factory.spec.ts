@@ -31,6 +31,23 @@ describe('markedOptionsFactory', () => {
     expect(options.breaks).toBe(true);
   });
 
+  it('detects direction independently for rendered prose, headings and checklist labels', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    try {
+      container.innerHTML = parseWithFactory(
+        'English\n\nReview متن فارسی\n\n# Review عنوان فارسی\n\n- [ ] Review کار فارسی',
+      );
+      const paragraphs = container.querySelectorAll('p');
+      expect(getComputedStyle(paragraphs[0]).direction).toBe('ltr');
+      expect(getComputedStyle(paragraphs[1]).direction).toBe('rtl');
+      expect(getComputedStyle(container.querySelector('h1')!).direction).toBe('rtl');
+      expect(getComputedStyle(container.querySelector('li')!).direction).toBe('rtl');
+    } finally {
+      container.remove();
+    }
+  });
+
   describe('checkbox renderer', () => {
     it('should return empty string for unchecked items', () => {
       const result = (options.renderer as any).checkbox({ checked: false });
@@ -88,7 +105,7 @@ describe('markedOptionsFactory', () => {
         task: false,
         checked: undefined,
       } as any);
-      expect(result).toBe('<li>Regular item</li>');
+      expect(result).toBe('<li dir="ltr">Regular item</li>');
       expect(result).not.toContain('checkbox-wrapper');
     });
 
@@ -209,7 +226,7 @@ describe('markedOptionsFactory', () => {
           ],
         } as any);
 
-        expect(result).toBe('<li><p>Loose item</p></li>');
+        expect(result).toBe('<li dir="ltr"><p>Loose item</p></li>');
       });
 
       it('should render nested list items without error', () => {
@@ -288,7 +305,7 @@ describe('markedOptionsFactory', () => {
           tokens: [{ type: 'text', raw: 'Tight item', text: 'Tight item' }],
         } as any);
 
-        expect(result).toBe('<li>Tight item</li>');
+        expect(result).toBe('<li dir="ltr">Tight item</li>');
       });
     });
   });
@@ -667,7 +684,7 @@ describe('markedOptionsFactory', () => {
       const result = paragraphRenderer({
         tokens: [{ type: 'text', raw: 'Simple paragraph', text: 'Simple paragraph' }],
       } as any);
-      expect(result).toBe('<p>Simple paragraph</p>');
+      expect(result).toBe('<p dir="ltr">Simple paragraph</p>');
     });
 
     it('should convert h1. syntax to heading', () => {
@@ -680,7 +697,7 @@ describe('markedOptionsFactory', () => {
       const result = paragraphRenderer({
         tokens: [{ type: 'text', raw: 'h1. My Heading', text: 'h1. My Heading' }],
       } as any);
-      expect(result).toBe('<h1> My Heading</h1>');
+      expect(result).toBe('<h1 dir="ltr"> My Heading</h1>');
     });
 
     it('should convert h2. syntax to heading', () => {
@@ -693,7 +710,7 @@ describe('markedOptionsFactory', () => {
       const result = paragraphRenderer({
         tokens: [{ type: 'text', raw: 'h2. Subheading', text: 'h2. Subheading' }],
       } as any);
-      expect(result).toBe('<h2> Subheading</h2>');
+      expect(result).toBe('<h2 dir="ltr"> Subheading</h2>');
     });
   });
 
