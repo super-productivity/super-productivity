@@ -199,7 +199,7 @@ const expectProjectAndTasksDeleted = async (
   await groupHeader.hover();
   await groupHeader
     .locator('.additional-btns button')
-    .filter({ has: page.locator('mat-icon', { hasText: 'visibility' }) })
+    .filter({ has: page.locator('mat-icon', { hasText: 'more_vert' }) })
     .click();
   // The menu must be open and listing projects, or the absence below is vacuous.
   await expect(
