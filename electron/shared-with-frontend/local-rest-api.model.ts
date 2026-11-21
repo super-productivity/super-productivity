@@ -1,4 +1,5 @@
 export const LOCAL_REST_API_HOST = '127.0.0.1';
+/** Default port; `--rest-api-port=<n>` or SP_LOCAL_REST_API_PORT can change it. */
 export const LOCAL_REST_API_PORT = 3876;
 export const LOCAL_REST_API_TIMEOUT_MS = 15000;
 export const LOCAL_REST_API_MAX_BODY_BYTES = 1024 * 1024;
@@ -10,6 +11,8 @@ export type LocalRestApiListenError = 'PORT_IN_USE' | 'PERMISSION_DENIED' | 'UNK
 export interface LocalRestApiState {
   isEnabled: boolean;
   isListening: boolean;
+  /** The port this app instance listens on (or tries to). */
+  port: number;
   error?: LocalRestApiListenError | 'TOKEN_STORAGE';
 }
 

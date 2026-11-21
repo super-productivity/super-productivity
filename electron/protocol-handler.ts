@@ -4,6 +4,7 @@ import * as path from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsAppReady } from './main-window';
 import { showOrFocus, toggleWindowVisibility } from './various-shared';
+import { LOCAL_REST_API_PORT_ARG } from './local-rest-api-port';
 
 export const PROTOCOL_NAME = 'superproductivity';
 export const PROTOCOL_PREFIX = `${PROTOCOL_NAME}://`;
@@ -206,11 +207,13 @@ export const initializeProtocolHandling = (
   if (IS_DEV && process.defaultApp) {
     if (process.argv.length >= 2) {
       const launchArgsForProtocol = [path.resolve(process.argv[1])];
-      const userDataDirArg = process.argv.find((arg) =>
-        arg.startsWith('--user-data-dir='),
-      );
-      if (userDataDirArg) {
-        launchArgsForProtocol.push(userDataDirArg);
+      // Keep the profile and its API port, so a protocol launch starts the app
+      // the way this one was started.
+      for (const prefix of ['--user-data-dir=', LOCAL_REST_API_PORT_ARG]) {
+        const arg = process.argv.find((val) => val.startsWith(prefix));
+        if (arg) {
+          launchArgsForProtocol.push(arg);
+        }
       }
 
       appInstance.setAsDefaultProtocolClient(PROTOCOL_NAME, process.execPath, [

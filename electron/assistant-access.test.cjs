@@ -669,6 +669,7 @@ test('assistant access starts off and nothing listens', async () => {
     scopes: [],
     hasCredential: false,
     isListening: false,
+    port: PORT,
   });
 });
 

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormlyModule } from '@ngx-formly/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FormlyLocalRestApiSettingsComponent } from './formly-local-rest-api-settings.component';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -278,6 +278,57 @@ describe('FormlyLocalRestApiSettingsComponent', () => {
     const status = fixture.nativeElement.querySelector('.status');
     expect(status.classList).toContain('is-error');
     expect(status.textContent).toContain(T.GCF.MISC.LOCAL_REST_API_STATUS_PORT_IN_USE);
+  });
+
+  describe('port', () => {
+    // Real interpolation, so the test sees the URL that reaches the DOM.
+    const useInterpolatingTranslations = (): void => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('en', {
+        GCF: {
+          MISC: {
+            LOCAL_REST_API_STATUS_LISTENING: 'Listening on {{url}}',
+            LOCAL_REST_API_STATUS_PORT_IN_USE: 'Port {{port}} is in use',
+          },
+        },
+      });
+      translate.use('en');
+    };
+
+    const renderWithState = async (state: Record<string, unknown>): Promise<string> => {
+      useInterpolatingTranslations();
+      setEa({
+        getLocalRestApiState: jasmine.createSpy().and.resolveTo(state),
+        getLocalRestApiToken: jasmine.createSpy().and.resolveTo('TOKEN'),
+      });
+      fixture.detectChanges();
+      await settle();
+      fixture.detectChanges();
+      return fixture.nativeElement.querySelector('.status').textContent.trim();
+    };
+
+    it('shows the default port until main reports one', () => {
+      expect(component.url()).toBe('http://127.0.0.1:3876');
+    });
+
+    it('shows the URL of the port main listens on', async () => {
+      const status = await renderWithState({
+        isEnabled: true,
+        isListening: true,
+        port: 3877,
+      });
+      expect(status).toBe('Listening on http://127.0.0.1:3877');
+    });
+
+    it('names the port main could not bind', async () => {
+      const status = await renderWithState({
+        isEnabled: true,
+        isListening: false,
+        port: 3877,
+        error: 'PORT_IN_USE',
+      });
+      expect(status).toBe('Port 3877 is in use');
+    });
   });
 
   it('reports a toggle that could not be saved', async () => {
