@@ -82,6 +82,7 @@ describe('withUnknownMemberWarning', () => {
   it('does not warn when feature-detecting an API member the host omits', () => {
     expect(api['executeNodeScript']).toBeUndefined();
     expect(api['onWindowFocusChange']).toBeUndefined();
+    expect(api['readPublishedSnapshot']).toBeUndefined();
     expect(warn).not.toHaveBeenCalled();
   });
 

@@ -65,6 +65,7 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../../features/config/default-global-c
 import { selectSyncConfig } from '../../../features/config/store/global-config.reducer';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
 import { AppDataComplete } from '../../model/model-config';
+import { ArchiveModel } from '../../../features/time-tracking/time-tracking.model';
 import { incrementVectorClock } from '../../../core/util/vector-clock';
 import { uuidv7 } from '../../../util/uuid-v7';
 
@@ -86,6 +87,11 @@ import { uuidv7 } from '../../../util/uuid-v7';
 const DESKTOP = 'desktop-client';
 const FRESH_READER = 'fresh-reader-client';
 const FILE_CFG: EncryptAndCompressCfg = { isEncrypt: false, isCompress: false };
+const DEFAULT_ARCHIVE: ArchiveModel = {
+  task: { ids: [], entities: {} },
+  timeTracking: { project: {}, tag: {} },
+  lastTimeTrackingFlush: 0,
+};
 // ~2000 real ops through the real adapter + IndexedDB exceed jasmine's 2s default.
 const TEST_TIMEOUT_MS = 60000;
 
@@ -314,6 +320,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
         'getStateSnapshotAsync',
         'getStateSnapshotForOperationLog',
         'getStateSnapshotForOperationLogAsync',
+        'getStateSnapshotWithArchiveIntegrity',
       ]);
       stateSnapshotSpy.getStateSnapshotAsync.and.callFake(async () => liveState);
       stateSnapshotSpy.getStateSnapshotForOperationLogAsync.and.callFake(
@@ -321,6 +328,15 @@ for (const isUseSplitSyncFiles of [false, true]) {
       );
       stateSnapshotSpy.getStateSnapshot.and.callFake(() => liveState);
       stateSnapshotSpy.getStateSnapshotForOperationLog.and.callFake(() => liveState);
+      stateSnapshotSpy.getStateSnapshotWithArchiveIntegrity.and.callFake(async () => ({
+        snapshot: {
+          ...liveState,
+          archiveYoung: DEFAULT_ARCHIVE,
+          archiveOld: DEFAULT_ARCHIVE,
+        },
+        // The archive spies below return null, so this fixture proves no integrity marker.
+        taskDataUnmodified: false,
+      }));
       validateSpy = jasmine.createSpyObj('ValidateStateService', [
         'validateAndRepairCurrentState',
       ]);
