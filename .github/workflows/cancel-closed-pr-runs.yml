@@ -32,7 +32,7 @@ jobs:
           # electron smoke, CodeQL, docs links and wiki lint, and the nightly
           # re-runs sync E2E. Nothing re-runs Android Native Tests, Plugin
           # Tests, the SuperSync Helm/Postgres checks or CI's electron/i18n/
-          # WebKit/Lighthouse checks (build.yml covers only part of CI), so
+          # WebKit checks (build.yml covers only part of CI), so
           # their PR run is the only signal. Keep them.
           keep='["iOS TestFlight Build on Label"]'
           if [[ "$MERGED" == "true" ]]; then
