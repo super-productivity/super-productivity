@@ -62,6 +62,18 @@ npm run package
 
 Tasks are linked using HTML comments containing unique IDs.
 
+Content before the first task is kept as the document header. Complete HTML
+comments at the end of the file whose opening `<!--` starts at column zero are
+kept as the document footer, including blank lines and line endings. This also
+applies when the project has no tasks, so the footer stays after tasks added later.
+With no tasks, up to the first two line breaks before the footer belong to the
+header; any remaining spacing belongs to the footer. This keeps the blank line
+after a Joplin title when adding tasks, but cannot recover arbitrary original
+header/footer spacing after all tasks have been removed.
+HTML comment delimiters inside fenced code blocks or matched backtick code spans within the same paragraph do not start a footer.
+Indent HTML comments to keep them in task notes. Other text following a task
+remains task notes; insufficient indentation never removes text characters.
+
 ## Testing
 
 ```bash

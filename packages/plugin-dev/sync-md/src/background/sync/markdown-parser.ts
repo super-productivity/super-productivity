@@ -17,7 +17,56 @@ export interface TaskParseResult {
   tasks: ParsedTask[];
   errors: string[];
   header?: string;
+  footer?: string;
 }
+
+/** Keep trailing column-zero HTML comments outside task notes, including their spacing. */
+const findFooterStart = (content: string): number => {
+  let footerStart = content.length;
+  let footerEnd = 0;
+  const tokens = /(^[ \t]*(`{3,}|~{3,})([^\r\n]*)\r?$)|(`+)|<!--[\s\S]*?-->/gm;
+  let match: RegExpExecArray | null;
+  while ((match = tokens.exec(content))) {
+    const fence = match[2];
+    if (fence) {
+      // Backtick fence info cannot contain backticks. Task-note indentation is allowed.
+      if (fence[0] === '`' && match[3].includes('`')) continue;
+      const closingFence = new RegExp(
+        `^[ \\t]*${fence[0]}{${fence.length},}[ \\t]*\\r?$`,
+        'gm',
+      );
+      closingFence.lastIndex = tokens.lastIndex;
+      tokens.lastIndex = closingFence.exec(content)
+        ? closingFence.lastIndex
+        : content.length;
+      continue;
+    }
+    const codeSpan = match[4];
+    if (codeSpan) {
+      const backticks = /`+|\r?\n[ \t]*\r?\n|\r?\n<!--/g;
+      backticks.lastIndex = tokens.lastIndex;
+      let closing: RegExpExecArray | null;
+      while ((closing = backticks.exec(content))) {
+        // A code span cannot continue into another paragraph or a footer block.
+        if (closing[0][0] !== '`') break;
+        if (closing[0].length !== codeSpan.length) continue;
+        tokens.lastIndex = backticks.lastIndex;
+        break;
+      }
+      continue;
+    }
+    const start = match.index!;
+    if (start > 0 && content[start - 1] !== '\n') continue;
+    let boundary = start;
+    while (boundary > 0 && /\s/.test(content[boundary - 1])) boundary--;
+    if (boundary !== footerEnd || footerStart === content.length) {
+      footerStart = boundary;
+    }
+    footerEnd = start + match[0].length;
+  }
+  if (content.slice(footerEnd).trim()) return content.length;
+  return footerStart;
+};
 
 /**
  * Detect the base indentation size used in the markdown
@@ -75,7 +124,10 @@ export const parseMarkdownWithHeader = (content: string): TaskParseResult => {
  * Handles tasks and subtasks (first two levels) and converts deeper levels to notes
  */
 export const parseMarkdownWithErrors = (content: string): TaskParseResult => {
-  const lines = content.split('\n');
+  const footerStart = findFooterStart(content);
+  const body = content.slice(0, footerStart);
+  let footer = content.slice(footerStart) || undefined;
+  const lines = body.split('\n');
   const tasks: ParsedTask[] = [];
   const errors: string[] = [];
   const parentStack: Array<{
@@ -93,7 +145,7 @@ export const parseMarkdownWithErrors = (content: string): TaskParseResult => {
   let header: string | undefined;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i].replace(/\r$/, '');
 
     // Match task line: - [ ] or - [x] with optional ID comment at the beginning
     const taskMatch = line.match(/^(\s*)- \[([ x])\]\s*(?:<!--([^>]+)-->\s*)?(.*)$/);
@@ -104,7 +156,7 @@ export const parseMarkdownWithErrors = (content: string): TaskParseResult => {
         firstTaskLineIndex = i;
         // Extract header content (everything before the first task)
         if (i > 0) {
-          header = lines.slice(0, i).join('\n');
+          header = lines.slice(0, i).join('\n') + '\n';
         }
       }
 
@@ -193,8 +245,9 @@ export const parseMarkdownWithErrors = (content: string): TaskParseResult => {
           const baseIndent = currentTask.isSubtask
             ? currentTask.indent + detectedIndentSize
             : detectedIndentSize * 2;
-          const noteLine =
-            line.length > baseIndent ? line.substring(baseIndent) : line.trim();
+          const noteLine = line.slice(
+            Math.min(baseIndent, line.match(/^[ \t]*/)![0].length),
+          );
           if (!tasks[currentTaskIndex].notes) {
             tasks[currentTaskIndex].notes = '';
           }
@@ -209,8 +262,7 @@ export const parseMarkdownWithErrors = (content: string): TaskParseResult => {
       const baseIndent = currentTask.isSubtask
         ? currentTask.indent + detectedIndentSize
         : detectedIndentSize;
-      const noteLine =
-        line.length > baseIndent ? line.substring(baseIndent) : line.trim();
+      const noteLine = line.slice(Math.min(baseIndent, line.match(/^[ \t]*/)![0].length));
 
       if (!tasks[currentTaskIndex].notes) {
         tasks[currentTaskIndex].notes = '';
@@ -220,12 +272,19 @@ export const parseMarkdownWithErrors = (content: string): TaskParseResult => {
     }
   }
 
-  // If no tasks were found, the entire content is considered header
+  // With no tasks, everything before the footer is header
   if (firstTaskLineIndex === -1 && lines.length > 0) {
-    header = content;
+    header = body;
+    // With no task boundary, reserve up to one blank line for the header.
+    // This keeps Joplin's title separator when tasks are added again.
+    if (header && footer) {
+      const separator = footer.match(/^(?:[ \t]*\r?\n){1,2}/)?.[0] || '';
+      header += separator;
+      footer = footer.slice(separator.length);
+    }
   }
 
-  return { tasks, errors, header };
+  return { tasks, errors, header, footer };
 };
 
 /**
