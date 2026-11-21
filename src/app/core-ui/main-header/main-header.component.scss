@@ -123,6 +123,15 @@
     cursor: grabbing;
   }
 
+  // The action row is one big `no-drag` box (see `.action-nav-scroll`), so the
+  // only part of the header the window can still be dragged by is the slack
+  // `.pill-slot` holds. In a narrow window with the side nav open that slack is
+  // zero and the title is hidden, leaving a sliver of a few pixels (#9843).
+  // Keep a handle the size of one button; the row scrolls to make room for it.
+  .pill-slot {
+    min-width: var(--header-button-size);
+  }
+
   // `.page-title` is a div with a routerLink, so neither `button` nor `a`
   // below reaches it -- it needs naming here or the one control that fills the
   // left of the header is inside the drag region and cannot be clicked. It was
