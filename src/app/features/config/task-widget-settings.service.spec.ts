@@ -17,6 +17,9 @@ describe('TaskWidgetSettingsService', () => {
     const service = TestBed.inject(TaskWidgetSettingsService);
 
     expect(service.settings()).toEqual({
+      isTaskListEnabled: false,
+      taskListFilter: 'all',
+      isTaskListCollapsed: false,
       isEnabled: false,
       isAlwaysShow: false,
       opacity: 95,
@@ -29,6 +32,9 @@ describe('TaskWidgetSettingsService', () => {
     const service = TestBed.inject(TaskWidgetSettingsService);
 
     expect(service.settings()).toEqual({
+      isTaskListEnabled: false,
+      taskListFilter: 'all',
+      isTaskListCollapsed: false,
       isEnabled: true,
       isAlwaysShow: false,
       opacity: 70,
@@ -41,15 +47,38 @@ describe('TaskWidgetSettingsService', () => {
     service.update({ isEnabled: true, opacity: 50 });
 
     expect(service.settings()).toEqual({
+      isTaskListEnabled: false,
+      taskListFilter: 'all',
+      isTaskListCollapsed: false,
       isEnabled: true,
       isAlwaysShow: false,
       opacity: 50,
     });
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')).toEqual({
+      isTaskListEnabled: false,
+      taskListFilter: 'all',
+      isTaskListCollapsed: false,
       isEnabled: true,
       isAlwaysShow: false,
       opacity: 50,
     });
+  });
+
+  it('keeps the list independent from the timer and restores collapsed state', () => {
+    const service = TestBed.inject(TaskWidgetSettingsService);
+    service.update({
+      isTaskListEnabled: true,
+      taskListFilter: 'today',
+      isTaskListCollapsed: true,
+    });
+    expect(service.settings().isEnabled).toBeFalse();
+    service.update({ isTaskListEnabled: false });
+    expect(service.settings().isTaskListCollapsed).toBeTrue();
+    TestBed.resetTestingModule();
+    const restored = TestBed.inject(TaskWidgetSettingsService);
+    expect(restored.settings().taskListFilter).toBe('today');
+    expect(restored.settings().isTaskListCollapsed).toBeTrue();
+    expect(restored.settings().isTaskListEnabled).toBeFalse();
   });
 
   it('falls back to defaults if stored JSON is corrupt', () => {
@@ -58,6 +87,9 @@ describe('TaskWidgetSettingsService', () => {
     const service = TestBed.inject(TaskWidgetSettingsService);
 
     expect(service.settings()).toEqual({
+      isTaskListEnabled: false,
+      taskListFilter: 'all',
+      isTaskListCollapsed: false,
       isEnabled: false,
       isAlwaysShow: false,
       opacity: 95,

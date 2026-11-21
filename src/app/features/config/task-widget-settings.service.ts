@@ -2,10 +2,14 @@ import { Injectable, signal } from '@angular/core';
 import { TaskWidgetConfig } from './global-config.model';
 import { IS_ELECTRON } from '../../app.constants';
 import { Log } from '../../core/log';
+import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 
 const STORAGE_KEY = 'sp_task_widget_settings';
 
 const DEFAULT_TASK_WIDGET_CONFIG: Required<TaskWidgetConfig> = {
+  isTaskListEnabled: false,
+  taskListFilter: 'all',
+  isTaskListCollapsed: false,
   isEnabled: false,
   isAlwaysShow: false,
   opacity: 95,
@@ -26,6 +30,20 @@ export class TaskWidgetSettingsService {
 
   constructor() {
     if (IS_ELECTRON) {
+      window.ea?.on(IPC.TASK_LIST_WIDGET_SETTINGS_CHANGED, (value) => {
+        const change = value as Partial<TaskWidgetConfig>;
+        this.update({
+          ...(typeof change.isTaskListEnabled === 'boolean'
+            ? { isTaskListEnabled: change.isTaskListEnabled }
+            : {}),
+          ...(typeof change.isTaskListCollapsed === 'boolean'
+            ? { isTaskListCollapsed: change.isTaskListCollapsed }
+            : {}),
+          ...(change.taskListFilter === 'all' || change.taskListFilter === 'today'
+            ? { taskListFilter: change.taskListFilter }
+            : {}),
+        });
+      });
       this._notifyElectron(this._settings());
     }
   }

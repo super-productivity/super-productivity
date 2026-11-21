@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'"
+    />
+    <title>Super Productivity</title>
+    <link
+      rel="stylesheet"
+      href="task-list-widget.css"
+    />
+  </head>
+  <body>
+    <header>
+      <strong>Super Productivity</strong><span id="count"></span>
+      <button
+        id="collapse"
+        aria-controls="content"
+      >
+        ▴
+      </button>
+      <button id="open">↗</button>
+      <button id="hide">×</button>
+    </header>
+    <main id="content">
+      <select id="filter">
+        <option value="all"></option>
+        <option value="today"></option>
+      </select>
+      <div id="scroll">
+        <ul id="tasks"></ul>
+        <p
+          id="empty"
+          role="status"
+        ></p>
+      </div>
+    </main>
+    <script src="task-list-widget-renderer.js"></script>
+  </body>
+</html>
