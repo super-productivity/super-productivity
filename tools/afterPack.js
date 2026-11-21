@@ -18,9 +18,12 @@
 // Context: field reports on issue #7270 (v18.2.4/v18.2.5) show that
 // app.commandLine.appendSwitch('ozone-platform','x11') from inside the
 // main process is not equivalent to passing the flag on argv — Chromium's
-// Ozone init in the browser process dlopens libEGL/libgbm on the core22
-// Mesa path before the switch is honored, which segfaults under Mesa ABI
-// drift. Injecting the flag via argv before Electron starts bypasses this.
+// Ozone init in the browser process dlopens libEGL/libgbm on the confined
+// Mesa path (historically core22 / gnome-42-2204) before the switch is
+// honored, which segfaults under Mesa ABI drift. Injecting the flag via
+// argv before Electron starts bypasses this. Keep this wrapper after the
+// core24 + gpu-2404 packaging migration until Wayland is field-verified
+// (see research doc "Removal conditions").
 //
 // See docs/research/snap-wayland-gpu-fix-research.md.
 
