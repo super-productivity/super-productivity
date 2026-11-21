@@ -82,8 +82,10 @@ export class TagService {
     this._store$.dispatch(deleteTags({ ids }));
   }
 
-  updateTag(id: string, changes: Partial<Tag>): void {
-    this._store$.dispatch(updateTag({ tag: { id, changes } }));
+  updateTag(id: string, changes: Partial<Tag>, isSkipSnack?: boolean): void {
+    this._store$.dispatch(
+      updateTag({ tag: { id, changes }, ...(isSkipSnack ? { isSkipSnack } : {}) }),
+    );
   }
 
   createTagObject(tag: Partial<Tag>): Tag {
