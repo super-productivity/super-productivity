@@ -16,6 +16,8 @@ import { isValidEntityId } from './is-valid-entity-id';
 import type { SyncLogMeta } from '@sp/sync-core';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
+import { isTaskHistoryEnvelope } from '../../features/tasks/task-history/task-history.validation';
+import { readTaskHistoryDelivery } from '../../features/tasks/task-history/task-history-delivery';
 
 /**
  * Result of validating an operation payload.
@@ -625,6 +627,22 @@ export const validateOperationPayload = (op: Operation): PayloadValidationResult
   // For multi-entity payloads, we validate the actionPayload
   // For legacy payloads, we validate the payload directly
   const actionPayload = extractActionPayloadForValidation(op.payload);
+
+  if (
+    actionPayload &&
+    typeof actionPayload === 'object' &&
+    'taskHistory' in actionPayload &&
+    !isTaskHistoryEnvelope(actionPayload.taskHistory)
+  ) {
+    return { success: false, error: 'Invalid task history envelope' };
+  }
+  if (op.entityType === 'PLUGIN_USER_DATA') {
+    try {
+      readTaskHistoryDelivery(actionPayload);
+    } catch {
+      return { success: false, error: 'Invalid task history delivery' };
+    }
+  }
 
   // 4. Validate based on operation type
   let result: PayloadValidationResult;

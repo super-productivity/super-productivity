@@ -13,6 +13,7 @@ import {
 import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
+import type { PluginTaskDetailContext } from '@super-productivity/plugin-api';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { ANI_ENTER_TIMING } from '../../../ui/animations/animation.const';
 import { PAGE_ENTER_FROM } from '../../../ui/animations/warp-route';
@@ -81,6 +82,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   // Set true when embedding the component repeatedly (e.g. work-view embed
   // toggled on/off), so the plugin keeps its registrations across mounts.
   @Input() skipCleanupOnDestroy: boolean = false;
+  @Input() taskDetailContext?: Omit<PluginTaskDetailContext, 'instanceId'>;
 
   private readonly _route = inject(ActivatedRoute);
   private readonly _router = inject(Router);
@@ -281,7 +283,15 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
       pluginId,
       manifest: plugin.manifest,
       indexHtml: indexContent,
-      baseCfg,
+      baseCfg: this.taskDetailContext
+        ? {
+            ...baseCfg,
+            taskDetail: {
+              ...this.taskDetailContext,
+              instanceId: this._createBridgeToken(),
+            },
+          }
+        : baseCfg,
       pluginBridge: this._pluginBridge,
       bridgeToken: this._createBridgeToken(),
       bridgeGeneration: this._pluginService.getPluginIframeGeneration(pluginId),
@@ -367,6 +377,12 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     if (currentPluginId && !this.skipCleanupOnDestroy) {
       this._cleanupService.cleanupPlugin(currentPluginId);
       PluginLog.log(`Cleaned up plugin references for: ${currentPluginId}`);
+    }
+    if (currentPluginId && this.taskDetailContext && this.iframeRef?.nativeElement) {
+      this._cleanupService.unregisterIframe(
+        currentPluginId,
+        this.iframeRef.nativeElement,
+      );
     }
 
     // Reset iframe to an empty document to stop execution but keep it in DOM

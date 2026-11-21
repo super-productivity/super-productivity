@@ -1,6 +1,75 @@
 import { privacyExport } from './privacy-export';
+import {
+  readTaskHistoryDelivery,
+  TASK_HISTORY_DELIVERY_PREFIX,
+} from '../../features/tasks/task-history/task-history-delivery';
+import {
+  collectTaskHistory,
+  mergeTaskHistory,
+} from '../../features/tasks/task-history/task-history.util';
+import { createStateWithExistingTasks } from '../../root-store/meta/task-shared-meta-reducers/test-utils';
 
 describe('privacyExport', () => {
+  it('redacts historical task text in both the projection and its opaque delivery', () => {
+    const initial = createStateWithExistingTasks(['task1']).tasks;
+    const previous = {
+      ...initial,
+      entities: {
+        task1: {
+          ...initial.entities.task1!,
+          title: 'original private title',
+          notes: 'original private note',
+        },
+      },
+    };
+    const next = {
+      ...initial,
+      entities: {
+        task1: {
+          ...initial.entities.task1!,
+          title: 'latest private title',
+          notes: 'latest private note',
+          priority: 3 as const,
+        },
+      },
+    };
+    const envelope = collectTaskHistory(previous, next, 'edit-1', 10, 'update', {
+      title: true,
+      notes: true,
+      priority: true,
+    });
+    const taskHistory = mergeTaskHistory(undefined, envelope);
+    const input = {
+      task: { ...next, taskHistory },
+      pluginUserData: [
+        {
+          id: TASK_HISTORY_DELIVERY_PREFIX + envelope.operationId,
+          data: JSON.stringify(envelope),
+        },
+        {
+          id: TASK_HISTORY_DELIVERY_PREFIX + 'invalid',
+          data: 'malformed private payload',
+        },
+        { id: 'unrelated-plugin', data: 'unrelated plugin data' },
+      ],
+    };
+    const original = JSON.stringify(input);
+    const raw = privacyExport(input);
+    expect(raw).not.toContain('private');
+    expect(JSON.stringify(input)).toBe(original);
+    const exported = JSON.parse(raw);
+    const delivery = readTaskHistoryDelivery(exported.pluginUserData[0]);
+    expect(delivery?.optionalEvents).toHaveSize(3);
+    expect(Object.values(exported.task.taskHistory.task1.optionalEvents)).toEqual(
+      delivery?.optionalEvents ?? [],
+    );
+    expect(
+      delivery?.optionalEvents?.find((event) => event.field === 'priority')?.after,
+    ).toEqual({ kind: 'priority', value: 3 });
+    expect(exported.pluginUserData[1].data).toBe('');
+    expect(exported.pluginUserData[2].data).toBe('unrelated plugin data');
+  });
+
   describe('existing sensitive fields (regression tests)', () => {
     it('should mask username field', () => {
       const input = { username: 'john_doe' };

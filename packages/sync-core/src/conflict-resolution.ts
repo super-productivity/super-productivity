@@ -54,6 +54,8 @@ export interface LwwConflictResolutionPlanningOptions<
    */
   isDeleteWinsAction?: (op: TOperation) => boolean;
   toEntityKey?: (entityType: string, entityId: string) => string;
+  /** Projects a payload for mirrored follow-up comparison without changing the operation. */
+  getDuplicateCreateComparisonPayload?: (payload: unknown) => unknown;
 }
 
 export interface LocalDeleteRemoteUpdateConversionOptions<
@@ -463,6 +465,7 @@ const winningClientId = (
 const editedSideOfDuplicateCreate = (
   localOps: readonly Operation<string>[],
   remoteOps: readonly Operation<string>[],
+  getComparisonPayload?: (payload: unknown) => unknown,
 ): LwwConflictResolutionWinner | undefined => {
   const isCreate = (op: Operation<string>): boolean => op.opType === OpType.Create;
   if (!localOps.some(isCreate) || !remoteOps.some(isCreate)) return undefined;
@@ -470,8 +473,10 @@ const editedSideOfDuplicateCreate = (
   // part of creating the entity on both devices, not a user edit. Compare the
   // wire form: a downloaded op lost its undefined keys in JSON, a local one
   // kept them ("do not remind" schedules carry remindAt: undefined).
-  const wire = (payload: unknown): unknown =>
-    payload === undefined ? undefined : JSON.parse(JSON.stringify(payload));
+  const wire = (payload: unknown): unknown => {
+    const comparable = getComparisonPayload ? getComparisonPayload(payload) : payload;
+    return comparable === undefined ? undefined : JSON.parse(JSON.stringify(comparable));
+  };
   const isMirrored = (
     op: Operation<string>,
     other: readonly Operation<string>[],
@@ -652,6 +657,7 @@ export const planLwwConflictResolutions = <
     const duplicateCreateWinner = editedSideOfDuplicateCreate(
       [...(localOpsByEntity.get(entityKey)?.values() ?? [])],
       [...(remoteOpsByEntity.get(entityKey)?.values() ?? [])],
+      options.getDuplicateCreateComparisonPayload,
     );
     if (duplicateCreateWinner === 'remote') {
       return { conflict, winner: 'remote', reason: 'remote-duplicate-create' };
