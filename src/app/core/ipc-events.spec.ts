@@ -2,6 +2,7 @@ import {
   parseAddTaskFromAppUriPayload,
   parseBeforeCloseIdsPayload,
   parseCompleteTaskFromAppUriPayload,
+  parseOpenTaskFromAppUriPayload,
 } from './ipc-events';
 
 describe('parseAddTaskFromAppUriPayload', () => {
@@ -61,6 +62,20 @@ describe('parseCompleteTaskFromAppUriPayload', () => {
 
   it('rejects a non-string title', () => {
     expect(parseCompleteTaskFromAppUriPayload({ title: 123 })).toBeNull();
+  });
+});
+
+describe('parseOpenTaskFromAppUriPayload', () => {
+  it('should return the trimmed task id', () => {
+    expect(parseOpenTaskFromAppUriPayload({ taskId: ' abc ' })).toBe('abc');
+  });
+
+  it('should reject a malformed payload', () => {
+    expect(parseOpenTaskFromAppUriPayload(undefined)).toBeNull();
+    expect(parseOpenTaskFromAppUriPayload('abc')).toBeNull();
+    expect(parseOpenTaskFromAppUriPayload({ taskId: '' })).toBeNull();
+    expect(parseOpenTaskFromAppUriPayload({ taskId: 42 })).toBeNull();
+    expect(parseOpenTaskFromAppUriPayload({ taskId: 'x'.repeat(201) })).toBeNull();
   });
 });
 
