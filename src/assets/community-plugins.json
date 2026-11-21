@@ -322,5 +322,18 @@
       "downloadUrl": "https://github.com/ptrckmgl/sp-gamify/releases/download/v1.1.1/sp-gamify.zip",
       "sha256": "6471e6b58b6557bf957772aec9afaa0529fc05554a7048fce19bca50845d728e"
     }
+  },
+  {
+    "name": "Hours Grid",
+    "shortDescription": "Task × day grid of tracked hours, grouped by project, with 15/30/60-min rounding, tag filter and copy/CSV export for reporting.",
+    "url": "https://github.com/No-No-Space/SP-Hours-Grid",
+    "author": "Aksel Alvarez Jurgueson",
+    "authorUrl": "https://github.com/No-No-Space",
+    "id": "hours-grid",
+    "release": {
+      "version": "0.4.1",
+      "downloadUrl": "https://github.com/No-No-Space/SP-Hours-Grid/releases/download/v0.4.1/hours-grid-0.4.1.zip",
+      "sha256": "3f199e0b4af9f7dec279f27564c06fa6f16995a3c5c0e187d1e7de0978edcd1e"
+    }
   }
 ]
