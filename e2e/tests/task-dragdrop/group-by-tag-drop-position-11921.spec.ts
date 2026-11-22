@@ -57,18 +57,19 @@ test.describe('Group by tag drop position (#11921)', () => {
 
     // Drop onto the upper edge of the group's second row.
     await startTaskDrag(page, row(loose).locator('done-toggle'));
-    const targetRow = tagGroup.locator('task').nth(1);
-    const box = await targetRow.boundingBox();
-    if (!box) throw new Error('Missing drop row');
-    const centerX = (b: { x: number; width: number }): number => {
-      const half = b.width / 2;
-      return b.x + half;
-    };
-    await page.mouse.move(centerX(box), box.y + 4, { steps: 25 });
+    // Resolved once: after the drag enters the group, CDK's placeholder is also
+    // a `task` and would shift a re-evaluated nth(1).
+    const targetRow = await tagGroup
+      .locator('task:not(.cdk-drag-placeholder)')
+      .nth(1)
+      .elementHandle();
+    const box = await targetRow?.boundingBox();
+    if (!targetRow || !box) throw new Error('Missing drop row');
+    const halfWidth = box.width / 2;
+    const x = box.x + halfWidth;
+    await page.mouse.move(x, box.y + 4, { steps: 25 });
     const entered = await targetRow.boundingBox();
-    if (entered) {
-      await page.mouse.move(centerX(entered), entered.y + 4, { steps: 5 });
-    }
+    if (entered) await page.mouse.move(x, entered.y + 4, { steps: 5 });
     await page.mouse.up();
 
     const expected = [before[0], loose, before[1], before[2]];

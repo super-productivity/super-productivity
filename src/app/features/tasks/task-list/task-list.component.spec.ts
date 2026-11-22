@@ -1233,8 +1233,8 @@ describe('TaskListComponent', () => {
   });
 
   // Grouped-by-tag view: a task dragged into a DIFFERENT tag group has its tags
-  // reassigned (move: drop the source group's tag, add the target's) instead of
-  // being reordered. groupTagId is undefined outside that view, null for a
+  // reassigned (move: drop the source group's tag, add the target's) and is
+  // placed at the drop slot (#11921). groupTagId is undefined outside that view, null for a
   // no-single-tag bucket ('No tag' / 'Unknown tag' / duplicate-titled).
   describe('drop() tag-group retag', () => {
     type GroupListData = {
@@ -1345,6 +1345,32 @@ describe('TaskListComponent', () => {
       expect(movedAfter()).toEqual(['b2']);
     });
 
+    it('moves within the active tag context, keeping the context tag', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup(NO_TAG_GROUP_ID),
+          target: undoneGroup('tagB', [{ id: 'b1' }, { id: 'b2' }]),
+          dragged: { id: 't1', parentId: null, tagIds: ['test-context'] },
+          currentIndex: 1,
+        }),
+      );
+
+      const [, newTags] = taskService.updateTags.calls.mostRecent().args;
+      expect(newTags).toEqual(['test-context', 'tagB']);
+      const move = (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0])
+        .find((a) => a.type === moveTaskInTodayList.type);
+      expect(move).toEqual(
+        jasmine.objectContaining({
+          taskId: 't1',
+          afterTaskId: 'b1',
+          workContextId: 'test-context',
+          workContextType: 'TAG',
+        }),
+      );
+    });
+
     it('retags before it moves', async () => {
       const order: string[] = [];
       taskService.updateTags.and.callFake(() => order.push('retag'));
@@ -1416,6 +1442,7 @@ describe('TaskListComponent', () => {
       const [, newTags] = taskService.updateTags.calls.mostRecent().args;
       // Source 'tagA' dropped, 'tagB' appended → duplicate left for updateTags to collapse.
       expect(newTags).toEqual(['tagB', 'tagB']);
+      expect(movedAfter()).toEqual([null]);
     });
 
     it('adds the target tag (no removal) when dragging from an ambiguous/unknown source bucket (src null)', async () => {
