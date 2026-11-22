@@ -27,4 +27,6 @@ export enum SimpleStoreKey {
   // Main-owned, never-synced assistant (MCP) access switch and granted scopes.
   // The credential itself is never stored, only a verifier in a 0600 file.
   ASSISTANT_ACCESS = 'assistantAccess',
+  // Keeping the taskbar icon visible when minimizing to tray.
+  IS_KEEP_TASKBAR_ICON = 'isKeepTaskbarIcon',
 }

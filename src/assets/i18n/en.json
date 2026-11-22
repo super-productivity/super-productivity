@@ -3005,6 +3005,7 @@
       "ASSISTANT_ACCESS_SETUP_JSON": "Other MCP clients that support HTTP servers:",
       "ASSISTANT_ACCESS_SAVE_ERROR": "Could not save the assistant access setting.",
       "IS_MINIMIZE_TO_TRAY": "Minimize to tray (desktop only)",
+      "IS_KEEP_TASKBAR_ICON": "Keep taskbar icon (desktop only)",
       "IS_SHOW_TIP_LONGER": "Show productivity tip on app start a little longer",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (macOS only)",
       "IS_SHOW_DUE_TASK_BADGE": "Show the number of tasks due today or overdue on the app icon (desktop)",

@@ -7,6 +7,7 @@ import { raiseForReminder, quitApp, showOrFocus } from '../various-shared';
 import {
   getIsLocked,
   setIsMinimizeToTray,
+  setIsKeepTaskbarIcon,
   setIsTrayShowCurrentTask,
   setIsTrayShowCurrentCountdown,
 } from '../shared-state';
@@ -55,6 +56,7 @@ export const initAppControlIpc = (): void => {
 
   const updateSettings = async (ev: any, cfg: GlobalConfigState): Promise<void> => {
     setIsMinimizeToTray(cfg.misc.isMinimizeToTray);
+    setIsKeepTaskbarIcon(!!cfg.misc.isKeepTaskbarIcon);
     setIsTrayShowCurrentTask(
       cfg.tasks?.isTrayShowCurrent ?? !!cfg.misc.isTrayShowCurrentTask,
     );
@@ -67,6 +69,11 @@ export const initAppControlIpc = (): void => {
         cfg.misc.isUseCustomWindowTitleBar,
       );
     }
+
+    await saveSimpleStore(
+      SimpleStoreKey.IS_KEEP_TASKBAR_ICON,
+      !!cfg.misc.isMinimizeToTray && !!cfg.misc.isKeepTaskbarIcon,
+    );
   };
 
   ipcMain.on(IPC.TRANSFER_SETTINGS_TO_ELECTRON, updateSettings);

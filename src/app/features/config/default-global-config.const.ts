@@ -54,6 +54,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeExit: false,
     isConfirmBeforeExitWithoutFinishDay: true,
     isMinimizeToTray: false,
+    isKeepTaskbarIcon: false,
     isHideNavTaskCount: false,
     isShowDueTaskBadge: false,
     isCheckForUpdates: true,

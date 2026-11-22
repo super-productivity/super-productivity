@@ -28,7 +28,12 @@ import {
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
 import { getStartMinimizedMode } from './start-minimized';
-import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
+import {
+  getIsMinimizeToTray,
+  getIsKeepTaskbarIcon,
+  getIsQuiting,
+  setIsQuiting,
+} from './shared-state';
 import { createMenuTemplate } from './menu';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
@@ -216,6 +221,10 @@ export const createWindow = async ({
           height: WCO_HEIGHT,
         }
       : undefined;
+
+  // Check if the taskbar icon should be kept visible on startup
+  const keepTaskbarIconOnStartup =
+    simpleStore[SimpleStoreKey.IS_KEEP_TASKBAR_ICON] === true;
 
   // The store-screenshot pipeline forces a fixed 1280×800 window so the
   // PNG dimensions match what the Mac App Store accepts (2560×1600 @2x).
@@ -529,7 +538,11 @@ export const createWindow = async ({
   // show gracefully
   mainWin.once('ready-to-show', () => {
     if (isStartMinimized) {
-      const mode = getStartMinimizedMode({ hasTray: !!ensureIndicator(), isMac: IS_MAC });
+      const mode = getStartMinimizedMode({
+        hasTray: !!ensureIndicator(),
+        isMac: IS_MAC,
+        keepTaskbarIcon: keepTaskbarIconOnStartup,
+      });
       log('Start minimized: main window', mode === 'hide' ? 'stays hidden' : 'minimized');
       if (mode === 'minimize') {
         // Minimizing a window that was never shown leaves it without a taskbar
@@ -890,8 +903,14 @@ const appCloseHandler = (app: App): void => {
         const indicator = ensureIndicator();
         if (indicator) {
           event.preventDefault();
-          mainWin.hide();
-          showTaskWidget();
+
+          if (getIsKeepTaskbarIcon()) {
+            mainWin.minimize();
+          } else {
+            mainWin.hide();
+            showTaskWidget();
+          }
+
           return;
         }
       }
@@ -935,7 +954,7 @@ const appMinimizeHandler = (app: App): void => {
     // TODO find reason for the typing error
     // @ts-ignore
     mainWin.on('minimize', (event: Event) => {
-      if (getIsMinimizeToTray()) {
+      if (getIsMinimizeToTray() && !getIsKeepTaskbarIcon()) {
         const indicator = ensureIndicator();
         if (!indicator) {
           return;
