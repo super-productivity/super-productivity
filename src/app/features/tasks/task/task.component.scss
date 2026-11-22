@@ -24,6 +24,12 @@
 :host.isTableRow {
   --task-first-line-min-height: var(--table-row-height);
   --task-inner-padding-top-bottom: 1px;
+
+  // Subtask rows end where their parent does: the fixed columns sit at the
+  // row's end, so an end margin would shift them out of line.
+  .sub-tasks {
+    margin-inline-end: 0;
+  }
 }
 
 // The tracked row sticks right below the table's sticky header (which sits

@@ -14,6 +14,11 @@
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
   user-select: none;
+
+  // Its open picker overlaps the next sections, whose headers stack the same.
+  &.isPickerOpen {
+    z-index: calc(var(--z-is-current-host) + 2);
+  }
 }
 
 .handle-spacer {

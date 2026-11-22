@@ -38,6 +38,7 @@ import { TableColId } from '../../tasks/task-table.token';
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
     role: 'row',
+    '[class.isPickerOpen]': 'isPickerOpen()',
     '(contextmenu)': 'openPicker($event)',
     '(document:pointerdown)': 'onDocumentPointerDown($event)',
     '(keydown.escape)': 'isPickerOpen.set(false)',
