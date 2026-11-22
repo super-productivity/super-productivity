@@ -14,11 +14,6 @@
   color: var(--text-color-muted);
   font-size: var(--font-size-sm);
   user-select: none;
-
-  // Its open picker overlaps the next sections, whose headers stack the same.
-  &.isPickerOpen {
-    z-index: calc(var(--z-is-current-host) + 2);
-  }
 }
 
 .handle-spacer {
@@ -124,10 +119,13 @@
   }
 }
 
-.picker {
-  position: absolute;
-  top: 100%;
-  inset-inline-end: 0;
+.picker:popover-open {
+  // A popover: fixed in the top layer at `pickerPos`, not the UA's centering.
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-height: calc(100vh - var(--s2));
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: var(--s-half);

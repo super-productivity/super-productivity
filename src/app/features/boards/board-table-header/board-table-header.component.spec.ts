@@ -96,10 +96,22 @@ describe('BoardTableHeaderComponent', () => {
     );
   });
 
-  it('opens the column picker on a right-click of the header', () => {
+  it('opens the column picker on a right-click, in the top layer at the pointer', () => {
     const el = fixture.nativeElement as HTMLElement;
-    el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    el.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 10,
+        clientY: 20,
+      }),
+    );
     fixture.detectChanges();
-    expect(el.querySelectorAll('.picker input[type="checkbox"]').length).toBe(7);
+    const picker = el.querySelector<HTMLElement>('.picker')!;
+    expect(picker.querySelectorAll('input[type="checkbox"]').length).toBe(7);
+    // The top layer: above every section's sticky header, whatever they stack.
+    expect(picker.matches(':popover-open')).toBeTrue();
+    expect(picker.getBoundingClientRect().left).toBe(10);
+    expect(picker.getBoundingClientRect().top).toBe(20);
   });
 });

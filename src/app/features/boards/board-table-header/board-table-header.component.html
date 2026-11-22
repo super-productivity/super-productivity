@@ -43,12 +43,13 @@
   </span>
   <!-- In the title cell: the picked columns stay aligned with the rows'. -->
   <button
+    #pickerBtn
     type="button"
     class="picker-btn"
     [attr.aria-expanded]="isPickerOpen()"
     [attr.aria-label]="T.F.BOARDS.TABLE.CHOOSE_COLUMNS | translate"
     [title]="T.F.BOARDS.TABLE.CHOOSE_COLUMNS | translate"
-    (click)="isPickerOpen.set(!isPickerOpen())"
+    (click)="togglePicker(pickerBtn)"
   >
     <span
       class="material-icons"
@@ -97,9 +98,15 @@
   }
 </div>
 @if (isPickerOpen()) {
+  @let pos = pickerPos();
   <div
+    #picker
     class="picker"
+    popover="manual"
     role="group"
+    [style.top.px]="pos.top"
+    [style.left.px]="pos.left"
+    [style.right.px]="pos.right"
     [attr.aria-label]="T.F.BOARDS.TABLE.CHOOSE_COLUMNS | translate"
   >
     @for (col of ALL_COLS; track col.id) {

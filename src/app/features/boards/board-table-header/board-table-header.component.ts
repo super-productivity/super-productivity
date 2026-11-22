@@ -1,11 +1,13 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  effect,
   ElementRef,
   inject,
   input,
   output,
   signal,
+  viewChild,
 } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { NgTemplateOutlet } from '@angular/common';
@@ -38,7 +40,6 @@ import { TableColId } from '../../tasks/task-table.token';
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
     role: 'row',
-    '[class.isPickerOpen]': 'isPickerOpen()',
     '(contextmenu)': 'openPicker($event)',
     '(document:pointerdown)': 'onDocumentPointerDown($event)',
     '(keydown.escape)': 'isPickerOpen.set(false)',
@@ -60,6 +61,15 @@ export class BoardTableHeaderComponent {
   isDragged = false;
 
   readonly isPickerOpen = signal(false);
+  // Viewport px. Fixed in the top layer: the sticky headers' stacking would
+  // otherwise paint the next sections over it.
+  protected readonly pickerPos = signal<{ top: number; left?: number; right?: number }>({
+    top: 0,
+  });
+  private readonly _picker = viewChild<ElementRef<HTMLElement>>('picker');
+  private readonly _showPicker = effect(() =>
+    this._picker()?.nativeElement.showPopover(),
+  );
   protected readonly T = T;
   protected readonly ALL_COLS = TABLE_COLS.filter((col) => col.id !== 'title');
   protected labelOf(id: TableColId): string {
@@ -165,9 +175,23 @@ export class BoardTableHeaderComponent {
     return getComputedStyle(this._el.nativeElement).direction === 'rtl' ? -1 : 1;
   }
 
+  /** Right-click: opens at the pointer, toward the side with room. */
   openPicker(ev: MouseEvent): void {
     ev.preventDefault();
+    const w = window.innerWidth;
+    this.pickerPos.set(
+      ev.clientX > w / 2
+        ? { top: ev.clientY, right: w - ev.clientX }
+        : { top: ev.clientY, left: ev.clientX },
+    );
     this.isPickerOpen.set(true);
+  }
+
+  /** The picker button: opens under it, its end edge on the button's. */
+  togglePicker(btn: HTMLElement): void {
+    const rect = btn.getBoundingClientRect();
+    this.pickerPos.set({ top: rect.bottom, right: window.innerWidth - rect.right });
+    this.isPickerOpen.set(!this.isPickerOpen());
   }
 
   onDocumentPointerDown(ev: PointerEvent): void {
