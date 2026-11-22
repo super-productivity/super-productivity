@@ -31,9 +31,11 @@ import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service'
  * @param vectorClock - Merged vector clock (should dominate all conflicting ops)
  * @param timestamp - Preserved timestamp for correct LWW semantics
  * @param entityIds - Captured task-project-move footprint, when applicable
- * @param listClearedFields - Disjoint-merge deltas ONLY: list undefined-valued
- *   payload keys as `clearedFields` so JSON serialization cannot drop the
- *   clears (#9776). Never enable for payloads built from live state.
+ * @param listClearedFields - Field deltas ONLY: list undefined-valued payload
+ *   keys as `clearedFields` so JSON serialization cannot drop the clears
+ *   (#9776). Enable only when every key is a field actually written (a merge
+ *   delta, or live values of exactly the differing fields); never for a
+ *   whole object materialized from live state.
  * @returns New UPDATE operation ready for upload
  */
 export const createLWWUpdateOp = (

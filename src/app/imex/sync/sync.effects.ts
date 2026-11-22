@@ -107,7 +107,16 @@ export class SyncEffects {
    */
   _syncBeforeQuitOnRequest$(requests$: Observable<string[]>): Observable<void> {
     return requests$.pipe(
-      filter((ids) => ids.includes(SYNC_BEFORE_CLOSE_ID)),
+      // Runs only once every other hold is done: the finish-day prompt can
+      // still cancel the quit, and stopping tracking (and releasing this hold)
+      // before that answer would leave a cancelled quit with tracking stopped
+      // and no hold for the next quit. The main process re-notifies the ids
+      // still pending whenever a hold finishes.
+      filter(
+        (ids) =>
+          ids.includes(SYNC_BEFORE_CLOSE_ID) &&
+          ids.every((id) => id === SYNC_BEFORE_CLOSE_ID),
+      ),
       tap(() => {
         // The running sync may wait on a dialog (conflict, confirm) that
         // a window hidden in the tray hides; a repeated Quit shows it.

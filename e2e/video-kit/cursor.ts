@@ -29,6 +29,8 @@ const ARROW_SVG =
 /**
  * Registers the cursor as an init script, so call it before the first
  * navigation. It survives reloads and stays hidden until the mouse first moves.
+ * Iframes forward their pointer events to the top page, which draws the only
+ * cursor, so it also follows the mouse over an embedded page.
  */
 export const installCursor = async (
   page: Page,
@@ -36,9 +38,77 @@ export const installCursor = async (
 ): Promise<void> => {
   await page.addInitScript(
     (args) => {
+      // A second call would add a second set of listeners: two ripples per click.
+      const installed = window as unknown as { vkCursorInstalled?: boolean };
+      if (installed.vkCursorInstalled) return;
+      installed.vkCursorInstalled = true;
+      const isArrow = args.style === 'arrow';
+      // Pointer events from this document and, through the `message` listener
+      // below, from its iframes. Only the top page draws a cursor: an iframe (a
+      // plugin page, say) forwards its events up, so one cursor follows the mouse
+      // across frame borders and `setCursorVisible`, which reaches the top page
+      // only, hides all of it.
+      let apply: (type: string, x: number, y: number) => void;
+      if (window !== window.top) {
+        apply = (type, x, y) =>
+          window.parent.postMessage({ [args.messageKey]: { type, x, y } }, '*');
+      } else {
+        apply = (type, x, y) => {
+          const cursor = document.getElementById('vk-cursor');
+          if (!cursor) return;
+          if (type === 'mousemove') {
+            cursor.style.transform = `translate3d(${x}px,${y}px,0)`;
+            return;
+          }
+          if (!isArrow) return;
+          if (type === 'mouseup') {
+            cursor.classList.remove('pressed');
+            return;
+          }
+          cursor.classList.add('pressed');
+          if (document.body.classList.contains(args.hiddenClass)) return;
+          const ripple = document.createElement('div');
+          ripple.className = 'vk-click-ripple';
+          ripple.style.transform = `translate3d(${x}px,${y}px,0) scale(0.3)`;
+          document.body.appendChild(ripple);
+          void ripple.offsetWidth;
+          ripple.style.transform = `translate3d(${x}px,${y}px,0) scale(1)`;
+          ripple.style.opacity = '0';
+          // transitionend, not a timer: a paused page clock freezes timers.
+          ripple.addEventListener('transitionend', (end) => {
+            if (end.propertyName === 'opacity') ripple.remove();
+          });
+        };
+      }
+      for (const type of ['mousemove', 'mousedown', 'mouseup']) {
+        document.addEventListener(
+          type,
+          (e) => apply(type, (e as MouseEvent).clientX, (e as MouseEvent).clientY),
+          { passive: true, capture: true },
+        );
+      }
+      // An iframe reports in its own viewport: map that onto this one through the
+      // frame's position and any scale above it (the camera's transform).
+      window.addEventListener('message', (e) => {
+        const event = (e.data as Record<string, unknown> | null)?.[args.messageKey] as
+          | { type: string; x: number; y: number }
+          | undefined;
+        if (!event) return;
+        const frame = Array.from(document.querySelectorAll('iframe')).find(
+          (f) => f.contentWindow === e.source,
+        );
+        if (!frame) return;
+        const rect = frame.getBoundingClientRect();
+        const scaleX = frame.offsetWidth ? rect.width / frame.offsetWidth : 1;
+        const scaleY = frame.offsetHeight ? rect.height / frame.offsetHeight : 1;
+        const offsetX = (frame.clientLeft + event.x) * scaleX;
+        const offsetY = (frame.clientTop + event.y) * scaleY;
+        apply(event.type, rect.left + offsetX, rect.top + offsetY);
+      });
+      if (window !== window.top) return;
+
       const attach = (): void => {
         if (document.getElementById('vk-cursor')) return;
-        const isArrow = args.style === 'arrow';
         const size =
           args.size ?? Math.min(64, Math.max(28, Math.round(window.innerWidth / 40)));
         const cursor = document.createElement('div');
@@ -77,37 +147,6 @@ export const installCursor = async (
         // Trusted: checked-in SVG constant.
         if (isArrow) cursor.innerHTML = args.arrowSvg;
         document.body.appendChild(cursor);
-        document.addEventListener(
-          'mousemove',
-          (e) => {
-            cursor.style.transform = `translate3d(${e.clientX}px,${e.clientY}px,0)`;
-          },
-          { passive: true },
-        );
-        if (!isArrow) return;
-        document.addEventListener(
-          'mousedown',
-          (e) => {
-            cursor.classList.add('pressed');
-            if (document.body.classList.contains(args.hiddenClass)) return;
-            const ripple = document.createElement('div');
-            ripple.className = 'vk-click-ripple';
-            ripple.style.transform = `translate3d(${e.clientX}px,${e.clientY}px,0) scale(0.3)`;
-            document.body.appendChild(ripple);
-            void ripple.offsetWidth;
-            ripple.style.transform = `translate3d(${e.clientX}px,${e.clientY}px,0) scale(1)`;
-            ripple.style.opacity = '0';
-            // transitionend, not a timer: a paused page clock freezes timers.
-            ripple.addEventListener('transitionend', (end) => {
-              if (end.propertyName === 'opacity') ripple.remove();
-            });
-          },
-          { passive: true, capture: true },
-        );
-        document.addEventListener('mouseup', () => cursor.classList.remove('pressed'), {
-          passive: true,
-          capture: true,
-        });
       };
       if (document.body) attach();
       else document.addEventListener('DOMContentLoaded', attach, { once: true });
@@ -118,6 +157,7 @@ export const installCursor = async (
       z: Z.cursor,
       hiddenClass: HIDDEN_CLASS,
       arrowSvg: ARROW_SVG,
+      messageKey: 'vkCursorEvent',
     },
   );
 };

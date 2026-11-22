@@ -1,0 +1,20 @@
+---
+# Generated from Harper's DueDiligence rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `do diligence` to `due diligence`.
+extends: existence
+message: "If this phrase should function as a noun it should be `due diligence`. If it should function as a verb it should be `do due diligence"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "due diligence"
+    - "do due diligence"
+tokens:
+  - "do(?!\\s*\\n\\s*\\n)\\s+diligence(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,40 @@
+---
+# Hand-written from Harper's BestOfAllTime: the superlative takes singular
+# `of all time`.
+#
+# The generated rule learned its swaps from the punctuation that happened to
+# follow the word in the linter's tests -- `times"` -> `time"`, `times,` ->
+# `time,`, `times?` -> `Time?|time?` -- rather than the phrase that licensed
+# the change. It caught the examples and nothing else, including every case
+# where the sentence carried on afterwards ("the best IDE of all times Visual
+# Studio"). This is the failure mode DIFFERENCES.md records for
+# `WouldNeverHave`, in a rule that had not yet been rewritten.
+#
+# `of all times` on its own is not the error. "Of all times for the server to
+# crash" is correct English, and Harper leaves it alone: its expression
+# requires a superlative earlier in the sentence -- an inflected one, `most`
+# with a positive adjective, or `favorite`/`favourite`/`top` -- then a noun
+# phrase, then the fixed phrase. The lookbehind here asks for the same three
+# things in the same order. A sequence cannot: the noun phrase between the
+# superlative and `of` runs from nothing at all ("most humble of all times")
+# to three words ("best bass guitarist of all times"), and a `sequence`
+# matches a fixed number of tokens.
+#
+# The window is 40 characters, which covers every example in the corpus with
+# room to spare; the longest is 15.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "This expression uses singular `time`"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+  params:
+    - "time"
+tokens:
+  - '(?<=\b(?:\w+est|most\s+\w+|favou?rite|top)\b.{0,40}\bof\sall\s)times\b'

@@ -1,0 +1,34 @@
+---
+# Generated from Harper's DoubleNegative rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Replaces the determiner `no` with `any` when it follows the auxiliary `didn't/did not` plus a main verb (e.g., have, need, want, make, take, get) so the clause contains only one negation.
+extends: substitution
+message: "With `didn't/did not`, using `no` creates a double negative; replace `no` with `any` to keep a single negation."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "did(?!\\s*\\n\\s*\\n)\\s+n't(?!\\s*\\n\\s*\\n)\\s+get(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did n't get any"
+  "did(?!\\s*\\n\\s*\\n)\\s+n't(?!\\s*\\n\\s*\\n)\\s+have(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did n't have any"
+  "did(?!\\s*\\n\\s*\\n)\\s+n't(?!\\s*\\n\\s*\\n)\\s+make(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did n't make any"
+  "did(?!\\s*\\n\\s*\\n)\\s+n't(?!\\s*\\n\\s*\\n)\\s+need(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did n't need any"
+  "did(?!\\s*\\n\\s*\\n)\\s+n't(?!\\s*\\n\\s*\\n)\\s+take(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did n't take any"
+  "did(?!\\s*\\n\\s*\\n)\\s+n't(?!\\s*\\n\\s*\\n)\\s+want(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did n't want any"
+  "did(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+get(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did not get any"
+  "did(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+have(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did not have any"
+  "did(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+make(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did not make any"
+  "did(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+need(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did not need any"
+  "did(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+take(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did not take any"
+  "did(?!\\s*\\n\\s*\\n)\\s+not(?!\\s*\\n\\s*\\n)\\s+want(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "did not want any"
+  "didn't(?!\\s*\\n\\s*\\n)\\s+get(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "didn't get any"
+  "didn't(?!\\s*\\n\\s*\\n)\\s+have(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "didn't have any"
+  "didn't(?!\\s*\\n\\s*\\n)\\s+make(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "didn't make any"
+  "didn't(?!\\s*\\n\\s*\\n)\\s+need(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "didn't need any"
+  "didn't(?!\\s*\\n\\s*\\n)\\s+take(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "didn't take any"
+  "didn't(?!\\s*\\n\\s*\\n)\\s+want(?!\\s*\\n\\s*\\n)\\s+no(?!['\\x{2019}]s\\b)": "didn't want any"

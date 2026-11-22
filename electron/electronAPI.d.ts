@@ -232,8 +232,7 @@ export interface ElectronAPI {
 
   informAboutAppReady(): void;
 
-  // Confirmation steps can cancel quitting and run before other steps.
-  scheduleRegisterBeforeClose(id: string, isConfirmation?: boolean): void;
+  scheduleRegisterBeforeClose(id: string): void;
 
   unscheduleRegisterBeforeClose(id: string): void;
 

@@ -11,16 +11,13 @@ import { UiHelperService } from '../ui-helper/ui-helper.service';
 import { DEFAULT_TASK, Task } from '../tasks/task.model';
 import { BehaviorSubject, EMPTY, of, Subject } from 'rxjs';
 
-type FinishDaySetting = { isConfirmBeforeExitWithoutFinishDay: boolean };
-
 describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
   let effects: FinishDayBeforeCloseEffects;
   let execBeforeCloseService: jasmine.SpyObj<ExecBeforeCloseService>;
   let router: jasmine.SpyObj<Router>;
   let showDialogSpy: jasmine.Spy;
   let uiHelperService: jasmine.SpyObj<UiHelperService>;
-  let closeNotifications: Subject<string[]>;
-  let miscConfig: BehaviorSubject<FinishDaySetting>;
+  let misc$: BehaviorSubject<{ isConfirmBeforeExitWithoutFinishDay: boolean }>;
 
   const doneTask: Task = {
     ...DEFAULT_TASK,
@@ -41,14 +38,13 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
       'unschedule',
       'setDone',
     ]);
-    closeNotifications = new Subject<string[]>();
-    execBeforeCloseServiceSpy.onBeforeClose$ = closeNotifications;
-    miscConfig = new BehaviorSubject<FinishDaySetting>({
+    execBeforeCloseServiceSpy.onBeforeClose$ = EMPTY;
+
+    misc$ = new BehaviorSubject<{ isConfirmBeforeExitWithoutFinishDay: boolean }>({
       isConfirmBeforeExitWithoutFinishDay: true,
     });
-
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
-      misc$: miscConfig,
+      misc$,
       appFeatures$: of({ isFinishDayEnabled: true }),
     });
 
@@ -89,21 +85,6 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
     uiHelperService = TestBed.inject(UiHelperService) as jasmine.SpyObj<UiHelperService>;
 
     showDialogSpy = spyOn(effects, '_showDialog');
-  });
-
-  it('acknowledges a queued quit notification received after the setting is disabled', () => {
-    const subscription = effects._warnToFinishDayBeforeClose$().subscribe();
-    try {
-      miscConfig.next({ isConfirmBeforeExitWithoutFinishDay: false });
-      closeNotifications.next(['FINISH_DAY_BEFORE_CLOSE_EFFECT']);
-
-      expect(execBeforeCloseService.setDone).toHaveBeenCalledOnceWith(
-        'FINISH_DAY_BEFORE_CLOSE_EFFECT',
-      );
-      expect(showDialogSpy).not.toHaveBeenCalled();
-    } finally {
-      subscription.unsubscribe();
-    }
   });
 
   describe('when there are done tasks', () => {
@@ -167,6 +148,101 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
     expect(execBeforeCloseService.setDone).toHaveBeenCalledOnceWith(
       'FINISH_DAY_BEFORE_CLOSE_EFFECT',
     );
+  });
+
+  describe('_warnOnRequest$()', () => {
+    let requests$: Subject<string[]>;
+
+    beforeEach(() => {
+      const workContextService = TestBed.inject(WorkContextService);
+      Object.defineProperty(workContextService, 'mainWorkContext$', {
+        value: of({ taskIds: [doneTask.id] }),
+      });
+      const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+      taskService.getByIdsLive$.and.returnValue(of([doneTask]));
+      requests$ = new Subject<string[]>();
+    });
+
+    it('prompts only for requests carrying its id', () => {
+      const handleSpy = spyOn(effects, '_handleCloseDecision').and.resolveTo();
+      const sub = effects._warnOnRequest$(requests$).subscribe();
+
+      // The main process re-notifies the sync hold alone once this one is done.
+      requests$.next(['SYNC_BEFORE_CLOSE_ID']);
+      expect(handleSpy).not.toHaveBeenCalled();
+
+      requests$.next(['FINISH_DAY_BEFORE_CLOSE_EFFECT', 'SYNC_BEFORE_CLOSE_ID']);
+      expect(handleSpy).toHaveBeenCalledOnceWith([doneTask]);
+      sub.unsubscribe();
+    });
+
+    it('acknowledges a queued request after confirmation is disabled', () => {
+      const handleSpy = spyOn(effects, '_handleCloseDecision').and.resolveTo();
+      const sub = effects._warnOnRequest$(requests$).subscribe();
+
+      misc$.next({ isConfirmBeforeExitWithoutFinishDay: false });
+      requests$.next(['SYNC_BEFORE_CLOSE_ID']);
+      expect(execBeforeCloseService.setDone).not.toHaveBeenCalled();
+
+      requests$.next(['FINISH_DAY_BEFORE_CLOSE_EFFECT', 'SYNC_BEFORE_CLOSE_ID']);
+      expect(execBeforeCloseService.setDone).toHaveBeenCalledOnceWith(
+        'FINISH_DAY_BEFORE_CLOSE_EFFECT',
+      );
+      expect(handleSpy).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
+    it('acknowledges the request if confirmation is disabled while tasks are loading', () => {
+      const tasks$ = new Subject<Task[]>();
+      const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+      taskService.getByIdsLive$.and.returnValue(tasks$);
+      const handleSpy = spyOn(effects, '_handleCloseDecision').and.resolveTo();
+      const sub = effects._warnOnRequest$(requests$).subscribe();
+
+      requests$.next(['FINISH_DAY_BEFORE_CLOSE_EFFECT', 'SYNC_BEFORE_CLOSE_ID']);
+      misc$.next({ isConfirmBeforeExitWithoutFinishDay: false });
+      expect(execBeforeCloseService.setDone).toHaveBeenCalledOnceWith(
+        'FINISH_DAY_BEFORE_CLOSE_EFFECT',
+      );
+
+      tasks$.next([doneTask]);
+      expect(handleSpy).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
+    it('keeps an open prompt in control after confirmation is disabled', async () => {
+      let answer: (choice: 'cancel') => void = () => undefined;
+      showDialogSpy.and.returnValue(new Promise((resolve) => (answer = resolve)));
+      const sub = effects._warnOnRequest$(requests$).subscribe();
+      const holdStates: boolean[] = [];
+      sub.add(
+        effects.requiresConfirmationHold$.subscribe((state) => holdStates.push(state)),
+      );
+      const request = ['FINISH_DAY_BEFORE_CLOSE_EFFECT', 'SYNC_BEFORE_CLOSE_ID'];
+
+      requests$.next(request);
+      misc$.next({ isConfirmBeforeExitWithoutFinishDay: false });
+      requests$.next(request);
+
+      expect(showDialogSpy).toHaveBeenCalledTimes(1);
+      expect(uiHelperService.focusApp).toHaveBeenCalledTimes(2);
+      expect(holdStates).toEqual([true]);
+      expect(execBeforeCloseService.setDone).not.toHaveBeenCalled();
+
+      answer('cancel');
+      await Promise.resolve();
+      expect(holdStates).toEqual([true, false]);
+      requests$.next(request);
+      expect(execBeforeCloseService.setDone).not.toHaveBeenCalled();
+
+      misc$.next({ isConfirmBeforeExitWithoutFinishDay: true });
+      misc$.next({ isConfirmBeforeExitWithoutFinishDay: false });
+      requests$.next(request);
+      expect(execBeforeCloseService.setDone).toHaveBeenCalledOnceWith(
+        'FINISH_DAY_BEFORE_CLOSE_EFFECT',
+      );
+      sub.unsubscribe();
+    });
   });
 
   // Finish Day archives won't-do tasks as well.

@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's ChangeTack: `change tact` for `change tack`.
+#
+# A tack is a sailing heading, so changing tack is changing direction. `Tact`
+# is the eggcorn, and `tacks`/`tacts` are its plurals; all three are corrected
+# to the singular.
+#
+# The verb is a look-behind so the alert points at the wrong word alone, and
+# the optional possessive covers "changed his tact" as well as "changed tact".
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Did you mean `tack`, as in a sailing heading?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "tack"
+tokens:
+  - "(?<=\\b(?:change[sd]?|changing)(?:\\s+(?:my|your|his|her|its|our|their|it's))?\\s)(?:tact|tacks|tacts)\\b"
+  - '(?<=\b(?:change|changes|changing)\sof\s)(?:tact|tacks|tacts)\b'
+  - '(?<=\bdifferent\s)tact\b'

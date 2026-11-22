@@ -1,0 +1,21 @@
+---
+# Generated from Harper's AtFaceValue rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects nonstandard variants of `at face value`.
+extends: existence
+message: "`at face value` is more idiomatic and more common."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "at face value"
+tokens:
+  - "at(?!\\s*\\n\\s*\\n)\\s+face(?!\\s*\\n\\s*\\n)\\s+values(?!['\\x{2019}]s\\b)"
+  - "on(?!\\s*\\n\\s*\\n)\\s+face(?!\\s*\\n\\s*\\n)\\s+values(?!['\\x{2019}]s\\b)"
+  - "on(?!\\s*\\n\\s*\\n)\\s+face(?!\\s*\\n\\s*\\n)\\s+value(?!['\\x{2019}]s\\b)"

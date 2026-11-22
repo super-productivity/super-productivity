@@ -1,0 +1,28 @@
+# A step is an instruction: "Run the build", not "You should run the
+# build" or "You can run the build".
+# https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+extends: existence
+message: "'%s' softens an instruction. Write the step as a command."
+link: https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+level: suggestion
+scope: list
+ignorecase: true
+tokens:
+  - '^\s*you (?:should|can|could|may|might|need to|will want to|will need to)\b'
+  - "^\\s*it(?:'s| is) (?:recommended|a good idea|best) to\\b"
+
+tests:
+  - name: fires
+    input: |
+      1. You should run the build.
+      2. You can push it.
+
+    want: |
+      1:4:HowTo.Imperative:'You should' softens an instruction. Write the step as a command.
+      2:4:HowTo.Imperative:'You can' softens an instruction. Write the step as a command.
+  - name: clean
+    input: |
+      1. Run the build.
+      2. Push it.
+
+    want: ""

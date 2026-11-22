@@ -1,0 +1,21 @@
+---
+# Hand-written from Harper's SinceDuration: `since` followed by a length of
+# time rather than a point in time.
+#
+# "since two hours" says the wrong thing -- `since` takes the moment something
+# started, so it wants either `for two hours` or `since two hours ago`. The
+# trailing look-ahead is Harper's own exception: with `ago` or `old` already
+# there, the sentence is right.
+#
+# Harper builds the quantity from spelled numbers, digits, articles and
+# quantifiers; the alternation below is that list written out.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "`since` takes a point in time; use `for` with a length of time."
+level: warning
+ignorecase: true
+tokens:
+  - 'since\s+(?:\d+|an?|a\s+couple(?:\s+of)?|(?:a\s+)?few|several|many|some|numerous|countless|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)\s+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)(?!\s+(?:ago|old)\b)'

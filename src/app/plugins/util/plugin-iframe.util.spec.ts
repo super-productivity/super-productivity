@@ -197,6 +197,37 @@ describe('handlePluginMessage()', () => {
     }
   });
 
+  it('lets an iframe sign-in outlast the 30s call timeout while the user signs in', async () => {
+    const tokens = { accessToken: 'a', expiresAt: 1 };
+    let finish!: (value: typeof tokens) => void;
+    const startOAuthFlow = jasmine
+      .createSpy('startOAuthFlow')
+      .and.returnValue(new Promise((resolve) => (finish = resolve)));
+    const config = createConfig({
+      createBoundMethods: () => ({ startOAuthFlow }),
+    } as unknown as PluginBridgeService);
+    jasmine.clock().install();
+    try {
+      const { frame, parent, source } = loadGeneratedIframeApi(config);
+      const api = frame.PluginAPI as unknown as {
+        startOAuthFlow: (cfg: unknown) => Promise<unknown>;
+      };
+      const pending = api.startOAuthFlow({ clientId: 'c' });
+      const call = parent.postMessage.calls.mostRecent().args[0];
+      const handled = handlePluginMessage(
+        { source, data: call } as unknown as MessageEvent,
+        config,
+      );
+      jasmine.clock().tick(120000);
+      finish(tokens);
+      await handled;
+      expect(startOAuthFlow).toHaveBeenCalledOnceWith({ clientId: 'c' });
+      await expectAsync(pending).toBeResolvedTo(tokens);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
   it('rebuilds iframe dialog button handlers and returns the selected result', async () => {
     let bridgedDialogCfg:
       | {

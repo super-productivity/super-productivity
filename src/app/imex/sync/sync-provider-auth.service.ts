@@ -97,6 +97,7 @@ export class SyncProviderAuthService {
       let msg: string;
       let translateParams: { [key: string]: string } | undefined;
       if (isTokenExchangeError && providerId === SyncProviderId.OneDrive) {
+        // Links the website page built from docs/wiki/2.09-Configure-Sync-Backend.md
         msg = T.F.SYNC.S.ONEDRIVE_AUTH_FAILED;
         translateParams = { error: httpErr?.detail || getErrorTxt(error) };
       } else if (isTokenExchangeError) {

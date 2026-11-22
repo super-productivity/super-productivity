@@ -9,8 +9,8 @@ export class ExecBeforeCloseService {
 
   constructor() {}
 
-  schedule(id: string, isConfirmation?: boolean): void {
-    window.ea.scheduleRegisterBeforeClose(id, isConfirmation);
+  schedule(id: string): void {
+    window.ea.scheduleRegisterBeforeClose(id);
   }
 
   unschedule(id: string): void {

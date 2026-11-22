@@ -1,0 +1,22 @@
+---
+# Generated from Harper's AnotherThingComing linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Corrects `another think coming` to `another thing coming`"
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "thing"
+tokens:
+  - pattern: 'have|got|had|has'
+  - pattern: 'another'
+  - pattern: 'think'
+    target: true
+  - pattern: 'coming'

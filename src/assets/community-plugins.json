@@ -272,6 +272,32 @@
     }
   },
   {
+    "name": "Cat Court",
+    "shortDescription": "Experimental: put an avoided task before two animated courtroom kittens, make your defense, then start it, add a tiny first step, or dismiss the case.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/procrastination-court",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-procrastination-court",
+    "release": {
+      "version": "0.1.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/procrastination-court-v0.1.0/ridonculous-procrastination-court-0.1.0.zip",
+      "sha256": "9b7f63070a3f7291e0784a1a88282cce0957528ec04ef386476759f467b38ee9"
+    }
+  },
+  {
+    "name": "Desk Pet",
+    "shortDescription": "Experimental: Mochi, a rice cake on every page, fed by finished tasks and grumpy about overdue ones. Uses an unofficial hack that a future app update could break; requires Super Productivity 20.0.0.",
+    "url": "https://github.com/super-productivity/ridonculous/tree/main/plugins/desk-pet",
+    "author": "super-productivity",
+    "authorUrl": "https://github.com/super-productivity",
+    "id": "ridonculous-desk-pet",
+    "release": {
+      "version": "0.3.0",
+      "downloadUrl": "https://github.com/super-productivity/ridonculous/releases/download/desk-pet-v0.3.0/ridonculous-desk-pet-0.3.0.zip",
+      "sha256": "07489a9b3ba1f7e6c4702240d3848ca824ce70c7730d9b5b2ee1ecb8745100f0"
+    }
+  },
+  {
     "name": "Deadlines",
     "shortDescription": "List, Calendar, and Timeline views for deadlines and fixed dates in Super Productivity.",
     "url": "https://github.com/Jontata/deadlines-plugin",

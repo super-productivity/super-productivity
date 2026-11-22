@@ -1,0 +1,19 @@
+---
+# Generated from Harper's IDo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `I does` to `I do`.
+extends: existence
+message: "`I` pairs with the bare verb `do`; the –s inflection `does` is reserved for third-person singular subjects."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "I do"
+tokens:
+  - "I(?!\\s*\\n\\s*\\n)\\s+does(?!['\\x{2019}]s\\b)"

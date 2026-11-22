@@ -55,7 +55,6 @@ import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
 import { isAllowedSessionPermission } from './session-permissions';
 import { applyJiraImageAuth } from './jira-image-auth';
-import { createBeforeCloseActions } from './before-close-actions';
 
 // Long enough to outlast a resize or move gesture, so a drag records one
 // sample rather than one per frame.
@@ -852,7 +851,7 @@ function createMenu(quitApp: () => void): void {
 
 // TODO this is ugly as f+ck
 const appCloseHandler = (app: App): void => {
-  const actions = createBeforeCloseActions();
+  let ids: string[] = [];
 
   const _quitApp = (): void => {
     setIsQuiting(true);
@@ -861,36 +860,31 @@ const appCloseHandler = (app: App): void => {
     mainWin.close();
   };
 
-  const notifyBeforeClose = (): void => {
-    const ids = actions.start();
-    log('Actions to wait for ', ids);
-    mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
-  };
-
-  ipcMain.on(IPC.REGISTER_BEFORE_CLOSE, (ev, { id, isConfirmation }) => {
-    actions.register(id, isConfirmation);
+  ipcMain.on(IPC.REGISTER_BEFORE_CLOSE, (ev, { id }) => {
+    ids.push(id);
   });
   ipcMain.on(IPC.UNREGISTER_BEFORE_CLOSE, (ev, { id }) => {
-    actions.unregister(id);
+    ids = ids.filter((idIn) => idIn !== id);
   });
   ipcMain.on(IPC.BEFORE_CLOSE_DONE, (ev, { id }) => {
-    const next = actions.complete(id);
-    if (next === 'ignore') {
-      return;
-    }
-    log(IPC.BEFORE_CLOSE_DONE, id, [...actions.pendingIds]);
-    if (next === 'quit') {
-      _quitApp();
-    } else if (next === 'notify') {
-      notifyBeforeClose();
+    ids = ids.filter((idIn) => idIn !== id);
+    log(IPC.BEFORE_CLOSE_DONE, id, ids);
+    if (ids.length === 0) {
+      // Destroy task widget before closing main window
+      destroyTaskWidget();
+      // The quit request can time out while the user answers the finish-day prompt
+      setIsQuitRequested(true);
+      mainWin.close();
+    } else if (mainWin && !mainWin.isDestroyed()) {
+      // Holds that wait for the others (sync before close) act once they are
+      // the last ones pending.
+      mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
     }
   });
 
   mainWin.on('close', (event) => {
     // NOTE: this might not work if we run a second instance of the app
-    log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', [
-      ...actions.pendingIds,
-    ]);
+    log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', ids);
     if (!getIsQuiting()) {
       if (getIsMinimizeToTray() && !getIsQuitRequested()) {
         const indicator = ensureIndicator();
@@ -906,8 +900,9 @@ const appCloseHandler = (app: App): void => {
 
       // A gone renderer (killed, oom, ...) never answers, so waiting for it
       // would leave no way to quit.
-      if (actions.pendingIds.size > 0 && !mainWin.webContents.isCrashed()) {
-        notifyBeforeClose();
+      if (ids.length > 0 && !mainWin.webContents.isCrashed()) {
+        log('Actions to wait for ', ids);
+        mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
       } else {
         _quitApp();
       }

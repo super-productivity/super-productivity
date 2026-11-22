@@ -1,0 +1,19 @@
+---
+# Generated from Harper's InADifferentDirection rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Detects the incorrect use of the preposition `into` when describing a change in path, strategy, or orientation. A direction is abstract, requiring `in` rather than `into`.
+extends: existence
+message: "Did you mean `in a different direction`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "in a different direction"
+tokens:
+  - "into(?!\\s*\\n\\s*\\n)\\s+a(?!\\s*\\n\\s*\\n)\\s+different(?!\\s*\\n\\s*\\n)\\s+direction(?!['\\x{2019}]s\\b)"

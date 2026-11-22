@@ -1,0 +1,21 @@
+---
+# Generated from Harper's Freezing rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Encourages vivid writing by suggesting `freezing` instead of weaker expressions like `very cold.`
+extends: existence
+message: "A more vivid adjective would better capture extreme cold."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "freezing"
+tokens:
+  - "extremely(?!\\s*\\n\\s*\\n)\\s+cold(?!['\\x{2019}]s\\b)"
+  - "really(?!\\s*\\n\\s*\\n)\\s+cold(?!['\\x{2019}]s\\b)"
+  - "very(?!\\s*\\n\\s*\\n)\\s+cold(?!['\\x{2019}]s\\b)"

@@ -314,6 +314,33 @@ describe('SyncEffects routing (Task 3)', () => {
       expect(sync).not.toHaveBeenCalled();
       expect(setDone).not.toHaveBeenCalled();
     });
+
+    it('waits until every other hold is done, so a cancelled quit keeps tracking', async () => {
+      const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+      const simpleCounterService = TestBed.inject(
+        SimpleCounterService,
+      ) as jasmine.SpyObj<SimpleCounterService>;
+
+      // The finish-day prompt is still open: cancelling it keeps the app open,
+      // so tracking must not be stopped yet and the hold must stay registered.
+      requests$.next(['FINISH_DAY_BEFORE_CLOSE_EFFECT', SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(taskService.setCurrentId).not.toHaveBeenCalled();
+      expect(simpleCounterService.turnOffAll).not.toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      expect(setDone).not.toHaveBeenCalled();
+
+      // The main process re-notifies once the prompt released its hold.
+      requests$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(taskService.setCurrentId).toHaveBeenCalledWith(null);
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
   });
 
   describe('sync before quit scheduling (#11831)', () => {

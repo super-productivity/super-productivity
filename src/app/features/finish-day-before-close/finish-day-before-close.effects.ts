@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { BehaviorSubject, combineLatest, firstValueFrom, Observable, of } from 'rxjs';
 import { ExecBeforeCloseService } from '../../core/electron/exec-before-close.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import {
@@ -13,10 +13,8 @@ import {
   map,
   switchMap,
   tap,
-  withLatestFrom,
 } from 'rxjs/operators';
 import { IS_ELECTRON } from '../../app.constants';
-import { combineLatest, EMPTY, Observable } from 'rxjs';
 import { WorkContextService } from '../work-context/work-context.service';
 import { Task } from '../tasks/task.model';
 import { TaskService } from '../tasks/task.service';
@@ -40,7 +38,8 @@ export class FinishDayBeforeCloseEffects {
   private _matDialog = inject(MatDialog);
   private _router = inject(Router);
   private _uiHelperService = inject(UiHelperService);
-  private _isPromptOpen = false;
+  private readonly _isPromptOpen$ = new BehaviorSubject(false);
+  private _ignoreDisabledQuitRequests = false;
 
   isEnabled$: Observable<boolean> =
     this._dataInitStateService.isAllDataLoadedInitially$.pipe(
@@ -57,14 +56,29 @@ export class FinishDayBeforeCloseEffects {
       distinctUntilChanged(),
     );
 
+  // Keep saving on hold until the user answers an already-open prompt.
+  readonly requiresConfirmationHold$ = combineLatest([
+    this.isEnabled$,
+    this._isPromptOpen$,
+  ]).pipe(
+    tap(([isEnabled, isPromptOpen]) => {
+      if (isEnabled || isPromptOpen) {
+        // A disabled prompt still decides the fate of requests already sent for it.
+        this._ignoreDisabledQuitRequests = !isEnabled;
+      }
+    }),
+    map(([isEnabled, isPromptOpen]) => isEnabled || isPromptOpen),
+    distinctUntilChanged(),
+  );
+
   scheduleUnscheduleFinishDayBeforeClose$ =
     IS_ELECTRON &&
     createEffect(
       () =>
-        this.isEnabled$.pipe(
-          tap((isEnabled) =>
-            isEnabled
-              ? this._execBeforeCloseService.schedule(EXEC_BEFORE_CLOSE_ID, true)
+        this.requiresConfirmationHold$.pipe(
+          tap((requiresHold) =>
+            requiresHold
+              ? this._execBeforeCloseService.schedule(EXEC_BEFORE_CLOSE_ID)
               : this._execBeforeCloseService.unschedule(EXEC_BEFORE_CLOSE_ID),
           ),
         ),
@@ -73,30 +87,46 @@ export class FinishDayBeforeCloseEffects {
 
   warnToFinishDayBeforeClose$ =
     IS_ELECTRON &&
-    createEffect(() => this._warnToFinishDayBeforeClose$(), { dispatch: false });
+    createEffect(
+      () => this._warnOnRequest$(this._execBeforeCloseService.onBeforeClose$),
+      { dispatch: false },
+    );
 
-  _warnToFinishDayBeforeClose$(): Observable<Task[]> {
-    return this._execBeforeCloseService.onBeforeClose$.pipe(
+  /**
+   * Prompts for each quit request carrying this hold's id. Kept out of the
+   * Electron-only effect above so specs can drive it.
+   */
+  _warnOnRequest$(requests$: Observable<string[]>): Observable<Task[] | null> {
+    return requests$.pipe(
+      // The main process re-notifies the holds still pending after one
+      // finishes; once this one is done it must not prompt again.
       filter((ids) => ids.includes(EXEC_BEFORE_CLOSE_ID)),
-      withLatestFrom(this.isEnabled$),
-      switchMap(([, isEnabled]) => {
-        if (!isEnabled) {
-          // A quit request already queued by Electron still needs a response.
-          if (this._isPromptOpen) {
+      switchMap(() =>
+        this.isEnabled$.pipe(
+          switchMap((isEnabled) =>
+            isEnabled
+              ? this._workContextService.mainWorkContext$.pipe(
+                  first(),
+                  switchMap((workContext) =>
+                    this._taskService.getByIdsLive$(workContext.taskIds).pipe(first()),
+                  ),
+                )
+              : of(null),
+          ),
+          first(),
+        ),
+      ),
+      tap((todayMainTasks) => {
+        if (todayMainTasks === null) {
+          // Electron can queue the request before receiving the unregister message.
+          if (this._isPromptOpen$.value) {
             this._uiHelperService.focusApp();
-          } else {
+          } else if (!this._ignoreDisabledQuitRequests) {
             this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
           }
-          return EMPTY;
+          return;
         }
-        return this._workContextService.mainWorkContext$.pipe(
-          first(),
-          switchMap((workContext) =>
-            this._taskService.getByIdsLive$(workContext.taskIds).pipe(first()),
-          ),
-        );
-      }),
-      tap((todayMainTasks) => {
+
         this._handleCloseDecision(todayMainTasks).catch(() => {
           // Don't let a dialog/router failure trap the user in close-pending state
           this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
@@ -117,15 +147,15 @@ export class FinishDayBeforeCloseEffects {
     // be seen for the quit to go on.
     this._uiHelperService.focusApp();
     // A repeated Quit while the prompt is open only brings it to the front.
-    if (this._isPromptOpen) {
+    if (this._isPromptOpen$.value) {
       return;
     }
-    this._isPromptOpen = true;
+    this._isPromptOpen$.next(true);
     let choice: FinishDayBeforeCloseChoice;
     try {
       choice = await this._showDialog(doneCount);
     } finally {
-      this._isPromptOpen = false;
+      this._isPromptOpen$.next(false);
     }
     if (choice === 'quit') {
       this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
