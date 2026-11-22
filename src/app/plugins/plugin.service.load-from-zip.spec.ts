@@ -127,7 +127,10 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
         { provide: PluginRunner, useValue: pluginRunner },
         { provide: PluginHooksService, useValue: pluginHooks },
         { provide: PluginSecurityService, useValue: pluginSecurity },
-        { provide: GlobalThemeService, useValue: { darkMode: () => 'light' } },
+        {
+          provide: GlobalThemeService,
+          useValue: { darkMode: () => 'light', isDarkTheme: () => false },
+        },
         { provide: PluginMetaPersistenceService, useValue: pluginMetaPersistence },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginCacheService, useValue: pluginCache },

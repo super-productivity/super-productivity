@@ -1,4 +1,5 @@
 import { expect, Locator, Page } from '@playwright/test';
+import { waitForMenuSettled } from './waits';
 
 /**
  * Opens the "Create view" dialog from the + of the side menu's Views section.
@@ -198,8 +199,13 @@ export const setViewRule = async (
   value: string,
 ): Promise<void> => {
   await expandViewSection(section);
-  await viewRuleChip(section, rule).click();
+  const chip = viewRuleChip(section, rule);
+  await chip.click();
+  // A pick made while the menu still opens can close it without applying the
+  // value, which the closed menu alone doesn't reveal; the chip label does.
+  await waitForMenuSettled(page);
   await pickMenuRadio(page, value);
+  await expect(chip).toContainText(value);
 };
 
 /**

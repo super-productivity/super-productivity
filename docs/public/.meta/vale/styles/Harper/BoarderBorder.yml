@@ -1,0 +1,28 @@
+---
+# Generated from Harper's BoarderBorder rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags the eggcorn `boarder` (a lodger) where `border` (an edge/boundary) is intended.
+extends: substitution
+message: "Did you mean `border`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "boarder(?!\\s*\\n\\s*\\n)\\s+around(?!['\\x{2019}]s\\b)": "border around|borders around"
+  "boarder(?!\\s*\\n\\s*\\n)\\s+between(?!['\\x{2019}]s\\b)": "border between|borders between"
+  "boarder(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "border of|borders of"
+  "boarder(?!\\s*\\n\\s*\\n)\\s+on(?!['\\x{2019}]s\\b)": "border on|borders on"
+  "boarder(?!\\s*\\n\\s*\\n)\\s+with(?!['\\x{2019}]s\\b)": "border with|borders with"
+  "boarders(?!\\s*\\n\\s*\\n)\\s+around(?!['\\x{2019}]s\\b)": "border around|borders around"
+  "boarders(?!\\s*\\n\\s*\\n)\\s+between(?!['\\x{2019}]s\\b)": "border between|borders between"
+  "boarders(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "border of|borders of"
+  "boarders(?!\\s*\\n\\s*\\n)\\s+on(?!['\\x{2019}]s\\b)": "border on|borders on"
+  "boarders(?!\\s*\\n\\s*\\n)\\s+with(?!['\\x{2019}]s\\b)": "border with|borders with"
+  "cross(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+boarder(?!['\\x{2019}]s\\b)": "cross the border|cross the borders"
+  "cross(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+boarders(?!['\\x{2019}]s\\b)": "cross the border|cross the borders"

@@ -2,6 +2,7 @@ import { FormlyFieldConfig } from '@ngx-formly/core';
 import { GenericConfigFormSection } from './global-config.model';
 import { T } from '../../t.const';
 import { IMEX_FORM } from './form-cfgs/imex-form.const';
+import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 
 /** A single search hit — everything needed to render the row and jump to it. */
 export interface SettingsSearchTarget {
@@ -103,6 +104,18 @@ const CUSTOM_TARGETS: readonly SettingsSearchTarget[] = [
     scrollSelector: `.section-${IMEX_FORM.key}`,
     sectionKey: IMEX_FORM.key,
   },
+  // the Microsoft To Do button is hidden on Android/iOS (no sign-in there)
+  ...(IS_NATIVE_PLATFORM
+    ? []
+    : [
+        {
+          labelKey: T.FILE_IMEX.IMPORT_FROM_MS_TODO,
+          tabLabelKey: T.PS.TABS.SYNC_BACKUP,
+          tabIndex: SETTINGS_SYNC_BACKUP_TAB_INDEX,
+          scrollSelector: `.section-${IMEX_FORM.key}`,
+          sectionKey: IMEX_FORM.key,
+        },
+      ]),
 ];
 
 /** Every field of a section, with `fieldGroup` wrappers (sync providers) flattened out. */

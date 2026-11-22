@@ -28,6 +28,16 @@ const getVideoProfile = (variant: string): VideoProfile => {
     };
   }
 
+  if (variant === 'ms-todo') {
+    return {
+      // 1920x1080 landscape. Playwright cannot click inside an iframe (the
+      // importer) under an ancestor's CSS zoom, so DPR, not zoom, enlarges
+      // the 1280x720 layout.
+      size: { width: 1280, height: 720 },
+      deviceScaleFactor: 1.5,
+    };
+  }
+
   if (variant === 'mobile') {
     return {
       // A 360x780 CSS viewport activates SP's phone layout; DPR 3 records

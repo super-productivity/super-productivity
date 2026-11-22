@@ -20,10 +20,13 @@
 - [[2.08-Choose-Sync-Backend]]
 - [[2.09-Configure-Sync-Backend]]
 - [[2.19-Sync-Proton-Drive-via-rclone]]
+- [[2.25-Sync-WebDAV-with-a-Private-Certificate-on-Android]]
 - [[2.20-Import-from-Todoist]]
 - [[2.21-Manage-Plugins]]
 - [[2.22-Import-from-TickTick]]
+- [[2.27-Import-from-Microsoft-To-Do]]
 - [[2.23-Connect-an-AI-Assistant]]
+- [[2.26-Create-Invoices]]
 - [[2.13-Run-with-Docker]]
 
 ### Contributing to Super-Productivity

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's InLieuOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the misspelling `in lue of` to `in lieu of`.
+extends: existence
+message: "Did you mean `in lieu of`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "in lieu of"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+lue(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"

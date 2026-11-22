@@ -85,6 +85,7 @@ export class InputDurationDirective implements ControlValueAccessor, Validator, 
 
   writeValue(value: number | null): void {
     this._msValue = value;
+    this._previousMsValue = value;
     this._formatDisplayValue();
   }
 

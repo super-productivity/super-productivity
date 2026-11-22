@@ -24,6 +24,19 @@ workflow's manual dispatch where supported.
 
 ## Prepare a version
 
+Before a final release, find the docs notes for unreleased features
+(see [the documentation guide](documentation-guide.md#features-not-in-a-release-yet)):
+
+```bash
+grep -rni "not released yet" docs/wiki docs/public
+```
+
+Remove each note whose feature is in this release. For a feature that stays out (behind a flag, or
+reverted), bump `vX.Y.Z` in its note to the version being released; for a
+reverted feature, remove its documentation too. Commit this on `master` before
+`npm version` and push it together with the version commit, so the daily docs deploy does not present a
+feature as shipped long before the release is published.
+
 Start from a clean, current release commit and choose the appropriate semantic
 version:
 
@@ -157,8 +170,16 @@ Center.
 - A plain `master` push builds desktop artifacts, uploads a development Android
   build to the Play `internal` track, and publishes the branch Snap to `edge`.
 - A `master` push that changes SuperSync server inputs publishes
-  `ghcr.io/super-productivity/supersync:latest` and `master-<sha>`. The prune keeps
-  the 15 newest master images and excludes `v*`, so release tags stay available.
+  `ghcr.io/super-productivity/supersync:latest` and `master-<sha>` once the SuperSync
+  server tests and the SuperSync E2E shards have passed for that commit in the same
+  run (about an hour; a newer image push cancels the run and starts over). The
+  released-client and WebDAV E2E jobs do not gate the image. A failed
+  or cancelled suite publishes nothing until the run's failed jobs are re-run and
+  pass. Re-run only the newest image run: an older one would move `latest` back to
+  its commit. Dispatching `.github/workflows/supersync-docker.yml` from
+  `master` without a `release_tag` builds the master image without the suites. The
+  prune keeps the 15 newest master images and excludes `v*`, so release tags stay
+  available.
 - Pre-release and manual Apple workflows upload builds without submitting them for
   App Review. Public TestFlight builds come only from the PR label workflow, see
   [Apple release automation](apple-release-automation.md#public-testflight-builds-label-triggered);

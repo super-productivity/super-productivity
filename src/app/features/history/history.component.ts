@@ -4,7 +4,7 @@ import { expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { SimpleCounter } from '../simple-counter/simple-counter.model';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../tasks/task.model';
-import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { DialogWorklogExportComponent } from '../worklog/dialog-worklog-export/dialog-worklog-export.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -28,6 +28,7 @@ import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
 import { NumberToMonthPipe } from '../../ui/pipes/number-to-month.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskArchiveService } from '../archive/task-archive.service';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { Log } from '../../core/log';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { WorklogTaskRowComponent } from '../worklog/worklog-task-row/worklog-task-row.component';
@@ -70,18 +71,20 @@ export class HistoryComponent {
   private readonly _worklogService = inject(WorklogService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _simpleCounterService = inject(SimpleCounterService);
-  private readonly _taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _router = inject(Router);
   private readonly _route = inject(ActivatedRoute);
   private readonly _store = inject(Store);
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _dateService = inject(DateService);
+  private readonly _dateTimeFormatService = inject(DateTimeFormatService);
   private readonly _queryParams = toSignal(this._route.queryParams, {
     initialValue: this._route.snapshot.queryParams,
   });
 
   T: typeof T = T;
+  readonly textLocale = this._dateTimeFormatService.textLocale;
   readonly worklogData = toSignal(this._worklogService.worklogData$);
   readonly enabledSimpleCounters = toSignal(
     this._simpleCounterService.enabledSimpleCounters$,
@@ -249,7 +252,7 @@ export class HistoryComponent {
     dateStr: string,
     newVal: number | string,
   ): Promise<void> {
-    await this._taskService.updateEverywhere(task.id, {
+    await this._taskArchiveOrchestrator.updateEverywhere(task.id, {
       timeSpentOnDay: {
         ...task.timeSpentOnDay,
         [dateStr]: +newVal,

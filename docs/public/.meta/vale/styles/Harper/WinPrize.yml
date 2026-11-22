@@ -1,0 +1,21 @@
+---
+# Hand-written from Harper's WinPrize: the award is a `prize`.
+#
+# The generated rule keyed on punctuation. Harper takes a form of `win`, then
+# optionally a determiner, then `price`, `prices`, `prise` or `prises` -- the
+# verb is what tells an award from a cost, since "the price won" is ordinary.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Perhaps you meant the word for an award."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:win|wins|won|winning)\s(?:(?:a|an|the|this|that|these|those|my|your|his|her|its|our|their|some|several|many|few|no|any|every|each|first|second|third|two|three|[0-9]+)\s)?)pri[cs]e\b': "prize"
+  '(?<=\b(?:win|wins|won|winning)\s(?:(?:a|an|the|this|that|these|those|my|your|his|her|its|our|their|some|several|many|few|no|any|every|each|first|second|third|two|three|[0-9]+)\s)?)pri[cs]es\b': "prizes"

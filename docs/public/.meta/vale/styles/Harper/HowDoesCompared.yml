@@ -1,0 +1,21 @@
+---
+# Hand-written from Harper's HowDoesCompared: `does` already carries the
+# tense, so the verb stays in its base form.
+#
+# The generated rule keyed on punctuation. The subjects are Harper's: `these`,
+# `they` and `those` after `do`, and the singulars after `does`.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Use the base form of the verb `compare`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\bhow\s+does\s+(?:it|this|that|he|she|one)\s)compare[ds]\b': "compare"
+  '(?<=\bhow\s+do\s+(?:these|they|those)\s)compare[ds]\b': "compare"
