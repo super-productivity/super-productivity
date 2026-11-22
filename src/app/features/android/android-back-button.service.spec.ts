@@ -12,6 +12,8 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { INBOX_PROJECT } from '../project/project.const';
 import { Project } from '../project/project.model';
 import { selectAllProjects } from '../project/store/project.selectors';
+import { selectAllBoards } from '../boards/store/boards.selectors';
+import { BoardCfg } from '../boards/boards.model';
 import { AppFeaturesConfig } from '../config/global-config.model';
 import { getStartPageUrlPath } from '../config/default-start-page.util';
 import { hideFocusOverlay } from '../focus-mode/store/focus-mode.actions';
@@ -131,6 +133,7 @@ describe('AndroidBackButtonService (#7972)', () => {
     store = TestBed.inject(MockStore);
     dispatch = spyOn(store, 'dispatch');
     store.overrideSelector(selectAllProjects, []);
+    store.overrideSelector(selectAllBoards, []);
     service = TestBed.inject(AndroidBackButtonService);
 
     // Prevent real side effects on globals.
@@ -424,6 +427,51 @@ describe('AndroidBackButtonService (#7972)', () => {
 
       expect(minimizeApp).toHaveBeenCalled();
       expect(navigateByUrl).not.toHaveBeenCalled();
+    });
+
+    describe('a single view as the start destination', () => {
+      const setViews = (ids: string[]): void => {
+        store.overrideSelector(
+          selectAllBoards,
+          ids.map((id) => ({ id }) as BoardCfg),
+        );
+        store.refreshState();
+      };
+
+      it('exits from that view', () => {
+        misc = { defaultStartPage: 'view:v1' };
+        setViews(['v1', 'v2']);
+        routerUrl = '/boards/v1';
+
+        service.handleBackButton();
+
+        expect(minimizeApp).toHaveBeenCalled();
+        expect(navigateByUrl).not.toHaveBeenCalled();
+      });
+
+      it('pops to that view from another view', () => {
+        misc = { defaultStartPage: 'view:v1' };
+        setViews(['v1', 'v2']);
+        routerUrl = '/boards/v2';
+
+        service.handleBackButton();
+
+        expect(navigateByUrl).toHaveBeenCalledWith('/boards/v1', { replaceUrl: true });
+        expect(minimizeApp).not.toHaveBeenCalled();
+      });
+
+      it('exits from any view once the start view is deleted', () => {
+        // The deleted view's route redirects to the last view; popping to it
+        // would land back here and never exit.
+        misc = { defaultStartPage: 'view:gone' };
+        setViews(['v2']);
+        routerUrl = '/boards/v2';
+
+        service.handleBackButton();
+
+        expect(minimizeApp).toHaveBeenCalled();
+        expect(navigateByUrl).not.toHaveBeenCalled();
+      });
     });
 
     it('treats a deeper path under a task list as non-top-level (navigates up)', () => {
