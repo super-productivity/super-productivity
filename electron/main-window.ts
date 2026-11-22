@@ -55,6 +55,7 @@ import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
 import { isAllowedSessionPermission } from './session-permissions';
 import { applyJiraImageAuth } from './jira-image-auth';
+import { registerBeforeCloseHandlers } from './before-close-holds';
 
 // Long enough to outlast a resize or move gesture, so a drag records one
 // sample rather than one per frame.
@@ -851,8 +852,6 @@ function createMenu(quitApp: () => void): void {
 
 // TODO this is ugly as f+ck
 const appCloseHandler = (app: App): void => {
-  let ids: string[] = [];
-
   const _quitApp = (): void => {
     setIsQuiting(true);
     // Destroy task widget before closing main window to ensure window-all-closed fires
@@ -860,54 +859,33 @@ const appCloseHandler = (app: App): void => {
     mainWin.close();
   };
 
-  ipcMain.on(IPC.REGISTER_BEFORE_CLOSE, (ev, { id }) => {
-    ids.push(id);
-  });
-  ipcMain.on(IPC.UNREGISTER_BEFORE_CLOSE, (ev, { id }) => {
-    ids = ids.filter((idIn) => idIn !== id);
-  });
-  ipcMain.on(IPC.BEFORE_CLOSE_DONE, (ev, { id }) => {
-    ids = ids.filter((idIn) => idIn !== id);
-    log(IPC.BEFORE_CLOSE_DONE, id, ids);
-    if (ids.length === 0) {
-      // Destroy task widget before closing main window
-      destroyTaskWidget();
-      // The quit request can time out while the user answers the finish-day prompt
-      setIsQuitRequested(true);
-      mainWin.close();
-    } else if (mainWin && !mainWin.isDestroyed()) {
-      // Holds that wait for the others (sync before close) act once they are
-      // the last ones pending.
-      mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
-    }
-  });
-
-  mainWin.on('close', (event) => {
-    // NOTE: this might not work if we run a second instance of the app
-    log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', ids);
-    if (!getIsQuiting()) {
+  registerBeforeCloseHandlers(
+    ipcMain,
+    mainWin,
+    (event, ids) => {
+      log('close event: isQuiting=', getIsQuiting(), 'pendingBeforeCloseIds=', ids);
+      if (getIsQuiting()) {
+        return false;
+      }
       if (getIsMinimizeToTray() && !getIsQuitRequested()) {
         const indicator = ensureIndicator();
         if (indicator) {
           event.preventDefault();
           mainWin.hide();
           showTaskWidget();
-          return;
+          return false;
         }
       }
-
-      event.preventDefault();
-
-      // A gone renderer (killed, oom, ...) never answers, so waiting for it
-      // would leave no way to quit.
-      if (ids.length > 0 && !mainWin.webContents.isCrashed()) {
-        log('Actions to wait for ', ids);
-        mainWin.webContents.send(IPC.NOTIFY_ON_CLOSE, ids);
-      } else {
-        _quitApp();
-      }
-    }
-  });
+      return true;
+    },
+    _quitApp,
+    () => {
+      // Destroy task widget before closing main window
+      destroyTaskWidget();
+      // The quit request can time out while the user answers the finish-day prompt
+      setIsQuitRequested(true);
+    },
+  );
 
   mainWin.on('closed', () => {
     // Clear any pending reset timer so it doesn't keep the event loop alive
