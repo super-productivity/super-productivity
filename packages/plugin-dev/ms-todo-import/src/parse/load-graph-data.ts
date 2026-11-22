@@ -5,7 +5,7 @@ export const GRAPH_ORIGIN = 'https://graph.microsoft.com';
 const LISTS_URL = `${GRAPH_ORIGIN}/v1.0/me/todo/lists`;
 // written out rather than URLSearchParams: Graph documents literal `$` options
 // and `%20` spaces, and `+` is not reliably read as a space in `$filter`
-const TASKS_QUERY = "$filter=status%20ne%20'completed'&$expand=checklistItems";
+const TASKS_QUERY = '$expand=checklistItems';
 
 type GraphRequestApi = Pick<PluginAPI, 'request'>;
 

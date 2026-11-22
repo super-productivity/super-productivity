@@ -217,11 +217,14 @@ export const parseGraphData = (
   const tasks: MsTodoTask[] = [];
   for (const project of projects) {
     for (const rawTask of raw.tasksByListId[project.extId] ?? []) {
-      if (!asStr(rawTask.id) || rawTask.status === 'completed') {
+      if (!asStr(rawTask.id)) {
         continue;
       }
       const task = parseTask(rawTask, project.extId, strings);
-      tasks.push(task);
+      tasks.push({
+        ...task,
+        isDone: rawTask.status === 'completed',
+      });
       for (const item of rawTask.checklistItems ?? []) {
         if (asStr(item.id)) {
           tasks.push(parseStep(item, task, strings));

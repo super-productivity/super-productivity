@@ -50,13 +50,17 @@ describe('parseGraphData', () => {
     });
   });
 
-  it('skips completed tasks but keeps in-progress and waiting ones', () => {
+  it('maps completed tasks as done and keeps in-progress and waiting ones open', () => {
     const tasks = parseTasks([
       { id: 'a', title: 'done', status: 'completed' },
       { id: 'b', title: 'started', status: 'inProgress' },
       { id: 'c', title: 'waiting', status: 'waitingOnOthers' },
     ]);
-    expect(tasks.map((t) => t.title)).toEqual(['started', 'waiting']);
+    expect(tasks.map((t) => [t.title, t.isDone])).toEqual([
+      ['done', true],
+      ['started', false],
+      ['waiting', false],
+    ]);
   });
 
   it('puts steps right after their task as sub-tasks, checked steps done', () => {
