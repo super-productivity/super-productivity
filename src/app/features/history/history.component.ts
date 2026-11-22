@@ -28,6 +28,7 @@ import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
 import { NumberToMonthPipe } from '../../ui/pipes/number-to-month.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskArchiveService } from '../archive/task-archive.service';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { Log } from '../../core/log';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { WorklogTaskRowComponent } from '../worklog/worklog-task-row/worklog-task-row.component';
@@ -77,11 +78,13 @@ export class HistoryComponent {
   private readonly _store = inject(Store);
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _dateService = inject(DateService);
+  private readonly _dateTimeFormatService = inject(DateTimeFormatService);
   private readonly _queryParams = toSignal(this._route.queryParams, {
     initialValue: this._route.snapshot.queryParams,
   });
 
   T: typeof T = T;
+  readonly textLocale = this._dateTimeFormatService.textLocale;
   readonly worklogData = toSignal(this._worklogService.worklogData$);
   readonly enabledSimpleCounters = toSignal(
     this._simpleCounterService.enabledSimpleCounters$,

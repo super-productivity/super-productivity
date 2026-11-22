@@ -46,7 +46,7 @@
                   >
                     <span
                       class="month-label"
-                      [innerHtml]="month.key | numberToMonth"
+                      [innerHtml]="month.key | numberToMonth: textLocale()"
                     ></span>
                     <mat-icon class="collapsible-expand-icon">{{
                       isMonthExpanded(year.key, month.key) ? 'expand_less' : 'expand_more'
@@ -175,7 +175,7 @@
                                       ) {
                                         {{
                                           worklogForDay.value.dateStr.slice(5, 7)
-                                            | numberToMonth
+                                            | numberToMonth: textLocale()
                                         }}
                                       }
                                     </button>
