@@ -6,7 +6,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { nanoid } from 'nanoid';
 import { selectAllBoards } from './store/boards.selectors';
 import { BoardsActions } from './store/boards.actions';
-import { BoardCfg } from './boards.model';
+import { BoardCfg, BoardPanelCfg } from './boards.model';
 import { DEFAULT_BOARD_CFG } from './boards.const';
 import { getLayoutChanges, translateViewTitle, ViewLayout } from './boards.util';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
@@ -155,6 +155,18 @@ export class BoardsService {
     if (Object.keys(updates).length) {
       this._store.dispatch(BoardsActions.updateBoard({ id: board.id, updates }));
     }
+  }
+
+  /**
+   * One section changed from its table header (columns, widths, sort): one
+   * `updateBoard` with the panels, as the view editor saves them. The stored
+   * task order wins in the reducer (`keepStoredTaskIds`).
+   */
+  updatePanel(board: BoardCfg, panel: BoardPanelCfg): void {
+    const panels = board.panels.map((p) => (p.id === panel.id ? panel : p));
+    this._store.dispatch(
+      BoardsActions.updateBoard({ id: board.id, updates: { panels } }),
+    );
   }
 
   /** The view page leaves a deleted view by itself (it watches the board list). */

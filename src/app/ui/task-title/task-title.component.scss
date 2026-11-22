@@ -101,6 +101,13 @@
   }
 }
 
+:host(.is-single-line) .display-value {
+  white-space: nowrap;
+  text-wrap-mode: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .display-value.is-placeholder {
   opacity: 0.6;
   font-style: italic;

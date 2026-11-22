@@ -1,0 +1,143 @@
+// The header row of a view's table: the same widths as the rows' cells
+// (`getTableGridTemplate`), title filling the rest.
+:host {
+  display: flex;
+  align-items: stretch;
+  position: sticky;
+  // Sticks to the scroll area's very top, over the board's padding
+  // (`board.component.scss`): rows never show in a gap above it.
+  top: calc(-1 * var(--s2));
+  z-index: calc(var(--z-is-current-host) + 1);
+  min-height: var(--table-row-height);
+  background: var(--bg);
+  border-bottom: 1px solid var(--separator-color);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  user-select: none;
+}
+
+.handle-spacer {
+  flex: none;
+  width: var(--table-handle-width);
+}
+
+.cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 0;
+  padding-inline: var(--s);
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title-name {
+  display: flex;
+  min-width: 0;
+}
+
+.sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-quarter);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--text-color);
+  }
+}
+
+.sort-ico {
+  font-size: var(--font-size-md);
+}
+
+.title-cell {
+  flex: 1;
+  gap: var(--s-half);
+}
+
+.cols {
+  display: flex;
+}
+
+.cols .cell {
+  flex: none;
+  border-inline-start: 1px solid var(--separator-color);
+  cursor: grab;
+}
+
+.cdk-drag-placeholder {
+  opacity: 0.4;
+}
+
+// Straddles the column's start edge (the divider).
+.resize-handle {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(-1 * var(--s-half));
+  width: var(--s);
+  cursor: col-resize;
+  z-index: 1;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--divider-color);
+    outline: none;
+  }
+}
+
+.picker-btn {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--s-quarter);
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--text-color);
+  }
+
+  .material-icons {
+    font-size: inherit;
+  }
+}
+
+.picker {
+  position: absolute;
+  top: 100%;
+  inset-inline-end: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-half);
+  padding: var(--s);
+  background: var(--card-bg);
+  border: 1px solid var(--separator-color);
+  box-shadow: var(--whiteframe-shadow-4dp);
+  color: var(--text-color);
+  font-size: var(--font-size-md);
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: var(--s);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+}

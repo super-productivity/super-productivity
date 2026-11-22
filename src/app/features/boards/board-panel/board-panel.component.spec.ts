@@ -51,7 +51,7 @@ import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { selectAllTagIds } from '../../tag/store/tag.reducer';
+import { selectAllTagIds, selectAllTags } from '../../tag/store/tag.reducer';
 import { AddTaskBarComponent } from '../../tasks/add-task-bar/add-task-bar.component';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 
@@ -77,7 +77,9 @@ const TEST_TAG_IDS = [
 const storeSignal = (selector: unknown, tagIds: Signal<string[]>): Signal<unknown> =>
   selector === selectAllTagIds
     ? tagIds
-    : signal(selector === selectTodayStr ? '2026-09-12' : 0);
+    : selector === selectAllTags
+      ? signal(tagIds().map((id) => ({ id, title: id })))
+      : signal(selector === selectTodayStr ? '2026-09-12' : 0);
 const daySelectSignal = (selector: unknown): Signal<unknown> =>
   storeSignal(selector, signal(TEST_TAG_IDS));
 
@@ -778,6 +780,25 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
 
       expect(component.tasks().map((t) => t.id)).toEqual(['big', 'mid', 'small']);
     });
+  });
+
+  // Every task in a section has the tags it requires (hidden on its rows):
+  // ranking those would tie every row on the first of them.
+  it('sorts by tag on the shown tags, not the required one', async () => {
+    // 'y' is the last tag: a row with no shown tag still sorts after it.
+    await setup([
+      mkTask({ id: 'only-a', tagIds: ['a'] }),
+      mkTask({ id: 'a-y', tagIds: ['a', 'y'] }),
+      mkTask({ id: 'a-c', tagIds: ['a', 'c'] }),
+      mkTask({ id: 'a-b', tagIds: ['a', 'b'] }),
+    ]);
+    const panel = { ...DEFAULT_PANEL_CFG, includedTagIds: ['a'], sortKey: 'tag' };
+    fixture.componentRef.setInput('panelCfg', panel);
+    fixture.detectChanges();
+    expect(component.tasks().map((t) => t.id)).toEqual(['a-b', 'a-c', 'a-y', 'only-a']);
+    fixture.componentRef.setInput('panelCfg', { ...panel, sortDir: 'desc' });
+    fixture.detectChanges();
+    expect(component.tasks().map((t) => t.id)).toEqual(['only-a', 'a-y', 'a-c', 'a-b']);
   });
 
   describe('isManualOrder', () => {

@@ -41,9 +41,11 @@
   <board-panel
     [panelCfg]="panel"
     [isListLayout]="isListLayout()"
+    [isTableLayout]="isTableLayout()"
     [isSection]="isSectioned()"
     (editBoard)="editBoard()"
     (editColumn)="editBoard(panel.id)"
     (adjacentPanel)="adjacentPanel(panel.id, $event)"
+    (panelChange)="updatePanel($event)"
   ></board-panel>
 }

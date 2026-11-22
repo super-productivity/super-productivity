@@ -1,4 +1,5 @@
 @let t = task();
+@let tc = tableCfg();
 <swipe-block
   [isDone]="t.isDone"
   [canSwipe]="!taskTitleEditEl?.isEditing() && !isTouchSelectionMode()"
@@ -15,6 +16,16 @@
       (mouseleave)="isFirstLineHover = false"
       class="first-line"
     >
+      @if (tc) {
+        <!-- Table rows: room to click the row (select, drag) without hitting
+             a cell that edits on click. -->
+        <div
+          class="table-handle"
+          aria-hidden="true"
+        >
+          <span class="material-icons">drag_indicator</span>
+        </div>
+      }
       <div
         class="title-and-left-btns-wrapper"
         (click)="titleBarClick($event)"
@@ -54,13 +65,14 @@
             [resetToLastExternalValueTrigger]="t"
             [style.pointer-events]="isTouchActive() && t.title.length ? 'none' : 'auto'"
             [readonly]="isTouchSelectionMode()"
+            [singleLine]="!!tc"
             #taskTitleEditEl
             (valueEdited)="updateTaskTitleIfChanged($event)"
             [value]="t.title"
             class="task-title"
           ></task-title>
 
-          @if (t.tagIds?.length || t.projectId || t.repeatCfgId || t.issueId) {
+          @if (!tc && (t.tagIds?.length || t.projectId || t.repeatCfgId || t.issueId)) {
             <!-- In a view, chips follow the view (like its cards), not the
                  stale active context: project shown, required tags hidden. -->
             <tag-list
@@ -75,51 +87,54 @@
       </div>
 
       <div class="all-controls-wrapper">
-        <div
-          (click)="onTimeWrapperClick($event)"
-          (keydown.enter)="estimateTime()"
-          (keydown.space)="$event.preventDefault(); estimateTime()"
-          [attr.role]="!t.subTasks?.length ? 'button' : null"
-          [attr.tabindex]="!t.subTasks?.length ? 0 : null"
-          [attr.aria-label]="
-            !t.subTasks?.length ? (T.F.TASK.CMP.ESTIMATE | translate) : null
-          "
-          [class.hasNoTimeSpentOrEstimate]="!t.timeSpent && !t.timeEstimate"
-          [class.isEditable]="!t.subTasks?.length"
-          class="time-wrapper"
-        >
-          @if (!t.subTasks?.length) {
-            <div class="time">
-              @if (t.timeSpent) {
-                <div class="time-val">
-                  <span>{{ t.timeSpent | msToString }}</span>
-                </div>
-                <div class="separator">/</div>
-              }
-              <div class="time-val">{{ t.timeEstimate | msToString }}</div>
-            </div>
-          }
-          @if (t.subTasks?.length) {
-            @let subTaskTimeSpent = t.subTasks | subTaskTotalTimeSpent;
-            @if (subTaskTimeLeft() || subTaskTimeSpent) {
+        <!-- A table row shows these in its own columns when they are picked. -->
+        @if (!tc?.has?.estimate && !tc?.has?.timeSpent) {
+          <div
+            (click)="onTimeWrapperClick($event)"
+            (keydown.enter)="estimateTime()"
+            (keydown.space)="$event.preventDefault(); estimateTime()"
+            [attr.role]="!t.subTasks?.length ? 'button' : null"
+            [attr.tabindex]="!t.subTasks?.length ? 0 : null"
+            [attr.aria-label]="
+              !t.subTasks?.length ? (T.F.TASK.CMP.ESTIMATE | translate) : null
+            "
+            [class.hasNoTimeSpentOrEstimate]="!t.timeSpent && !t.timeEstimate"
+            [class.isEditable]="!t.subTasks?.length"
+            class="time-wrapper"
+          >
+            @if (!t.subTasks?.length) {
               <div class="time">
-                <div class="time-val">
-                  <mat-icon
-                    inline="true"
-                    style="margin-top: -6px"
-                    >functions
-                  </mat-icon>
-                  <span>{{ subTaskTimeSpent | msToString }}</span>
-                </div>
-                <div class="separator">/</div>
-                <div class="time-val">
-                  <mat-icon inline="true">hourglass_empty</mat-icon>
-                  {{ subTaskTimeLeft() | msToString }}
-                </div>
+                @if (t.timeSpent) {
+                  <div class="time-val">
+                    <span>{{ t.timeSpent | msToString }}</span>
+                  </div>
+                  <div class="separator">/</div>
+                }
+                <div class="time-val">{{ t.timeEstimate | msToString }}</div>
               </div>
             }
-          }
-        </div>
+            @if (t.subTasks?.length) {
+              @let subTaskTimeSpent = t.subTasks | subTaskTotalTimeSpent;
+              @if (subTaskTimeLeft() || subTaskTimeSpent) {
+                <div class="time">
+                  <div class="time-val">
+                    <mat-icon
+                      inline="true"
+                      style="margin-top: -6px"
+                      >functions
+                    </mat-icon>
+                    <span>{{ subTaskTimeSpent | msToString }}</span>
+                  </div>
+                  <div class="separator">/</div>
+                  <div class="time-val">
+                    <mat-icon inline="true">hourglass_empty</mat-icon>
+                    {{ subTaskTimeLeft() | msToString }}
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        }
 
         <div class="controls">
           @if (isFirstLineHover && !isTouchActive()) {
@@ -143,84 +158,86 @@
               <mat-icon>attach_file</mat-icon>
             </button>
           }
-          @if (t.remindAt) {
-            <button
-              (click)="scheduleTask()"
-              [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
-              [matTooltip]="
-                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
-              "
-              matTooltipPosition="above"
-              [attr.aria-label]="
-                hasTimeConflict()
-                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
-                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
-              "
-              class="ico-btn schedule-btn"
-              [attr.data-scheduled-date-color]="scheduledDateColor()"
-              mat-icon-button
-            >
-              <mat-icon>alarm</mat-icon>
-              <div
-                class="time-badge"
-                [innerHTML]="t.dueWithTime | shortPlannedAt"
-              ></div>
-            </button>
-          } @else if (t.dueWithTime) {
-            <button
-              (click)="scheduleTask()"
-              [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
-              [matTooltip]="
-                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
-              "
-              matTooltipPosition="above"
-              [attr.aria-label]="
-                hasTimeConflict()
-                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
-                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
-              "
-              class="ico-btn schedule-btn"
-              [attr.data-scheduled-date-color]="scheduledDateColor()"
-              mat-icon-button
-            >
-              @if (isScheduledToday()) {
-                <mat-icon>wb_sunny</mat-icon>
-              } @else {
-                <mat-icon>schedule</mat-icon>
-              }
-              <div
-                class="time-badge"
-                [innerHTML]="t.dueWithTime | shortPlannedAt"
-              ></div>
-            </button>
-          } @else if (isShowDueDayBtn()) {
-            <button
-              (click)="scheduleTask()"
-              [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
-              [matTooltip]="
-                hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
-              "
-              matTooltipPosition="above"
-              [attr.aria-label]="
-                hasTimeConflict()
-                  ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
-                  : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
-              "
-              class="ico-btn schedule-btn"
-              [attr.data-scheduled-date-color]="scheduledDateColor()"
-              mat-icon-button
-            >
-              @if (isScheduledToday()) {
-                <mat-icon>wb_sunny</mat-icon>
-              } @else {
-                <mat-icon>today</mat-icon>
-              }
-              <div class="time-badge">
-                {{
-                  t.dueDay | localDateStr: globalTrackingIntervalService.todayDateStr()
-                }}
-              </div>
-            </button>
+          @if (!tc?.has?.due) {
+            @if (t.remindAt) {
+              <button
+                (click)="scheduleTask()"
+                [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+                [matTooltip]="
+                  hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+                "
+                matTooltipPosition="above"
+                [attr.aria-label]="
+                  hasTimeConflict()
+                    ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                    : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+                "
+                class="ico-btn schedule-btn"
+                [attr.data-scheduled-date-color]="scheduledDateColor()"
+                mat-icon-button
+              >
+                <mat-icon>alarm</mat-icon>
+                <div
+                  class="time-badge"
+                  [innerHTML]="t.dueWithTime | shortPlannedAt"
+                ></div>
+              </button>
+            } @else if (t.dueWithTime) {
+              <button
+                (click)="scheduleTask()"
+                [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+                [matTooltip]="
+                  hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+                "
+                matTooltipPosition="above"
+                [attr.aria-label]="
+                  hasTimeConflict()
+                    ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                    : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+                "
+                class="ico-btn schedule-btn"
+                [attr.data-scheduled-date-color]="scheduledDateColor()"
+                mat-icon-button
+              >
+                @if (isScheduledToday()) {
+                  <mat-icon>wb_sunny</mat-icon>
+                } @else {
+                  <mat-icon>schedule</mat-icon>
+                }
+                <div
+                  class="time-badge"
+                  [innerHTML]="t.dueWithTime | shortPlannedAt"
+                ></div>
+              </button>
+            } @else if (isShowDueDayBtn()) {
+              <button
+                (click)="scheduleTask()"
+                [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
+                [matTooltip]="
+                  hasTimeConflict() ? (T.F.TASK.CMP.TIME_CONFLICT | translate) : ''
+                "
+                matTooltipPosition="above"
+                [attr.aria-label]="
+                  hasTimeConflict()
+                    ? (T.F.TASK.CMP.TIME_CONFLICT | translate)
+                    : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+                "
+                class="ico-btn schedule-btn"
+                [attr.data-scheduled-date-color]="scheduledDateColor()"
+                mat-icon-button
+              >
+                @if (isScheduledToday()) {
+                  <mat-icon>wb_sunny</mat-icon>
+                } @else {
+                  <mat-icon>today</mat-icon>
+                }
+                <div class="time-badge">
+                  {{
+                    t.dueDay | localDateStr: globalTrackingIntervalService.todayDateStr()
+                  }}
+                </div>
+              </button>
+            }
           }
           @if (hasTimeConflict()) {
             <!-- Decorative: MatIcon forces aria-hidden, and the adjacent schedule
@@ -233,7 +250,7 @@
               >priority_high</mat-icon
             >
           }
-          @if (hasDeadline()) {
+          @if (hasDeadline() && !tc?.has?.deadline) {
             <button
               (click)="openDeadlineDialog()"
               [title]="T.F.TASK.ADDITIONAL_INFO.DEADLINE | translate"
@@ -304,10 +321,89 @@
             }
           </div>
         </div>
-        @if (t.priority; as p) {
-          <task-priority-indicator [priority]="p"></task-priority-indicator>
+        @if (t.priority && !tc?.has?.priority) {
+          <task-priority-indicator [priority]="t.priority"></task-priority-indicator>
         }
       </div>
+
+      @if (tc) {
+        <!-- Table cells (a view's table layout): plain elements; a click on a
+             cell edits its field the way the row's own button would. -->
+        @for (col of tc.colIds; track col) {
+          <div
+            class="table-cell"
+            [attr.data-col]="col"
+            (click)="onTableCellClick($event, col)"
+          >
+            @switch (col) {
+              @case ('project') {
+                @if (!t.parentId && t.projectId) {
+                  <!-- Not a link here: a click edits the cell (move to project), like tags. -->
+                  <tag-list
+                    part="project"
+                    [task]="t"
+                    [isProjectTagClickable]="false"
+                    [isTouchSelectionMode]="isTouchSelectionMode()"
+                  ></tag-list>
+                }
+              }
+              @case ('tags') {
+                @if (t.tagIds?.length || t.repeatCfgId || t.issueId) {
+                  <tag-list
+                    part="tags"
+                    [task]="t"
+                    [isTouchSelectionMode]="isTouchSelectionMode()"
+                    [tagsToHide]="viewTagsToHide()"
+                  ></tag-list>
+                }
+              }
+              @case ('estimate') {
+                @if (t.subTasks?.length) {
+                  {{ subTaskTimeLeft() | msToString }}
+                } @else if (t.timeEstimate) {
+                  {{ t.timeEstimate | msToString }}
+                }
+              }
+              @case ('timeSpent') {
+                @if (t.subTasks?.length) {
+                  {{ t.subTasks | subTaskTotalTimeSpent | msToString }}
+                } @else if (t.timeSpent) {
+                  {{ t.timeSpent | msToString }}
+                }
+              }
+              @case ('due') {
+                @if (t.dueWithTime) {
+                  <span [innerHTML]="t.dueWithTime | shortPlannedAt"></span>
+                } @else if (t.dueDay) {
+                  {{
+                    t.dueDay | localDateStr: globalTrackingIntervalService.todayDateStr()
+                  }}
+                }
+              }
+              @case ('deadline') {
+                @if (t.deadlineWithTime) {
+                  <span
+                    [class.color-warn-i]="isDeadlineOverdue()"
+                    [innerHTML]="t.deadlineWithTime | shortPlannedAt"
+                  ></span>
+                } @else if (t.deadlineDay) {
+                  <span [class.color-warn-i]="isDeadlineOverdue()">{{
+                    t.deadlineDay
+                      | localDateStr: globalTrackingIntervalService.todayDateStr()
+                  }}</span>
+                }
+              }
+              @case ('priority') {
+                @if (t.priority) {
+                  <task-priority-indicator
+                    [priority]="t.priority"
+                  ></task-priority-indicator>
+                }
+              }
+            }
+          </div>
+        }
+      }
     </div>
 
     @if (isCurrent()) {
@@ -398,10 +494,12 @@
     #projectMenuTriggerEl
     [matMenuTriggerFor]="projectMenu"
     style="position: absolute; visibility: hidden; pointer-events: none"
+    [style.left.px]="menuAnchor()?.x"
+    [style.top.px]="menuAnchor()?.y"
   ></div>
   <mat-menu
     #projectMenu="matMenu"
-    (closed)="focusSelf()"
+    (closed)="menuAnchor.set(null); focusSelf()"
     (menuOpened)="_loadProjectListIfNeeded()"
   >
     <ng-template matMenuContent>
@@ -426,10 +524,15 @@
 }
 
 @if (isTagMenuVisible()) {
+  <!-- A table cell opens it under the cell (menuAnchor); elsewhere it opens
+       below the row, where it sits in the flow. -->
   <tag-toggle-menu-list
     #tagToggleMenuList
     [task]="t"
+    [style.position]="menuAnchor() ? 'absolute' : null"
+    [style.left.px]="menuAnchor()?.x"
+    [style.top.px]="menuAnchor()?.y"
     (toggleTag)="toggleTag($event)"
-    (afterClose)="isTagMenuVisible.set(false); focusSelf()"
+    (afterClose)="isTagMenuVisible.set(false); menuAnchor.set(null); focusSelf()"
   ></tag-toggle-menu-list>
 }

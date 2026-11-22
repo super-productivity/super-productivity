@@ -1,0 +1,116 @@
+@let cols = this.cols();
+@let sorted = sort();
+<!-- A column name: a button that sorts the section by it, when it can. -->
+<ng-template
+  #nameTpl
+  let-id
+  let-label="label"
+>
+  @if (sortKeyOf(id)) {
+    <button
+      type="button"
+      class="label sort-btn"
+      [title]="T.F.BOARDS.TABLE.SORT_BY | translate: { title: label }"
+      (click)="onNameClick(id)"
+    >
+      {{ label }}
+      @if (sorted?.key === sortKeyOf(id)) {
+        <span
+          class="material-icons sort-ico"
+          aria-hidden="true"
+          >{{ sorted?.dir === 'desc' ? 'arrow_downward' : 'arrow_upward' }}</span
+        >
+      }
+    </button>
+  } @else {
+    <span class="label">{{ label }}</span>
+  }
+</ng-template>
+<div class="handle-spacer"></div>
+<div class="cell title-cell">
+  <span
+    class="title-name"
+    role="columnheader"
+    [attr.aria-sort]="ariaSortOf('title')"
+  >
+    <ng-container
+      [ngTemplateOutlet]="nameTpl"
+      [ngTemplateOutletContext]="{
+        $implicit: 'title',
+        label: T.F.BOARDS.TABLE.COL_TITLE | translate,
+      }"
+    ></ng-container>
+  </span>
+  <!-- In the title cell: the picked columns stay aligned with the rows'. -->
+  <button
+    type="button"
+    class="picker-btn"
+    [attr.aria-expanded]="isPickerOpen()"
+    [attr.aria-label]="T.F.BOARDS.TABLE.CHOOSE_COLUMNS | translate"
+    [title]="T.F.BOARDS.TABLE.CHOOSE_COLUMNS | translate"
+    (click)="isPickerOpen.set(!isPickerOpen())"
+  >
+    <span
+      class="material-icons"
+      aria-hidden="true"
+      >view_column</span
+    >
+  </button>
+</div>
+<div
+  class="cols"
+  cdkDropList
+  cdkDropListOrientation="horizontal"
+  cdkDropListLockAxis="x"
+  (cdkDropListDropped)="drop($event)"
+>
+  @for (col of cols; track col.id) {
+    @if (col.id !== 'title') {
+      @let label = labelOf(col.id) | translate;
+      <div
+        class="cell"
+        role="columnheader"
+        cdkDrag
+        [attr.aria-sort]="ariaSortOf(col.id)"
+        (pointerdown)="isDragged = false"
+        (cdkDragStarted)="isDragged = true"
+        [attr.data-col]="col.id"
+        [style.width.px]="col.width"
+      >
+        <span
+          class="resize-handle"
+          role="separator"
+          tabindex="0"
+          aria-orientation="vertical"
+          [attr.aria-valuenow]="col.width"
+          [attr.aria-label]="T.F.BOARDS.TABLE.RESIZE | translate: { title: label }"
+          [title]="T.F.BOARDS.TABLE.RESIZE | translate: { title: label }"
+          (pointerdown)="startResize($event, col.id)"
+          (keydown)="resizeByKey($event, col.id)"
+        ></span>
+        <ng-container
+          [ngTemplateOutlet]="nameTpl"
+          [ngTemplateOutletContext]="{ $implicit: col.id, label }"
+        ></ng-container>
+      </div>
+    }
+  }
+</div>
+@if (isPickerOpen()) {
+  <div
+    class="picker"
+    role="group"
+    [attr.aria-label]="T.F.BOARDS.TABLE.CHOOSE_COLUMNS | translate"
+  >
+    @for (col of ALL_COLS; track col.id) {
+      <label>
+        <input
+          type="checkbox"
+          [checked]="isShown(col.id)"
+          (change)="toggleCol(col.id)"
+        />
+        {{ col.label | translate }}
+      </label>
+    }
+  </div>
+}

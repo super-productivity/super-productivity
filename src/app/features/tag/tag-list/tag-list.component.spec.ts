@@ -371,6 +371,38 @@ describe('TagListComponent', () => {
     });
   });
 
+  describe('part input (table cells)', () => {
+    beforeEach(() => {
+      projectState$.next({
+        ids: ['proj-1'],
+        entities: { 'proj-1': createMockProject('proj-1', 'My Project') },
+      });
+      tagState$.next({
+        ids: ['tag-1'],
+        entities: { 'tag-1': createMockTag('tag-1', 'Alpha') },
+      });
+      workContext$.next({ activeId: 'proj-1', activeType: WorkContextType.PROJECT });
+      fixture.componentRef.setInput(
+        'task',
+        createMockTask({ projectId: 'proj-1', tagIds: ['tag-1'], repeatCfgId: 'r1' }),
+      );
+    });
+
+    it('shows only the project chip for the project part, in any context', () => {
+      fixture.componentRef.setInput('part', 'project');
+      fixture.detectChanges();
+      expect(component.tags().map((t) => t.id)).toEqual(['proj-1']);
+      expect(component.indicatorChips()).toEqual([]);
+    });
+
+    it('shows the tags but never the project chip for the tags part', () => {
+      fixture.componentRef.setInput('part', 'tags');
+      fixture.componentRef.setInput('isShowProjectTagAlways', true);
+      fixture.detectChanges();
+      expect(component.tags().map((t) => t.id)).toEqual(['tag-1']);
+    });
+  });
+
   describe('project tag click', () => {
     // The tag-list host stands in for the task row listening for clicks.
     let rowClick: jasmine.Spy;

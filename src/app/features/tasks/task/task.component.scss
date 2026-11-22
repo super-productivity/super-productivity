@@ -14,3 +14,85 @@
     box-shadow: none;
   }
 }
+
+// TABLE ROW (a view's table layout, `TASK_TABLE`)
+// ---------
+// One grid per row, its columns from the view (`--table-cols`, see
+// `getTableGridTemplate`): title area, the row's buttons, then the picked
+// columns at fixed widths, anchored to the row's end so they line up across
+// rows, sections and subtask rows. Short rows; a divider before each cell.
+:host.isTableRow {
+  --task-first-line-min-height: var(--table-row-height);
+  --task-inner-padding-top-bottom: 1px;
+}
+
+// The tracked row sticks right below the table's sticky header (which sits
+// over the board's padding, see `board-table-header`), not under it.
+:host.isTableRow.isCurrent {
+  top: calc(var(--table-row-height) + 1px - var(--s2));
+}
+
+// Nested subtask rows are table rows too, so this may reach them.
+:host.isTableRow .first-line {
+  display: grid;
+  grid-template-columns: var(--table-cols);
+  align-items: stretch;
+
+  > .title-and-left-btns-wrapper {
+    min-height: 0;
+
+    done-toggle {
+      --done-toggle-size: var(--table-row-height);
+    }
+  }
+
+  > .all-controls-wrapper .controls button {
+    min-height: 0;
+  }
+}
+
+.table-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color-muted);
+  font-size: var(--font-size-lg);
+  opacity: 0;
+  transition: opacity var(--transition-duration-s) ease-out;
+
+  .material-icons {
+    font-size: inherit;
+  }
+
+  // Shown on the row's hover, while selecting, and on touch (no hover).
+  .first-line:hover > &,
+  :host.isMultiSelected > swipe-block &,
+  :host-context(body.isTouchPrimary) & {
+    opacity: 1;
+  }
+}
+
+.table-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: var(--s);
+  border-inline-start: 1px solid var(--separator-color);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+  cursor: pointer;
+
+  // Chips on one line; the cell clips what doesn't fit.
+  tag-list ::ng-deep {
+    .tags-container,
+    .tags {
+      flex-wrap: nowrap;
+      margin: 0;
+      padding: 0;
+      justify-content: flex-start;
+    }
+  }
+}

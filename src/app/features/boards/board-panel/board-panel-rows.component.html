@@ -102,6 +102,17 @@
        Edge classes: a flat section draws no line at its edges, and the done
        list none above its first row (the open list's last line is there). -->
   @let hasDone = panel.shownDone().length > 0;
+  <!-- Each section of a table has its own header: its columns, widths and
+       sort (a click on a column name). -->
+  @if (panel.isTableLayout() && (panel.mainRows().length || hasDone)) {
+    <board-table-header
+      [cols]="tableCols()"
+      [sort]="tableSort()"
+      (draft)="draftTableCols.set($event)"
+      (changed)="setTableCols($event)"
+      (sortBy)="sortBy($event)"
+    ></board-table-header>
+  }
   <task-list
     [class.task-list-no-top-line]="panel.isSection()"
     [class.task-list-no-bottom-line]="panel.isSection() && !hasDone"

@@ -538,6 +538,10 @@ body.isDarkTheme {
   --task-row-edge: var(--task-separator);
   --task-selected-edge: 3px solid color-mix(in srgb, var(--text-color) 65%, transparent);
   --task-list-row-gap: 0px;
+  // A view's table layout: rows (and its header) this short.
+  --table-row-height: 28px;
+  // Its leading handle column: click to select rows without editing a cell.
+  --table-handle-width: 20px;
 
   // Task shadows (Cat A — same in both modes)
   --task-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;

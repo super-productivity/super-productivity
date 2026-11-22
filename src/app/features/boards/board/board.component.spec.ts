@@ -19,6 +19,7 @@ describe('BoardComponent', () => {
   let dispatch: jasmine.Spy;
   let tagIds: WritableSignal<ReadonlySet<string>>;
   let isXs: WritableSignal<boolean>;
+  let updatePanel: jasmine.Spy;
 
   // One `addTag` per tag; nothing else is dispatched.
   const addedTags = (): Tag[] =>
@@ -31,6 +32,7 @@ describe('BoardComponent', () => {
 
   const render = async (board: BoardCfg, existing: string[]): Promise<HTMLElement> => {
     dispatch = jasmine.createSpy('dispatch');
+    updatePanel = jasmine.createSpy('updatePanel');
     tagIds = signal(new Set(existing));
     isXs = signal(false);
     await TestBed.configureTestingModule({
@@ -38,7 +40,10 @@ describe('BoardComponent', () => {
       providers: [
         provideNoopAnimations(),
         { provide: Store, useValue: { dispatch } },
-        { provide: BoardsService, useValue: { editBoard: jasmine.createSpy() } },
+        {
+          provide: BoardsService,
+          useValue: { editBoard: jasmine.createSpy(), updatePanel },
+        },
         { provide: ViewCriteriaContextService, useValue: { tagIdSet: tagIds } },
         { provide: LayoutService, useValue: { isXs: () => isXs() } },
       ],
@@ -128,5 +133,33 @@ describe('BoardComponent', () => {
     expect(el.classList).toContain('isListLayout');
     // Still the board's columns: not the list width of a one-column view.
     expect(el.classList).not.toContain('isSingleColumn');
+  });
+
+  describe('table layout', () => {
+    const table: BoardCfg = {
+      id: 't',
+      title: 'T',
+      cols: 1,
+      listStyle: 'table',
+      panels: [{ ...DEFAULT_PANEL_CFG, id: 'p' }],
+    };
+
+    it('tells its sections to show a table, and stores what they change', async () => {
+      const el = await render(table, []);
+      expect(fixture.componentInstance.isTableLayout()).toBeTrue();
+      expect(el.classList).toContain('isTableLayout');
+      const changed = { ...table.panels[0], tableCols: [{ id: 'title' }] };
+      fixture.componentInstance.updatePanel(changed);
+      expect(updatePanel).toHaveBeenCalledOnceWith(table, changed);
+    });
+
+    it('shows a list on phones without changing the stored layout', async () => {
+      await render(table, []);
+      isXs.set(true);
+      fixture.detectChanges();
+      expect(fixture.componentInstance.isTableLayout()).toBeFalse();
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(updatePanel).not.toHaveBeenCalled();
+    });
   });
 });

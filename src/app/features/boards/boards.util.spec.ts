@@ -5,8 +5,14 @@ import {
   getPanelHeaderCount,
   getPanelItems,
   getPanelRowIds,
+  getTableCols,
+  getTableGridTemplate,
+  getTableSort,
+  getTableSortClickChanges,
   getViewIcon,
+  getViewLayout,
   getViewLayoutSwitch,
+  toTaskTableCfg,
   matchPanelTasks,
   normalizeBoardForSave,
   getPanelSortKey,
@@ -28,6 +34,7 @@ import {
 import { TaskCopy } from '../tasks/task.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { T } from '../../t.const';
+import { DEFAULT_PANEL_CFG } from './boards.const';
 import {
   addDaysToDbDateStr,
   buildTaskComparator,
@@ -1127,6 +1134,19 @@ describe('getViewIcon', () => {
     expect(getViewIcon({ cols: 1 })).toBe('view_list');
     expect(getViewIcon({ cols: 0 })).toBe('view_list');
     expect(getViewIcon({ cols: 2 })).toBe('view_kanban');
+    expect(getViewIcon({ cols: 1, listStyle: 'table' })).toBe('table_rows');
+  });
+});
+
+describe('getViewLayout', () => {
+  it('reads a board from its columns, a table from listStyle, else a list', () => {
+    expect(getViewLayout({ cols: 1 })).toBe('list');
+    expect(getViewLayout({ cols: 1, listStyle: 'table' })).toBe('table');
+    expect(getViewLayout({ cols: 1, listStyle: 'list' })).toBe('list');
+    // A word a newer client adds reads as a list.
+    expect(getViewLayout({ cols: 1, listStyle: 'grid' })).toBe('list');
+    // Stale while a board.
+    expect(getViewLayout({ cols: 3, listStyle: 'table' })).toBe('board');
   });
 });
 
@@ -1143,6 +1163,15 @@ describe('getViewLayoutSwitch', () => {
       layout: 'list',
       icon: getViewIcon({ cols: 1 }),
       label: T.F.BOARDS.V.SHOW_AS_LIST,
+    });
+  });
+
+  it('offers the board on a table, and a board the table it was', () => {
+    expect(getViewLayoutSwitch({ cols: 1, listStyle: 'table' }).layout).toBe('board');
+    expect(getViewLayoutSwitch({ cols: 2, listStyle: 'table' })).toEqual({
+      layout: 'table',
+      icon: 'table_rows',
+      label: T.F.BOARDS.V.SHOW_AS_TABLE,
     });
   });
 });
@@ -1196,6 +1225,111 @@ describe('getLayoutChanges', () => {
     expect(
       getLayoutChanges({ cols: 1, boardCols: 2, panels: panels(3) }, 'list'),
     ).toEqual({});
+    expect(
+      getLayoutChanges({ cols: 1, listStyle: 'table', panels: panels(3) }, 'table'),
+    ).toEqual({});
+  });
+
+  it('switches between list and table with listStyle alone', () => {
+    expect(getLayoutChanges({ cols: 1, panels: panels(2) }, 'table')).toEqual({
+      listStyle: 'table',
+    });
+    expect(
+      getLayoutChanges({ cols: 1, listStyle: 'table', panels: panels(2) }, 'list'),
+    ).toEqual({ listStyle: 'list' });
+  });
+
+  it('turns a board into a table, remembering its column count', () => {
+    expect(getLayoutChanges({ cols: 3, panels: panels(3) }, 'table')).toEqual({
+      cols: 1,
+      boardCols: 3,
+      listStyle: 'table',
+    });
+    // Back from a board to its table: listStyle already reads right.
+    expect(
+      getLayoutChanges({ cols: 3, listStyle: 'table', panels: panels(3) }, 'table'),
+    ).toEqual({ cols: 1, boardCols: 3 });
+    // A board whose stale listStyle says table, switched to a list.
+    expect(
+      getLayoutChanges({ cols: 3, listStyle: 'table', panels: panels(3) }, 'list'),
+    ).toEqual({ cols: 1, boardCols: 3, listStyle: 'list' });
+  });
+
+  it('keeps listStyle when a table becomes a board', () => {
+    expect(
+      getLayoutChanges(
+        { cols: 1, boardCols: 2, listStyle: 'table', panels: panels(3) },
+        'board',
+      ),
+    ).toEqual({ cols: 2 });
+  });
+});
+
+describe('table columns', () => {
+  it('defaults to title, project and tags', () => {
+    expect(getTableCols({}).map((c) => c.id)).toEqual(['title', 'project', 'tags']);
+  });
+
+  it('puts the title first, skips unknown and repeated ids, clamps widths', () => {
+    const cols = getTableCols({
+      tableCols: [
+        { id: 'tags', width: 5 },
+        { id: 'newerClientCol', width: 100 },
+        { id: 'title', width: 300 },
+        { id: 'tags', width: 200 },
+        { id: 'estimate', width: 9999 },
+        { id: 'priority' },
+        { id: 'due', width: NaN },
+      ],
+    });
+    expect(cols).toEqual([
+      { id: 'title', width: 0 },
+      { id: 'tags', width: 48 },
+      { id: 'estimate', width: 600 },
+      { id: 'priority', width: 70 },
+      { id: 'due', width: 110 },
+    ]);
+  });
+
+  it('shows the title alone when every other column is hidden', () => {
+    expect(getTableCols({ tableCols: [] })).toEqual([{ id: 'title', width: 0 }]);
+  });
+
+  it('builds the grid: title, row buttons, then the fixed columns', () => {
+    expect(
+      getTableGridTemplate([
+        { id: 'title', width: 0 },
+        { id: 'project', width: 160 },
+        { id: 'tags', width: 200 },
+      ]),
+    ).toBe('var(--table-handle-width) minmax(0, 1fr) auto 160px 200px');
+  });
+
+  it('cycles a column header click: ascending, descending, manual', () => {
+    const panel = { ...DEFAULT_PANEL_CFG, id: 'p', title: 'P', taskIds: [] };
+    const asc = getTableSortClickChanges(panel, 'deadline')!;
+    expect(getTableSort(asc)).toEqual({ key: 'deadline', dir: 'asc' });
+    const desc = getTableSortClickChanges(asc, 'deadline')!;
+    expect(getTableSort(desc)).toEqual({ key: 'deadline', dir: 'desc' });
+    const manual = getTableSortClickChanges(desc, 'deadline')!;
+    expect(getTableSort(manual)).toBeNull();
+    expect('sortDir' in manual).toBeFalse();
+    // Another column starts ascending again; released clients keep `sortBy`.
+    const byTitle = getTableSortClickChanges(desc, 'title')!;
+    expect(byTitle.sortBy).toBe('title');
+    expect(byTitle.sortKey).toBeUndefined();
+    expect(byTitle.sortDir).toBe('asc');
+    // The project column has no sort.
+    expect(getTableSortClickChanges(panel, 'project')).toBeNull();
+  });
+
+  it('gives the rows the picked columns after the title', () => {
+    expect(
+      toTaskTableCfg([
+        { id: 'title', width: 0 },
+        { id: 'due', width: 100 },
+      ]),
+    ).toEqual({ colIds: ['due'], has: { due: true } });
   });
 });
 

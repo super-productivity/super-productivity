@@ -13,7 +13,7 @@ import {
   untracked,
   viewChildren,
 } from '@angular/core';
-import { BoardCfg } from '../boards.model';
+import { BoardCfg, BoardPanelCfg } from '../boards.model';
 import {
   BoardPanelComponent,
   BoardPanelNavigation,
@@ -36,6 +36,7 @@ import { ViewTaskListRegistry } from '../../tasks/view-task-list-registry.servic
 import { ViewCriteriaContextService } from '../view-criteria-context.service';
 import { expandOutOnlyAnimation } from '../../../ui/animations/expand.ani';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { getViewLayout } from '../boards.util';
 
 // The tags the default views use, created with their fixed ids.
 const DEFAULT_VIEW_TAGS = [IMPORTANT_TAG, URGENT_TAG, IN_PROGRESS_TAG];
@@ -53,6 +54,7 @@ const DEFAULT_VIEW_TAGS = [IMPORTANT_TAG, URGENT_TAG, IN_PROGRESS_TAG];
     // One column reads like a task list: list width, centered.
     '[class.isSingleColumn]': 'boardCfg().cols <= 1',
     '[class.isListLayout]': 'isListLayout()',
+    '[class.isTableLayout]': 'isTableLayout()',
   },
 })
 export class BoardComponent {
@@ -110,6 +112,16 @@ export class BoardComponent {
   readonly isListLayout = computed(
     () => this.boardCfg().cols <= 1 || this._layoutService.isXs(),
   );
+  // A list shown as a table, on wider screens: phones show it as a list
+  // (columns don't fit) and leave the stored layout as it is.
+  readonly isTableLayout = computed(
+    () => getViewLayout(this.boardCfg()) === 'table' && !this._layoutService.isXs(),
+  );
+  /** A section changed from its table header (columns, widths, sort). */
+  updatePanel(panel: BoardPanelCfg): void {
+    this._boardsService.updatePanel(this.boardCfg(), panel);
+  }
+
   readonly isSectioned = computed(
     () => this.isListLayout() && this.boardCfg().panels.length > 1,
   );
