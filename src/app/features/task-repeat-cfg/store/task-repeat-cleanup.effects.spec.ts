@@ -24,6 +24,7 @@ import { TODAY_TAG } from '../../tag/tag.const';
 import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
 import { selectConfigFeatureState } from '../../config/store/global-config.reducer';
 import { GlobalConfigState } from '../../config/global-config.model';
+import { getRepeatableTaskId } from '../get-repeatable-task-id.util';
 
 describe('TaskRepeatCleanupEffects', () => {
   let effects: TaskRepeatCleanupEffects;
@@ -294,6 +295,83 @@ describe('TaskRepeatCleanupEffects', () => {
         ['today-stale-parent'],
         ['stale-subtask'],
       ]);
+
+      sub.unsubscribe();
+    }));
+
+    it("keeps another timezone's previous-day instance whose creation time reads as today", fakeAsync(() => {
+      // Created at noon of yesterday on a device behind this timezone: the
+      // timestamp reads as today here, the id names yesterday.
+      const eightHoursMs = 8 * 60 * 60 * 1000;
+      const yesterdayElsewhere: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: getRepeatableTaskId('cfg-tz', getDbDateStr(yesterdayMs)),
+        repeatCfgId: 'cfg-tz',
+        created: todayMs - eightHoursMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+      const todayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: getRepeatableTaskId('cfg-tz', getDbDateStr(todayMs)),
+        repeatCfgId: 'cfg-tz',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(yesterdayElsewhere),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds()).toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps a legacy-id instance whose creation time reads as the day of a deterministic one', fakeAsync(() => {
+      // The task made repeatable on a device behind this timezone keeps its
+      // random id; its creation time reads as yesterday here, its day was the
+      // day before.
+      const fourHoursMs = 4 * 60 * 60 * 1000;
+      const convertedElsewhere: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: 'converted-elsewhere',
+        repeatCfgId: 'cfg-tz2',
+        created: yesterdayMs - fourHoursMs,
+        dueDay: getDbDateStr(yesterdayMs - DAY_MS),
+        isDone: false,
+        timeSpent: 0,
+      };
+      const yesterdayInstance: Task = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: getRepeatableTaskId('cfg-tz2', getDbDateStr(yesterdayMs)),
+        repeatCfgId: 'cfg-tz2',
+        created: yesterdayMs,
+        dueDay: getDbDateStr(yesterdayMs),
+        isDone: false,
+        timeSpent: 0,
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(convertedElsewhere),
+        wrapWithSubTasks(yesterdayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds()).toEqual([]);
 
       sub.unsubscribe();
     }));

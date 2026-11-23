@@ -44,6 +44,7 @@ import {
 import {
   getRepeatableSubTaskId,
   getRepeatableTaskId,
+  getRepeatInstanceDay,
 } from './get-repeatable-task-id.util';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 import { getRepeatDeadlineDay } from './store/get-repeat-deadline-day.util';
@@ -271,18 +272,15 @@ export class TaskRepeatCfgService {
     // differs from the repeat day we are about to create.
     const targetDateStr = getDbDateStr(targetCreated);
 
-    // Generate the deterministic ID that would be used for this task.
-    // This ensures both local created-date check AND ID check prevent duplicates.
-    const expectedTaskId = getRepeatableTaskId(taskRepeatCfg.id, targetDateStr);
-
-    // Check if a task already exists with this deterministic ID or creation date.
-    // We use `created` (immutable, set to noon on the repeat-schedule day) instead of
-    // `dueDay` because dueDay is mutable — planTasksForToday changes it when users
-    // reschedule overdue tasks to today, causing false-positive duplicate matches (#6192).
-    const taskAlreadyExists = existingTaskInstances.some((taskI) => {
-      const existingDateStr = getDbDateStr(taskI.created);
-      return taskI.id === expectedTaskId || existingDateStr === targetDateStr;
-    });
+    // Check if a task already exists for this day, by its deterministic ID or,
+    // for legacy IDs, its creation date. We use `created` (immutable, set to noon
+    // on the repeat-schedule day) instead of `dueDay` because dueDay is mutable —
+    // planTasksForToday changes it when users reschedule overdue tasks to today,
+    // causing false-positive duplicate matches (#6192).
+    const repeatCfgId = taskRepeatCfg.id;
+    const taskAlreadyExists = existingTaskInstances.some(
+      (taskI) => getRepeatInstanceDay(taskI, repeatCfgId) === targetDateStr,
+    );
 
     if (taskAlreadyExists) {
       // Task already exists for this date. Still advance lastTaskCreationDay so
@@ -364,7 +362,7 @@ export class TaskRepeatCfgService {
       // without placing the task in a section, but all of them handle this.
       ...(await this._getAddToSectionsOfPreviousInstance(
         taskRepeatCfg,
-        expectedTaskId,
+        taskWithTargetDates.id,
         existingTaskInstances,
       )),
       updateTaskRepeatCfg({

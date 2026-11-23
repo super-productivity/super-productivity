@@ -526,6 +526,32 @@ describe('TaskRepeatCfgService', () => {
       );
     });
 
+    it('uses a deterministic occurrence day even when its timestamp reads as today in this timezone', async () => {
+      const today = new Date();
+      const dueDay = getDbDateStr(today);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const existing = {
+        ...mockTaskWithSubTasks,
+        id: getRepeatableTaskId(mockTaskRepeatCfg.id, getDbDateStr(yesterday)),
+        created: today.getTime(),
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([existing]));
+      taskService.createNewTaskWithDefaults.and.returnValue({
+        ...mockTask,
+        id: getRepeatableTaskId(mockTaskRepeatCfg.id, dueDay),
+        dueDay,
+      });
+      const actions = await service._getActionsForTaskRepeatCfg(
+        mockTaskRepeatCfg,
+        today.getTime(),
+      );
+      const create = actions.find(
+        (action) => action.type === TaskSharedActions.addTask.type,
+      ) as ReturnType<typeof TaskSharedActions.addTask> | undefined;
+      expect(create?.task.id).toBe(getRepeatableTaskId(mockTaskRepeatCfg.id, dueDay));
+    });
+
     it('should not create duplicate but advance lastTaskCreationDay for legacy task with matching created date', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
