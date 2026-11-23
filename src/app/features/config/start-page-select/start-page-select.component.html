@@ -28,9 +28,18 @@
     }}</mat-option>
   }
   @if (appFeatures().isBoardsEnabled) {
+    <!-- Opens the last opened view. -->
     <mat-option [value]="DefaultStartPage.Boards">{{
       T.MH.BOARDS | translate
     }}</mat-option>
+    @for (view of views(); track view.value) {
+      <mat-option [value]="view.value">
+        <select-option-row
+          [title]="view.title"
+          [icon]="view.icon"
+        ></select-option-row>
+      </mat-option>
+    }
   }
 
   @for (opt of projects(); track opt.id) {
