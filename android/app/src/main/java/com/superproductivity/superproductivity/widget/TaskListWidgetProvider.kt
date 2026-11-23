@@ -411,12 +411,14 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_tracking_row, openAppPendingIntent)
 
             // "+" → quick add dialog; the app itself stays closed. The capture goes
-            // to Today on every widget, project widgets included.
+            // to this widget's project, or to Today. One PendingIntent per widget
+            // (request code), so each keeps its own project extra.
             val quickAddIntent = Intent(context, QuickAddActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                projectIdToOpen?.let { putExtra(QuickAddActivity.EXTRA_PROJECT_ID, it) }
             }
             val quickAddPendingIntent = PendingIntent.getActivity(
-                context, 0, quickAddIntent,
+                context, appWidgetId, quickAddIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_add, quickAddPendingIntent)

@@ -12,7 +12,9 @@ import com.superproductivity.superproductivity.R
 /**
  * The widget's "+": a small dialog over the home screen. The title goes to the
  * [CaptureInbox] like a share, so no WebView loads. The widget lists it at
- * once; the app adds it to Today (short syntax applied) when it next opens.
+ * once; the app adds it (short syntax applied) when it next opens: to the
+ * widget's project when started from a project widget ([EXTRA_PROJECT_ID]),
+ * otherwise to Today.
  */
 class QuickAddActivity : AppCompatActivity() {
     private lateinit var input: EditText
@@ -38,7 +40,11 @@ class QuickAddActivity : AppCompatActivity() {
             return
         }
         val id = try {
-            CaptureInbox.forContext(this).add(title, CaptureInbox.SOURCE_WIDGET)
+            CaptureInbox.forContext(this).add(
+                title,
+                CaptureInbox.SOURCE_WIDGET,
+                projectId = intent.getStringExtra(EXTRA_PROJECT_ID)
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save quick add", e)
             // Keep the dialog open so the typed title is not lost.
@@ -62,7 +68,9 @@ class QuickAddActivity : AppCompatActivity() {
         Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
     }
 
-    private companion object {
-        const val TAG = "SP_QUICK_ADD"
+    companion object {
+        /** The project of the widget whose "+" started this; absent for Today. */
+        const val EXTRA_PROJECT_ID = "QUICK_ADD_PROJECT_ID"
+        private const val TAG = "SP_QUICK_ADD"
     }
 }

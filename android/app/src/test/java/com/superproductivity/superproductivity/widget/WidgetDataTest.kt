@@ -539,4 +539,19 @@ class WidgetDataTest {
         val tasks = WidgetData.parse(blob)
         assertEquals(tasks, WidgetData.withPendingCaptures(tasks, "[]"))
     }
+
+    @Test
+    fun eachWidgetListsOnlyTheQuickAddsHeadedForIt() {
+        val captures = """[{"id":"today","title":"Today"},{"id":"p1-add","title":"P1","projectId":"p1"},{"id":"p2-add","title":"P2","projectId":"p2"},{"id":"null-add","title":"Null","projectId":null}]"""
+
+        assertEquals(
+            listOf("null-add", "today"),
+            WidgetData.withPendingCaptures(emptyList(), captures).map { it.id }
+        )
+        assertEquals(
+            listOf("p1-add"),
+            WidgetData.withPendingCaptures(emptyList(), captures, "p1").map { it.id }
+        )
+        assertTrue(WidgetData.withPendingCaptures(emptyList(), captures, "p3").isEmpty())
+    }
 }

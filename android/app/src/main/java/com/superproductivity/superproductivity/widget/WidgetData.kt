@@ -193,17 +193,31 @@ object WidgetData {
 
     /**
      * Puts the title captures from [CaptureInbox.pendingJson] (widget quick adds)
-     * above the snapshot, newest first like the add bar's add-to-top. Not a Today
-     * rule mirrored natively: the app imports every title capture into Today by
-     * contract (AndroidCaptureImportService). The capture id becomes the task id,
-     * so one already in the snapshot (imported, not yet acknowledged) shows once.
+     * above the snapshot, newest first like the add bar's add-to-top. A capture
+     * with a `projectId` (quick add on a project widget) is listed only on widgets
+     * showing that project; one without, only on Today widgets. This follows the
+     * import contract (AndroidCaptureImportService), which files a capture in its
+     * project when that project is still usable and in Today otherwise. The
+     * capture id becomes the task id, so one already in the snapshot (imported,
+     * not yet acknowledged) shows once.
      */
-    fun withPendingCaptures(tasks: List<WidgetTask>, capturesJson: String): List<WidgetTask> {
+    fun withPendingCaptures(
+        tasks: List<WidgetTask>,
+        capturesJson: String,
+        selectedProjectId: String? = null
+    ): List<WidgetTask> {
         val known = tasks.mapTo(HashSet()) { it.id }
         val captures = JSONArray(capturesJson)
         val pending = (0 until captures.length())
             .map { captures.getJSONObject(it) }
             .filter { it.getString("id") !in known }
+            // Each widget lists the quick adds headed for what it shows: its
+            // project, or Today for captures without one. isNull: optString
+            // maps JSON null to the string "null".
+            .filter {
+                val target = if (it.isNull("projectId")) null else it.optString("projectId", null)
+                target == selectedProjectId
+            }
             .map {
                 WidgetTask(
                     id = it.getString("id"),
