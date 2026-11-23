@@ -66,6 +66,19 @@ class TrackingForegroundService : Service() {
         var isStartPending: Boolean = false
             private set
 
+        // The web app's estimate for a task (#11896). Kept apart from the
+        // session and keyed by task id, so it may arrive before or after the
+        // ACTION_START it belongs to. Memory only: the web app re-sends it on
+        // every launch.
+        @Volatile
+        private var timeEstimate: TimeEstimate? = null
+
+        // When the last "estimate exceeded" notice for [timeEstimate] was shown,
+        // so a re-arm (time edit, estimate re-send) never repeats it sooner
+        // than TimeEstimateAlarm.REPEAT_INTERVAL_MS.
+        @Volatile
+        private var timeEstimateNotifiedAtMs: Long? = null
+
         fun markStartPending() {
             isStartPending = true
         }
@@ -150,6 +163,8 @@ class TrackingForegroundService : Service() {
 
         @Synchronized
         fun clearState(context: Context) {
+            TimeEstimateAlarm.cancel(context)
+            timeEstimateNotifiedAtMs = null
             isTracking = false
             currentTaskId = null
             startTimestamp = 0
@@ -214,6 +229,71 @@ class TrackingForegroundService : Service() {
             } else {
                 null
             }
+        }
+
+        /**
+         * Sets (or clears, with null) the estimate the web app wants to be
+         * notified about and re-arms the alarm accordingly.
+         */
+        @Synchronized
+        fun setTimeEstimate(context: Context, estimate: TimeEstimate?) {
+            val prev = timeEstimate
+            if (prev?.taskId != estimate?.taskId ||
+                prev?.timeEstimateMs != estimate?.timeEstimateMs
+            ) {
+                timeEstimateNotifiedAtMs = null
+            }
+            timeEstimate = estimate
+            rearmTimeEstimateAlarm(context)
+        }
+
+        /**
+         * Arms the alarm for the moment the tracked task reaches its estimate,
+         * or cancels it when the estimate is for another task, unset, or
+         * nothing is tracked.
+         */
+        @Synchronized
+        internal fun rearmTimeEstimateAlarm(context: Context) {
+            val estimate = timeEstimate
+            if (!isTracking || !resumeAfterRestore || estimate == null ||
+                estimate.taskId != currentTaskId || estimate.timeEstimateMs <= 0
+            ) {
+                TimeEstimateAlarm.cancel(context)
+                return
+            }
+            TimeEstimateAlarm.schedule(
+                context,
+                estimate,
+                TimeEstimateAlarm.nextTriggerAtMs(
+                    System.currentTimeMillis(),
+                    getElapsedMs(),
+                    estimate.timeEstimateMs,
+                    timeEstimateNotifiedAtMs
+                )
+            )
+        }
+
+        /**
+         * Called when the alarm fires. Returns the notice to show, or null when
+         * it no longer applies (tracking moved on or stopped). Re-arms the next
+         * repeat while the same task keeps being tracked.
+         */
+        @Synchronized
+        fun onTimeEstimateAlarm(context: Context, fired: TimeEstimate): TimeEstimate? {
+            restoreIfIdle(context)
+            if (!isTracking || !resumeAfterRestore || currentTaskId != fired.taskId) {
+                return null
+            }
+            // A fresh process after a kill has no estimate in memory: the alarm's
+            // own copy is the latest the web app sent.
+            val estimate = timeEstimate ?: fired.also { timeEstimate = it }
+            if (estimate.taskId != fired.taskId) return null
+            val isDue = TimeEstimateAlarm.isReached(getElapsedMs(), estimate.timeEstimateMs)
+            if (isDue) {
+                timeEstimateNotifiedAtMs = System.currentTimeMillis()
+            }
+            rearmTimeEstimateAlarm(context)
+            return if (isDue) estimate else null
         }
 
         private fun applyInMemory(state: TrackingState) {
@@ -370,6 +450,7 @@ class TrackingForegroundService : Service() {
         // risking a second startForeground() failure resetting tracking state.
         // The chronometer in the notification ticks on its own — no update
         // loop needed (#8243).
+        rearmTimeEstimateAlarm(this)
         return updateNotification()
     }
 
@@ -394,6 +475,7 @@ class TrackingForegroundService : Service() {
             )
         )
 
+        rearmTimeEstimateAlarm(this)
         // Update notification immediately
         updateNotification()
     }

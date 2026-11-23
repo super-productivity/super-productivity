@@ -86,6 +86,15 @@ export interface AndroidInterface {
   stopTrackingService?(): void;
   updateTrackingService?(timeSpentMs: number): void;
   getTrackingElapsed?(): string;
+  // Native notifies when the tracked task exceeds it, also while the WebView
+  // is paused (#11896). timeEstimateMs <= 0 clears it. Strings arrive
+  // pre-translated. Absent on APKs that predate it.
+  setTrackingTimeEstimate?(
+    taskId: string,
+    timeEstimateMs: number,
+    title: string,
+    body: string,
+  ): void;
   openAppNotificationSettings?(): void;
 
   // Silent notification mirroring tracking on ANOTHER device (SuperSync
