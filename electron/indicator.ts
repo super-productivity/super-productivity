@@ -12,7 +12,6 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
 import { release } from 'os';
-import { execFile } from 'child_process';
 import {
   initTaskWidgetSettingsListener,
   updateTaskWidgetTask,
@@ -102,12 +101,16 @@ export const initIndicator = ({
   // On macOS we always load the black (`-l`) icons and mark them as template
   // images in getTrayImage(); the system auto-inverts them for the current
   // menu bar appearance, so the static dark/light choice doesn't apply.
+  // On Windows the taskbar follows the "Windows mode", which can differ from the
+  // "app mode" behind shouldUseDarkColors (Custom mode, accent-colored taskbar).
   shouldUseDarkColors =
     !IS_MAC &&
     (forceDarkTray ||
       IS_LINUX ||
       (IS_WINDOWS && !isWindows11()) ||
-      nativeTheme.shouldUseDarkColors);
+      (IS_WINDOWS
+        ? nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
+        : nativeTheme.shouldUseDarkColors));
 
   _showApp = showApp;
   _quitApp = quitApp;
@@ -115,22 +118,7 @@ export const initIndicator = ({
   initAppListeners(app);
   initListeners();
 
-  const createdTray = ensureIndicator();
-
-  // nativeTheme reports the Windows *app* mode, but the taskbar follows the
-  // separate *Windows* mode. With "Custom" mode or an accent-colored taskbar the
-  // two differ and the icon becomes black on a dark taskbar. Correct it once the
-  // taskbar setting is read; until then the nativeTheme guess stays in place.
-  if (IS_WINDOWS && isWindows11() && !forceDarkTray) {
-    readWindowsTaskbarIsDark().then((isTaskbarDark) => {
-      if (isTaskbarDark !== undefined && isTaskbarDark !== shouldUseDarkColors) {
-        shouldUseDarkColors = isTaskbarDark;
-        refreshIndicator();
-      }
-    });
-  }
-
-  return createdTray;
+  return ensureIndicator();
 };
 
 export const ensureIndicator = (): Tray | undefined => {
@@ -626,30 +614,6 @@ function isWindows11(): boolean {
 
   return isWin11;
 }
-
-const WINDOWS_PERSONALIZE_KEY =
-  'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize';
-
-// Resolves undefined when the value can't be read, so callers keep their fallback.
-const readWindowsTaskbarIsDark = (): Promise<boolean | undefined> =>
-  new Promise((resolve) => {
-    execFile(
-      'reg',
-      ['query', WINDOWS_PERSONALIZE_KEY, '/v', 'SystemUsesLightTheme'],
-      { windowsHide: true, timeout: 5000 },
-      (err, stdout) => {
-        if (err) {
-          log('Could not read Windows taskbar theme, keeping app theme for tray icon');
-          resolve(undefined);
-          return;
-        }
-        const match = /SystemUsesLightTheme\s+REG_DWORD\s+0x([0-9a-f]+)/i.exec(
-          String(stdout),
-        );
-        resolve(match ? parseInt(match[1], 16) === 0 : undefined);
-      },
-    );
-  });
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function getProgressMessage(
