@@ -111,16 +111,34 @@ private class TaskListRemoteViewsFactory(
 
         // Checkbox toggles to the opposite of the DISPLAYED state; anywhere else
         // on the row opens the app. A pending quick add has no task to toggle
-        // yet, so its checkbox opens the app too, which imports it.
+        // yet, so its checkbox opens the app too, which imports it. The label
+        // names the task and the outcome: every row's checkbox would otherwise
+        // read the same to a screen reader.
+        val action = WidgetData.checkboxActionFor(task)
         rv.setOnClickFillInIntent(
             R.id.widget_done_checkbox,
-            if (task.isPending) {
-                Intent().putExtra(TaskListWidgetProvider.EXTRA_OPEN_APP, true)
-            } else {
-                Intent()
-                    .putExtra(TaskListWidgetProvider.EXTRA_TASK_ID, task.id)
-                    .putExtra(TaskListWidgetProvider.EXTRA_SET_DONE, !task.isDone)
+            when (action) {
+                WidgetCheckboxAction.OPEN_APP ->
+                    Intent().putExtra(TaskListWidgetProvider.EXTRA_OPEN_APP, true)
+                WidgetCheckboxAction.MARK_DONE, WidgetCheckboxAction.MARK_UNDONE ->
+                    Intent()
+                        .putExtra(TaskListWidgetProvider.EXTRA_TASK_ID, task.id)
+                        .putExtra(
+                            TaskListWidgetProvider.EXTRA_SET_DONE,
+                            action == WidgetCheckboxAction.MARK_DONE
+                        )
             }
+        )
+        rv.setContentDescription(
+            R.id.widget_done_checkbox,
+            context.getString(
+                when (action) {
+                    WidgetCheckboxAction.MARK_DONE -> R.string.widget_task_mark_done
+                    WidgetCheckboxAction.MARK_UNDONE -> R.string.widget_task_mark_undone
+                    WidgetCheckboxAction.OPEN_APP -> R.string.widget_task_open_pending
+                },
+                task.title
+            )
         )
         rv.setOnClickFillInIntent(
             R.id.widget_task_row,

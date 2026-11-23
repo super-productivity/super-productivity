@@ -14,6 +14,18 @@ data class WidgetTask(
     val isPending: Boolean = false
 )
 
+/**
+ * What a row's checkbox does, decided in one place so its tap and its
+ * screen-reader label cannot disagree.
+ */
+enum class WidgetCheckboxAction {
+    MARK_DONE,
+    MARK_UNDONE,
+
+    /** A pending quick add has no task to toggle yet; the tap opens the app. */
+    OPEN_APP
+}
+
 /** A project a widget instance can be pointed at (#9518). */
 data class WidgetProject(
     val id: String,
@@ -168,6 +180,13 @@ object WidgetData {
             return null
         }
         return usableProject(root, projectId)?.getString("title")
+    }
+
+    /** The checkbox action for [task], from its DISPLAYED state (pending overlay included). */
+    fun checkboxActionFor(task: WidgetTask): WidgetCheckboxAction = when {
+        task.isPending -> WidgetCheckboxAction.OPEN_APP
+        task.isDone -> WidgetCheckboxAction.MARK_UNDONE
+        else -> WidgetCheckboxAction.MARK_DONE
     }
 
     /** Whether a done tap at [tappedAtMs] (0 = unknown) still keeps its row listed. */
