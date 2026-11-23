@@ -27,8 +27,11 @@ tap does (mark done, mark not done, or, for a pending quick add, open the app),
 decided by `WidgetData.checkboxActionFor`, which also picks the tap's intent.
 The checkbox and the header's "+" are 48dp wide; rows keep their compact height.
 
-Tapping a project widget's header or a row opens that project's task list in
-the app. Today widgets keep opening the app's default view.
+Tapping a widget's header or a row opens its list in the app: the project, or
+Today. A Today widget opens Today through the `com.super-productivity.app://today`
+URL, like the launcher shortcut, so it does not depend on the configured start
+page. A pending quick add's checkbox opens the same list, where the app imports
+the task.
 
 Project widgets list open tasks: the project list followed by the backlog, up
 to the 20-row limit. A task checked on the widget stays listed, checked, for

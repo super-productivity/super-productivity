@@ -78,3 +78,31 @@ test('every UI action host is declared in the manifest', () => {
     assert.ok(DECLARED_HOSTS.has(host), `${SCHEME}://${host} is not declared`),
   );
 });
+
+// Native code that opens an app URL itself (the home-screen widget opens Today)
+// needs the same two guarantees: Android delivers it and a parser handles it.
+const KOTLIN_DIR = join(ROOT, 'android', 'app', 'src', 'main', 'java');
+const kotlinSources = (dir) =>
+  require('node:fs')
+    .readdirSync(dir, { withFileTypes: true })
+    .flatMap((entry) =>
+      entry.isDirectory()
+        ? kotlinSources(join(dir, entry.name))
+        : entry.name.endsWith('.kt')
+          ? [readFileSync(join(dir, entry.name), 'utf8')]
+          : [],
+    );
+const NATIVE_HOSTS = kotlinSources(KOTLIN_DIR).flatMap((source) =>
+  [...source.matchAll(/"com\.super-productivity\.app:\/\/([a-z-]+)"/g)].map((m) => m[1]),
+);
+
+test('every app URL opened from native code is declared and parsed', () => {
+  assert.ok(NATIVE_HOSTS.includes('today'), 'the widget no longer opens Today by URL');
+  NATIVE_HOSTS.forEach((host) => {
+    assert.ok(DECLARED_HOSTS.has(host), `${SCHEME}://${host} is not declared`);
+    assert.ok(
+      QUICK_ACTION_HOSTS.includes(host) || TASK_ACTION_HOSTS.includes(host),
+      `${SCHEME}://${host} is opened natively but no parser handles it`,
+    );
+  });
+});

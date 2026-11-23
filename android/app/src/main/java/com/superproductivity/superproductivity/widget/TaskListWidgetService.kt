@@ -110,16 +110,22 @@ private class TaskListRemoteViewsFactory(
         }
 
         // Checkbox toggles to the opposite of the DISPLAYED state; anywhere else
-        // on the row opens the app. A pending quick add has no task to toggle
-        // yet, so its checkbox opens the app too, which imports it. The label
-        // names the task and the outcome: every row's checkbox would otherwise
-        // read the same to a screen reader.
+        // on the row opens the widget's list in the app (its project, or Today).
+        // A pending quick add has no task to toggle yet, so its checkbox opens
+        // the list too, and the app imports the task there. The label names the
+        // task and the outcome: every row's checkbox would otherwise read the
+        // same to a screen reader.
+        val openList = Intent().apply {
+            putExtra(TaskListWidgetProvider.EXTRA_OPEN_APP, true)
+            projectIdToOpen?.let {
+                putExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID, it)
+            }
+        }
         val action = WidgetData.checkboxActionFor(task)
         rv.setOnClickFillInIntent(
             R.id.widget_done_checkbox,
             when (action) {
-                WidgetCheckboxAction.OPEN_APP ->
-                    Intent().putExtra(TaskListWidgetProvider.EXTRA_OPEN_APP, true)
+                WidgetCheckboxAction.OPEN_APP -> openList
                 WidgetCheckboxAction.MARK_DONE, WidgetCheckboxAction.MARK_UNDONE ->
                     Intent()
                         .putExtra(TaskListWidgetProvider.EXTRA_TASK_ID, task.id)
@@ -140,15 +146,7 @@ private class TaskListRemoteViewsFactory(
                 task.title
             )
         )
-        rv.setOnClickFillInIntent(
-            R.id.widget_task_row,
-            Intent().apply {
-                putExtra(TaskListWidgetProvider.EXTRA_OPEN_APP, true)
-                projectIdToOpen?.let {
-                    putExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID, it)
-                }
-            }
-        )
+        rv.setOnClickFillInIntent(R.id.widget_task_row, openList)
 
         return rv
     }
