@@ -1,7 +1,8 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
-import { filter, tap } from 'rxjs/operators';
+import { combineLatest } from 'rxjs';
+import { filter, map, tap } from 'rxjs/operators';
 import * as actions from './store/focus-mode.actions';
 import * as selectors from './store/focus-mode.selectors';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -66,6 +67,20 @@ export class FocusModeService {
   sessionProgress$ = this._store.select(selectors.selectProgress);
   currentSessionTime$ = this._store.select(selectors.selectTimeElapsed);
   timeToGo$ = this._store.select(selectors.selectTimeRemaining);
+  /**
+   * Time to show in the tray and the mini task widget: elapsed time for
+   * open-ended Flowtime sessions, remaining time for Pomodoro/Countdown
+   * so it matches the focus overlay.
+   */
+  displayedSessionTime$ = combineLatest([
+    this._store.select(selectors.selectMode),
+    this.currentSessionTime$,
+    this.timeToGo$,
+  ]).pipe(
+    map(([mode, elapsed, remaining]) =>
+      mode === FocusModeMode.Flowtime ? elapsed : remaining,
+    ),
+  );
 
   // Single timer that updates the store at 1-second intervals for smooth UI
   constructor() {

@@ -106,7 +106,7 @@ export class TaskElectronEffects {
           select(selectCurrentTask),
           withLatestFrom(
             this._store$.pipe(select(selectIsOverlayShown)),
-            this._focusModeService.currentSessionTime$,
+            this._focusModeService.displayedSessionTime$,
           ),
           // Only take the first value and complete
           take(1),
@@ -200,7 +200,7 @@ export class TaskElectronEffects {
         withLatestFrom(
           this._store$.pipe(select(selectCurrentTask)),
           this._store$.pipe(select(selectIsOverlayShown)),
-          this._focusModeService.currentSessionTime$.pipe(startWith(0)),
+          this._focusModeService.displayedSessionTime$.pipe(startWith(0)),
         ),
         tap(([action, current, isFocusModeEnabled, currentFocusSessionTime]) => {
           window.ea.updateCurrentTask(

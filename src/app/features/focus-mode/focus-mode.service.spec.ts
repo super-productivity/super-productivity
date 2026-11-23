@@ -176,6 +176,12 @@ describe('FocusModeService', () => {
       expect(service.mode()).toBe(FocusModeMode.Pomodoro);
     }));
 
+    it('should expose remaining time as displayed session time for Pomodoro', fakeAsync(() => {
+      let value: number | undefined;
+      service.displayedSessionTime$.subscribe((v) => (value = v));
+      expect(value).toBe(1500000);
+    }));
+
     it('should initialize isOverlayShown signal', fakeAsync(() => {
       expect(service.isOverlayShown()).toBe(false);
     }));
