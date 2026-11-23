@@ -3,7 +3,7 @@ import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { combineLatest } from 'rxjs';
-import { distinctUntilChanged, filter, map, tap } from 'rxjs/operators';
+import { distinctUntilChanged, filter, map, startWith, tap } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import { selectCurrentTask } from '../../tasks/store/task.selectors';
@@ -13,12 +13,12 @@ import { DroidLog } from '../../../core/log';
 import { Task } from '../../tasks/task.model';
 import { T } from '../../../t.const';
 import { truncate } from '../../../util/truncate';
-import { parseNativeTrackingData } from './android-foreground-tracking.effects';
 
 export interface NativeTimeEstimate {
   taskId: string;
   timeEstimate: number;
   title: string;
+  lang: string | undefined;
 }
 
 /**
@@ -29,12 +29,14 @@ export interface NativeTimeEstimate {
 export const getNativeTimeEstimate = (
   isNotifyEnabled: boolean,
   currentTask: Task | null | undefined,
+  lang?: string,
 ): NativeTimeEstimate | null =>
   isNotifyEnabled && currentTask && currentTask.timeEstimate > 0
     ? {
         taskId: currentTask.id,
         timeEstimate: currentTask.timeEstimate,
         title: currentTask.title,
+        lang,
       }
     : null;
 
@@ -47,18 +49,8 @@ export const isSameNativeTimeEstimate = (
     !!b &&
     a.taskId === b.taskId &&
     a.timeEstimate === b.timeEstimate &&
-    a.title === b.title);
-
-/**
- * Whether the native tracking service shows the "estimate exceeded"
- * notification for this task, so the web app must not post a second one.
- * False on APKs without native support and whenever native tracks nothing or
- * another task (e.g. focus mode replaces the tracking service).
- */
-export const isTimeEstimateNotifiedNatively = (taskId: string): boolean =>
-  IS_ANDROID_WEB_VIEW &&
-  !!androidInterface.setTrackingTimeEstimate &&
-  parseNativeTrackingData(androidInterface.getTrackingElapsed?.())?.taskId === taskId;
+    a.title === b.title &&
+    a.lang === b.lang);
 
 /**
  * Hands the tracked task's estimate to the native tracking service, which
@@ -79,16 +71,23 @@ export class AndroidTimeEstimateEffects {
         combineLatest([
           this._store.select(selectConfigFeatureState),
           this._store.select(selectCurrentTask),
+          // Native keeps the text it was handed: re-send it when the language
+          // changes, and once translations have loaded on a cold start.
+          this._translateService.onLangChange.pipe(
+            map((e) => e.lang),
+            startWith(this._translateService.currentLang),
+          ),
         ]).pipe(
           filter(
             () =>
               !!androidInterface.setTrackingTimeEstimate &&
               !this._hydrationState.isApplyingRemoteOps(),
           ),
-          map(([cfg, currentTask]) =>
+          map(([cfg, currentTask, lang]) =>
             getNativeTimeEstimate(
               !!cfg?.timeTracking?.isNotifyWhenTimeEstimateExceeded,
               currentTask,
+              lang,
             ),
           ),
           distinctUntilChanged(isSameNativeTimeEstimate),

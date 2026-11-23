@@ -74,8 +74,8 @@ class TrackingForegroundService : Service() {
         private var timeEstimate: TimeEstimate? = null
 
         // When the last "estimate exceeded" notice for [timeEstimate] was shown,
-        // so a re-arm (time edit, estimate re-send) never repeats it sooner
-        // than TimeEstimateAlarm.REPEAT_INTERVAL_MS.
+        // so a re-arm (time edit, estimate re-send, service restart after focus
+        // mode) never repeats it sooner than TimeEstimateAlarm.REPEAT_INTERVAL_MS.
         @Volatile
         private var timeEstimateNotifiedAtMs: Long? = null
 
@@ -163,8 +163,10 @@ class TrackingForegroundService : Service() {
 
         @Synchronized
         fun clearState(context: Context) {
+            // timeEstimateNotifiedAtMs survives: focus mode stops and restarts
+            // the service, and the next notice must still wait out the repeat
+            // interval. setTimeEstimate resets it for a new task or estimate.
             TimeEstimateAlarm.cancel(context)
-            timeEstimateNotifiedAtMs = null
             isTracking = false
             currentTaskId = null
             startTimestamp = 0
@@ -277,17 +279,20 @@ class TrackingForegroundService : Service() {
          * Called when the alarm fires. Returns the notice to show, or null when
          * it no longer applies (tracking moved on or stopped). Re-arms the next
          * repeat while the same task keeps being tracked.
+         *
+         * Deliberately no restoreIfIdle(): an alarm that outlived a process
+         * kill must not revive the session without its service — a killed
+         * session stays frozen at its death until the app is reopened (#7390),
+         * and the web app's own check notifies then.
          */
         @Synchronized
         fun onTimeEstimateAlarm(context: Context, fired: TimeEstimate): TimeEstimate? {
-            restoreIfIdle(context)
-            if (!isTracking || !resumeAfterRestore || currentTaskId != fired.taskId) {
+            val estimate = timeEstimate
+            if (!isTracking || !resumeAfterRestore || currentTaskId != fired.taskId ||
+                estimate?.taskId != fired.taskId
+            ) {
                 return null
             }
-            // A fresh process after a kill has no estimate in memory: the alarm's
-            // own copy is the latest the web app sent.
-            val estimate = timeEstimate ?: fired.also { timeEstimate = it }
-            if (estimate.taskId != fired.taskId) return null
             val isDue = TimeEstimateAlarm.isReached(getElapsedMs(), estimate.timeEstimateMs)
             if (isDue) {
                 timeEstimateNotifiedAtMs = System.currentTimeMillis()

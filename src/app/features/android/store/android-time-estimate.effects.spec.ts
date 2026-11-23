@@ -1,7 +1,6 @@
 import {
   getNativeTimeEstimate,
   isSameNativeTimeEstimate,
-  isTimeEstimateNotifiedNatively,
 } from './android-time-estimate.effects';
 import { Task } from '../../tasks/task.model';
 
@@ -11,10 +10,11 @@ describe('android-time-estimate helpers', () => {
 
   describe('getNativeTimeEstimate', () => {
     it('returns the estimate of the current task when enabled', () => {
-      expect(getNativeTimeEstimate(true, task())).toEqual({
+      expect(getNativeTimeEstimate(true, task(), 'de')).toEqual({
         taskId: 't1',
         timeEstimate: 60000,
         title: 'Write',
+        lang: 'de',
       });
     });
 
@@ -32,13 +32,14 @@ describe('android-time-estimate helpers', () => {
   });
 
   describe('isSameNativeTimeEstimate', () => {
-    const a = { taskId: 't1', timeEstimate: 60000, title: 'Write' };
+    const a = { taskId: 't1', timeEstimate: 60000, title: 'Write', lang: 'en' };
 
     it('ignores timeSpent ticks (equal fields)', () => {
       expect(isSameNativeTimeEstimate(a, { ...a })).toBe(true);
     });
 
-    it('detects a changed estimate, task or title', () => {
+    it('detects a changed estimate, task, title or language', () => {
+      expect(isSameNativeTimeEstimate(a, { ...a, lang: 'de' })).toBe(false);
       expect(isSameNativeTimeEstimate(a, { ...a, timeEstimate: 1 })).toBe(false);
       expect(isSameNativeTimeEstimate(a, { ...a, taskId: 't2' })).toBe(false);
       expect(isSameNativeTimeEstimate(a, { ...a, title: 'x' })).toBe(false);
@@ -48,12 +49,6 @@ describe('android-time-estimate helpers', () => {
       expect(isSameNativeTimeEstimate(null, null)).toBe(true);
       expect(isSameNativeTimeEstimate(null, a)).toBe(false);
       expect(isSameNativeTimeEstimate(a, null)).toBe(false);
-    });
-  });
-
-  describe('isTimeEstimateNotifiedNatively', () => {
-    it('is false outside the Android WebView', () => {
-      expect(isTimeEstimateNotifiedNatively('t1')).toBe(false);
     });
   });
 });
