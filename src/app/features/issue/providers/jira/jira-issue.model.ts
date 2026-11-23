@@ -46,6 +46,11 @@ export type JiraChangelogEntry = Readonly<{
   to: string;
 }>;
 
+export type JiraExtraFieldValue = Readonly<{
+  label: string;
+  value: string;
+}>;
+
 // NOTE this is NOT equal to JiraIssueOriginalReduced
 
 export type JiraIssueReduced = Readonly<{
@@ -69,6 +74,7 @@ export type JiraIssueReduced = Readonly<{
   // new properties (mapped)
   comments: JiraComment[];
   storyPoints?: number;
+  extraFields?: JiraExtraFieldValue[];
 }>;
 
 export type JiraSubtask = Readonly<{

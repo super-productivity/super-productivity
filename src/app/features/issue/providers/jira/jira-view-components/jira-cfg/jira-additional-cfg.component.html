@@ -97,28 +97,56 @@
       <br />
     </div>
 
-    <mat-form-field>
-      <mat-label>{{ T.F.JIRA.CFG_CMP.STORY_POINTS | translate }}</mat-label>
-      <input
-        [formControl]="customFieldSuggestionsCtrl"
-        [matAutocomplete]="storyPointAutoEl"
-        class="border-color-primary"
-        matInput
-      />
+    @for (extraField of extraFields; track $index) {
+      <div class="extra-field-row">
+        <mat-form-field>
+          <mat-label>{{ T.F.JIRA.CFG_CMP.EXTRA_FIELD | translate }}</mat-label>
+          <input
+            [formControl]="fieldIdControls[$index]"
+            [matAutocomplete]="fieldAutoEl"
+            class="border-color-primary"
+            matInput
+          />
+          <mat-autocomplete
+            #fieldAutoEl="matAutocomplete"
+            [autoActiveFirstOption]="true"
+          >
+            @for (
+              field of filteredCustomFieldSuggestions$[$index] | async;
+              track trackByCustomFieldId($index, field)
+            ) {
+              <mat-option [value]="field.id">
+                {{ field.name }} · {{ field.id }}
+              </mat-option>
+            }
+          </mat-autocomplete>
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>{{ T.F.JIRA.CFG_CMP.EXTRA_FIELD_LABEL | translate }}</mat-label>
+          <input
+            [value]="extraField.label"
+            (change)="updateExtraField($index, 'label', $event)"
+            matInput
+          />
+        </mat-form-field>
+        <button
+          (click)="removeExtraField($index)"
+          [matTooltip]="T.G.DELETE | translate"
+          color="warn"
+          mat-icon-button
+          type="button"
+        >
+          <mat-icon>delete</mat-icon>
+        </button>
+      </div>
+    }
 
-      <mat-autocomplete
-        #storyPointAutoEl="matAutocomplete"
-        [autoActiveFirstOption]="true"
-      >
-        @for (
-          field of filteredCustomFieldSuggestions$ | async;
-          track trackByCustomFieldId($index, field)
-        ) {
-          <mat-option [value]="field.id"
-            ><span>{{ field?.id }}: {{ field?.name }}</span>
-          </mat-option>
-        }
-      </mat-autocomplete>
-    </mat-form-field>
+    <button
+      (click)="addExtraField()"
+      mat-stroked-button
+      type="button"
+    >
+      {{ T.F.JIRA.CFG_CMP.ADD_EXTRA_FIELD | translate }}
+    </button>
   </section>
 </form>

@@ -3,3 +3,13 @@
   text-align: right;
   margin-bottom: var(--s);
 }
+
+.extra-field-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+
+  mat-form-field {
+    flex: 1;
+  }
+}

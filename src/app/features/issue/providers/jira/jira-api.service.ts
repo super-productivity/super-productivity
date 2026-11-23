@@ -229,6 +229,7 @@ export class JiraApiService {
       fields: [
         ...JIRA_ADDITIONAL_ISSUE_FIELDS,
         ...(cfg.storyPointFieldId ? [cfg.storyPointFieldId] : []),
+        ...(cfg.extraFields ?? []).map((f) => f.id),
       ],
     };
     const searchQuery = cfg.autoAddBacklogJqlQuery;

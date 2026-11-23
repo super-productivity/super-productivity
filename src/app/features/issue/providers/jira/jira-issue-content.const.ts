@@ -30,7 +30,7 @@ export const JIRA_ISSUE_CONTENT_CONFIG: IssueContentConfig<JiraIssue> = {
       label: T.F.ISSUE.ISSUE_CONTENT.STORY_POINTS,
       value: 'storyPoints',
       type: IssueFieldType.TEXT,
-      isVisible: (issue: JiraIssue) => !!issue.storyPoints,
+      isVisible: (issue: JiraIssue) => !!issue.storyPoints && !issue.extraFields?.length,
     },
     {
       label: T.F.ISSUE.ISSUE_CONTENT.ASSIGNEE,
@@ -86,6 +86,14 @@ export const JIRA_ISSUE_CONTENT_CONFIG: IssueContentConfig<JiraIssue> = {
       value: 'description',
       type: IssueFieldType.MARKDOWN,
       isVisible: (issue: JiraIssue) => !!issue.description,
+    },
+    {
+      // Render user-configured fields after all built-in fields.
+      label: '',
+      value: 'extraFields',
+      type: IssueFieldType.CUSTOM,
+      customTemplate: 'jira-extra-fields',
+      isVisible: (issue: JiraIssue) => (issue.extraFields?.length ?? 0) > 0,
     },
   ],
   comments: {

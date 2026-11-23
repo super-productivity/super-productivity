@@ -18,55 +18,64 @@
     <div class="table-wrapper">
       <table class="issue-table">
         @for (field of visibleFields(); track trackByIndex($index)) {
-          <tr [class.description-row]="field.type === IssueFieldType.MARKDOWN">
-            <th>{{ field.label | translate }}</th>
-            <td
-              [class.markdown]="field.type === IssueFieldType.MARKDOWN"
-              [class.full-width]="field.isFullWidth"
-            >
-              @switch (field.type) {
-                @case (IssueFieldType.TEXT) {
-                  {{ getFieldValue(field, currentIssue()) }}
-                }
-                @case (IssueFieldType.LINK) {
-                  @if (getFieldLink(field, currentIssue()); as link) {
-                    <a
-                      [href]="link"
-                      target="_blank"
-                    >
+          @if (field.customTemplate === 'jira-extra-fields') {
+            @for (extraField of getFieldValue(field, currentIssue()); track $index) {
+              <tr>
+                <th>{{ extraField.label | translate }}</th>
+                <td>{{ extraField.value || '–' }}</td>
+              </tr>
+            }
+          } @else {
+            <tr [class.description-row]="field.type === IssueFieldType.MARKDOWN">
+              <th>{{ field.label | translate }}</th>
+              <td
+                [class.markdown]="field.type === IssueFieldType.MARKDOWN"
+                [class.full-width]="field.isFullWidth"
+              >
+                @switch (field.type) {
+                  @case (IssueFieldType.TEXT) {
+                    {{ getFieldValue(field, currentIssue()) }}
+                  }
+                  @case (IssueFieldType.LINK) {
+                    @if (getFieldLink(field, currentIssue()); as link) {
+                      <a
+                        [href]="link"
+                        target="_blank"
+                      >
+                        <strong>{{ getFieldValue(field, currentIssue()) }}</strong>
+                      </a>
+                    } @else {
                       <strong>{{ getFieldValue(field, currentIssue()) }}</strong>
-                    </a>
-                  } @else {
-                    <strong>{{ getFieldValue(field, currentIssue()) }}</strong>
+                    }
+                  }
+                  @case (IssueFieldType.CHIPS) {
+                    <mat-chip-listbox [selectable]="false">
+                      @for (chip of getFieldValue(field, currentIssue()); track $index) {
+                        <mat-chip-option [title]="chip.description || ''">
+                          {{ chip.name || chip }}
+                        </mat-chip-option>
+                      }
+                    </mat-chip-listbox>
+                  }
+                  @case (IssueFieldType.MARKDOWN) {
+                    <div
+                      [data]="getFieldValue(field, currentIssue())"
+                      class="markdown"
+                      markdown
+                    ></div>
+                  }
+                  @case (IssueFieldType.CUSTOM) {
+                    <issue-content-custom
+                      [field]="field"
+                      [issue]="currentIssue()!"
+                      [config]="cfg"
+                      [task]="currentTask()"
+                    ></issue-content-custom>
                   }
                 }
-                @case (IssueFieldType.CHIPS) {
-                  <mat-chip-listbox [selectable]="false">
-                    @for (chip of getFieldValue(field, currentIssue()); track $index) {
-                      <mat-chip-option [title]="chip.description || ''">
-                        {{ chip.name || chip }}
-                      </mat-chip-option>
-                    }
-                  </mat-chip-listbox>
-                }
-                @case (IssueFieldType.MARKDOWN) {
-                  <div
-                    [data]="getFieldValue(field, currentIssue())"
-                    class="markdown"
-                    markdown
-                  ></div>
-                }
-                @case (IssueFieldType.CUSTOM) {
-                  <issue-content-custom
-                    [field]="field"
-                    [issue]="currentIssue()!"
-                    [config]="cfg"
-                    [task]="currentTask()"
-                  ></issue-content-custom>
-                }
-              }
-            </td>
-          </tr>
+              </td>
+            </tr>
+          }
         }
       </table>
 

@@ -3,6 +3,7 @@ import {
   JiraAuthor,
   JiraChangelogEntry,
   JiraComment,
+  JiraExtraFieldValue,
   JiraIssue,
   JiraIssueReduced,
   JiraRelatedIssue,
@@ -98,9 +99,67 @@ export const mapResponse = (res: JiraApiEnvelope): unknown => res.response;
 export const mapIssueResponse = (res: JiraIssueEnvelope, cfg: JiraCfg): JiraIssue =>
   mapIssue(res.response, cfg);
 
+// Jira custom fields come back in a handful of well-known shapes (option,
+// user, version, attachment, cascade, arrays of these, or plain scalars).
+// Pick the display value per shape instead of guessing a key order, so any
+// field type Jira supports renders sensibly and never as "[object Object]".
+const formatCustomFieldValue = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) {
+    return value.map(formatCustomFieldValue).filter(Boolean).join(', ');
+  }
+  if (typeof value !== 'object') {
+    return String(value);
+  }
+
+  const obj = value as Record<string, unknown>;
+  const parts: string[] = [];
+
+  // option / component / version / priority / status / resolution
+  const label = obj.value ?? obj.displayName ?? obj.name ?? obj.filename ?? obj.key;
+  const labelText = formatCustomFieldValue(label);
+  if (labelText) {
+    parts.push(labelText);
+  }
+
+  // cascade option: parent value + child value
+  if (obj.child) {
+    const childText = formatCustomFieldValue(obj.child);
+    if (childText) {
+      parts.push(childText);
+    }
+  }
+
+  // user without a display name still has accountId/key; avoid [object Object]
+  if (parts.length === 0) {
+    const fallback = obj.accountId ?? obj.id;
+    const fallbackText = formatCustomFieldValue(fallback);
+    if (fallbackText) {
+      parts.push(fallbackText);
+    }
+  }
+
+  return parts.join(' / ');
+};
+
 export const mapIssue = (issue: JiraIssueOriginal, cfg: JiraCfg): JiraIssue => {
   const issueCopy = Object.assign({}, issue);
   const fields = issueCopy.fields;
+  const rawFields = fields as Record<string, unknown>;
+  // Keep every configured field, including those with no value on this issue.
+  // The sidebar renders a placeholder for empty values so a configured field never looks unsaved.
+  const extraFields: JiraExtraFieldValue[] = (cfg.extraFields ?? []).map((f) => ({
+    label: f.label,
+    value: formatCustomFieldValue(rawFields[f.id]),
+  }));
+  const storyPointValue = cfg.storyPointFieldId
+    ? formatCustomFieldValue(rawFields[cfg.storyPointFieldId])
+    : '';
+  const storyPointNumber = Number(storyPointValue);
+  const storyPoints =
+    cfg.storyPointFieldId && !!storyPointValue && Number.isFinite(storyPointNumber)
+      ? storyPointNumber
+      : undefined;
   IssueLog.log('Jira issue fields mapped', {
     issueKey: issueCopy.key,
     componentCount: fields.components?.length ?? 0,
@@ -110,9 +169,7 @@ export const mapIssue = (issue: JiraIssueOriginal, cfg: JiraCfg): JiraIssue => {
     issueLinkCount: fields.issuelinks?.length ?? 0,
     hasDescription: !!fields.description,
     hasAssignee: !!fields.assignee,
-    hasStoryPoints: !!(
-      cfg.storyPointFieldId && (fields as Record<string, unknown>)[cfg.storyPointFieldId]
-    ),
+    hasStoryPoints: storyPoints !== undefined,
   });
 
   return {
@@ -127,11 +184,8 @@ export const mapIssue = (issue: JiraIssueOriginal, cfg: JiraCfg): JiraIssue => {
     updated: fields.updated,
     status: fields.status,
     priority: fields.priority,
-    storyPoints:
-      !!cfg.storyPointFieldId &&
-      !!(fields as Record<string, unknown>)[cfg.storyPointFieldId]
-        ? ((fields as Record<string, unknown>)[cfg.storyPointFieldId] as number)
-        : undefined,
+    storyPoints,
+    extraFields,
     attachments: fields.attachment && fields.attachment.map(mapAttachment),
     comments:
       !!fields.comment && !!fields.comment.comments

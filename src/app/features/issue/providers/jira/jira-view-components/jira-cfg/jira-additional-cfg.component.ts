@@ -5,7 +5,6 @@ import {
   input,
   Input,
   OnDestroy,
-  OnInit,
   output,
 } from '@angular/core';
 import { ConfigFormSection } from '../../../../../config/global-config.model';
@@ -16,7 +15,11 @@ import {
   UntypedFormControl,
   UntypedFormGroup,
 } from '@angular/forms';
-import { JiraTransitionConfig, JiraTransitionOption } from '../../jira.model';
+import {
+  JiraExtraFieldCfg,
+  JiraTransitionConfig,
+  JiraTransitionOption,
+} from '../../jira.model';
 import { expandAnimation } from '../../../../../../ui/animations/expand.ani';
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import {
@@ -24,7 +27,15 @@ import {
   IssueProviderJira,
   SearchResultItem,
 } from '../../../../issue.model';
-import { catchError, debounceTime, first, map, switchMap, tap } from 'rxjs/operators';
+import {
+  catchError,
+  debounceTime,
+  first,
+  map,
+  startWith,
+  switchMap,
+  tap,
+} from 'rxjs/operators';
 import { JiraApiService } from '../../jira-api.service';
 import { DEFAULT_JIRA_CFG } from '../../jira.const';
 import { JiraIssue } from '../../jira-issue.model';
@@ -40,9 +51,11 @@ import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autoc
 import { MatOption } from '@angular/material/core';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatSelect } from '@angular/material/select';
-import { MatButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
 import { AsyncPipe } from '@angular/common';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { devError } from '../../../../../../util/dev-error';
 
 @Component({
@@ -64,14 +77,18 @@ import { devError } from '../../../../../../util/dev-error';
     MatProgressSpinner,
     MatSelect,
     MatButton,
+    MatIconButton,
+    MatIcon,
+    MatTooltip,
     AsyncPipe,
     TranslatePipe,
   ],
 })
-export class JiraAdditionalCfgComponent implements OnInit, OnDestroy {
+export class JiraAdditionalCfgComponent implements OnDestroy {
   private _jiraApiService = inject(JiraApiService);
   private _snackService = inject(SnackService);
   private _issueProviderService = inject(IssueProviderService);
+  private _translateService = inject(TranslateService);
 
   readonly section = input<ConfigFormSection<IssueProviderJira>>();
 
@@ -80,7 +97,9 @@ export class JiraAdditionalCfgComponent implements OnInit, OnDestroy {
   T: typeof T = T;
   HelperClasses: typeof HelperClasses = HelperClasses;
   issueSuggestionsCtrl: UntypedFormControl = new UntypedFormControl();
-  customFieldSuggestionsCtrl: UntypedFormControl = new UntypedFormControl();
+  extraFields: JiraExtraFieldCfg[] = [];
+  fieldIdControls: UntypedFormControl[] = [];
+  filteredCustomFieldSuggestions$: Observable<any[]>[] = [];
   customFields: any[] = [];
   customFieldsPromise?: Promise<any>;
   isLoading$: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
@@ -107,10 +126,6 @@ export class JiraAdditionalCfgComponent implements OnInit, OnDestroy {
       tap((suggestions) => {
         this.isLoading$.next(false);
       }),
-    );
-  filteredCustomFieldSuggestions$: Observable<any[]> =
-    this.customFieldSuggestionsCtrl.valueChanges.pipe(
-      map((value) => this._filterCustomFieldSuggestions(value)),
     );
   transitionConfigOpts: {
     key: keyof JiraTransitionConfig;
@@ -152,6 +167,21 @@ export class JiraAdditionalCfgComponent implements OnInit, OnDestroy {
       newCfg.availableTransitions = DEFAULT_JIRA_CFG.availableTransitions;
     }
 
+    const storedExtraFields = newCfg.extraFields;
+    const legacyLabelKey = T.F.ISSUE.ISSUE_CONTENT.STORY_POINTS;
+    this.extraFields = storedExtraFields
+      ? storedExtraFields.map((f) => ({ ...f }))
+      : newCfg.storyPointFieldId
+        ? [
+            {
+              id: newCfg.storyPointFieldId,
+              label: String(
+                this._translateService.instant(legacyLabelKey) || legacyLabelKey,
+              ),
+            },
+          ]
+        : [];
+
     this._cfg = newCfg;
 
     this.transitionConfigOpts = Object.keys(newCfg.transitionConfig).map((k: string) => {
@@ -161,14 +191,8 @@ export class JiraAdditionalCfgComponent implements OnInit, OnDestroy {
         val: newCfg.transitionConfig[key],
       };
     });
-  }
 
-  ngOnInit(): void {
-    this._subs.add(
-      this.customFieldSuggestionsCtrl.valueChanges.subscribe((value) => {
-        this.partialModelChange({ storyPointFieldId: value });
-      }),
-    );
+    this._syncFieldControls();
   }
 
   ngOnDestroy(): void {
@@ -233,6 +257,10 @@ export class JiraAdditionalCfgComponent implements OnInit, OnDestroy {
     this.customFieldsPromise.then((v: any) => {
       if (v && Array.isArray(v.response)) {
         this.customFields = v.response;
+        // Emit valueChanges so the suggestion streams recompute with the freshly
+        // loaded fields (emitEvent: false leaves the dropdown empty). The save
+        // subscription ignores unchanged values, so this cannot persist anything.
+        this.fieldIdControls.forEach((ctrl) => ctrl.setValue(ctrl.value));
       }
     });
   }
@@ -258,13 +286,82 @@ export class JiraAdditionalCfgComponent implements OnInit, OnDestroy {
     }
   }
 
-  private _filterCustomFieldSuggestions(value: string): string[] {
-    const filterValue = value && value.toLowerCase();
+  addExtraField(): void {
+    this.extraFields = [...this.extraFields, { id: '', label: '' }];
+    this._syncFieldControls();
+    this._saveExtraFields();
+  }
+
+  updateExtraField(index: number, key: keyof JiraExtraFieldCfg, event: Event): void {
+    const value = (event.target as HTMLInputElement).value.trim();
+    this.extraFields = this.extraFields.map((field, i) =>
+      i === index ? { ...field, [key]: value } : field,
+    );
+    this._saveExtraFields();
+  }
+
+  removeExtraField(index: number): void {
+    this.extraFields = this.extraFields.filter((_, i) => i !== index);
+    this._syncFieldControls();
+    this._saveExtraFields();
+  }
+
+  private _syncFieldControls(): void {
+    if (this.fieldIdControls.length > this.extraFields.length) {
+      this.fieldIdControls.length = this.extraFields.length;
+      this.filteredCustomFieldSuggestions$.length = this.extraFields.length;
+    }
+    this.extraFields.forEach((field, i) => {
+      let ctrl = this.fieldIdControls[i];
+      if (!ctrl) {
+        ctrl = new UntypedFormControl(field.id);
+        this.fieldIdControls.push(ctrl);
+        this.filteredCustomFieldSuggestions$.push(
+          ctrl.valueChanges.pipe(
+            startWith(field.id),
+            map((value: string) => this._filterCustomFieldSuggestions(value)),
+          ),
+        );
+        // Selecting an option and typing both emit valueChanges (selecting does not
+        // fire a DOM input event). Write back and save here, resolving the index
+        // dynamically so add/remove cannot shift it. Unchanged values are skipped:
+        // loadCustomFields only sets values to refresh the suggestion panel.
+        this._subs.add(
+          ctrl.valueChanges.subscribe((value: string) => {
+            const idx = this.fieldIdControls.indexOf(ctrl);
+            if (idx < 0 || !this.extraFields[idx]) {
+              return;
+            }
+            const nextId = value || '';
+            if (this.extraFields[idx].id === nextId) {
+              return;
+            }
+            this.extraFields[idx] = { ...this.extraFields[idx], id: nextId };
+            this._saveExtraFields();
+          }),
+        );
+      } else if (ctrl.value !== field.id) {
+        ctrl.setValue(field.id, { emitEvent: false });
+      }
+    });
+  }
+
+  private _filterCustomFieldSuggestions(value: string): any[] {
+    const filterValue = (value || '').toLowerCase();
     return this.customFields.filter(
       (field) =>
         field &&
-        (field.name.toLowerCase().includes(filterValue) ||
-          field.id.includes(filterValue)),
+        (String(field.name ?? '')
+          .toLowerCase()
+          .includes(filterValue) ||
+          String(field.id ?? '').includes(filterValue)),
     );
+  }
+
+  private _saveExtraFields(): void {
+    this.partialModelChange({
+      extraFields: this.extraFields.filter((field) => !!field.id && !!field.label),
+      storyPointFieldId: null,
+    });
   }
 }

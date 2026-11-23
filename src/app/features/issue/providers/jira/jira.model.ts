@@ -23,6 +23,11 @@ export interface JiraTransitionConfig {
   DONE: JiraTransitionOption;
 }
 
+export interface JiraExtraFieldCfg {
+  id: string;
+  label: string;
+}
+
 export interface JiraCfg extends BaseIssueProviderCfg {
   _isBlockAccess: boolean;
   host: string | null;
@@ -51,6 +56,8 @@ export interface JiraCfg extends BaseIssueProviderCfg {
   isCheckToReAssignTicketOnTaskStart: boolean;
 
   storyPointFieldId: string | null;
+  // Optional so Jira configs saved before this field existed still validate.
+  extraFields?: JiraExtraFieldCfg[];
 
   isTransitionIssuesEnabled: boolean;
   transitionConfig: JiraTransitionConfig;
