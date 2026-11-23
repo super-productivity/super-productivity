@@ -10,6 +10,7 @@ import {
 } from '../../utils/supersync-helpers';
 import type { Page } from '@playwright/test';
 import {
+  getRepeatSeriesView,
   openRecurDialog,
   saveRecurDialog,
   setRecurSkipOverdue,
@@ -20,51 +21,28 @@ import { waitForAppReady } from '../../utils/waits';
 type RepeatState = {
   instanceIds: string[];
   legacyInstanceCount: number;
-  lastCreationDays: string[];
+  lastCreationDay: string | null | undefined;
 };
-const readRepeatState = (page: Page): Promise<RepeatState> =>
-  page.evaluate(async () => {
-    type State = {
-      tasks: {
-        ids: string[];
-        entities: Record<string, { repeatCfgId?: string; parentId?: string }>;
-      };
-      taskRepeatCfg: { entities: Record<string, { lastTaskCreationDay?: string }> };
-    };
-    const { store } = (
-      window as unknown as {
-        __e2eTestHelpers: {
-          store: {
-            subscribe: (cb: (state: State) => void) => { unsubscribe: () => void };
-          };
-        };
-      }
-    ).__e2eTestHelpers;
-    return new Promise<RepeatState>((resolve) => {
-      const subscription = store.subscribe((state) => {
-        window.setTimeout(() => subscription.unsubscribe());
-        resolve({
-          // Same config, so sorting orders the instances by day.
-          instanceIds: state.tasks.ids.filter((id) => id.startsWith('rpt_')).sort(),
-          // The task made repeatable keeps its random id.
-          legacyInstanceCount: state.tasks.ids.filter((id) => {
-            const task = state.tasks.entities[id];
-            return !!task.repeatCfgId && !task.parentId && !id.startsWith('rpt_');
-          }).length,
-          lastCreationDays: Object.values(state.taskRepeatCfg.entities).map(
-            (cfg) => cfg.lastTaskCreationDay ?? '',
-          ),
-        });
-      });
-    });
-  });
+const readRepeatState = async (page: Page, title: string): Promise<RepeatState> => {
+  const { cfg, tasks } = await getRepeatSeriesView(page, title);
+  return {
+    // Sorted by id, which for one config is the day order.
+    instanceIds: tasks.map(({ id }) => id).filter((id) => id.startsWith('rpt_')),
+    // The task made repeatable keeps its random id.
+    legacyInstanceCount: tasks.filter(
+      ({ id, repeatCfgId }) => !!repeatCfgId && !id.startsWith('rpt_'),
+    ).length,
+    lastCreationDay: cfg?.lastTaskCreationDay,
+  };
+};
 
 // A repeat instance is created at noon of its day in the creating timezone.
 // A's June 16 instance (Los Angeles) reads as June 17 on B (Tokyo), so B used to
 // count its own June 17 occurrence as created, advance the config's creation day
 // and never create it. "Keep every copy" keeps the overdue instances, so the
-// duplicate cleanup must not take one occurrence for another either: the task
-// made repeatable on June 15 keeps its random id and reads as June 16 on B.
+// duplicate cleanup must not take one occurrence for another either: once B
+// creates June 17, both instances read as June 17 on B and as June 16 on A. The
+// task made repeatable on June 15 keeps its random id and must survive as well.
 test.describe('@supersync Repeat occurrence from a device in another timezone', () => {
   test('a device a day ahead still creates its own occurrence', async ({
     browser,
@@ -108,7 +86,7 @@ test.describe('@supersync Repeat occurrence from a device in another timezone', 
       await a.page.clock.setSystemTime(new Date('2026-06-16T19:00:00Z'));
       await a.page.evaluate(() => window.dispatchEvent(new Event('focus')));
       await expect
-        .poll(async () => (await readRepeatState(a.page)).instanceIds, {
+        .poll(async () => (await readRepeatState(a.page, taskName)).instanceIds, {
           timeout: 60000,
         })
         .toEqual([expect.stringMatching(/_2026-06-16$/)]);
@@ -121,10 +99,10 @@ test.describe('@supersync Repeat occurrence from a device in another timezone', 
       await waitForAppReady(b.page);
       await b.sync.syncAndWait();
       await expect
-        .poll(async () => (await readRepeatState(b.page)).lastCreationDays, {
+        .poll(async () => (await readRepeatState(b.page, taskName)).lastCreationDay, {
           timeout: 60000,
         })
-        .toEqual(['2026-06-17']);
+        .toBe('2026-06-17');
       await b.sync.syncAndWait();
       await a.sync.syncAndWait();
 
@@ -134,6 +112,7 @@ test.describe('@supersync Repeat occurrence from a device in another timezone', 
             async () => {
               const { instanceIds, legacyInstanceCount } = await readRepeatState(
                 client.page,
+                taskName,
               );
               return { instanceIds, legacyInstanceCount };
             },

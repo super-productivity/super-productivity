@@ -1,28 +1,16 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
-import { openRecurDialog, saveRecurDialog } from '../../utils/recurring-task-helpers';
+import {
+  getRepeatSeriesView,
+  openRecurDialog,
+  saveRecurDialog,
+} from '../../utils/recurring-task-helpers';
 
-const readRepeatInstanceIds = (page: Page): Promise<string[]> =>
-  page.evaluate(async () => {
-    const { store } = (
-      window as unknown as {
-        __e2eTestHelpers: {
-          store: {
-            subscribe: (cb: (state: { tasks: { ids: string[] } }) => void) => {
-              unsubscribe: () => void;
-            };
-          };
-        };
-      }
-    ).__e2eTestHelpers;
-    return new Promise<string[]>((resolve) => {
-      const subscription = store.subscribe((state) => {
-        window.setTimeout(() => subscription.unsubscribe());
-        // Same config, so sorting orders the instances by day.
-        resolve(state.tasks.ids.filter((id) => id.startsWith('rpt_')).sort());
-      });
-    });
-  });
+// The series' tasks come sorted by id, which for one config is the day order.
+const readRepeatInstanceIds = async (page: Page, title: string): Promise<string[]> =>
+  (await getRepeatSeriesView(page, title)).tasks
+    .map(({ id }) => id)
+    .filter((id) => id.startsWith('rpt_'));
 
 /**
  * A repeat instance is created at noon of its day in the creating timezone.
@@ -62,7 +50,7 @@ test.describe('Repeat Task - timezone change', () => {
     await page.clock.setSystemTime(new Date('2026-06-16T16:00:00Z'));
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect
-      .poll(() => readRepeatInstanceIds(page), { timeout: 60000 })
+      .poll(() => readRepeatInstanceIds(page, taskTitle), { timeout: 60000 })
       .toEqual([expect.stringMatching(/_2026-06-16$/)]);
 
     // The device travels to Tokyo and the app starts on June 17, 09:00.
@@ -73,7 +61,7 @@ test.describe('Repeat Task - timezone change', () => {
 
     // Default Daily cleanup may already have removed the untouched June 16 instance.
     await expect
-      .poll(() => readRepeatInstanceIds(page), { timeout: 60000 })
+      .poll(() => readRepeatInstanceIds(page, taskTitle), { timeout: 60000 })
       .toContainEqual(expect.stringMatching(/_2026-06-17$/));
   });
 });
