@@ -1,0 +1,5 @@
+New in 20.1.0:
+Drag selected tasks together, set recurring deadlines and find tasks by attached links. Use the schedule tray for tasks without a time.
+Import from Microsoft To Do and bring in Todoist repeats. An optional invoicing plugin is now bundled.
+Android repeating reminders stay visible and skip the task you're tracking. Swipe from the right edge to open navigation.
+Fixes for sync conflicts, saved tracked time, focus breaks and duration entry.

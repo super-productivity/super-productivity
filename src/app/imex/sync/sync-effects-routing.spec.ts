@@ -15,6 +15,7 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SYNC_INITIAL_SYNC_TRIGGER } from './sync.const';
 import { OperationLogDownloadService } from '../../op-log/sync/operation-log-download.service';
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
+import { OperationWriteFlushService } from '../../op-log/sync/operation-write-flush.service';
 import { SYNC_BEFORE_CLOSE_ID } from './sync.const';
 
 /**
@@ -35,6 +36,9 @@ describe('SyncEffects routing (Task 3)', () => {
   let remoteBacklogRemains$: Subject<void>;
   let schedulerRequest: jasmine.Spy;
   let sync: jasmine.Spy;
+  let syncCfg$: BehaviorSubject<{ isManualSyncOnly?: boolean }>;
+  let isEnabledAndReady$: BehaviorSubject<boolean>;
+  let flushPendingWrites: jasmine.Spy;
   let subs: { unsubscribe: () => void }[];
 
   const flush = async (): Promise<void> => {
@@ -49,6 +53,11 @@ describe('SyncEffects routing (Task 3)', () => {
     remoteBacklogRemains$ = new Subject<void>();
     schedulerRequest = jasmine.createSpy('request');
     sync = jasmine.createSpy('sync').and.resolveTo('InSync');
+    syncCfg$ = new BehaviorSubject<{ isManualSyncOnly?: boolean }>({
+      isManualSyncOnly: false,
+    });
+    flushPendingWrites = jasmine.createSpy('flushPendingWrites').and.resolveTo();
+    isEnabledAndReady$ = new BehaviorSubject(true);
 
     TestBed.configureTestingModule({
       providers: [
@@ -66,9 +75,10 @@ describe('SyncEffects routing (Task 3)', () => {
           provide: SyncWrapperService,
           useValue: {
             sync,
-            isEnabledAndReady$: new BehaviorSubject(true),
+            isEnabledAndReady$,
             syncInterval$: new BehaviorSubject(10000),
             syncProviderId$: new BehaviorSubject(SyncProviderId.WebDAV),
+            syncCfg$,
           },
         },
         {
@@ -98,6 +108,10 @@ describe('SyncEffects routing (Task 3)', () => {
             'flushAccumulatedTime',
             'turnOffAll',
           ]),
+        },
+        {
+          provide: OperationWriteFlushService,
+          useValue: { flushPendingWrites },
         },
         {
           provide: UiHelperService,
@@ -299,6 +313,154 @@ describe('SyncEffects routing (Task 3)', () => {
 
       expect(sync).not.toHaveBeenCalled();
       expect(setDone).not.toHaveBeenCalled();
+    });
+
+    it('waits until every other hold is done, so a cancelled quit keeps tracking', async () => {
+      const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+      const simpleCounterService = TestBed.inject(
+        SimpleCounterService,
+      ) as jasmine.SpyObj<SimpleCounterService>;
+
+      // The finish-day prompt is still open: cancelling it keeps the app open,
+      // so tracking must not be stopped yet and the hold must stay registered.
+      requests$.next(['FINISH_DAY_BEFORE_CLOSE_EFFECT', SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(taskService.setCurrentId).not.toHaveBeenCalled();
+      expect(simpleCounterService.turnOffAll).not.toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      expect(setDone).not.toHaveBeenCalled();
+
+      // The main process re-notifies once the prompt released its hold.
+      requests$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(taskService.setCurrentId).toHaveBeenCalledWith(null);
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+  });
+
+  describe('sync before quit scheduling (#11831)', () => {
+    let execBeforeClose: jasmine.SpyObj<ExecBeforeCloseService>;
+    let onBeforeClose$: Subject<string[]>;
+    let taskService: jasmine.SpyObj<TaskService>;
+    let simpleCounterService: jasmine.SpyObj<SimpleCounterService>;
+
+    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+    beforeEach(() => {
+      execBeforeClose = TestBed.inject(
+        ExecBeforeCloseService,
+      ) as jasmine.SpyObj<ExecBeforeCloseService>;
+      onBeforeClose$ = execBeforeClose.onBeforeClose$ as Subject<string[]>;
+      taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+      simpleCounterService = TestBed.inject(
+        SimpleCounterService,
+      ) as jasmine.SpyObj<SimpleCounterService>;
+    });
+
+    it('persists tracked time but does not sync when "Only sync manually" is on', async () => {
+      syncCfg$.next({ isManualSyncOnly: true });
+      subs.push(effects._syncBeforeQuit$().subscribe());
+      // The quit is still held: without it the main process quits at once and
+      // the batched tracked time is lost.
+      expect(execBeforeClose.schedule).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(taskService.setCurrentId).toHaveBeenCalledWith(null);
+      expect(simpleCounterService.flushAccumulatedTime).toHaveBeenCalled();
+      expect(flushPendingWrites).toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
+    it('persists tracked time on quit when sync is off', async () => {
+      // Sync off is the default: without the hold the main process quits at
+      // once and the running stopwatch counter time since the last batch is lost.
+      isEnabledAndReady$.next(false);
+      subs.push(effects._syncBeforeQuit$().subscribe());
+      expect(execBeforeClose.schedule).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(taskService.setCurrentId).toHaveBeenCalledWith(null);
+      expect(simpleCounterService.flushAccumulatedTime).toHaveBeenCalled();
+      expect(flushPendingWrites).toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
+    it('keeps the quit held when sync is turned off while the app runs', async () => {
+      subs.push(effects._syncBeforeQuit$().subscribe());
+      isEnabledAndReady$.next(false);
+
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(execBeforeClose.unschedule).not.toHaveBeenCalled();
+      expect(simpleCounterService.flushAccumulatedTime).toHaveBeenCalled();
+      expect(sync).not.toHaveBeenCalled();
+      expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
+    it('releases the quit only after the tracked time is written', async () => {
+      syncCfg$.next({ isManualSyncOnly: true });
+      let finishWrites!: () => void;
+      flushPendingWrites.and.returnValue(
+        new Promise<void>((resolve) => (finishWrites = resolve)),
+      );
+      subs.push(effects._syncBeforeQuit$().subscribe());
+
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+      expect(flushPendingWrites).toHaveBeenCalled();
+      expect(execBeforeClose.setDone).not.toHaveBeenCalled();
+
+      finishWrites();
+      await settle();
+      expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
+    it('releases the quit even when persisting the time fails', async () => {
+      syncCfg$.next({ isManualSyncOnly: true });
+      flushPendingWrites.and.rejectWith(new Error('lock timeout'));
+      subs.push(effects._syncBeforeQuit$().subscribe());
+
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+
+      expect(sync).not.toHaveBeenCalled();
+      expect(execBeforeClose.setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+    });
+
+    it('follows the setting when it is toggled while the app runs', async () => {
+      subs.push(effects._syncBeforeQuit$().subscribe());
+      expect(execBeforeClose.schedule).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);
+
+      syncCfg$.next({ isManualSyncOnly: true });
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+      expect(sync).not.toHaveBeenCalled();
+
+      syncCfg$.next({ isManualSyncOnly: false });
+      onBeforeClose$.next([SYNC_BEFORE_CLOSE_ID]);
+      await settle();
+      await settle();
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(execBeforeClose.unschedule).not.toHaveBeenCalled();
+      expect(execBeforeClose.setDone).toHaveBeenCalledTimes(2);
     });
   });
 });

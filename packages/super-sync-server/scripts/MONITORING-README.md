@@ -57,13 +57,31 @@ counts every account above 50, 75 and 90 percent of its own quota (and at or
 over it), from the `users` counters alone. The projection tables cover the
 accounts with a device heartbeat in the last 30 days (an upload bumps it, so no
 other account grew), highest quota use first, capped at `MONITOR_SCOPE_USERS`
-(default 200; the header says when the cap bound). For those it reads the bytes
-uploaded over the 30 days, one `(user_id, received_at, server_seq)` index range
-per account, and projects the time to quota at that rate. The projection
+(default 200; the header says when the cap bound). For those it estimates the
+bytes uploaded over the 30 days: the window's operation count from sequence
+numbers (one `(user_id, received_at, server_seq)` index descent for the first
+operation in the window, `last_seq` for the newest) times their average size
+from the newest 100 operations. Full-state operations (an import or a repair)
+are the exception: one can outweigh every other operation in the window, so
+the newest 100 of them in the window are summed exactly and only the remaining
+operations are averaged; an account with more than 100 in the window is
+underestimated. That lookup is bounded only through the partial index
+`operations_user_id_full_state_server_seq_idx` (migration `20260512000000`): on
+a database without it, such as one created with `prisma db push`, it reads the
+whole window. It then projects the time to quota at that rate. The projection
 assumes no pruning, the routine case because incremental sync creates no
-full-state boundary, so real times can only be longer. Its `operations` work is
-the scoped accounts' 30-day upload volume rather than a fixed per-user tail,
-which is why it is not part of `run-all-monitoring`.
+full-state boundary; pruning makes real times longer, a one-off import counts
+as if it recurred every 30 days, and the averaged part can be off in either
+direction. Its `operations` work is `users x tail`, like the reports below;
+summing every operation in the window instead hit `statement_timeout` on the
+hosted instance with 1,000 accounts (2026-11-11).
+
+In production, run it through the container wrapper, which forwards
+`MONITOR_SCOPE_USERS` and `MONITOR_STATEMENT_TIMEOUT_MS` into the container:
+
+```bash
+MONITOR_SCOPE_USERS=1000 ./scripts/docker-monitor.sh quota --limit 50
+```
 
 ### 2. Storage Analysis (`analyze-storage.ts`)
 

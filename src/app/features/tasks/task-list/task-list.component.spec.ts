@@ -91,6 +91,7 @@ describe('TaskListComponent', () => {
             previewTasks: () => [],
             selectionSize: () => 0,
             isListGroupDrag: () => false,
+            isCancelled: () => false,
             start: () => {},
             clear: () => {},
             finish: () => {},
@@ -1232,8 +1233,8 @@ describe('TaskListComponent', () => {
   });
 
   // Grouped-by-tag view: a task dragged into a DIFFERENT tag group has its tags
-  // reassigned (move: drop the source group's tag, add the target's) instead of
-  // being reordered. groupTagId is undefined outside that view, null for a
+  // reassigned (move: drop the source group's tag, add the target's) and is
+  // placed at the drop slot (#11921). groupTagId is undefined outside that view, null for a
   // no-single-tag bucket ('No tag' / 'Unknown tag' / duplicate-titled).
   describe('drop() tag-group retag', () => {
     type GroupListData = {
@@ -1294,8 +1295,95 @@ describe('TaskListComponent', () => {
       const [task, newTags] = taskService.updateTags.calls.mostRecent().args;
       expect(task.id).toBe('t1');
       expect(newTags).toEqual(['tagC', 'tagB']);
-      // Retag short-circuits the reorder path.
-      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    // #11921: the retagged task lands at the drop slot, not at the group's end.
+    const movedAfter = (): (string | null)[] =>
+      (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0])
+        .filter((a) => a.type === moveTaskInTodayList.type)
+        .map((a) => a.afterTaskId);
+
+    it('places the retagged task before the row it was dropped on', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup(NO_TAG_GROUP_ID),
+          target: undoneGroup('tagB', [{ id: 'b1' }, { id: 'b2' }, { id: 'b3' }]),
+          dragged: { id: 't1', parentId: null, tagIds: [] },
+          currentIndex: 2,
+        }),
+      );
+
+      expect(taskService.updateTags).toHaveBeenCalledTimes(1);
+      expect(movedAfter()).toEqual(['b2']);
+    });
+
+    it('places the retagged task first when dropped on the first row', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup('tagA'),
+          target: undoneGroup('tagB', [{ id: 'b1' }, { id: 'b2' }]),
+          dragged: { id: 't1', parentId: null, tagIds: ['tagA'] },
+          currentIndex: 0,
+        }),
+      );
+
+      expect(movedAfter()).toEqual([null]);
+    });
+
+    it('places the retagged task last when dropped below the last row', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup('tagA'),
+          target: undoneGroup('tagB', [{ id: 'b1' }, { id: 'b2' }]),
+          dragged: { id: 't1', parentId: null, tagIds: ['tagA'] },
+          currentIndex: 2,
+        }),
+      );
+
+      expect(movedAfter()).toEqual(['b2']);
+    });
+
+    it('moves within the active tag context, keeping the context tag', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup(NO_TAG_GROUP_ID),
+          target: undoneGroup('tagB', [{ id: 'b1' }, { id: 'b2' }]),
+          dragged: { id: 't1', parentId: null, tagIds: ['test-context'] },
+          currentIndex: 1,
+        }),
+      );
+
+      const [, newTags] = taskService.updateTags.calls.mostRecent().args;
+      expect(newTags).toEqual(['test-context', 'tagB']);
+      const move = (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0])
+        .find((a) => a.type === moveTaskInTodayList.type);
+      expect(move).toEqual(
+        jasmine.objectContaining({
+          taskId: 't1',
+          afterTaskId: 'b1',
+          workContextId: 'test-context',
+          workContextType: 'TAG',
+        }),
+      );
+    });
+
+    it('retags before it moves', async () => {
+      const order: string[] = [];
+      taskService.updateTags.and.callFake(() => order.push('retag'));
+      (store.dispatch as jasmine.Spy).and.callFake(() => order.push('move'));
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup('tagA'),
+          target: undoneGroup('tagB', [{ id: 'b1' }]),
+          dragged: { id: 't1', parentId: null, tagIds: ['tagA'] },
+        }),
+      );
+
+      expect(order).toEqual(['retag', 'move']);
     });
 
     it('adds the target tag when dragging out of the "No tag" bucket (no removal)', async () => {
@@ -1325,7 +1413,7 @@ describe('TaskListComponent', () => {
       const [task, newTags] = taskService.updateTags.calls.mostRecent().args;
       expect(task.id).toBe('t1');
       expect(newTags).toEqual([]);
-      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(movedAfter()).toEqual([null]);
     });
 
     it('keeps the active tag when dropping onto "No tag" inside that tag view (#9630)', async () => {
@@ -1354,6 +1442,7 @@ describe('TaskListComponent', () => {
       const [, newTags] = taskService.updateTags.calls.mostRecent().args;
       // Source 'tagA' dropped, 'tagB' appended → duplicate left for updateTags to collapse.
       expect(newTags).toEqual(['tagB', 'tagB']);
+      expect(movedAfter()).toEqual([null]);
     });
 
     it('adds the target tag (no removal) when dragging from an ambiguous/unknown source bucket (src null)', async () => {

@@ -26,7 +26,8 @@
       min-width: 100%;
 
       // Match grid-container column widths exactly
-      .week-header-dates {
+      .week-header-dates,
+      schedule-tray {
         grid-template-columns: var(--schedule-time-width) repeat(
             var(--nr-of-days),
             minmax(var(--schedule-day-width), 1fr)
@@ -208,6 +209,12 @@
       grid-template-columns: 1fr;
     }
 
+    schedule-tray {
+      // below the date and its prev/next buttons, across all three
+      grid-column: 1 / -1;
+      grid-template-columns: 1fr;
+    }
+
     .day {
       border: none !important;
     }
@@ -245,6 +252,14 @@
   }
 }
 
+// Same columns as the dates above it and the grid below.
+schedule-tray {
+  display: grid;
+  grid-template-columns: var(--schedule-time-width) repeat(var(--nr-of-days), 1fr);
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .day {
   position: relative;
   display: flex;
@@ -269,6 +284,10 @@
     height: 16px;
     font-size: 16px;
     line-height: 16px;
+  }
+
+  &.drag-over {
+    background: mat-css-vars.mat-css-color-primary($opacity: 0.05);
   }
 }
 

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ExpandForward rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Expands the abbreviation `fwd` to the full word `forward` for clarity.
+extends: existence
+message: "Use `forward` instead of `fwd`"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "forward"
+tokens:
+  - "fwd(?!['\\x{2019}]s\\b)"

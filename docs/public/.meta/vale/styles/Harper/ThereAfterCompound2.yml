@@ -1,0 +1,30 @@
+---
+# Hand-written companion to the generated ThereAfterCompound, which asks for a
+# verb, auxiliary or adverb after `there after` and so misses the three
+# examples Harper tests it on: Vale reads `CAME` in "THERE AFTER CAME THE RETRY
+# LOOP" as a noun and `can` in "there after can we close the incident" as a
+# proper noun.
+#
+# The words are named outright here instead, which is what this port does
+# whenever a rule's trigger is the very thing that confuses the tagger --
+# `ThenThan.yml` and `WereWhere.yml` say the same.
+#
+# The list is auxiliaries and modals rather than verbs at large, because the
+# guard is load-bearing: "I'll be there after the meeting" is correct English
+# and only the part of speech of the next word tells it from the compound.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "This two-word form is likely intended as the single adverb."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+  params:
+    - "thereafter"
+tokens:
+  - '\bthere\s+after\b(?=\s+(?:can|could|will|would|shall|should|may|might|must|came|come|comes|is|are|was|were|do|does|did|has|have|had)\b)'

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AsComparedTo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `as compare to` to `as compared to`.
+extends: existence
+message: "Did you mean `as compared to`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "as compared to"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+compare(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"

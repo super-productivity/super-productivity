@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's RedundantProgressiveComparative: `increasingly
+# more` says the same thing twice.
+#
+# Harper requires an adjective or adverb after the pair. Without it `more` is
+# not a comparative at all -- "increasingly more than a minor annoyance" is a
+# quantity, "increasingly more people" is a count -- and the redundancy the
+# rule names is not there. A substitution cannot ask for a tag, so this is a
+# sequence with the pair marked as the target.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "This phrasing is redundant; use a direct comparative like `more and more`."
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "more and more"
+tokens:
+  - pattern: 'increasingly'
+    target: true
+  - pattern: 'more'
+    target: true
+  - tag: 'JJ[RS]?|RB[RS]?'

@@ -1,0 +1,25 @@
+---
+# Generated from Harper's YourOutClauseAgreement rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `your` when it appears where a subject-plus-verb contraction is intended before `out` and a following preposition.
+extends: sequence
+message: "Use the contraction for `you are` in this clause."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "you're"
+tokens:
+  - pattern: 'because|before|unless|after|since|until|while|once|till|when|but|as|if'
+  - pattern: 'your'
+    target: true
+  - upos: ADV
+  - pattern: 'out'
+  - pattern: 'outside|around|inside|under|over|with|at|in|of|on'

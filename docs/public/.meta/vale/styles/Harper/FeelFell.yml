@@ -1,0 +1,22 @@
+---
+# Hand-written from Harper's FeelFell: `fell` where `feel` is meant.
+#
+# `fell` is a real word, so it takes a neighbour to tell the two apart: a
+# negated auxiliary before it, which only a bare infinitive can follow, or one
+# of the words `feel` takes after it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Did you mean `feel`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "feel"
+tokens:
+  - "(?<=\\b(?:didn't|doesn't)\\s)fell\\b"
+  - "fell(?=\\s+(?:comfortable|free|good|I|I'm|it|it's|like|that|we|you)\\b)"

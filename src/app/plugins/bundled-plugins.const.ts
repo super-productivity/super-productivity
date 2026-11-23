@@ -27,8 +27,10 @@ export const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/app-auto-track',
   'assets/bundled-plugins/todoist-import',
   'assets/bundled-plugins/ticktick-import',
+  'assets/bundled-plugins/ms-todo-import',
   'assets/bundled-plugins/parallel-code',
   'assets/bundled-plugins/ai-command',
+  'assets/bundled-plugins/invoicing',
 ] as const;
 
 // Reserved ids: an uploaded plugin may not reuse a bundled plugin's manifest id (it would
@@ -53,7 +55,9 @@ export const BUNDLED_PLUGIN_IDS = new Set<string>([
   'github-issue-provider',
   'gitlab-issue-provider',
   'google-calendar-provider',
+  'invoicing',
   'linear-issue-provider',
+  'ms-todo-import',
   'nextcloud-deck-issue-provider',
   'parallel-code',
   'procrastination-buster',

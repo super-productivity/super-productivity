@@ -127,7 +127,10 @@ describe('AgentCaptureService', () => {
             assertSyncEpochUnchanged: () => undefined,
           },
         },
-        { provide: DateService, useValue: { todayStr: () => '2026-10-15' } },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => '2026-10-15', getStartOfNextDayDiffMs: () => 0 },
+        },
         {
           provide: SyncWrapperService,
           useValue: { isSyncInProgress$: syncing$ },

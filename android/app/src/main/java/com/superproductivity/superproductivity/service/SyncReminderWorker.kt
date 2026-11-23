@@ -33,6 +33,7 @@ class SyncReminderWorker(
             if (fileCredentials != null) {
                 return runFileSyncReminderCheck(applicationContext, fileCredentials)
             }
+            RepeatReminderCache.clear(applicationContext)
             Log.d(TAG, "No sync credentials configured, skipping")
             return Result.success()
         }
@@ -54,13 +55,17 @@ class SyncReminderWorker(
         var hasMore = true
         var iterations = 0
         val maxIterations = 100
+        var repeatGeneration = RepeatReminderCache.getGeneration(applicationContext)
+        var repeatState = RepeatReminderCache.getState(applicationContext)
+        val protectedRepeatIds = HashSet<String>()
 
         while (hasMore && iterations < maxIterations) {
             iterations++
             val result = provider.fetchReminderChanges(
                 credentials.baseUrl,
                 credentials.accessToken,
-                lastSeq
+                lastSeq,
+                repeatState = repeatState,
             )
 
             if (result == null) {
@@ -84,8 +89,22 @@ class SyncReminderWorker(
             if (!reminderSettings.isDisabled) {
                 for (reminder in result.remindersToSchedule) {
                     scheduleReminderFromSync(applicationContext, reminder, reminderSettings.useAlarmStyle)
+                    protectedRepeatIds.add(reminder.taskId)
                     totalScheduled++
                 }
+            }
+
+            // Persist the folded repeat configs in this same iteration as the
+            // seq cursor, and before it: a retried page is idempotent, a page
+            // whose seq advanced without the fold would be lost.
+            repeatState = result.nextRepeatState
+            if (!RepeatReminderCache.saveStateIfUnchanged(applicationContext, repeatState, repeatGeneration)) {
+                // The open app sent its configs mid-run. Re-fetch this page onto
+                // them without moving the cursor, so none of its ops are lost;
+                // re-scheduling its task alarms is idempotent (same ids).
+                repeatGeneration = RepeatReminderCache.getGeneration(applicationContext)
+                repeatState = RepeatReminderCache.getState(applicationContext)
+                continue
             }
 
             // Update sequence cursor.
@@ -105,6 +124,18 @@ class SyncReminderWorker(
 
         if (iterations >= maxIterations) {
             Log.w(TAG, "Hit max pagination iterations ($maxIterations), stopping. seq=$lastSeq")
+        }
+
+        // Re-derive even when this run downloaded nothing new, so the 14-day
+        // window slides. Disabled reminders still folded the cache above and
+        // leave the armed slots alone; opening the app reschedules them.
+        if (!reminderSettings.isDisabled) {
+            armRepeatReminders(
+                applicationContext,
+                repeatState,
+                reminderSettings.useAlarmStyle,
+                protectedRepeatIds,
+            )
         }
 
         if (totalCancelled > 0 || totalScheduled > 0) {

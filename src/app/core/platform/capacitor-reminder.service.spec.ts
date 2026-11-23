@@ -1,6 +1,7 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { Capacitor } from '@capacitor/core';
 import { provideMockStore } from '@ngrx/store/testing';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { LocalNotificationsWeb } from '@capacitor/local-notifications/dist/esm/web';
 import { CapacitorReminderService } from './capacitor-reminder.service';
 import { CapacitorPlatformService } from './capacitor-platform.service';
@@ -9,13 +10,23 @@ import {
   REMINDER_ACTION_TYPE_ID,
 } from './capacitor-notification.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { SnackService } from '../snack/snack.service';
+import { LS } from '../persistence/storage-keys.const';
+import { T } from '../../t.const';
+
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+// Longer than the iOS budget's debounce, so one tick runs a whole pass.
+const BUDGET_SETTLE_MS = 1000;
 
 describe('CapacitorReminderService', () => {
   let service: CapacitorReminderService;
   let platformServiceSpy: jasmine.SpyObj<CapacitorPlatformService>;
   let notificationServiceSpy: jasmine.SpyObj<CapacitorNotificationService>;
+  let snackServiceSpy: jasmine.SpyObj<SnackService>;
 
   beforeEach(() => {
+    snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     // Create spies for dependencies
     platformServiceSpy = jasmine.createSpyObj(
       'CapacitorPlatformService',
@@ -43,8 +54,10 @@ describe('CapacitorReminderService', () => {
       'getPermissionState',
       'cancel',
       'cancelMultiple',
+      'getPending',
       'registerReminderActions',
     ]);
+    notificationServiceSpy.getPending.and.resolveTo([]);
     notificationServiceSpy.ensurePermissions.and.returnValue(Promise.resolve(true));
     notificationServiceSpy.getPermissionState.and.returnValue(Promise.resolve('granted'));
     notificationServiceSpy.cancel.and.returnValue(Promise.resolve(true));
@@ -55,6 +68,7 @@ describe('CapacitorReminderService', () => {
       providers: [
         CapacitorReminderService,
         provideMockStore(),
+        { provide: SnackService, useValue: snackServiceSpy },
         { provide: CapacitorPlatformService, useValue: platformServiceSpy },
         { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
       ],
@@ -85,6 +99,7 @@ describe('CapacitorReminderService', () => {
         providers: [
           CapacitorReminderService,
           provideMockStore(),
+          { provide: SnackService, useValue: snackServiceSpy },
           { provide: CapacitorPlatformService, useValue: nativePlatformSpy },
           { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
         ],
@@ -112,6 +127,7 @@ describe('CapacitorReminderService', () => {
         providers: [
           CapacitorReminderService,
           provideMockStore(),
+          { provide: SnackService, useValue: snackServiceSpy },
           { provide: CapacitorPlatformService, useValue: platformSpy },
           { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
         ],
@@ -211,6 +227,7 @@ describe('CapacitorReminderService', () => {
           providers: [
             CapacitorReminderService,
             provideMockStore(),
+            { provide: SnackService, useValue: snackServiceSpy },
             { provide: CapacitorPlatformService, useValue: nativePlatformSpy },
             { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
             { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: false },
@@ -359,6 +376,7 @@ describe('CapacitorReminderService', () => {
           providers: [
             CapacitorReminderService,
             provideMockStore(),
+            { provide: SnackService, useValue: snackServiceSpy },
             { provide: CapacitorPlatformService, useValue: platformServiceSpy },
             { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
             { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
@@ -419,6 +437,7 @@ describe('CapacitorReminderService', () => {
         providers: [
           CapacitorReminderService,
           provideMockStore(),
+          { provide: SnackService, useValue: snackServiceSpy },
           { provide: CapacitorPlatformService, useValue: nativePlatformSpy },
           { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
           // Override the WebView discriminator via DI; `Capacitor.isNativePlatform()`
@@ -428,6 +447,25 @@ describe('CapacitorReminderService', () => {
         ],
       });
       legacyService = TestBed.inject(CapacitorReminderService);
+    });
+
+    it('hands a reminder to the OS right away off iOS, without the iOS budget', async () => {
+      const scheduleSpy = spyOn(
+        LocalNotificationsWeb.prototype,
+        'schedule',
+      ).and.resolveTo({ notifications: [] });
+
+      await legacyService.scheduleReminder({
+        notificationId: 42,
+        reminderId: 'task-1',
+        relatedId: 'task-1',
+        title: 'Test Reminder',
+        reminderType: 'TASK',
+        triggerAtMs: Date.now() + 60000,
+      });
+
+      expect(scheduleSpy).toHaveBeenCalledTimes(1);
+      expect(notificationServiceSpy.getPending).not.toHaveBeenCalled();
     });
 
     it('requestPermissionsInBackground short-circuits without consulting Capacitor', async () => {
@@ -469,7 +507,7 @@ describe('CapacitorReminderService', () => {
     let nativePlatformSpy: jasmine.SpyObj<CapacitorPlatformService>;
     let scheduleSpy: jasmine.Spy;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       nativePlatformSpy = jasmine.createSpyObj(
         'CapacitorPlatformService',
         ['hasCapability', 'isIOS'],
@@ -501,10 +539,16 @@ describe('CapacitorReminderService', () => {
         providers: [
           CapacitorReminderService,
           provideMockStore(),
+          { provide: SnackService, useValue: snackServiceSpy },
           { provide: CapacitorPlatformService, useValue: nativePlatformSpy },
           { provide: CapacitorNotificationService, useValue: notificationServiceSpy },
         ],
       });
+      // Capacitor loads the plugin's web implementation on first use, in real
+      // time, which fakeAsync cannot wait for: load it before the tests below.
+      await LocalNotifications.schedule({ notifications: [] });
+      scheduleSpy.calls.reset();
+
       nativeService = TestBed.inject(CapacitorReminderService);
     });
 
@@ -512,15 +556,25 @@ describe('CapacitorReminderService', () => {
       expect(nativeService.isAvailable).toBe(true);
     });
 
-    it('should call notificationService.cancel when cancelling reminder', async () => {
-      await nativeService.cancelReminder(123);
-      expect(notificationServiceSpy.cancel).toHaveBeenCalledWith(123);
-    });
+    // On iOS the budget arms and cancels in a pass shortly after the call
+    // (see ios-reminder-budget.ts), so these wait for it.
+    it('should cancel a pending reminder on iOS when cancelling reminder', fakeAsync(() => {
+      notificationServiceSpy.getPending.and.resolveTo([{ id: 123 }]);
 
-    it('should call notificationService.cancelMultiple when cancelling multiple reminders', async () => {
-      await nativeService.cancelMultipleReminders([1, 2, 3]);
+      void nativeService.cancelReminder(123);
+      tick(BUDGET_SETTLE_MS);
+
+      expect(notificationServiceSpy.cancelMultiple).toHaveBeenCalledWith([123]);
+    }));
+
+    it('should cancel pending reminders on iOS when cancelling multiple reminders', fakeAsync(() => {
+      notificationServiceSpy.getPending.and.resolveTo([{ id: 1 }, { id: 2 }, { id: 3 }]);
+
+      void nativeService.cancelMultipleReminders([1, 2, 3]);
+      tick(BUDGET_SETTLE_MS);
+
       expect(notificationServiceSpy.cancelMultiple).toHaveBeenCalledWith([1, 2, 3]);
-    });
+    }));
 
     it('should call notificationService.ensurePermissions when ensuring permissions', async () => {
       await nativeService.ensurePermissions();
@@ -537,8 +591,8 @@ describe('CapacitorReminderService', () => {
       expect(notificationServiceSpy.ensurePermissions).not.toHaveBeenCalled();
     });
 
-    it('should include sound property when scheduling on iOS', async () => {
-      await nativeService.scheduleReminder({
+    it('should include sound property when scheduling on iOS', fakeAsync(() => {
+      void nativeService.scheduleReminder({
         notificationId: 42,
         reminderId: 'task-1',
         relatedId: 'task-1',
@@ -546,6 +600,7 @@ describe('CapacitorReminderService', () => {
         reminderType: 'TASK',
         triggerAtMs: Date.now() + 60000,
       });
+      tick(BUDGET_SETTLE_MS);
 
       expect(scheduleSpy).toHaveBeenCalledWith(
         jasmine.objectContaining({
@@ -556,10 +611,10 @@ describe('CapacitorReminderService', () => {
           ],
         }),
       );
-    });
+    }));
 
-    it('should include reminder actions for explicit iOS task reminders', async () => {
-      await nativeService.scheduleReminder({
+    it('should include reminder actions for explicit iOS task reminders', fakeAsync(() => {
+      void nativeService.scheduleReminder({
         notificationId: 42,
         reminderId: 'task-1',
         relatedId: 'task-1',
@@ -567,6 +622,7 @@ describe('CapacitorReminderService', () => {
         reminderType: 'TASK',
         triggerAtMs: Date.now() + 60000,
       });
+      tick(BUDGET_SETTLE_MS);
 
       expect(scheduleSpy).toHaveBeenCalledWith(
         jasmine.objectContaining({
@@ -577,10 +633,10 @@ describe('CapacitorReminderService', () => {
           ],
         }),
       );
-    });
+    }));
 
-    it('should include reminder actions and metadata for explicit iOS deadline reminders', async () => {
-      await nativeService.scheduleReminder({
+    it('should include reminder actions and metadata for explicit iOS deadline reminders', fakeAsync(() => {
+      void nativeService.scheduleReminder({
         notificationId: 42,
         reminderId: 'task-1_deadline',
         relatedId: 'task-1',
@@ -588,6 +644,7 @@ describe('CapacitorReminderService', () => {
         reminderType: 'DEADLINE',
         triggerAtMs: Date.now() + 60000,
       });
+      tick(BUDGET_SETTLE_MS);
 
       expect(scheduleSpy).toHaveBeenCalledWith(
         jasmine.objectContaining({
@@ -603,10 +660,10 @@ describe('CapacitorReminderService', () => {
           ],
         }),
       );
-    });
+    }));
 
-    it('should not include reminder actions for due-date notifications', async () => {
-      await nativeService.scheduleReminder({
+    it('should not include reminder actions for due-date notifications', fakeAsync(() => {
+      void nativeService.scheduleReminder({
         notificationId: 42,
         reminderId: 'task-1',
         relatedId: 'task-1',
@@ -614,6 +671,7 @@ describe('CapacitorReminderService', () => {
         reminderType: 'DUE_DATE',
         triggerAtMs: Date.now() + 60000,
       });
+      tick(BUDGET_SETTLE_MS);
 
       expect(scheduleSpy).toHaveBeenCalledWith(
         jasmine.objectContaining({
@@ -624,6 +682,77 @@ describe('CapacitorReminderService', () => {
           ],
         }),
       );
+    }));
+
+    describe('pending-notification limit', () => {
+      const wantReminders = (count: number, stepMs: number): void => {
+        const now = Date.now();
+        // Farthest first: iOS itself would drop the first added, the soonest.
+        for (let i = count; i >= 1; i--) {
+          const offsetMs = i * stepMs;
+          void nativeService.scheduleReminder({
+            notificationId: i,
+            reminderId: `task-${i}`,
+            relatedId: `task-${i}`,
+            title: 'Test Reminder',
+            reminderType: 'TASK',
+            triggerAtMs: now + offsetMs,
+          });
+        }
+        tick(BUDGET_SETTLE_MS);
+      };
+      const armedIds = (): number[] =>
+        scheduleSpy.calls.allArgs().map(([options]) => options.notifications[0].id);
+
+      beforeEach(() => localStorage.removeItem(LS.IOS_REMINDER_LIMIT_NOTICE_AT));
+      afterEach(() => localStorage.removeItem(LS.IOS_REMINDER_LIMIT_NOTICE_AT));
+
+      it('arms the 60 soonest of 61 reminders and leaves the farthest out', fakeAsync(() => {
+        wantReminders(61, DAY);
+
+        expect(scheduleSpy).toHaveBeenCalledTimes(60);
+        expect(armedIds()).toContain(1);
+        expect(armedIds()).toContain(60);
+        expect(armedIds()).not.toContain(61);
+      }));
+
+      it('says how far the armed reminders reach when the limit cuts them short', fakeAsync(() => {
+        // One per hour: the 60th is 60 hours away, so two full days are covered.
+        wantReminders(61, HOUR);
+
+        expect(snackServiceSpy.open).toHaveBeenCalledOnceWith({
+          msg: T.F.REMINDER.S_IOS_LIMIT,
+          translateParams: { days: 2 },
+        });
+      }));
+
+      it('does not repeat the notice within 30 days', fakeAsync(() => {
+        wantReminders(61, HOUR);
+        tick(29 * DAY);
+        wantReminders(61, HOUR);
+
+        expect(snackServiceSpy.open).toHaveBeenCalledTimes(1);
+      }));
+
+      it('shows the notice again after 30 days', fakeAsync(() => {
+        wantReminders(61, HOUR);
+        tick(31 * DAY);
+        wantReminders(61, HOUR);
+
+        expect(snackServiceSpy.open).toHaveBeenCalledTimes(2);
+      }));
+
+      it('stays quiet while the armed reminders reach two weeks or more', fakeAsync(() => {
+        wantReminders(61, DAY);
+
+        expect(snackServiceSpy.open).not.toHaveBeenCalled();
+      }));
+
+      it('stays quiet while slots are free', fakeAsync(() => {
+        wantReminders(59, HOUR);
+
+        expect(snackServiceSpy.open).not.toHaveBeenCalled();
+      }));
     });
   });
 });

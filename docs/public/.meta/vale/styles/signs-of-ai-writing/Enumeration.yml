@@ -1,0 +1,11 @@
+extends: existence
+message: "Hedged enumeration detected: '%s'"
+level: suggestion
+link: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
+tokens:
+  - 'one of the most'
+  - 'among the most'
+  - 'some of the most'
+  - 'one of the first'
+  - 'among the earliest'
+  - 'some of the earliest'

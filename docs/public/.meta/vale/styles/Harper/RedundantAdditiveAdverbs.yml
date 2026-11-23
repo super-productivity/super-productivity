@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's RedundantAdditiveAdverbs: `also`, `too` and `as
+# well` all add the same thing, so two of them add it twice.
+#
+# The generated rule keyed on punctuation and missed "It is free too also."
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Only the `also`/`too` pair is ported, and only when no adjective, adverb or
+# preposition follows. Both exclusions are what separates the doubled additive
+# from ordinary English: "the version update is also too slow" is `too` as a
+# degree, and "in the readme also as well as a link" is `as well as` doing its
+# job as a conjunction.
+extends: sequence
+message: "Two additive adverbs together say the same thing twice."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'also|too'
+    target: true
+  - pattern: 'also|too'
+  - tag: 'JJ[RS]?|RB[RS]?|IN'
+    negate: true

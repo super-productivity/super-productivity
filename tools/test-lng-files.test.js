@@ -90,6 +90,7 @@ test('compareTranslationKeys reports sorted nested missing and unnecessary keys'
   assert.deepEqual(compareTranslationKeys(reference, translation), {
     missingKeys: ['common.save'],
     unnecessaryKeys: ['common.delete', 'obsolete.label'],
+    localePluralKeys: [],
   });
 });
 
@@ -110,6 +111,7 @@ test('compareTranslationKeys treats object-versus-leaf differences as structural
   assert.deepEqual(compareTranslationKeys(reference, translation), {
     missingKeys: ['settings.theme.label'],
     unnecessaryKeys: ['settings.theme'],
+    localePluralKeys: [],
   });
 });
 
@@ -587,6 +589,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
           file: 'de.json',
           missingKeys: ['common.save'],
           unnecessaryKeys: ['common.delete'],
+          localePluralKeys: [],
           placeholderMismatches: [],
           droppedPlaceholderKeys: [],
           newDroppedPlaceholderKeys: [],
@@ -599,6 +602,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
           file: 'fr.json',
           missingKeys: ['common.save', 'task.title'],
           unnecessaryKeys: [],
+          localePluralKeys: [],
           placeholderMismatches: [],
           droppedPlaceholderKeys: [],
           newDroppedPlaceholderKeys: [],
@@ -611,6 +615,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
           file: 'zh.json',
           missingKeys: [],
           unnecessaryKeys: [],
+          localePluralKeys: [],
           placeholderMismatches: [],
           droppedPlaceholderKeys: [],
           newDroppedPlaceholderKeys: [],
@@ -622,6 +627,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
       ],
       totalMissing: 3,
       totalUnnecessary: 1,
+      totalLocalePlural: 0,
       staleBaselineFiles: [],
       totalPlaceholderMismatches: 0,
       totalUnexpectedPlaceholders: 0,
@@ -669,6 +675,7 @@ test('inspectTranslationDirectory ignores .json directories and checks locale fi
           file: 'de.json',
           missingKeys: ['common.cancel'],
           unnecessaryKeys: [],
+          localePluralKeys: [],
           placeholderMismatches: [],
           droppedPlaceholderKeys: [],
           newDroppedPlaceholderKeys: [],
@@ -680,6 +687,7 @@ test('inspectTranslationDirectory ignores .json directories and checks locale fi
       ],
       totalMissing: 1,
       totalUnnecessary: 0,
+      totalLocalePlural: 0,
       staleBaselineFiles: [],
       totalPlaceholderMismatches: 0,
       totalUnexpectedPlaceholders: 0,

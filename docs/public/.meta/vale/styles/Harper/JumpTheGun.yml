@@ -1,0 +1,21 @@
+---
+# Hand-written from Harper's JumpTheGun: the idiom is `jump the gun`,
+# singular and definite.
+#
+# The generated rule keyed on punctuation.
+#
+# Harper matches a form of `jump` before an article and `gun` or `guns`, then
+# excludes `the gun` -- so what is left is the two ways to get it wrong: an
+# indefinite article ("jump a gun") or a plural ("jumped the guns"). Writing
+# the exclusion into the pattern says the same thing in one place.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "The correct idiom is `jump the gun`."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '\b(?:jump|jumped|jumping|jumps)\s+(?:(?:an?)\s+guns?|the\s+guns)\b'

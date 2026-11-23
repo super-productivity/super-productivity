@@ -1,3 +1,4 @@
+import { FileTransportOptions } from './sync-fuzz-file-transport';
 import { TestBed } from '@angular/core/testing';
 import { ArchiveDbAdapter } from '../../../../core/persistence/archive-db-adapter.service';
 import { Note } from '../../../../features/note/note.model';
@@ -45,6 +46,13 @@ import {
 export interface FuzzFailure {
   signature: string;
   detail: string;
+  /**
+   * Set by the list-comparing oracles (convergence, restart): true when every
+   * difference with this signature is inside a list both sides hold the same
+   * members of. The signature cannot say it (a path names no members), and it
+   * separates the known order gap from a membership difference in triage.
+   */
+  orderOnly?: boolean;
 }
 
 export interface FuzzResult {
@@ -52,6 +60,11 @@ export interface FuzzResult {
   failures: FuzzFailure[];
   /** Distinct server rejections, as `<errorCode> <actionType>`. */
   rejections: string[];
+  /**
+   * Local data conflicts whose dialog the run answered. Not failures, but each
+   * answer drops one side, so a transport with many is judged on less.
+   */
+  answeredConflicts: number;
   ms: number;
   /** With `debug`: server rows, rejections and every device's op log. */
   dump?: string[];
@@ -69,6 +82,13 @@ export interface FuzzOptions {
    */
   weights?: IntentWeights;
   debug?: boolean;
+  /** Sync through the real file-based adapter instead of the fake SuperSync server. */
+  fileTransport?: FileTransportOptions;
+  /**
+   * How often a generated sync is killed mid-way (`x`; file transport only,
+   * default 0). Drawn from its own stream, so every other step stays the same.
+   */
+  killProbability?: number;
 }
 
 const DEVICES = ['A', 'B', 'C'];
@@ -76,6 +96,10 @@ const SYNC_PROBABILITY = 0.35;
 const COMPACT_PROBABILITY = 0.1;
 const RESTART_PROBABILITY = 0.1;
 const SETTLE_ROUNDS = 6;
+/** Seeds the `x` stream, as DIALOG_STREAM_SALT does for `k`. */
+const KILL_STREAM_SALT = 0x4b111ed5;
+/** A generated kill falls before one of the first this-many durable writes. */
+const MAX_KILL_WRITE = 12;
 /** How often a generated step keeps local data in a dialog (`k`). */
 const USE_LOCAL_PROBABILITY = 0.3;
 /**
@@ -167,9 +191,9 @@ interface LedgerWrite {
  *   remote one is read per field but writes every field at its own time, as
  *   a snapshot does; the side rule here differs only where the other side
  *   has a later intent than the restore (kept as before, not seen in fuzz).
- * - `moveTask`: `moveToOtherProject` carries the flat PRE-move task, not
- *   `{ id, changes }`, so a local one refuses (`isChangesShapedOp`) and the
- *   field patch never takes a remote one's values.
+ * `moveTask` is not one of them: `moveToOtherProject` carries the flat PRE-move
+ * task, but conflict resolution reads it as the `projectId` it writes
+ * (`projectMoveTarget`, #11685), so a crossing with it resolves per field.
  * A `track` is whole-entity when it plans the task for today (`opaque`,
  * decision 6). A plain delta is not: detection drops a remote one that is
  * disjoint from the local side before it reaches a conflict
@@ -178,7 +202,6 @@ interface LedgerWrite {
  * and a local one stays pending beside the patch (`keptLocalTimeDeltas`).
  */
 const WHOLE_ENTITY_INTENTS: ReadonlySet<Intent[0]> = new Set([
-  'moveTask',
   'countHabit',
   'deleteTask',
   'archiveTask',
@@ -433,7 +456,7 @@ const WRITTEN_FIELDS: Readonly<Record<string, readonly string[]>> = {
 };
 
 const lastReplacement = (harness: SyncFuzzHarness): Replacement | undefined => {
-  const row = [...harness.server.rows]
+  const row = [...harness.wire.rows]
     .reverse()
     .find((r) => r.op.opType === 'SYNC_IMPORT' || r.op.opType === 'BACKUP_IMPORT');
   if (!row) return undefined;
@@ -491,11 +514,25 @@ const valueAt = (source: unknown, path: string[]): unknown =>
     source,
   );
 
+/** Whether the difference at `path` is one list holding the same members in another order. */
+export const isOrderOnlyDiff = (a: unknown, b: unknown, path: string[]): boolean => {
+  const members = (source: unknown): string[] | undefined => {
+    const list = valueAt(source, path.slice(0, -1));
+    return Array.isArray(list)
+      ? list.map((item) => JSON.stringify(item)).sort()
+      : undefined;
+  };
+  const [left, right] = [members(a), members(b)];
+  return !!left && !!right && JSON.stringify(left) === JSON.stringify(right);
+};
+
+const DIFF_LIMIT = 20;
+
 /** The differing leaf paths of two JSON-like values, at most `limit`. */
 export const diffPaths = (
   a: unknown,
   b: unknown,
-  limit = 20,
+  limit = DIFF_LIMIT,
   path = '',
   found: string[] = [],
 ): string[] => {
@@ -521,6 +558,23 @@ export const diffPaths = (
   }
   found.push(path || '.');
   return found;
+};
+
+/**
+ * The differences of two comparable states, each with its order verdict. A
+ * list cut off at the limit may have left a membership difference out, so
+ * none of a truncated list counts as order only.
+ */
+const diffsWithOrder = (
+  a: unknown,
+  b: unknown,
+): { diff: string; path: string[]; orderOnly: boolean }[] => {
+  const diffs = diffPaths(a, b);
+  return diffs.map((diff) => {
+    const path = diff.slice(1).split('.');
+    const orderOnly = diffs.length < DIFF_LIMIT && isOrderOnlyDiff(a, b, path);
+    return { diff, path, orderOnly };
+  });
 };
 
 /**
@@ -553,7 +607,8 @@ const shortJson = (value: unknown): string => JSON.stringify(value)?.slice(0, 16
 
 /**
  * Classifies a sync event without ids. A multi-entity stop keeps its side and
- * action type but not its entity count, which only follows list lengths.
+ * action type but not its entity count, which only follows list lengths; nor
+ * does a local data conflict keep its count of unsynced changes.
  */
 const eventSignature = (event: FuzzEvent): string => {
   const stop =
@@ -565,7 +620,10 @@ const eventSignature = (event: FuzzEvent): string => {
   return stop
     ? `stop:${stop[1]}`
     : `${event.kind}:${event.detail
-        .replace(/\b[tnhbp]\d+\b|fuzzDev\w|\b[BEAI]_[A-Za-z0-9]{6}\b|[0-9a-f-]{36}/g, '*')
+        .replace(
+          /\b[tnhbp]\d+\b|fuzzDev\w|\b[BEAI]_[A-Za-z0-9]{6}\b|[0-9a-f-]{36}|\d+(?= unsynced changes)/g,
+          '*',
+        )
         .slice(0, 120)}`;
 };
 
@@ -584,18 +642,23 @@ const pathSignature = (path: string): string =>
 
 export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
   const started = performance.now();
-  const harness = await SyncFuzzHarness.create();
+  const harness = await SyncFuzzHarness.create(options.fileTransport);
   const failures: FuzzFailure[] = [];
-  const fail = (signature: string, detail: string): void => {
-    if (!failures.some((f) => f.signature === signature)) {
-      // Wall-clock times and days depend on when the run started; keep them out.
-      failures.push({
-        signature,
-        detail: detail
-          .replace(/\b1[5-9]\d{11}\b/g, '<time>')
-          .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '<day>'),
-      });
+  const fail = (signature: string, detail: string, orderOnly?: boolean): void => {
+    const known = failures.find((f) => f.signature === signature);
+    if (known) {
+      // One membership difference makes the whole signature more than order.
+      if (orderOnly === false) known.orderOnly = false;
+      return;
     }
+    // Wall-clock times and days depend on when the run started; keep them out.
+    failures.push({
+      signature,
+      detail: detail
+        .replace(/\b1[5-9]\d{11}\b/g, '<time>')
+        .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '<day>'),
+      ...(orderOnly === undefined ? {} : { orderOnly }),
+    });
   };
   const entries: LedgerEntry[] = [];
   const ownClock = async (): Promise<VectorClock> =>
@@ -647,13 +710,18 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     device: FuzzDevice,
     importAnswer?: ImportDialogAnswer,
     stopAnswer?: ImportDialogAnswer,
+    killAtWrite?: number,
   ): Promise<void> => {
     const before = harness.events.length;
     harness.importDialogAnswer = importAnswer;
     harness.stopDialogAnswer = stopAnswer;
-    await harness.sync(device);
+    const isKilled = killAtWrite
+      ? await harness.syncKilled(device, killAtWrite)
+      : (await harness.sync(device), false);
     syncCount++;
-    for (const entry of entries) {
+    // A killed sync whose upload never landed uploads at the next one.
+    const hasUploaded = !isKilled || !!harness.fileTransport?.hasLanded;
+    for (const entry of hasUploaded ? entries : []) {
       if (entry.device === device.name && entry.uploadedAt === Infinity) {
         entry.uploadedAt = syncCount;
       }
@@ -738,7 +806,12 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
   // answer with `k`, and settle with the remote data. A trace without either
   // keeps its stops unanswered, as every trace did before the dialog was
   // modeled. The stop stays a failure either way (#10377); what the answer
-  // drops is judged in addition.
+  // drops is judged in addition. The same dialog opens for a local data
+  // conflict (LocalDataConflictError: a remote snapshot over unsynced changes
+  // in file sync, or first remote ops on a never-synced device with data) and
+  // takes the same answers; answered, that conflict is counted
+  // (`answeredConflicts`) but not a failure, and unanswered it stays a
+  // `sync-error`.
   const modelsStopDialog = !options.steps || replaces || options.steps.some((s) => s.k);
 
   const executed: FuzzStep[] = [];
@@ -753,7 +826,7 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     }
     if (step.s) {
       const answer = answerOf(step.k);
-      await sync(device, answersImports() ? answer : undefined, answer);
+      await sync(device, answersImports() ? answer : undefined, answer, step.x);
     }
     if (step.c) await harness.compact(device);
     if (step.r) await harness.restart(device);
@@ -765,6 +838,7 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
         ...(step.c ? { c: 1 } : {}),
         ...(step.r ? { r: 1 } : {}),
         ...(step.s && step.k ? { k: step.k } : {}),
+        ...(step.s && step.x ? { x: step.x } : {}),
       });
     }
   };
@@ -779,6 +853,8 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     const dialogRandom = replaces
       ? random
       : createRandom((options.seed ?? 1) ^ DIALOG_STREAM_SALT);
+    const killRandom = createRandom((options.seed ?? 1) ^ KILL_STREAM_SALT);
+    const killProbability = options.killProbability ?? 0;
     let idCounter = 10;
     const nextId = (prefix: string): string => `${prefix}${++idCounter}`;
     for (let i = 0; i < (options.stepCount ?? 30); i++) {
@@ -802,9 +878,12 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
         }
         return generated;
       });
+      const isKill = killRandom() < killProbability;
+      const killAtWrite = 1 + Math.floor(killRandom() * MAX_KILL_WRITE);
       await runStep(
         {
           d: name,
+          ...(isKill ? { x: killAtWrite } : {}),
           ...(random() < SYNC_PROBABILITY ? { s: 1 } : {}),
           ...(random() < COMPACT_PROBABILITY ? { c: 1 } : {}),
           ...(random() < RESTART_PROBABILITY ? { r: 1 } : {}),
@@ -826,13 +905,13 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
   const settle = (device: FuzzDevice): Promise<void> =>
     sync(device, answersImports() ? 'USE_REMOTE' : undefined, settleStopAnswer);
   for (let round = 0; round < SETTLE_ROUNDS; round++) {
-    const seqBefore = harness.server.latestSeq;
+    const seqBefore = harness.wire.latestSeq;
     let pending = 0;
     for (const name of DEVICES) {
       await settle(deviceOf(name));
       pending += await harness.pendingOpCount(deviceOf(name));
     }
-    if (harness.server.latestSeq === seqBefore && pending === 0) break;
+    if (harness.wire.latestSeq === seqBefore && pending === 0) break;
   }
   const observer = await harness.addDevice('F');
   await settle(observer);
@@ -891,13 +970,14 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
   // Oracle: convergence of every device with a fresh one.
   for (const name of DEVICES) {
     const state = await harness.syncedState(deviceOf(name));
-    for (const diff of diffPaths(comparable(state), comparable(reference))) {
-      const path = diff.slice(1).split('.');
+    const diffs = diffsWithOrder(comparable(state), comparable(reference));
+    for (const { diff, path, orderOnly } of diffs) {
       fail(
         `divergence:${pathSignature(diff)}`,
         `${name} vs fresh at ${diff}: ${shortJson(valueAt(state, path))} vs ${shortJson(
           valueAt(reference, path),
         )}`,
+        orderOnly,
       );
     }
   }
@@ -919,13 +999,13 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     const before = comparable(await harness.syncedState(deviceOf(name)));
     await harness.restart(deviceOf(name));
     const after = await harness.syncedState(deviceOf(name));
-    for (const diff of diffPaths(comparable(after), before)) {
-      const path = diff.slice(1).split('.');
+    for (const { diff, path, orderOnly } of diffsWithOrder(comparable(after), before)) {
       fail(
         `restart-changed:${pathSignature(diff)}`,
         `${name} after vs before restart at ${diff}: ${shortJson(
           valueAt(after, path),
         )} vs ${shortJson(valueAt(before, path))}`,
+        orderOnly,
       );
     }
   }
@@ -950,8 +1030,9 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     steps: executed,
     failures,
     rejections: [
-      ...new Set(harness.server.rejections.map((r) => `${r.errorCode} ${r.actionType}`)),
+      ...new Set(harness.wire.rejections.map((r) => `${r.errorCode} ${r.actionType}`)),
     ].sort(),
+    answeredConflicts: harness.events.filter((e) => e.kind === 'data-conflict').length,
     ms: Math.round(performance.now() - started),
     ...(options.debug ? { dump } : {}),
   };
@@ -974,13 +1055,13 @@ const dumpRun = async (
   harness: SyncFuzzHarness,
   devices: FuzzDevice[],
 ): Promise<string[]> => {
-  const lines = harness.server.rows.map(
+  const lines = harness.wire.rows.map(
     ({ serverSeq, op }) =>
       `srv ${serverSeq} ${op.clientId} ${op.actionType} ${entityOfOp(op)} ` +
       `${op.opType}${op.syncImportReason ? ` ${op.syncImportReason}` : ''} ` +
       `${JSON.stringify(op.vectorClock)} ts+${op.timestamp % 1_000_000}`,
   );
-  lines.push(...harness.server.rejections.map((r) => `rej ${JSON.stringify(r)}`));
+  lines.push(...harness.wire.rejections.map((r) => `rej ${JSON.stringify(r)}`));
   lines.push(...harness.events.map((e) => `evt ${JSON.stringify(e)}`));
   for (const device of devices) {
     const validation = await harness.as(device, () =>

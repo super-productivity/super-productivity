@@ -1,0 +1,50 @@
+---
+# Generated from Harper's TheyToThem rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Converts `they` to `them` whenever the pronoun serves as an object after common prepositions or actions that take direct objects.
+extends: substitution
+message: "Use `them` when the pronoun follows a preposition or transitive verb."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "about(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "about them"
+  "across(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "across them"
+  "against(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "against them"
+  "among(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "among them"
+  "around(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "around them"
+  "ask(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "ask them"
+  "behind(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "behind them"
+  "between(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "between them"
+  "beyond(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "beyond them"
+  "call(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "call them"
+  "contact(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "contact them"
+  "follow(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "follow them"
+  "for(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "for them"
+  "help(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "help them"
+  "inside(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "inside them"
+  "invite(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "invite them"
+  "mention(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "mention them"
+  "near(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "near them"
+  "outside(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "outside them"
+  "remind(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "remind them"
+  "see(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "see them"
+  "send(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "send them"
+  "show(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "show them"
+  "support(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "support them"
+  "tell(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "tell them"
+  "thank(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "thank them"
+  "through(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "through them"
+  "to(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "to them"
+  "toward(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "toward them"
+  "towards(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "towards them"
+  "trust(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "trust them"
+  "visit(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "visit them"
+  "watch(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "watch them"
+  "with(?!\\s*\\n\\s*\\n)\\s+they(?!['\\x{2019}]s\\b)": "with them"

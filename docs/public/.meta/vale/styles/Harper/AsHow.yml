@@ -1,0 +1,18 @@
+---
+# Hand-written from Harper's AsHow: `as how` where `as to how` is meant.
+#
+# The two words alone are not the mistake. `same as how` is idiomatic, and a
+# comparison built with `as ... as` ends in the same pair -- "as well as how
+# they are weighted" -- so Harper drops the match after `same` and after `as`
+# plus an adjective. Both exclusions are look-behinds here, which keeps them
+# out of the reported span.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Consider rephrasing to `as to how`."
+level: warning
+ignorecase: true
+tokens:
+  - '(?<!\bsame\s)(?<!\bas\s\w{1,20}\s)as\s+how'

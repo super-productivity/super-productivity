@@ -1,0 +1,23 @@
+---
+# Generated from Harper's NerveRacking rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects common misspellings and missing hyphen in `nerve-racking`.
+extends: existence
+message: "Use `nerve-racking` for something that causes anxiety or tension."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "nerve-racking"
+tokens:
+  - "nerve(?!\\s*\\n\\s*\\n)\\s+wracking(?!['\\x{2019}]s\\b)"
+  - "nerve(?!\\s*\\n\\s*\\n)\\s+wrecking(?!['\\x{2019}]s\\b)"
+  - "nerve(?!\\s*\\n\\s*\\n)\\s+racking(?!['\\x{2019}]s\\b)"
+  - "nerve-wracking(?!['\\x{2019}]s\\b)"
+  - "nerve-wrecking(?!['\\x{2019}]s\\b)"
