@@ -340,7 +340,7 @@ describe('IssueService', () => {
             createMockTask({
               id: `task-${i}`,
               issueId: `issue-${i}`,
-              issueType: 'GITLAB',
+              issueType: 'OPEN_PROJECT',
             }),
           );
           const updates = tasks.map((task) => ({
@@ -352,7 +352,7 @@ describe('IssueService', () => {
             // The provider shows an HTTP error before returning its successful updates.
             from(
               handleIssueProviderHttpError$(
-                'GITLAB',
+                'OPEN_PROJECT',
                 snackService,
                 new HttpErrorResponse({ status: 404 }),
               ),
@@ -364,7 +364,7 @@ describe('IssueService', () => {
           void service
             .refreshIssueTasks(tasks, {
               id: 'provider',
-              issueProviderKey: 'GITLAB',
+              issueProviderKey: 'OPEN_PROJECT',
             } as IssueProvider)
             .then(() => {
               completed = true;
