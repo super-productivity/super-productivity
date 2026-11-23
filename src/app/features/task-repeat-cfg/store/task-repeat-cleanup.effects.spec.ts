@@ -453,6 +453,35 @@ describe('TaskRepeatCleanupEffects', () => {
       sub.unsubscribe();
     }));
 
+    it('deletes an EMPTY overdue instance that has a deterministic id', fakeAsync(() => {
+      repeatCfgs$.next([skipOverdueCfg('cfg-so-rpt', '', { title: 'Water plants' })]);
+      const instance = (dayMs: number): Task => ({
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        id: getRepeatableTaskId('cfg-so-rpt', getDbDateStr(dayMs)),
+        title: 'Water plants',
+        repeatCfgId: 'cfg-so-rpt',
+        created: dayMs,
+        dueDay: getDbDateStr(dayMs),
+        isDone: false,
+        timeSpent: 0,
+      });
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(instance(yesterdayMs)),
+        wrapWithSubTasks(instance(todayMs)),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds())
+        .withContext('"Only keep the latest" groups by config, whatever the ids name')
+        .toEqual([getRepeatableTaskId('cfg-so-rpt', getDbDateStr(yesterdayMs))]);
+
+      sub.unsubscribe();
+    }));
+
     it("deletes yesterday's EMPTY timed overdue instance when schedule matches the template", fakeAsync(() => {
       const dueWithTime = getDateTimeFromClockString('09:00', yesterdayMs);
       repeatCfgs$.next([
