@@ -61,12 +61,14 @@ the relaunch after a package update, does not repeat the navigation.
   external apps must not be able to complete tasks.
 - The header's "+" opens `QuickAddActivity`, a dialog over the home screen
   that writes the typed title to `CaptureInbox` (like a share) and finishes.
-  Angular imports it on its next start or resume as one Today `addTask` with
-  short syntax applied. Like checkbox taps, it never touches the snapshot: the
-  renderer lists not-yet-imported title captures above the snapshot rows
-  (`WidgetData.withPendingCaptures`, raw title, checkbox opens the app). This
-  is a fact of the capture contract (title captures always go to Today), not
-  Today membership computed natively.
+  Angular imports it on its next start or resume as one `addTask` with short
+  syntax applied: into the widget's project when the "+" belongs to a project
+  widget (the capture carries `projectId`), otherwise into Today. A project
+  deleted or archived before the import falls back to Today. Like checkbox
+  taps, it never touches the snapshot: the renderer lists not-yet-imported
+  title captures above the snapshot rows (`WidgetData.withPendingCaptures`,
+  raw title, checkbox opens the app), each only on widgets showing its target.
+  This is a fact of the capture contract, not membership computed natively.
 
 The serializer and Kotlin parser are locked to the same golden shape by
 `android-widget.selectors.spec.ts` and `WidgetDataTest.kt`. Update both ends and
@@ -87,8 +89,7 @@ until the app writes a current snapshot.
 ## Deliberate limitations
 
 - No undo or per-task deep link. Quick add takes a title only (short syntax
-  covers project, tags and dates) and always lands in Today, also from a
-  project widget.
+  covers project, tags and dates).
 - A project widget lists open tasks; a task checked there disappears after five
   seconds. Undo it later from the app's done list.
 - Inbox, archived projects and projects hidden from the menu are not

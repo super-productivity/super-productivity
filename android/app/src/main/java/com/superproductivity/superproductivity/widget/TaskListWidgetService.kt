@@ -56,14 +56,13 @@ private class TaskListRemoteViewsFactory(
             Log.e(TAG, "Failed to parse widget data", e)
             emptyList()
         }
-        // Quick adds are imported into Today, so only a Today widget lists them.
-        if (projectIdToOpen != null) {
-            tasks = snapshot.take(MAX_TASKS)
-            return
-        }
         // Separate try: an unreadable inbox must not hide the snapshot's tasks.
         tasks = try {
-            WidgetData.withPendingCaptures(snapshot, CaptureInbox.forContext(context).pendingJson())
+            WidgetData.withPendingCaptures(
+                snapshot,
+                CaptureInbox.forContext(context).pendingJson(),
+                projectIdToOpen
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read pending quick adds", e)
             snapshot

@@ -37,6 +37,7 @@ class CaptureInbox(private val dir: File) {
         source: String,
         createdAt: Long = System.currentTimeMillis(),
         id: String = UUID.randomUUID().toString(),
+        projectId: String? = null,
     ): String {
         val trimmed = title.trim()
         require(trimmed.isNotEmpty()) { "Blank capture title" }
@@ -51,6 +52,9 @@ class CaptureInbox(private val dir: File) {
                 .put("title", trimmed)
                 .put("source", source)
                 .put("createdAt", createdAt)
+            // Quick add from a project widget: the app files it there if that
+            // project is still usable, else in Today like any other quick add.
+            if (projectId != null) json.put("projectId", projectId)
             write(id, json)
         }
         return id
