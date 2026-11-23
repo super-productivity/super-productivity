@@ -205,6 +205,7 @@ export class TaskMultiSelectBarComponent {
       this._taskFocusService.closeActiveTaskContextMenu.set(null);
       this._taskFocusService.isTaskContextMenuOpen.set(false);
     }
+    this.bulk.onBulkMenuClosed();
     // Return keyboard focus to the anchor row so shortcuts keep working.
     const anchorId = this.multiSelect.anchorId();
     // A menu item may have opened a dialog; leave focus inside it.

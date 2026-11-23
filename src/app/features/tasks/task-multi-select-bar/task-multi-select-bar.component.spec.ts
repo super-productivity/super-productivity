@@ -57,6 +57,7 @@ describe('TaskMultiSelectBarComponent', () => {
             hasScheduled: signal(false),
             hasDeadline: signal(false),
             hasEstimatable: signal(false),
+            onBulkMenuClosed: jasmine.createSpy('onBulkMenuClosed'),
           },
         },
         {
@@ -192,6 +193,39 @@ describe('TaskMultiSelectBarComponent', () => {
     ]);
     fixture.componentInstance.onMenuClosed();
     multiSelect.toggle('a');
+    fixture.detectChanges();
+    tick(500);
+  }));
+
+  it('closes the open tag submenu with the bulk menu and tells the bulk service (#11943)', fakeAsync(() => {
+    const panels = (): number =>
+      document.querySelectorAll('.cdk-overlay-container .mat-mdc-menu-panel').length;
+    multiSelect.enterTouchSelectionMode('a');
+    fixture.detectChanges();
+    const moreBtn = Array.from(
+      fixture.nativeElement.querySelectorAll('.bar button') as NodeListOf<HTMLElement>,
+    ).find((b) => b.textContent?.includes('more_horiz'));
+    moreBtn!.click();
+    fixture.detectChanges();
+    tick();
+    fixture.componentInstance.onMenuOpened();
+    const tagTrigger = Array.from(
+      document.querySelectorAll<HTMLElement>('.cdk-overlay-container [mat-menu-item]'),
+    ).find((el) => el.textContent?.includes(T.F.TASK.CMP.TOGGLE_TAGS));
+    tagTrigger!.click();
+    fixture.detectChanges();
+    tick();
+    expect(panels()).toBe(2);
+
+    // A tag toggle keeps the touch selection, so the bar and its trigger stay
+    // and the bulk menu closes as a whole (Android back, backdrop tap).
+    taskFocusService.closeActiveTaskContextMenu()!();
+    fixture.detectChanges();
+    tick(500);
+
+    expect(panels()).toBe(0);
+    expect(TestBed.inject(TaskBulkActionService).onBulkMenuClosed).toHaveBeenCalled();
+    multiSelect.clear();
     fixture.detectChanges();
     tick(500);
   }));

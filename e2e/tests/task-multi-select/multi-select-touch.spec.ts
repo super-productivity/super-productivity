@@ -90,6 +90,67 @@ test.describe('Task multi-select (touch)', () => {
     await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
   });
 
+  test('the tag menu stays open for several toggles and ends the mode on close (#11943)', async ({
+    page,
+    workViewPage,
+    taskPage,
+    tagPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const tagOne = `${testPrefix}-Tag One`;
+    const tagTwo = `${testPrefix}-Tag Two`;
+    await tagPage.createTag(tagOne);
+    await tagPage.createTag(tagTwo);
+    const first = `${testPrefix}-Tags One`;
+    const second = `${testPrefix}-Tags Two`;
+    await workViewPage.addTask(first);
+    await workViewPage.addTask(second);
+    const a = taskPage.getTaskByText(first);
+    const b = taskPage.getTaskByText(second);
+    const bar = page.locator(BAR);
+    const panels = page.locator('.mat-mdc-menu-panel');
+
+    await page.evaluate(() =>
+      window.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch' })),
+    );
+    await expect(page.locator('body')).toHaveClass(/isTouchPrimary/);
+    await a.focus();
+    await page.keyboard.press('q');
+    await waitForMenuSettled(page);
+    await page
+      .locator('.mat-mdc-menu-content button', { hasText: 'Select several tasks' })
+      .tap();
+    await b.tap();
+    await expect(bar).toContainText('2 selected');
+
+    await bar.getByRole('button', { name: 'Actions' }).tap();
+    await waitForMenuSettled(page);
+    await page.locator('.mat-mdc-menu-content button', { hasText: 'Toggle tags' }).tap();
+    await waitForMenuSettled(page);
+    const tagButton = (title: string): Locator =>
+      page.locator('.mat-mdc-menu-content button', { hasText: title });
+
+    // The first toggle used to end the mode, which removed the bar and closed
+    // the bulk menu, while the tag submenu stayed on screen with no way out.
+    await tagButton(tagOne).tap();
+    await expect(a.locator('tag', { hasText: tagOne })).toBeVisible();
+    await expect(b.locator('tag', { hasText: tagOne })).toBeVisible();
+    await expect(bar).toContainText('2 selected');
+    await expect(panels).toHaveCount(2);
+
+    await tagButton(tagTwo).tap();
+    await expect(a.locator('tag', { hasText: tagTwo })).toBeVisible();
+    await expect(b.locator('tag', { hasText: tagTwo })).toBeVisible();
+
+    // Tapping outside closes the menu; that ends the mode, as any completed
+    // action does.
+    await page.touchscreen.tap(5, 5);
+    await expect(panels).toHaveCount(0);
+    await expect(bar).toBeHidden();
+    await expect(page.locator('task .select-ring')).toHaveCount(0);
+  });
+
   test('mobile planner swipe menu enables tap selection and pauses dragging', async ({
     page,
     workViewPage,
