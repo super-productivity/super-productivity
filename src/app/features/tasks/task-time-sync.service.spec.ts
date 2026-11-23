@@ -1,3 +1,4 @@
+import { effect, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Action, ScannedActionsSubject } from '@ngrx/store';
@@ -194,6 +195,25 @@ describe('TaskTimeSyncService', () => {
         ['parent', 5000],
         ['other', 2000],
       ]);
+    });
+
+    it('does not make an effect that dispatches depend on the current task', () => {
+      const trigger = signal(0);
+      let runs = 0;
+      TestBed.runInInjectionContext(() =>
+        effect(() => {
+          trigger();
+          runs++;
+          // Store.dispatch emits the scanned action synchronously, like this.
+          actions.next({ type: 'from-effect' });
+        }),
+      );
+      TestBed.tick();
+
+      commit({ ...before, currentTaskId: null }, unsetCurrentTask());
+      TestBed.tick();
+
+      expect(runs).toBe(1);
     });
   });
 

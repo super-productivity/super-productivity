@@ -1,4 +1,4 @@
-import { inject, Injectable, Injector } from '@angular/core';
+import { inject, Injectable, Injector, untracked } from '@angular/core';
 import { ScannedActionsSubject, Store } from '@ngrx/store';
 import { filter, map, pairwise, tap } from 'rxjs/operators';
 import { defer } from 'rxjs';
@@ -35,8 +35,10 @@ export class TaskTimeSyncService {
   // TaskService subscribes once for its lifetime. Scanned actions pair the
   // committed pointer change with its cause, including a whole remote bulk.
   // A store selector alone loses the creation payload and intermediate maps.
+  // The read is untracked: an action dispatched inside an effect() would
+  // otherwise make that effect rerun on every current-task change.
   readonly taskChange$ = defer(() => this._injector.get(ScannedActionsSubject)).pipe(
-    map((action) => ({ action, task: this._currentTask() })),
+    map((action) => ({ action, task: untracked(this._currentTask) })),
     pairwise(),
     filter(([previous, current]) => previous.task?.id !== current.task?.id),
     tap(([previous, current]) => {
