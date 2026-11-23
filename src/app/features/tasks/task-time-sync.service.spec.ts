@@ -1,13 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { ScannedActionsSubject } from '@ngrx/store';
+import { Action, ScannedActionsSubject } from '@ngrx/store';
+import { Subscription } from 'rxjs';
 import { bulkApplyOperations } from '../../op-log/apply/bulk-hydration.action';
 import { bulkOperationsMetaReducer } from '../../op-log/apply/bulk-hydration.meta-reducer';
 import { ActionType, Operation, OpType } from '../../op-log/core/operation.types';
 import { syncTimeSpent } from '../time-tracking/store/time-tracking.actions';
 import { AppStateSnapshot } from '../../op-log/core/types/backup.types';
 import { initialTaskState, taskReducer } from './store/task.reducer';
-import { addSubTask } from './store/task.actions';
+import { addSubTask, setCurrentTask, unsetCurrentTask } from './store/task.actions';
 import { DEFAULT_TASK, Task, TaskState } from './task.model';
 import { TaskTimeSyncService } from './task-time-sync.service';
 
@@ -52,30 +53,51 @@ describe('TaskTimeSyncService', () => {
     expect(action['timeSpentForDay']).toBeUndefined();
   });
 
-  it('flushes inherited parent time through additive bulk replay, but not explicit time', () => {
-    for (const scenario of ['local', 'bulk', 'explicit'] as const) {
-      const day = '2024-01-15';
-      const parent = createTask('parent', {
-        timeSpent: 5000,
-        timeSpentOnDay: { [day]: 5000 },
+  describe('taskChange$', () => {
+    const day = '2024-01-15';
+    const parent = createTask('parent', {
+      timeSpent: 5000,
+      timeSpentOnDay: { [day]: 5000 },
+    });
+    const before: TaskState = {
+      ...initialTaskState,
+      ids: [parent.id],
+      entities: { parent },
+      currentTaskId: parent.id,
+    };
+    let actions: ScannedActionsSubject;
+    let changes: number;
+    let subscription: Subscription;
+
+    const commit = (tasks: TaskState, action: Action): void => {
+      store.setState({ tasks });
+      actions.next(action);
+    };
+
+    beforeEach(() => {
+      actions = TestBed.inject(ScannedActionsSubject);
+      changes = 0;
+      subscription = service.taskChange$.subscribe(() => {
+        changes++;
+        service.flush();
       });
+      commit(before, { type: 'seed' });
+      service.accumulate(parent.id, 5000, day);
+    });
+
+    afterEach(() => subscription.unsubscribe());
+
+    // Adds the first subtask while the parent is current, then applies the one
+    // flushed delta on a receiver that has the creation but not the pending time.
+    const addFirstSubTask = (
+      scenario: 'local' | 'bulk' | 'explicit',
+    ): { flushed: { taskId: string }; after: TaskState; receiver: TaskState } => {
       const child = createTask('child', {
         parentId: parent.id,
         ...(scenario === 'explicit'
           ? { timeSpent: 600000, timeSpentOnDay: { [day]: 600000 } }
           : {}),
       });
-      const before: TaskState = {
-        ...initialTaskState,
-        ids: [parent.id],
-        entities: { parent },
-        currentTaskId: parent.id,
-      };
-      const actions = TestBed.inject(ScannedActionsSubject);
-      const subscription = service.taskChange$.subscribe(() => service.flush());
-      store.setState({ tasks: before });
-      actions.next({ type: 'seed' });
-      service.accumulate(parent.id, 5000, day);
       const addChild = addSubTask({ task: child, parentId: parent.id });
       const operations: Operation[] = [
         {
@@ -106,11 +128,11 @@ describe('TaskTimeSyncService', () => {
       const creation =
         scenario === 'bulk' ? bulkApplyOperations({ operations }) : addChild;
       const after = bulkOperationsMetaReducer(taskReducer)(before, creation);
-      store.setState({ tasks: after });
-      actions.next(creation);
-      const action = dispatchSpy.calls.mostRecent().args[0];
-      expect(action.taskId).toBe(scenario === 'explicit' ? parent.id : child.id);
-      if (scenario === 'bulk') expect(after.entities[child.id]!.timeSpent).toBe(8000);
+      commit(after, creation);
+
+      expect(changes).toBe(1);
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      const flushed = dispatchSpy.calls.mostRecent().args[0];
       const receiverBefore = bulkOperationsMetaReducer(taskReducer)(
         {
           ...before,
@@ -120,16 +142,59 @@ describe('TaskTimeSyncService', () => {
         creation,
       );
       const receiver = taskReducer(receiverBefore, {
-        ...action,
-        meta: { ...action.meta, isRemote: true },
+        ...flushed,
+        meta: { ...flushed.meta, isRemote: true },
       });
-      const expected =
-        scenario === 'bulk' ? 8000 : scenario === 'explicit' ? 600000 : 5000;
-      expect(receiver.entities[child.id]!.timeSpent).toBe(expected);
-      if (scenario !== 'explicit')
-        expect(receiver.entities[parent.id]!.timeSpent).toBe(expected);
-      subscription.unsubscribe();
-    }
+      return { flushed, after, receiver };
+    };
+
+    it('sends pending parent time for a first subtask that inherits it', () => {
+      const { flushed, receiver } = addFirstSubTask('local');
+
+      expect(flushed.taskId).toBe('child');
+      expect(receiver.entities['child']!.timeSpent).toBe(5000);
+      expect(receiver.entities['parent']!.timeSpent).toBe(5000);
+    });
+
+    it('sends pending parent time for a first subtask from a remote bulk', () => {
+      const { flushed, after, receiver } = addFirstSubTask('bulk');
+
+      expect(flushed.taskId).toBe('child');
+      expect(after.entities['child']!.timeSpent).toBe(8000);
+      expect(receiver.entities['child']!.timeSpent).toBe(8000);
+      expect(receiver.entities['parent']!.timeSpent).toBe(8000);
+    });
+
+    it('keeps pending time on the parent when the subtask has its own time', () => {
+      const { flushed, receiver } = addFirstSubTask('explicit');
+
+      expect(flushed.taskId).toBe('parent');
+      expect(receiver.entities['child']!.timeSpent).toBe(600000);
+    });
+
+    it('flushes pending time for the previous task on a plain switch or stop', () => {
+      const other = createTask('other');
+      const switched: TaskState = {
+        ...before,
+        ids: [parent.id, other.id],
+        entities: { parent, other },
+        currentTaskId: other.id,
+      };
+
+      commit(switched, setCurrentTask({ id: other.id }));
+      service.accumulate(other.id, 2000, day);
+      commit({ ...switched, currentTaskId: null }, unsetCurrentTask());
+
+      expect(changes).toBe(2);
+      expect(
+        dispatchSpy.calls
+          .allArgs()
+          .map(([flushed]) => [flushed.taskId, flushed.duration]),
+      ).toEqual([
+        ['parent', 5000],
+        ['other', 2000],
+      ]);
+    });
   });
 
   it('projects pending task time out of an op-log snapshot', () => {
