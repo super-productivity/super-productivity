@@ -247,6 +247,11 @@
       android:exported="false" />
 
     <receiver
+      android:name=".receiver.TimeEstimateAlarmReceiver"
+      android:enabled="true"
+      android:exported="false" />
+
+    <receiver
       android:name=".receiver.BootReceiver"
       android:enabled="true"
       android:exported="true"
