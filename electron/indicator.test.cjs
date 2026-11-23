@@ -22,6 +22,9 @@ let templateImages = [];
 let beforeQuitHandler = () => {};
 let mockIsTrayShowCurrentTask = false;
 let mockIsTrayShowCurrentCountdown = false;
+let mockOsRelease = '10.0.19045';
+let mockRegQuery = { err: new Error('not mocked'), stdout: '' };
+let execFileCalls = [];
 
 const resetModule = () => {
   delete require.cache[indicatorModulePath];
@@ -109,6 +112,22 @@ const installMocks = () => {
       };
     }
 
+    if (request === 'os') {
+      return {
+        ...originalModuleLoad.call(this, request, parent, isMain),
+        release: () => mockOsRelease,
+      };
+    }
+
+    if (request === 'child_process') {
+      return {
+        execFile: (file, args, opts, cb) => {
+          execFileCalls.push([file, args]);
+          cb(mockRegQuery.err, mockRegQuery.stdout);
+        },
+      };
+    }
+
     if (request === 'electron-log/main') {
       return {
         log: () => {},
@@ -179,6 +198,9 @@ test.beforeEach(() => {
   beforeQuitHandler = () => {};
   mockIsTrayShowCurrentTask = false;
   mockIsTrayShowCurrentCountdown = false;
+  mockOsRelease = '10.0.19045';
+  mockRegQuery = { err: new Error('not mocked'), stdout: '' };
+  execFileCalls = [];
 
   Object.defineProperty(process, 'platform', {
     configurable: true,
@@ -240,6 +262,55 @@ test('Windows portable build creates the tray without a GUID', () => {
 
   assert.equal(createdTrayArgs.length, 1);
   assert.equal(createdTrayArgs[0][1], undefined);
+});
+
+const regQueryStdout = (value) =>
+  '\r\nHKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\r\n' +
+  `    SystemUsesLightTheme    REG_DWORD    ${value}\r\n\r\n`;
+
+const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
+
+// Windows 11 "Custom" mode / accent-colored taskbar: app mode light (what
+// nativeTheme reports) but taskbar dark. The icon must follow the taskbar.
+test('Windows 11 switches to the white tray icon when the taskbar is dark', async () => {
+  mockOsRelease = '10.0.22631';
+  mockRegQuery = { err: null, stdout: regQueryStdout('0x0') };
+  initIndicatorOnWindows();
+
+  assert.equal(createdTrayArgs[0][0], '/icons/indicator/stopped-l.png');
+  assert.equal(execFileCalls.length, 1);
+  assert.equal(execFileCalls[0][0], 'reg');
+
+  await flushPromises();
+  assert.equal(traySetImageCalls.at(-1), '/icons/indicator/stopped-d.png');
+});
+
+test('Windows 11 keeps the black tray icon when the taskbar is light', async () => {
+  mockOsRelease = '10.0.22631';
+  mockRegQuery = { err: null, stdout: regQueryStdout('0x1') };
+  initIndicatorOnWindows();
+  await flushPromises();
+
+  assert.ok(!traySetImageCalls.includes('/icons/indicator/stopped-d.png'));
+});
+
+test('Windows 11 keeps the app-theme icon when the taskbar setting is unreadable', async () => {
+  mockOsRelease = '10.0.22631';
+  mockRegQuery = { err: new Error('reg failed'), stdout: '' };
+  initIndicatorOnWindows();
+  await flushPromises();
+
+  assert.equal(createdTrayArgs[0][0], '/icons/indicator/stopped-l.png');
+  assert.ok(!traySetImageCalls.includes('/icons/indicator/stopped-d.png'));
+});
+
+test('Windows 10 keeps the white tray icon without reading the registry', async () => {
+  mockOsRelease = '10.0.19045';
+  initIndicatorOnWindows();
+  await flushPromises();
+
+  assert.equal(createdTrayArgs[0][0], '/icons/indicator/stopped-d.png');
+  assert.equal(execFileCalls.length, 0);
 });
 
 test('initIndicator uses NativeImage for Linux tray creation and updates', () => {
