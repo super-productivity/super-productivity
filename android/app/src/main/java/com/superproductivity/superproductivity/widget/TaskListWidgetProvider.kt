@@ -88,11 +88,10 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     queueProjectToOpen(context, projectId)
                 }
                 try {
+                    // A project row is opened through the queued entry above; a
+                    // Today row opens Today, not whatever the start page is.
                     context.startActivity(
-                        Intent(context, CapacitorMainActivity::class.java).apply {
-                            flags =
-                                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                        }
+                        if (projectId != null) openAppIntent(context) else openTodayIntent(context)
                     )
                     if (projectId != null) {
                         LocalBroadcastManager.getInstance(context)
@@ -130,6 +129,29 @@ class TaskListWidgetProvider : AppWidgetProvider() {
         private const val PREFERENCES_NAME = "task_list_widget"
         private const val PENDING_OPEN_PROJECT_KEY = "pending_open_project"
         private const val PENDING_OPEN_PROJECT_AT_KEY = "pending_open_project_at"
+
+        /**
+         * The app URL that opens Today, handled by parse-app-uri-quick-action.ts like
+         * the launcher shortcut's (tools/verify-android-url-hosts.test.js checks the
+         * host is declared and parsed).
+         */
+        private const val TODAY_URI = "com.super-productivity.app://today"
+
+        private fun openAppIntent(context: Context): Intent =
+            Intent(context, CapacitorMainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+
+        /**
+         * Opens the app on Today, as a project widget opens its project. The start
+         * page can be another view (#11961). A recents relaunch drops the URL
+         * (CapacitorMainActivity.onNewIntent), so it is not replayed.
+         */
+        private fun openTodayIntent(context: Context): Intent =
+            openAppIntent(context).apply {
+                action = Intent.ACTION_VIEW
+                data = Uri.parse(TODAY_URI)
+            }
 
         private fun widgetIds(context: Context, appWidgetManager: AppWidgetManager): IntArray =
             appWidgetManager.getAppWidgetIds(
@@ -382,12 +404,15 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             )
             views.setPendingIntentTemplate(R.id.widget_task_list, clickPendingIntent)
 
-            // Header tap → open app
-            val openAppIntent = Intent(context, CapacitorMainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
+            // Tracking row tap → open app
             val openAppPendingIntent = PendingIntent.getActivity(
-                context, 0, openAppIntent,
+                context, 0, openAppIntent(context),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            // Header/empty tap on a Today widget → open Today. Its own identity
+            // (action and data differ from the plain open-app intent above).
+            val openTodayPendingIntent = PendingIntent.getActivity(
+                context, 0, openTodayIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             // Header/empty tap on a project widget → open that project. Still a direct
@@ -398,14 +423,13 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 PendingIntent.getActivity(
                     context,
                     appWidgetId,
-                    Intent(context, CapacitorMainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    openAppIntent(context).apply {
                         putExtra(EXTRA_OPEN_PROJECT_ID, projectId)
                         data = Uri.parse("widget-open:$appWidgetId")
                     },
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-            } ?: openAppPendingIntent
+            } ?: openTodayPendingIntent
             views.setOnClickPendingIntent(R.id.widget_header, openSourcePendingIntent)
             views.setOnClickPendingIntent(R.id.widget_empty, openSourcePendingIntent)
             views.setOnClickPendingIntent(R.id.widget_tracking_row, openAppPendingIntent)
