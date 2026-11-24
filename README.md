@@ -211,6 +211,10 @@ A big thank you to all our sponsors!
 
   <a href="https://www.blacksmith.sh"><img alt="CI powered by Blacksmith" src="docs/screens/blacksmith-powered-wob.png" height="60"/></a>
 
+- **[IP-Projects](https://ip-projects.de?sp)**: hosts our servers.
+
+  <a href="https://ip-projects.de?sp"><img alt="Hosting by IP-Projects" src="docs/screens/ip-projects-logo.png" height="60"/></a>
+
 _(If you are, intend to or have been a sponsor and want to be shown here, [please let me know](mailto:contact@super-productivity.com)!)_
 
 ## Documentation: Manual versus Automated
