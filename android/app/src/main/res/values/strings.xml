@@ -40,6 +40,11 @@
   <string name="widget_description">Shows Today\'s or a selected project\'s tasks with quick done action</string>
   <string name="widget_empty">No tasks</string>
   <string name="widget_task_done">Toggle task done</string>
+  <!-- Screen-reader labels of a row's checkbox; %1$s is the task title -->
+  <string name="widget_task_mark_done">Mark as done: %1$s</string>
+  <string name="widget_task_mark_undone">Mark as not done: %1$s</string>
+  <!-- A quick add the app has not imported yet; its checkbox opens the app -->
+  <string name="widget_task_open_pending">Open the app to add: %1$s</string>
   <!-- Currently tracked task row; %1$s is the task title -->
   <string name="widget_tracking_title">Tracking: %1$s</string>
   <!-- Device currently tracking it, e.g. "on Desktop"; %1$s is the device label -->

@@ -554,4 +554,38 @@ class WidgetDataTest {
         )
         assertTrue(WidgetData.withPendingCaptures(emptyList(), captures, "p3").isEmpty())
     }
+
+    @Test
+    fun checkboxOfAnOpenTaskMarksItDone() {
+        assertEquals(
+            WidgetCheckboxAction.MARK_DONE,
+            WidgetData.checkboxActionFor(WidgetTask("t1", "Task one", false, null))
+        )
+    }
+
+    @Test
+    fun checkboxOfADoneTaskMarksItNotDone() {
+        assertEquals(
+            WidgetCheckboxAction.MARK_UNDONE,
+            WidgetData.checkboxActionFor(WidgetTask("t2", "Task two", true, null))
+        )
+    }
+
+    @Test
+    fun checkboxFollowsAPendingDoneTapNotTheSnapshot() {
+        // The label must describe what the next tap does: t1 is open in the blob
+        // but checked on the widget, so the next tap un-checks it.
+        val tapped = WidgetData.parse(blob, pendingDoneTargets = mapOf("t1" to true))
+            .first { it.id == "t1" }
+        assertEquals(WidgetCheckboxAction.MARK_UNDONE, WidgetData.checkboxActionFor(tapped))
+    }
+
+    @Test
+    fun checkboxOfAPendingQuickAddOpensTheApp() {
+        val pending = WidgetData.withPendingCaptures(
+            emptyList(),
+            """[{"id": "c1", "title": "Buy milk"}]"""
+        ).single()
+        assertEquals(WidgetCheckboxAction.OPEN_APP, WidgetData.checkboxActionFor(pending))
+    }
 }

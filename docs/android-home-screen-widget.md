@@ -2,7 +2,7 @@
 
 > **Status:** Maintained
 >
-> **Last verified:** 2026-11-01
+> **Last verified:** 2026-11-23
 
 The widget displays up to 20 tasks from the app's last snapshot of either the
 Today view or one selected active project and lets the user toggle completion.
@@ -21,6 +21,11 @@ transfer because launcher widget IDs are not stable across restoration. A
 widget whose selected project is deleted, archived, or hidden falls back to
 Today. The stored selection is retained, so making an archived or hidden
 project available again restores it.
+
+A screen reader announces each row's checkbox with the task title and what a
+tap does (mark done, mark not done, or, for a pending quick add, open the app),
+decided by `WidgetData.checkboxActionFor`, which also picks the tap's intent.
+The checkbox and the header's "+" are 48dp wide; rows keep their compact height.
 
 Tapping a project widget's header or a row opens that project's task list in
 the app. Today widgets keep opening the app's default view.
