@@ -78,7 +78,7 @@ export type MiscConfig = Readonly<{
 }>;
 
 /** How a task's priority is drawn next to its title. */
-export type TaskPriorityIconPreset = 'chevrons' | 'numbers';
+export type TaskPriorityIconPreset = 'chevrons' | 'numbers' | 'numbersHighFirst';
 
 export type TasksConfig = Readonly<{
   isAutoMarkParentAsDone: boolean;

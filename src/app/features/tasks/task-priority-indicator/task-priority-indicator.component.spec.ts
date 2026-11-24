@@ -98,6 +98,24 @@ describe('TaskPriorityIndicatorComponent', () => {
     expect(icon(fixture)!.getAttribute('fontIcon')).toBe(TASK_PRIORITY_ICONS.numbers[3]);
   });
 
+  it('shows 1 for High and 3 for Low in the high-first numeric preset', () => {
+    setConfiguredPreset('numbersHighFirst');
+
+    for (const [priority, expectedIcon] of [
+      [3, 'counter_1'],
+      [2, 'counter_2'],
+      [1, 'counter_3'],
+    ] as const) {
+      const fixture = create(priority);
+
+      expect(icon(fixture)!.getAttribute('fontIcon')).toBe(expectedIcon);
+      expect(icon(fixture)!.getAttribute('aria-label')).toBe(
+        TASK_PRIORITY_LABEL_KEY[priority],
+      );
+      expect(fixture.nativeElement.getAttribute('data-priority')).toBe(`${priority}`);
+    }
+  });
+
   for (const [legacy, level] of [
     ['low', 1],
     ['medium', 2],

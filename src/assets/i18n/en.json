@@ -3121,6 +3121,7 @@
       "PRIORITY_ICON_PRESET": "Priority icons",
       "PRIORITY_ICON_PRESET_CHEVRONS": "Chevrons",
       "PRIORITY_ICON_PRESET_NUMBERS": "Numbers",
+      "PRIORITY_ICON_PRESET_NUMBERS_HIGH_FIRST": "Numbers (1 = High)",
       "TITLE": "Tasks"
     },
     "TIME_TRACKING": {
