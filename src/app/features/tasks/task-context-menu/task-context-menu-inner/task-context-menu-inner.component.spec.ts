@@ -20,6 +20,7 @@ import { of, throwError } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../../core/date/date.service';
+import { PlannerActions } from '../../../planner/store/planner.actions';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
 import { Project } from '../../../project/project.model';
@@ -666,6 +667,46 @@ describe('TaskContextMenuInnerComponent', () => {
         doneOn: 1_700_000_000_000,
         wontDoOn: 1_700_000_000_000,
       });
+    });
+  });
+
+  describe('date quick picks before a 04:00 day start', () => {
+    let menu: TaskContextMenuInnerComponent;
+    let dispatchSpy: jasmine.Spy;
+
+    // 02:00 on Monday 2030-06-17 still belongs to the logical day 2030-06-16.
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2030, 5, 17, 2));
+      TestBed.inject(DateService).setStartOfNextDayDiff('04:00');
+      menu = TestBed.createComponent(TaskContextMenuInnerComponent).componentInstance;
+      menu.task = component.task;
+      dispatchSpy = spyOn(store, 'dispatch');
+    });
+
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('plans Today for the logical today', () => {
+      menu.quickAccessBtnClick(1);
+
+      expect(dispatchSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({
+          type: TaskSharedActions.planTasksForToday.type,
+          today: '2030-06-16',
+        }),
+      );
+    });
+
+    it('labels and plans Tomorrow for the logical tomorrow', () => {
+      menu.quickAccessBtnClick(2);
+
+      expect(menu['tomorrowLabel']).toBe('Mon');
+      expect(dispatchSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({
+          type: PlannerActions.planTaskForDay.type,
+          day: '2030-06-17',
+        }),
+      );
     });
   });
 

@@ -562,7 +562,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   }
 
   onQuickAccessClick(option: 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'): void {
-    const tDate = new Date();
+    const tDate = this._dateService.getLogicalTodayDate();
     tDate.setMinutes(0, 0, 0);
 
     switch (option) {

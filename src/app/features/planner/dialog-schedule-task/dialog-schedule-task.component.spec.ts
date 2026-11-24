@@ -27,6 +27,7 @@ import { ReminderService } from '../../reminder/reminder.service';
 import { PlannerActions } from '../store/planner.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { ScheduleConfig } from '../../config/global-config.model';
 import { selectTaskRepeatCfgByIdAllowUndefined } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
@@ -590,6 +591,29 @@ describe('DialogScheduleTaskComponent', () => {
       expect(selectedDate.getMonth()).toBe(originalDate.getMonth());
       expect(selectedDate.getDate()).toBe(originalDate.getDate());
       expect(component.selectedTime).toBe('14:45');
+    });
+  });
+
+  describe('onQuickAccessClick() before a 04:00 day start', () => {
+    // 02:00 on 2030-06-17 still belongs to the logical day 2030-06-16.
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2030, 5, 17, 2));
+      TestBed.inject(DateService).setStartOfNextDayDiff('04:00');
+      component.data = { ...component.data, isSubmitOnQuickAccess: false };
+    });
+
+    afterEach(() => jasmine.clock().uninstall());
+
+    [
+      { option: 'today', day: '2030-06-16' },
+      { option: 'tomorrow', day: '2030-06-17' },
+    ].forEach(({ option, day }) => {
+      it(`selects the logical ${option}`, () => {
+        component.onQuickAccessClick(option as 'today' | 'tomorrow');
+
+        expect(getDbDateStr(component.selectedDate as Date)).toBe(day);
+      });
     });
   });
 
