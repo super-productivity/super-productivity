@@ -34,7 +34,7 @@
   color: var(--text-color-muted);
 }
 
-:host(.task-section.isExpanded) .collapsible-header {
+:host(.task-section.isExpanded) > .collapsible-header {
   border-bottom-color: var(--divider-color);
 }
 

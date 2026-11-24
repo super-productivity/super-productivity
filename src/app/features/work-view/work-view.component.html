@@ -165,7 +165,7 @@
                   [isExpanded]="
                     !customizerService.collapsedGroupIds().includes(group.key)
                   "
-                  (isExpandedChange)="onGroupExpandedChange(group.key)"
+                  (isExpandedChange)="onGroupExpandedChange(group.key, $event)"
                   [isGroup]="true"
                 >
                   @if (group.newTaskPrefill) {
@@ -350,7 +350,7 @@
                         [isExpanded]="
                           !customizerService.collapsedGroupIds().includes(group.key)
                         "
-                        (isExpandedChange)="onGroupExpandedChange(group.key)"
+                        (isExpandedChange)="onGroupExpandedChange(group.key, $event)"
                         [isGroup]="true"
                       >
                         <task-list
@@ -404,7 +404,7 @@
                       [isExpanded]="
                         !customizerService.collapsedGroupIds().includes(group.key)
                       "
-                      (isExpandedChange)="onGroupExpandedChange(group.key)"
+                      (isExpandedChange)="onGroupExpandedChange(group.key, $event)"
                       [isGroup]="true"
                     >
                       <task-list
