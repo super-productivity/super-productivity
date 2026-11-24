@@ -187,9 +187,9 @@
     "authorUrl": "https://github.com/BigWebstas",
     "id": "joplin-notes-sync",
     "release": {
-      "version": "1.12.0",
-      "downloadUrl": "https://github.com/BigWebstas/SuperProd-Joplin-Sync/releases/download/v1.12.0/joplin-notes-sync-1.12.0.zip",
-      "sha256": "dc3df771aed853e4528561a664f6108c0560360eae0912bef708a57618095dc4"
+      "version": "1.15.1",
+      "downloadUrl": "https://github.com/BigWebstas/SuperProd-Joplin-Sync/releases/download/v1.15.1/joplin-notes-sync-1.15.1.zip",
+      "sha256": "d041d8dcd28c0a502334436474ae8f29c6ac18da8de8d8223b4b521be73ec6ca"
     }
   },
   {
