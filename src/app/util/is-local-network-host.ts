@@ -15,7 +15,7 @@ const extractHostname = (value: string): string | null => {
   }
 };
 
-/** True for hosts reachable without internet: localhost, private IPs, *.local/*.lan. */
+/** True for hosts reachable without internet: localhost, private IPs, *.local/*.lan/*.home.arpa. */
 export const isLocalNetworkHost = (value: string | null | undefined): boolean => {
   const host =
     value &&
@@ -30,6 +30,7 @@ export const isLocalNetworkHost = (value: string | null | undefined): boolean =>
     host.endsWith('.localhost') ||
     host.endsWith('.local') ||
     host.endsWith('.lan') ||
+    host.endsWith('.home.arpa') ||
     host === '::1' ||
     /^f[cd][0-9a-f]{2}:/.test(host) ||
     /^fe80:/.test(host) ||
@@ -46,7 +47,11 @@ export const isConfigLocalNetworkOnly = (config: unknown): boolean => {
     return false;
   }
   const urls = Object.entries(config as Record<string, unknown>).filter(
-    ([key, value]) => typeof value === 'string' && /(url|host)$/i.test(key) && !!value,
+    ([key, value]) =>
+      key.toLowerCase() !== 'altpubliclinkhost' &&
+      typeof value === 'string' &&
+      /(url|host)$/i.test(key) &&
+      !!value,
   ) as [string, string][];
   return urls.length > 0 && urls.every(([, value]) => isLocalNetworkHost(value));
 };

@@ -455,6 +455,28 @@ describe('PollToBacklogEffects', () => {
       discardPeriodicTasks();
     }));
 
+    it('should poll a local Jira provider while offline', fakeAsync(() => {
+      const provider = createMockIssueProvider({
+        id: 'jira-1',
+        host: 'http://192.168.1.10',
+        altPublicLinkHost: 'https://jira.example.com',
+        pollingMode: 'always',
+      });
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+      actions$ = new Subject<any>().asObservable();
+      isOnline$.next(false);
+
+      const subscription = effects.pollNewIssuesToBacklogAlways$.subscribe();
+      tick(10001);
+
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledOnceWith(JIRA_TYPE, 'jira-1', true);
+      subscription.unsubscribe();
+      discardPeriodicTasks();
+    }));
+
     it('should NOT poll always-mode providers without isAutoAddToBacklog', fakeAsync(() => {
       const provider = createMockIssueProvider({
         id: 'jira-1',

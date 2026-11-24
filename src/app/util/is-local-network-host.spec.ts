@@ -8,6 +8,7 @@ describe('isLocalNetworkHost', () => {
       'localhost:3000',
       '172.20.1.1',
       'gitlab.local',
+      'http://gitlab.home.arpa',
     ]) {
       expect(isLocalNetworkHost(h)).toBe(true);
     }
@@ -23,5 +24,11 @@ describe('isLocalNetworkHost', () => {
     ).toBe(true);
     expect(isConfigLocalNetworkOnly({ gitlabBaseUrl: '' })).toBe(false);
     expect(isConfigLocalNetworkOnly({ host: 'https://x.atlassian.net' })).toBe(false);
+    expect(
+      isConfigLocalNetworkOnly({
+        host: 'http://192.168.1.10',
+        altPublicLinkHost: 'https://jira.example.com',
+      }),
+    ).toBe(true);
   });
 });
