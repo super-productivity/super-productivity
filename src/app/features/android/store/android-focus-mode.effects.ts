@@ -1,6 +1,6 @@
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
-import { createSelector, Store } from '@ngrx/store';
+import { Action, createSelector, Store } from '@ngrx/store';
 import {
   exhaustMap,
   filter,
@@ -179,6 +179,25 @@ export const shouldHandleNativeTimerComplete = (
   }
   return now - timer.startedAt >= timer.duration - NATIVE_COMPLETE_TOLERANCE_MS;
 };
+
+/**
+ * The state change for a native timer completion that passed
+ * `shouldHandleNativeTimerComplete`. A finished break only stops (via a
+ * wall-clock tick) and stays on the break screen until the user leaves it, like
+ * on desktop; skipping it would auto-start the next Pomodoro session and loop
+ * endlessly while the user is away.
+ */
+export const getNativeTimerCompleteAction = (
+  isBreak: boolean,
+  // Lazy: computing it credits tracked time, which only a work completion should do.
+  getCompletedDuration: () => number,
+): Action =>
+  isBreak
+    ? focusModeActions.tick()
+    : focusModeActions.completeFocusSession({
+        isManual: false,
+        completedDuration: getCompletedDuration(),
+      });
 
 export type NativeFocusModeData = {
   durationMs: number;
@@ -722,20 +741,11 @@ export class AndroidFocusModeEffects {
             'AndroidFocusModeEffects: Native timer complete received, isBreak=' + isBreak,
           ),
         ),
-        withLatestFrom(
-          this._store.select(selectTimer),
-          this._store.select(selectPausedTaskId),
-        ),
+        withLatestFrom(this._store.select(selectTimer)),
         filter(([isBreak, timer]) => shouldHandleNativeTimerComplete(isBreak, timer)),
-        map(([isBreak, timer, pausedTaskId]) => {
-          if (isBreak) {
-            return focusModeActions.skipBreak({ pausedTaskId });
-          }
-          return focusModeActions.completeFocusSession({
-            isManual: false,
-            completedDuration: this._completionDuration(timer),
-          });
-        }),
+        map(([isBreak, timer]) =>
+          getNativeTimerCompleteAction(isBreak, () => this._completionDuration(timer)),
+        ),
       ),
     );
 

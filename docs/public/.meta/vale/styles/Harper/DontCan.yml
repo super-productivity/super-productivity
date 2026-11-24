@@ -1,0 +1,20 @@
+---
+# Generated from Harper's DontCan rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `don't can` to `can't` or `cannot`.
+extends: existence
+message: "The grammatically correct form is `can't` or `cannot`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "can't"
+    - "cannot"
+tokens:
+  - "don't(?!\\s*\\n\\s*\\n)\\s+can(?!['\\x{2019}]s\\b)"

@@ -33,9 +33,9 @@ const App: Component = () => {
   const showBackButton = () => currentView() !== 'home';
 
   return (
-    <div class="app">
+    <div class="page">
       <Show when={showBackButton()}>
-        <header class="header page-fade">
+        <header class="page-header page-fade">
           <Button
             variant="back"
             onClick={navigateBack}
@@ -45,7 +45,7 @@ const App: Component = () => {
         </header>
       </Show>
 
-      <main class="main">
+      <main>
         <Show when={currentView() === 'home'}>
           <HomeView
             onSelectCategory={navigateToCategory}

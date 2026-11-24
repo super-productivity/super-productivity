@@ -18,7 +18,7 @@ import {
 import { GlobalConfigService } from '../config/global-config.service';
 import { msToString } from '../../ui/duration/ms-to-string.pipe';
 import { IdleService } from '../idle/idle.service';
-import { IS_ELECTRON } from '../../app.constants';
+import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../app.constants';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
 import { GlobalConfigState, TakeABreakConfig } from '../config/global-config.model';
@@ -58,6 +58,7 @@ export class TakeABreakService {
   private _bannerService = inject(BannerService);
   private _uiHelperService = inject(UiHelperService);
   private _snackService = inject(SnackService);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
 
   otherNoBreakTIme$ = new Subject<number>();
 
@@ -91,8 +92,22 @@ export class TakeABreakService {
       filter(Boolean),
     );
 
+  // Desktop only: the interval free-runs there (hidden window included), so a
+  // tick longer than BREAK_TRIGGER_DURATION means the renderer was suspended,
+  // i.e. the system slept. That tick can arrive before Electron's idle IPC
+  // deselects the task, so counting it as work fired the reminder at wake.
+  // Treat it like the untracked-stretch reset instead, matching the order where
+  // idle wins. Not on mobile: wake-up ticks there cover time the foreground
+  // service tracked in the background, which is real work.
+  private _isSleepGapTick = (tick: Tick): boolean =>
+    this._isElectron && tick.duration > BREAK_TRIGGER_DURATION;
+
+  private _triggerSleepGapReset$: Observable<unknown> =
+    this._timeTrackingService.tick$.pipe(filter(this._isSleepGapTick));
+
   private _tick$: Observable<number> = merge(
     this._timeTrackingService.tick$.pipe(
+      filter((tick) => !this._isSleepGapTick(tick)),
       map((tick) => tick.duration),
       filter(() => !!this._taskService.currentTaskId()),
     ),
@@ -107,15 +122,15 @@ export class TakeABreakService {
     // session's remaining time (`getTimerRemainingMs`) as the cap to
     // `triggerWakeUpTick`, which is exactly 0 whenever a focus session sits at
     // or over its duration (android-focus-mode.effects.ts,
-    // android-foreground-tracking.effects.ts), and
-    // `consumeCurrentTick()` is unclamped, so a backwards clock step goes
-    // negative. Resetting is `_triggerReset$`'s job alone.
+    // android-foreground-tracking.effects.ts). Resetting is `_triggerReset$`'s
+    // job alone.
     filter((duration) => duration > 0),
   );
 
   // the dialog checkbox is the single source of truth for resetting; it
   // auto-defaults to checked when a break is tracked, so an unchecked value
-  // means the user explicitly opted out of the reset
+  // means the user explicitly opted out of the reset ("Taking a break" mode
+  // has no checkbox and always resets)
   private _triggerIdleDialogReset$: Observable<unknown> = this._actions$.pipe(
     ofType(idleDialogResult),
     filter(({ isResetBreakTimer }) => isResetBreakTimer),
@@ -138,8 +153,10 @@ export class TakeABreakService {
   // the action it waited for lost its last dispatcher in v11.1.0, so for every
   // Electron user (idle tracking defaults to on) the automatic reset was dead
   // and only the idle dialog's checkbox could clear the timer. See #9305.
-  private _triggerProgrammaticReset$: Observable<unknown> =
-    this._triggerSimpleBreakReset$;
+  private _triggerProgrammaticReset$: Observable<unknown> = merge(
+    this._triggerSimpleBreakReset$,
+    this._triggerSleepGapReset$,
+  );
 
   private _triggerManualReset$: Subject<number> = new Subject<number>();
 

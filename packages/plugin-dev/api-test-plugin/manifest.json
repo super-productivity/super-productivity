@@ -26,5 +26,6 @@
     "persistDataSynced",
     "loadSyncedData"
   ],
+  "dataSharing": [],
   "hooks": ["taskComplete", "taskUpdate", "taskDelete", "currentTaskChange"]
 }

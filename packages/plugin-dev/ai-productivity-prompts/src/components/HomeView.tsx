@@ -16,7 +16,7 @@ const HomeView: Component<HomeViewProps> = (props) => {
         <p class="text-muted">Choose what you need help with:</p>
       </div>
 
-      <div class="category-grid page-fade">
+      <div class="grid page-fade">
         <For each={PROMPT_CATEGORIES}>
           {(category) => (
             <CategoryCard
@@ -26,11 +26,8 @@ const HomeView: Component<HomeViewProps> = (props) => {
           )}
         </For>
 
-        <Card
-          onClick={props.onCustomPromptsClick}
-          class="custom-prompts-card"
-        >
-          <h3 class="text-primary">My Custom Prompts</h3>
+        <Card onClick={props.onCustomPromptsClick}>
+          <h3>My Custom Prompts</h3>
           <p class="text-muted">Create & manage your own prompts</p>
         </Card>
       </div>
@@ -44,11 +41,8 @@ const CategoryCard: Component<{
   onClick: () => void;
 }> = (props) => {
   return (
-    <Card
-      onClick={props.onClick}
-      class="category-card"
-    >
-      <h3 class="text-primary">{props.category.title}</h3>
+    <Card onClick={props.onClick}>
+      <h3>{props.category.title}</h3>
       <p class="text-muted">{props.category.prompts.length} prompts</p>
     </Card>
   );

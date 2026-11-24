@@ -1,0 +1,20 @@
+---
+# Generated from Harper's ComprisesOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# `Comprises` already contains the notion of `of`, so following it with another `of` is redundant.
+extends: existence
+message: "Avoid `comprises of`; let `comprises` stand on its own or choose `consists of`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "comprises"
+    - "is comprised of"
+tokens:
+  - "comprises(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"

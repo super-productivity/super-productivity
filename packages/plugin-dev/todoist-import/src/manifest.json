@@ -17,9 +17,19 @@
     "addTag",
     "batchUpdateForProject",
     "updateTask",
+    "addTaskRepeatCfg",
+    "getDayContext",
     "showSnack"
   ],
   "allowedHosts": ["api.todoist.com"],
+  "dataSharing": [
+    {
+      "recipient": "Todoist",
+      "hosts": ["api.todoist.com"],
+      "data": ["credentials"],
+      "privacyPolicyUrl": "https://doist.com/privacy"
+    }
+  ],
   "iFrame": true,
   "isSkipMenuEntry": true,
   "i18n": {

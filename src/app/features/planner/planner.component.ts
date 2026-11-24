@@ -12,6 +12,9 @@ import { PlannerCalendarNavComponent } from './planner-calendar-nav/planner-cale
 import { PlannerService } from './planner.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { selectPlannerDayMap } from './store/planner.selectors';
+import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
+import { combineLatest } from 'rxjs';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 
 @Component({
   selector: 'planner',
@@ -29,6 +32,7 @@ export class PlannerComponent {
   private _store = inject(Store);
   private _dateService = inject(DateService);
   private _plannerService = inject(PlannerService);
+  private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   layoutService = inject(LayoutService);
 
   readonly T = T;
@@ -63,14 +67,22 @@ export class PlannerComponent {
   });
 
   constructor() {
-    this._store
-      .select(selectTaskFeatureState)
+    // Keyed on the ids array (its ref survives entity-only updates such as the
+    // per-second time-tracking tick) plus the logical day, the two inputs the
+    // cleanup reducer actually depends on.
+    combineLatest([
+      this._store.select(selectTaskFeatureState).pipe(
+        map((taskState) => taskState.ids as string[]),
+        distinctUntilChanged(),
+      ),
+      this._globalTrackingIntervalService.todayDateStr$,
+    ])
       .pipe(takeUntilDestroyed())
-      .subscribe((taskState) => {
+      .subscribe(([allTaskIds]) => {
         this._store.dispatch(
           PlannerActions.cleanupOldAndUndefinedPlannerTasks({
             today: this._dateService.todayStr(),
-            allTaskIds: taskState.ids as string[],
+            allTaskIds,
           }),
         );
       });

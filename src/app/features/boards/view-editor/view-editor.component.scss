@@ -1,52 +1,133 @@
+@use '../../../../styles/_globals.scss' as *;
+
+// The title and content are the dialog's own rows (see the component).
 :host {
-  display: block;
+  display: contents;
+  // The label column, shared with the sections' Rules and Sort rows.
+  --view-editor-label-w: 88px;
 }
 
-.view-title {
-  width: 100%;
+// The title stays over the scrolling content as a bar: tight below, and a
+// line once the content scrolls under it. Only the line changes, so nothing
+// moves when scrolling starts.
+.title {
+  --mat-dialog-headline-padding: 6px 24px 4px;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--transition-duration-s);
 }
 
-.field-label,
-.sections-heading {
-  display: block;
-  margin: 0 0 var(--s);
-  color: var(--text-color-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-wide);
+.title.is-scrolled {
+  border-bottom-color: var(--divider-color);
 }
 
-// Columns sits next to the toggle on every width: the toggle's basis is 0, so
-// it shrinks instead of wrapping (its two segments still fit at 320px).
-.layout-row {
+// Below xs the dialog is full screen (panelClass 'fullscreen-xs-dialog').
+.content {
   display: flex;
-  align-items: center;
-  gap: var(--s2);
-}
+  flex-direction: column;
+  gap: var(--s3);
 
-// Basis 0: the group's own width is 100%, which would push Columns to the
-// next line.
-.layout-toggle {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.cols {
-  // Fits "Columns"; its error may wrap to two lines.
-  flex: 0 0 104px;
+  // A set width: opening a card (wrapping chips) doesn't resize the dialog.
+  @include mq(xs) {
+    width: 540px;
+    max-height: 85vh;
+  }
+  // One column of section cards: a wider dialog would only stretch the rows.
+  @include mq(sm) {
+    width: 720px;
+  }
 }
 
 .hint {
-  margin: var(--s) 0 var(--s3);
+  margin: 0;
+}
+
+// Label column, then the controls: aligned with a flat list's Rules and Sort.
+.form-row {
+  display: grid;
+  grid-template-columns: var(--view-editor-label-w) minmax(0, 1fr);
+  column-gap: var(--s2);
+  align-items: center;
+}
+
+.form-label {
   color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.layout-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s) var(--s2);
+}
+
+// A width's preview: its sections as boxes, wrapped as the board wraps them.
+.cols-preview {
+  display: inline-grid;
+  grid-template-columns: repeat(var(--cols), var(--s));
+  gap: 2px;
+  vertical-align: middle;
+}
+
+.cols-box {
+  height: var(--s);
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.sections-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s);
+  margin-bottom: calc(-1 * var(--s2));
+}
+
+.sections-heading {
+  margin: 0;
 }
 
 .sections {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--s);
 }
 
-.add-section {
-  margin-top: var(--s2);
+// Phones: one column, the controls full width, no label beside the layout.
+.content.is-phone {
+  gap: var(--s3);
+
+  .layout-row {
+    grid-template-columns: minmax(0, 1fr);
+
+    .form-label {
+      display: none;
+    }
+  }
+
+  .layout-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .layout-toggle,
+  .cols-toggle {
+    display: flex;
+  }
+
+  .layout-option {
+    flex: 1 1 0;
+  }
+
+  // Edge to edge, one line between cards. shortcut: 24px is Material's
+  // dialog-content-padding default; read the token if a theme changes it.
+  .sections {
+    gap: 0;
+    margin-inline: -24px;
+  }
+
+  view-editor-section + view-editor-section {
+    margin-top: -1px;
+  }
 }

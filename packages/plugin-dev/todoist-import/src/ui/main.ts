@@ -69,7 +69,7 @@ const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
   });
   const fetchBtn = el('button', { text: t('BUTTON.LOAD_PREVIEW') });
   const errorLine = errorMsg
-    ? [el('p', { className: 'error', role: 'alert', text: errorMsg })]
+    ? [el('p', { className: 'callout callout--danger', role: 'alert', text: errorMsg })]
     : [];
 
   const submit = async (): Promise<void> => {
@@ -88,7 +88,12 @@ const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
     );
     try {
       const raw = await loadTodoistData(api(), token);
-      const model = parseSyncResponse(raw || {}, parseStrings());
+      const dayContext = await api().getDayContext?.();
+      const model = parseSyncResponse(
+        raw || {},
+        parseStrings(),
+        dayContext?.startOfNextDayDiffMs ?? 0,
+      );
       if (!model.projects.length) {
         renderTokenStep(t('TOKEN.NO_PROJECTS'), token);
         return;
@@ -113,7 +118,7 @@ const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
     ...errorLine,
     el('label', { htmlFor: tokenInputId, text: t('TOKEN.LABEL') }),
     tokenInput,
-    el('p', { className: 'muted', text: t('TOKEN.HELP') }),
+    el('p', { className: 'text-muted text-sm', text: t('TOKEN.HELP') }),
     el('div', { className: 'actions' }, [fetchBtn]),
   );
 };
@@ -282,7 +287,7 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
   const failure = result.errorMessage
     ? [
         el('p', {
-          className: 'error',
+          className: 'callout callout--danger',
           role: 'alert',
           text: result.failedProjectTitle
             ? t('ERROR.IMPORT_STOPPED', {
@@ -296,9 +301,18 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
   const unverified = result.isCountUnverified
     ? [
         el('p', {
-          className: 'warn',
+          className: 'callout callout--warning',
           role: 'status',
           text: t('SUMMARY.UNVERIFIED'),
+        }),
+      ]
+    : [];
+  const failedRepeats = result.failedRepeatCount
+    ? [
+        el('p', {
+          className: 'callout callout--warning',
+          role: 'status',
+          text: t('SUMMARY.REPEATS_FAILED', { count: result.failedRepeatCount }),
         }),
       ]
     : [];
@@ -331,11 +345,12 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
     }),
     el('ul', {}, items),
     ...unverified,
+    ...failedRepeats,
     ...tagLine,
     ...failure,
     ...lossy,
     el('p', {
-      className: 'muted',
+      className: 'text-muted text-sm',
       text: t('SUMMARY.UNDO'),
     }),
   );

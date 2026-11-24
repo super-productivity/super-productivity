@@ -22,10 +22,14 @@ import {
   type Page,
 } from '@playwright/test';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { ImportPage } from '../pages/import.page';
 import { waitForAppReady } from '../utils/waits';
 import {
+  FLATHUB_SCENARIOS,
+  FORCED_THEME,
+  IS_NATIVE_CAPTURE,
   MASTER_DIR_ELECTRON,
   MASTER_DIR_WEB,
   MOBILE_VIEWPORTS,
@@ -213,6 +217,166 @@ const captureWindowWithChrome = async (
   }
 };
 
+/** How long GNOME capture waits for the user's Alt+Print in one scene. */
+const GNOME_WAIT_MS = 300_000;
+let gnomeShotIndex = 0;
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Root folder to watch for GNOME screenshots. GNOME Shell saves to
+ * `$(xdg-user-dir PICTURES)/<localized "Screenshots">` (e.g. `Bildschirmfotos`
+ * on a German desktop), so we watch the Pictures folder and its direct
+ * subfolders rather than guessing the translated name.
+ */
+const gnomeScreenshotRoot = async (): Promise<string> => {
+  const override = process.env.SP_SCREENSHOT_GNOME_DIR?.trim();
+  if (override) return override;
+  try {
+    const { stdout } = await run('xdg-user-dir', ['PICTURES']);
+    const pictures = stdout.toString().trim();
+    if (pictures) return pictures;
+  } catch {
+    /* xdg-user-dir missing: fall back to the default location */
+  }
+  return path.join(os.homedir(), 'Pictures');
+};
+
+/** Absolute paths of all PNGs in `root` and its direct subfolders. */
+const listPngs = (root: string): string[] => {
+  const out: string[] = [];
+  const scan = (dir: string, depth: number): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory() && depth > 0) scan(p, depth - 1);
+      else if (e.isFile() && e.name.toLowerCase().endsWith('.png')) out.push(p);
+    }
+  };
+  scan(root, 1);
+  return out;
+};
+
+const currentDesktop = (process.env.XDG_CURRENT_DESKTOP ?? '').toUpperCase();
+const IS_KDE = currentDesktop.includes('KDE');
+const IS_GNOME = currentDesktop.includes('GNOME');
+
+/** Width and height from a PNG's IHDR chunk. */
+const pngSize = (file: string): { width: number; height: number } => {
+  const header = Buffer.alloc(24);
+  const fd = fs.openSync(file, 'r');
+  try {
+    fs.readSync(fd, header, 0, 24, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+};
+
+/**
+ * KDE capture: raise and focus the window, then let Spectacle grab the active
+ * window in the background. Spectacle includes KWin's title bar, rounded
+ * corners and shadow (per its "Include window titlebar/shadow" settings).
+ */
+const captureViaSpectacle = async (
+  electronApp: ElectronApplication,
+  outPath: string,
+  scenario: string,
+): Promise<void> => {
+  const bounds = await electronApp.evaluate(({ BrowserWindow }) => {
+    const w = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!w) throw new Error('No Electron window to capture');
+    w.show();
+    w.moveTop();
+    w.focus();
+    return w.getBounds();
+  });
+  // Let KWin finish activating the window and the renderer finish painting.
+  await sleep(800);
+  if (fs.existsSync(outPath)) fs.rmSync(outPath);
+  console.log(`[screenshot] ${scenario} → spectacle --activewindow`);
+  await run('spectacle', [
+    '--background',
+    '--nonotify',
+    '--activewindow',
+    '--output',
+    outPath,
+  ]);
+  if (!fs.existsSync(outPath)) {
+    throw new Error(`Spectacle did not write ${outPath} for ${scenario}`);
+  }
+  // Sanity check: the capture should be the app window (plus title bar and
+  // shadow), not e.g. the terminal that happened to keep focus.
+  const size = pngSize(outPath);
+  const ratio = size.width / size.height / (bounds.width / bounds.height);
+  if (ratio < 0.85 || ratio > 1.15) {
+    throw new Error(
+      `${scenario}: captured ${size.width}x${size.height}, but the app window is ` +
+        `${bounds.width}x${bounds.height}. Was another window active? Keep the ` +
+        'Super Productivity window in front while the capture runs.',
+    );
+  }
+};
+
+/**
+ * GNOME capture: bring the window forward, ask the user to press Alt+Print
+ * (GNOME's native window screenshot, with decoration, rounded corners and
+ * shadow), then copy the new PNG from the screenshots folder to `outPath`.
+ */
+const captureViaGnome = async (
+  electronApp: ElectronApplication,
+  outPath: string,
+  scenario: string,
+): Promise<void> => {
+  const dir = await gnomeScreenshotRoot();
+  const before = new Set(listPngs(dir));
+
+  await electronApp
+    .evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+      w?.show();
+      w?.focus();
+    })
+    .catch(() => undefined);
+
+  gnomeShotIndex += 1;
+  console.log(
+    `\n📸 [${gnomeShotIndex}/${FLATHUB_SCENARIOS.length}] ${scenario}\n` +
+      '   Click the Super Productivity title bar, then press Alt+Print.\n' +
+      `   Waiting for a new PNG in ${dir} (or a folder directly inside it) …`,
+  );
+
+  const deadline = Date.now() + GNOME_WAIT_MS;
+  while (Date.now() < deadline) {
+    await sleep(500);
+    const fresh = listPngs(dir).filter((p) => !before.has(p));
+    if (!fresh.length) continue;
+    const src = fresh[0];
+    console.log(`   ↳ found ${src}`);
+    // GNOME writes the file asynchronously; wait until its size settles.
+    let lastSize = -1;
+    for (let i = 0; i < 20; i++) {
+      const size = fs.statSync(src).size;
+      if (size > 0 && size === lastSize) break;
+      lastSize = size;
+      await sleep(250);
+    }
+    fs.copyFileSync(src, outPath);
+    console.log(`   ✓ saved ${path.relative(process.cwd(), outPath)}`);
+    return;
+  }
+  throw new Error(
+    `No new screenshot appeared in ${dir} or its subfolders within ` +
+      `${GNOME_WAIT_MS / 1000}s for ${scenario}. Set SP_SCREENSHOT_GNOME_DIR ` +
+      'if GNOME saves elsewhere.',
+  );
+};
+
 const ONBOARDING_INIT = (): void => {
   localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
   localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
@@ -252,6 +416,15 @@ export const test = base.extend<ScreenshotFixtures>({
       `worker-${testInfo.workerIndex}-${Date.now()}`,
     );
     fs.mkdirSync(userDataDir, { recursive: true });
+    // Native capture: start with the system title bar so the desktop draws
+    // real decoration and shadow. main-window.ts reads this before the
+    // window exists; the seed sets the matching renderer config.
+    if (IS_NATIVE_CAPTURE) {
+      fs.writeFileSync(
+        path.join(userDataDir, 'simpleSettings'),
+        JSON.stringify({ isUseCustomWindowTitleBar: false }),
+      );
+    }
 
     // NODE_ENV is intentionally NOT set to 'DEV': start-app.js binds
     // `isShowDevTools = IS_DEV`, and electron/debug.ts auto-opens DevTools on
@@ -400,7 +573,7 @@ export const test = base.extend<ScreenshotFixtures>({
             /* localStorage may be unavailable until renderer ready */
           }
         },
-        { darkMode: theme, customThemeId: customTheme },
+        { darkMode: FORCED_THEME ?? theme, customThemeId: customTheme },
       );
       await page.evaluate(() => location.reload());
       await page.waitForLoadState('domcontentloaded');
@@ -474,7 +647,7 @@ export const test = base.extend<ScreenshotFixtures>({
       } catch {
         /* noop */
       }
-    }, theme);
+    }, FORCED_THEME ?? theme);
     // Mirror the DARK_MODE init script for the custom-theme picker. The
     // CustomThemeService reads LS.CUSTOM_THEME at construction; for E2E
     // screenshots we point it at a built-in theme by id (e.g. 'dracula').
@@ -556,6 +729,8 @@ export const test = base.extend<ScreenshotFixtures>({
       });
     };
     const fn = async (scenario: string, name: string): Promise<void> => {
+      // GNOME capture only stops for scenes that end up in the Flathub gallery.
+      if (IS_NATIVE_CAPTURE && !FLATHUB_SCENARIOS.includes(scenario)) return;
       // Read live theme + locale from the page so one test can span multiple
       // (locale × theme) variants. helpers.applyTheme flips DARK_MODE in
       // localStorage; helpers.applyLocale stamps the current locale on
@@ -584,7 +759,11 @@ export const test = base.extend<ScreenshotFixtures>({
       } catch {
         /* electron pages with no mouse host shouldn't ever fail this */
       }
-      if (MODE === 'electron' && electronApp) {
+      if (MODE === 'electron' && electronApp && IS_NATIVE_CAPTURE && IS_KDE) {
+        await captureViaSpectacle(electronApp, file, scenario);
+      } else if (MODE === 'electron' && electronApp && IS_NATIVE_CAPTURE && IS_GNOME) {
+        await captureViaGnome(electronApp, file, scenario);
+      } else if (MODE === 'electron' && electronApp) {
         await captureWindowWithChrome(electronApp, page, file);
       } else {
         await page.screenshot({

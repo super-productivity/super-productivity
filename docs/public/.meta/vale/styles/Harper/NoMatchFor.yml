@@ -1,0 +1,25 @@
+---
+# Hand-written from Harper's NoMatchFor: the idiom is `no match for`.
+#
+# The generated rule flattened Harper's alternation into three consecutive
+# pronoun slots, so it required `its its its no match ...` and matched
+# nothing -- the same failure as FellowCoRedundancy.
+#
+# Harper asks for a form of `be`, or one of a set of contractions, then
+# `no match`, then a preposition. The preposition is what gets replaced, so
+# `for` itself is excluded here; Harper reaches the same result by offering a
+# correction identical to the text.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "If you mean the idiom, it's `no match for`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  "(?<=\\b(?:am|is|are|was|were|be|been|being|i'm|im|we're|were|you're|youre|he's|hes|she's|shes|it's|its|they're|theyre)\\s)no\\s+match\\s+(?!for\\b)[a-z]+\\b": "no match for"

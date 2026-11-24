@@ -10,7 +10,9 @@ import com.superproductivity.superproductivity.service.BackgroundSyncCredentialS
 import com.superproductivity.superproductivity.service.QuickFetchCoalescer
 import com.superproductivity.superproductivity.service.ReminderChangeResult
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.RepeatReminderCache
 import com.superproductivity.superproductivity.service.SuperSyncBackgroundProvider
+import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.service.buildPayloadDecryptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -96,6 +98,19 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             return
         }
 
+        // Checked when the alarm fires, not by cancelling it when tracking starts:
+        // tracking can end natively (notification Pause/Done with the app swiped
+        // away) where no JS runs to re-arm a cancelled alarm (#6823). Memory
+        // only: a fresh process after a kill has none, and then it rings.
+        val trackedTaskId = TrackingForegroundService.currentTaskId.takeIf {
+            TrackingForegroundService.isTracking && TrackingForegroundService.resumeAfterRestore
+        }
+        if (isReminderForTrackedTask(reminderType, relatedId, trackedTaskId)) {
+            Log.d(TAG, "Task is being tracked, dropping alarm: id=$notificationId")
+            ReminderNotificationHelper.cancelReminder(context, notificationId)
+            return
+        }
+
         val pendingResult = goAsync()
 
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
@@ -149,8 +164,11 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             // goAsync() window. Ops with unknown salts degrade to envelope-only
             // parsing and are reported in unreadableTaskIds.
             val decryptor = buildPayloadDecryptor(context, TAG, deriveOnMiss = false)
+            // The cached configs let a project or tag delete mark its repeat
+            // alarms stale; with an empty state only config deletes would.
             SuperSyncBackgroundProvider(decryptor).fetchQuick(
-                credentials.baseUrl, credentials.accessToken, lastSeq
+                credentials.baseUrl, credentials.accessToken, lastSeq,
+                repeatState = RepeatReminderCache.getState(context),
             )
         } ?: return false  // Error -> fail-open
 
@@ -178,7 +196,10 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val decryptor = buildPayloadDecryptor(context, TAG) ?: return null
         val derived = derivingScope.async {
             derivingFetches.get(cacheKey) {
-                SuperSyncBackgroundProvider(decryptor).fetchQuick(baseUrl, accessToken, lastSeq)
+                SuperSyncBackgroundProvider(decryptor).fetchQuick(
+                    baseUrl, accessToken, lastSeq,
+                    repeatState = RepeatReminderCache.getState(context),
+                )
             }
         }
         val waitMs = deadlineMs - SystemClock.elapsedRealtime()
@@ -187,3 +208,13 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         return result
     }
 }
+
+/**
+ * A task's own reminder is pointless while its timer runs (#6823). Deadline and
+ * due-date reminders still ring, as before.
+ */
+internal fun isReminderForTrackedTask(
+    reminderType: String,
+    relatedId: String,
+    trackedTaskId: String?,
+): Boolean = reminderType == "TASK" && trackedTaskId != null && trackedTaskId == relatedId

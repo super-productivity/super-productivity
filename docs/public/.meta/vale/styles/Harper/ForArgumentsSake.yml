@@ -1,0 +1,20 @@
+---
+# Generated from Harper's ForArgumentsSake rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `for argument sake` to `for argument's sake`.
+extends: existence
+message: "Use the possessive `argument's`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "for argument's sake"
+tokens:
+  - "for(?!\\s*\\n\\s*\\n)\\s+arguments(?!\\s*\\n\\s*\\n)\\s+sake(?!['\\x{2019}]s\\b)"
+  - "for(?!\\s*\\n\\s*\\n)\\s+argument(?!\\s*\\n\\s*\\n)\\s+sake(?!['\\x{2019}]s\\b)"

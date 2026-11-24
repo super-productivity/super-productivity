@@ -1,4 +1,4 @@
-import { test } from '../../fixtures/supersync.fixture';
+import { expect, test } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
   getSuperSyncConfig,
@@ -13,6 +13,7 @@ import {
 } from '../../utils/supersync-helpers';
 import { expectTaskVisible } from '../../utils/supersync-assertions';
 import { waitForAppReady } from '../../utils/waits';
+import { getStoreTaskTitlesContaining } from '../../utils/audit-winners-helpers';
 
 /**
  * SuperSync Round-Time-Spent Conflict E2E Test (#9601)
@@ -385,13 +386,21 @@ test.describe('@supersync Round Time Spent Conflict Resolution', () => {
         await clientB.sync.syncAndWait();
         await clientA.sync.syncAndWait();
 
+        // A renamed the parent last, so A's title wins the rename conflict on
+        // both clients and after a reload; B's rename must not survive.
         for (const client of [clientA, clientB]) {
           await expectExactTaskTime(client, childName, expectedTime);
           await expectExactTaskTime(client, parentName, expectedTime);
+          expect(await getStoreTaskTitlesContaining(client.page, parentName)).toEqual([
+            `${parentName}-A`,
+          ]);
           await client.page.reload({ waitUntil: 'domcontentloaded' });
           await waitForAppReady(client.page);
           await expectExactTaskTime(client, childName, expectedTime);
           await expectExactTaskTime(client, parentName, expectedTime);
+          expect(await getStoreTaskTitlesContaining(client.page, parentName)).toEqual([
+            `${parentName}-A`,
+          ]);
         }
       } finally {
         if (clientA) await closeClient(clientA);

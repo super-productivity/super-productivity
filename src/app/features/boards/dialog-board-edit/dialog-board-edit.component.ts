@@ -3,9 +3,7 @@ import {
   MAT_DIALOG_DATA,
   MatDialog,
   MatDialogActions,
-  MatDialogContent,
   MatDialogRef,
-  MatDialogTitle,
 } from '@angular/material/dialog';
 import { T } from '../../../t.const';
 import { BoardEditComponent } from '../board-edit/board-edit.component';
@@ -18,17 +16,8 @@ import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confir
 @Component({
   selector: 'dialog-board-edit',
   standalone: true,
-  imports: [
-    MatDialogTitle,
-    MatDialogContent,
-    MatDialogActions,
-    BoardEditComponent,
-    MatButton,
-    MatIcon,
-    TranslatePipe,
-  ],
+  imports: [MatDialogActions, BoardEditComponent, MatButton, MatIcon, TranslatePipe],
   templateUrl: './dialog-board-edit.component.html',
-  styleUrl: './dialog-board-edit.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DialogBoardEditComponent {

@@ -9,7 +9,7 @@ import { TaskService } from '../tasks/task.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { UiHelperService } from '../ui-helper/ui-helper.service';
 import { DEFAULT_TASK, Task } from '../tasks/task.model';
-import { EMPTY } from 'rxjs';
+import { EMPTY, of, Subject } from 'rxjs';
 
 describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
   let effects: FinishDayBeforeCloseEffects;
@@ -144,6 +144,28 @@ describe('FinishDayBeforeCloseEffects._handleCloseDecision()', () => {
     expect(execBeforeCloseService.setDone).toHaveBeenCalledOnceWith(
       'FINISH_DAY_BEFORE_CLOSE_EFFECT',
     );
+  });
+
+  describe('_warnOnRequest$()', () => {
+    it('prompts only for requests carrying its id', async () => {
+      const workContextService = TestBed.inject(WorkContextService);
+      Object.defineProperty(workContextService, 'mainWorkContext$', {
+        value: of({ taskIds: [doneTask.id] }),
+      });
+      const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+      taskService.getByIdsLive$.and.returnValue(of([doneTask]));
+      const handleSpy = spyOn(effects, '_handleCloseDecision').and.resolveTo();
+      const requests$ = new Subject<string[]>();
+      const sub = effects._warnOnRequest$(requests$).subscribe();
+
+      // The main process re-notifies the sync hold alone once this one is done.
+      requests$.next(['SYNC_BEFORE_CLOSE_ID']);
+      expect(handleSpy).not.toHaveBeenCalled();
+
+      requests$.next(['FINISH_DAY_BEFORE_CLOSE_EFFECT', 'SYNC_BEFORE_CLOSE_ID']);
+      expect(handleSpy).toHaveBeenCalledOnceWith([doneTask]);
+      sub.unsubscribe();
+    });
   });
 
   // Finish Day archives won't-do tasks as well.

@@ -64,34 +64,26 @@ const CustomPromptEditor: Component<CustomPromptEditorProps> = (props) => {
 
   return (
     <div class="page-fade">
-      <div class="editor-header">
-        <h2 class="text-primary">
-          {isEditing() ? 'Edit Custom Prompt' : 'Create Custom Prompt'}
-        </h2>
-      </div>
+      <h2>{isEditing() ? 'Edit Custom Prompt' : 'Create Custom Prompt'}</h2>
 
-      <div class="editor-container">
-        <div class="editor-instructions">
-          <p class="text-muted">
-            Create a custom prompt template. Your current tasks will be automatically
-            appended when you use this prompt.
-          </p>
-          <p class="text-muted">
-            <strong>Tip:</strong> Press Ctrl+Enter (or Cmd+Enter) to save quickly.
-          </p>
+      <div class="stack">
+        <div class="callout">
+          <div class="stack">
+            <p class="text-muted">
+              Create a custom prompt template. Your current tasks will be automatically
+              appended when you use this prompt.
+            </p>
+            <p class="text-muted">
+              <strong>Tip:</strong> Press Ctrl+Enter (or Cmd+Enter) to save quickly.
+            </p>
+          </div>
         </div>
 
-        <div class="editor-field">
-          <label
-            for="prompt-title"
-            class="field-label"
-          >
-            Prompt Title:
-          </label>
+        <div class="field">
+          <label for="prompt-title">Prompt Title:</label>
           <input
             id="prompt-title"
             type="text"
-            class="prompt-title-input"
             value={promptTitle()}
             onInput={(e) => setPromptTitle(e.currentTarget.value)}
             placeholder="e.g., Daily Priority Planner"
@@ -99,16 +91,10 @@ const CustomPromptEditor: Component<CustomPromptEditorProps> = (props) => {
           />
         </div>
 
-        <div class="editor-field">
-          <label
-            for="prompt-textarea"
-            class="field-label"
-          >
-            Prompt Template:
-          </label>
+        <div class="field">
+          <label for="prompt-textarea">Prompt Template:</label>
           <textarea
             id="prompt-textarea"
-            class="prompt-textarea"
             value={promptText()}
             onInput={(e) => setPromptText(e.currentTarget.value)}
             onKeyDown={handleKeyDown}
@@ -128,7 +114,7 @@ Give me a specific action plan with time estimates."
           />
         </div>
 
-        <div class="editor-actions">
+        <div class="actions">
           <button
             class="btn-outline"
             onClick={props.onCancel}

@@ -25,6 +25,9 @@ import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.compon
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
+import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
+import { SyncFirstChoiceComponent } from '../sync-first-choice/sync-first-choice.component';
 
 @Component({
   selector: 'dialog-sync-conflict',
@@ -42,6 +45,7 @@ import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.ser
     ShortTimePipe,
     MatTooltip,
     CollapsibleComponent,
+    SyncFirstChoiceComponent,
   ],
 })
 export class DialogSyncConflictComponent {
@@ -61,6 +65,11 @@ export class DialogSyncConflictComponent {
   remote = this.data.remote;
   local = this.data.local;
   isOwnUploadsMissing = this.data.reason === ConflictReason.OwnUploadsMissing;
+  // A device that never synced, joining a SuperSync account that has tasks (2b).
+  isFirstSuperSync =
+    this.data.reason === ConflictReason.NoLastSync &&
+    !this.local.lastSyncedVectorClock &&
+    inject(SyncProviderManager).getActiveProvider()?.id === SyncProviderId.SuperSync;
 
   isHighlightRemote =
     this.remote.lastUpdate !== null && this.remote.lastUpdate > this.local.lastUpdate;
@@ -83,7 +92,8 @@ export class DialogSyncConflictComponent {
     this._matDialogRef.disableClose = true;
   }
 
-  close(res?: DialogConflictResolutionResult): void {
+  /** `isWarned`: the choice already showed its warning, so skip the confirm. */
+  close(res?: DialogConflictResolutionResult, isWarned = false): void {
     // #9256: Keep local force-uploads with a clean slate, which deletes remote
     // ops this device could not decrypt.
     if (
@@ -92,7 +102,7 @@ export class DialogSyncConflictComponent {
     ) {
       return;
     }
-    if (res && this.shouldConfirmOverwrite(res)) {
+    if (res && !isWarned && this.shouldConfirmOverwrite(res)) {
       const confirmMessage = this.getConfirmationMessage(res);
 
       this._matDialog

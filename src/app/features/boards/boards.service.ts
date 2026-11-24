@@ -87,10 +87,15 @@ export class BoardsService {
     try {
       const { DialogBoardEditComponent } =
         await import('./dialog-board-edit/dialog-board-edit.component');
+      // The dialog itself takes focus: on its first control, the title's
+      // pencil, it showed as pressed. A column's title asks for that column's
+      // card, so there its `cdkFocusInitial` is focused (the default).
       this._matDialog.open(DialogBoardEditComponent, {
         restoreFocus: true,
         panelClass: 'fullscreen-xs-dialog',
-        data: panelId ? { board, openPanelId: panelId } : { board },
+        ...(panelId
+          ? { data: { board, openPanelId: panelId } }
+          : { data: { board }, autoFocus: 'dialog' }),
       });
     } finally {
       this._isOpeningEditor = false;

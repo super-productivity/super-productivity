@@ -1,0 +1,34 @@
+---
+# Hand-written from Harper's WouldNeverHave.
+#
+# The generated rule derived its swaps from the examples, which gave it the
+# span that changed rather than the phrase that licensed the change: `could
+# never have known` -> `never could have known` differs only in `could never`
+# -> `never could`, so the rule fired on any `could never` and suggested a
+# truncated fix. `We could never know the reason.` was the false positive, and
+# `could have never` was missed because no example isolated it.
+#
+# Harper names eight phrases outright and requires a verb after them, so
+# `I could never have.` is left alone. `\w` is as close as a substitution gets
+# to that -- it asks for a following word, not for a verb -- which keeps the
+# end-of-sentence case out while accepting a noun Harper would decline.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "For a more standard style, consider using %s."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "could(?!\\s*\\n\\s*\\n)\\s+have(?!\\s*\\n\\s*\\n)\\s+never(?=(?!\\s*\\n\\s*\\n)\\s+\\w)": "never could have"
+  "could(?!\\s*\\n\\s*\\n)\\s+never(?!\\s*\\n\\s*\\n)\\s+have(?=(?!\\s*\\n\\s*\\n)\\s+\\w)": "never could have"
+  "could've(?!\\s*\\n\\s*\\n)\\s+never(?=(?!\\s*\\n\\s*\\n)\\s+\\w)": "never could've"
+  "couldve(?!\\s*\\n\\s*\\n)\\s+never(?=(?!\\s*\\n\\s*\\n)\\s+\\w)": "never could've"
+  "would(?!\\s*\\n\\s*\\n)\\s+have(?!\\s*\\n\\s*\\n)\\s+never(?=(?!\\s*\\n\\s*\\n)\\s+\\w)": "never would have"
+  "would(?!\\s*\\n\\s*\\n)\\s+never(?!\\s*\\n\\s*\\n)\\s+have(?=(?!\\s*\\n\\s*\\n)\\s+\\w)": "never would have"
+  "would've(?!\\s*\\n\\s*\\n)\\s+never(?=(?!\\s*\\n\\s*\\n)\\s+\\w)": "never would've"
+  "wouldve(?!\\s*\\n\\s*\\n)\\s+never(?=(?!\\s*\\n\\s*\\n)\\s+\\w)": "never would've"

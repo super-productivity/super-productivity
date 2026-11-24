@@ -1,0 +1,44 @@
+---
+# Hand-written from Harper's DiscourseMarkers: a sentence opening with a
+# discourse marker needs a comma after it.
+#
+# Harper anchors this to the first word of the sentence -- it runs the
+# expression there and nowhere else. `sequence` cannot say that, so this is an
+# `existence` rule scoped to a sentence and anchored with `^`, which comes to
+# the same thing.
+#
+# Harper also skips the marker when the next word is an adposition, a
+# coordinating conjunction, an adjective or an adverb -- "Instead of giving",
+# "Honestly and graciously", "Thus far" -- because the marker is then modifying
+# what follows rather than opening a clause. That needs a tag, which cannot be
+# combined with the anchor here, so the two closed classes are named instead:
+# every adposition and conjunction that can follow a marker, plus the adverbs
+# common enough to matter. Adjectives and the rest of the adverbs are the
+# remaining false positives ("However careful you are").
+#
+# The gap after the marker has to reach a word. A plain `\s` matched the
+# newline ending a paragraph, so a marker standing alone with no clause after
+# it -- a heading, a list item -- was asked for a comma it has nowhere to put.
+# The shape is `internal/rx`.Gap followed by a lookahead, spelled out because a
+# hand-written rule cannot import it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The second pattern is the multi-word markers, which the first cannot reach:
+# it matches a single word at the sentence start. "For example I recommend
+# updating the configuration" and "On the other hand we could delay the
+# deployment" both want the comma, and both were unreported.
+#
+# `of course` is not among them. Harper leaves "Of course feel free to add
+# this by pull request" alone, and including it flagged three.
+extends: existence
+message: "A discourse marker needs a comma after it."
+level: suggestion
+scope: sentence
+ignorecase: true
+nonword: true
+tokens:
+  - '^(?:accordingly|additionally|alternatively|consequently|conversely|frankly|furthermore|hence|honestly|however|incidentally|indeed|instead|meanwhile|moreover|nevertheless|notwithstanding|nowadays|otherwise|subsequently|therefore|thus)[^\S\n]*\s[^\S\n]*(?!(?:of|in|on|at|to|for|from|with|by|about|into|onto|over|under|above|below|after|before|between|among|across|around|behind|beyond|through|during|despite|without|within|against|toward|towards|upon|per|via|like|than|and|or|but|nor|yet|so|far|also|only|just|even|still|again|already)\b)(?=\S)'
+  - '^(?:now a days|on the other hand|on the contrary|for example|for instance|in other words|in fact|in addition|in conclusion|in short|in particular|as a result|after all|at the same time|to be honest|to be fair)[^\S\n]+(?=\S)'

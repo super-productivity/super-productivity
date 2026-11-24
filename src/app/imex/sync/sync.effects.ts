@@ -3,7 +3,6 @@ import { createEffect } from '@ngrx/effects';
 import {
   concatMap,
   delay,
-  distinctUntilChanged,
   exhaustMap,
   filter,
   first,
@@ -19,13 +18,23 @@ import {
 import { SyncTriggerService } from './sync-trigger.service';
 import { BackgroundSyncSchedulerService } from './background-sync-scheduler.service';
 import { OperationLogDownloadService } from '../../op-log/sync/operation-log-download.service';
+import { OperationWriteFlushService } from '../../op-log/sync/operation-write-flush.service';
 import {
   INITIAL_SYNC_DELAY_MS,
   SYNC_BEFORE_CLOSE_ID,
   SYNC_INITIAL_SYNC_TRIGGER,
 } from '../../imex/sync/sync.const';
 import { SyncProviderId } from '../../op-log/sync-exports';
-import { asyncScheduler, combineLatest, defer, EMPTY, merge, Observable, of } from 'rxjs';
+import {
+  asyncScheduler,
+  combineLatest,
+  defer,
+  EMPTY,
+  firstValueFrom,
+  merge,
+  Observable,
+  of,
+} from 'rxjs';
 import { IS_ONLINE$ } from '../../util/is-online.token';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -55,6 +64,7 @@ export class SyncEffects {
   private _dataInitStateService = inject(DataInitStateService);
   private _execBeforeCloseService = inject(ExecBeforeCloseService);
   private _uiHelperService = inject(UiHelperService);
+  private _writeFlushService = inject(OperationWriteFlushService);
   private _isSyncBeforeQuitRunning = false;
   private readonly _initialPwaUpdateCheckService = inject(InitialPwaUpdateCheckService);
 
@@ -69,24 +79,27 @@ export class SyncEffects {
           // behavioural tests. `defer` hands over a fresh instance per
           // construction; the subscribed behaviour is unchanged.
           defer(() => EMPTY)
-        : this._dataInitStateService.isAllDataLoadedInitially$.pipe(
-            concatMap(() => this._syncWrapperService.isEnabledAndReady$),
-            distinctUntilChanged(),
-            tap((isEnabled) =>
-              isEnabled
-                ? this._execBeforeCloseService.schedule(SYNC_BEFORE_CLOSE_ID)
-                : this._execBeforeCloseService.unschedule(SYNC_BEFORE_CLOSE_ID),
-            ),
-            switchMap((isEnabled) =>
-              isEnabled
-                ? this._syncBeforeQuitOnRequest$(
-                    this._execBeforeCloseService.onBeforeClose$,
-                  )
-                : EMPTY,
-            ),
-          ),
+        : this._syncBeforeQuit$(),
     { dispatch: false },
   );
+
+  /**
+   * Holds the quit to persist tracked time and, when enabled, to sync.
+   * Kept out of the Electron-only effect above so specs can drive it.
+   */
+  _syncBeforeQuit$(): Observable<void> {
+    return this._dataInitStateService.isAllDataLoadedInitially$.pipe(
+      take(1),
+      // Scheduled with sync off and under "Only sync manually" too: the hold
+      // also persists the task and counter time that is only written in
+      // batches. Without it the main process quits at once and that time is
+      // lost; the sync itself is skipped on request instead (#11831).
+      tap(() => this._execBeforeCloseService.schedule(SYNC_BEFORE_CLOSE_ID)),
+      switchMap(() =>
+        this._syncBeforeQuitOnRequest$(this._execBeforeCloseService.onBeforeClose$),
+      ),
+    );
+  }
 
   /**
    * Runs the sync before close for each quit request carrying its id. Kept out
@@ -94,7 +107,16 @@ export class SyncEffects {
    */
   _syncBeforeQuitOnRequest$(requests$: Observable<string[]>): Observable<void> {
     return requests$.pipe(
-      filter((ids) => ids.includes(SYNC_BEFORE_CLOSE_ID)),
+      // Runs only once every other hold is done: the finish-day prompt can
+      // still cancel the quit, and stopping tracking (and releasing this hold)
+      // before that answer would leave a cancelled quit with tracking stopped
+      // and no hold for the next quit. The main process re-notifies the ids
+      // still pending whenever a hold finishes.
+      filter(
+        (ids) =>
+          ids.includes(SYNC_BEFORE_CLOSE_ID) &&
+          ids.every((id) => id === SYNC_BEFORE_CLOSE_ID),
+      ),
       tap(() => {
         // The running sync may wait on a dialog (conflict, confirm) that
         // a window hidden in the tray hides; a repeated Quit shows it.
@@ -117,6 +139,18 @@ export class SyncEffects {
           // because the op-log persistence effects schedule their writes in
           // the same tick; we just need to let them execute.
           await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          const isEnabled = await firstValueFrom(
+            this._syncWrapperService.isEnabledAndReady$,
+          );
+          const syncCfg = await firstValueFrom(this._syncWrapperService.syncCfg$);
+          if (!isEnabled || syncCfg?.isManualSyncOnly) {
+            // Sync off or "Only sync manually": no sync on quit (#11831), but
+            // wait until the time flushed above is written, or the quit drops it.
+            await this._writeFlushService.flushPendingWrites().catch((e: unknown) => {
+              SyncLog.err(e);
+            });
+            return;
+          }
           try {
             await this._syncWrapperService.sync();
           } catch (e: unknown) {

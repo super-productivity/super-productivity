@@ -12,6 +12,7 @@ import {
   generateSyncFolderName,
   closeContextsSafely,
 } from '../../utils/sync-helpers';
+import { getBrowserLocalDateStr, getStoreTask } from '../../utils/audit-webdav-helpers';
 
 /**
  * WebDAV TODAY Tag Concurrent Updates E2E Tests
@@ -88,7 +89,7 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[TODAY Reorder] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -107,7 +108,7 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
 
     // Client B syncs (downloads tasks)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await expect(pageB.locator('task')).toHaveCount(3);
     console.log('[TODAY Reorder] Client B downloaded 3 tasks');
 
@@ -152,19 +153,19 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // --- Both clients sync ---
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[TODAY Reorder] Client A synced reorder');
 
     await waitForStatePersistence(pageB);
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[TODAY Reorder] Client B synced reorder');
 
     // Sync again for eventual consistency
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[TODAY Reorder] Both synced again for consistency');
 
     // --- Verify final state ---
@@ -243,7 +244,7 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[TODAY Create] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -262,7 +263,7 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
 
     // Client B syncs (downloads tasks)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await expect(pageB.locator('task')).toHaveCount(2);
     console.log('[TODAY Create] Client B downloaded 2 tasks for today');
 
@@ -290,19 +291,19 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // --- Both clients sync ---
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[TODAY Create] Client A synced');
 
     await waitForStatePersistence(pageB);
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[TODAY Create] Client B synced');
 
     // Sync again for consistency
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[TODAY Create] Both synced again');
 
     // --- Verify final state ---
@@ -383,7 +384,7 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[TODAY Remove] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -402,7 +403,7 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
 
     // Client B syncs
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await expect(pageB.locator('task')).toHaveCount(3);
     console.log('[TODAY Remove] Client B downloaded 3 tasks');
 
@@ -414,6 +415,8 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
 
     // Client A removes Task2 from today by clicking the "tomorrow" quick-access button
     const task2OnA = taskPageA.getTaskByText(task2Name).first();
+    const task2Id = await task2OnA.getAttribute('data-task-id');
+    expect(task2Id).toBeTruthy();
     await task2OnA.click({ button: 'right' });
 
     // The quick-access div contains: [TODAY, TOMORROW, NEXT_WEEK, SCHEDULE_DIALOG]
@@ -443,19 +446,19 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // --- Both clients sync ---
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[TODAY Remove] Client A synced removal');
 
     await waitForStatePersistence(pageB);
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[TODAY Remove] Client B synced');
 
     // Sync again for consistency
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[TODAY Remove] Both synced again');
 
     // --- Verify final state ---
@@ -480,6 +483,16 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     await expect(taskPageB.getTaskByText(task3Name)).toBeVisible();
     await expect(taskPageA.getTaskByText(task2Name)).not.toBeVisible();
     await expect(taskPageB.getTaskByText(task2Name)).not.toBeVisible();
+
+    // Out of TODAY must mean rescheduled, not deleted: Task2 still exists on
+    // both clients with dueDay = tomorrow. Uses the browser's calendar date,
+    // which matches the app's logical day with the default start-of-day.
+    const tomorrow = await getBrowserLocalDateStr(pageA, 1);
+    for (const page of [pageA, pageB]) {
+      const task2 = await getStoreTask(page, task2Id!);
+      expect(task2, 'Task2 must still exist').not.toBeNull();
+      expect(task2!.dueDay).toBe(tomorrow);
+    }
 
     console.log('[TODAY Remove] ✓ Remove from today handled correctly');
 

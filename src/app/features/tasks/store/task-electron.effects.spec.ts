@@ -193,6 +193,47 @@ describe('TaskElectronEffects', () => {
     });
   });
 
+  describe('syncTodayTasksToElectron$', () => {
+    it('should resend the Today list when a title changes, not when only time does', () => {
+      const updateTodayTasksSpy = jasmine.createSpy('updateTodayTasks');
+      (window as any).ea.updateTodayTasks = updateTodayTasksSpy;
+      store.overrideSelector(selectTodayTaskIds, ['T1']);
+      store.refreshState();
+
+      const sub = effects.syncTodayTasksToElectron$.subscribe();
+      expect(updateTodayTasksSpy).toHaveBeenCalledTimes(1);
+
+      store.overrideSelector(selectTaskEntities, {
+        T1: { ...task, timeSpent: task.timeSpent + 60000 },
+      });
+      store.refreshState();
+      expect(updateTodayTasksSpy).toHaveBeenCalledTimes(1);
+
+      store.overrideSelector(selectTaskEntities, { T1: { ...task, title: 'Renamed' } });
+      store.refreshState();
+      sub.unsubscribe();
+
+      expect(updateTodayTasksSpy).toHaveBeenCalledTimes(2);
+      expect(updateTodayTasksSpy.calls.mostRecent().args[0]).toEqual([
+        jasmine.objectContaining({ id: 'T1', title: 'Renamed' }),
+      ]);
+    });
+
+    it('should drop a task from the list once it is done', () => {
+      const updateTodayTasksSpy = jasmine.createSpy('updateTodayTasks');
+      (window as any).ea.updateTodayTasks = updateTodayTasksSpy;
+      store.overrideSelector(selectTodayTaskIds, ['T1']);
+      store.refreshState();
+
+      const sub = effects.syncTodayTasksToElectron$.subscribe();
+      store.overrideSelector(selectTaskEntities, { T1: { ...task, isDone: true } });
+      store.refreshState();
+      sub.unsubscribe();
+
+      expect(updateTodayTasksSpy.calls.mostRecent().args[0]).toEqual([]);
+    });
+  });
+
   describe('setTaskBarProgress$', () => {
     it('should publish task progress while no focus session owns the bar', () => {
       const sub = effects.setTaskBarProgress$.subscribe();

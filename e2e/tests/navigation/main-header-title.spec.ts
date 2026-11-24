@@ -18,7 +18,7 @@ const createClickCounter = async (page: Page, title: string): Promise<void> => {
   await page.goto('/#/habits');
   await page.waitForURL(/habits/);
 
-  await page.locator('.add-habit-btn').click();
+  await page.locator('.add-habit-btn').first().click();
   const dialog = page.locator('dialog-simple-counter-edit-settings');
   await expect(dialog).toBeVisible();
 
@@ -267,6 +267,48 @@ test.describe('main header title and action row', () => {
     const counter = page.locator('#mobile-simple-counter-menu simple-counter-button');
     await expect(counter).toHaveCount(1);
     await expect(counter).toBeInViewport();
+  });
+
+  /**
+   * A tray longer than the screen scrolls, but it must stop above the bottom
+   * nav: on an iPhone the notch and home-indicator insets pushed its last
+   * counter under the nav, out of reach (#5936). The insets are emulated
+   * through the same custom properties native code publishes.
+   */
+  test('keeps the last counter of a long tray above the bottom nav', async ({
+    page,
+    workViewPage,
+  }) => {
+    test.setTimeout(120000);
+    await workViewPage.waitForTaskList();
+    for (let i = 1; i <= 13; i++) {
+      await createClickCounter(page, `Counter ${i}`);
+    }
+    await page.setViewportSize({ width: 390, height: 700 });
+    // What the iOS app sets: notch and home-indicator insets, and the body
+    // padding that shifts the whole layout below the notch.
+    await page.evaluate(() => {
+      const root = document.documentElement.style;
+      root.setProperty('--safe-area-inset-top', '47px');
+      root.setProperty('--safe-area-inset-bottom', '34px');
+      document.body.classList.add('isNativeMobile', 'isIOS');
+    });
+
+    await page.locator('.mobile-dropdown-wrapper button').first().click();
+    const tray = page.locator('#mobile-simple-counter-menu');
+    const counters = tray.locator('simple-counter-button');
+    await expect(counters).toHaveCount(13);
+
+    const navTop = (await page
+      .locator('mobile-bottom-nav .mobile-bottom-nav')
+      .boundingBox())!.y;
+    // Measure once the slide-in transform has landed: until then it both
+    // shortens the scroll height and lifts the counter.
+    const last = counters.last();
+    await expect(last).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+    await tray.evaluate((el) => (el.scrollTop = el.scrollHeight));
+    const box = (await last.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(navTop);
   });
 
   /**

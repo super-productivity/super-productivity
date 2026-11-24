@@ -1,0 +1,19 @@
+---
+# Generated from Harper's MoreThatLikely rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the common typo `more that likely` to `more than likely`.
+extends: existence
+message: "Did you mean `more than likely`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "more than likely"
+tokens:
+  - "more(?!\\s*\\n\\s*\\n)\\s+that(?!\\s*\\n\\s*\\n)\\s+likely(?!['\\x{2019}]s\\b)"

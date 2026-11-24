@@ -1,133 +1,13 @@
 /*
  * Procrastination Buster Plugin Styles
- * UI Kit provides base element styles (body, headings, buttons, etc.)
- * Only plugin-specific layout rules here.
+ * Layout, cards, buttons and text come from the plugin UI kit; only
+ * centering of intro blocks and the cycle diagram is plugin-specific.
  */
-
-.app {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  padding: var(--s2);
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header h1 {
-  margin: 0;
-}
-
-.main {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-}
 
 .intro {
   text-align: center;
-  margin-bottom: var(--s3);
 }
 
-/* Blocker Selector */
-.blocker-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--s);
-  margin-top: var(--s3);
-}
-
-.blocker-card p {
-  margin: 0;
-}
-
-/* Strategy List */
-.strategy-container {
-  max-width: 600px;
-  margin: 0 auto;
-}
-
-.selected-type {
-  padding: var(--s3);
-  text-align: center;
-}
-
-.selected-type h2 {
-  margin: 0 0 var(--s) 0;
-}
-
-.emotion {
-  margin: 0;
-  font-style: italic;
-}
-
-.strategy-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s);
-}
-
-.strategy-item {
-  padding: var(--s2);
-}
-
-.strategy-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--s2);
-  flex-wrap: wrap;
-}
-
-.strategy-text {
-  margin: 0;
-  flex: 1;
-}
-
-/* Info content */
-.info-content {
-  max-width: 700px;
-  margin: 0 auto;
-  padding: var(--s2);
-}
-
-.info-content section {
-  margin-bottom: var(--s3);
-}
-
-.info-content h3 {
-  color: var(--c-primary);
-}
-
-/* Procrastination graph */
 .procrastination-graph {
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: var(--s);
-  margin: var(--s3) 0;
-  flex-wrap: wrap;
-}
-
-.graph-item {
-  padding: var(--s) var(--s2);
-  background: var(--card-bg);
-  border: 1px solid var(--extra-border-color);
-  border-radius: var(--card-border-radius);
-  text-align: center;
-  font-size: 0.9em;
-}
-
-.sync-icon {
-  color: var(--text-color-muted);
-}
-
-/* Action buttons */
-.action-buttons {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--s3);
 }

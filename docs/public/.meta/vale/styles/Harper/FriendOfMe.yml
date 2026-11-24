@@ -1,0 +1,25 @@
+---
+# Hand-written from Harper's FriendOfMe: `a friend of mine`, not `of me`.
+#
+# The generated rule matched the noun + `of` + any pronoun by tag, so it also
+# flagged `friend of mine`, `of his`, `of theirs` -- the possessive forms the
+# rule exists to recommend. Its message came out as the literal template text,
+# `Use `{poss_pron_str}` instead of `{obj_pron_str}`.`, because the replacement
+# is chosen in Rust from the pronoun it matched and there was nothing for the
+# generator to read.
+#
+# Harper matches object pronouns only, and of those it declines two: `her` and
+# `it`, which are ambiguous -- `her` is already possessive in `a friend of her
+# sister`, and `of it` is ordinary English. So the five below are the complete
+# set it reports.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Use a possessive pronoun -- `mine`, `yours`, `his`, `ours`, `theirs` -- instead of an object pronoun."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '\b(?:friend|friends|enemy|enemies)\s+of\s+(?:me|you|him|us|them)\b'

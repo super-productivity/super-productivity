@@ -34,7 +34,7 @@ import { PluginWorkContextHeaderBtnCfg } from '../plugin-api.model';
          for time tracking. */
       button.isActive {
         background: rgba(var(--ink-on-channel), 0.18);
-        transition: background var(--transition-standard);
+        transition: background var(--transition-duration-m) var(--ani-standard-timing);
       }
 
       button.isActive:hover:not(:disabled) {

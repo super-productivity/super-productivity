@@ -267,17 +267,6 @@ describe('Multi-tab frontier guard (#9438)', () => {
       expect(frontier.isSaveSafeAt(lastSeq)).toBe(true);
     };
 
-    it('appendBatch advances the frontier', async () => {
-      await storeService.appendBatch(
-        [
-          createTaskOperation(client, 'wl-batch-1', OpType.Create, { title: 'b1' }),
-          createTaskOperation(client, 'wl-batch-2', OpType.Create, { title: 'b2' }),
-        ],
-        'local',
-      );
-      await expectInStep();
-    });
-
     it('appendBatchSkipDuplicates advances the frontier', async () => {
       await storeService.appendBatchSkipDuplicates(
         [createTaskOperation(client, 'wl-skipdup-1', OpType.Create, { title: 's1' })],

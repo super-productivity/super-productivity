@@ -292,6 +292,19 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       expect(createdCfg().startDate).toBe('2026-10-10');
     });
 
+    it("keeps the task's due→deadline gap, like the repeat dialog (#10983)", async () => {
+      tasks['due'] = { ...tasks['due'], deadlineDay: '2026-10-13' };
+      await handle(request('POST', '/task-repeat-cfgs', { taskId: 'due' }));
+
+      expect(createdCfg().deadlineOffsetDays).toBe(3);
+    });
+
+    it('sets no deadline offset for a task without deadline', async () => {
+      await handle(request('POST', '/task-repeat-cfgs', { taskId: 'due' }));
+
+      expect(createdCfg().deadlineOffsetDays).toBeUndefined();
+    });
+
     it("takes over the task's time with the default reminder", async () => {
       await handle(request('POST', '/task-repeat-cfgs', { taskId: 'timed' }));
 
@@ -377,6 +390,95 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
           skipOverdue: false,
         }),
       );
+    });
+
+    it('takes an end day and counting from completion', async () => {
+      await handle(
+        request('POST', '/task-repeat-cfgs', {
+          taskId: 't1',
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'DAILY',
+          repeatEvery: 3,
+          repeatFromCompletionDate: true,
+          repeatUntilDay: '2026-12-31',
+        }),
+      );
+
+      expect(createdCfg()).toEqual(
+        jasmine.objectContaining({
+          repeatEvery: 3,
+          repeatFromCompletionDate: true,
+          waitForCompletion: true,
+          repeatUntilDay: '2026-12-31',
+        }),
+      );
+    });
+
+    it('treats a partial custom weekly weekday list as the complete selection', async () => {
+      const response = await handle(
+        request('POST', '/task-repeat-cfgs', {
+          taskId: 't1',
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'WEEKLY',
+          wednesday: true,
+        }),
+      );
+
+      expect(response.status).toBe(201);
+      expect(createdCfg()).toEqual(
+        jasmine.objectContaining({
+          monday: false,
+          tuesday: false,
+          wednesday: true,
+          thursday: false,
+          friday: false,
+          saturday: false,
+          sunday: false,
+        }),
+      );
+    });
+
+    it('preserves default weekdays when a custom weekly create omits weekdays', async () => {
+      for (const schedule of [{ repeatCycle: 'WEEKLY' }, {}] as const) {
+        const response = await handle(
+          request('POST', '/task-repeat-cfgs', {
+            taskId: 't1',
+            quickSetting: 'CUSTOM',
+            repeatEvery: 2,
+            ...schedule,
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(createdCfg()).toEqual(
+          jasmine.objectContaining({
+            repeatCycle: 'WEEKLY',
+            repeatEvery: 2,
+            monday: true,
+            tuesday: true,
+            wednesday: true,
+            thursday: true,
+            friday: true,
+            saturday: false,
+            sunday: false,
+          }),
+        );
+      }
+    });
+
+    it('rejects an explicitly empty custom weekly weekday selection', async () => {
+      const response = await handle(
+        request('POST', '/task-repeat-cfgs', {
+          taskId: 't1',
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'WEEKLY',
+          wednesday: false,
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(errorCode(response)).toBe('INVALID_INPUT');
+      expectNoDispatch();
     });
 
     it('honours explicit isPaused and skipOverdue', async () => {
@@ -471,6 +573,13 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
         expect(response.status).toBe(400);
         expect(errorCode(response)).toBe('INVALID_INPUT');
       }
+      const repeating = await handle(
+        request('POST', '/task-repeat-cfgs', { taskId: 'repeating' }),
+      );
+      // released wording (v19.2.0)
+      expect(repeating.body.ok ? undefined : repeating.body.error.message).toBe(
+        'Task already repeats; change its repeat config with PATCH /task-repeat-cfgs/:id',
+      );
       expectNoDispatch();
     });
 
@@ -497,6 +606,10 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       expect(response.body.ok ? undefined : response.body.error.details).toEqual({
         fields: ['title', 'lastTaskCreationDay'],
       });
+      // released wording (v19.2.0); scripts may match on it
+      expect(response.body.ok ? undefined : response.body.error.message).toBe(
+        'Field(s) cannot be set through this endpoint: title, lastTaskCreationDay',
+      );
       expectNoDispatch();
     });
 
@@ -515,6 +628,10 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
         expect(response.status).toBe(400);
         expect(errorCode(response)).toBe('INVALID_INPUT');
       }
+      const notObject = await handle(request('POST', '/task-repeat-cfgs', []));
+      expect(notObject.body.ok ? undefined : notObject.body.error.message).toBe(
+        'Request body must be a JSON object',
+      );
       expectNoDispatch();
     });
   });
@@ -569,6 +686,56 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       );
     });
 
+    it('replaces the whole custom weekday selection when a day is provided', async () => {
+      const response = await handle(
+        request('PATCH', '/task-repeat-cfgs/weekly', {
+          quickSetting: 'CUSTOM',
+          friday: true,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(data<TaskRepeatCfg>(response)).toEqual(
+        jasmine.objectContaining({
+          quickSetting: 'CUSTOM',
+          monday: false,
+          tuesday: false,
+          wednesday: false,
+          thursday: false,
+          friday: true,
+          saturday: false,
+          sunday: false,
+        }),
+      );
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'weekly',
+        jasmine.objectContaining({
+          quickSetting: 'CUSTOM',
+          wednesday: false,
+          friday: true,
+        }),
+        false,
+      );
+    });
+
+    it('preserves custom weekdays when PATCH changes only the interval', async () => {
+      const response = await handle(
+        request('PATCH', '/task-repeat-cfgs/weekly', {
+          quickSetting: 'CUSTOM',
+          repeatEvery: 3,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(data<TaskRepeatCfg>(response)).toEqual(
+        jasmine.objectContaining({
+          repeatEvery: 3,
+          wednesday: true,
+          friday: false,
+        }),
+      );
+    });
+
     it('drops the last-day anchor when leaving its preset', async () => {
       await handle(
         request('PATCH', '/task-repeat-cfgs/lastDay', {
@@ -580,6 +747,45 @@ describe('LocalRestApiTaskRepeatCfgRoutesService', () => {
       expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
         'lastDay',
         { quickSetting: 'CUSTOM', monthlyLastDay: undefined },
+        false,
+      );
+    });
+
+    it('keeps counting from completion when a custom schedule leaves it out', async () => {
+      cfgs$.next([
+        createCfg('after', {
+          quickSetting: 'CUSTOM',
+          repeatEvery: 3,
+          repeatFromCompletionDate: true,
+          waitForCompletion: true,
+        }),
+      ]);
+
+      await handle(
+        request('PATCH', '/task-repeat-cfgs/after', {
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'WEEKLY',
+          repeatEvery: 2,
+        }),
+      );
+
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'after',
+        { repeatEvery: 14 },
+        false,
+      );
+    });
+
+    it('removes the end day with null', async () => {
+      cfgs$.next([createCfg('ending', { repeatUntilDay: '2026-12-31' })]);
+
+      await handle(
+        request('PATCH', '/task-repeat-cfgs/ending', { repeatUntilDay: null }),
+      );
+
+      expect(repeatCfgServiceMock.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'ending',
+        { repeatUntilDay: undefined },
         false,
       );
     });

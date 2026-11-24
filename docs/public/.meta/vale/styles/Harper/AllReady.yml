@@ -1,0 +1,39 @@
+---
+# Hand-written from Harper's AllReady: `all ready` where `already` was meant.
+#
+# The generated rule asked for an adjective after the phrase, and failed all
+# four of Harper's own examples. Vale tags `aware` in "all ready aware" and
+# `excited` in "all ready excited" as verbs -- the README's own illustration of
+# what a statistical tagger does with a sentence that is already wrong.
+#
+# `VERB` is accepted alongside `ADJ` because that is where those participles
+# land. It does not widen the rule much: the correct `all ready` is predicative
+# and what follows it is a particle, a conjunction or nothing at all -- "we are
+# all ready to go", "all ready and waiting", "the files are all ready."
+#
+# Two of Harper's examples stay out of reach: "all ready public on the blog"
+# and "felt all ready confident", where Vale tags `public` and `confident` as
+# nouns. Adding NOUN would catch them and break Harper's own guardrail in the
+# same file -- "You can keep all ready supplies in the closet" must go
+# untouched, and `supplies` is a noun there for the same reason. `make verify`
+# reports those two, and they are the reason it is not silent.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use `already` before adjectives instead of the two-word phrase."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "already"
+tokens:
+  - pattern: 'all'
+    target: true
+  - pattern: 'ready'
+    target: true
+  - upos: ADJ|VERB

@@ -1,0 +1,29 @@
+---
+# Hand-written from Harper's AllIntentsAndPurposes: the idiom is `for all
+# intents and purposes` (or `to all ...`).
+#
+# The generated rule required `for` or `to` in front, so it only ever caught a
+# misspelled idiom after a correct preposition. Harper's chain takes *any*
+# preposition and then decides, which means it also reports a correctly spelled
+# idiom after the wrong one -- "of all intents and purposes", "at all intents and
+# purposes". Those were 11 missed findings.
+#
+# So there are two ways to be wrong, and they are independent:
+#
+#   1. the idiom is right but the preposition is not `for`/`to`
+#   2. the idiom itself is wrong, whatever the preposition
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "The idiom is `for all intents and purposes`."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  # Right idiom, wrong preposition. `for` and `to` are the two correct ones,
+  # so neither belongs here -- leaving `to` in flagged the correct idiom.
+  - '\b(?:at|on|of|by|with|from|since|during|through|about|into|is|it)\s+all\s+intents\s+and\s+purposes\b'
+  # Wrong idiom, any preposition.
+  - '\b(?:for|to|at|on|of|by|with|from|to|since|during|through|about|into|is|it)\s+all\s+(?:intended|intense|intensive|intrinsic|extents)\s+(?:and\s+)?purposes\b'

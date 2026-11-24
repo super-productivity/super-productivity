@@ -1,5 +1,6 @@
 import {
   CAPTURE_DAILY_LIMIT_TEXT,
+  CAPTURE_ESTIMATE_MINUTES_MAX,
   CAPTURE_NOTES_MAX_BYTES,
   CAPTURE_PROJECT_MAX_CHARS,
   CAPTURE_QUEUE_FULL_TEXT,
@@ -25,7 +26,8 @@ const DUE_DATE_PATTERN = '^\\d{4}-\\d{2}-\\d{2}$';
 const DUE_TIME_PATTERN = '^([01]\\d|2[0-3]):[0-5]\\d$';
 
 /**
- * `create_task(title, notes?, dueDate?, dueTime?, repeat?, project?)`: the only tool.
+ * `create_task(title, notes?, dueDate?, dueTime?, repeat?, deadlineDate?,
+ * deadlineTime?, estimateMinutes?, project?)`: the only tool.
  * Public once shipped: optional fields may be added, nothing removed or renamed.
  */
 export const CREATE_TASK_TOOL: McpToolDefinition = {
@@ -35,9 +37,10 @@ export const CREATE_TASK_TOOL: McpToolDefinition = {
     'Add a task to the Inbox, or to an existing project, in Super ' +
     'Productivity. Text is kept literally: ' +
     '#tags, +projects and dates in the title or notes are not parsed; pass ' +
-    'dueDate (and optionally dueTime) to schedule the task, repeat to make ' +
-    'it recurring, and project to name the project. This tool cannot read ' +
-    'tasks or projects.',
+    'dueDate (and optionally dueTime) to schedule the task, repeat to make it ' +
+    'recurring, and project to name the project. Use deadlineDate (and optionally ' +
+    'deadlineTime) for when the work is due and estimateMinutes for how long it ' +
+    'takes. This tool cannot read tasks or projects.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -102,6 +105,28 @@ export const CREATE_TASK_TOOL: McpToolDefinition = {
         minLength: 1,
         maxLength: CAPTURE_PROJECT_MAX_CHARS,
       },
+      deadlineDate: {
+        type: 'string',
+        description:
+          "Optional day the work is due, as YYYY-MM-DD in the user's local calendar. " +
+          'Separate from dueDate, the day to work on it. Not with repeat.',
+        pattern: DUE_DATE_PATTERN,
+      },
+      deadlineTime: {
+        type: 'string',
+        description:
+          "Optional time on deadlineDate, as 24-hour HH:MM in the user's local " +
+          'time zone. Requires deadlineDate.',
+        pattern: DUE_TIME_PATTERN,
+      },
+      estimateMinutes: {
+        type: 'integer',
+        description:
+          `Optional estimate of the work in whole minutes, 1 to ${CAPTURE_ESTIMATE_MINUTES_MAX}. ` +
+          "Replaces the user's default estimate.",
+        minimum: 1,
+        maximum: CAPTURE_ESTIMATE_MINUTES_MAX,
+      },
     },
     required: ['title'],
     additionalProperties: false,
@@ -133,9 +158,25 @@ export type CreateTaskArgs = {
   repeat?: CaptureRepeat;
   /** Trimmed project title; matched on the importing device. */
   project?: string;
+  /** `YYYY-MM-DD`, a real calendar day. */
+  deadlineDate?: string;
+  /** `HH:MM`, 24-hour; only with `deadlineDate`. */
+  deadlineTime?: string;
+  /** Whole minutes, 1 to `CAPTURE_ESTIMATE_MINUTES_MAX`. */
+  estimateMinutes?: number;
 };
 
-const ARG_NAMES = ['title', 'notes', 'dueDate', 'dueTime', 'repeat', 'project'];
+const ARG_NAMES = [
+  'title',
+  'notes',
+  'dueDate',
+  'dueTime',
+  'repeat',
+  'project',
+  'deadlineDate',
+  'deadlineTime',
+  'estimateMinutes',
+];
 const REPEAT_KEYS = ['cycle', 'every', 'weekdays'];
 const DUE_DATE_RE = new RegExp(DUE_DATE_PATTERN);
 const DUE_TIME_RE = new RegExp(DUE_TIME_PATTERN);
@@ -177,6 +218,41 @@ const validateDue = (
     return 'dueTime must be a 24-hour time as HH:MM';
   }
   return { dueDate, dueTime };
+};
+
+/** `deadlineDate` and `deadlineTime` follow the same rules as `dueDate` and `dueTime`. */
+const validateDeadline = (
+  args: Record<string, unknown>,
+): Pick<CreateTaskArgs, 'deadlineDate' | 'deadlineTime'> | string => {
+  const { deadlineDate, deadlineTime } = args;
+  if (deadlineDate === undefined) {
+    return deadlineTime === undefined ? {} : 'deadlineTime requires deadlineDate';
+  }
+  if (
+    typeof deadlineDate !== 'string' ||
+    !DUE_DATE_RE.test(deadlineDate) ||
+    !isCalendarDay(deadlineDate)
+  ) {
+    return 'deadlineDate must be a calendar day as YYYY-MM-DD';
+  }
+  if (deadlineTime === undefined) return { deadlineDate };
+  if (typeof deadlineTime !== 'string' || !DUE_TIME_RE.test(deadlineTime)) {
+    return 'deadlineTime must be a 24-hour time as HH:MM';
+  }
+  return { deadlineDate, deadlineTime };
+};
+
+const validateEstimate = (value: unknown): number | undefined | string => {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < 1 ||
+    value > CAPTURE_ESTIMATE_MINUTES_MAX
+  ) {
+    return `estimateMinutes must be a whole number from 1 to ${CAPTURE_ESTIMATE_MINUTES_MAX}`;
+  }
+  return value;
 };
 
 const isOneOf = <T extends string>(list: readonly T[], value: unknown): value is T =>
@@ -254,10 +330,19 @@ export const validateCreateTaskArgs = (
   if (typeof repeat === 'string') return repeat;
   const project = validateProject(args.project);
   if (typeof project === 'object') return project.error;
+  const deadline = validateDeadline(args);
+  if (typeof deadline === 'string') return deadline;
+  // A repeat config has no deadline, so later occurrences could not keep it.
+  if (repeat && deadline.deadlineDate)
+    return 'deadlineDate cannot be combined with repeat';
+  const estimateMinutes = validateEstimate(args.estimateMinutes);
+  if (typeof estimateMinutes === 'string') return estimateMinutes;
   const extra = {
     ...dueOnly,
     ...(repeat ? { repeat } : {}),
     ...(project === undefined ? {} : { project }),
+    ...deadline,
+    ...(estimateMinutes === undefined ? {} : { estimateMinutes }),
   };
   if (args.notes === undefined) return { title, ...extra };
   if (typeof args.notes !== 'string') return 'notes must be a string';
@@ -296,6 +381,11 @@ export const runCreateTask = async (
       ...(args.dueTime === undefined ? {} : { dueTime: args.dueTime }),
       ...(args.repeat === undefined ? {} : { repeat: args.repeat }),
       ...(args.project === undefined ? {} : { project: args.project }),
+      ...(args.deadlineDate === undefined ? {} : { deadlineDate: args.deadlineDate }),
+      ...(args.deadlineTime === undefined ? {} : { deadlineTime: args.deadlineTime }),
+      ...(args.estimateMinutes === undefined
+        ? {}
+        : { estimateMinutes: args.estimateMinutes }),
       createdAt: Date.now(),
       client: grant.clientName,
     });

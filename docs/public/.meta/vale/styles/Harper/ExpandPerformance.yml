@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ExpandPerformance rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Expands the abbreviation `perf` to the full word `performance` for clarity.
+extends: existence
+message: "Use `performance` instead of `perf`"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "performance"
+tokens:
+  - "perf(?!['\\x{2019}]s\\b)"

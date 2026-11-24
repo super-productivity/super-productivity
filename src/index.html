@@ -113,7 +113,88 @@
       http-equiv="Content-Security-Policy"
     />
     <base href="./" />
+    <script>
+      // Launch screen: paint the app's frame (background, bottom bar space)
+      // before any JS bundle runs, so the app looks open at once and its
+      // content arrives in place. Colors come from the last session's frame
+      // (launch-frame.ts, LS.LAUNCH_FRAME), the nav geometry from the side
+      // nav's own keys; the defaults below cover a first launch.
+      (function () {
+        var root = document.documentElement;
+        var get = function (key) {
+          try {
+            return localStorage.getItem(key);
+          } catch (e) {
+            return null;
+          }
+        };
+        // LS.DARK_MODE: 'dark' | 'light' | 'system' (GlobalThemeService)
+        var mode = get('DARK_MODE');
+        if (mode === 'dark' || mode === 'light') {
+          root.setAttribute('data-sp-mode', mode);
+        }
+        var isDark =
+          mode === 'dark' ||
+          (mode !== 'light' &&
+            !!window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+        // LS.LAST_BOOT_MS (boot-splash.ts): the last start was quick, so this
+        // one likely is too; a tip would not stay up long enough to be read.
+        var lastBootMs = parseInt(get('SUP_LAST_BOOT_MS'), 10);
+        if (!isNaN(lastBootMs) && lastBootMs < 2000) {
+          root.setAttribute('data-sp-quick-boot', '');
+        }
+
+        // Mirrors MagicSideNavComponent: 190–400px, default 260, collapsed 56.
+        var width = parseInt(get('SUP_NAV_SIDEBAR_WIDTH'), 10);
+        width = isNaN(width) ? 260 : Math.max(190, Math.min(400, width));
+        var isCollapsed = get('SUP_NAV_SIDEBAR_EXPANDED') === 'false';
+        root.style.setProperty('--sp-nav-w', (isCollapsed ? 56 : width) + 'px');
+
+        try {
+          var frame = JSON.parse(get('SUP_LAUNCH_FRAME') || '{}')[
+            isDark ? 'dark' : 'light'
+          ];
+          if (frame) {
+            root.style.setProperty('--sp-bg', frame.bg);
+            root.style.setProperty('--sp-fg', frame.fg);
+            if (frame.backdrop) {
+              root.style.setProperty('--sp-backdrop', frame.backdrop);
+            }
+            if (frame.bottomBar) {
+              root.style.setProperty('--sp-bottom', frame.bottomBar + 'px');
+            }
+            if (frame.isRtl) {
+              root.setAttribute('data-sp-rtl', '');
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
     <style type="text/css">
+      /* Defaults: the default theme's --bg and text colors, and
+         the 44px phone bottom bar (MobileBottomNavComponent). */
+      :root {
+        --sp-bg: #131314;
+        --sp-fg: #e6e6e6;
+        --sp-backdrop: none;
+        --sp-nav-w: 260px;
+        --sp-bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root:not([data-sp-mode='dark']) {
+          --sp-bg: #f8f8f7;
+          --sp-fg: #2c2c2c;
+        }
+      }
+
+      :root[data-sp-mode='light'] {
+        --sp-bg: #f8f8f7;
+        --sp-fg: #2c2c2c;
+      }
+
       html,
       body {
         height: 100%;
@@ -123,102 +204,176 @@
         height: 100%;
         margin: 0;
         padding: 0;
-        background: rgb(18, 18, 18);
-        color: #fff;
+        background: var(--sp-bg);
+        color: var(--sp-fg);
       }
 
-      .loading-full-page-wrapper {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
+      /* A sibling of <app-root>, so bootstrapping does not wipe it. When the
+         shell renders, on phones it uncovers the bottom bar and keeps covering
+         only the content area (showShellUnderBootSplash); once data is loaded,
+         it fades out (fadeOutBootSplash, both in AppComponent). z-index stays
+         below the CDK overlay (1000): startup dialogs show above it. */
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        background: var(--sp-bg);
+        color: var(--sp-fg);
         cursor: grab;
         -webkit-app-region: drag;
+        /* Short: the content below is ready; the fade only softens the cut. */
+        transition: opacity 180ms cubic-bezier(0.4, 0, 1, 1);
       }
 
-      .loading-full-page-wrapper:active {
+      #app-splash::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--sp-backdrop);
+        pointer-events: none;
+      }
+
+      #app-splash:active {
         cursor: grabbing;
       }
 
-      .app-loading {
-        position: fixed;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
+      /* Phones: steps back to the content area, so the bottom bar can slide
+         up and be used while data loads. Below the navs
+         (--z-mobile-bottom-nav 50, --z-side-nav 60): the add task button
+         reaches up into the content area. Desktop keeps the whole window
+         covered: the side nav shows as the splash fades out. */
+      @media (max-width: 599px) {
+        #app-splash.is-shell-shown {
+          z-index: 49;
+          background: none;
+          pointer-events: none;
+          -webkit-app-region: no-drag;
+        }
+
+        #app-splash.is-shell-shown::before {
+          display: none;
+        }
+
+        /* Fixed, so the backdrop lines up with the app's full-window one. */
+        #app-splash.is-shell-shown .app-loading {
+          background:
+            var(--sp-backdrop) fixed,
+            var(--sp-bg);
+          pointer-events: auto;
+          -webkit-app-region: drag;
+        }
       }
 
+      #app-splash.is-hiding {
+        opacity: 0;
+        pointer-events: none;
+        -webkit-app-region: no-drag;
+      }
+
+      /* The content area, where the page will appear. The tip is shifted back
+         by half the nav (--sp-shift), so it sits centred in the window. */
+      .app-loading {
+        --sp-shift: calc(var(--sp-nav-w) / -2);
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: var(--sp-nav-w);
+        right: 0;
+      }
+
+      [data-sp-rtl] .app-loading {
+        --sp-shift: calc(var(--sp-nav-w) / 2);
+        left: 0;
+        right: var(--sp-nav-w);
+      }
+
+      @media (max-width: 599px) {
+        /* Above where the bottom bar will be. */
+        .app-loading,
+        [data-sp-rtl] .app-loading {
+          --sp-shift: 0px;
+          left: 0;
+          right: 0;
+          bottom: var(--sp-bottom);
+        }
+
+        /* No nav beside it here: the full width is free. */
+        .app-loading .productivity-tip {
+          max-width: calc(100% - 48px);
+        }
+      }
+
+      /* Centred on the window, not the content area: that is where the Android
+         system splash draws the same icon (android/.../drawable/ic_splash.xml),
+         whatever the bar and inset sizes, so the hand-off cannot make it jump;
+         and it stays put when the bottom bar is uncovered. */
       .app-loading .logo {
         position: fixed;
         left: 50%;
         top: 50%;
-        transform: translate(-50%, -50%);
-        width: 90px;
-        height: 90px;
+        width: 72px;
+        height: 72px;
+        margin: -36px 0 0 -36px;
       }
 
       .app-loading .logo path {
-        fill: #fff;
-      }
-
-      @media (prefers-color-scheme: light) {
-        body {
-          background: transparent;
-          background-image: none;
-          color: #000000;
-        }
-
-        .app-loading .logo path {
-          fill: #000;
-        }
-      }
-
-      .app-loading .spinner {
-        position: relative;
-        margin: 100px auto;
-        width: 120px;
-        height: 120px;
+        fill: var(--sp-fg);
       }
 
       .app-loading .spinner-pulse {
-        position: absolute;
+        position: fixed;
         top: 50%;
         left: 50%;
-        width: 140px;
-        height: 140px;
-        margin: -70px 0 0 -70px;
+        width: 112px;
+        height: 112px;
+        margin: -56px 0 0 -56px;
         border-radius: 50%;
         background-color: #6495ed;
         opacity: 0;
         animation: sp-pulse 2s ease-in-out infinite;
       }
 
+      /* Quiet but readable. The short delay only skips near-instant starts,
+         where a tip would flash; slow starts get almost the whole load to read it.
+         Not shown at all when the last start was quick (data-sp-quick-boot):
+         the splash would be gone before it could be read. */
       .productivity-tip {
-        text-align: center;
         position: absolute;
-        left: 50%;
-        bottom: 70%;
-        width: 400px;
-        max-width: 80vw;
-        transform: translate(-50%);
-        padding-bottom: 10px;
+        left: calc(50% + var(--sp-shift));
+        bottom: 10%;
+        width: 360px;
+        max-width: max(200px, calc(100% - 48px - var(--sp-nav-w)));
+        transform: translateX(-50%);
+        text-align: center;
+        opacity: 0.85;
+        animation: sp-fade-in 400ms cubic-bezier(0, 0, 0.2, 1) 400ms backwards;
       }
 
       .app-loading .productivity-tip h2#heading {
         font:
-          500 20px/32px 'Open Sans',
+          500 14px/20px 'Open Sans',
           'Helvetica Neue',
           sans-serif;
-        margin: 0 0 8px !important;
+        margin: 0 0 4px !important;
         color: inherit;
       }
 
       .app-loading .productivity-tip p {
         font:
-          400 14px/20px 'Open Sans',
+          400 13px/19px 'Open Sans',
           'Helvetica Neue',
           sans-serif;
-        margin: 0 0 8px !important;
+        margin: 0 !important;
+      }
+
+      [data-sp-quick-boot] .productivity-tip {
+        display: none;
+      }
+
+      @keyframes sp-fade-in {
+        from {
+          opacity: 0;
+        }
       }
 
       @keyframes sp-pulse {
@@ -228,48 +383,55 @@
           transform: scale(0.8);
         }
         50% {
-          opacity: 0.15;
+          opacity: 0.12;
           transform: scale(1);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .productivity-tip,
+        .app-loading .spinner-pulse {
+          animation: none;
         }
       }
     </style>
   </head>
   <body class="mat-typography">
-    <app-root>
-      <div class="loading-full-page-wrapper">
-        <div class="app-loading">
-          <div class="productivity-tip">
-            <h2 id="heading">Heading</h2>
-            <p id="text">Text</p>
-          </div>
-
-          <div class="spinner">
-            <div class="spinner-pulse"></div>
-          </div>
-
-          <svg
-            class="logo"
-            viewBox="0 0 64 64"
-          >
-            <path
-              d="M 0.65537046,34.582787 32.452267,63.855301 63.791548,0.94356422 30.222644,47.722023 Z"
-              id="path3395"
-              style="
-                fill-opacity: 1;
-                fill-rule: evenodd;
-                stroke: none;
-                stroke-width: 1.46761858;
-                stroke-linecap: butt;
-                stroke-linejoin: bevel;
-                stroke-miterlimit: 13.80000019;
-                stroke-dasharray: none;
-                stroke-opacity: 1;
-              "
-            />
-          </svg>
+    <app-root></app-root>
+    <div
+      id="app-splash"
+      class="loading-full-page-wrapper"
+    >
+      <div class="app-loading">
+        <div class="productivity-tip">
+          <h2 id="heading">Heading</h2>
+          <p id="text">Text</p>
         </div>
+
+        <div class="spinner-pulse"></div>
+
+        <svg
+          class="logo"
+          viewBox="0 0 64 64"
+        >
+          <path
+            d="M 0.65537046,34.582787 32.452267,63.855301 63.791548,0.94356422 30.222644,47.722023 Z"
+            id="path3395"
+            style="
+              fill-opacity: 1;
+              fill-rule: evenodd;
+              stroke: none;
+              stroke-width: 1.46761858;
+              stroke-linecap: butt;
+              stroke-linejoin: bevel;
+              stroke-miterlimit: 13.80000019;
+              stroke-dasharray: none;
+              stroke-opacity: 1;
+            "
+          />
+        </svg>
       </div>
-    </app-root>
+    </div>
     <noscript>Please enable JavaScript to use this application.</noscript>
     <script>
       // Browser compatibility check — must use ES5 syntax only.
@@ -292,7 +454,8 @@
           var el = document.querySelector('.app-loading');
           if (el) {
             el.innerHTML =
-              '<div style="text-align:center;padding:32px 24px;max-width:400px">' +
+              '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);' +
+              'width:min(400px,calc(100% - 48px));text-align:center">' +
               '<h2 style="font:500 20px/28px sans-serif;margin:0 0 16px">Browser Update Required</h2>' +
               '<p style="font:400 14px/22px sans-serif;margin:0 0 12px">' +
               'Super Productivity requires a newer browser version to run.' +

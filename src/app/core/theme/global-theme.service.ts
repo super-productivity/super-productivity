@@ -317,9 +317,6 @@ export class GlobalThemeService {
 
   private _setDarkTheme(isDarkTheme: boolean): void {
     this._materialCssVarsService.setDarkTheme(isDarkTheme);
-    this._setChartTheme(isDarkTheme).catch((err) => {
-      Log.warn('Failed to set chart theme', err);
-    });
     // this._materialCssVarsService.setDarkTheme(true);
     // this._materialCssVarsService.setDarkTheme(false);
   }
@@ -621,39 +618,6 @@ export class GlobalThemeService {
         this.document.body.classList.add(BodyClass.isTouchPrimary);
       }
     }
-  }
-
-  private async _setChartTheme(isDarkTheme: boolean): Promise<void> {
-    const { ThemeService } = await import('ng2-charts');
-
-    const chartThemeService = this._environmentInjector.get(ThemeService);
-
-    const overrides: import('chart.js').ChartConfiguration['options'] = isDarkTheme
-      ? {
-          scales: {
-            x: {
-              ticks: {
-                color: 'white',
-              },
-              grid: {
-                color: 'rgba(255,255,255,0.1)',
-              },
-            },
-
-            y: {
-              ticks: {
-                color: 'white',
-              },
-              grid: {
-                color: 'rgba(255,255,255,0.1)',
-              },
-            },
-          },
-        }
-      : {
-          scales: {},
-        };
-    chartThemeService.setColorschemesOptions(overrides);
   }
 
   /**

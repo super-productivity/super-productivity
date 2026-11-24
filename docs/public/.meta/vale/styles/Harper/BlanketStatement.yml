@@ -1,0 +1,19 @@
+---
+# Generated from Harper's BlanketStatement rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects common errors in the phrase `blanket statement`.
+extends: existence
+message: "Use the more idiomatic phrasing."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "blanket statement"
+tokens:
+  - "blanketed(?!\\s*\\n\\s*\\n)\\s+statement(?!['\\x{2019}]s\\b)"

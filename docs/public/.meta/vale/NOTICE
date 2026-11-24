@@ -1,0 +1,18 @@
+# Third-party notices
+
+## Harper
+
+The rules in `styles/Harper/` and the dictionary in `styles/config/dictionaries/harper.dict` are derived from [Harper][harper].
+Harper is Copyright (c) Automattic, Inc. and contributors.
+Licensed under the Apache License, Version 2.0.
+Full license texts: `styles/Harper/LICENSE` and `styles/config/dictionaries/LICENSE`.
+
+## signs-of-ai-writing
+
+The rules in `styles/signs-of-ai-writing/` are adapted from [vale-signs-of-ai-writing][signs-of-ai-writing] by ammil-industries.
+Licensed under the Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0), <https://creativecommons.org/licenses/by-sa/4.0/>.
+Any changes made to these files in this repository are shared under the same license.
+Full license text: `styles/signs-of-ai-writing/LICENSE`.
+
+[harper]: https://github.com/Automattic/harper
+[signs-of-ai-writing]: https://github.com/ammil-industries/vale-signs-of-ai-writing

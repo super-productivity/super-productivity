@@ -1,7 +1,5 @@
 import { JiraIssue, JiraIssueReduced } from './providers/jira/jira-issue.model';
 import { JiraCfg } from './providers/jira/jira.model';
-import { GitlabCfg } from './providers/gitlab/gitlab.model';
-import { GitlabIssue } from './providers/gitlab/gitlab-issue.model';
 import { CaldavIssue, CaldavIssueReduced } from './providers/caldav/caldav-issue.model';
 import { CaldavCfg } from './providers/caldav/caldav.model';
 import { OpenProjectCfg } from './providers/open-project/open-project.model';
@@ -9,7 +7,7 @@ import {
   OpenProjectWorkPackage,
   OpenProjectWorkPackageReduced,
 } from './providers/open-project/open-project-issue.model';
-// Redmine is now a plugin — no built-in Cfg/Issue types needed
+// GitLab and Redmine are now plugins — no built-in Cfg/Issue types needed
 // Trello is now a plugin — no built-in Cfg/Issue types needed
 import { EntityState } from '@ngrx/entity';
 import {
@@ -37,7 +35,6 @@ export interface BaseIssueProviderCfg {
 // typia validator would treat a synced task/provider using the new key as corruption.
 export type BuiltInIssueProviderKey =
   | 'JIRA'
-  | 'GITLAB'
   | 'CALDAV'
   | 'ICAL'
   | 'OPEN_PROJECT'
@@ -52,7 +49,8 @@ export type MigratedIssueProviderKey =
   | 'TRELLO'
   | 'AZURE_DEVOPS'
   | 'REDMINE'
-  | 'NEXTCLOUD_DECK';
+  | 'NEXTCLOUD_DECK'
+  | 'GITLAB';
 
 // Plugin issue provider keys use a 'plugin:' prefix to avoid collision
 export type PluginIssueProviderKey = `plugin:${string}`;
@@ -71,7 +69,6 @@ export const isPluginIssueProvider = (
 
 const BUILT_IN_KEYS: ReadonlySet<string> = new Set<BuiltInIssueProviderKey>([
   'JIRA',
-  'GITLAB',
   'CALDAV',
   'ICAL',
   'OPEN_PROJECT',
@@ -87,6 +84,7 @@ const MIGRATED_KEYS: ReadonlySet<string> = new Set<MigratedIssueProviderKey>([
   'AZURE_DEVOPS',
   'REDMINE',
   'NEXTCLOUD_DECK',
+  'GITLAB',
 ]);
 
 export const isValidIssueProviderKey = (key: string): key is IssueProviderKey => {
@@ -95,7 +93,6 @@ export const isValidIssueProviderKey = (key: string): key is IssueProviderKey =>
 
 export type IssueIntegrationCfg =
   | JiraCfg
-  | GitlabCfg
   | CaldavCfg
   | CalendarProviderCfg
   | OpenProjectCfg
@@ -110,7 +107,6 @@ export enum IssueLocalState {
 export interface IssueIntegrationCfgs {
   // should be the same as key IssueProviderKey
   JIRA?: JiraCfg;
-  GITLAB?: GitlabCfg;
   CALDAV?: CaldavCfg;
   CALENDAR?: CalendarProviderCfg;
   OPEN_PROJECT?: OpenProjectCfg;
@@ -119,7 +115,6 @@ export interface IssueIntegrationCfgs {
 
 export type IssueData =
   | JiraIssue
-  | GitlabIssue
   | CaldavIssue
   | ICalIssue
   | OpenProjectWorkPackage
@@ -128,7 +123,6 @@ export type IssueData =
 
 export type IssueDataReduced =
   | JiraIssueReduced
-  | GitlabIssue
   | OpenProjectWorkPackageReduced
   | CaldavIssueReduced
   | ICalIssueReduced
@@ -138,21 +132,19 @@ export type IssueDataReduced =
 export type IssueDataReducedMap = {
   [K in IssueProviderKey]: K extends 'JIRA'
     ? JiraIssueReduced
-    : K extends 'GITLAB'
-      ? GitlabIssue
-      : K extends 'CALDAV'
-        ? CaldavIssueReduced
-        : K extends 'ICAL'
-          ? ICalIssueReduced
-          : K extends 'OPEN_PROJECT'
-            ? OpenProjectWorkPackageReduced
-            : K extends 'PLAINSPACE'
-              ? PlainspaceIssue
-              : K extends MigratedIssueProviderKey
+    : K extends 'CALDAV'
+      ? CaldavIssueReduced
+      : K extends 'ICAL'
+        ? ICalIssueReduced
+        : K extends 'OPEN_PROJECT'
+          ? OpenProjectWorkPackageReduced
+          : K extends 'PLAINSPACE'
+            ? PlainspaceIssue
+            : K extends MigratedIssueProviderKey
+              ? PluginSearchResult
+              : K extends PluginIssueProviderKey
                 ? PluginSearchResult
-                : K extends PluginIssueProviderKey
-                  ? PluginSearchResult
-                  : never;
+                : never;
 };
 
 // TODO: add issue model to the IssueDataReducedMap
@@ -208,8 +200,10 @@ export interface IssueProviderGithub extends IssueProviderBase {
   pluginConfig: Record<string, unknown>;
 }
 
-export interface IssueProviderGitlab extends IssueProviderBase, GitlabCfg {
+export interface IssueProviderGitlab extends IssueProviderBase {
   issueProviderKey: 'GITLAB';
+  pluginId: string;
+  pluginConfig: Record<string, unknown>;
 }
 
 export interface IssueProviderCaldav extends IssueProviderBase, CaldavCfg {

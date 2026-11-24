@@ -17,7 +17,15 @@ import {
   parseCaptureRepeat,
   toCaptureRepeatCfg,
 } from './capture-repeat-cfg';
-import { parseDueDay, parseDueTime, toSchedule, toStartTime } from './capture-schedule';
+import {
+  parseDueDay,
+  parseDueTime,
+  parseEstimateMinutes,
+  toDeadline,
+  toSchedule,
+  toStartTime,
+} from './capture-schedule';
+import { getDeadlineAutoPlanFields } from '../util/get-deadline-auto-plan-fields';
 import { NativeCaptureSource } from '../native-capture/native-capture-importer.service';
 
 /** Never rename: installs keep their receipts under it. */
@@ -51,6 +59,12 @@ export interface AgentCapture {
     link?: string;
     /** Wanted project title; resolved against this device's projects on create. */
     project?: string;
+    /** `YYYY-MM-DD`; a calendar day. */
+    deadlineDay?: string;
+    /** `[hours, minutes]` on `deadlineDay`, in this device's time zone. */
+    deadlineTime?: [number, number];
+    /** Whole minutes; replaces the default estimate. */
+    estimateMinutes?: number;
   } | null;
 }
 
@@ -70,6 +84,8 @@ export interface AgentCaptureRun {
    * mid-run is never the target.
    */
   getTargetProjects: () => Pick<Project, 'id' | 'title'>[];
+  /** With `todayStr`: decides whether a deadline today plans the task for today. */
+  startOfNextDayDiffMs: number;
   /** Throws SyncEpochChangedError once the account, provider or password changed. */
   assertUnchanged: (context: string) => void;
 }
@@ -125,6 +141,10 @@ export const createSuperSyncCaptureSource = (
           active.defaultEstimate,
           active.defaultRemindOption,
           projectId,
+          {
+            todayStr: () => active.todayStr,
+            getStartOfNextDayDiffMs: () => active.startOfNextDayDiffMs,
+          },
         ),
       );
       const repeatAction = addRepeatCfgAction(capture, active, projectId);
@@ -204,6 +224,27 @@ const toDue = (
 };
 
 /**
+ * Optional v1 fields, dropped when invalid like `toDue`. A deadline is dropped
+ * from a recurring capture: a repeat config has no deadline (the server never
+ * seals that combination).
+ */
+const toDeadlineAndEstimate = (
+  p: Record<string, unknown>,
+): Pick<
+  NonNullable<AgentCapture['task']>,
+  'deadlineDay' | 'deadlineTime' | 'estimateMinutes'
+> => {
+  const estimateMinutes = parseEstimateMinutes(p.estimateMinutes);
+  const estimate = estimateMinutes ? { estimateMinutes } : {};
+  const deadlineDay = parseDueDay(p.deadlineDate);
+  if (!deadlineDay || p.repeat !== undefined) return estimate;
+  const deadlineTime = parseDueTime(p.deadlineTime);
+  return deadlineTime
+    ? { deadlineDay, deadlineTime, ...estimate }
+    : { deadlineDay, ...estimate };
+};
+
+/**
  * Optional v1 field (Android share): only http(s), so a crafted capture can't
  * add a `javascript:` or `file:` link.
  */
@@ -278,20 +319,23 @@ export const toCaptureTask = (
     ...(repeat ? { repeat } : {}),
     ...(link ? { link } : {}),
     ...(project ? { project } : {}),
+    ...toDeadlineAndEstimate(p),
   };
 };
 
 /**
- * One addTask for a validated capture in the resolved project; its link, if
- * any, rides along.
+ * One addTask for a validated capture in the resolved project; its link and deadline
+ * ride along. When today is given, a deadline today plans the task for today.
  */
 export const addCaptureTaskAction = (
   capture: AgentCapture,
   defaultEstimate: number,
   defaultRemindOption: TaskReminderOptionId,
   projectId: string,
+  today?: Parameters<typeof getDeadlineAutoPlanFields>[0],
 ): ReturnType<typeof TaskSharedActions.addTask> => {
   const task = capture.task as NonNullable<AgentCapture['task']>;
+  const deadline = toDeadline(task);
   return TaskSharedActions.addTask({
     task: {
       ...DEFAULT_TASK,
@@ -300,8 +344,9 @@ export const addCaptureTaskAction = (
       notes: task.notes ?? '',
       projectId,
       created: task.createdAt,
-      timeEstimate: defaultEstimate,
+      timeEstimate: task.estimateMinutes ? task.estimateMinutes * 60000 : defaultEstimate,
       ...toSchedule(task, defaultRemindOption),
+      ...deadline,
       // Inside the addTask, so the capture stays one op. LINK is fixed: an
       // IMG attachment would load the URL as soon as the task is shown.
       attachments: task.link
@@ -321,6 +366,9 @@ export const addCaptureTaskAction = (
     isAddToBacklog: false,
     isAddToBottom: true,
     isIgnoreShortSyntax: true,
+    ...(today && task.deadlineDay
+      ? getDeadlineAutoPlanFields(today, deadline.deadlineDay, deadline.deadlineWithTime)
+      : {}),
   });
 };
 
@@ -342,7 +390,9 @@ const addRepeatCfgAction = (
     projectId,
     startDay: task.dueDay ?? run.todayStr,
     startTime,
-    defaultEstimate: run.defaultEstimate,
+    defaultEstimate: task.estimateMinutes
+      ? task.estimateMinutes * 60000
+      : run.defaultEstimate,
     remindOption: run.defaultRemindOption,
   });
   return addTaskRepeatCfgToTask({

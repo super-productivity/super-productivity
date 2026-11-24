@@ -10,6 +10,14 @@
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": [],
+  "dataSharing": [
+    {
+      "recipient": "Linear",
+      "hosts": ["api.linear.app"],
+      "data": ["credentials"],
+      "privacyPolicyUrl": "https://linear.app/privacy"
+    }
+  ],
   "hooks": [],
   "i18n": {
     "languages": ["en"]

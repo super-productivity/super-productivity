@@ -41,6 +41,12 @@
           id="auth-forms"
           class="card"
         >
+          <p
+            id="connect-intro"
+            class="hidden"
+          >
+            Log in or register to connect your new device.
+          </p>
           <div class="tabs">
             <button
               class="tab-btn active"
@@ -257,6 +263,50 @@
           </div>
         </div>
 
+        <!-- Connect a new device (/?r=…), see connect.js -->
+        <div
+          id="connect-panel"
+          class="card hidden"
+        >
+          <h2 id="connect-title">Connect this device?</h2>
+          <p id="connect-account"></p>
+          <div
+            id="connect-details"
+            class="hidden"
+          >
+            <p>
+              <strong id="connect-device"></strong>
+              ·
+              <span id="connect-platform"></span>
+            </p>
+            <p
+              id="connect-code"
+              class="connect-code"
+            ></p>
+            <p>Connect only if your app shows this code right now.</p>
+            <div class="action-buttons">
+              <button
+                id="connect-approve-btn"
+                class="btn primary"
+              >
+                Connect
+              </button>
+              <button
+                id="connect-cancel-btn"
+                class="btn secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+          <button
+            id="connect-not-you-btn"
+            class="btn text-only"
+          >
+            Not you? Log out
+          </button>
+        </div>
+
         <!-- Account Settings -->
         <div
           id="account-settings"
@@ -317,6 +367,7 @@
       </footer>
     </div>
 
+    <script src="connect.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

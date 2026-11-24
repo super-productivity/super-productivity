@@ -66,6 +66,13 @@ Minimal manifest:
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": ["http"],
+  "dataSharing": [
+    {
+      "recipient": "Example",
+      "userServer": true,
+      "data": ["credentials", "userText"]
+    }
+  ],
   "hooks": [],
   "issueProvider": {
     "pollIntervalMs": 600000,
@@ -88,6 +95,11 @@ must name a built-in SVG icon (`BUILT_IN_SVG_ICONS` in
 Omit `issueProvider.issueProviderKey` for a new provider. The host assigns
 `plugin:<plugin-id>`. That field is reserved for repository-managed plugins that
 migrate an existing built-in key and its persisted configurations.
+
+`dataSharing` lists what the provider sends and to whom. It is shown when the user
+connects an account, so declare everything the provider can send; see
+[Declaring what your plugin sends](plugin-development.md#declaring-what-your-plugin-sends-datasharing).
+Bundled plugins must declare it (`electron/bundled-plugin-ids.test.cjs`).
 
 ## 2. Register the provider
 
@@ -245,7 +257,8 @@ For a bundled provider:
    plugin dir or in `packages/plugin-dev`) and commit the updated shared `packages/plugin-dev/package-lock.json`, or
    every build's `npm ci` fails.
 4. Add only English source strings; follow existing plugin i18n packaging.
-5. Update the issue-provider comparison in `docs/wiki/` in the same change.
+5. Update the issue-provider comparison in `docs/wiki/` in the same change (or its
+   `docs/public/` replacement once migrated); see the [documentation guide](documentation-guide.md).
 
 Uploaded community plugins do not need core registration and keep their
 `plugin:<plugin-id>` provider key.

@@ -13,6 +13,7 @@ import {
 } from '../../utils/sync-helpers';
 import { translationRegex, translationText } from '../../utils/i18n-strings';
 import { waitForAppReady, waitForStatePersistence } from '../../utils/waits';
+import { countWebdavWrites } from '../../utils/audit-webdav-helpers';
 
 const authorization = `Basic ${Buffer.from('admin:admin').toString('base64')}`;
 
@@ -43,7 +44,7 @@ test.describe('@webdav automatic file format rollout', () => {
       await work.addTask(title);
       await waitForStatePersistence(a.page);
       await sync.setupWebdavSync(config, { useProductFormatDefault: true });
-      await waitForSyncComplete(a.page, sync);
+      expect(await waitForSyncComplete(a.page, sync)).toBe('success');
 
       // Assert the real commit point before checking reload or another client.
       // Released clients join v2 without an opt-in, so a new folder stays v2.
@@ -62,12 +63,12 @@ test.describe('@webdav automatic file format rollout', () => {
       await waitForAppReady(a.page);
       await expect(a.page.locator('task').filter({ hasText: title })).toBeVisible();
       await sync.triggerSync();
-      await waitForSyncComplete(a.page, sync);
+      expect(await waitForSyncComplete(a.page, sync)).toBe('success');
       b = await setupSyncClient(browser, baseURL);
       const syncB = new SyncPage(b.page);
       await new WorkViewPage(b.page).waitForTaskList();
       await syncB.setupWebdavSync(config, { useProductFormatDefault: true });
-      await waitForSyncComplete(b.page, syncB);
+      expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
       await expect(b.page.locator('task').filter({ hasText: title })).toBeVisible();
       expect(await remoteStatus(request, `${remote}sync-ops.json`)).toBe(404);
     } finally {
@@ -97,7 +98,7 @@ test.describe('@webdav automatic file format rollout', () => {
         { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` },
         { useProductFormatDefault: true },
       );
-      await waitForSyncComplete(a.page, sync);
+      expect(await waitForSyncComplete(a.page, sync)).toBe('success');
 
       // With its ops synced, the client seeds the empty target with a
       // SERVER_MIGRATION SYNC_IMPORT through the snapshot upload path.
@@ -105,7 +106,7 @@ test.describe('@webdav automatic file format rollout', () => {
         { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${nextFolder}` },
         { isReconfigure: true, useProductFormatDefault: true },
       );
-      await waitForSyncComplete(a.page, sync);
+      expect(await waitForSyncComplete(a.page, sync)).toBe('success');
       const monolith = await readPrefixedFile<{
         version: number;
         state: unknown;
@@ -186,7 +187,7 @@ test.describe('@webdav automatic file format rollout', () => {
       expect(JSON.stringify(monolith.state)).toContain(title);
       expect(await remoteStatus(request, `${remote}sync-ops.json`)).toBe(404);
       await sync.triggerSync();
-      await waitForSyncComplete(a.page, sync);
+      expect(await waitForSyncComplete(a.page, sync)).toBe('success');
       await expect(a.page.locator('task').filter({ hasText: title })).toBeVisible();
     } finally {
       await closeContextsSafely(a.context);
@@ -212,7 +213,7 @@ test.describe('@webdav automatic file format rollout', () => {
       await workA.addTask(original);
       await waitForStatePersistence(a.page);
       await syncA.setupWebdavSync({ ...config, isUseSplitSyncFiles: true });
-      await waitForSyncComplete(a.page, syncA);
+      expect(await waitForSyncComplete(a.page, syncA)).toBe('success');
       const ops = await readPrefixedFile<{
         version: number;
         snapshotRef: { file: string };
@@ -243,7 +244,7 @@ test.describe('@webdav automatic file format rollout', () => {
       const workB = new WorkViewPage(b.page);
       await workB.waitForTaskList();
       await syncB.setupWebdavSync(config, { useProductFormatDefault: true });
-      await waitForSyncComplete(b.page, syncB);
+      expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
       await expect(b.page.locator('task').filter({ hasText: original })).toBeVisible();
 
       // After a restart, only discovery can keep this device on v3.
@@ -254,7 +255,7 @@ test.describe('@webdav automatic file format rollout', () => {
       await workB.addTask(added);
       await waitForStatePersistence(b.page);
       await syncB.triggerSync();
-      await waitForSyncComplete(b.page, syncB);
+      expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
       const joinedOps = await readPrefixedFile<{ version: number; recentOps: unknown[] }>(
         request,
         `${remote}sync-ops.json`,
@@ -269,7 +270,7 @@ test.describe('@webdav automatic file format rollout', () => {
       );
       expect(tombstone).toMatchObject({ version: 3, format: 'split' });
       await syncA.triggerSync();
-      await waitForSyncComplete(a.page, syncA);
+      expect(await waitForSyncComplete(a.page, syncA)).toBe('success');
       await expect(a.page.locator('task').filter({ hasText: added })).toBeVisible();
 
       // The joining device synced v3 while its Surgical sync setting stayed off.
@@ -306,7 +307,7 @@ test.describe('@webdav automatic file format rollout', () => {
         await workA.addTask(original);
         await waitForStatePersistence(a.page);
         await syncA.setupWebdavSync({ ...config, isUseSplitSyncFiles: false });
-        await waitForSyncComplete(a.page, syncA);
+        expect(await waitForSyncComplete(a.page, syncA)).toBe('success');
         const legacy = await readPrefixedFile<{
           version: number;
           state: { globalConfig: { sync: { isUseSplitSyncFiles?: boolean } } };
@@ -329,7 +330,7 @@ test.describe('@webdav automatic file format rollout', () => {
           { ...config, isUseSplitSyncFiles: false },
           { useProductFormatDefault: choice === 'default' },
         );
-        await waitForSyncComplete(b.page, syncB);
+        expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
         await expect(b.page.locator('task').filter({ hasText: original })).toBeVisible();
         if (choice === 'migrate') {
           // First hydrate the existing config, then explicitly opt into migration.
@@ -340,17 +341,19 @@ test.describe('@webdav automatic file format rollout', () => {
           );
           // Migration publishes an equivalent v3 baseline, then defers appending
           // until the next download applies its new revision (#10395).
-          await waitForSyncComplete(b.page, syncB, 30000, {
-            allowResponseOnlyCompletion: true,
-          });
+          expect(
+            await waitForSyncComplete(b.page, syncB, 30000, {
+              allowResponseOnlyCompletion: true,
+            }),
+          ).toBe('success');
           await syncB.triggerSync();
-          await waitForSyncComplete(b.page, syncB);
+          expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
         }
         const added = `Joined writer ${folder}`;
         await workB.addTask(added);
         await waitForStatePersistence(b.page);
         await syncB.triggerSync();
-        await waitForSyncComplete(b.page, syncB);
+        expect(await waitForSyncComplete(b.page, syncB)).toBe('success');
         if (choice === 'migrate') {
           const ops = await readPrefixedFile<{ version: number; recentOps: unknown[] }>(
             request,
@@ -384,7 +387,7 @@ test.describe('@webdav automatic file format rollout', () => {
             ).toBe(404);
           }
           await syncA.triggerSync();
-          await waitForSyncComplete(a.page, syncA);
+          expect(await waitForSyncComplete(a.page, syncA)).toBe('success');
           await expect(a.page.locator('task').filter({ hasText: added })).toBeVisible();
         }
         await b.page.reload();
@@ -425,7 +428,7 @@ test.describe('@webdav automatic file format rollout', () => {
             syncFolderPath: `/${seedFolder}`,
             isUseSplitSyncFiles: false,
           });
-          await waitForSyncComplete(seed.page, seedSync);
+          expect(await waitForSyncComplete(seed.page, seedSync)).toBe('success');
           const legacyResponse = await request.get(
             `${root}${seedFolder}/DEV/sync-data.json`,
             {
@@ -443,6 +446,7 @@ test.describe('@webdav automatic file format rollout', () => {
           await waitForStatePersistence(joining.page);
           let legacyReads = 0;
           let concurrentV2Created = false;
+          const targetPuts = countWebdavWrites(joining.page, `${folder}/DEV`);
           let releaseLegacyRead: (() => void) | undefined;
           await joining.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
             if (route.request().method() === 'GET' && ++legacyReads === 6) {
@@ -486,6 +490,11 @@ test.describe('@webdav automatic file format rollout', () => {
             headers: { Authorization: authorization },
           });
           expect(await preserved.text()).toBe(legacy);
+          // Not migrated and not merged over: the app wrote no sync file here.
+          expect(targetPuts()).toBe(0);
+          // Pinned (measured 2026-11) to catch unexpected extra round-trips; the
+          // real guards are the zero writes and the unchanged remote file.
+          expect(legacyReads).toBe(6);
           expect(
             (
               await request.get(`${remote}sync-ops.json`, {
@@ -495,7 +504,7 @@ test.describe('@webdav automatic file format rollout', () => {
           ).toBe(404);
           if (switchTarget) {
             await sync.triggerSync();
-            await waitForSyncComplete(joining.page, sync);
+            expect(await waitForSyncComplete(joining.page, sync)).toBe('success');
             const nextRemote = `${root}${nextFolder}/DEV/`;
             const monolith = await readPrefixedFile<{ version: number; state: unknown }>(
               request,
@@ -509,6 +518,8 @@ test.describe('@webdav automatic file format rollout', () => {
           await expect(
             joining.page.locator('task').filter({ hasText: localTitle }),
           ).toBeVisible();
+          expect(targetPuts()).toBe(0);
+          expect(legacyReads).toBe(6);
         } finally {
           await closeContextsSafely(seed.context, joining?.context);
         }
@@ -570,7 +581,7 @@ test.describe('@webdav automatic file format rollout', () => {
       }
       await a.page.unroute(routePattern);
       await sync.triggerSync();
-      await waitForSyncComplete(a.page, sync);
+      expect(await waitForSyncComplete(a.page, sync)).toBe('success');
       const monolith = await readPrefixedFile<{ version: number }>(
         request,
         `${remote}sync-data.json`,

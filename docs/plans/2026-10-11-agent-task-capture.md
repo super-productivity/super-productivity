@@ -102,6 +102,17 @@ and names the Inbox fallback; no project data reaches the assistant. The
 retry window keys on `project` too. The local `create_task` does not take it
 yet.
 
+Also added, on both tools: optional `deadlineDate` (`YYYY-MM-DD`),
+`deadlineTime` (`HH:MM`, needs `deadlineDate`) and `estimateMinutes` (whole
+minutes, 1–10080). Same rules as the due fields: optional v1 payload fields
+that released apps ignore, resolved in the importing device's time zone
+into `deadlineDay` or `deadlineWithTime` and `timeEstimate` inside the one
+`addTask` (the add-task bar's own way of setting a deadline at creation, so
+no `setDeadline` op), with the `addTask` auto-plan fields so a deadline of
+today plans the task for today. A deadline is refused with `repeat` (a
+repeat config has no deadline; the hosted import drops it), and the retry
+window keys on all three.
+
 ## Flow
 
 1. Settings → SuperSync → **"Let AI assistants add tasks"** (off by default).

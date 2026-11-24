@@ -15,6 +15,12 @@ import {
   waitForArchivePersistence,
   closeContextsSafely,
 } from '../../utils/sync-helpers';
+import { getArchiveYoungTaskIds } from '../../utils/supersync-helpers';
+import {
+  getArchiveYoungTask,
+  getStoreTagIdByTitle,
+  getStoreTask,
+} from '../../utils/audit-webdav-helpers';
 import { Page } from 'playwright';
 
 /**
@@ -103,6 +109,10 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     const task = taskPageA.getTaskByText(taskName).first();
     await tagPageA.assignTagToTask(task, tagName);
     await expect(tagPageA.getTagOnTask(task, tagName)).toBeVisible();
+    const taskId = await task.getAttribute('data-task-id');
+    expect(taskId).toBeTruthy();
+    const tagId = await getStoreTagIdByTitle(pageA, tagName);
+    expect(tagId).toBeTruthy();
     console.log('[Delete Tag] Client A created task with tag');
 
     // Mark task done and archive
@@ -116,7 +126,7 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Delete Tag] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -131,13 +141,23 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
 
     // Client B syncs (downloads archived task with tag)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Delete Tag] Client B synced, downloaded archived task');
 
     // Verify tag exists on Client B
     const tagExistsB = await tagPageB.tagExistsInSidebar(tagName);
     expect(tagExistsB).toBe(true);
     console.log('[Delete Tag] Verified tag exists on Client B');
+
+    // Precondition: B holds the archived task, still tagged. Without this the
+    // cascade below could pass on a client that never had the task at all.
+    await expect
+      .poll(async () => (await getArchiveYoungTask(pageB, taskId!))?.tagIds ?? null, {
+        timeout: 10000,
+        message: 'B must hold the archived task with its tag',
+      })
+      .toEqual([tagId]);
+    expect(await getArchiveYoungTaskIds(pageB)).toContain(taskId!);
 
     // --- Client A deletes the tag ---
     await tagPageA.deleteTag(tagName);
@@ -146,12 +166,12 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Delete Tag] Client A synced deletion');
 
     // Client B syncs
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Delete Tag] Client B synced');
 
     // --- Verify final state ---
@@ -162,7 +182,22 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
 
     const tagExistsBFinal = await tagPageB.tagExistsInSidebar(tagName);
     expect(tagExistsBFinal).toBe(false);
+    await expect(
+      pageB.locator('magic-side-nav').getByText(tagName, { exact: true }),
+    ).toHaveCount(0);
+    expect(await getStoreTagIdByTitle(pageB, tagName)).toBeNull();
     console.log('[Delete Tag] Tag deleted on Client B');
+
+    // The cascade: the archived task survives (it still has its project) with
+    // the deleted tag scrubbed, locally on A and via the remote op on B.
+    for (const page of [pageA, pageB]) {
+      await expect
+        .poll(async () => (await getArchiveYoungTask(page, taskId!))?.tagIds ?? null, {
+          timeout: 10000,
+          message: 'archived task must exist with the deleted tag removed',
+        })
+        .toEqual([]);
+    }
 
     // Reload Client B and verify no errors (archive should be cleaned)
     await pageB.reload();
@@ -236,6 +271,8 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
 
     // Mark task done
     const task = taskPageA.getTaskByText(taskName).first();
+    const taskId = await task.getAttribute('data-task-id');
+    expect(taskId).toBeTruthy();
     await taskPageA.markTaskAsDone(task);
     await pageA.waitForTimeout(500);
 
@@ -254,7 +291,7 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Delete Project] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -269,12 +306,24 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
 
     // Client B syncs (downloads project and archived task)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Delete Project] Client B synced');
 
     // Navigate to the project directly to verify it exists on Client B
     await projectPageB.navigateToProjectByName(projectName);
     console.log('[Delete Project] Verified project exists on Client B (navigated to it)');
+
+    // Precondition: A holds the archived project task too (not yet flushed to
+    // archive_old), so A's absence check below cannot pass vacuously.
+    await expect
+      .poll(async () => getArchiveYoungTaskIds(pageA), { timeout: 10000 })
+      .toContain(taskId!);
+
+    // Precondition: B holds the archived project task, so the delete below has
+    // something to cascade to.
+    await expect
+      .poll(async () => getArchiveYoungTaskIds(pageB), { timeout: 10000 })
+      .toContain(taskId!);
 
     // --- Client A deletes the project ---
     await projectPageA.deleteProject(projectName);
@@ -283,12 +332,12 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Delete Project] Client A synced deletion');
 
     // Client B syncs
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Delete Project] Client B synced');
 
     // --- Verify final state ---
@@ -307,6 +356,19 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     await expect(projectInSidebar).not.toBeVisible({ timeout: 3000 });
 
     console.log('[Delete Project] Project deleted on Client B');
+
+    // The cascade: the archived task is removed with its project on both
+    // clients (A locally, B through the remote op's archive handler).
+    for (const page of [pageA, pageB]) {
+      await expect
+        .poll(async () => getArchiveYoungTaskIds(page), {
+          timeout: 10000,
+          message: 'archived task of the deleted project must be gone',
+        })
+        .not.toContain(taskId!);
+      // Guards only against the task coming back to life in the live store.
+      expect(await getStoreTask(page, taskId!)).toBeNull();
+    }
     console.log('[Delete Project] ✓ Delete project with archived tasks synced correctly');
 
     // Cleanup
@@ -370,12 +432,18 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     const task2 = taskPageA.getTaskByText(task2Name).first();
     await tagPageA.assignTagToTask(task1, tagName);
     await tagPageA.assignTagToTask(task2, tagName);
+    const task1Id = await task1.getAttribute('data-task-id');
+    const task2Id = await task2.getAttribute('data-task-id');
+    expect(task1Id).toBeTruthy();
+    expect(task2Id).toBeTruthy();
+    const tagId = await getStoreTagIdByTitle(pageA, tagName);
+    expect(tagId).toBeTruthy();
     console.log('[Concurrent] Client A created 2 tasks with tag');
 
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Concurrent] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -383,6 +451,7 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     const syncPageB = new SyncPage(pageB);
     const workViewPageB = new WorkViewPage(pageB);
     const taskPageB = new TaskPage(pageB);
+    const tagPageB = new TagPage(pageB);
 
     await workViewPageB.waitForTaskList();
     await syncPageB.setupWebdavSync(WEBDAV_CONFIG);
@@ -390,7 +459,7 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
 
     // Client B syncs (downloads tasks with tag)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await expect(pageB.locator('task')).toHaveCount(2);
     console.log('[Concurrent] Client B downloaded 2 tasks');
 
@@ -412,19 +481,19 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     // --- Both clients sync ---
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Concurrent] Client A synced tag deletion');
 
     await waitForStatePersistence(pageB);
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Concurrent] Client B synced archive');
 
     // Sync again for eventual consistency
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Concurrent] Both synced again for consistency');
 
     // --- Verify final state ---
@@ -449,6 +518,37 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     const tagOnTask2 = tagPageA.getTagOnTask(task2AfterReload, tagName);
     await expect(tagOnTask2).not.toBeVisible({ timeout: 2000 });
     console.log('[Concurrent] Tag no longer on Task2');
+
+    // The tag is gone from B as well (store and sidebar), not only from A.
+    expect(await getStoreTagIdByTitle(pageB, tagName)).toBeNull();
+    expect(await tagPageB.tagExistsInSidebar(tagName)).toBe(false);
+    expect(await getStoreTagIdByTitle(pageA, tagName)).toBeNull();
+
+    for (const [label, page] of [
+      ['A', pageA],
+      ['B', pageB],
+    ] as const) {
+      // Task1: archived on both clients, out of the live list.
+      expect(await getStoreTask(page, task1Id!), `${label}: Task1 live`).toBeNull();
+      await expect
+        .poll(async () => getArchiveYoungTaskIds(page), {
+          timeout: 10000,
+          message: `${label}: Task1 must be archived`,
+        })
+        .toContain(task1Id!);
+      // Task2: still live, untagged.
+      const task2State = await getStoreTask(page, task2Id!);
+      expect(task2State, `${label}: Task2 live`).not.toBeNull();
+      expect(task2State!.tagIds).not.toContain(tagId!);
+      // #11466: A's archived copy used to keep the deleted tag id, because the
+      // remote archive write ran after A's own tag-delete cleanup.
+      const archivedTask1 = await getArchiveYoungTask(page, task1Id!);
+      expect(archivedTask1, `${label}: archived Task1`).not.toBeNull();
+      expect(
+        archivedTask1!.tagIds,
+        `${label}: archived Task1 must not keep the deleted tag id`,
+      ).not.toContain(tagId!);
+    }
 
     console.log(
       '[Concurrent] ✓ Concurrent delete tag and archive task resolved correctly',
