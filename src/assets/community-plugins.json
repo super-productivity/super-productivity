@@ -141,7 +141,12 @@
     "url": "https://github.com/giba0/memos-sync",
     "author": "giba0",
     "authorUrl": "https://github.com/giba0",
-    "id": "memos-sync"
+    "id": "memos-sync",
+    "release": {
+      "version": "0.5.0",
+      "downloadUrl": "https://github.com/giba0/memos-sync/releases/download/v0.5.0/memos-sync.zip",
+      "sha256": "046656e4fc548d88cfdab7d2b3ad631da3989da5b71ed5c789f558ccd487490d"
+    }
   },
   {
     "name": "YouTrack Importer for SuperProductivity",
