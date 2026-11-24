@@ -322,5 +322,32 @@
       "downloadUrl": "https://github.com/ptrckmgl/sp-gamify/releases/download/v1.1.1/sp-gamify.zip",
       "sha256": "6471e6b58b6557bf957772aec9afaa0529fc05554a7048fce19bca50845d728e"
     }
+  },
+  {
+    "name": "Habit Tracker",
+    "shortDescription": "Track habits, streaks, progress, and analytics.",
+    "url": "https://github.com/rushikeshdhatinge/super-productivity-habit-tracker",
+    "author": "Rushikesh Dhatinge",
+    "authorUrl": "https://github.com/rushikeshdhatinge",
+    "id": "habit-tracker",
+    "release": {
+      "version": "2.3.1",
+      "downloadUrl": "https://github.com/rushikeshdhatinge/super-productivity-habit-tracker/releases/download/v2.3.1/habit-tracker-v2.3.1.zip",
+      "sha256": "c1f590ed67aff8a142fb3bc7618f031b30dc0dd7d3300be9955cfa62458008e5"
+    }
+  },
+  {
+    "name": "AI Productivity Assistant",
+    "shortDescription": "AI-powered productivity assistant with multiple AI provider support.",
+    "url": "https://github.com/rushikeshdhatinge/super-productivity-ai-productivity-assistant",
+    "author": "Rushikesh Dhatinge",
+    "authorUrl": "https://github.com/rushikeshdhatinge",
+    "id": "ai-productivity-assistant",
+    "release": {
+      "version": "0.6.1",
+      "downloadUrl": "https://github.com/rushikeshdhatinge/super-productivity-ai-productivity-assistant/releases/download/v0.6.1/ai-productivity-assistant-v0.6.1.zip",
+      "sha256": "d11f3e95186ac5ffaee5b5620d87efbbe6a63c4b5f3b01ae193d0e34b1d40cf1"
+    }
   }
+
 ]
