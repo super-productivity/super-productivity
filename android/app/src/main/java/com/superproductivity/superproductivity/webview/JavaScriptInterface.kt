@@ -27,6 +27,7 @@ import com.superproductivity.superproductivity.service.ReminderNotificationHelpe
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.RepeatReminderCache
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
+import com.superproductivity.superproductivity.service.TimeEstimate
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.share.CaptureKeyStore
 import com.superproductivity.superproductivity.share.ShareUploadWorker
@@ -269,6 +270,22 @@ class JavaScriptInterface(
             // (exempt from the background-start ban) or, after a restore in a new
             // process, this comes from the JS recovery at launch or onResume.
             activity.startService(intent)
+        }
+    }
+
+    /**
+     * The estimate of the tracked task, so native can notify when it is
+     * exceeded while the WebView is paused (#11896). [timeEstimateMs] <= 0
+     * clears it. Title and body come translated from the web app.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setTrackingTimeEstimate(taskId: String, timeEstimateMs: Long, title: String, body: String) {
+        safeCall("Failed to set tracking time estimate") {
+            TrackingForegroundService.setTimeEstimate(
+                activity,
+                if (timeEstimateMs > 0) TimeEstimate(taskId, timeEstimateMs, title, body) else null
+            )
         }
     }
 
@@ -574,6 +591,13 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun getWidgetDoneQueue(): String? {
         return WidgetDoneQueue.getAndClear(activity)
+    }
+
+    /** Get the project selected by the most recent widget row tap and clear it. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getWidgetProjectToOpen(): String? {
+        return TaskListWidgetProvider.getAndClearProjectToOpen(activity)
     }
 
     /**

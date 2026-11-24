@@ -22,6 +22,8 @@ import { TaskService } from '../tasks/task.service';
 import { DEFAULT_TASK } from '../tasks/task.model';
 import { WorkContextType } from '../work-context/work-context.model';
 import { TODAY_TAG } from '../tag/tag.const';
+import { selectProjectFeatureState } from '../project/store/project.selectors';
+import { Project } from '../project/project.model';
 
 describe('AndroidCaptureImportService', () => {
   const id = '7DCC80FA-577A-4D99-B16E-15D4B8787B62';
@@ -51,7 +53,12 @@ describe('AndroidCaptureImportService', () => {
               }
             : null,
         },
-        provideMockStore({ selectors: [{ selector: selectTaskEntities, value: {} }] }),
+        provideMockStore({
+          selectors: [
+            { selector: selectTaskEntities, value: {} },
+            { selector: selectProjectFeatureState, value: { ids: [], entities: {} } },
+          ],
+        }),
         { provide: TaskService, useValue: taskService },
         {
           provide: DataInitStateService,
@@ -92,7 +99,9 @@ describe('AndroidCaptureImportService', () => {
       .map((args) => args[0] as ReturnType<typeof TaskSharedActions.addTask>)
       .filter((action) => action.type === TaskSharedActions.addTask.type);
 
-  const entries = (...list: { id: string; title: string }[]): string =>
+  const entries = (
+    ...list: { id: string; title: string; projectId?: string | null }[]
+  ): string =>
     JSON.stringify(list.map((e, i) => ({ v: 1, ...e, createdAt: i, source: 'overlay' })));
 
   beforeEach(() => {
@@ -144,6 +153,52 @@ describe('AndroidCaptureImportService', () => {
     expect(action.isIgnoreShortSyntax).toBeUndefined();
     expect(flush.flushPendingWrites).toHaveBeenCalled();
     expect(acknowledge).toHaveBeenCalledOnceWith(id);
+  });
+
+  describe('quick add from a project widget', () => {
+    const setProjects = (...projects: Partial<Project>[]): void => {
+      store.overrideSelector(selectProjectFeatureState, {
+        ids: projects.map((p) => p.id as string),
+        entities: Object.fromEntries(projects.map((p) => [p.id, p as Project])),
+      } as ReturnType<typeof selectProjectFeatureState>);
+      store.refreshState();
+    };
+
+    beforeEach(() => loaded.next(true));
+
+    it('files the task in the widget project', async () => {
+      setProjects({ id: 'p1', isArchived: false });
+      pending = entries({ id, title: 'Draft intro', projectId: 'p1' });
+
+      expect(await service.importPending()).toBe(1);
+      expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledOnceWith({
+        title: 'Draft intro',
+        id,
+        workContextType: WorkContextType.PROJECT,
+        workContextId: 'p1',
+      });
+      expect(addedTasks()[0].workContextId).toBe('p1');
+      expect(addedTasks()[0].workContextType).toBe(WorkContextType.PROJECT);
+      expect(acknowledge).toHaveBeenCalledOnceWith(id);
+    });
+
+    it('falls back to Today when the project is gone or archived', async () => {
+      setProjects({ id: 'archived', isArchived: true });
+      pending = entries(
+        { id, title: 'Gone', projectId: 'deleted' },
+        { id: id2, title: 'Archived', projectId: 'archived' },
+      );
+
+      expect(await service.importPending()).toBe(2);
+      expect(addedTasks().map((a) => a.workContextId)).toEqual([
+        TODAY_TAG.id,
+        TODAY_TAG.id,
+      ]);
+      expect(addedTasks().map((a) => a.workContextType)).toEqual([
+        WorkContextType.TAG,
+        WorkContextType.TAG,
+      ]);
+    });
   });
 
   it('does not acknowledge until the task write has completed', async () => {

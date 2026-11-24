@@ -55,7 +55,7 @@ export type MiscConfig = Readonly<{
   isTrayShowCurrentCountdown?: boolean;
   isUseCustomWindowTitleBar?: boolean;
   customTheme?: string;
-  // number: one of DefaultStartPage. string: project id.
+  // number: one of DefaultStartPage. string: project id, or `view:<boardId>`.
   defaultStartPage?: number | string;
   unsplashApiKey?: string | null;
   // Global wallpaper: shown on pages that don't provide their own background

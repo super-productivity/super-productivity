@@ -22,6 +22,9 @@ let templateImages = [];
 let beforeQuitHandler = () => {};
 let mockIsTrayShowCurrentTask = false;
 let mockIsTrayShowCurrentCountdown = false;
+let mockOsRelease = '10.0.19045';
+let mockAppDark = false;
+let mockSystemDark = false;
 
 const resetModule = () => {
   delete require.cache[indicatorModulePath];
@@ -98,7 +101,12 @@ const installMocks = () => {
           },
         },
         nativeTheme: {
-          shouldUseDarkColors: false,
+          get shouldUseDarkColors() {
+            return mockAppDark;
+          },
+          get shouldUseDarkColorsForSystemIntegratedUI() {
+            return mockSystemDark;
+          },
         },
         nativeImage: {
           createFromPath: (iconPath) => {
@@ -106,6 +114,13 @@ const installMocks = () => {
             return createFakeNativeImage(iconPath, readPngSize(iconPath));
           },
         },
+      };
+    }
+
+    if (request === 'os') {
+      return {
+        ...originalModuleLoad.call(this, request, parent, isMain),
+        release: () => mockOsRelease,
       };
     }
 
@@ -179,6 +194,9 @@ test.beforeEach(() => {
   beforeQuitHandler = () => {};
   mockIsTrayShowCurrentTask = false;
   mockIsTrayShowCurrentCountdown = false;
+  mockOsRelease = '10.0.19045';
+  mockAppDark = false;
+  mockSystemDark = false;
 
   Object.defineProperty(process, 'platform', {
     configurable: true,
@@ -240,6 +258,51 @@ test('Windows portable build creates the tray without a GUID', () => {
 
   assert.equal(createdTrayArgs.length, 1);
   assert.equal(createdTrayArgs[0][1], undefined);
+});
+
+const initIndicatorOnWindows11 = ({ appDark, systemDark, forceDarkTray = false }) => {
+  mockOsRelease = '10.0.22631';
+  mockAppDark = appDark;
+  mockSystemDark = systemDark;
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: 'win32',
+  });
+  const { initIndicator } = loadIndicatorModule();
+  initIndicator({
+    showApp: () => {},
+    quitApp: () => {},
+    ICONS_FOLDER: '/icons/',
+    forceDarkTray,
+    app: { on: () => {} },
+  });
+};
+
+// Windows 11 "Custom" mode / accent-colored taskbar: the taskbar follows the
+// Windows mode, not the app mode, so the icon must too.
+test('Windows 11 uses the white tray icon on a dark taskbar with light apps', () => {
+  initIndicatorOnWindows11({ appDark: false, systemDark: true });
+
+  assert.equal(createdTrayArgs[0][0], '/icons/indicator/stopped-d.png');
+});
+
+test('Windows 11 uses the black tray icon on a light taskbar with dark apps', () => {
+  initIndicatorOnWindows11({ appDark: true, systemDark: false });
+
+  assert.equal(createdTrayArgs[0][0], '/icons/indicator/stopped-l.png');
+});
+
+test('Windows 11 --force-dark-tray uses the white tray icon on a light taskbar', () => {
+  initIndicatorOnWindows11({ appDark: false, systemDark: false, forceDarkTray: true });
+
+  assert.equal(createdTrayArgs[0][0], '/icons/indicator/stopped-d.png');
+});
+
+test('Windows 10 keeps the white tray icon on a light taskbar', () => {
+  mockOsRelease = '10.0.19045';
+  initIndicatorOnWindows();
+
+  assert.equal(createdTrayArgs[0][0], '/icons/indicator/stopped-d.png');
 });
 
 test('initIndicator uses NativeImage for Linux tray creation and updates', () => {
