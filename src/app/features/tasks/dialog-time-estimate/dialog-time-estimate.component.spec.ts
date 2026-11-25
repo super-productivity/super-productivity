@@ -4,6 +4,7 @@ import { Subject } from 'rxjs';
 import { DEFAULT_TASK, Task } from '../task.model';
 import { TaskService } from '../task.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { DateService } from '../../../core/date/date.service';
 import { DialogTimeEstimateComponent } from './dialog-time-estimate.component';
 
 const OTHER_DAY = '2026-10-01';
@@ -98,5 +99,23 @@ describe('DialogTimeEstimateComponent closing (#10823)', () => {
     createComponent();
 
     expect(dialogRef.disableClose).toBeTrue();
+  });
+
+  describe('before a 04:00 day start', () => {
+    // 02:00 on 2026-10-02 still belongs to the logical day 2026-10-01.
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 9, 2, 2));
+      TestBed.inject(DateService).setStartOfNextDayDiff('04:00');
+    });
+
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('shows the time tracked on the logical day as today', () => {
+      const cmp = createComponent();
+
+      expect(cmp.todayStr).toBe(OTHER_DAY);
+      expect(cmp.timeSpentOnDayCopy[cmp.todayStr]).toBe(1000);
+    });
   });
 });

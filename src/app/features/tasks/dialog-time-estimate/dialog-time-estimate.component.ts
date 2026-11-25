@@ -19,7 +19,7 @@ import {
 } from '@angular/material/dialog';
 import { Task, TaskCopy, TimeSpentOnDayCopy } from '../task.model';
 import { TaskService } from '../task.service';
-import { getTodayStr } from '../util/get-today-str';
+import { DateService } from '../../../core/date/date.service';
 import { createTaskCopy } from '../util/create-task-copy';
 import {
   DialogAddTimeEstimateForOtherDayComponent,
@@ -73,6 +73,7 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
   private _cd = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _dateService = inject(DateService);
   data = inject(MAT_DIALOG_DATA);
 
   // Exposed so the template can pass the reactive locale to the now-pure
@@ -89,7 +90,7 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
     const _taskService = this._taskService;
 
     this.task = this.data.task;
-    this.todayStr = getTodayStr();
+    this.todayStr = this._dateService.todayStr();
     this._taskService = _taskService;
     this.taskCopy = createTaskCopy(this.task);
     this.timeSpentOnDayCopy = this.taskCopy.timeSpentOnDay || {};
