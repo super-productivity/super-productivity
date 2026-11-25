@@ -143,9 +143,9 @@
     "authorUrl": "https://github.com/giba0",
     "id": "memos-sync",
     "release": {
-      "version": "0.5.0",
-      "downloadUrl": "https://github.com/giba0/memos-sync/releases/download/v0.5.0/memos-sync.zip",
-      "sha256": "046656e4fc548d88cfdab7d2b3ad631da3989da5b71ed5c789f558ccd487490d"
+      "version": "0.5.1",
+      "downloadUrl": "https://github.com/giba0/memos-sync/releases/download/v0.5.1/memos-sync.zip",
+      "sha256": "83406f3827cc24e282efd98b673496d5fa4f27dfbf4f5dc20c0a01827af271c3"
     }
   },
   {
