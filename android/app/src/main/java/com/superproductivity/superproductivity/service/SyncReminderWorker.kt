@@ -33,7 +33,6 @@ class SyncReminderWorker(
             if (fileCredentials != null) {
                 return runFileSyncReminderCheck(applicationContext, fileCredentials)
             }
-            RepeatReminderCache.clear(applicationContext)
             Log.d(TAG, "No sync credentials configured, skipping")
             return Result.success()
         }
@@ -72,54 +71,57 @@ class SyncReminderWorker(
                 Log.w(TAG, "Fetch failed, will retry later")
                 return Result.retry()
             }
+            // A login change and this page's local alarm, cache and cursor writes
+            // must finish in order. The network request stays outside the lock.
+            synchronized(BackgroundSyncCredentialStore) {
+                if (credentialsChanged(credentials)) return Result.success()
 
-            // Cancel every alarm of gone/done tasks, and single cleared ones
-            for (taskId in result.taskIdsToCancel) {
-                cancelRemindersForTask(applicationContext, taskId)
-                totalCancelled++
-            }
-            for (reminderId in result.reminderIdsToCancel) {
-                cancelReminderById(applicationContext, reminderId)
-                totalCancelled++
-            }
-
-            // Schedule new reminders — unless the user disabled reminders. The
-            // cursor still advances: re-enabling them in the app reschedules
-            // every reminder from its full state, so nothing is lost.
-            if (!reminderSettings.isDisabled) {
-                for (reminder in result.remindersToSchedule) {
-                    scheduleReminderFromSync(applicationContext, reminder, reminderSettings.useAlarmStyle)
-                    protectedRepeatIds.add(reminder.taskId)
-                    totalScheduled++
+                // Cancel every alarm of gone/done tasks, and single cleared ones
+                for (taskId in result.taskIdsToCancel) {
+                    cancelRemindersForTask(applicationContext, taskId)
+                    totalCancelled++
                 }
-            }
-
-            // Persist the folded repeat configs in this same iteration as the
-            // seq cursor, and before it: a retried page is idempotent, a page
-            // whose seq advanced without the fold would be lost.
-            repeatState = result.nextRepeatState
-            if (!RepeatReminderCache.saveStateIfUnchanged(applicationContext, repeatState, repeatGeneration)) {
-                // The open app sent its configs mid-run. Re-fetch this page onto
-                // them without moving the cursor, so none of its ops are lost;
-                // re-scheduling its task alarms is idempotent (same ids).
-                repeatGeneration = RepeatReminderCache.getGeneration(applicationContext)
-                repeatState = RepeatReminderCache.getState(applicationContext)
-                continue
-            }
-
-            // Update sequence cursor.
-            // Also reset if server's latestSeq is lower (server was wiped/reset).
-            if (result.latestSeq != lastSeq) {
-                if (result.latestSeq < lastSeq) {
-                    Log.w(TAG, "Server seq (${ result.latestSeq}) < local seq ($lastSeq), server was likely reset. Resetting cursor.")
+                for (reminderId in result.reminderIdsToCancel) {
+                    cancelReminderById(applicationContext, reminderId)
+                    totalCancelled++
                 }
-                lastSeq = result.latestSeq
-                BackgroundSyncCredentialStore.setLastServerSeq(
-                    applicationContext, credentials.baseUrl, lastSeq
-                )
-            }
 
-            hasMore = result.hasMore
+                // Schedule new reminders — unless the user disabled reminders. The
+                // cursor still advances: re-enabling them in the app reschedules
+                // every reminder from its full state, so nothing is lost.
+                if (!reminderSettings.isDisabled) {
+                    for (reminder in result.remindersToSchedule) {
+                        scheduleReminderFromSync(applicationContext, reminder, reminderSettings.useAlarmStyle)
+                        protectedRepeatIds.add(reminder.taskId)
+                        totalScheduled++
+                    }
+                }
+
+                // Persist the folded repeat configs in this same iteration as the
+                // seq cursor, and before it: a retried page is idempotent, a page
+                // whose seq advanced without the fold would be lost.
+                repeatState = result.nextRepeatState
+                if (!RepeatReminderCache.saveStateIfUnchanged(applicationContext, result, repeatGeneration)) {
+                    // The open app sent its configs mid-run. Re-fetch this page onto
+                    // them without moving the cursor, so none of its ops are lost;
+                    // re-scheduling its task alarms is idempotent (same ids).
+                    repeatGeneration = RepeatReminderCache.getGeneration(applicationContext)
+                    repeatState = RepeatReminderCache.getState(applicationContext)
+                    return@synchronized
+                }
+
+                // Update sequence cursor.
+                // Also reset if server's latestSeq is lower (server was wiped/reset).
+                if (result.latestSeq != lastSeq) {
+                    if (result.latestSeq < lastSeq) {
+                        Log.w(TAG, "Server seq (${ result.latestSeq}) < local seq ($lastSeq), server was likely reset. Resetting cursor.")
+                    }
+                    lastSeq = result.latestSeq
+                    BackgroundSyncCredentialStore.setLastServerSeq(applicationContext, credentials.baseUrl, lastSeq)
+                }
+
+                hasMore = result.hasMore
+            }
         }
 
         if (iterations >= maxIterations) {
@@ -129,13 +131,15 @@ class SyncReminderWorker(
         // Re-derive even when this run downloaded nothing new, so the 14-day
         // window slides. Disabled reminders still folded the cache above and
         // leave the armed slots alone; opening the app reschedules them.
-        if (!reminderSettings.isDisabled) {
-            armRepeatReminders(
-                applicationContext,
-                repeatState,
-                reminderSettings.useAlarmStyle,
-                protectedRepeatIds,
-            )
+        synchronized(BackgroundSyncCredentialStore) {
+            if (!reminderSettings.isDisabled && !credentialsChanged(credentials)) {
+                armRepeatReminders(
+                    applicationContext,
+                    repeatState,
+                    reminderSettings.useAlarmStyle,
+                    protectedRepeatIds,
+                )
+            }
         }
 
         if (totalCancelled > 0 || totalScheduled > 0) {
@@ -147,4 +151,9 @@ class SyncReminderWorker(
         return Result.success()
     }
 
+    private fun credentialsChanged(captured: BackgroundSyncCredentialStore.Credentials): Boolean {
+        if (BackgroundSyncCredentialStore.get(applicationContext) == captured) return false
+        Log.d(TAG, "Sync credentials changed mid-run, stopping")
+        return true
+    }
 }

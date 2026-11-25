@@ -61,7 +61,7 @@ class RepeatReminderScheduleTest {
             ReminderToSchedule("rpt_a_2026-06-16", "A", 2_000L, false),
             ReminderToSchedule("rpt_a_2026-06-15", "A", 500L, false),
         )
-        val plan = planRepeatReminderSlots(null, derived, now)
+        val plan = planRepeatReminderSlots(null, derived, now, emptyMap())
         assertEquals(emptySet<String>(), plan.toCancel)
         assertEquals(listOf("rpt_a_2026-06-16"), plan.toSchedule.map { it.taskId })
         assertEquals(2_000L, plan.slots["rpt_a_2026-06-16"])
@@ -75,7 +75,7 @@ class RepeatReminderScheduleTest {
             ReminderToSchedule("rpt_a_2026-06-16", "A", 2_500L, false),
             ReminderToSchedule("rpt_a_2026-06-17", "A", 3_000L, false),
         )
-        val plan = planRepeatReminderSlots(previous, derived, now)
+        val plan = planRepeatReminderSlots(previous, derived, now, emptyMap())
         assertEquals(setOf("rpt_a_2026-06-16"), plan.toCancel)
         assertEquals(listOf("rpt_a_2026-06-16"), plan.toSchedule.map { it.taskId })
     }
@@ -85,7 +85,7 @@ class RepeatReminderScheduleTest {
         val now = 10_000L
         val previous = mapOf("rpt_a_2026-06-16" to 9_000L, "rpt_a_2026-06-17" to 20_000L)
         val derived = listOf(ReminderToSchedule("rpt_a_2026-06-17", "A", 20_000L, false))
-        val plan = planRepeatReminderSlots(previous, derived, now)
+        val plan = planRepeatReminderSlots(previous, derived, now, emptyMap())
         assertEquals(emptySet<String>(), plan.toCancel)
         assertEquals(emptyList<String>(), plan.toSchedule.map { it.taskId })
     }
@@ -95,8 +95,22 @@ class RepeatReminderScheduleTest {
         val now = 10_000L
         val previous = mapOf("rpt_a_2026-06-16" to 9_000L)
         val derived = listOf(ReminderToSchedule("rpt_a_2026-06-16", "A", 20_000L, false))
-        val plan = planRepeatReminderSlots(previous, derived, now)
+        val plan = planRepeatReminderSlots(previous, derived, now, emptyMap())
         assertEquals(setOf("rpt_a_2026-06-16"), plan.toCancel)
+        assertEquals(listOf("rpt_a_2026-06-16"), plan.toSchedule.map { it.taskId })
+    }
+
+    @Test
+    fun `later plan re-arms a pending slot whose title changed`() {
+        val now = 1_000L
+        val previous = mapOf("rpt_a_2026-06-16" to 2_000L, "rpt_a_2026-06-17" to 3_000L)
+        val derived = listOf(
+            ReminderToSchedule("rpt_a_2026-06-16", "Renamed", 2_000L, false),
+            ReminderToSchedule("rpt_a_2026-06-17", "Renamed", 3_000L, false),
+        )
+        val armedTitles = mapOf("rpt_a_2026-06-16" to "Old", "rpt_a_2026-06-17" to "Renamed")
+        val plan = planRepeatReminderSlots(previous, derived, now, armedTitles)
+        assertEquals(emptySet<String>(), plan.toCancel)
         assertEquals(listOf("rpt_a_2026-06-16"), plan.toSchedule.map { it.taskId })
     }
 
@@ -104,7 +118,7 @@ class RepeatReminderScheduleTest {
     fun `later plan cancels a future slot that is no longer derived`() {
         val now = 10_000L
         val previous = mapOf("rpt_a_2026-06-17" to 20_000L)
-        val plan = planRepeatReminderSlots(previous, emptyList(), now)
+        val plan = planRepeatReminderSlots(previous, emptyList(), now, emptyMap())
         assertEquals(setOf("rpt_a_2026-06-17"), plan.toCancel)
     }
 

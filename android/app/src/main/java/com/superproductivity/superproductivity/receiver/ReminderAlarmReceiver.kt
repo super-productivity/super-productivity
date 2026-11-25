@@ -156,7 +156,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             context, credentials.baseUrl
         )
 
-        // Token in the key: a re-login on the same server keeps lastSeq, and one
+        // Token in the key: every login on a server restarts at lastSeq 0, and one
         // account's result must never answer for another's alarms.
         val cacheKey = Triple(credentials.baseUrl, credentials.accessToken, lastSeq)
         val result = staleCheckFetches.get(cacheKey) {

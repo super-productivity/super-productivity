@@ -127,9 +127,9 @@ object BackgroundSyncCredentialStore {
             .putString(KEY_BASE_URL, baseUrl)
             .putString(KEY_ACCESS_TOKEN, accessToken)
         FILE_KEYS.forEach { editor.remove(it) }
-        // Reset seq when access token changes (account switch on same server)
-        val tokenChanged = previousToken != null && previousToken != accessToken
-        if (tokenChanged) {
+        // After logout a saved URL cursor has no owner. Start fresh on any new login.
+        val loginChanged = previousToken != accessToken || prefs.getString(KEY_BASE_URL, null) != baseUrl
+        if (loginChanged) {
             editor.putLong(seqKey(baseUrl), 0L)
         }
         editor.commit()
@@ -137,7 +137,7 @@ object BackgroundSyncCredentialStore {
         // A first SuperSync save (no previous token) keeps a file snapshot so
         // the next op page can update it. Clear after the commit so a failed
         // write does not drop the cache while the old token is still current.
-        if (tokenChanged) RepeatReminderCache.clear(context)
+        if (previousToken != null && loginChanged) RepeatReminderCache.clear(context)
     }
 
     @Synchronized
