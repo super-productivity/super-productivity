@@ -118,9 +118,11 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
   }
 
   submit(): void {
+    // Tracking keeps adding to the store while the dialog is open, so unedited
+    // days must not be written back from the opening snapshot.
     this._taskService.update(this.taskCopy.id, {
       timeEstimate: this.taskCopy.timeEstimate,
-      timeSpentOnDay: this.timeSpentOnDayCopy,
+      ...(this._isTimeSpentChanged() && { timeSpentOnDay: this.timeSpentOnDayCopy }),
     });
     this._matDialogRef.close({
       timeEstimate: this.taskCopy.timeEstimate,
@@ -157,6 +159,10 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
     if ((this.taskCopy.timeEstimate || 0) !== (this.task.timeEstimate || 0)) {
       return true;
     }
+    return this._isTimeSpentChanged();
+  }
+
+  private _isTimeSpentChanged(): boolean {
     const before = this.task.timeSpentOnDay || {};
     const after = this.timeSpentOnDayCopy;
     const days = new Set([...Object.keys(before), ...Object.keys(after)]);
