@@ -1,0 +1,19 @@
+---
+# Generated from Harper's FairBit rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects malapropisms of `a fair bit`.
+extends: existence
+message: "A `decent amount` is a `fair bit`. `Fare` is the price of a ticket."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "fair bit"
+tokens:
+  - "fare(?!\\s*\\n\\s*\\n)\\s+bit(?!['\\x{2019}]s\\b)"

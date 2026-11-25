@@ -1,0 +1,20 @@
+---
+# Generated from Harper's AnAnother rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `an another` and `a another`.
+extends: existence
+message: "Use `another` on its own."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "another"
+tokens:
+  - "an(?!\\s*\\n\\s*\\n)\\s+another(?!['\\x{2019}]s\\b)"
+  - "a(?!\\s*\\n\\s*\\n)\\s+another(?!['\\x{2019}]s\\b)"

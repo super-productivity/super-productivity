@@ -20,7 +20,7 @@ Privacy is never traded away; the others are ranked, and the earlier one wins a 
 
 ## Required reading per task
 
-- Styling → [`docs/styling-guide.md`](docs/styling-guide.md); user-facing functionality → [`docs/documentation-guide.md`](docs/documentation-guide.md)
+- Styling → [`docs/styling-guide.md`](docs/styling-guide.md); user-facing functionality → [`docs/documentation-guide.md`](docs/documentation-guide.md); public documentation work → that guide and the [`diataxis` skill](.agents/skills/diataxis/SKILL.md)
 - Sync, op-log, vector clocks → [sync index](docs/sync-and-op-log/README.md), then only the relevant contracts. Effects/reducers/bulk dispatch touching synced state → [`contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md). Judging whether a sync bug is real / how severe → [`sync-severity-triage.md`](docs/sync-and-op-log/sync-severity-triage.md)
 - E2E tests → [`e2e/AGENTS.md`](e2e/AGENTS.md); marketing videos → [`e2e/store-video/AGENTS.md`](e2e/store-video/AGENTS.md)
 - Load-bearing decisions → [`ARCHITECTURE-DECISIONS.md`](ARCHITECTURE-DECISIONS.md)
@@ -33,6 +33,7 @@ Privacy is never traded away; the others are ranked, and the earlier one wins a 
 
 ```bash
 npm run checkFile <files...>   # prettier + lint
+npm run docs:public:check      # public docs: Vale, markdownlint, frontmatter, visual, lychee
 npm run prettier               # multi-file format
 npm run lint                   # multi-file lint
 npm run typecheck              # app incl. templates, specs, Electron (not worker/e2e/packages)

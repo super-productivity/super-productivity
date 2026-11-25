@@ -1,0 +1,20 @@
+---
+# Generated from Harper's ToGreatLengths rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `through great lengths` to `to great lengths`.
+extends: existence
+message: "The idiom is to go `to great lengths`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "to great lengths"
+tokens:
+  - "to(?!\\s*\\n\\s*\\n)\\s+a(?!\\s*\\n\\s*\\n)\\s+great(?!\\s*\\n\\s*\\n)\\s+length(?!['\\x{2019}]s\\b)"
+  - "through(?!\\s*\\n\\s*\\n)\\s+great(?!\\s*\\n\\s*\\n)\\s+lengths(?!['\\x{2019}]s\\b)"

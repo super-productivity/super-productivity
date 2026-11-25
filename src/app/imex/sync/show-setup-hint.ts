@@ -40,6 +40,8 @@ export const showSetupHint = (
       return true;
     }
   }
+  // The certificate message links the website page built from
+  // docs/wiki/2.25-Sync-WebDAV-with-a-Private-Certificate-on-Android.md
   snackService.open({
     msg: isCertError
       ? T.F.SYNC.S.ERROR_UNTRUSTED_CERTIFICATE_ANDROID

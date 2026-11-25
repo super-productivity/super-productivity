@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ALongTime rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `along time` to `a long time`.
+extends: existence
+message: "Use `a long time` for referring to a duration of time."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "a long time"
+tokens:
+  - "along(?!\\s*\\n\\s*\\n)\\s+time(?!['\\x{2019}]s\\b)"

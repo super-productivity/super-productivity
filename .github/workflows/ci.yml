@@ -142,6 +142,11 @@ jobs:
         run: npm run env # Generate env.generated.ts from environment variables
       - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: npm run int:test # Validate i18n JSON files
+      # Every PR, not only Android ones: the TS reminder function imports ~45
+      # app files, too many for a path filter to track.
+      - name: Check Android repeat-reminder fixtures match the TS function
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: node tools/generate-repeat-reminder-fixtures.mjs --check
       - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: npm run test:electron # Node-side unit tests for electron/*.cjs
       - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}

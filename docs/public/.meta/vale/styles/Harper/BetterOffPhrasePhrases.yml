@@ -1,0 +1,21 @@
+---
+# Generated from Harper's BetterOffPhrasePhrases rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Rewrites `better of` to `better off` in common comparative phrasing.
+extends: existence
+message: "This expression usually takes `off` instead of `of`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "better off"
+nonword: true
+tokens:
+  - "(?<=\\b(?:being|feels|been|feel|felt|were|are|was|am|be|is)(?!\\s*\\n\\s*\\n)\\s+)(?:better)(?!\\s*\\n\\s*\\n)\\s+(?:of)\\b"
+  - "(?:better)(?!\\s*\\n\\s*\\n)\\s+(?:of)(?=(?!\\s*\\n\\s*\\n)\\s+(?:without|before|with|not|now|at|if)\\b)"

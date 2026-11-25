@@ -1,0 +1,25 @@
+---
+# Hand-written from Harper's CodeInWriteIn: you write code `in` a language,
+# not `on` one.
+#
+# Harper leaves two words out of its verb set on purpose, each with a comment
+# saying why: `code` and `programs` produce too many false positives. The
+# generated rule read the set from the source and took them anyway, so "Notes
+# and Programs on Java." became a finding Harper does not make.
+#
+# The language list drops `on assembly level`, which rustgen scraped out of a
+# comment -- Harper names the phrase to explain a false positive it avoids. A
+# sequence slot matches one token, so it could never have fired anyway.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "For writing code, the preposition should be `in` rather than `on`."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'programming|programmed|program|written|coding|writes|coded|codes|write|wrote'
+  - pattern: 'on'
+  - pattern: 'ecmascript|javascript|typescript|assembler|assembly|fortran|haskell|csharp|golang|kotlin|oberon|pascal|python|basic|clisp|cobol|julia|shell|swift|bash|dart|html|java|lisp|objc|odin|perl|ruby|rust|ada|asm|cpp|css|php|zig|zsh|go|js|sh|c'

@@ -1,0 +1,39 @@
+{
+  "id": "ms-todo-import",
+  "manifestVersion": 1,
+  "name": "Import from Microsoft To Do",
+  "version": "1.0.0",
+  "minSupVersion": "18.0.0",
+  "description": "One-time import of your open Microsoft To Do lists, tasks, steps, notes, due dates and repeats. Additive \u2014 your existing Super Productivity data is never touched.",
+  "author": "SuperProductivity",
+  "homepage": "https://github.com/super-productivity/super-productivity",
+  "hooks": [],
+  "permissions": [
+    "oauth",
+    "http",
+    "getTasks",
+    "getAllProjects",
+    "addProject",
+    "getAllTags",
+    "addTag",
+    "batchUpdateForProject",
+    "updateTask",
+    "addTaskRepeatCfg",
+    "showSnack"
+  ],
+  "allowedHosts": ["graph.microsoft.com"],
+  "dataSharing": [
+    {
+      "recipient": "Microsoft",
+      "hosts": ["login.microsoftonline.com", "graph.microsoft.com"],
+      "data": ["credentials"],
+      "privacyPolicyUrl": "https://privacy.microsoft.com/privacystatement"
+    }
+  ],
+  "iFrame": true,
+  "isSkipMenuEntry": true,
+  "i18n": {
+    "languages": ["en"]
+  },
+  "icon": "icon.svg"
+}

@@ -1,0 +1,23 @@
+---
+# Generated from Harper's WokVerbTypo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags likely typo cases where `wok` appears where the verb `work` is expected.
+extends: sequence
+message: "Did you mean `work`?"
+level: error
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "work"
+tokens:
+  - pattern: 'should|could|might|would|must|will|can|may'
+  - upos: ADV
+  - pattern: 'wok'
+    target: true

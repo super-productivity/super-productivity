@@ -389,6 +389,42 @@ describe('PollToBacklogEffects', () => {
       ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1', true);
     }));
 
+    it("should poll at the provider's own interval from the first timer (#11815)", fakeAsync(() => {
+      const provider = createMockIssueProvider({
+        id: 'caldav-1',
+        issueProviderKey: 'CALDAV',
+        defaultProjectId: 'project-2',
+        isAutoAddToBacklog: true,
+        pollingMode: 'always',
+        pollIntervalMinutes: 2,
+      } as Partial<IssueProvider>);
+      // The real CalDAV service only knows the interval from the provider it is
+      // given; without one it falls back to 10 minutes.
+      issueServiceSpy.getPollInterval.and.callFake((_key, p) => {
+        const minutes = (p as { pollIntervalMinutes?: number } | undefined)
+          ?.pollIntervalMinutes;
+        return minutes ? minutes * 60 * 1000 : 10 * 60 * 1000;
+      });
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+      actions$ = new Subject<any>().asObservable();
+
+      const subscription = effects.pollNewIssuesToBacklogAlways$.subscribe();
+
+      tick(10001);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledTimes(1);
+
+      tick(2 * 60 * 1000);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledTimes(2);
+
+      subscription.unsubscribe();
+      discardPeriodicTasks();
+    }));
+
     it('should skip polls while offline and poll once the connection is back', fakeAsync(() => {
       store.overrideSelector(selectEnabledIssueProviders, [
         createMockIssueProvider({ id: 'jira-1', pollingMode: 'always' }),

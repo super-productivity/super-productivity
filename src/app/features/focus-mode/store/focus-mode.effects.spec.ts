@@ -45,6 +45,8 @@ import { HydrationStateService } from '../../../op-log/apply/hydration-state.ser
 import { DEFAULT_TASK } from '../../tasks/task.model';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { Action } from '@ngrx/store';
+import { FocusModeLocalSettingsService } from '../../config/focus-mode-local-settings.service';
+import { UiHelperService } from '../../ui-helper/ui-helper.service';
 
 describe('FocusModeEffects', () => {
   let actions$: Observable<any>;
@@ -3317,6 +3319,126 @@ describe('FocusModeEffects', () => {
       expect(eaMock.setProgressBar).toHaveBeenCalledWith({
         progress: 1,
         progressBarMode: 'none',
+      });
+    });
+
+    // #11094: users who miss the flash (or have no taskbar, e.g. tiling WMs)
+    // can opt back into raising the window on this device.
+    describe('with "bring window to front" enabled', () => {
+      let localSettings: FocusModeLocalSettingsService;
+
+      beforeEach(() => {
+        localSettings = TestBed.inject(FocusModeLocalSettingsService);
+        localSettings.update({ isFocusWindowOnSessionEnd: true });
+      });
+
+      afterEach(() => {
+        localSettings.update({ isFocusWindowOnSessionEnd: false });
+        localStorage.removeItem('sp_focus_mode_local_settings');
+      });
+
+      let raiseSpy: jasmine.Spy;
+
+      beforeEach(() => {
+        raiseSpy = spyOn(TestBed.inject(UiHelperService), 'focusAppAfterNotification');
+      });
+
+      it('should raise the window once when the work timer ends the session', (done) => {
+        store.overrideSelector(
+          selectors.selectTimer,
+          createMockTimer({
+            isRunning: false,
+            purpose: 'work',
+            duration: 25 * 60 * 1000,
+            elapsed: 25 * 60 * 1000,
+          }),
+        );
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+        store.overrideSelector(selectors.selectIsOvertimeEnabled, false);
+        store.refreshState();
+
+        effects.detectSessionCompletion$.pipe(take(1)).subscribe(() => {
+          expect(raiseSpy).toHaveBeenCalledOnceWith({ isReminder: true });
+          done();
+        });
+      });
+
+      it('should raise the window when the break timer runs out, keeping the flash', (done) => {
+        const breakDuration = 5 * 60 * 1000;
+        store.overrideSelector(
+          selectors.selectTimer,
+          createMockTimer({
+            isRunning: false,
+            purpose: 'break',
+            startedAt: Date.now() - breakDuration,
+            duration: breakDuration,
+            elapsed: breakDuration,
+          }),
+        );
+        store.refreshState();
+
+        effects.detectBreakTimeUp$.pipe(take(1)).subscribe(() => {
+          expect(raiseSpy).toHaveBeenCalledOnceWith({ isReminder: true });
+          expect(eaMock.flashFrame).toHaveBeenCalled();
+          done();
+        });
+      });
+
+      // The session end already raised it; the startBreak that follows
+      // (notifyOnBreakStart$ -> _notifyUser(true)) must not raise again.
+      it('should not raise again from the plain notification (e.g. break start)', () => {
+        (effects as any)._notifyUser(true);
+
+        expect(raiseSpy).not.toHaveBeenCalled();
+        expect(eaMock.flashFrame).toHaveBeenCalled();
+      });
+
+      // The user is in the app; a raise would blur the field they type in.
+      it('should not raise on a completion the user dispatched', (done) => {
+        actions$ = of(actions.completeFocusSession({ isManual: true }));
+
+        effects.notifyOnSessionComplete$.subscribe({
+          complete: () => {
+            expect(raiseSpy).not.toHaveBeenCalled();
+            expect(eaMock.flashFrame).toHaveBeenCalled();
+            done();
+          },
+        });
+      });
+
+      it('should not raise when the user ends the break', (done) => {
+        actions$ = of(actions.completeBreak({ pausedTaskId: null }));
+
+        effects.notifyOnBreakComplete$.subscribe({
+          complete: () => {
+            expect(raiseSpy).not.toHaveBeenCalled();
+            done();
+          },
+        });
+      });
+    });
+
+    it('should not raise the window on a timer-driven end while the option is off', (done) => {
+      const raiseSpy = spyOn(
+        TestBed.inject(UiHelperService),
+        'focusAppAfterNotification',
+      );
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'work',
+          duration: 25 * 60 * 1000,
+          elapsed: 25 * 60 * 1000,
+        }),
+      );
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectors.selectIsOvertimeEnabled, false);
+      store.refreshState();
+
+      effects.detectSessionCompletion$.pipe(take(1)).subscribe(() => {
+        expect(raiseSpy).not.toHaveBeenCalled();
+        done();
       });
     });
   });

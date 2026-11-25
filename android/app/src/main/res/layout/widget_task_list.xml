@@ -6,7 +6,7 @@
     android:background="@drawable/widget_bg"
     android:paddingStart="10dp"
     android:paddingEnd="10dp"
-    android:paddingTop="12dp"
+    android:paddingTop="4dp"
     android:paddingBottom="6dp">
 
     <LinearLayout
@@ -16,8 +16,8 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:paddingStart="6dp"
-        android:paddingEnd="6dp"
-        android:paddingBottom="10dp">
+        android:paddingEnd="0dp"
+        android:paddingBottom="2dp">
 
         <ImageView
             android:layout_width="18dp"
@@ -37,12 +37,15 @@
             android:textSize="16sp"
             android:textStyle="bold" />
 
-        <!-- Own click target inside the header: opens QuickAddActivity, not the app -->
+        <!-- Own click target inside the header: opens QuickAddActivity, not the app.
+             48dp touch target around the 24dp icon; the root's top and the
+             header's bottom padding shrank by the same 16dp, so the header
+             keeps its height. -->
         <ImageView
             android:id="@+id/widget_add"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:padding="4dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
             android:src="@drawable/ic_widget_add"
             android:contentDescription="@string/widget_add_task" />
     </LinearLayout>
