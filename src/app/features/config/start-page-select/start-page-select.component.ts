@@ -10,7 +10,7 @@ import { GlobalConfigService } from '../global-config.service';
 import { DefaultStartPage, toViewStartPage } from '../default-start-page.const';
 import { T } from 'src/app/t.const';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
-import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
+import { DEFAULT_PROJECT_ICON, INBOX_PROJECT } from '../../project/project.const';
 import { BoardsService } from '../../boards/boards.service';
 import { getViewIcon, translateViewTitle } from '../../boards/boards.util';
 
@@ -38,10 +38,22 @@ export class StartPageSelectComponent extends FieldType<FormlyFieldConfig> {
   readonly T = T;
   readonly DefaultStartPage = DefaultStartPage;
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
+  readonly inboxProjectId = INBOX_PROJECT.id;
 
-  // Signal-based (CLAUDE.md prefers signals over observables).
-  // listInTreeOrderForUI filters archived + hidden-from-menu projects.
-  readonly projects = this._projectService.listInTreeOrderForUI;
+  readonly inboxProject = computed(() =>
+    this._projectService
+      .listInTreeOrderForUI()
+      .find((project) => project.id === this.inboxProjectId),
+  );
+  readonly inboxCustomTitle = computed(() => {
+    const title = this.inboxProject()?.title;
+    return title === INBOX_PROJECT.title ? undefined : title;
+  });
+  readonly projects = computed(() =>
+    this._projectService
+      .listInTreeOrderForUI()
+      .filter((project) => project.id !== this.inboxProjectId),
+  );
   readonly appFeatures = this._globalConfigService.appFeatures;
   readonly views = computed(() =>
     this._boardsService.boards().map((view) => ({

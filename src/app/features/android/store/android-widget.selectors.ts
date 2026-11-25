@@ -11,6 +11,7 @@ import {
   selectProjectFeatureState,
   selectUnarchivedVisibleProjects,
 } from '../../project/store/project.selectors';
+import { INBOX_PROJECT } from '../../project/project.const';
 import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
@@ -251,7 +252,12 @@ export const selectAndroidWidgetData = createSelector(
       tasks.push(toWidgetTask(task));
     }
 
-    const projects: AndroidWidgetProject[] = visibleProjects.map((project) => {
+    const inbox = projectState.entities[INBOX_PROJECT.id];
+    const selectableProjects =
+      inbox && !inbox.isArchived && !inbox.isHiddenFromMenu
+        ? [inbox, ...visibleProjects]
+        : visibleProjects;
+    const projects: AndroidWidgetProject[] = selectableProjects.map((project) => {
       const listed: Task[] = [];
       const done: Task[] = [];
       let openCount = 0;

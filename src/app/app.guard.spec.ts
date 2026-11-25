@@ -104,6 +104,13 @@ describe('DefaultStartPageGuard', () => {
     expectUrl(await runGuard(), `/project/${INBOX_PROJECT.id}/tasks`);
   });
 
+  it('routes the Inbox project ID saved by the start-page picker', async () => {
+    misc$.next({ defaultStartPage: INBOX_PROJECT.id });
+    getByIdOnce$.and.returnValue(of(INBOX_PROJECT));
+
+    expectUrl(await runGuard(), `/project/${INBOX_PROJECT.id}/tasks`);
+  });
+
   it('routes Planner when feature enabled', async () => {
     misc$.next({ defaultStartPage: 2 });
     expectUrl(await runGuard(), '/planner');
