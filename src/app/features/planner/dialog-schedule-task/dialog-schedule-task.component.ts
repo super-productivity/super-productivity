@@ -37,6 +37,7 @@ import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
 import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
@@ -104,6 +105,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _snackService = inject(SnackService);
   private _datePipe = inject(LocaleDatePipe);
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
   private _reminderService = inject(ReminderService);
   private _translateService = inject(TranslateService);
   private _globalConfigService = inject(GlobalConfigService);
@@ -533,7 +535,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     const newDate = new Date(
       getDateTimeFromClockString(normalizedTime, this.selectedDate as Date),
     );
-    this._taskService.scheduleTask(
+    this._taskSchedulingService.scheduleTask(
       task,
       newDate.getTime(),
       this.selectedReminderCfgId,

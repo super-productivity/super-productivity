@@ -30,6 +30,7 @@ import {
   TaskWithSubTasks,
 } from '../task.model';
 import { TaskService } from '../task.service';
+import { TaskSchedulingService } from '../task-scheduling.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskComponent } from './task.component';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -44,6 +45,7 @@ describe('TaskComponent shortcut handling', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<TaskComponent>;
   let component: TaskComponent;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskSchedulingServiceSpy: jasmine.SpyObj<TaskSchedulingService>;
   let taskDuplicateServiceSpy: jasmine.SpyObj<TaskDuplicateService>;
   let addSubtaskInputServiceSpy: jasmine.SpyObj<AddSubtaskInputService>;
   let storeSpy: jasmine.SpyObj<Store>;
@@ -97,7 +99,6 @@ describe('TaskComponent shortcut handling', () => {
         'pauseCurrent',
         'getByIdWithSubTaskData$',
         'focusTaskById',
-        'scheduleTask',
         'markIssueUpdatesAsRead',
       ],
       {
@@ -107,6 +108,9 @@ describe('TaskComponent shortcut handling', () => {
         timeConflictTaskIds: signal<Set<string>>(new Set<string>()),
       },
     );
+    taskSchedulingServiceSpy = jasmine.createSpyObj('TaskSchedulingService', [
+      'scheduleTask',
+    ]);
     // Default: any parent lookup returns an empty-subTasks shell.
     // Individual specs may override via .and.returnValue(of({...})).
     taskServiceSpy.getByIdWithSubTaskData$.and.callFake((id: string) =>
@@ -157,6 +161,7 @@ describe('TaskComponent shortcut handling', () => {
         },
 
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskSchedulingService, useValue: taskSchedulingServiceSpy },
         { provide: TaskDuplicateService, useValue: taskDuplicateServiceSpy },
         {
           provide: TaskRepeatCfgService,
@@ -691,9 +696,9 @@ describe('TaskComponent shortcut handling', () => {
 
       await component.scheduleTaskTomorrow();
 
-      // Should call taskService.scheduleTask instead of dispatching planTaskForDay
+      // Should call taskSchedulingService.scheduleTask instead of dispatching planTaskForDay
       // June 2nd at 10:00:00
-      expect(taskServiceSpy.scheduleTask).toHaveBeenCalledWith(
+      expect(taskSchedulingServiceSpy.scheduleTask).toHaveBeenCalledWith(
         timedTask as any,
         new Date('2026-06-02T10:00:00').getTime(),
         jasmine.any(String),

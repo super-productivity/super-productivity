@@ -4,6 +4,7 @@ import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { IssueService } from './issue.service';
 import { TaskService } from '../tasks/task.service';
 import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
+import { TaskSchedulingService } from '../tasks/task-scheduling.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
@@ -53,6 +54,7 @@ describe('IssueService', () => {
   let service: IssueService;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
   let taskArchiveOrchestratorSpy: jasmine.SpyObj<TaskArchiveOrchestratorService>;
+  let taskSchedulingServiceSpy: jasmine.SpyObj<TaskSchedulingService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let workContextServiceSpy: jasmine.SpyObj<WorkContextService>;
   let issueProviderServiceSpy: jasmine.SpyObj<IssueProviderService>;
@@ -102,11 +104,9 @@ describe('IssueService', () => {
 
   beforeEach(() => {
     taskServiceSpy = jasmine.createSpyObj('TaskService', [
-      'checkForTaskWithIssueEverywhere',
       'getByIdWithSubTaskData$',
       'moveToCurrentWorkContext',
       'add',
-      'addAndSchedule',
       'addSubTaskTo',
       'update',
       'remove',
@@ -115,6 +115,10 @@ describe('IssueService', () => {
     taskArchiveOrchestratorSpy = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
       'restoreTask',
       'getAllIssueIdsForProviderEverywhere',
+      'checkForTaskWithIssueEverywhere',
+    ]);
+    taskSchedulingServiceSpy = jasmine.createSpyObj('TaskSchedulingService', [
+      'addAndSchedule',
     ]);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
@@ -188,6 +192,7 @@ describe('IssueService', () => {
         IssueService,
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestratorSpy },
+        { provide: TaskSchedulingService, useValue: taskSchedulingServiceSpy },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         { provide: IssueProviderService, useValue: issueProviderServiceSpy },
@@ -230,7 +235,7 @@ describe('IssueService', () => {
     };
 
     beforeEach(() => {
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
       taskServiceSpy.add.and.returnValue('new-task-id');
       service.ISSUE_SERVICE_MAP['JIRA'].getAddTaskData = () => ({
         title: 'Synthetic issue',
@@ -263,7 +268,7 @@ describe('IssueService', () => {
       const backgroundLookup = new Promise<null>((resolve) => {
         releaseBackgroundLookup = () => resolve(null);
       });
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.returnValues(
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.returnValues(
         backgroundLookup,
         Promise.resolve(null),
         Promise.resolve(null),
@@ -283,7 +288,9 @@ describe('IssueService', () => {
       flushMicrotasks();
 
       // Both foreground lookups saw no task while the background owns the import.
-      expect(taskServiceSpy.checkForTaskWithIssueEverywhere).toHaveBeenCalledTimes(3);
+      expect(
+        taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere,
+      ).toHaveBeenCalledTimes(3);
       expect(taskServiceSpy.add).not.toHaveBeenCalled();
       releaseBackgroundLookup();
       flushMicrotasks();
@@ -305,9 +312,11 @@ describe('IssueService', () => {
     });
 
     it('allows a retry after a failed lookup', async () => {
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.rejectWith(new Error('lookup'));
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.rejectWith(
+        new Error('lookup'),
+      );
       await expectAsync(service.addTaskFromIssue(options)).toBeRejected();
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
       await expectAsync(service.addTaskFromIssue(options)).toBeResolvedTo('new-task-id');
       expect(taskServiceSpy.add).toHaveBeenCalledTimes(1);
     });
@@ -319,7 +328,7 @@ describe('IssueService', () => {
       const calendarEvent = createMockCalendarEvent();
 
       // Task already exists - checkForTaskWithIssueEverywhere returns the task
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: existingTask,
         subTasks: null,
         isFromArchive: false,
@@ -339,7 +348,7 @@ describe('IssueService', () => {
       const existingTask = createMockTask();
       const calendarEvent = createMockCalendarEvent();
 
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: existingTask,
         subTasks: null,
         isFromArchive: false,
@@ -365,7 +374,7 @@ describe('IssueService', () => {
       const existingTask = createMockTask();
       const calendarEvent = createMockCalendarEvent();
 
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: existingTask,
         subTasks: null,
         isFromArchive: false,
@@ -394,7 +403,7 @@ describe('IssueService', () => {
       const existingTask = createMockTask({ dueWithTime: originalDueWithTime });
       const calendarEvent = createMockCalendarEvent();
 
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: existingTask,
         subTasks: null,
         isFromArchive: false,
@@ -414,7 +423,7 @@ describe('IssueService', () => {
       const existingTask = createMockTask();
       const calendarEvent = createMockCalendarEvent();
 
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: existingTask,
         subTasks: null,
         isFromArchive: false,
@@ -438,7 +447,7 @@ describe('IssueService', () => {
         title: 'GitHub Issue',
       };
 
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: existingTask,
         subTasks: null,
         isFromArchive: false,
@@ -463,7 +472,7 @@ describe('IssueService', () => {
 
     const setupForNewTask = (): void => {
       // No existing task found
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
       taskServiceSpy.add.and.returnValue('new-task-id');
 
       // Mock getAddTaskData
@@ -540,7 +549,7 @@ describe('IssueService', () => {
         tagIds: ['remote-tag'],
         issueLastSyncedValues: { labels: ['bug'] },
       });
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
       taskServiceSpy.add.and.returnValue('new-task-id');
       issueProviderServiceSpy.getCfgOnce$.and.returnValue(
         of({
@@ -648,7 +657,7 @@ describe('IssueService', () => {
     };
 
     beforeEach(() => {
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
       taskServiceSpy.add.and.returnValue('new-task-id');
       (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
         title: 'Auto Import',
@@ -728,16 +737,18 @@ describe('IssueService', () => {
     it('should add child as a top-level task when parent is archived', async () => {
       // child-uid: not in SP → returns null (so it gets added fresh)
       // parent-uid: in archive → _tryAddSubTask returns undefined → fallback to top-level
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.callFake(async (id: string) => {
-        if (id === 'parent-uid') {
-          return {
-            task: { id: 'parent-task-id', parentId: null } as any,
-            subTasks: null,
-            isFromArchive: true,
-          };
-        }
-        return null;
-      });
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.callFake(
+        async (id: string) => {
+          if (id === 'parent-uid') {
+            return {
+              task: { id: 'parent-task-id', parentId: null } as any,
+              subTasks: null,
+              isFromArchive: true,
+            };
+          }
+          return null;
+        },
+      );
 
       await service.addTaskFromIssue({
         issueDataReduced: caldavIssue as any,
@@ -750,7 +761,7 @@ describe('IssueService', () => {
     });
 
     it('should add child as top-level task when parent is not in SP yet', async () => {
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
 
       await service.addTaskFromIssue({
         issueDataReduced: caldavIssue as any,
@@ -763,7 +774,7 @@ describe('IssueService', () => {
     });
 
     it('should call addSubTaskTo once per child even when provider returns duplicates', async () => {
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
       taskServiceSpy.add.and.returnValue('parent-task-id');
       taskServiceSpy.addSubTaskTo.and.returnValue('sub-id');
 
@@ -790,7 +801,7 @@ describe('IssueService', () => {
     const jiraIssue = { id: 'JIRA-1', title: 'Test Jira Issue' };
 
     const setupForNewTask = (): void => {
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
       taskServiceSpy.add.and.returnValue('new-task-id');
       (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
         title: 'Test Jira Issue',
@@ -854,7 +865,7 @@ describe('IssueService', () => {
 
   describe('addTaskFromIssue - short syntax', () => {
     const setupForNewTask = (key: 'JIRA' | 'PLAINSPACE'): void => {
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
       taskServiceSpy.add.and.returnValue('new-task-id');
       (service.ISSUE_SERVICE_MAP[key] as any).getAddTaskData = () => ({
         title: 'Fix login #bug 1h',
@@ -907,7 +918,7 @@ describe('IssueService', () => {
         issueType: 'GITHUB',
         projectId: 'project-1',
       });
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: existingTask,
         subTasks: null,
         isFromArchive: false,
@@ -930,7 +941,7 @@ describe('IssueService', () => {
         issueType: 'GITHUB',
         projectId: 'project-1',
       });
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: existingTask,
         subTasks: null,
         isFromArchive: false,
@@ -959,7 +970,7 @@ describe('IssueService', () => {
         issueType: 'GITHUB',
         projectId: 'project-1',
       });
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: existingTask,
         subTasks: null,
         isFromArchive: false,
@@ -1297,7 +1308,7 @@ describe('IssueService', () => {
       plainspaceService = TestBed.inject(PlainspaceCommonInterfacesService);
       spyOn(plainspaceService, 'getNewIssuesToAddToBacklog').and.resolveTo([]);
       translateServiceSpy.instant.and.returnValue('issues');
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: createArchivedTask(),
         subTasks: null,
         isFromArchive: true,
@@ -1340,7 +1351,7 @@ describe('IssueService', () => {
         timeSpentOnDay: { [trackedDay]: 1800000 },
         timeEstimate: 1800000,
       });
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: archivedTask,
         subTasks: null,
         isFromArchive: true,
@@ -1372,25 +1383,29 @@ describe('IssueService', () => {
       expect(taskServiceSpy.update).not.toHaveBeenCalled();
       // never a second task — its deterministic id would collide with the archived one
       expect(taskServiceSpy.add).not.toHaveBeenCalled();
-      expect(taskServiceSpy.addAndSchedule).not.toHaveBeenCalled();
+      expect(taskSchedulingServiceSpy.addAndSchedule).not.toHaveBeenCalled();
     });
 
     it('does NOT restore a non-recurring archived task', async () => {
       await importForIssue(createPlainspaceIssue({ isRecurring: false }));
 
       expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
-      expect(taskServiceSpy.checkForTaskWithIssueEverywhere).not.toHaveBeenCalled();
+      expect(
+        taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere,
+      ).not.toHaveBeenCalled();
     });
 
     it('does NOT restore while the remote occurrence is still done', async () => {
       await importForIssue(createPlainspaceIssue({ isDone: true }));
 
       expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
-      expect(taskServiceSpy.checkForTaskWithIssueEverywhere).not.toHaveBeenCalled();
+      expect(
+        taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere,
+      ).not.toHaveBeenCalled();
     });
 
     it('does NOT restore while the task is still active', async () => {
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: createArchivedTask({ isDone: false }),
         subTasks: null,
         isFromArchive: false,
@@ -1452,7 +1467,7 @@ describe('IssueService', () => {
     });
 
     it('preserves completed subtasks and clears stale reminders locally and after sync', async () => {
-      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
+      taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: createArchivedTask({ subTaskIds: ['sub-1'] }),
         subTasks: [
           createReducerTask({
@@ -1543,7 +1558,9 @@ describe('IssueService', () => {
 
       await service.checkAndImportNewIssuesToBacklogForProject('ICAL', PROVIDER_ID, true);
 
-      expect(taskServiceSpy.checkForTaskWithIssueEverywhere).not.toHaveBeenCalled();
+      expect(
+        taskArchiveOrchestratorSpy.checkForTaskWithIssueEverywhere,
+      ).not.toHaveBeenCalled();
       expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
     });
 

@@ -5,6 +5,7 @@ import { BehaviorSubject, of } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { AddTaskBarComponent } from './add-task-bar.component';
 import { TaskService } from '../task.service';
+import { TaskSchedulingService } from '../task-scheduling.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
@@ -86,10 +87,12 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       isEnableDeadline: true,
       isEnableProject: true,
     });
+    const taskSchedulingServiceSpy = jasmine.createSpyObj('TaskSchedulingService', [
+      'scheduleTask',
+    ]);
     const taskServiceSpy = jasmine.createSpyObj('TaskService', [
       'add',
       'getByIdOnce$',
-      'scheduleTask',
       'moveToCurrentWorkContext',
     ]);
     const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
@@ -154,6 +157,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       ],
       providers: [
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskSchedulingService, useValue: taskSchedulingServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: TagService, useValue: tagServiceSpy },

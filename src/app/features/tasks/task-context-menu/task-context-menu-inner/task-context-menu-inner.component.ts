@@ -45,6 +45,7 @@ import {
 } from 'rxjs/operators';
 import { Project } from '../../../project/project.model';
 import { TaskService } from '../../task.service';
+import { TaskSchedulingService } from '../../task-scheduling.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
 import { SnackService } from '../../../../core/snack/snack.service';
@@ -132,6 +133,7 @@ import { DIALOG_AUTO_FOCUS_TYPING } from '../../../../util/dialog-auto-focus';
 export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _datePipe = inject(LocaleDatePipe);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskSchedulingService = inject(TaskSchedulingService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
   private readonly _elementRef = inject(ElementRef);
@@ -846,7 +848,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     } else if (this.task.dueWithTime) {
       const task = this.task;
       const newDate = combineDateAndTime(newDayDate, new Date(this.task.dueWithTime));
-      this._taskService.scheduleTask(
+      this._taskSchedulingService.scheduleTask(
         task,
         newDate.getTime(),
         this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
