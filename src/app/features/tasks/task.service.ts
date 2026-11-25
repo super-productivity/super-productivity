@@ -6,15 +6,12 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { merge, Observable } from 'rxjs';
 import { pageHidden$ } from '../../util/page-hidden';
 import {
-  ArchiveTask,
   DEFAULT_TASK,
   DropListModelSource,
   HideSubTasksMode,
   Task,
-  TaskArchive,
   TaskCopy,
   TaskDetailTargetPanel,
-  TaskReminderOptionId,
   TaskState,
   TaskWithSubTasks,
 } from './task.model';
@@ -35,7 +32,6 @@ import {
   updateTaskUi,
 } from './store/task.actions';
 import { getNextHideSubTasksMode } from './util/get-next-hide-sub-tasks-mode';
-import { IssueProviderKey } from '../issue/issue.model';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import {
   selectAllTasks,
@@ -73,7 +69,6 @@ import { getAnchorFromDragDrop } from '../work-context/store/work-context-meta.h
 import { Router } from '@angular/router';
 import { unique } from '../../util/unique';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
-import { remindOptionToMilliseconds } from './util/remind-option-to-milliseconds';
 import {
   moveProjectTaskDownInBacklogList,
   moveProjectTaskInBacklogList,
@@ -99,7 +94,6 @@ import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
 import { devError } from '../../util/dev-error';
-import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
@@ -195,7 +189,6 @@ export class TaskService {
   );
 
   private _lastFocusedTaskEl: WeakRef<HTMLElement> | null = null;
-  private _allTasks$: Observable<Task[]> = this._store.pipe(select(selectAllTasks));
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
 
   private _unsyncedContexts: Map<
@@ -424,25 +417,6 @@ export class TaskService {
       }),
     );
     return task && task.id;
-  }
-
-  async addAndSchedule(
-    title: string | null,
-    additional: Partial<Task> = {},
-    due: number,
-    remindCfg?: TaskReminderOptionId,
-    isIgnoreShortSyntax = false,
-  ): Promise<string> {
-    const id = this.add(title, undefined, additional, undefined, isIgnoreShortSyntax);
-    const task = await this.getByIdOnce$(id).toPromise();
-    this.scheduleTask(
-      task,
-      due,
-      remindCfg ??
-        this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
-        DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
-    );
-    return id;
   }
 
   addToToday(task: TaskWithSubTasks): void {
@@ -1017,46 +991,6 @@ export class TaskService {
     });
   }
 
-  // REMINDER
-  // --------
-  scheduleTask(
-    task: Task | TaskWithSubTasks,
-    due: number,
-    remindCfg: TaskReminderOptionId,
-    isMoveToBacklog: boolean = false,
-  ): void {
-    this._store.dispatch(
-      TaskSharedActions.scheduleTaskWithTime({
-        task,
-        dueWithTime: due,
-        remindAt: remindOptionToMilliseconds(due, remindCfg),
-        isMoveToBacklog,
-      }),
-    );
-  }
-
-  reScheduleTask({
-    task,
-    due,
-    remindCfg,
-    isMoveToBacklog = false,
-  }: {
-    task: Task;
-    due: number;
-    remindCfg: TaskReminderOptionId;
-    isMoveToBacklog: boolean;
-  }): void {
-    this._store.dispatch(
-      TaskSharedActions.reScheduleTaskWithTime({
-        task,
-        dueWithTime: due,
-        remindAt: remindOptionToMilliseconds(due, remindCfg),
-        isMoveToBacklog,
-      }),
-    );
-  }
-
-  // ------
   getByIdOnce$(id: string): Observable<Task> {
     return this._store.pipe(select(selectTaskById, { id }), take(1));
   }
@@ -1182,59 +1116,6 @@ export class TaskService {
 
   // GLOBAL TASK MODEL STUFF
   // -----------------------
-
-  async checkForTaskWithIssueEverywhere(
-    issueId: string | number,
-    issueProviderKey: IssueProviderKey,
-    issueProviderId: string,
-  ): Promise<{
-    task: Task;
-    subTasks: Task[] | null;
-    isFromArchive: boolean;
-  } | null> {
-    if (!issueProviderId) {
-      throw new Error('No issueProviderId');
-    }
-
-    const findTaskFn = (task: Task | ArchiveTask | undefined): boolean =>
-      !!task &&
-      // NOTE: we check all, since it is theoretically possible for the same issueId to appear across issue providers
-      task.issueId === issueId &&
-      task.issueType === issueProviderKey &&
-      task.issueProviderId === issueProviderId;
-
-    const allTasks = (await this._allTasks$.pipe(first()).toPromise()) as Task[];
-    const taskWithSameIssue: Task = allTasks.find(findTaskFn) as Task;
-
-    if (taskWithSameIssue) {
-      return {
-        task: taskWithSameIssue,
-        isFromArchive: false,
-        subTasks: null,
-      };
-    } else {
-      const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
-      const ids = archiveTaskState && (archiveTaskState.ids as string[]);
-      if (ids) {
-        const archiveTaskWithSameIssue = ids
-          .map((id) => archiveTaskState.entities[id])
-          .find(findTaskFn);
-
-        return archiveTaskWithSameIssue
-          ? {
-              task: archiveTaskWithSameIssue as Task,
-              subTasks: archiveTaskWithSameIssue.subTaskIds
-                ? archiveTaskWithSameIssue.subTaskIds
-                    .map((id) => archiveTaskState.entities[id])
-                    .filter((task): task is Task => !!task)
-                : null,
-              isFromArchive: true,
-            }
-          : null;
-      }
-      return null;
-    }
-  }
 
   createNewTaskWithDefaults({
     title,
