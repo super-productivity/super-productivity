@@ -1,7 +1,7 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { Component, NO_ERRORS_SCHEMA } from '@angular/core';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { DragDropModule } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragStart, DragDropModule } from '@angular/cdk/drag-drop';
 import { TranslateModule } from '@ngx-translate/core';
 import { ScheduleEventComponent } from './schedule-event.component';
 import { SVEType } from '../schedule.const';
@@ -402,6 +402,55 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
       setEvent(SVEType.SplitTaskContinuedLast);
       expect(component.isResizable()).toBe(false);
       expect(fixture.nativeElement.querySelector('.resize-handle')).toBeNull();
+    });
+  });
+
+  describe('touch long-press menu (#11977)', () => {
+    // real TouchEvents: the host's CdkDrag reads their touches too
+    const fire = (type: string): Event => {
+      const target: HTMLElement = fixture.nativeElement;
+      const init = { bubbles: true, cancelable: true };
+      const touch = new Touch({ identifier: 1, target });
+      const down = type === 'touchstart' ? [touch] : [];
+      const ev =
+        type === 'contextmenu'
+          ? new MouseEvent(type, init)
+          : new TouchEvent(type, {
+              ...init,
+              touches: down,
+              targetTouches: down,
+              changedTouches: [touch],
+            });
+      target.dispatchEvent(ev);
+      return ev;
+    };
+
+    const longPress = (): jasmine.Spy => {
+      fixture.componentRef.setInput('event', makeTaskScheduleEvent());
+      fixture.detectChanges();
+      const openSpy = spyOn(component.taskContextMenu()!, 'open');
+      fire('touchstart');
+      expect(fire('contextmenu').defaultPrevented).toBe(true);
+      return openSpy;
+    };
+
+    it('should not open the menu when the long-press turns into a drag', () => {
+      const openSpy = longPress();
+      const drag = fixture.debugElement.injector.get(CdkDrag);
+      drag.started.emit({ source: drag } as CdkDragStart);
+      // a long-press timer that fires late, mid-drag
+      fire('contextmenu');
+      fire('touchend');
+
+      expect(openSpy).not.toHaveBeenCalled();
+    });
+
+    it('should open the menu on release when the long-press did not drag', () => {
+      const openSpy = longPress();
+      expect(openSpy).not.toHaveBeenCalled();
+
+      expect(fire('touchend').defaultPrevented).toBe(true);
+      expect(openSpy).toHaveBeenCalledTimes(1);
     });
   });
 
