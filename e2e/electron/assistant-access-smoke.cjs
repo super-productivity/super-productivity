@@ -158,6 +158,50 @@ async function launch() {
       (await call('get_task', { id, includeNotes: true })).structuredContent.task.notes,
       'smoke note',
     );
+    // Edits through the internal assistant routes, with the real store and effects.
+    // Without the edit permission the tool does not exist for this connection.
+    const ungranted = await rpc('tools/call', {
+      name: 'update_task',
+      arguments: { id, isDone: true },
+    });
+    assert.ok(
+      ungranted.body.error,
+      'update_task must not be callable without tasks:edit',
+    );
+    await page.evaluate(() =>
+      window.ea.setAssistantAccessScopes(['tasks:read', 'tasks:capture', 'tasks:edit']),
+    );
+    const { today } = (await call('get_status')).structuredContent;
+    assert.match(today, /^\d{4}-\d{2}-\d{2}$/);
+    const updated = await call('update_task', {
+      id,
+      title: 'MCP smoke edited #literal',
+      dueDate: today,
+      dueTime: '23:30',
+      estimateMinutes: 25,
+    });
+    assert.equal(updated.structuredContent?.status, 'applied');
+    assert.equal(updated.structuredContent.task.title, 'MCP smoke edited #literal');
+    assert.equal(updated.structuredContent.task.timeEstimate, 25 * 60000);
+    assert.ok(updated.structuredContent.task.dueWithTime > 0);
+    assert.equal((await call('update_task', { id, notes: '' })).isError, true);
+    assert.equal((await call('start_task', { id })).structuredContent?.status, 'applied');
+    assert.equal((await call('get_current_task')).structuredContent.task.id, id);
+    await call('stop_tracking');
+    assert.equal((await call('get_current_task')).structuredContent.task, null);
+    const logged = await call('log_time', { id, minutes: 5, date: today, mode: 'set' });
+    assert.equal(logged.structuredContent?.status, 'applied');
+    assert.equal(
+      (await call('update_task', { id, isDone: true })).structuredContent.task.isDone,
+      true,
+    );
+    await page.evaluate(() =>
+      window.ea.setAssistantAccessScopes([
+        'tasks:read',
+        'tasks:read_notes',
+        'tasks:capture',
+      ]),
+    );
     await page.evaluate(() => window.ea.setLocalRestApiEnabled(true));
     await app.close();
     app = undefined;
@@ -166,7 +210,7 @@ async function launch() {
     assert.equal((await fetch('http://127.0.0.1:3876/health')).status, 200);
     assert.equal(
       (await call('get_task', { id })).structuredContent.task.title,
-      'MCP smoke #literal',
+      'MCP smoke edited #literal',
     );
     await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0].minimize(),
@@ -182,7 +226,7 @@ async function launch() {
     await page.evaluate(() => window.ea.rotateAssistantAccessCredential());
     assert.equal((await rpc('ping', {})).status, 401);
     console.log(
-      'PASS: real Electron capture, scopes, auth, persisted dual-switch startup, minimize, hide/show, reload and rotation',
+      'PASS: real Electron capture, edits, scopes, auth, persisted dual-switch startup, minimize, hide/show, reload and rotation',
     );
   } finally {
     if (app) await app.close();

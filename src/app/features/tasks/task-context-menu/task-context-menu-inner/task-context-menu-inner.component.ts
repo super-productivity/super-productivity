@@ -70,8 +70,7 @@ import { Store } from '@ngrx/store';
 import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
 import { MatTooltip } from '@angular/material/tooltip';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
-import { PlannerActions } from '../../../planner/store/planner.actions';
-import { combineDateAndTime } from '../../../../util/combine-date-and-time';
+import { TaskScheduleService } from '../../task-schedule.service';
 import { getNextWeekDayOffset } from '../../../../util/get-next-week-day-offset';
 import { DateAdapter } from '@angular/material/core';
 import { ICAL_TYPE, PLAINSPACE_TYPE } from '../../../issue/issue.const';
@@ -89,7 +88,6 @@ import { MenuTouchFixDirective } from '../menu-touch-fix.directive';
 import { TaskLog } from '../../../../core/log';
 import { isTouchEventInstance } from '../../../../util/is-touch-event.util';
 import { TaskFocusService } from '../../task-focus.service';
-import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-config.const';
 import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
 import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
@@ -147,6 +145,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _dateService = inject(DateService);
+  private readonly _taskScheduleService = inject(TaskScheduleService);
   private readonly _menuTreeService = inject(MenuTreeService);
   private readonly _addSubtaskInputService = inject(AddSubtaskInputService);
   private readonly _taskDuplicateService = inject(TaskDuplicateService);
@@ -676,15 +675,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   addToMyDay(): void {
-    this._store.dispatch(
-      TaskSharedActions.planTasksForToday({
-        taskIds: [this.task.id],
-        today: this._dateService.todayStr(),
-        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
-        parentTaskMap: { [this.task.id]: this.task.parentId },
-        isShowSnack: true,
-      }),
-    );
+    this._taskScheduleService.planForToday(this.task);
   }
 
   unschedule(): void {
@@ -809,63 +800,26 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private async _schedule(selectedDate: Date, isRemoveFromToday = false): Promise<void> {
+  private _schedule(selectedDate: Date): void {
     if (!selectedDate) {
       TaskLog.err('no selected date');
       return;
     }
 
-    const newDayDate = new Date(selectedDate);
-    const newDay = getDbDateStr(newDayDate);
-
-    // If task is already scheduled for today with time and we're planning for today,
-    // just add to my day (which clears the reminder) instead of rescheduling
-    if (
-      this.task.dueWithTime &&
-      this._dateService.isToday(this.task.dueWithTime) &&
+    const newDay = getDbDateStr(new Date(selectedDate));
+    if (this._taskScheduleService.planForDay(this.task, newDay)) {
+      return;
+    }
+    const formattedDate =
       newDay === this._dateService.todayStr()
-    ) {
-      this.addToMyDay();
-      return;
-    }
-
-    if (isRemoveFromToday) {
-      this.unschedule();
-    } else if (this.task.dueDay === newDay) {
-      const formattedDate =
-        newDay === this._dateService.todayStr()
-          ? this._translateService.instant(T.G.TODAY_TAG_TITLE)
-          : (this._datePipe.transform(newDay, 'shortDate') as string);
-      this._snackService.open({
-        type: 'CUSTOM',
-        ico: 'info',
-        msg: T.F.PLANNER.S.TASK_ALREADY_PLANNED,
-        translateParams: { date: formattedDate },
-      });
-      return;
-    } else if (this.task.dueWithTime) {
-      const task = this.task;
-      const newDate = combineDateAndTime(newDayDate, new Date(this.task.dueWithTime));
-      this._taskService.scheduleTask(
-        task,
-        newDate.getTime(),
-        this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
-          DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
-        false,
-      );
-    } else {
-      if (newDay === this._dateService.todayStr()) {
-        this.addToMyDay();
-      } else {
-        this._store.dispatch(
-          PlannerActions.planTaskForDay({
-            task: this.task,
-            day: newDay,
-            isShowSnack: true,
-          }),
-        );
-      }
-    }
+        ? this._translateService.instant(T.G.TODAY_TAG_TITLE)
+        : (this._datePipe.transform(newDay, 'shortDate') as string);
+    this._snackService.open({
+      type: 'CUSTOM',
+      ico: 'info',
+      msg: T.F.PLANNER.S.TASK_ALREADY_PLANNED,
+      translateParams: { date: formattedDate },
+    });
   }
 
   unscheduleTask(): void {

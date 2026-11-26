@@ -10,6 +10,7 @@ import {
   AssistantAccessCredentialResult,
   AssistantAccessScope,
   AssistantAccessState,
+  getRequiredScope,
 } from '../shared-with-frontend/assistant-access.model';
 import { loadSimpleStoreAll, saveSimpleStore } from '../simple-store';
 import { readSecretFile, writeSecretFile } from '../secure-file';
@@ -55,17 +56,19 @@ const hashCredential = (credential: string): Buffer =>
   createHash('sha256').update(credential, 'utf8').digest();
 
 /**
- * Keeps only known scopes, in canonical order, and drops notes access when
- * summary access is missing — notes are only reachable through a task read.
+ * Keeps only known scopes, in canonical order, and drops a scope whose required
+ * scope is missing (see getRequiredScope): notes and the archive
+ * are only reachable through a task read, and a write answers with what it read.
  */
 export const normalizeScopes = (input: unknown): AssistantAccessScope[] => {
   if (!Array.isArray(input)) {
     return [];
   }
   const requested = ASSISTANT_ACCESS_SCOPES.filter((scope) => input.includes(scope));
-  return requested.includes('tasks:read')
-    ? requested
-    : requested.filter((scope) => scope !== 'tasks:read_notes');
+  return requested.filter((scope) => {
+    const required = getRequiredScope(scope);
+    return required === undefined || requested.includes(required);
+  });
 };
 
 const toPersisted = (): PersistedSettings => ({ isEnabled, scopes: [...scopes] });
