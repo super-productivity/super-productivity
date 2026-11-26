@@ -35,6 +35,12 @@ capture_diagnostics() {
 # The emulator reports a hardware keyboard, which keeps the soft keyboard
 # hidden; ImeInsetShimInstrumentedTest needs it to open. See that test.
 adb shell settings put secure show_ime_with_hard_keyboard 1 || true
+# A freshly booted emulator can ANR the launcher; its "isn't responding" dialog
+# keeps window focus, the app window never gains it and the IME never serves the
+# WebView ("WebView had an input connection: false", runs 44915552155 and
+# 45868773514). Same fix as run-android-ime-check.sh, which hit it first.
+adb shell settings put global hide_error_dialogs 1 || true
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null || true
 adb logcat -c || true
 
 # Bounded so a hung instrumentation fails with a report instead of consuming the

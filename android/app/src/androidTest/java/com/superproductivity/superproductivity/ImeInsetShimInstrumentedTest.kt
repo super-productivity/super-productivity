@@ -208,8 +208,18 @@ class ImeInsetShimInstrumentedTest {
         }
     }
 
-    /** Focuses the field and asks for the IME. Returns whether an input connection existed. */
-    private fun showIme(activity: CapacitorMainActivity, webView: WebView): Boolean {
+    /** What [showIme] could establish before asking; only reported, never asserted. */
+    private data class ImeRequest(val windowFocused: Boolean, val served: Boolean)
+
+    /** Focuses the field and asks for the IME. */
+    private fun showIme(activity: CapacitorMainActivity, webView: WebView): ImeRequest {
+        // The IME only serves the focused window. A system dialog over the app
+        // (a launcher ANR on a freshly booted emulator) keeps window focus, and
+        // every step below then silently does nothing — so wait for it first and
+        // name it in the failure if it never comes.
+        val windowFocused = awaitTrue("the activity window to gain focus") {
+            onMainSync { activity.hasWindowFocus() }
+        }
         // View focus first, then the editable inside it, then the request: a
         // programmatic focus() without a user gesture does not raise the IME by
         // itself, and show(ime()) needs an editor attached to the focused view.
@@ -221,34 +231,36 @@ class ImeInsetShimInstrumentedTest {
         // A request issued before then is dropped outright — "Ignoring
         // showSoftInput() as view ... is not served", the whole failure in run
         // 33975587718 — so wait for the connection instead of racing it.
-        val served = awaitServedView(activity, webView)
+        val served = awaitTrue("the WebView to get an input connection") {
+            onMainSync { inputMethodManager(activity).isActive(webView) }
+        }
         onMainSync {
             WindowInsetsControllerCompat(activity.window, webView)
                 .show(WindowInsetsCompat.Type.ime())
         }
-        return served
+        return ImeRequest(windowFocused, served)
     }
 
     /**
-     * Waits until the IME has an input connection to [webView], i.e. a show
-     * request would reach the IME instead of being ignored. Reports a miss
-     * rather than failing on it, so that a genuine never-opens failure still
-     * fails on the geometry with the full reading rather than dying here.
+     * Waits for a precondition of a show request reaching the IME (window focus,
+     * an input connection to the WebView). Reports a miss rather than failing on
+     * it, so that a genuine never-opens failure still fails on the geometry with
+     * the full reading rather than dying here.
      */
-    private fun awaitServedView(
-        activity: CapacitorMainActivity,
-        webView: WebView,
+    private fun awaitTrue(
+        waitingFor: String,
         timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
+        check: () -> Boolean,
     ): Boolean {
         val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(timeoutSeconds)
         do {
-            if (onMainSync { inputMethodManager(activity).isActive(webView) }) return true
+            if (check()) return true
             // Coarser than POLL_MS: isActive() can hit system_server synchronously,
             // and this wait exists for the case where that server is already the
             // slow part. Detection latency does not matter at this granularity.
             SystemClock.sleep(SERVED_POLL_MS)
         } while (SystemClock.elapsedRealtime() < deadline)
-        Log.i(TAG, "WebView still has no input connection after ${timeoutSeconds}s")
+        Log.i(TAG, "Still waiting for $waitingFor after ${timeoutSeconds}s")
         return false
     }
 
@@ -280,7 +292,7 @@ class ImeInsetShimInstrumentedTest {
         // holds focus — the focusing steps return early and the renderer re-reports
         // nothing — so the wait, not the focus, is what makes this retry worth a try.)
         Log.i(TAG, "IME not open after show(ime()); retrying the request and the wait")
-        val served = showIme(activity, webView)
+        val request = showIme(activity, webView)
         onMainSync {
             inputMethodManager(activity)
                 .showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
@@ -289,9 +301,10 @@ class ImeInsetShimInstrumentedTest {
             activity,
             webView,
             "the IME to open (visible frame must drop by more than 15% of the root height; " +
-                "WebView had an input connection: $served — false means the request was " +
-                "very likely dropped before reaching the IME; on an emulator make sure " +
-                "`settings put secure show_ime_with_hard_keyboard 1` ran)",
+                "window had focus: ${request.windowFocused}, WebView had an input connection: " +
+                "${request.served} — false means the request was very likely dropped before " +
+                "reaching the IME; on an emulator make sure `settings put secure " +
+                "show_ime_with_hard_keyboard 1` and `settings put global hide_error_dialogs 1` ran)",
         ) { it.keyboardOpenPerListener }
     }
 
