@@ -8,7 +8,8 @@ import {
   ScheduleLunchBreakCfg,
   ScheduleWorkStartEndCfg,
 } from '../schedule.model';
-import { createScheduleDays } from './create-schedule-days';
+import { createScheduleDays, getBudgetLeftForDay } from './create-schedule-days';
+import { ScheduleTrayCfg, withScheduleDayTray } from './with-schedule-day-tray';
 import { createBlockedBlocksByDayMap } from './create-blocked-blocks-by-day-map';
 
 export const mapToScheduleDays = (
@@ -30,6 +31,9 @@ export const mapToScheduleDays = (
   realNow?: number,
   startOfNextDayDiffMs: number = 0,
   weekendDays: number[] = [],
+  // Set = tray mode: untimed tasks stay out of the grid and are returned per
+  // day as `ScheduleDay.tray`. Unset = auto-placement.
+  trayCfg?: ScheduleTrayCfg,
 ): ScheduleDay[] => {
   // NOTE to use for failing test cases
   // const params = {
@@ -94,6 +98,36 @@ export const mapToScheduleDays = (
     realNow,
     startOfNextDayDiffMs,
   );
+
+  if (trayCfg) {
+    // Today list order, not `initialTasks`: nothing is placed, so the current
+    // task has no slot to be moved to the front of.
+    const untimedTasks = tasks.filter((task) => typeof task.dueWithTime !== 'number');
+    // No flow tasks, untimed repeats or planner days: the grid gets the blocker
+    // blocks only (timed tasks, calendar events, lunch, work hours).
+    return createScheduleDays(
+      [],
+      [],
+      dayDates,
+      {},
+      blockerBlocksDayMap,
+      workStartEndCfg,
+      now,
+      realNow,
+      weekendDays,
+    ).map((day, i) =>
+      withScheduleDayTray(day, {
+        tasks: untimedTasks,
+        plannerTasks: plannerDayMap[day.dayDate] || [],
+        repeatCfgs: unScheduledTaskRepeatCfgs,
+        budgetMs: getBudgetLeftForDay(
+          blockerBlocksDayMap[day.dayDate] || [],
+          i === 0 ? now : undefined,
+        ),
+        isCapacityLimited: trayCfg.isCapacityLimited,
+      }),
+    );
+  }
 
   const v = createScheduleDays(
     nonScheduledTasks,

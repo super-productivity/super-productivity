@@ -24,8 +24,10 @@ import { LOCK_NAMES } from '../../op-log/core/operation-log.const';
 
 /**
  * Maps tasks to archive format by:
- * - Setting isDone=true
+ * - Setting isDone=true on root tasks; subtasks keep their own isDone so an
+ *   undone subtask of a done parent is restored undone (#11720)
  * - Computing doneOn from task.doneOn, parent.doneOn, or fallback to now
+ *   (undone subtasks keep no doneOn)
  * - Clearing reminder/scheduling fields
  */
 const mapTasksToArchiveFormat = (
@@ -34,6 +36,15 @@ const mapTasksToArchiveFormat = (
   logPrefix: string,
 ): Task[] => {
   return flatTasks.map((task: Task) => {
+    const archiveFields = {
+      reminderId: undefined,
+      dueWithTime: undefined,
+      dueDay: undefined,
+      _hideSubTasksMode: undefined,
+    };
+    if (task.parentId && !task.isDone) {
+      return { ...task, ...archiveFields, isDone: false, doneOn: undefined };
+    }
     let doneOn: number;
     if (task.isDone && task.doneOn) {
       doneOn = task.doneOn;
@@ -50,15 +61,7 @@ const mapTasksToArchiveFormat = (
     } else {
       doneOn = now;
     }
-    return {
-      ...task,
-      reminderId: undefined,
-      isDone: true,
-      dueWithTime: undefined,
-      dueDay: undefined,
-      _hideSubTasksMode: undefined,
-      doneOn,
-    };
+    return { ...task, ...archiveFields, isDone: true, doneOn };
   });
 };
 

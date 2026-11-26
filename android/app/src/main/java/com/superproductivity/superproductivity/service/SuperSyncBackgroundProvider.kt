@@ -96,9 +96,10 @@ class SuperSyncBackgroundProvider(
         baseUrl: String,
         accessToken: String,
         lastSeq: Long,
-        limit: Int
+        limit: Int,
+        repeatState: RepeatCfgSyncState,
     ): ReminderChangeResult? {
-        return doFetch(httpClient, baseUrl, accessToken, lastSeq, limit)
+        return doFetch(httpClient, baseUrl, accessToken, lastSeq, limit, repeatState)
     }
 
     /**
@@ -111,9 +112,10 @@ class SuperSyncBackgroundProvider(
         baseUrl: String,
         accessToken: String,
         lastSeq: Long,
-        limit: Int = 100
+        limit: Int = 100,
+        repeatState: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
     ): ReminderChangeResult? {
-        return doFetch(quickHttpClient, baseUrl, accessToken, lastSeq, limit)
+        return doFetch(quickHttpClient, baseUrl, accessToken, lastSeq, limit, repeatState)
     }
 
     private suspend fun doFetch(
@@ -121,7 +123,8 @@ class SuperSyncBackgroundProvider(
         baseUrl: String,
         accessToken: String,
         lastSeq: Long,
-        limit: Int
+        limit: Int,
+        repeatState: RepeatCfgSyncState,
     ): ReminderChangeResult? {
         val url = "${baseUrl.trimEnd('/')}/api/sync/ops?sinceSeq=$lastSeq&limit=$limit"
         val request = Request.Builder()
@@ -140,7 +143,7 @@ class SuperSyncBackgroundProvider(
                     return null
                 }
                 val body = resp.body?.string() ?: return null
-                parseResponse(body)
+                parseResponse(body, repeatState)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch ops from $baseUrl", e)
@@ -148,10 +151,16 @@ class SuperSyncBackgroundProvider(
         }
     }
 
-    internal fun parseResponse(body: String): ReminderChangeResult {
+    internal fun parseResponse(
+        body: String,
+        repeatState: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
+    ): ReminderChangeResult {
         val json = JSONObject(body)
         val ops = json.optJSONArray("ops")
-            ?: return ReminderChangeResult(emptySet(), emptyList(), json.optLong("latestSeq", 0L), false)
+            ?: return ReminderChangeResult(
+                emptySet(), emptyList(), json.optLong("latestSeq", 0L), false,
+                nextRepeatState = repeatState,
+            )
         val hasMore = json.optBoolean("hasMore", false)
         // latestSeq is the server's global watermark, not the end of this page.
         // The worker must request the remaining ops before persisting that watermark.
@@ -171,12 +180,18 @@ class SuperSyncBackgroundProvider(
         val taskIdsToCancel = mutableSetOf<String>()
         val reminderIdsToCancel = mutableSetOf<String>()
         val unreadableTaskIds = mutableSetOf<String>()
+        val repeatCfgIdsRemoved = mutableSetOf<String>()
+        var nextRepeatState = repeatState
 
         for (i in 0 until ops.length()) {
             val serverOp = ops.getJSONObject(i)
             val op = serverOp.getJSONObject("op")
             // Lazy so envelope-only ops (e.g. DEL) never pay for decryption
             val payload = lazy(LazyThreadSafetyMode.NONE) { resolvePayload(op) }
+
+            if (op.optString("entityType", "") in RepeatCfgSync.ENTITY_TYPES) {
+                nextRepeatState = RepeatCfgSync.fold(nextRepeatState, op, payload, repeatCfgIdsRemoved)
+            }
 
             val tempMap = mutableMapOf<Pair<String, Boolean>, ReminderToSchedule>()
             extractRemindersToSchedule(op, payload, tempMap, now)
@@ -214,6 +229,8 @@ class SuperSyncBackgroundProvider(
             latestSeq = latestSeq,
             hasMore = hasMore,
             unreadableTaskIds = unreadableTaskIds,
+            repeatCfgIdsRemoved = repeatCfgIdsRemoved,
+            nextRepeatState = nextRepeatState,
         )
     }
 

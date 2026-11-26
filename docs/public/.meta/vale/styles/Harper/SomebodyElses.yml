@@ -1,0 +1,20 @@
+---
+# Generated from Harper's SomebodyElses rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `somebody else's` when the `'s` is in the wrong place.
+extends: existence
+message: "This should be `somebody else's`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "somebody else's"
+tokens:
+  - "somebody's(?!\\s*\\n\\s*\\n)\\s+else's(?!['\\x{2019}]s\\b)"
+  - "somebody's(?!\\s*\\n\\s*\\n)\\s+else(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's CanBeSeen rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `can be seem` to the proper phrase `can be seen`.
+extends: existence
+message: "Did you mean `can be seen`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "can be seen"
+tokens:
+  - "can(?!\\s*\\n\\s*\\n)\\s+be(?!\\s*\\n\\s*\\n)\\s+seem(?!['\\x{2019}]s\\b)"

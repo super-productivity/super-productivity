@@ -1,0 +1,19 @@
+---
+# Generated from Harper's EverPresent rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the missing hyphen in `ever present` to the compound adjective `ever-present`.
+extends: existence
+message: "Hyphenate `ever-present` when it functions as a compound adjective."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "ever-present"
+tokens:
+  - "ever(?!\\s*\\n\\s*\\n)\\s+present(?!['\\x{2019}]s\\b)"

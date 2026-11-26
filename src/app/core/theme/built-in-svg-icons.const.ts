@@ -19,6 +19,7 @@ export const BUILT_IN_SVG_ICONS: readonly (readonly [string, string])[] = [
   ['plainspace', 'assets/icons/plainspace.svg'],
   // Header sync button states: one ring drawn at the header's icon size
   ['sync_ring', 'assets/icons/sync-ring.svg'],
+  ['sync_in_progress', 'assets/icons/sync-in-progress.svg'],
   ['sync_done', 'assets/icons/sync-done.svg'],
   ['sync_error', 'assets/icons/sync-error.svg'],
   ['sync_off', 'assets/icons/sync-off.svg'],

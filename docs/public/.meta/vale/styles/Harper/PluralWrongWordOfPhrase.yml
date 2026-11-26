@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's PluralWrongWordOfPhrase: these phrases take their
+# plural on the first noun.
+#
+# The generated rule keyed on punctuation. Harper drives this from a table of
+# eight phrases, which is short enough to write out.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "This phrase is pluralized on the main noun, not on the last noun."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\b(?:body|bodies)\s+in\s+whites\b': "bodies in white"
+  '\b(?:flash|flashes)\s+in[\s-]the\s+pans\b': "flashes in the pan"
+  '\blines?\s+of\s+codes\b': "lines of code"
+  '\bparts?\s+of\s+speeches\b': "parts of speech"
+  '\bpoints?\s+of\s+views\b': "points of view"
+  '\bproofs?\s+of\s+concepts\b': "proofs of concept"
+  '\brules?\s+of\s+thumbs\b': "rules of thumb"

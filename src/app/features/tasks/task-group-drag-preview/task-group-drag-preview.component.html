@@ -1,0 +1,8 @@
+<div class="multi-task-drag-preview-count">
+  {{ T.F.TASK.MULTI_SELECT.SELECTED_COUNT | translate: { count: count() } }}
+</div>
+<div class="multi-task-drag-preview-tasks">
+  @for (task of tasks(); track task.id) {
+    <div class="multi-task-drag-preview-row">{{ task.title }}</div>
+  }
+</div>

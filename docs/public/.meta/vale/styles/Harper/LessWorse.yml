@@ -1,0 +1,23 @@
+---
+# Generated from Harper's LessWorse linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+#
+# Suggests alternatives to `less/least worse/worst` for more standard,
+# clearer comparisons.
+extends: substitution
+message: "Suggests alternatives to `less/least worse/worst` for more standard, clearer comparisons."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "least(?!\\s*\\n\\s*\\n)\\s+worse": "less bad"
+  "least-worst": "least bad|least worst"
+  "less(?!\\s*\\n\\s*\\n)\\s+worst": "least bad"

@@ -27,6 +27,14 @@
   </style>
 
 
+  <!-- The widget picker shows its own AlertDialog over the home screen. -->
+  <style name="AppTheme.WidgetConfigure" parent="AppTheme.NoActionBar">
+    <item name="android:windowIsTranslucent">true</item>
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:backgroundDimEnabled">false</item>
+  </style>
+
+
   <style name="AppTheme.NoActionBarLaunch" >
     <item name="android:windowActionBarOverlay">true</item>
     <!--

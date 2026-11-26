@@ -1,0 +1,21 @@
+---
+# Generated from Harper's LowHangingFruit rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects nonstandard variants of `low-hanging fruit`.
+extends: existence
+message: "The standard form is `low-hanging fruit` with a hyphen and singular form."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "low-hanging fruit"
+tokens:
+  - "low(?!\\s*\\n\\s*\\n)\\s+hanging(?!\\s*\\n\\s*\\n)\\s+fruits(?!['\\x{2019}]s\\b)"
+  - "low(?!\\s*\\n\\s*\\n)\\s+hanging(?!\\s*\\n\\s*\\n)\\s+fruit(?!['\\x{2019}]s\\b)"
+  - "low-hanging(?!\\s*\\n\\s*\\n)\\s+fruits(?!['\\x{2019}]s\\b)"

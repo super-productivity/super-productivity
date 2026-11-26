@@ -1,0 +1,10 @@
+extends: existence
+message: "LLM citation artifact detected: '%s'"
+level: error
+link: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
+nonword: true
+tokens:
+  - '↩\d+'
+  - '\[↩\]'
+  - '<sup>\[↩\]</sup>'
+  - '\{\{cite[^}]+\}\}<sup>\[\d+\]</sup>'

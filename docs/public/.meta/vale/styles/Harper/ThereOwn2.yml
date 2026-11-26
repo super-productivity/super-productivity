@@ -1,0 +1,17 @@
+---
+# Hand-written from Harper's ThereOwn -- the contraction forms, which Harper
+# flags wherever they appear. See ThereOwn.yml.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean the possessive `their`?"
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'they''re|theyre'
+    target: true
+  - pattern: 'own'
+    target: true

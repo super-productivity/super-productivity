@@ -487,6 +487,23 @@ describe('RuleRegistry', () => {
     expect(persistDataSyncedMock).not.toHaveBeenCalled();
   });
 
+  it('zero-pads loaded and imported H:MM time triggers to match the runtime HH:MM', async () => {
+    const timeRule = (id: string, value: string): AutomationRule => ({
+      id,
+      name: id,
+      isEnabled: true,
+      trigger: { type: 'timeBased', value },
+      conditions: [],
+      actions: [],
+    });
+    loadSyncedDataMock.mockResolvedValue(JSON.stringify([timeRule('loaded', '8:15')]));
+    registry = new RuleRegistry(mockPlugin);
+
+    await registry.addRules([timeRule('imported', '9:00')]);
+
+    expect((await registry.getRules()).map((r) => r.trigger.value)).toEqual(['08:15', '09:00']);
+  });
+
   it('should update existing rule', async () => {
     const unsupportedRule = {
       id: 'future-trigger',

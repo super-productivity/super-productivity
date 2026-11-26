@@ -129,6 +129,12 @@ describe('DefaultStartPageGuard', () => {
     expectUrl(await runGuard(), TODAY_URL);
   });
 
+  it('routes a view start page to that view without a project lookup', async () => {
+    misc$.next({ defaultStartPage: 'view:b1' });
+    expectUrl(await runGuard(), '/boards/b1');
+    expect(getByIdOnce$).not.toHaveBeenCalled();
+  });
+
   it('falls back to Today when Boards disabled', async () => {
     appFeatures.and.returnValue({
       isPlannerEnabled: true,

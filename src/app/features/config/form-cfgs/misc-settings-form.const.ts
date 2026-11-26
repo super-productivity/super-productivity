@@ -13,6 +13,11 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
   key: 'misc',
   help: T.GCF.MISC.HELP,
   items: [
+    {
+      key: 'isHideNavTaskCount',
+      type: 'checkbox',
+      templateOptions: { label: T.GCF.MISC.IS_HIDE_NAV_TASK_COUNT },
+    },
     ...(IS_ELECTRON
       ? ([
           {

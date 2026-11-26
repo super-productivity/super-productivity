@@ -1,0 +1,19 @@
+---
+# Generated from Harper's IveGotTo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the slip `I've go to` to the idiomatic `I've got to`.
+extends: existence
+message: "Use `I've got to` for necessity or obligation."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "I've got to"
+tokens:
+  - "I've(?!\\s*\\n\\s*\\n)\\s+go(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"

@@ -59,11 +59,17 @@ test.describe('@supersync SuperSync browser sign-in', () => {
       await expect(signIn).toBeHidden({ timeout: 15000 });
       const setupPassword = page.locator('dialog-enable-encryption');
       await expect(setupPassword).toBeVisible({ timeout: 20000 });
-      await setupPassword.locator('.e2e-setup-encrypt-password').fill(config.password!);
-      await setupPassword
-        .locator('.e2e-setup-encrypt-confirm-password')
-        .fill(config.password!);
-      await setupPassword.locator('.e2e-setup-encrypt-submit').click();
+      const submit = setupPassword.locator('.e2e-setup-encrypt-submit');
+      // The dialog's auto-focus can move focus back to the first field mid-fill,
+      // appending the confirm value there; re-fill until the passwords match.
+      await expect(async () => {
+        await setupPassword.locator('.e2e-setup-encrypt-password').fill(config.password!);
+        await setupPassword
+          .locator('.e2e-setup-encrypt-confirm-password')
+          .fill(config.password!);
+        await expect(submit).toBeEnabled({ timeout: 1000 });
+      }).toPass({ timeout: 10000 });
+      await submit.click();
 
       // Then the finish screen confirms sync is on.
       const finished = page.locator('dialog-sync-finished');
