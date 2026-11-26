@@ -1,3 +1,5 @@
+import { ProjectService } from '../../../features/project/project.service';
+import { TagService } from '../../../features/tag/tag.service';
 import {
   Component,
   EnvironmentProviders,
@@ -10,11 +12,12 @@ import {
 } from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject, Subject, of } from 'rxjs';
 import { NavigationEnd, provideRouter, Router, RouterLink } from '@angular/router';
 import { MatTooltip } from '@angular/material/tooltip';
 import { By } from '@angular/platform-browser';
+import { MatDialog } from '@angular/material/dialog';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { LayoutService } from '../../layout/layout.service';
 import { TranslateModule, TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -38,6 +41,9 @@ import { PluginMenuEntryCfg } from '../../../plugins/plugin-api.model';
 import { PluginState } from '../../../plugins/plugin-state.model';
 import { BoardCfg } from '../../../features/boards/boards.model';
 import { BoardsService } from '../../../features/boards/boards.service';
+import { DEFAULT_PROJECT } from '../../../features/project/project.const';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { SnackService } from '../../../core/snack/snack.service';
 
 // The title's spacing tokens are declared by main-header and inherited, so this
 // host pulls in that stylesheet and mounts the real `page-title` under it —
@@ -95,6 +101,10 @@ describe('PageTitleComponent', () => {
   let pluginStates: Map<string, PluginState>;
   let editBoardSpy: jasmine.Spy;
   let setViewLayoutSpy: jasmine.Spy;
+  let projectGetByIdSpy: jasmine.Spy;
+  let tagGetByIdSpy: jasmine.Spy;
+  let dialogOpenSpy: jasmine.Spy;
+  let snackOpenSpy: jasmine.Spy;
   let langChange$: Subject<unknown>;
   let translateInstant: (key: string) => string;
 
@@ -117,10 +127,14 @@ describe('PageTitleComponent', () => {
       provide: BoardsService,
       useValue: { editBoard: editBoardSpy, setViewLayout: setViewLayoutSpy },
     },
+    { provide: ProjectService, useValue: { getByIdOnce$: projectGetByIdSpy } },
+    { provide: TagService, useValue: { getTagById$: tagGetByIdSpy } },
     // The phone breakpoint (LayoutService); the smallest one (350px) is the
     // page title's own.
     { provide: LayoutService, useValue: { isXs: () => isXs() } },
     { provide: BreakpointObserver, useValue: { observe: () => isXxxs$ } },
+    { provide: MatDialog, useValue: { open: dialogOpenSpy } },
+    { provide: SnackService, useValue: { open: snackOpenSpy } },
     {
       provide: WorkContextService,
       useValue: {
@@ -195,6 +209,10 @@ describe('PageTitleComponent', () => {
     openMenuRequest$ = new Subject<void>();
     editBoardSpy = jasmine.createSpy('editBoard').and.returnValue(Promise.resolve());
     setViewLayoutSpy = jasmine.createSpy('setViewLayout');
+    projectGetByIdSpy = jasmine.createSpy('getByIdOnce$').and.returnValue(of(undefined));
+    tagGetByIdSpy = jasmine.createSpy('getTagById$').and.returnValue(of(undefined));
+    dialogOpenSpy = jasmine.createSpy('open');
+    snackOpenSpy = jasmine.createSpy('open');
     openSpy = jasmine
       .createSpy('openProjectOnPlainspace')
       .and.returnValue(Promise.resolve());
@@ -670,6 +688,7 @@ describe('PageTitleComponent', () => {
     let navigateSpy: jasmine.Spy;
     let title: HTMLElement;
     let tooltip: MatTooltip;
+    let fixture: ComponentFixture<PageTitleComponent>;
 
     const renderTitle = async (url: string): Promise<void> => {
       TestBed.resetTestingModule();
@@ -696,12 +715,17 @@ describe('PageTitleComponent', () => {
       const router = TestBed.inject(Router);
       spyOnProperty(router, 'url', 'get').and.returnValue(url);
       navigateSpy = spyOn(router, 'navigateByUrl').and.resolveTo(true);
-      const fixture = TestBed.createComponent(PageTitleComponent);
+      fixture = TestBed.createComponent(PageTitleComponent);
       fixture.detectChanges();
       const titleDe = fixture.debugElement.query(By.css('.page-title'));
       title = titleDe.nativeElement as HTMLElement;
       tooltip = titleDe.injector.get(MatTooltip);
     };
+
+    const waitForDialogOpen = (): Promise<void> =>
+      new Promise((resolve) => {
+        dialogOpenSpy.and.callFake(() => resolve());
+      });
 
     const navigatedTo = (): string[] =>
       navigateSpy.calls.allArgs().map(([tree]) => String(tree));
@@ -739,10 +763,42 @@ describe('PageTitleComponent', () => {
       });
     });
 
-    [
-      ['the task list', '/active/tasks'],
-      ['/boards without a view', '/boards'],
-    ].forEach(([label, url]) => {
+    it('opens tag settings on the Today task list, not a link', async () => {
+      tagGetByIdSpy.and.returnValue(of(TODAY_TAG));
+      await renderTitle('/tag/TODAY/tasks');
+      const dialogOpened = waitForDialogOpen();
+      title.click();
+      await dialogOpened;
+      expect(navigateSpy).not.toHaveBeenCalled();
+      expect(title.getAttribute('role')).toBe('button');
+      expect(tooltip.message).toBe(T.MH.SETTINGS);
+      expect(tagGetByIdSpy).toHaveBeenCalledOnceWith('TODAY');
+      expect(dialogOpenSpy).toHaveBeenCalledTimes(1);
+      expect(dialogOpenSpy.calls.mostRecent().args[1].data).toEqual({
+        isProject: false,
+        entity: TODAY_TAG,
+      });
+    });
+
+    it('opens project settings on the project task list, not a link', async () => {
+      typeAndId$.next({ activeId: 'p1', activeType: WorkContextType.PROJECT });
+      projectGetByIdSpy.and.returnValue(of(DEFAULT_PROJECT));
+      await renderTitle('/project/p1/tasks');
+      const dialogOpened = waitForDialogOpen();
+      title.click();
+      await dialogOpened;
+      expect(navigateSpy).not.toHaveBeenCalled();
+      expect(title.getAttribute('role')).toBe('button');
+      expect(tooltip.message).toBe(T.MH.SETTINGS);
+      expect(projectGetByIdSpy).toHaveBeenCalledOnceWith('p1');
+      expect(dialogOpenSpy).toHaveBeenCalledTimes(1);
+      expect(dialogOpenSpy.calls.mostRecent().args[1].data).toEqual({
+        isProject: true,
+        entity: DEFAULT_PROJECT,
+      });
+    });
+
+    [['/boards without a view', '/boards']].forEach(([label, url]) => {
       it(`still links to the task list on ${label}`, async () => {
         await renderTitle(url);
         title.click();
