@@ -11,8 +11,12 @@ fi
 cat "$RUNNER_TEMP/setup.sh"
 bash "$RUNNER_TEMP/setup.sh"
 rm -rf app/build/outputs/androidTest-results
+adb logcat -c || true
+# Host wall clock (the emulator's clock follows it) so lines line up with logcat.
 ( while :; do
-    printf '%s %s\n' "$SECONDS" "$(adb shell dumpsys window 2>/dev/null | grep -E 'mCurrentFocus=' | head -1 | tr -s ' ')"
+    f=$(adb shell dumpsys window displays 2>/dev/null | grep -E 'mCurrentFocus=|mFocusedApp=' | tr -s ' ' | tr '\n' ' ')
+    r=$(adb shell dumpsys activity activities 2>/dev/null | grep -E 'topResumedActivity=|mResumedActivity:|ResumedActivity:' | head -2 | tr -s ' ' | tr '\n' ' ')
+    printf '%s %s %s\n' "$(date +%T)" "$f" "$r"
     sleep 1
   done ) > "$RUNNER_TEMP/focus.log" 2>&1 &
 poller=$!
@@ -20,10 +24,11 @@ timeout 480 ./gradlew :app:connectedPlayDebugAndroidTest > "$RUNNER_TEMP/gradle.
 status=$?
 kill "$poller" 2>/dev/null
 if [ "$status" -ne 0 ]; then
-  xml=$(find app/build -name 'TEST-*.xml' 2>/dev/null | head -3 | tr '\n' ' ')
-  msg=$(find app/build -name 'TEST-*.xml' -exec grep -hoE '<failure message="[^"]{0,700}' {} + 2>/dev/null | head -2 | tr '\n' ' ')
-  err=$(grep -E 'FAILED|Exception|Error|error:|INSTALL_|offline|What went wrong' -A2 "$RUNNER_TEMP/gradle.log" | grep -v '^--$' | head -25 | tr '\n' '|' | cut -c1-1500)
-  focus=$(awk '{ $1=""; if ($0 != prev) print; prev=$0 }' "$RUNNER_TEMP/focus.log" | tr '\n' '|' | cut -c1-2500)
-  echo "::error title=${ARM}-iter-${ITER}::focus-sequence=[$focus]"
+  err=$(grep -E 'FAILED|AssertionError|Exception|INSTALL_|offline|What went wrong' "$RUNNER_TEMP/gradle.log" | grep -v '> Task' | head -6 | tr '\n' '|' | cut -c1-1500)
+  echo "::error title=${ARM}-iter-${ITER}::status=$status log=[$err]"
+  echo "----- focus/resumed timeline (changes only) -----"
+  awk '{ t=$1; $1=""; if ($0 != prev) print t $0; prev=$0 }' "$RUNNER_TEMP/focus.log"
+  echo "----- test logcat (SUPKeyboardTest, TestRunner, ActivityTaskManager) -----"
+  adb logcat -d -v time -s SUPKeyboardTest:I TestRunner:I ActivityTaskManager:I WindowManager:W | tail -300
 fi
 exit $status

@@ -2,6 +2,7 @@ package com.superproductivity.superproductivity
 
 import android.graphics.Rect
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
@@ -220,6 +221,7 @@ class ImeInsetShimInstrumentedTest {
         val windowFocused = awaitTrue("the activity window to gain focus") {
             onMainSync { activity.hasWindowFocus() }
         }
+        if (!windowFocused) logWindowState()
         // View focus first, then the editable inside it, then the request: a
         // programmatic focus() without a user gesture does not raise the IME by
         // itself, and show(ime()) needs an editor attached to the focused view.
@@ -262,6 +264,26 @@ class ImeInsetShimInstrumentedTest {
         } while (SystemClock.elapsedRealtime() < deadline)
         Log.i(TAG, "Still waiting for $waitingFor after ${timeoutSeconds}s")
         return false
+    }
+
+    /**
+     * Logs who holds window focus and which activity the system thinks is resumed,
+     * for a focus wait that missed: the activity reports RESUMED to the scenario
+     * while another window (the launcher, in the loop runs) keeps focus, and only
+     * the task stack can say whether the app's task fell behind home. System
+     * window and activity names only — no app content.
+     */
+    private fun logWindowState() {
+        val uiAutomation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        for (command in listOf("dumpsys window displays", "dumpsys activity activities")) {
+            ParcelFileDescriptor.AutoCloseInputStream(uiAutomation.executeShellCommand(command))
+                .bufferedReader()
+                .useLines { lines ->
+                    lines.filter { WINDOW_STATE_LINE.containsMatchIn(it) }
+                        .take(WINDOW_STATE_MAX_LINES)
+                        .forEach { Log.i(TAG, "focus-miss [$command] ${it.trim()}") }
+                }
+        }
     }
 
     private fun inputMethodManager(activity: CapacitorMainActivity): InputMethodManager =
@@ -411,6 +433,11 @@ class ImeInsetShimInstrumentedTest {
         const val SETTLE_MS = 300L
         // Sub-pixel rounding between the visible frame and the view bottom.
         const val TOLERANCE_PX = 2
+        const val WINDOW_STATE_MAX_LINES = 60
+        val WINDOW_STATE_LINE = Regex(
+            "mCurrentFocus|mFocusedApp|mFocusedWindow|ResumedActivity|mLastPausedActivity|" +
+                "\\* Task\\{|\\* Hist|mSleeping|isSleeping|mKeyguardShowing|mDreamingLockscreen"
+        )
 
         // The viewport meta mirrors src/index.html: SystemBars reads
         // viewport-fit=cover back from this tag at onDOMReady and only takes its
