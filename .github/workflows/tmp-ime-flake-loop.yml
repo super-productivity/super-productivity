@@ -8,12 +8,15 @@ permissions:
 jobs:
   loop:
     name: loop ${{ matrix.arm }} ${{ matrix.shard }}
+    # Opt-in per push: only commits whose message contains [loop] start the
+    # 20 emulator jobs, so ordinary pushes to this branch cost nothing.
+    if: contains(github.event.head_commit.message, '[loop]')
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        arm: [fix, fix2]
+        arm: [fix]
         shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
     steps:
       - name: Check out Git repository
