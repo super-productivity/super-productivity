@@ -58,9 +58,9 @@ describe('DialogTimeEstimateComponent closing (#10823)', () => {
 
     backdropClick$.next(new MouseEvent('click'));
 
-    expect(taskService.update).toHaveBeenCalledWith('task-1', {
+    // Unedited time spent is left out, so time tracked meanwhile is kept.
+    expect(taskService.update).toHaveBeenCalledOnceWith('task-1', {
       timeEstimate: 120000,
-      timeSpentOnDay: { [OTHER_DAY]: 1000 },
     });
     expect(dialogRef.close).toHaveBeenCalledTimes(1);
   });
@@ -71,7 +71,10 @@ describe('DialogTimeEstimateComponent closing (#10823)', () => {
 
     backdropClick$.next(new MouseEvent('click'));
 
-    expect(taskService.update).toHaveBeenCalledTimes(1);
+    expect(taskService.update).toHaveBeenCalledOnceWith('task-1', {
+      timeEstimate: 60000,
+      timeSpentOnDay: { [OTHER_DAY]: 1000, [cmp.todayStr]: 5000 },
+    });
   });
 
   it('closes without an update when tapping outside unchanged', () => {
