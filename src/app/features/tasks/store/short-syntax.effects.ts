@@ -241,6 +241,18 @@ export class ShortSyntaxEffects {
                 ];
               }
 
+              // A date-only deadline must stay all-day in title edits, just as in
+              // the add bar.
+              if (
+                finalTaskChanges.hasDeadlineTime === false &&
+                finalTaskChanges.deadlineWithTime
+              ) {
+                finalTaskChanges.deadlineDay = getDbDateStr(
+                  finalTaskChanges.deadlineWithTime,
+                );
+                finalTaskChanges.deadlineWithTime = null;
+              }
+
               // Use compound action for atomic state update
               const autoPlanFields = getDeadlineAutoPlanFields(
                 this._dateService,
