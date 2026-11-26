@@ -39,6 +39,7 @@ import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { moveClockTimeIntoLogicalDay } from '../../../util/move-clock-time-into-logical-day';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -590,6 +591,15 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         nextMonth.setMonth(nextMonth.getMonth() + 1);
         this.selectedDate = nextMonth;
         break;
+    }
+
+    // The quick picks give a logical day, so a time before the day start goes on the next calendar date
+    const time = this._normalizedTime();
+    if (time && isValidSplitTime(time)) {
+      this.selectedDate = moveClockTimeIntoLogicalDay(
+        new Date(getDateTimeFromClockString(time, this.selectedDate as Date)),
+        this._dateService.getStartOfNextDayDiffMs(),
+      );
     }
 
     if (this.data.isSubmitOnQuickAccess !== false) {

@@ -78,6 +78,7 @@ describe('TaskContextMenuInnerComponent', () => {
       'setCurrentId',
       'moveToTop',
       'moveToBottom',
+      'scheduleTask',
     ]);
     taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
       'getArchiveTasksForRepeatCfgId',
@@ -707,6 +708,30 @@ describe('TaskContextMenuInnerComponent', () => {
           day: '2030-06-17',
         }),
       );
+    });
+
+    [
+      { item: 1, time: '01:30', expected: new Date(2030, 5, 17, 1, 30) },
+      { item: 2, time: '01:30', expected: new Date(2030, 5, 18, 1, 30) },
+      { item: 1, time: '10:00', expected: new Date(2030, 5, 16, 10, 0) },
+    ].forEach(({ item, time, expected }) => {
+      it(`keeps a ${time} task picked with item ${item} on that logical day`, () => {
+        const [h, m] = time.split(':').map(Number);
+        menu.task = {
+          ...component.task,
+          dueDay: undefined,
+          dueWithTime: new Date(2030, 5, 20, h, m).getTime(),
+        };
+
+        menu.quickAccessBtnClick(item);
+
+        expect(taskService.scheduleTask).toHaveBeenCalledOnceWith(
+          jasmine.anything(),
+          expected.getTime(),
+          jasmine.anything(),
+          false,
+        );
+      });
     });
   });
 

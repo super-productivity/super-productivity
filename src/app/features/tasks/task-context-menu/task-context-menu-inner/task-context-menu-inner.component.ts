@@ -72,6 +72,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { PlannerActions } from '../../../planner/store/planner.actions';
 import { combineDateAndTime } from '../../../../util/combine-date-and-time';
+import { moveClockTimeIntoLogicalDay } from '../../../../util/move-clock-time-into-logical-day';
 import { getNextWeekDayOffset } from '../../../../util/get-next-week-day-offset';
 import { DateAdapter } from '@angular/material/core';
 import { ICAL_TYPE, PLAINSPACE_TYPE } from '../../../issue/issue.const';
@@ -847,7 +848,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       return;
     } else if (this.task.dueWithTime) {
       const task = this.task;
-      const newDate = combineDateAndTime(newDayDate, new Date(this.task.dueWithTime));
+      // newDayDate is a logical day, so a time before the day start goes on the next calendar date
+      const newDate = moveClockTimeIntoLogicalDay(
+        combineDateAndTime(newDayDate, new Date(this.task.dueWithTime)),
+        this._dateService.getStartOfNextDayDiffMs(),
+      );
       this._taskService.scheduleTask(
         task,
         newDate.getTime(),

@@ -615,6 +615,20 @@ describe('DialogScheduleTaskComponent', () => {
         expect(getDbDateStr(component.selectedDate as Date)).toBe(day);
       });
     });
+
+    [
+      { option: 'today', time: '01:30', expected: new Date(2030, 5, 17, 1, 30) },
+      { option: 'tomorrow', time: '01:30', expected: new Date(2030, 5, 18, 1, 30) },
+      { option: 'today', time: '10:00', expected: new Date(2030, 5, 16, 10, 0) },
+    ].forEach(({ option, time, expected }) => {
+      it(`keeps a ${time} time picked for the logical ${option} on that day`, () => {
+        component.selectedTime = time;
+
+        component.onQuickAccessClick(option as 'today' | 'tomorrow');
+
+        expect(component.plannedTimestamp()).toBe(expected.getTime());
+      });
+    });
   });
 
   describe('remove()', () => {
