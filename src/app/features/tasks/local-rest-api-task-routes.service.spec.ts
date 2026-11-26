@@ -11,6 +11,7 @@ import { Project } from '../project/project.model';
 import { IssueLog } from '../../core/log';
 import { LocalRestApiFeatureBridgeService } from './local-rest-api-feature-bridge.service';
 import { TODAY_TAG } from '../tag/tag.const';
+import { selectAllTagIds } from '../tag/store/tag.reducer';
 import { DateService } from '../../core/date/date.service';
 import { Task, TaskWithSubTasks, TaskArchive } from './task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
@@ -189,6 +190,7 @@ describe('LocalRestApiTaskRoutesService', () => {
 
     service = TestBed.inject(LocalRestApiTaskRoutesService);
     store = TestBed.inject(MockStore);
+    store.overrideSelector(selectAllTagIds, ['tag-1', 'tag-2', TODAY_TAG.id]);
     dispatchSpy = spyOn(store, 'dispatch');
   });
 
@@ -556,6 +558,106 @@ describe('LocalRestApiTaskRoutesService', () => {
     });
 
     describe('POST /tasks', () => {
+      describe('with a project or tag that does not exist', () => {
+        beforeEach(() => {
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(createMockTask('new-task-id')),
+          });
+          activeProjects = [
+            { id: 'project-1' } as Project,
+            { id: 'archived-project', isArchived: true } as Project,
+          ];
+        });
+
+        const expectError = (
+          response: Awaited<ReturnType<typeof sendRequestAndWait>>,
+          status: number,
+          code: string,
+        ): void => {
+          expect(response.status).toBe(status);
+          if (response.body.ok) {
+            throw new Error('Expected an error response');
+          }
+          expect(response.body.error.code).toBe(code);
+          expect(taskServiceMock.add).not.toHaveBeenCalled();
+        };
+
+        it('should create a task in an active project', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'New Task', projectId: 'project-1', tagIds: ['tag-1'] },
+            }),
+          );
+
+          expect(response.status).toBe(201);
+          expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+            title: 'New Task',
+            projectId: 'project-1',
+            tagIds: ['tag-1'],
+          });
+        });
+
+        it('should reject a project that does not exist', async () => {
+          expectError(
+            await sendRequestAndWait(
+              createRequest('POST', '/tasks', {
+                body: { title: 'New Task', projectId: 'missing-project' },
+              }),
+            ),
+            404,
+            'PROJECT_NOT_FOUND',
+          );
+        });
+
+        it('should reject an archived project', async () => {
+          expectError(
+            await sendRequestAndWait(
+              createRequest('POST', '/tasks', {
+                body: { title: 'New Task', projectId: 'archived-project' },
+              }),
+            ),
+            404,
+            'PROJECT_NOT_FOUND',
+          );
+        });
+
+        it('should reject a prototype-property name as a project id', async () => {
+          expectError(
+            await sendRequestAndWait(
+              createRequest('POST', '/tasks', {
+                body: { title: 'New Task', projectId: 'constructor' },
+              }),
+            ),
+            404,
+            'PROJECT_NOT_FOUND',
+          );
+        });
+
+        it('should reject an empty project id', async () => {
+          expectError(
+            await sendRequestAndWait(
+              createRequest('POST', '/tasks', {
+                body: { title: 'New Task', projectId: '' },
+              }),
+            ),
+            400,
+            'INVALID_INPUT',
+          );
+        });
+
+        it('should reject a tag that does not exist', async () => {
+          expectError(
+            await sendRequestAndWait(
+              createRequest('POST', '/tasks', {
+                body: { title: 'New Task', tagIds: ['tag-1', 'missing-tag'] },
+              }),
+            ),
+            404,
+            'TAG_NOT_FOUND',
+          );
+        });
+      });
+
       it('should create a task with valid input', async () => {
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
           get: () => (_id: string) => of(createMockTask('new-task-id')),
@@ -2110,6 +2212,45 @@ describe('LocalRestApiTaskRoutesService', () => {
         expect(featureBridgeMock.moveTaskToProject).not.toHaveBeenCalled();
         expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
           projectId: 'archived-project',
+          title: 'Round-tripped task',
+        });
+      });
+
+      it('should reject adding a tag that does not exist', async () => {
+        const mockTask = createMockTask('task-1', { tagIds: ['tag-1'] });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { tagIds: ['tag-1', 'missing-tag'] },
+          }),
+        );
+
+        expect(response.status).toBe(404);
+        if (response.body.ok) {
+          throw new Error('Expected an error response');
+        }
+        expect(response.body.error.code).toBe('TAG_NOT_FOUND');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should accept echoing a tag the task already has, even if it no longer exists', async () => {
+        const mockTask = createMockTask('task-1', { tagIds: ['deleted-tag'] });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { tagIds: ['deleted-tag', 'tag-2'], title: 'Round-tripped task' },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+          tagIds: ['deleted-tag', 'tag-2'],
           title: 'Round-tripped task',
         });
       });
