@@ -2,6 +2,7 @@ package com.superproductivity.superproductivity.service
 
 import android.content.Context
 import android.util.Log
+import java.util.TimeZone
 
 private const val TAG = "ReminderSyncHelper"
 private const val DUE_DAY_SUFFIX = "_dueday"
@@ -124,6 +125,8 @@ data class ReminderChangeResult(
     val repeatCfgIdsRemoved: Set<String> = emptySet(),
     /** Repeat-config cache after folding this page's ops onto the cache passed in. */
     val nextRepeatState: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
+    /** Configs explicitly deleted on this page, as they were when their tasks were detached. */
+    val detachedSeries: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
 ) {
     /**
      * Fire-time stale check for one alarm: was it cancelled (deleted/done, or
@@ -150,8 +153,15 @@ data class ReminderChangeResult(
         if (taskId in taskIdsToCancel || reminderIdOfType(taskId, reminderType) in reminderIdsToCancel) {
             return true
         }
-        val repeatCfgId = parseRepeatOccurrenceId(taskId)?.cfgId
-        return repeatCfgId != null && repeatCfgId in repeatCfgIdsRemoved
+        // Series-level removal only reaches alarms pre-scheduled from the config
+        // (always "TASK"). An instance the config already created keeps its own
+        // reminder and deadline under the same occurrence id.
+        if (reminderType != "TASK") return false
+        val repeatCfgId = parseRepeatOccurrenceId(taskId)?.cfgId ?: return false
+        if (repeatCfgId !in repeatCfgIdsRemoved) return false
+        // A deleted config detaches its instances; judge them by its last known state.
+        val state = if (nextRepeatState.byId(repeatCfgId) == null) detachedSeries else nextRepeatState
+        return !isLiveRepeatInstance(taskId, state, TimeZone.getDefault())
     }
 }
 

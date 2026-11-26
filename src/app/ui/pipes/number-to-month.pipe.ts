@@ -15,6 +15,9 @@ export class NumberToMonthPipe implements PipeTransform {
     return new Date(Date.UTC(2000, month - 1, 1)).toLocaleDateString(locale, {
       month: 'long',
       timeZone: 'UTC',
+      // The worklog groups by Gregorian month; a locale's own calendar (fa →
+      // Persian) would name a different month.
+      calendar: 'gregory',
     });
   }
 }

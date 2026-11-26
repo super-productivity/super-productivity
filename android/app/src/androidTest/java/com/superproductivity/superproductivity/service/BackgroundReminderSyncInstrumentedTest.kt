@@ -171,6 +171,67 @@ class BackgroundReminderSyncInstrumentedTest {
     }
 
     @Test
+    fun sameServerLoginAfterLogoutReadsTheNewAccountsFirstPage() {
+        assertEquals(ListenableWorker.Result.success(), runWorker())
+        val reminder = expectedSchedules.first { !it.isDeadline }
+        cancelRemindersForTask(context, reminder.taskId)
+        BackgroundSyncCredentialStore.clear(context)
+        BackgroundSyncCredentialStore.save(context, baseUrl, "new-account-token")
+        assertEquals(ListenableWorker.Result.success(), runWorker())
+        assertNotNull(storedAlarm(reminder.taskId))
+    }
+
+    @Test
+    fun accountSwitchWhileFetchingDiscardsTheOldPage() {
+        val taskId = expectedSchedules.first { !it.isDeadline }.taskId
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                BackgroundSyncCredentialStore.save(context, baseUrl, "new-account-token")
+                return MockResponse().setBody(opsResponse(0).toString())
+            }
+        }
+        assertEquals(ListenableWorker.Result.success(), runWorker())
+        assertEquals(0L, BackgroundSyncCredentialStore.getLastServerSeq(context, baseUrl))
+        assertNull(storedAlarm(taskId))
+    }
+
+    @Test
+    fun deletingSeriesAfterCreatingAnInstanceKeepsOnlyTheDetachedAlarm() {
+        val cfg = RepeatCfg("detached", lastTaskCreationDay = "2099-06-14", isComplete = true)
+        val live = "rpt_detached_2099-06-15"
+        val future = "rpt_detached_2099-06-16"
+        fun op(seq: Int, type: String, action: String, payload: JSONObject) = JSONObject()
+            .put("serverSeq", seq).put("op", JSONObject().put("entityType", "TASK_REPEAT_CFG")
+                .put("entityId", cfg.id).put("opType", type).put("actionType", action)
+                .put("payload", JSONObject().put("actionPayload", payload)))
+        val update = JSONObject().put("taskRepeatCfg", JSONObject().put("id", cfg.id)
+            .put("changes", JSONObject().put("lastTaskCreationDay", "2099-06-15")))
+        val ops = JSONArray()
+            .put(op(1, "UPD", "[TaskRepeatCfg] Update TaskRepeatCfg", update))
+            .put(op(2, "DEL", "[TaskRepeatCfg] Delete TaskRepeatCfg", JSONObject().put("taskRepeatCfgId", cfg.id)))
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = MockResponse().setBody(
+                JSONObject().put("ops", ops).put("latestSeq", 2).put("hasMore", false).toString(),
+            )
+        }
+        RepeatReminderCache.saveState(context, RepeatCfgSyncState(listOf(cfg)))
+        RepeatReminderCache.saveSlots(context, mapOf(live to FAR_FUTURE, future to FAR_FUTURE))
+        try {
+            seedAlarm(live, "TASK", live)
+            seedAlarm(future, "TASK", future)
+            fireAlarm(slotId(live, false), live, "TASK", FAR_FUTURE)
+            assertNotNull("detached reminder should fire", waitFor(15_000) { activeNotification(slotId(live, false)) })
+            seedAlarm(live, "TASK", live)
+            assertEquals(ListenableWorker.Result.success(), runWorker())
+            assertNotNull("worker must keep the detached reminder", storedAlarm(live))
+            assertNull("worker must cancel the future occurrence", storedAlarm(future))
+        } finally {
+            cancelRemindersForTask(context, live)
+            cancelRemindersForTask(context, future)
+        }
+    }
+
+    @Test
     fun workerUsesAlarmStyleWhenTheUserEnabledIt() {
         BackgroundReminderSettingsStore.save(context, isDisabled = false, useAlarmStyle = true)
 

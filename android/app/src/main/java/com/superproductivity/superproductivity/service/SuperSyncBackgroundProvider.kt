@@ -181,6 +181,7 @@ class SuperSyncBackgroundProvider(
         val reminderIdsToCancel = mutableSetOf<String>()
         val unreadableTaskIds = mutableSetOf<String>()
         val repeatCfgIdsRemoved = mutableSetOf<String>()
+        val detached = mutableMapOf<String, RepeatCfg>()
         var nextRepeatState = repeatState
 
         for (i in 0 until ops.length()) {
@@ -190,7 +191,7 @@ class SuperSyncBackgroundProvider(
             val payload = lazy(LazyThreadSafetyMode.NONE) { resolvePayload(op) }
 
             if (op.optString("entityType", "") in RepeatCfgSync.ENTITY_TYPES) {
-                nextRepeatState = RepeatCfgSync.fold(nextRepeatState, op, payload, repeatCfgIdsRemoved)
+                nextRepeatState = RepeatCfgSync.fold(nextRepeatState, op, payload, repeatCfgIdsRemoved, detached)
             }
 
             val tempMap = mutableMapOf<Pair<String, Boolean>, ReminderToSchedule>()
@@ -231,6 +232,7 @@ class SuperSyncBackgroundProvider(
             unreadableTaskIds = unreadableTaskIds,
             repeatCfgIdsRemoved = repeatCfgIdsRemoved,
             nextRepeatState = nextRepeatState,
+            detachedSeries = RepeatCfgSyncState(detached.values.filter { nextRepeatState.byId(it.id) == null }),
         )
     }
 
