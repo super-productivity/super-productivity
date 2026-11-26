@@ -173,6 +173,7 @@ const TASKS = [
     issueId: 'JIRA-1',
   },
   { id: 't2', title: 'Sub', notes: '', isDone: true, parentId: 't1', tagIds: [] },
+  { id: 't3', title: 'Work on MCP', isDone: false, tagIds: [], subTaskIds: [] },
 ];
 
 const fakeForward = (overrides = {}) => {
@@ -185,7 +186,12 @@ const fakeForward = (overrides = {}) => {
     if (request.path === '/tasks') {
       return { status: 200, body: { ok: true, data: TASKS } };
     }
-    if (request.path === '/tasks/t1') {
+    const task = TASKS.find((t) => request.path === `/tasks/${t.id}`);
+    if (task) {
+      return { status: 200, body: { ok: true, data: task } };
+    }
+    // per default t1 is tracked
+    if (request.path.startsWith('/task-control/')) {
       return { status: 200, body: { ok: true, data: TASKS[0] } };
     }
     return {
@@ -205,10 +211,16 @@ test('only granted tools are listed', () => {
   const names = (scopes) => tools.listGrantedTools(scopes).map((t) => t.name);
   assert.deepEqual(names([]), ['get_status']);
   assert.deepEqual(names(['tasks:capture']), ['get_status', 'create_task']);
+  assert.deepEqual(names(['tasks:track']), [
+    'get_status',
+    'set_current_task',
+    'stop_tracking',
+  ]);
   assert.deepEqual(names(READ), [
     'get_status',
     'list_tasks',
     'get_task',
+    'get_current_task',
     'list_projects',
     'list_tags',
   ]);
@@ -219,7 +231,12 @@ test('only granted tools are listed', () => {
 });
 
 test('every tool has a title and explicit behaviour hints', () => {
-  const all = tools.listGrantedTools([...READ, 'tasks:read_notes', 'tasks:capture']);
+  const all = tools.listGrantedTools([
+    ...READ,
+    'tasks:read_notes',
+    'tasks:capture',
+    'tasks:track',
+  ]);
   for (const tool of all) {
     assert.ok(tool.title, `${tool.name} needs a title`);
     assert.equal(tool.annotations.title, tool.title);
@@ -231,7 +248,7 @@ test('every tool has a title and explicit behaviour hints', () => {
     ]) {
       assert.equal(typeof tool.annotations[hint], 'boolean', `${tool.name}.${hint}`);
     }
-    assert.equal(tool.annotations.openWorldHint, false);
+    assert.equal(tool.annotations.openWorldHint, tool.name === 'set_current_task');
     if (tool.annotations.readOnlyHint) {
       assert.equal(tool.annotations.destructiveHint, false);
     }
@@ -241,6 +258,7 @@ test('every tool has a title and explicit behaviour hints', () => {
     'get_status',
     'list_tasks',
     'get_task',
+    'get_current_task',
     'list_projects',
     'list_tags',
   ]);
@@ -287,6 +305,13 @@ test('arguments are validated strictly', async () => {
   assert.equal(badLimit.isError, true);
   const badId = await tools.runTool('get_task', { id: '../status' }, () => READ, forward);
   assert.equal(badId.isError, true);
+  const badTrackId = await tools.runTool(
+    'set_current_task',
+    { id: '../status' },
+    () => ['tasks:track'],
+    forward,
+  );
+  assert.equal(badTrackId.isError, true);
   assert.equal(calls.length, 0, 'nothing invalid may reach the renderer');
 });
 
@@ -533,6 +558,112 @@ test('create_task never claims nothing happened when the outcome is unknown', as
   assert.match(busy.content[0].text, /^APP_BUSY/);
 });
 
+test('get_current_task returns a summary or null', async () => {
+  const tracked = await tools.runTool(
+    'get_current_task',
+    {},
+    () => READ,
+    fakeForward().forward,
+  );
+  assert.equal(tracked.structuredContent.task.id, 't1');
+
+  const { forward } = fakeForward({
+    '/task-control/current': () => ({ status: 200, body: { ok: true, data: null } }),
+  });
+  const idle = await tools.runTool('get_current_task', {}, () => READ, forward);
+  assert.deepEqual(idle.structuredContent, { task: null });
+});
+
+test('set_current_task switches an open task and reports the previous one', async () => {
+  const { forward, calls } = fakeForward();
+  const result = await tools.runTool(
+    'set_current_task',
+    { id: 't3' },
+    () => ['tasks:track'],
+    forward,
+  );
+  assert.deepEqual(result.structuredContent, {
+    currentTaskId: 't3',
+    previousTaskId: 't1',
+  });
+  assert.deepEqual(calls[0].query, { source: 'active' });
+  assert.deepEqual(calls[calls.length - 1], {
+    method: 'POST',
+    path: '/task-control/current',
+    body: { taskId: 't3' },
+  });
+});
+
+test('set_current_task refuses done tasks and parents without writing', async () => {
+  const { forward, calls } = fakeForward();
+  const done = await tools.runTool(
+    'set_current_task',
+    { id: 't2' },
+    () => ['tasks:track'],
+    forward,
+  );
+  assert.match(done.content[0].text, /^TASK_DONE/);
+  assert.equal(calls.filter((c) => c.method === 'POST').length, 0);
+  const parent = await tools.runTool(
+    'set_current_task',
+    { id: 't1' },
+    () => ['tasks:track'],
+    forward,
+  );
+  assert.match(parent.content[0].text, /^HAS_SUBTASKS/);
+  assert.equal(calls.filter((c) => c.method === 'POST').length, 0);
+});
+
+test('set_current_task does not switch when the grant is revoked during its lookups', async () => {
+  let scopes = ['tasks:track'];
+  const { forward, calls } = fakeForward({
+    '/task-control/current': (request) => {
+      if (request.method === 'GET') scopes = [];
+      return { status: 200, body: { ok: true, data: null } };
+    },
+  });
+  const result = await tools.runTool(
+    'set_current_task',
+    { id: 't3' },
+    () => scopes,
+    forward,
+  );
+  assert.match(result.content[0].text, /^NOT_PERMITTED/);
+  assert.equal(
+    calls.some((call) => call.method === 'POST'),
+    false,
+  );
+});
+
+test('tracking writes never claim nothing happened when the renderer fails', async () => {
+  const { forward } = fakeForward();
+  const failingPost = async (request) => {
+    if (request.method === 'POST') throw new tools.RendererTimeoutError();
+    return forward(request);
+  };
+  const switched = await tools.runTool(
+    'set_current_task',
+    { id: 't3' },
+    () => ['tasks:track'],
+    failingPost,
+  );
+  assert.match(switched.content[0].text, /^OUTCOME_UNKNOWN/);
+  const stopped = await tools.runTool(
+    'stop_tracking',
+    {},
+    () => ['tasks:track'],
+    failingPost,
+  );
+  assert.match(stopped.content[0].text, /^OUTCOME_UNKNOWN/);
+});
+
+test('stop_tracking stops tracking', async () => {
+  const { forward, calls } = fakeForward();
+  const result = await tools.runTool('stop_tracking', {}, () => ['tasks:track'], forward);
+  assert.deepEqual(result.structuredContent, { currentTaskId: null });
+  assert.deepEqual(calls, [{ method: 'POST', path: '/task-control/stop' }]);
+});
+
 // --- HTTP, through the real listener ---------------------------------------------
 
 const originalModuleLoad = Module._load;
@@ -768,7 +899,7 @@ test('granted read scope serves projected tasks through the renderer routes', as
   );
   assert.equal(res.status, 200);
   const { tasks } = res.body.result.structuredContent;
-  assert.equal(tasks.length, 2);
+  assert.equal(tasks.length, TASKS.length);
   assert.ok(!JSON.stringify(res.body).includes('SECRET NOTES'));
   const call = rendererCalls[rendererCalls.length - 1];
   assert.equal(call.path, '/tasks');

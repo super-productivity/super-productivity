@@ -3,16 +3,22 @@ import { AssistantAccessScope } from '../shared-with-frontend/assistant-access.m
 import { McpToolDefinition, McpToolResult } from './mcp-protocol';
 
 /**
- * A tool's title and behaviour hints. Every tool here works on the user's own
- * task list, so none is open-world; an issue integration the user set up acts
- * on a captured task as on one added by hand. A tool that edits existing tasks
- * would not qualify: two-way issue sync pushes those edits to linked issues.
- * A write is destructive when it can overwrite something; one that only adds
- * is not.
+ * A tool's title and behaviour hints. A tool is open-world when it can reach
+ * an issue tracker: an integration the user set up acts on a captured task as
+ * on one added by hand, so capture is not, but starting a task can run issue
+ * start actions (e.g. Jira transitions), so that is. A tool that edits
+ * existing tasks would be too: two-way issue sync pushes those edits to linked
+ * issues. A write is destructive when it can overwrite something; one that
+ * only adds is not.
  */
 export const describeTool = (
   title: string,
-  hints: { readOnly: boolean; destructive: boolean; idempotent: boolean },
+  hints: {
+    readOnly: boolean;
+    destructive: boolean;
+    idempotent: boolean;
+    openWorld?: boolean;
+  },
 ): Pick<McpToolDefinition, 'title' | 'annotations'> => ({
   title,
   annotations: {
@@ -20,7 +26,7 @@ export const describeTool = (
     readOnlyHint: hints.readOnly,
     destructiveHint: hints.destructive,
     idempotentHint: hints.idempotent,
-    openWorldHint: false,
+    openWorldHint: hints.openWorld ?? false,
   },
 });
 
