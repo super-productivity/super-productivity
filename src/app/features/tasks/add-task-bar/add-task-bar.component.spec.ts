@@ -599,6 +599,18 @@ describe('AddTaskBarComponent', () => {
 
       expect(component.stateService.state().tagIds).toEqual(['need']);
     });
+
+    it('adds the view tag once when the title also names it as #tag', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      component.stateService.updateInputTxt('First task #need');
+      component.stateService.updateCleanText('First task');
+      component.stateService.updateTagIdsFromTxt(['need']);
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.tagIds).toEqual(['need']);
+    });
   });
 
   describe('addTask', () => {

@@ -66,6 +66,7 @@ import { truncate } from '../../../util/truncate';
 import { SnackService } from '../../../core/snack/snack.service';
 import type { ViewTaskPrefill } from '../view-task-list.token';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
+import { AddTaskBarState } from './add-task-bar.const';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
 import { rollWeekendDateForRepeat } from './roll-weekend-date-for-repeat';
 import { ShortSyntaxSegment, splitTextByRanges } from '../short-syntax-ranges';
@@ -229,15 +230,26 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       return false;
     }
     const state = this.stateService.state();
-    const tagsToRemove = this.tagsToRemove();
     return prefill.isHidden({
       projectId: state.projectId ?? undefined,
-      tagIds: unique([...state.tagIds, ...state.tagIdsFromTxt]).filter(
-        (id) => !tagsToRemove.includes(id),
-      ),
+      tagIds: this._newTaskTagIds(state),
       dueDay: state.date ?? undefined,
     });
   });
+
+  /**
+   * The new task's tags: the chips, the title's #tags and `extraTagIds`, each
+   * once (a view's tag can be both a chip and a #tag), minus `tagsToRemove`.
+   */
+  private _newTaskTagIds(
+    { tagIds, tagIdsFromTxt }: Pick<AddTaskBarState, 'tagIds' | 'tagIdsFromTxt'>,
+    extraTagIds: readonly string[] = [],
+  ): string[] {
+    const tagsToRemove = this.tagsToRemove();
+    return unique([...tagIds, ...tagIdsFromTxt, ...extraTagIds]).filter(
+      (id) => !tagsToRemove.includes(id),
+    );
+  }
   currentProject = computed(() =>
     this.projects().find((p) => p.id === this.stateService.state().projectId),
   );
@@ -558,29 +570,20 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this._isAddingTask = true;
     try {
       const state = currentState;
-      let finalTagIds = [...state.tagIds, ...state.tagIdsFromTxt];
-
-      if (this.hasNewTags()) {
-        const shouldCreateNewTags = await this._confirmNewTags();
-        if (shouldCreateNewTags) {
-          const newTagIds = await this._createNewTags(state.newTagTitles);
-          finalTagIds = [...finalTagIds, ...newTagIds];
-        }
-      }
-
-      // Filter out tags to remove if specified
-      const tagsToRemoveList = this.tagsToRemove();
-      if (tagsToRemoveList && tagsToRemoveList.length > 0) {
-        finalTagIds = finalTagIds.filter((tagId) => !tagsToRemoveList.includes(tagId));
-      }
+      const newTagIds =
+        this.hasNewTags() && (await this._confirmNewTags())
+          ? await this._createNewTags(state.newTagTitles)
+          : [];
 
       const additionalFields = this.additionalFields();
       const taskData: Partial<TaskCopy> = {
         ...additionalFields,
         projectId: state.projectId,
-        tagIds: additionalFields?.tagIds
-          ? unique([...finalTagIds, ...additionalFields.tagIds])
-          : finalTagIds,
+        // The caller's tags are added after `tagsToRemove`, so they always stay.
+        tagIds: unique([
+          ...this._newTaskTagIds(state, newTagIds),
+          ...(additionalFields?.tagIds ?? []),
+        ]),
         // needs to be 0
         timeEstimate: state.estimate || 0,
         attachments:
