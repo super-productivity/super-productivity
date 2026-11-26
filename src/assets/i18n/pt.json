@@ -971,7 +971,7 @@
       "S": {
         "REMOVED_PLAN_DATE": "Data do plano removida para a tarefa ' {{taskTitle}}'",
         "TASK_ALREADY_PLANNED": "A tarefa já está planeada para {{date}}",
-        "TASK_PLANNED_FOR": "Tarefa planejada para <strong>{{date}}</strong>{{extra}}"
+        "TASK_PLANNED_FOR": "Tarefa planeada para <strong>{{date}}</strong>{{extra}}"
       }
     },
     "POMODORO": {
