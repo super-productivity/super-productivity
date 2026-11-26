@@ -43,7 +43,9 @@ describe('LocalRestApiAssistantCaptureRoutesService', () => {
   });
 
   it('rejects an invalid capture', async () => {
-    const res = await service.handle(createRequest({ title: 'x', tagIds: [] }, 'mcp'));
+    const res = await service.handle(
+      createRequest({ title: 'x', projectId: 'p' }, 'mcp'),
+    );
     expect(res?.status).toBe(400);
     expect(assistantCaptureMock.capture).not.toHaveBeenCalled();
   });

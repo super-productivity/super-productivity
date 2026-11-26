@@ -30,6 +30,8 @@ import {
   toCaptureRepeatCfg,
 } from '../agent-capture/capture-repeat-cfg';
 import { nanoid } from 'nanoid';
+import { selectAllTagIds } from '../../tag/store/tag.reducer';
+import { TODAY_TAG } from '../../tag/tag.const';
 
 export const MAX_CAPTURE_TITLE_LENGTH = 500;
 export const MAX_CAPTURE_NOTES_LENGTH = 8 * 1024;
@@ -37,6 +39,7 @@ export const MAX_CAPTURE_NOTES_LENGTH = 8 * 1024;
 export interface AssistantCaptureInput extends CaptureDue, CaptureDeadline {
   title: string;
   notes?: string;
+  tagIds?: string[];
   repeat?: CaptureRepeat;
   /** Whole minutes; replaces the default estimate. */
   estimateMinutes?: number;
@@ -45,6 +48,7 @@ export interface AssistantCaptureInput extends CaptureDue, CaptureDeadline {
 const INPUT_KEYS = [
   'title',
   'notes',
+  'tagIds',
   'dueDate',
   'dueTime',
   'repeat',
@@ -56,8 +60,16 @@ const INPUT_KEYS = [
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** Distinct, non-empty ids; whether the tags exist is checked at capture time. */
+const parseTagIds = (value: unknown): string[] | undefined =>
+  Array.isArray(value) &&
+  value.every((id) => typeof id === 'string' && id.length > 0) &&
+  new Set(value).size === value.length
+    ? value
+    : undefined;
+
 /**
- * Accepts exactly `{title, notes?, dueDate?, dueTime?, repeat?, deadlineDate?,
+ * Accepts exactly `{title, notes?, tagIds?, dueDate?, dueTime?, repeat?, deadlineDate?,
  * deadlineTime?, estimateMinutes?}` within the limits the main process enforces. Unlike the hosted import, an invalid
  * scheduling field rejects the whole request: the caller is still there to
  * fix it. The main process is the strict gate; `parseCaptureRepeat` here still
@@ -83,6 +95,7 @@ export const parseAssistantCaptureInput = (
   ) {
     return undefined;
   }
+  const tagIds = parseTagIds(body.tagIds);
   const dueDay = parseDueDay(dueDate);
   const time = parseDueTime(dueTime);
   const repeat = parseCaptureRepeat(body.repeat);
@@ -91,6 +104,7 @@ export const parseAssistantCaptureInput = (
   const deadlineClock = parseDueTime(deadlineTime);
   const estimate = parseEstimateMinutes(estimateMinutes);
   if (
+    (body.tagIds !== undefined && !tagIds) ||
     (dueDate !== undefined && !dueDay) ||
     (dueTime !== undefined && (!dueDay || !time)) ||
     (body.repeat !== undefined && !repeat) ||
@@ -105,6 +119,7 @@ export const parseAssistantCaptureInput = (
   return {
     title: title.trim(),
     ...(notes ? { notes } : {}),
+    ...(tagIds?.length ? { tagIds } : {}),
     ...(dueDay ? { dueDay } : {}),
     ...(time ? { dueTime: time } : {}),
     ...(repeat ? { repeat } : {}),
@@ -119,7 +134,8 @@ export const parseAssistantCaptureInput = (
  * the local op log.
  *
  * The capture is pinned: it always lands in the Inbox, whatever view is open —
- * no tag from a tag view, no Today date, no default project — and its title is
+ * no tag from a tag view, no Today date, no default project; only the tags the
+ * caller names — and its title is
  * never parsed for short syntax, because it is untrusted input. One user intent
  * is one `addTask` op; a recurring capture adds the add-task bar's
  * `addTaskRepeatCfgToTask`, as the hosted capture import does.
@@ -138,6 +154,7 @@ export class AssistantCaptureService {
   private readonly _writeFlush = inject(OperationWriteFlushService);
   private readonly _globalConfig = inject(GlobalConfigService);
   private readonly _dateService = inject(DateService);
+  private readonly _tagIds = this._store.selectSignal(selectAllTagIds);
 
   async capture(input: AssistantCaptureInput): Promise<AssistantCaptureResult> {
     // Actions dispatched while remote ops are applied are deferred and not
@@ -148,6 +165,14 @@ export class AssistantCaptureService {
     // Already unable to persist: adding would only put more unsaved state on top.
     if (this._operationCapture.hasUnrecoveredPersistFailure()) {
       return { status: 'PERSIST_DEGRADED' };
+    }
+
+    const knownTagIds: readonly (string | number)[] = this._tagIds();
+    if (
+      input.tagIds &&
+      !input.tagIds.every((id) => id !== TODAY_TAG.id && knownTagIds.includes(id))
+    ) {
+      return { status: 'TAG_NOT_FOUND' };
     }
 
     // TaskInternalEffects otherwise dispatches a second persistent updateTask
@@ -163,6 +188,7 @@ export class AssistantCaptureService {
     const task = this._taskService.createNewTaskWithDefaults({
       title: input.title,
       additional: {
+        ...(input.tagIds ? { tagIds: input.tagIds } : {}),
         ...(input.notes ? { notes: input.notes } : {}),
         ...(estimate > 0 ? { timeEstimate: estimate } : {}),
         ...toSchedule(input, remindOption),
@@ -179,6 +205,7 @@ export class AssistantCaptureService {
           title: input.title,
           notes: input.notes,
           projectId: INBOX_PROJECT.id,
+          tagIds: input.tagIds,
           startDay: input.dueDay ?? this._dateService.todayStr(),
           startTime: toStartTime(input.dueTime),
           defaultEstimate: estimate,
