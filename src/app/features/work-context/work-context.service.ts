@@ -36,6 +36,7 @@ import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import {
+  addDoneSubTasksListedOnToday,
   hasTasksToWorkOn,
   mapEstimateRemainingFromTasks,
   isDoneTaskForToday,
@@ -534,6 +535,7 @@ export class WorkContextService {
   // On Today only done tasks due or completed today are listed: rendering every
   // unarchived done task made cold start grow ~linearly with their number.
   // Re-evaluated on day change so yesterday's tasks drop out after rollover.
+  // Subtasks Today shows on their own stay listed once done (#12003).
   // Perf note: the source still maps every task in the workspace on each store
   // emission (O(all tasks)); tracking done IDs per context would avoid the scan.
   doneTasks$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
@@ -541,12 +543,16 @@ export class WorkContextService {
       isToday
         ? combineLatest([
             this.doneTasksToArchive$,
+            this.mainListTasks$,
             this._globalTrackingIntervalService.todayDateStr$,
           ]).pipe(
-            map(([tasks, todayStr]) => {
+            map(([tasks, todayListTasks, todayStr]) => {
               const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
-              return tasks.filter((task) =>
-                isDoneTaskForToday(task, todayStr, startOfNextDayDiffMs),
+              return addDoneSubTasksListedOnToday(
+                tasks.filter((task) =>
+                  isDoneTaskForToday(task, todayStr, startOfNextDayDiffMs),
+                ),
+                todayListTasks,
               );
             }),
           )
