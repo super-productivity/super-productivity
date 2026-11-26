@@ -160,6 +160,11 @@ const mapIssue = (item: AzureWorkItem): PluginIssue => {
     summary,
     priority: fields['Microsoft.VSTS.Common.Priority'] as number | undefined,
     due,
+    // Scrum PBIs and bugs; absent on types or processes without the field.
+    acceptanceCriteria: fields['Microsoft.VSTS.Common.AcceptanceCriteria'] as
+      | string
+      | undefined,
+    systemInfo: fields['Microsoft.VSTS.TCM.SystemInfo'] as string | undefined,
   };
 };
 
@@ -384,6 +389,18 @@ registerIssueProvider({
     { field: 'due', label: t('DISPLAY.DUE_DATE'), type: 'text', hideEmpty: true },
     { field: 'priority', label: t('DISPLAY.PRIORITY'), type: 'text', hideEmpty: true },
     { field: 'body', label: t('DISPLAY.DESCRIPTION'), type: 'markdown' },
+    {
+      field: 'acceptanceCriteria',
+      label: t('DISPLAY.ACCEPTANCE_CRITERIA'),
+      type: 'markdown',
+      hideEmpty: true,
+    },
+    {
+      field: 'systemInfo',
+      label: t('DISPLAY.SYSTEM_INFO'),
+      type: 'markdown',
+      hideEmpty: true,
+    },
   ],
 
   doneStates: DONE_STATES,
