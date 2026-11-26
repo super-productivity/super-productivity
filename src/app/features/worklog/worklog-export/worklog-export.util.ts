@@ -343,7 +343,7 @@ export const formatRows = (
           (acc, curr) => acc + curr,
           0,
         );
-        const timeSpentPart = row.timeSpent / timeSpentTotal;
+        const timeSpentPart = timeSpentTotal === 0 ? 0 : row.timeSpent / timeSpentTotal;
         Log.log(`${row.timeSpent} / ${timeSpentTotal} = ${timeSpentPart}`);
         timeEstimate = timeEstimate * timeSpentPart;
       }
