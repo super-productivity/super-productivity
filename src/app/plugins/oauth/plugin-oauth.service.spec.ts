@@ -633,6 +633,164 @@ describe('PluginOAuthService', () => {
     });
   });
 
+  describe('ID token (OIDC)', () => {
+    const tokenUrl = 'https://oauth2.googleapis.com/token';
+
+    it('keeps the id_token from the code exchange', async () => {
+      const promise = service.exchangeCodeForTokens({
+        tokenUrl,
+        clientId: 'cid',
+        code: 'code',
+        codeVerifier: 'verifier',
+        redirectUri: 'https://localhost/callback',
+      });
+      httpMock.expectOne(tokenUrl).flush({
+        access_token: 'access',
+        refresh_token: 'refresh',
+        expires_in: 3600,
+        id_token: 'id-1',
+      });
+
+      expect((await promise).idToken).toBe('id-1');
+    });
+
+    it('leaves idToken unset when the provider returns none', async () => {
+      const promise = service.exchangeCodeForTokens({
+        tokenUrl,
+        clientId: 'cid',
+        code: 'code',
+        codeVerifier: 'verifier',
+        redirectUri: 'https://localhost/callback',
+      });
+      httpMock.expectOne(tokenUrl).flush({
+        access_token: 'access',
+        refresh_token: 'refresh',
+        expires_in: 3600,
+      });
+
+      expect((await promise).idToken).toBeUndefined();
+    });
+
+    it('keeps the id_token from a refresh', async () => {
+      const promise = service.refreshAccessToken(tokenUrl, 'cid', 'refresh');
+      httpMock.expectOne(tokenUrl).flush({
+        access_token: 'access-2',
+        expires_in: 3600,
+        id_token: 'id-2',
+      });
+
+      expect((await promise).idToken).toBe('id-2');
+    });
+
+    it('returns null when no tokens are stored', async () => {
+      expect(await service.getValidIdToken('unknown-plugin')).toBeNull();
+    });
+
+    it('returns null when the grant has no ID token', async () => {
+      service.storeTokens('plugin-1', {
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        expiresAt: Date.now() + 3600000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+
+      expect(await service.getValidIdToken('plugin-1')).toBeNull();
+    });
+
+    it('returns the stored ID token while it is valid', async () => {
+      service.storeTokens('plugin-1', {
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        idToken: 'id-1',
+        expiresAt: Date.now() + 3600000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+
+      expect(await service.getValidIdToken('plugin-1')).toBe('id-1');
+    });
+
+    it('refreshes near expiry and returns the new ID token', async () => {
+      service.storeTokens('plugin-1', {
+        accessToken: 'old-access',
+        refreshToken: 'refresh',
+        idToken: 'old-id',
+        expiresAt: Date.now() + 60000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+
+      const promise = service.getValidIdToken('plugin-1');
+      httpMock.expectOne(tokenUrl).flush({
+        access_token: 'new-access',
+        expires_in: 3600,
+        id_token: 'new-id',
+      });
+
+      expect(await promise).toBe('new-id');
+      expect(await service.getValidToken('plugin-1')).toBe('new-access');
+    });
+
+    it('does not hand out the old ID token when a refresh returns none', async () => {
+      service.storeTokens('plugin-1', {
+        accessToken: 'old-access',
+        refreshToken: 'refresh',
+        idToken: 'old-id',
+        expiresAt: Date.now() + 60000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+
+      const promise = service.getValidIdToken('plugin-1');
+      httpMock.expectOne(tokenUrl).flush({
+        access_token: 'new-access',
+        expires_in: 3600,
+      });
+
+      expect(await promise).toBeNull();
+    });
+
+    it('shares one refresh between access and ID token requests', async () => {
+      service.storeTokens('plugin-1', {
+        accessToken: 'old-access',
+        refreshToken: 'refresh',
+        idToken: 'old-id',
+        expiresAt: Date.now() + 60000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+
+      const accessPromise = service.getValidToken('plugin-1');
+      const idPromise = service.getValidIdToken('plugin-1');
+      httpMock.expectOne(tokenUrl).flush({
+        access_token: 'new-access',
+        expires_in: 3600,
+        id_token: 'new-id',
+      });
+
+      expect(await accessPromise).toBe('new-access');
+      expect(await idPromise).toBe('new-id');
+    });
+
+    it('keeps the ID token through serialize and restore', () => {
+      service.storeTokens('plugin-1', {
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        idToken: 'id-1',
+        expiresAt: Date.now() + 3600000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+      const serialized = service.serializeTokens('plugin-1')!;
+      service.clearTokens('plugin-1');
+
+      service.restoreTokens('plugin-1', serialized);
+
+      return service.getValidIdToken('plugin-1').then((id) => expect(id).toBe('id-1'));
+    });
+  });
+
   describe('token serialization', () => {
     it('should serialize and restore tokens', () => {
       service.storeTokens('plugin-1', {

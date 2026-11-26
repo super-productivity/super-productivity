@@ -49,6 +49,10 @@ const readOAuthErrorCode = (body: unknown): string | null => {
   return typeof code === 'string' ? code : null;
 };
 
+/** The OIDC `id_token` of a token response, if it carries a usable one. */
+const readIdToken = (body: { id_token?: unknown }): string | undefined =>
+  typeof body.id_token === 'string' && body.id_token ? body.id_token : undefined;
+
 /**
  * True only when the authorization server rejected the stored grant itself, i.e.
  * Google's `400 {"error":"invalid_grant"}` for a revoked or expired refresh token.
@@ -77,7 +81,7 @@ export class PluginOAuthService {
   private _http = inject(HttpClient);
   private _tokenStore = new Map<string, PluginOAuthTokens>();
   private _pendingRedirect: PendingRedirect | null = null;
-  private _refreshPromises = new Map<string, Promise<string | null>>();
+  private _refreshPromises = new Map<string, Promise<PluginOAuthTokens | null>>();
 
   /** Emits the pluginId when a token refresh fails and in-memory tokens are cleared. */
   tokenInvalidated$ = new Subject<string>();
@@ -197,13 +201,16 @@ export class PluginOAuthService {
       access_token: string;
       refresh_token: string;
       expires_in: number;
+      id_token?: unknown;
     }>(opts.tokenUrl, params);
 
     const expiresInMs = response.expires_in * 1000;
+    const idToken = readIdToken(response);
     return {
       accessToken: response.access_token,
       refreshToken: response.refresh_token,
       expiresAt: Date.now() + expiresInMs,
+      ...(idToken ? { idToken } : {}),
     };
   }
 
@@ -212,7 +219,7 @@ export class PluginOAuthService {
     clientId: string,
     refreshToken: string,
     clientSecret?: string,
-  ): Promise<{ accessToken: string; expiresAt: number }> {
+  ): Promise<{ accessToken: string; expiresAt: number; idToken?: string }> {
     const params: Record<string, string> = {
       grant_type: 'refresh_token',
       client_id: clientId,
@@ -225,6 +232,7 @@ export class PluginOAuthService {
     const response = await this._postTokenRequest<{
       access_token?: unknown;
       expires_in?: unknown;
+      id_token?: unknown;
       error?: unknown;
     }>(tokenUrl, params);
 
@@ -247,9 +255,11 @@ export class PluginOAuthService {
         ? response.expires_in
         : DEFAULT_TOKEN_LIFETIME_SEC;
     const expiresInMs = expiresInSec * 1000;
+    const idToken = readIdToken(response);
     return {
       accessToken: response.access_token,
       expiresAt: Date.now() + expiresInMs,
+      ...(idToken ? { idToken } : {}),
     };
   }
 
@@ -320,13 +330,22 @@ export class PluginOAuthService {
   }
 
   async getValidToken(pluginId: string): Promise<string | null> {
+    return (await this._getValidTokens(pluginId))?.accessToken ?? null;
+  }
+
+  /** The OIDC ID token of the grant (null if the provider issued none), refreshed like the access token. */
+  async getValidIdToken(pluginId: string): Promise<string | null> {
+    return (await this._getValidTokens(pluginId))?.idToken ?? null;
+  }
+
+  private async _getValidTokens(pluginId: string): Promise<PluginOAuthTokens | null> {
     const tokens = this._tokenStore.get(pluginId);
     if (!tokens) {
       return null;
     }
 
     if (tokens.expiresAt - Date.now() > TOKEN_REFRESH_BUFFER_MS) {
-      return tokens.accessToken;
+      return tokens;
     }
 
     // Deduplicate concurrent refresh calls to avoid token rotation issues
@@ -347,7 +366,7 @@ export class PluginOAuthService {
   private async _doRefresh(
     pluginId: string,
     tokens: PluginOAuthTokens,
-  ): Promise<string | null> {
+  ): Promise<PluginOAuthTokens | null> {
     try {
       PluginLog.log(`Refreshing token for plugin ${pluginId}`);
       const refreshed = await this.refreshAccessToken(
@@ -365,13 +384,17 @@ export class PluginOAuthService {
         PluginLog.log(`Discarding refreshed token for plugin ${pluginId}: store changed`);
         return null;
       }
-      this._tokenStore.set(pluginId, {
+      // The ID token shares the access token's lifetime: never keep an old one
+      // past a refresh that did not issue a new one.
+      const updated: PluginOAuthTokens = {
         ...tokens,
         accessToken: refreshed.accessToken,
         expiresAt: refreshed.expiresAt,
-      });
+        idToken: refreshed.idToken,
+      };
+      this._tokenStore.set(pluginId, updated);
       this.tokensRefreshed$.next(pluginId);
-      return refreshed.accessToken;
+      return updated;
     } catch (err) {
       if (this._tokenStore.get(pluginId) !== tokens) {
         return null;

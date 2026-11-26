@@ -85,7 +85,10 @@ import { GlobalThemeService } from '../core/theme/global-theme.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { createPluginSyncAdapter } from './issue-provider/plugin-sync-adapter.service';
-import { PluginOAuthBridgeService } from './oauth/plugin-oauth-bridge.service';
+import {
+  PluginOAuthBoundMethods,
+  PluginOAuthBridgeService,
+} from './oauth/plugin-oauth-bridge.service';
 import { PluginSecretService } from './secret/plugin-secret.service';
 import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
@@ -289,12 +292,10 @@ export class PluginBridgeService implements OnDestroy {
     registerConfigHandler: (handler: () => void) => void;
     registerIssueProvider: (definition: IssueProviderPluginDefinition) => void;
     unregisterIssueProvider: () => void;
-    startOAuthFlow: (
-      config: OAuthFlowConfig,
-      tokenKey?: string,
-    ) => Promise<OAuthTokenResult>;
-    getOAuthToken: (tokenKey?: string) => Promise<string | null>;
-    clearOAuthToken: (tokenKey?: string) => Promise<void>;
+    startOAuthFlow: PluginOAuthBoundMethods['startOAuthFlow'];
+    getOAuthToken: PluginOAuthBoundMethods['getOAuthToken'];
+    getOAuthIdToken: PluginOAuthBoundMethods['getOAuthIdToken'];
+    clearOAuthToken: PluginOAuthBoundMethods['clearOAuthToken'];
     setSecret: (key: string, value: string) => Promise<void>;
     getSecret: (key: string) => Promise<string | null>;
     deleteSecret: (key: string) => Promise<void>;
@@ -392,19 +393,9 @@ export class PluginBridgeService implements OnDestroy {
       },
 
       // OAuth
-      startOAuthFlow: (
-        config: OAuthFlowConfig,
-        tokenKey?: string,
-      ): Promise<OAuthTokenResult> =>
-        this._pluginOAuthBridge.startOAuthFlow(pluginId, config, tokenKey),
-      getOAuthToken: (tokenKey?: string): Promise<string | null> =>
-        this._pluginOAuthBridge.getOAuthToken(
-          pluginId,
-          this._getOAuthConfigForPlugin(pluginId),
-          tokenKey,
-        ),
-      clearOAuthToken: (tokenKey?: string): Promise<void> =>
-        this._pluginOAuthBridge.clearOAuthToken(pluginId, tokenKey),
+      ...this._pluginOAuthBridge.createBoundMethods(pluginId, () =>
+        this._getOAuthConfigForPlugin(pluginId),
+      ),
 
       // Secret storage (local-only, per-plugin, never synced)
       setSecret: (key: string, value: string): Promise<void> =>

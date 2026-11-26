@@ -560,6 +560,8 @@ export interface OAuthTokenResult {
   accessToken: string;
   refreshToken: string;
   expiresAt: number; // unix ms
+  /** OpenID Connect ID token, when the provider issued one (request the `openid` scope). */
+  idToken?: string;
 }
 
 export interface PluginNote {
@@ -974,6 +976,15 @@ export interface PluginAPI {
   startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult>;
 
   getOAuthToken(): Promise<string | null>;
+
+  /**
+   * The OpenID Connect ID token of the current OAuth grant, refreshed like the
+   * access token. For APIs that authenticate with an ID token instead of an access
+   * token (e.g. services behind Google Cloud IAP). Requires the `openid` scope;
+   * resolves to `null` when the provider issued no ID token. `tokenKey` selects the
+   * grant like in the implementation of `getOAuthToken`.
+   */
+  getOAuthIdToken(tokenKey?: string): Promise<string | null>;
 
   clearOAuthToken(): Promise<void>;
 
