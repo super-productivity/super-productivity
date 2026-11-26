@@ -14,7 +14,10 @@ test('keeps the priority when creating the next recurring occurrence', async ({
   const task = taskPage.getTaskByText('Recurring priority').first();
   await task.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Priority', exact: true }).click();
-  await page.getByRole('menuitemradio', { name: 'High', exact: true }).click();
+  // Moving the pointer across sibling menu items can close this submenu.
+  const highPriority = page.getByRole('menuitemradio', { name: 'High', exact: true });
+  await expect(highPriority).toBeVisible();
+  await highPriority.press('Enter');
   await expect(task.locator('task-priority-indicator')).toHaveAttribute(
     'data-priority',
     '3',

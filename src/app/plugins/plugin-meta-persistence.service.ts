@@ -4,6 +4,10 @@ import { firstValueFrom } from 'rxjs';
 import { PluginMetadata } from './plugin-persistence.model';
 import { upsertPluginMetadata, deletePluginMetadata } from './store/plugin.actions';
 import { selectPluginMetadataFeatureState } from './store/plugin-metadata.reducer';
+import {
+  clearTaskHistoryRecordingConsent,
+  TASK_HISTORY_PLUGIN_ID,
+} from '../features/tasks/task-history/task-history-recording-config';
 
 /**
  * Service for persisting plugin metadata using NgRx actions.
@@ -19,6 +23,8 @@ export class PluginMetaPersistenceService {
    * Set plugin enabled/disabled status
    */
   async setPluginEnabled(pluginId: string, isEnabled: boolean): Promise<void> {
+    if (pluginId === TASK_HISTORY_PLUGIN_ID && !isEnabled)
+      clearTaskHistoryRecordingConsent();
     const pluginMetadata: PluginMetadata = { id: pluginId, isEnabled };
 
     this._store.dispatch(upsertPluginMetadata({ pluginMetadata }));
@@ -59,6 +65,7 @@ export class PluginMetaPersistenceService {
    * Remove plugin metadata
    */
   removePluginMetadata(pluginId: string): void {
+    if (pluginId === TASK_HISTORY_PLUGIN_ID) clearTaskHistoryRecordingConsent();
     this._store.dispatch(deletePluginMetadata({ pluginId }));
   }
 }

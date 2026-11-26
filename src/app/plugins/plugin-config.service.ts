@@ -6,6 +6,11 @@ import { PluginUserPersistenceService } from './plugin-user-persistence.service'
 import { PluginCacheService } from './plugin-cache.service';
 import { PluginLog } from '../core/log';
 import { first } from 'rxjs/operators';
+import {
+  readTaskHistoryPreferences,
+  saveTaskHistoryPreferences,
+  TASK_HISTORY_PLUGIN_ID,
+} from '../features/tasks/task-history/task-history-recording-config';
 
 interface PluginConfigData {
   config: Record<string, unknown>;
@@ -76,6 +81,7 @@ export class PluginConfigService {
    * Get the saved configuration for a plugin
    */
   async getPluginConfig(pluginId: string): Promise<Record<string, unknown> | null> {
+    if (pluginId === TASK_HISTORY_PLUGIN_ID) return readTaskHistoryPreferences();
     const configData =
       await this._pluginUserPersistenceService.loadPluginUserData(pluginId);
 
@@ -99,6 +105,10 @@ export class PluginConfigService {
     pluginId: string,
     config: Record<string, unknown>,
   ): Promise<void> {
+    if (pluginId === TASK_HISTORY_PLUGIN_ID) {
+      saveTaskHistoryPreferences(config);
+      return;
+    }
     const configData: PluginConfigData = {
       config,
       savedAt: Date.now(),

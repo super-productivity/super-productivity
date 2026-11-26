@@ -386,6 +386,31 @@
       </div>
     }
   </div>
+
+  @for (block of pluginTaskDetailBlocks(); track block.key) {
+    <task-detail-item
+      type="panel"
+      #historyItem
+      (collapseParent)="collapseParent()"
+      (keyPress)="onItemKeyPress($event)"
+    >
+      <ng-container panel-header>
+        <mat-icon class="panel-header-icon">extension</mat-icon>
+        <span>{{ block.label }}</span>
+      </ng-container>
+      <ng-container panel-content>
+        @if (historyItem.expanded) {
+          <plugin-index
+            class="plugin-task-detail-block"
+            [directPluginId]="block.pluginId"
+            [taskDetailContext]="{ taskId: block.taskId, blockId: block.id }"
+            [showFullUI]="false"
+            [skipCleanupOnDestroy]="true"
+          ></plugin-index>
+        }
+      </ng-container>
+    </task-detail-item>
+  }
 </div>
 
 @if (panelState.isDragOver()) {

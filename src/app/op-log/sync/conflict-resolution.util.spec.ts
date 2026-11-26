@@ -1,14 +1,126 @@
+import { planLwwConflictResolutions } from '@sp/sync-core';
 import {
   isDeleteWinsOperation,
   LWW_PLANNING_OPTIONS,
   mergeMarkedDeleteWinsOps,
 } from './conflict-resolution.util';
-import { ActionType, Operation, OpType } from '../core/operation.types';
+import { ActionType, EntityConflict, Operation, OpType } from '../core/operation.types';
 import {
   deleteTag,
   deleteTags,
   TAG_DELETE_WINS_MARKER,
 } from '../../features/tag/store/tag.actions';
+
+describe('duplicate timed repeat with recorded task history', () => {
+  const entityId = 'rpt_daily_2030-06-16';
+  const scheduledAt = 1_907_845_200_000;
+  const operation = (
+    clientId: 'A' | 'B',
+    counter: number,
+    actionType: ActionType,
+    opType: OpType,
+    actionPayload: Record<string, unknown>,
+  ): Operation => ({
+    id: `${clientId}-${counter}`,
+    clientId,
+    actionType,
+    opType,
+    entityType: 'TASK',
+    entityId,
+    payload: { actionPayload, entityChanges: [] },
+    vectorClock: { [clientId]: counter },
+    timestamp: (clientId === 'A' ? 1000 : 2000) + counter,
+    schemaVersion: 1,
+  });
+  const create = (clientId: 'A' | 'B'): Operation =>
+    operation(clientId, 1, ActionType.TASK_SHARED_ADD, OpType.Create, {
+      task: { id: entityId },
+    });
+  const schedule = (clientId: 'A' | 'B', dueWithTime: number): Operation => {
+    const operationId = `${clientId}-2`;
+    const occurredAt = clientId === 'A' ? 1002 : 2002;
+    return operation(
+      clientId,
+      2,
+      ActionType.TASK_SHARED_SCHEDULE_WITH_TIME,
+      OpType.Update,
+      {
+        task: { id: entityId },
+        dueWithTime,
+        taskHistory: {
+          version: 1,
+          operationId,
+          occurredAt,
+          baselines: [],
+          events: [
+            {
+              id: `${operationId}:schedule`,
+              operationId,
+              occurredAt,
+              taskId: entityId,
+              field: 'schedule',
+              before: { kind: 'none' },
+              after: { kind: 'time', value: dueWithTime },
+              sourceAction: ActionType.TASK_SHARED_SCHEDULE_WITH_TIME,
+            },
+          ],
+        },
+      },
+    );
+  };
+  const tracked = operation(
+    'A',
+    3,
+    ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+    OpType.Update,
+    {
+      taskId: entityId,
+      date: '2030-06-16',
+      duration: 120_000,
+    },
+  );
+  const conflict = (localOps: Operation[], remoteOps: Operation[]): EntityConflict => ({
+    entityType: 'TASK',
+    entityId,
+    localOps,
+    remoteOps,
+    suggestedResolution: 'manual',
+  });
+
+  it('selects the tracked side from both devices and keeps the original operations', () => {
+    const a = [create('A'), schedule('A', scheduledAt), tracked];
+    const b = [create('B'), schedule('B', scheduledAt)];
+    const original = structuredClone([a, b]);
+    const [fromA] = planLwwConflictResolutions([conflict(a, b)], LWW_PLANNING_OPTIONS);
+    const [fromB] = planLwwConflictResolutions([conflict(b, a)], LWW_PLANNING_OPTIONS);
+    expect(fromA.reason).toBe('local-duplicate-create');
+    expect(fromB.reason).toBe('remote-duplicate-create');
+    expect([a, b]).toEqual(original);
+  });
+
+  it('still counts a different due time as an edit', () => {
+    const a = [create('A'), schedule('A', scheduledAt), tracked];
+    const b = [create('B'), schedule('B', scheduledAt + 60_000)];
+    const [plan] = planLwwConflictResolutions([conflict(a, b)], LWW_PLANNING_OPTIONS);
+    expect(plan.reason).toBe('remote-timestamp-or-tie');
+  });
+
+  it('matches a derived schedule from a client without the history recorder', () => {
+    const a = [create('A'), schedule('A', scheduledAt), tracked];
+    const oldSchedule = operation(
+      'B',
+      2,
+      ActionType.TASK_SHARED_SCHEDULE_WITH_TIME,
+      OpType.Update,
+      { task: { id: entityId }, dueWithTime: scheduledAt },
+    );
+    const [plan] = planLwwConflictResolutions(
+      [conflict([create('B'), oldSchedule], a)],
+      LWW_PLANNING_OPTIONS,
+    );
+    expect(plan.reason).toBe('remote-duplicate-create');
+  });
+});
 
 /**
  * #11489: a marked single-tag delete wins over a concurrent edit of the tag,

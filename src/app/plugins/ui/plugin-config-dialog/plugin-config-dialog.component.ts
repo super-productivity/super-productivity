@@ -13,7 +13,8 @@ import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { FormlyJsonschema } from '@ngx-formly/core/json-schema';
 import { JSONSchema7 } from 'json-schema';
 import { PluginManifest } from '../../plugin-api.model';
-import { PluginUserPersistenceService } from '../../plugin-user-persistence.service';
+import { PluginConfigService } from '../../plugin-config.service';
+import { TASK_HISTORY_PLUGIN_ID } from '../../../features/tasks/task-history/task-history-recording-config';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { PluginLog } from '../../../core/log';
@@ -23,11 +24,6 @@ import { MatError } from '@angular/material/form-field';
 export interface PluginConfigDialogData {
   manifest: PluginManifest;
   schema: JSONSchema7;
-}
-
-interface PluginConfigData {
-  config: Record<string, unknown>;
-  savedAt: number;
 }
 
 @Component({
@@ -129,7 +125,8 @@ interface PluginConfigData {
 })
 export class PluginConfigDialogComponent {
   private readonly _dialogRef = inject(MatDialogRef<PluginConfigDialogComponent>);
-  private readonly _pluginUserPersistenceService = inject(PluginUserPersistenceService);
+  private readonly _pluginConfigService = inject(PluginConfigService);
+  private _initialModel: Record<string, unknown> = {};
   private readonly _formlyJsonschema = inject(FormlyJsonschema);
   readonly _translateService = inject(TranslateService);
 
@@ -166,23 +163,9 @@ export class PluginConfigDialogComponent {
       }
 
       // Load existing configuration
-      const existingConfig = await this._pluginUserPersistenceService.loadPluginUserData(
-        this.manifest.id,
-      );
-
-      if (existingConfig) {
-        try {
-          const parsedConfig = JSON.parse(existingConfig) as PluginConfigData;
-          // Only use the config part, not the full persistence object
-          this.model = parsedConfig.config || {};
-        } catch (e) {
-          PluginLog.warn(
-            `Failed to parse existing config for plugin ${this.manifest.id}`,
-            e,
-          );
-          this.model = {};
-        }
-      }
+      this.model =
+        (await this._pluginConfigService.getPluginConfig(this.manifest.id)) ?? {};
+      this._initialModel = { ...this.model };
 
       this.loading.set(false);
     } catch (error) {
@@ -200,15 +183,15 @@ export class PluginConfigDialogComponent {
     this.loading.set(true);
     try {
       // Save the configuration
-      const configData: PluginConfigData = {
-        config: this.model,
-        savedAt: Date.now(),
-      };
-
-      await this._pluginUserPersistenceService.persistPluginUserData(
-        this.manifest.id,
-        JSON.stringify(configData),
-      );
+      const config =
+        this.manifest.id === TASK_HISTORY_PLUGIN_ID
+          ? Object.fromEntries(
+              Object.entries(this.model).filter(
+                ([key, value]) => value !== this._initialModel[key],
+              ),
+            )
+          : this.model;
+      await this._pluginConfigService.savePluginConfig(this.manifest.id, config);
 
       PluginLog.log(`Saved config for plugin ${this.manifest.id}`);
       this._dialogRef.close(true);

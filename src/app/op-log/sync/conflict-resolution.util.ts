@@ -382,6 +382,18 @@ export const LWW_PLANNING_OPTIONS = {
   isDeleteWinsAction: isDeleteWinsOperation,
   toEntityKey: (entityType: string, entityId: string): string =>
     toEntityKey(entityType as EntityType, entityId),
+  getDuplicateCreateComparisonPayload: (payload: unknown): unknown => {
+    if (
+      !isMultiEntityPayload(payload) ||
+      !Object.hasOwn(payload.actionPayload ?? {}, 'taskHistory')
+    ) {
+      return payload;
+    }
+    // Devices can record different author events for the same derived schedule.
+    const actionPayload = { ...payload.actionPayload };
+    delete actionPayload['taskHistory'];
+    return { ...payload, actionPayload };
+  },
 };
 
 export const isResolvableTodayListAction = (actionType: ActionType): boolean =>

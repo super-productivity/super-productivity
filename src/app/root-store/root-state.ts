@@ -22,8 +22,10 @@ import { AppState, appStateFeatureKey } from './app-state/app-state.reducer';
 import { MenuTreeState } from '../features/menu-tree/store/menu-tree.model';
 import { TIME_TRACKING_FEATURE_KEY } from '../features/time-tracking/store/time-tracking.reducer';
 import { TimeTrackingState } from '../features/time-tracking/time-tracking.model';
+import type { PluginMetaDataState } from '../plugins/plugin-persistence.model';
 
 export interface RootState {
+  pluginMetadata?: PluginMetaDataState;
   [TASK_FEATURE_NAME]: TaskState;
   [WORK_CONTEXT_FEATURE_NAME]: WorkContextState;
   [PROJECT_FEATURE_NAME]: ProjectState;

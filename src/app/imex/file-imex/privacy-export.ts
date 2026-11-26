@@ -1,4 +1,8 @@
 import { dirtyDeepCopy } from '../../util/dirtyDeepCopy';
+import {
+  readTaskHistoryDelivery,
+  TASK_HISTORY_DELIVERY_PREFIX,
+} from '../../features/tasks/task-history/task-history-delivery';
 
 let i: number = 0;
 
@@ -59,6 +63,31 @@ const maskString = (key: string, val: string, counter: number): string => {
 
 const recurse = (obj: unknown): void => {
   if (typeof obj !== 'object' || obj === null) return;
+
+  const record = obj as Record<string, unknown>;
+  if (record['field'] === 'title' || record['field'] === 'notes') {
+    for (const side of ['before', 'after']) {
+      const entry = record[side] as { kind?: unknown; value?: unknown } | undefined;
+      // Copies of the same event must stay identical in the anonymized export.
+      if (entry?.kind === 'text' && typeof entry.value === 'string' && entry.value) {
+        entry.value = '[redacted]';
+      }
+    }
+  }
+  if (
+    typeof record['id'] === 'string' &&
+    record['id'].startsWith(TASK_HISTORY_DELIVERY_PREFIX) &&
+    Object.hasOwn(record, 'data')
+  ) {
+    try {
+      const envelope = readTaskHistoryDelivery(record);
+      recurse(envelope);
+      record['data'] = envelope ? JSON.stringify(envelope) : '';
+    } catch {
+      // Never include the original opaque payload if it cannot be anonymized.
+      record['data'] = '';
+    }
+  }
 
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
