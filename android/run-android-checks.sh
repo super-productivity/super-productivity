@@ -41,6 +41,18 @@ adb shell settings put secure show_ime_with_hard_keyboard 1 || true
 # 45868773514). Same fix as run-android-ime-check.sh, which hit it first.
 adb shell settings put global hide_error_dialogs 1 || true
 adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null || true
+# Neither line closes an ANR dialog that is already up: it held focus through
+# a whole run in 45905549386. Force-stopping the process that ANR'd dismisses
+# its dialog; home restarts the launcher, and a repeat ANR stays hidden now.
+for _ in 1 2 3 4 5; do
+  anr_pkg=$(adb shell dumpsys window windows 2> /dev/null |
+    grep -oE 'Application Not Responding: [A-Za-z0-9._]+' | head -1 | sed 's/.*: //')
+  [ -z "$anr_pkg" ] && break
+  echo "Dismissing the ANR dialog of $anr_pkg"
+  adb shell am force-stop "$anr_pkg" || true
+  sleep 2
+done
+# End of pre-test emulator setup.
 adb logcat -c || true
 
 # Bounded so a hung instrumentation fails with a report instead of consuming the

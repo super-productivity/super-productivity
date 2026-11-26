@@ -4,7 +4,7 @@
 # suite, as the API 35 CI job runs it. ARM=control skips the ANR-dialog lines.
 set -uo pipefail
 if [ "${ARM#fix}" != "$ARM" ]; then
-  sed -n '/^adb shell settings put secure show_ime_with_hard_keyboard/,/CLOSE_SYSTEM_DIALOGS/p' run-android-checks.sh > "$RUNNER_TEMP/setup.sh"
+  sed -n '/^adb shell settings put secure show_ime_with_hard_keyboard/,/^# End of pre-test emulator setup/p' run-android-checks.sh > "$RUNNER_TEMP/setup.sh"
 else
   grep '^adb shell settings put secure show_ime_with_hard_keyboard' run-android-checks.sh > "$RUNNER_TEMP/setup.sh"
 fi
@@ -30,5 +30,7 @@ if [ "$status" -ne 0 ]; then
   awk '{ t=$1; $1=""; if ($0 != prev) print t $0; prev=$0 }' "$RUNNER_TEMP/focus.log"
   echo "----- test logcat (SUPKeyboardTest, TestRunner, ActivityTaskManager) -----"
   adb logcat -d -v time -s SUPKeyboardTest:I TestRunner:I ActivityTaskManager:I WindowManager:W | tail -300
+  echo "----- focus decisions (InputDispatcher, WindowManager) -----"
+  adb logcat -d -v time -s InputDispatcher:I WindowManager:I | grep -iE 'focus' | tail -200
 fi
 exit $status
