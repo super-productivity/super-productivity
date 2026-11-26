@@ -662,6 +662,33 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
     expect(focusItemSpy).toHaveBeenCalled();
     item.remove();
   }));
+
+  describe('onItemKeyPress', () => {
+    let items: { focusEl: jasmine.Spy }[];
+
+    beforeEach(() => {
+      items = [{ focusEl: jasmine.createSpy() }, { focusEl: jasmine.createSpy() }];
+      (component as unknown as { itemEls: () => unknown[] }).itemEls = () => items;
+    });
+
+    it('moves to the next item on ArrowDown', () => {
+      component.onItemKeyPress(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+
+      expect(component.panelState.selectedItemIndex()).toBe(1);
+      expect(items[1].focusEl).toHaveBeenCalled();
+    });
+
+    // Ctrl+Alt+ArrowDown (move to bottom) on a panel sub-task must keep focus
+    // on the sub-task, or the task shortcut finds no focused task.
+    it('ignores ArrowDown with a modifier key', () => {
+      component.onItemKeyPress(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', ctrlKey: true, altKey: true }),
+      );
+
+      expect(component.panelState.selectedItemIndex()).toBe(0);
+      expect(items[1].focusEl).not.toHaveBeenCalled();
+    });
+  });
 });
 
 // Opening the notes panel via a checklist's progress badge routes through
