@@ -654,6 +654,35 @@ describe('PollIssueUpdatesEffects', () => {
       sub.unsubscribe();
     }));
 
+    it('should poll a local plugin provider while offline', fakeAsync(() => {
+      const provider = createMockIssueProvider({
+        id: 'gitlab-provider-1',
+        issueProviderKey: 'plugin:gitlab-issue-provider',
+        pluginConfig: { gitlabBaseUrl: 'http://192.168.1.5' },
+      });
+      issueServiceSpy.getPollInterval.and.returnValue(300000);
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.overrideSelector(selectAllCalendarIssueTasks, [
+        createMockTask({
+          issueId: 'GITLAB-1',
+          issueType: provider.issueProviderKey,
+          issueProviderId: provider.id,
+        }),
+      ]);
+      store.refreshState();
+
+      const actionsSubject = new Subject<any>();
+      actions$ = actionsSubject.asObservable();
+      isOnline$.next(false);
+
+      const subscription = effects.pollIssueChangesForCurrentContext$.subscribe();
+      actionsSubject.next(loadAllData({ appDataComplete: {} as any }));
+      tick(10001);
+
+      expect(issueServiceSpy.refreshIssueTasks).toHaveBeenCalledTimes(1);
+      subscription.unsubscribe();
+    }));
+
     it('should NOT poll providers with pollingMode always (handled by separate effect)', fakeAsync(() => {
       const jiraProvider = createMockIssueProvider({
         id: 'jira-provider-1',

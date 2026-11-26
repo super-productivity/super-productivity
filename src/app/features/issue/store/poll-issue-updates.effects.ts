@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { combineLatest, EMPTY, from, merge, Observable, timer } from 'rxjs';
+import { combineLatest, EMPTY, from, merge, Observable, of, timer } from 'rxjs';
 import { catchError, first, map, switchMap } from 'rxjs/operators';
 import { IssueService } from '../issue.service';
 import { Task, TaskWithSubTasks } from '../../tasks/task.model';
@@ -22,6 +22,7 @@ import { IssueLog } from '../../../core/log';
 import { getRefreshOnLook$ } from './refresh-on-look';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { isLocalProvider } from './is-local-provider';
 import { pollWhileOnline } from '../../../util/poll-while-online';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
@@ -122,7 +123,7 @@ export class PollIssueUpdatesEffects {
 
   private _createUpdatePollTimer(provider: IssueProvider): Observable<unknown> {
     return pollWhileOnline(
-      this._isOnline$,
+      isLocalProvider(provider) ? of(true) : this._isOnline$,
       [
         timer(
           DELAY_BEFORE_ISSUE_POLLING,
