@@ -44,4 +44,28 @@ describe('formatJiraDate', () => {
     const timezonePart = result.substring(result.length - 5);
     expect(timezonePart).toMatch(/^[+-]\d{4}$/); // e.g., +0100 or -0500
   });
+
+  describe('timezone offset', () => {
+    let timezoneOffsetSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      timezoneOffsetSpy = spyOn(Date.prototype, 'getTimezoneOffset');
+    });
+
+    const offsetFor = (timezoneOffset: number): string => {
+      timezoneOffsetSpy.and.returnValue(timezoneOffset);
+      return formatJiraDate(new Date(2024, 0, 15, 10, 30, 0)).slice(-5);
+    };
+
+    it('should keep the hour of half-hour zones east of UTC', () => {
+      expect(offsetFor(-330)).toBe('+0530');
+      expect(offsetFor(-345)).toBe('+0545');
+    });
+
+    it('should format whole-hour zones and zones west of UTC', () => {
+      expect(offsetFor(-60)).toBe('+0100');
+      expect(offsetFor(210)).toBe('-0330');
+      expect(offsetFor(480)).toBe('-0800');
+    });
+  });
 });
