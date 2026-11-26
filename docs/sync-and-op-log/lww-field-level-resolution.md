@@ -480,8 +480,9 @@ holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op
   patch rows (a re-send whose upload failed or was killed) are read by key,
   like its edits; a replace row, a reminder clear or a remote delete keep the
   whole-entity path.
-- **Content banner:** a patch reports a content field only where both sides
-  wrote it (`findPatchContentConflicts`).
+- **Content banner:** identical final writes to a task's title, notes, or
+  ordered subtask IDs do not trigger a warning. A patch only reports
+  differences in fields both sides wrote (`findPatchContentConflicts`).
 
 **Residuals:**
 
