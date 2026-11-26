@@ -1048,9 +1048,13 @@ const parseShortSyntaxDate = async (
       }
     }
 
-    const simpleMatch = rr[0].match(/\d+/);
-    if (simpleMatch && simpleMatch[0] && typeof +simpleMatch[0] === 'number') {
-      const nr = +simpleMatch[0];
+    // Only a bare hour right after the trigger ("@12", "@ 4", "lunch@12"). A
+    // number further into the match belongs to the title ("Ping @anna re
+    // issue 7" must not become "Ping" at 07:00), and digits glued to letters
+    // are no hour ("@15th" must not become 15:00 with "th" left behind).
+    const simpleMatch = rr[0].match(/^.\s*(\d+)(?![\p{L}\p{N}])/u);
+    if (simpleMatch) {
+      const nr = +simpleMatch[1];
       if (nr <= 24) {
         const due = new Date(
           now.getFullYear(),
@@ -1067,10 +1071,7 @@ const parseShortSyntaxDate = async (
           due.setDate(due.getDate() + 1);
         }
 
-        const matchIndex = simpleMatch.index as number;
-        const matchText = simpleMatch[0];
-        const textToReplace = rr[0].substring(0, matchIndex + matchText.length);
-        const ranges = consume(textToReplace);
+        const ranges = consume(simpleMatch[0]);
 
         if (isDeadline) {
           return {
