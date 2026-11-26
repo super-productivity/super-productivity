@@ -55,6 +55,13 @@
       (change)="setScope('tasks:capture', $event.checked, $event.source)"
       >{{ T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_CAPTURE | translate }}</mat-checkbox
     >
+    <mat-checkbox
+      class="scope"
+      [checked]="hasScope('tasks:update')"
+      [disabled]="isBusy()"
+      (change)="setScope('tasks:update', $event.checked, $event.source)"
+      >{{ T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_UPDATE | translate }}</mat-checkbox
+    >
 
     <h3 class="sub-section-heading">
       {{ T.GCF.MISC.ASSISTANT_ACCESS_KEY | translate }}

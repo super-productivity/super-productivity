@@ -277,6 +277,51 @@ describe('LocalRestApiTaskRoutesService', () => {
 
   describe('task routes', () => {
     describe('GET /tasks', () => {
+      it('pages filtered task summaries before IPC and preserves full REST responses', async () => {
+        const id = 'cal_' + 'x'.repeat(210) + '/.?event@example.org';
+        const tasks = [
+          createMockTask('other', { projectId: 'elsewhere' }),
+          createMockTask(id, { notes: 'private', priority: 'medium' }),
+          createMockTask('done', { isDone: true }),
+          createMockTask('last'),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+        const list = createRequest('GET', '/tasks', {
+          query: { projectId: 'INBOX_PROJECT', limit: '1' },
+        });
+        const first = await sendRequestAndWait({ ...list, source: 'mcp' });
+        expect(first.body).toEqual({
+          ok: true,
+          data: {
+            tasks: [jasmine.objectContaining({ id, priority: 'medium' })],
+            hasMore: true,
+          },
+        });
+        expect(JSON.stringify(first.body)).not.toMatch(
+          /private|notes|timeSpentOnDay|subTaskIds/,
+        );
+        const next = { ...list, query: { ...list.query, cursor: id } };
+        const last = await sendRequestAndWait({ ...next, source: 'mcp' });
+        expect(last.body).toEqual({
+          ok: true,
+          data: {
+            tasks: [jasmine.objectContaining({ id: 'last' })],
+            hasMore: false,
+          },
+        });
+        const stale = await sendRequestAndWait({
+          ...next,
+          source: 'mcp',
+          query: { ...next.query, cursor: 'done' },
+        });
+        expect(stale.body).toEqual({
+          ok: false,
+          error: jasmine.objectContaining({ code: 'INVALID_CURSOR' }),
+        });
+        const rest = await sendRequestAndWait(next);
+        expect(rest.body).toEqual({ ok: true, data: [tasks[1], tasks[3]] });
+      });
+
       it('should return all active tasks by default', async () => {
         const tasks = [createMockTask('task-1'), createMockTask('task-2')];
         Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
@@ -1031,6 +1076,23 @@ describe('LocalRestApiTaskRoutesService', () => {
     });
 
     describe('GET /tasks/:id', () => {
+      it('looks up a literal MCP id, hides archived projects and leaves REST routing alone', async () => {
+        const id = 'cal_/../status?x@calendar';
+        const task = createMockTask(id, { projectId: 'calendar' });
+        const lookup = jasmine.createSpy('getByIdOnce$').and.returnValue(of(task));
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', { get: () => lookup });
+        const request = createRequest('GET', '/assistant/task', { query: { id } });
+        expect(await service.handle(request)).toBeUndefined();
+        const active = await sendRequestAndWait({ ...request, source: 'mcp' });
+        expect(lookup).toHaveBeenCalledOnceWith(id);
+        expect(active.body).toEqual({ ok: true, data: task });
+        Object.defineProperty(projectServiceMock, 'archived$', {
+          get: () => of([{ id: 'calendar', isArchived: true } as Project]),
+        });
+        const archived = await sendRequestAndWait({ ...request, source: 'mcp' });
+        expect(archived.status).toBe(404);
+      });
+
       it('should return task by id', async () => {
         const mockTask = createMockTask('task-1');
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
