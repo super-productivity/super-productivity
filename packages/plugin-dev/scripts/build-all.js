@@ -48,6 +48,26 @@ function assertFilesExist(basePath, files, pluginName) {
   }
 }
 
+// Plugin built with ../scripts/build-with-esbuild.js: build, then copy dist/ to assets.
+function esbuildPlugin(name) {
+  return {
+    name,
+    path: name,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(__dirname, '../../../src/assets/bundled-plugins', name);
+      copyRecursive(path.join(pluginPath, 'dist'), targetDir);
+      assertFilesExist(
+        targetDir,
+        ['manifest.json', 'plugin.js', 'icon.svg', 'i18n/en.json'],
+        name,
+      );
+      return 'Built and copied to assets';
+    },
+  };
+}
+
 // Plugin configurations
 const plugins = [
   {
@@ -565,6 +585,29 @@ const plugins = [
       return 'Built and copied to assets';
     },
   },
+  esbuildPlugin('gitea-issue-provider'),
+  esbuildPlugin('linear-issue-provider'),
+  esbuildPlugin('trello-issue-provider'),
+  esbuildPlugin('azure-devops-issue-provider'),
+  esbuildPlugin('redmine-issue-provider'),
+  esbuildPlugin('nextcloud-deck-issue-provider'),
+  esbuildPlugin('gitlab-issue-provider'),
+  {
+    name: 'brain-dump',
+    path: 'brain-dump',
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/brain-dump',
+      );
+      fs.mkdirSync(targetDir, { recursive: true });
+      for (const file of ['manifest.json', 'plugin.js', 'icon.svg']) {
+        fs.copyFileSync(path.join(pluginPath, file), path.join(targetDir, file));
+      }
+      return 'Copied to assets';
+    },
+  },
 ];
 
 async function buildPlugin(plugin) {
@@ -654,4 +697,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildAll };
+module.exports = { buildAll, plugins };

@@ -215,3 +215,24 @@ test('every bundled plugin declares dataSharing covering its allowedHosts', () =
 
   assert.deepEqual(problems, [], problems.join('\n'));
 });
+
+// `plugins:build` (build-all.js) builds the assets E2E and dev builds load; it keeps
+// its own list, so a bundled plugin missing from it is absent there (#9759).
+test('every BUNDLED_PLUGIN_PATHS plugin is built by plugin-dev/scripts/build-all.js', () => {
+  const source = fs.readFileSync(BUNDLED_PLUGINS_CONST_PATH, 'utf8');
+  const bundledPaths = extractStringLiteralList(source, 'BUNDLED_PLUGIN_PATHS = [', ']');
+  assert.ok(bundledPaths.length > 0, 'Parsed zero entries from BUNDLED_PLUGIN_PATHS.');
+
+  const { plugins } = require(path.join(PLUGIN_DEV_DIR, 'scripts/build-all.js'));
+  const built = new Set(plugins.map((plugin) => plugin.name));
+  const missing = bundledPaths
+    .map((assetPath) => assetPath.split('/').pop())
+    .filter((dirName) => !built.has(dirName));
+
+  assert.deepEqual(
+    missing,
+    [],
+    `Bundled plugin dir(s) missing from packages/plugin-dev/scripts/build-all.js: ${missing.join(', ')}. ` +
+      '`npm run plugins:build` (used by E2E) would not build them.',
+  );
+});

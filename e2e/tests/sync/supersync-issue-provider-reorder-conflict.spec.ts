@@ -365,8 +365,7 @@ for (const scenario of scenarios) {
       const ids = ['provider-a', 'provider-b', 'provider-witness'].map(
         (id) => `${id}-${testRunId}`,
       );
-      // The edited/pinned provider (index 0) must be built-in: GitLab is a bundled
-      // plugin now, and the E2E build (plugin-dev build-all.js) does not ship it.
+      // The edited/pinned provider (index 0) is a built-in Jira provider.
       await seedProviders(a.page, ids, 'JIRA');
       await a.workView.addTask('baseline witness');
       if (scenario.compact) await a.workView.addTask('Compaction activity');
