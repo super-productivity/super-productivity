@@ -1,23 +1,27 @@
 {
   "CFG": {
-    "REPO": "användarnamn/repositoryName",
-    "TOKEN": "Åtkomsttoken",
-    "FILTER_USERNAME": "Användarnamn (t.ex. för att filtrera ut ändringar du själv har gjort)",
-    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
-    "HOW_TO_GET_TOKEN": "How to get a token"
+    "REPO": "Arkiv (ägare/arkivnamn)",
+    "TOKEN": "Personlig åtkomsttoken (obligatorisk för privata arkiv, valfri för offentliga arkiv)",
+    "API_BASE_URL": "Basadress för GitHubs API (standard: https://api.github.com)",
+    "FILTER_USERNAME": "Användarnamn vars egna kommentarer ska ignoreras vid sökning efter uppdateringar",
+    "BACKLOG_QUERY": "Sökfråga för backloggen (standard med token: ”sort:updated state:open assignee:@me”, utan token: ”sort:updated state:open”). Utan token importeras även andras öppna ärenden.",
+    "INCLUDE_PULL_REQUESTS": "Ta med pull requests tillsammans med ärenden i sökresultaten och backloggen",
+    "HOW_TO_GET_TOKEN": "Så skaffar du en åtkomsttoken"
   },
   "DISPLAY": {
     "SUMMARY": "Sammanfattning",
     "STATE": "Status",
-    "ASSIGNEE": "Mottagare",
+    "ASSIGNEE": "Ansvarig",
     "LABELS": "Etiketter",
-    "MILESTONE": "Milestone",
-    "CREATOR": "Created by",
+    "MILESTONE": "Milstolpe",
+    "CREATOR": "Skapat av",
     "DESCRIPTION": "Beskrivning"
   },
-  "FORM_HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna GitHub-ärenden för ett specifikt arkiv listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt importera alla öppna ärenden. </p><p>För att komma förbi användningsbegränsningar och få åtkomst kan du ange en åtkomsttoken. <a href=’https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps’>Mer information om dess omfattning finns här</a>.",
+  "FORM_HELP": "<p>I dagsplaneringen kan du få förslag på öppna GitHub-ärenden från ett visst arkiv när du skapar en uppgift. Varje förslag visar mer information och en länk till ärendet.</p><p>Du kan också importera alla öppna ärenden automatiskt.</p><p>Ange en åtkomsttoken för att få åtkomst och en högre gräns för antalet anrop. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Läs mer om behörigheter för åtkomsttoken</a>.",
   "ERRORS": {
-    "CONFIG_ERROR": "GitHub: Fel vid mappning av data. Är namnet på ditt arkiv korrekt?",
-    "ERR_UNKNOWN": "GitHub: Okänd felkod {{statusCode}} {{errorMsg}}. Har API-gränsen överskridits?"
+    "CONFIG_ERROR": "GitHub: Det gick inte att tolka uppgifterna. Kontrollera att arkivnamnet är rätt.",
+    "ERR_UNKNOWN": "GitHub: Okänt fel {{statusCode}} {{errorMsg}}. Har gränsen för antalet API-anrop överskridits?",
+    "TOKEN_REQUIRED": "GitHub: Du behöver en personlig åtkomsttoken för att skapa eller uppdatera ärenden. Lägg till en token i inställningarna för ärendekällan.",
+    "INSUFFICIENT_PERMISSIONS": "GitHub: Din token saknar troligen rätt behörigheter. Klassiska åtkomsttoken behöver behörigheten ”repo”. Åtkomsttoken med detaljerade behörigheter behöver ”Issues: Read and write”. Felet kan också betyda att arkivet saknas eller att ärenden är avstängda där."
   }
 }

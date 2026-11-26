@@ -1,0 +1,17 @@
+{
+  "CFG": {
+    "API_KEY": "API-nyckel",
+    "TEAM_ID": "Team-ID (valfritt, för att filtrera efter team)",
+    "PROJECT_ID": "Projekt-ID (valfritt, för att filtrera efter projekt)",
+    "HOW_TO_GET_TOKEN": "Hämta din API-nyckel"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammanfattning",
+    "STATE": "Status",
+    "PRIORITY": "Prioritet",
+    "ASSIGNEE": "Ansvarig",
+    "LABELS": "Etiketter",
+    "DESCRIPTION": "Beskrivning"
+  },
+  "FORM_HELP": "<p>Här kan du ställa in vilka Linear-ärenden som visas när du skapar en uppgift i Super Productivity. Ärenden som du har tilldelats visas som förslag med en länk till ärendet och mer information. Du kan importera dem som uppgifter.</p>"
+}

@@ -1,28 +1,28 @@
 {
   "CFG": {
-    "BASE_URL": "Nextcloud bas-URL",
+    "BASE_URL": "Basadress för Nextcloud",
     "USERNAME": "Ditt Nextcloud-användarnamn",
-    "PASSWORD": "Ditt Nextcloud-applösenord",
-    "BOARD": "Board",
-    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
-    "DONE_STACK": "Done stack (cards are moved here on completion)",
-    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
-    "NONE": "None",
-    "FILTER_BY_ASSIGNEE": "Importera endast kort tilldelade till mig",
-    "TITLE_TEMPLATE": "Mall för uppgiftstitel",
-    "TITLE_TEMPLATE_DESC": "Variabler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exempel: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lämna tomt för enbart korttitel."
+    "PASSWORD": "Ditt applösenord för Nextcloud",
+    "BOARD": "Tavla",
+    "IMPORT_STACKS": "Importera från listor (lämna tomt för alla)",
+    "DONE_STACK": "Lista för slutförda kort (korten flyttas hit när uppgifterna slutförs)",
+    "STACKS_DESC": "Välj först en tavla och använd sedan inläsningsknappen för att visa tavlans listor.",
+    "NONE": "Ingen",
+    "FILTER_BY_ASSIGNEE": "Importera bara kort som jag har tilldelats",
+    "TITLE_TEMPLATE": "Mall för uppgiftens titel",
+    "TITLE_TEMPLATE_DESC": "Variabler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exempel: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lämna tomt om du bara vill använda kortets titel."
   },
   "DISPLAY": {
     "SUMMARY": "Sammanfattning",
-    "DESCRIPTION": "Deck-beskrivning",
-    "STACK": "Stapel",
-    "DUE_DATE": "Två datum",
-    "ASSIGNED_USERS": "Tilldelade användare",
+    "DESCRIPTION": "Beskrivning i Deck",
+    "STACK": "Lista",
+    "DUE_DATE": "Förfallodatum",
+    "ASSIGNED_USERS": "Ansvariga användare",
     "LABELS": "Etiketter"
   },
   "ERRORS": {
-    "NO_BOARD": "Nextcloud Deck: No board selected",
-    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+    "NO_BOARD": "Nextcloud Deck: Ingen tavla har valts",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Kortet hittades inte på den valda tavlan"
   },
   "FORM_HELP": "Konfigurera din Nextcloud Deck-integration för att importera kort som uppgifter. Använd ett applösenord för autentisering."
 }

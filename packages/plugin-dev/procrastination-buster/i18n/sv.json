@@ -1,0 +1,108 @@
+{
+  "HOME": {
+    "TITLE": "Vad hindrar dig från att komma igång?",
+    "SUBTITLE": "Välj det som stämmer bäst med hur du känner just nu:",
+    "LEARN_MORE_BUTTON": "Läs mer om varför vi skjuter upp saker →"
+  },
+  "NAVIGATION": {
+    "BACK": "← Tillbaka"
+  },
+  "STRATEGIES": {
+    "TITLE": "Förslag på strategier:",
+    "ACTION_BUTTON": "🎯 Starta ett fokuspass",
+    "ACTION_BUTTON_TITLE": "Starta ett fokuspass"
+  },
+  "TYPES": {
+    "OVERWHELM": {
+      "TITLE": "Överväldigad",
+      "EMOTION": "Det är för mycket på en gång",
+      "STRATEGY_1": "Dela upp arbetet i femminutersuppgifter",
+      "STRATEGY_2": "Gör en om–så-plan: Om X händer, så gör jag Y",
+      "STRATEGY_3": "Välj en enda sak att göra",
+      "STRATEGY_4": "Starta ett fokuspass"
+    },
+    "PERFECTIONISM": {
+      "TITLE": "Perfektionism",
+      "EMOTION": "Det är inte tillräckligt bra",
+      "STRATEGY_1": "Ge dig själv 30 minuter för ett första utkast",
+      "STRATEGY_2": "Skriv ner vad som skulle vara tillräckligt bra",
+      "STRATEGY_3": "Öva på att vara vänlig mot dig själv",
+      "STRATEGY_4": "Låt framsteg vara viktigare än perfektion"
+    },
+    "UNCLEAR": {
+      "TITLE": "Osäkerhet",
+      "EMOTION": "Jag vet inte vad jag ska göra",
+      "STRATEGY_1": "Bestäm nästa konkreta steg",
+      "STRATEGY_2": "Prata med någon om uppgiften",
+      "STRATEGY_3": "Gör en tankekarta",
+      "STRATEGY_4": "Skriv ner dina frågor"
+    },
+    "BORING": {
+      "TITLE": "Uttråkad",
+      "EMOTION": "Det är tråkigt",
+      "STRATEGY_1": "Gör uppgiften till ett spel",
+      "STRATEGY_2": "Lyssna på musik eller en podd under tiden",
+      "STRATEGY_3": "Planera en belöning",
+      "STRATEGY_4": "Dela upp uppgiften i mindre delar"
+    },
+    "FEAR": {
+      "TITLE": "Rädsla",
+      "EMOTION": "Jag kanske misslyckas",
+      "STRATEGY_1": "Tänk igenom vad som i värsta fall kan hända",
+      "STRATEGY_2": "Pröva dig fram i liten skala",
+      "STRATEGY_3": "Be någon du litar på om stöd",
+      "STRATEGY_4": "Skriv ner det som har gått bra"
+    },
+    "ENERGY": {
+      "TITLE": "Lite energi",
+      "EMOTION": "Jag är för trött",
+      "STRATEGY_1": "Rör på dig i fem minuter",
+      "STRATEGY_2": "Drick vatten",
+      "STRATEGY_3": "Gör den enklaste uppgiften först",
+      "STRATEGY_4": "Ta en tupplur på 20 minuter"
+    },
+    "DISTRACTION": {
+      "TITLE": "Distraherad",
+      "EMOTION": "Annat verkar mer intressant",
+      "STRATEGY_1": "Stäng ute det som stör",
+      "STRATEGY_2": "Avsätt tid för ostört arbete",
+      "STRATEGY_3": "Rensa arbetsplatsen",
+      "STRATEGY_4": "Gör något som brukar hjälpa dig att fokusera"
+    },
+    "RESISTANCE": {
+      "TITLE": "Motvilja",
+      "EMOTION": "Jag vill inte göra det här",
+      "STRATEGY_1": "Varför är det viktigt?",
+      "STRATEGY_2": "Kombinera uppgiften med något du tycker om",
+      "STRATEGY_3": "Kan du låta någon annan göra uppgiften?",
+      "STRATEGY_4": "Byt perspektiv: Vad kan jag lära mig?"
+    }
+  },
+  "INFO": {
+    "TITLE": "Varför skjuter vi upp saker?",
+    "INTRO": "När vi skjuter upp saker är det hanteringen av våra känslor som är svårigheten, snarare än planeringen av vår tid.",
+    "CYCLE_TITLE": "En ond cirkel",
+    "CYCLE_INTRO": "När en uppgift väcker obehag kan vi hamna i en ond cirkel:",
+    "CYCLE_STEP_1": "Du är rädd för att misslyckas",
+    "CYCLE_STEP_2": "Du undviker uppgiften",
+    "CYCLE_STEP_3": "Du känner dig lättad en stund",
+    "CYCLE_STEP_4": "Oron växer",
+    "BREAKING_TITLE": "Så bryter du mönstret",
+    "BREAKING_INTRO": "Försök möta dig själv med nyfikenhet och omtanke utan att döma. Fråga dig själv:",
+    "BREAKING_Q1": "Vad känner jag när jag tänker på den här uppgiften?",
+    "BREAKING_Q2": "Vilken del känns svårast?",
+    "BREAKING_Q3": "Vad är jag rädd ska hända om jag börjar?",
+    "STRATEGIES_TITLE": "Strategier att pröva",
+    "STRATEGY_START_SMALL": "Börja i liten skala:",
+    "STRATEGY_START_SMALL_DESC": "Vilket är det minsta steg du kan ta för att komma igång?",
+    "STRATEGY_TIMEBOX": "Sätt en tidsgräns:",
+    "STRATEGY_TIMEBOX_DESC": "Arbeta i 10–25 minuter och ta sedan en paus",
+    "STRATEGY_REFRAME": "Byt perspektiv:",
+    "STRATEGY_REFRAME_DESC": "Fokusera på att komma framåt även om allt inte blir perfekt",
+    "STRATEGY_COMPASSION": "Var vänlig mot dig själv:",
+    "STRATEGY_COMPASSION_DESC": "Tala till dig själv som du skulle tala till en god vän",
+    "TRIGGERS_TITLE": "Vanliga orsaker",
+    "TRIGGERS_TEXT": "Vi skjuter ofta upp en uppgift för att vi vill göra den perfekt, är rädda för att misslyckas eller känner oss överväldigade. Ibland är förväntningarna otydliga eller så känns uppgiften tråkig. Att förstå vad som får just dig att vänta är ett första steg mot att komma igång.",
+    "BACK_TO_WORK": "Tillbaka till arbetet!"
+  }
+}
