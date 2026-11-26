@@ -44,6 +44,26 @@ const migrateNextcloudDeckProvider = (provider: Record<string, unknown>): IssueP
     },
   }) as unknown as IssueProvider;
 
+// TODO: Remove legacy field preservation after a few releases.
+// project first so the tooltip/initials keep showing it. Tasks keep their
+// issueId (`group/repo#iid`) and issueTimeTracked, so already submitted time
+// is not offered again by the finish-day worklog dialog.
+const migrateGitlabProvider = (provider: Record<string, unknown>): IssueProvider =>
+  ({
+    ...provider,
+    pluginId: 'gitlab-issue-provider',
+    pluginConfig: {
+      project: provider['project'] ?? '',
+      token: provider['token'] ?? '',
+      gitlabBaseUrl: provider['gitlabBaseUrl'] ?? '',
+      // the legacy project request sent no scope when unset, i.e. all issues
+      scope: provider['scope'] || 'all',
+      filterUsername: provider['filterUsername'] ?? '',
+      filter: provider['filter'] ?? '',
+      isSubmitWorklogOnFinishDay: provider['isEnableTimeTracking'] ?? false,
+    },
+  }) as unknown as IssueProvider;
+
 export const issueProviderReducer = createReducer(
   issueProviderInitialState,
 
@@ -231,6 +251,16 @@ export const issueProviderReducer = createReducer(
               : {}),
           },
         } as unknown as IssueProvider;
+      }
+
+      // Migrate pre-plugin GITLAB providers to plugin shape
+      if (
+        provider &&
+        provider['issueProviderKey'] === 'GITLAB' &&
+        !provider['pluginConfig']
+      ) {
+        needsMigration = true;
+        migratedEntities[id] = migrateGitlabProvider(provider);
       }
 
       // Migrate pre-plugin NEXTCLOUD_DECK providers to plugin shape

@@ -403,6 +403,29 @@ const plugins = [
     },
   },
   {
+    name: 'ai-command',
+    path: 'ai-command',
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/ai-command',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      // app.js is inlined into index.html; only ship the runtime files.
+      const distFiles = ['manifest.json', 'plugin.js', 'index.html', 'icon.svg'];
+      for (const file of distFiles) {
+        const src = path.join(pluginPath, 'dist', file);
+        const dest = path.join(targetDir, file);
+        if (fs.existsSync(src)) copyRecursive(src, dest);
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  {
     name: 'app-auto-track',
     path: 'app-auto-track',
     copyToAssets: true,
@@ -482,6 +505,62 @@ const plugins = [
         targetDir,
         ['manifest.json', 'plugin.js', 'index.html', 'icon.svg', 'i18n/en.json'],
         'ticktick-import',
+      );
+      return 'Built and copied to assets';
+    },
+  },
+  {
+    name: 'ms-todo-import',
+    path: 'ms-todo-import',
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/ms-todo-import',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distPath = path.join(pluginPath, 'dist');
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        for (const file of files) {
+          copyRecursive(path.join(distPath, file), path.join(targetDir, file));
+        }
+      }
+      assertFilesExist(
+        targetDir,
+        ['manifest.json', 'plugin.js', 'index.html', 'icon.svg', 'i18n/en.json'],
+        'ms-todo-import',
+      );
+      return 'Built and copied to assets';
+    },
+  },
+  {
+    name: 'invoicing',
+    path: 'invoicing',
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/invoicing',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distPath = path.join(pluginPath, 'dist');
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        for (const file of files) {
+          copyRecursive(path.join(distPath, file), path.join(targetDir, file));
+        }
+      }
+      assertFilesExist(
+        targetDir,
+        ['manifest.json', 'plugin.js', 'index.html', 'icon.svg', 'i18n/en.json'],
+        'invoicing',
       );
       return 'Built and copied to assets';
     },

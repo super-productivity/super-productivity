@@ -5,6 +5,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { getLastDeletePayload } from '../../../root-store/meta/undo-task-delete.meta-reducer';
 import { select, Store } from '@ngrx/store';
 import {
+  concatMap,
   delay,
   distinctUntilChanged,
   filter,
@@ -46,6 +47,8 @@ import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { DateService } from '../../../core/date/date.service';
 import { isBlankTask } from '../util/is-blank-task';
+import { isTimeEstimateNotifiedNatively } from '../../android/native-time-estimate.util';
+import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
 import { TaskMultiSelectService } from '../task-multi-select.service';
 import { TASK_DELETE_UNDO_WINDOW_MS } from '../../../app.constants';
 import {
@@ -68,6 +71,7 @@ export class TaskUiEffects {
   private _layoutService = inject(LayoutService);
   private _dateService = inject(DateService);
   private _taskMultiSelectService = inject(TaskMultiSelectService);
+  private _focusTimer = this._store$.selectSignal(selectTimer);
 
   taskCreatedSnack$ = createEffect(
     () =>
@@ -222,15 +226,22 @@ export class TaskUiEffects {
         // A bulk "mark done" plays the sound once itself.
         filter(() => !this._taskMultiSelectService.isBulkFeedbackSuppressed()),
         withLatestFrom(
-          this._workContextService.flatDoneTodayNr$,
           this._globalConfigService.sound$,
           this._store$.select(selectTaskEntities),
         ),
-        filter(([{ task }, , soundCfg, entities]) => {
+        filter(([{ task }, soundCfg, entities]) => {
           const doneTask = entities[task.id as string];
           return !!soundCfg.doneSound && !(doneTask && isWontDoTask(doneTask));
         }),
-        tap(([, doneToday, soundCfg]) => playDoneSound(soundCfg, doneToday)),
+        // Read the count on demand: holding flatDoneTodayNr$ via withLatestFrom
+        // kept it subscribed, re-scanning every task each time-tracking tick.
+        concatMap(([, soundCfg]) =>
+          this._workContextService.flatDoneTodayNr$.pipe(
+            first(),
+            map((doneToday) => ({ soundCfg, doneToday })),
+          ),
+        ),
+        tap(({ soundCfg, doneToday }) => playDoneSound(soundCfg, doneToday)),
       ),
     { dispatch: false },
   );
@@ -286,11 +297,15 @@ export class TaskUiEffects {
   private _notifyAboutTimeEstimateExceeded(currentTask: Task): void {
     const title = truncate(currentTask.title);
 
-    this._notifyService.notify({
-      title: T.F.TASK.N.ESTIMATE_EXCEEDED,
-      body: T.F.TASK.N.ESTIMATE_EXCEEDED_BODY,
-      translateParams: { title },
-    });
+    // On Android the tracking service notifies natively, also while the
+    // WebView is paused (#11896); posting here too would double it.
+    if (!isTimeEstimateNotifiedNatively(this._focusTimer().purpose !== null)) {
+      this._notifyService.notify({
+        title: T.F.TASK.N.ESTIMATE_EXCEEDED,
+        body: T.F.TASK.N.ESTIMATE_EXCEEDED_BODY,
+        translateParams: { title },
+      });
+    }
 
     this._bannerService.open({
       msg: T.F.TASK.B.ESTIMATE_EXCEEDED,

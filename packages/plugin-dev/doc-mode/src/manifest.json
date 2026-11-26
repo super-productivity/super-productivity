@@ -18,6 +18,7 @@
     "loadSyncedData",
     "registerHook"
   ],
+  "dataSharing": [],
   "iFrame": true,
   "isSkipMenuEntry": true,
   "hooks": ["workContextChange", "anyTaskUpdate"],

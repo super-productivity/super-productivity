@@ -5,7 +5,7 @@ import { openRecurDialog, saveRecurDialog } from '../../utils/recurring-task-hel
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/8025
  *
- * In the CUSTOM recurring config, switching the "Recur cycle" away from Weekly
+ * In the CUSTOM recurring config, switching the "Unit" away from Weekly
  * (to Month/Year) and back to Weekly leaves the weekday checkboxes rendered but
  * non-interactive: they "look enabled but are actually disabled". A click no
  * longer updates the model, so the user's weekday selection is silently lost.
@@ -33,7 +33,7 @@ const setQuickSetting = async (page: Page, optionLabel: RegExp): Promise<void> =
   await expect(page.locator('mat-option')).toHaveCount(0, { timeout: 5000 });
 };
 
-/** Switch the CUSTOM "Recur cycle" select (Day / Week / Month / Year). */
+/** Switch the CUSTOM "Unit" select (Day / Week / Month / Year). */
 const setRepeatCycle = async (page: Page, optionLabel: RegExp): Promise<void> => {
   const dialog = page.locator(DIALOG);
   const cycleSelect = dialog.locator('.repeat-cycle mat-select').first();
@@ -119,12 +119,13 @@ test.describe('Recurring Task - Custom weekday checkboxes frozen after cycle rou
     const dialog = await openRecurDialog(page);
 
     // Enter CUSTOM mode; repeatCycle defaults to WEEKLY with Mon-Fri checked.
-    await setQuickSetting(page, /Custom recurring config/i);
+    await setQuickSetting(page, /Custom…/i);
 
+    // Each day is a chip: a native checkbox named by the day, inside its label.
+    const mondayInput = dialog.getByRole('checkbox', { name: 'Monday' });
     const mondayCheckbox = dialog
-      .locator('.weekdays mat-checkbox')
-      .filter({ hasText: /Monday/i });
-    const mondayInput = mondayCheckbox.locator('input[type="checkbox"]');
+      .locator('.weekdays label')
+      .filter({ has: page.getByRole('checkbox', { name: 'Monday' }) });
     await expect(mondayInput).toBeChecked(); // sanity: default Weekly has Monday on
 
     // The round-trip that triggers the bug: Week -> Month -> Week.
@@ -165,15 +166,16 @@ test.describe('Recurring Task - Custom weekday checkboxes frozen after cycle rou
     await taskPage.openTaskDetail(task);
     const dialog = await openRecurDialog(page);
 
-    await setQuickSetting(page, /Custom recurring config/i);
+    await setQuickSetting(page, /Custom…/i);
     await setQuickSetting(page, /Every day/i);
-    await setQuickSetting(page, /Custom recurring config/i);
+    await setQuickSetting(page, /Custom…/i);
     await setRepeatCycle(page, /^Week$/);
 
+    // Each day is a chip: a native checkbox named by the day, inside its label.
+    const tuesdayInput = dialog.getByRole('checkbox', { name: 'Tuesday' });
     const tuesdayCheckbox = dialog
-      .locator('.weekdays mat-checkbox')
-      .filter({ hasText: /Tuesday/i });
-    const tuesdayInput = tuesdayCheckbox.locator('input[type="checkbox"]');
+      .locator('.weekdays label')
+      .filter({ has: page.getByRole('checkbox', { name: 'Tuesday' }) });
     await expect(tuesdayInput).toBeChecked();
 
     await tuesdayCheckbox.click();

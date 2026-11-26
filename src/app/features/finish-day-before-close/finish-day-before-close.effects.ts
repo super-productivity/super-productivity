@@ -8,6 +8,7 @@ import { GlobalConfigService } from '../config/global-config.service';
 import {
   concatMap,
   distinctUntilChanged,
+  filter,
   first,
   map,
   switchMap,
@@ -17,9 +18,9 @@ import { IS_ELECTRON } from '../../app.constants';
 import { combineLatest, EMPTY, Observable } from 'rxjs';
 import { WorkContextService } from '../work-context/work-context.service';
 import { Task } from '../tasks/task.model';
-import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import { TaskService } from '../tasks/task.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { UiHelperService } from '../ui-helper/ui-helper.service';
 import {
   DialogFinishDayBeforeCloseComponent,
   FinishDayBeforeCloseChoice,
@@ -37,6 +38,8 @@ export class FinishDayBeforeCloseEffects {
   private _workContextService = inject(WorkContextService);
   private _matDialog = inject(MatDialog);
   private _router = inject(Router);
+  private _uiHelperService = inject(UiHelperService);
+  private _isPromptOpen = false;
 
   isEnabled$: Observable<boolean> =
     this._dataInitStateService.isAllDataLoadedInitially$.pipe(
@@ -73,34 +76,62 @@ export class FinishDayBeforeCloseEffects {
       () =>
         this.isEnabled$.pipe(
           switchMap((isEnabled) =>
-            isEnabled ? this._execBeforeCloseService.onBeforeClose$ : EMPTY,
+            isEnabled
+              ? this._warnOnRequest$(this._execBeforeCloseService.onBeforeClose$)
+              : EMPTY,
           ),
-          switchMap(() =>
-            this._workContextService.mainWorkContext$.pipe(
-              first(),
-              switchMap((workContext) =>
-                this._taskService.getByIdsLive$(workContext.taskIds).pipe(first()),
-              ),
-            ),
-          ),
-          tap((todayMainTasks) => {
-            this._handleCloseDecision(todayMainTasks).catch(() => {
-              // Don't let a dialog/router failure trap the user in close-pending state
-              this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
-            });
-          }),
         ),
       { dispatch: false },
     );
 
+  /**
+   * Prompts for each quit request carrying this hold's id. Kept out of the
+   * Electron-only effect above so specs can drive it.
+   */
+  _warnOnRequest$(requests$: Observable<string[]>): Observable<Task[]> {
+    return requests$.pipe(
+      // The main process re-notifies the holds still pending after one
+      // finishes; once this one is done it must not prompt again.
+      filter((ids) => ids.includes(EXEC_BEFORE_CLOSE_ID)),
+      switchMap(() =>
+        this._workContextService.mainWorkContext$.pipe(
+          first(),
+          switchMap((workContext) =>
+            this._taskService.getByIdsLive$(workContext.taskIds).pipe(first()),
+          ),
+        ),
+      ),
+      tap((todayMainTasks) => {
+        this._handleCloseDecision(todayMainTasks).catch(() => {
+          // Don't let a dialog/router failure trap the user in close-pending state
+          this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+        });
+      }),
+    );
+  }
+
   async _handleCloseDecision(todayMainTasks: Task[]): Promise<void> {
-    const doneCount = todayMainTasks.filter(isCompletedTask).length;
+    // Finish Day archives every done task, won't-do ones too.
+    const doneCount = todayMainTasks.filter((t) => t.isDone).length;
     if (doneCount === 0) {
       this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
       return;
     }
 
-    const choice = await this._showDialog(doneCount);
+    // Quitting from the tray can leave the window hidden, and the prompt must
+    // be seen for the quit to go on.
+    this._uiHelperService.focusApp();
+    // A repeated Quit while the prompt is open only brings it to the front.
+    if (this._isPromptOpen) {
+      return;
+    }
+    this._isPromptOpen = true;
+    let choice: FinishDayBeforeCloseChoice;
+    try {
+      choice = await this._showDialog(doneCount);
+    } finally {
+      this._isPromptOpen = false;
+    }
     if (choice === 'quit') {
       this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
     } else if (choice === 'finish-day') {

@@ -51,6 +51,16 @@ describe('withRemindAtForDueChange', () => {
     expect(res.isClearRemindAt).toBeFalse();
   });
 
+  it('keeps a long-lead reminder offset on a reschedule', () => {
+    const DAY = 24 * MIN_60;
+    const res = withRemindAtForDueChange(
+      { dueWithTime: oldDue, remindAt: oldDue - DAY },
+      { dueWithTime: newDue },
+      TaskReminderOptionId.AtStart,
+    );
+    expect(res.changes.remindAt).toBe(newDue - DAY);
+  });
+
   it('keeps an already scheduled task reminder-less on a reschedule (no default)', () => {
     const changes = { dueWithTime: newDue };
     const res = withRemindAtForDueChange(

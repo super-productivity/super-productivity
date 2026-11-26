@@ -3,22 +3,25 @@
   margin-bottom: var(--s3);
 }
 
-.project-title {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  border-bottom: 2px solid;
+// Mirrors the side-nav project icon, so each section is recognisable at a glance.
+.project-icon {
+  flex: none;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
 
-  border-color: var(--extra-border-color);
-
-  mat-icon {
-    margin: 0 var(--s-half);
+  &.project-icon--emoji {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+    font-size: var(--font-size-lg);
+    font-feature-settings: normal;
+    text-transform: none;
+    letter-spacing: normal;
   }
+}
 
-  h2,
-  h3 {
-    margin: 0;
-    padding: 0;
-  }
+.project-time {
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
 }

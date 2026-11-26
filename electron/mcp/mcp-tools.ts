@@ -8,6 +8,7 @@ import { McpToolDefinition, McpToolResult } from './mcp-protocol';
 import {
   DUE_DATE_PATTERN,
   DUE_TIME_PATTERN,
+  ESTIMATE_MINUTES_MAX,
   REPEAT_CYCLES,
   REPEAT_EVERY_MAX,
   REPEAT_WEEKDAYS,
@@ -25,6 +26,8 @@ import {
   RendererReply,
   ToolSpec,
   UNTRUSTED_NOTE,
+  READ_ONLY_HINTS,
+  describeTool,
   ok,
   fail,
   invalid,
@@ -60,6 +63,7 @@ export const MCP_API_VERSION = '1';
 const getStatus: ToolSpec = {
   definition: {
     name: 'get_status',
+    ...describeTool('Check connection', READ_ONLY_HINTS),
     description:
       'Reports whether Super Productivity is ready and which permissions this connection has. Returns no task data.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -80,6 +84,7 @@ const listTasks: ToolSpec = {
   scope: 'tasks:read',
   definition: {
     name: 'list_tasks',
+    ...describeTool('List tasks', READ_ONLY_HINTS),
     description:
       'Lists active (not archived) tasks as summaries, open tasks only unless includeDone is set. ' +
       'Filter by a title search, a project id or a tag id (use tagId "TODAY" for today\'s tasks). ' +
@@ -168,6 +173,7 @@ const getTask: ToolSpec = {
   scope: 'tasks:read',
   definition: {
     name: 'get_task',
+    ...describeTool('Get task', READ_ONLY_HINTS),
     description:
       'Returns one active task by id, including its subtask ids. Notes are only included when ' +
       `includeNotes is set and this connection may read notes; they are cut at ${MAX_NOTES_CHARS} characters. ` +
@@ -241,6 +247,7 @@ const getTask: ToolSpec = {
 
 const namedEntityList = (
   name: 'list_projects' | 'list_tags',
+  title: string,
   path: '/projects' | '/tags',
   key: 'projects' | 'tags',
   description: string,
@@ -248,6 +255,7 @@ const namedEntityList = (
   scope: 'tasks:read',
   definition: {
     name,
+    ...describeTool(title, READ_ONLY_HINTS),
     description,
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
@@ -272,6 +280,7 @@ const namedEntityList = (
 
 const listProjects = namedEntityList(
   'list_projects',
+  'List projects',
   '/projects',
   'projects',
   'Lists the ids and titles of active projects, to interpret or filter tasks. ' +
@@ -280,6 +289,7 @@ const listProjects = namedEntityList(
 
 const listTags = namedEntityList(
   'list_tags',
+  'List tags',
   '/tags',
   'tags',
   'Lists the ids and titles of tags, to interpret or filter tasks. ' + UNTRUSTED_NOTE,
@@ -300,12 +310,19 @@ const createTask: ToolSpec = {
   scope: 'tasks:capture',
   definition: {
     name: 'create_task',
+    // Adds and never overwrites; a repeated call adds another task.
+    ...describeTool('Add task to Inbox', {
+      readOnly: false,
+      destructive: false,
+      idempotent: false,
+    }),
     description:
       "Adds a new task to the user's Inbox with the given title and optional notes, exactly as written. " +
       'It gets the same defaults as a task the user adds to the Inbox by hand; no project or tag ' +
       'comes from the request, and #tags, +projects and dates in the title or notes are not parsed. ' +
       'Pass dueDate (and optionally dueTime) to schedule the task, and repeat to make it recurring. ' +
-      'Retrying after an error can create a duplicate.',
+      'Pass deadlineDate (and optionally deadlineTime) when the work is due, and estimateMinutes ' +
+      'for how long it takes. Retrying after an error can create a duplicate.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -352,6 +369,28 @@ const createTask: ToolSpec = {
           required: ['cycle'],
           additionalProperties: false,
         },
+        deadlineDate: {
+          type: 'string',
+          description:
+            "Optional day the work is due, as YYYY-MM-DD in the user's local calendar. " +
+            'Separate from dueDate, the day to work on it. Not with repeat.',
+          pattern: DUE_DATE_PATTERN,
+        },
+        deadlineTime: {
+          type: 'string',
+          description:
+            "Optional time on deadlineDate, as 24-hour HH:MM in the user's local " +
+            'time zone. Requires deadlineDate.',
+          pattern: DUE_TIME_PATTERN,
+        },
+        estimateMinutes: {
+          type: 'integer',
+          description:
+            `Optional estimate of the work in whole minutes, 1 to ${ESTIMATE_MINUTES_MAX}. ` +
+            "Replaces the user's default estimate.",
+          minimum: 1,
+          maximum: ESTIMATE_MINUTES_MAX,
+        },
       },
       required: ['title'],
       additionalProperties: false,
@@ -364,6 +403,9 @@ const createTask: ToolSpec = {
       'dueDate',
       'dueTime',
       'repeat',
+      'deadlineDate',
+      'deadlineTime',
+      'estimateMinutes',
     ]);
     if (unknownArg) {
       return invalid(unknownArg);

@@ -29,6 +29,9 @@ interface IncrementFields {
 }
 
 const SET_VALUE_KEYS: ReadonlySet<string> = new Set(['date', 'value']);
+// Same floor as a repeat's startDate: earlier years break the counter's
+// day-based charts and cannot be removed again through the app.
+const MIN_DATE = '1000-01-01';
 const INCREMENT_KEYS: ReadonlySet<string> = new Set(['by']);
 
 /**
@@ -93,6 +96,12 @@ export class LocalRestApiSimpleCounterRoutesService implements LocalRestApiFeatu
     }
     if (!isValidDBDateStr(date)) {
       return this._invalid(requestId, 'date must be a valid YYYY-MM-DD date');
+    }
+    if (date < MIN_DATE) {
+      return this._invalid(requestId, `date must not be before ${MIN_DATE}`);
+    }
+    if (date > this._dateService.todayStr()) {
+      return this._invalid(requestId, 'date must not be after today');
     }
 
     const counter = await this._getCounter(counterId);

@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
+import { provideEffects } from '@ngrx/effects';
+import { provideStore, Store } from '@ngrx/store';
 import { ReplaySubject } from 'rxjs';
 import { ArchiveOperationHandlerEffects } from './archive-operation-handler.effects';
 import {
@@ -41,9 +43,9 @@ describe('ArchiveOperationHandlerEffects', () => {
   beforeEach(() => {
     actions$ = new ReplaySubject<Action>(1);
     mockArchiveOperationHandler = jasmine.createSpyObj('ArchiveOperationHandler', [
-      'handleOperation',
+      'enqueueLocalOperation',
     ]);
-    mockArchiveOperationHandler.handleOperation.and.returnValue(Promise.resolve());
+    mockArchiveOperationHandler.enqueueLocalOperation.and.returnValue(Promise.resolve());
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
     mockWorklogService = jasmine.createSpyObj('WorklogService', ['refreshWorklog']);
 
@@ -62,42 +64,48 @@ describe('ArchiveOperationHandlerEffects', () => {
   });
 
   describe('handleArchiveOperations$', () => {
-    it('should call handleOperation for moveToArchive action', (done) => {
+    it('should call enqueueLocalOperation for moveToArchive action', (done) => {
       const tasks = [createMockTaskWithSubTasks('task-1')];
       const action = TaskSharedActions.moveToArchive({ tasks });
 
       effects.handleArchiveOperations$.subscribe(() => {
-        expect(mockArchiveOperationHandler.handleOperation).toHaveBeenCalledWith(action);
+        expect(mockArchiveOperationHandler.enqueueLocalOperation).toHaveBeenCalledWith(
+          action,
+        );
         done();
       });
 
       actions$.next(action);
     });
 
-    it('should call handleOperation for restoreTask action', (done) => {
+    it('should call enqueueLocalOperation for restoreTask action', (done) => {
       const task = createMockTask('task-1');
       const action = TaskSharedActions.restoreTask({ task, subTasks: [] });
 
       effects.handleArchiveOperations$.subscribe(() => {
-        expect(mockArchiveOperationHandler.handleOperation).toHaveBeenCalledWith(action);
+        expect(mockArchiveOperationHandler.enqueueLocalOperation).toHaveBeenCalledWith(
+          action,
+        );
         done();
       });
 
       actions$.next(action);
     });
 
-    it('should call handleOperation for flushYoungToOld action', (done) => {
+    it('should call enqueueLocalOperation for flushYoungToOld action', (done) => {
       const action = flushYoungToOld({ timestamp: Date.now() });
 
       effects.handleArchiveOperations$.subscribe(() => {
-        expect(mockArchiveOperationHandler.handleOperation).toHaveBeenCalledWith(action);
+        expect(mockArchiveOperationHandler.enqueueLocalOperation).toHaveBeenCalledWith(
+          action,
+        );
         done();
       });
 
       actions$.next(action);
     });
 
-    it('should call handleOperation for deleteProject action', (done) => {
+    it('should call enqueueLocalOperation for deleteProject action', (done) => {
       const action = TaskSharedActions.deleteProject({
         projectId: 'proj-1',
         noteIds: [],
@@ -105,25 +113,29 @@ describe('ArchiveOperationHandlerEffects', () => {
       });
 
       effects.handleArchiveOperations$.subscribe(() => {
-        expect(mockArchiveOperationHandler.handleOperation).toHaveBeenCalledWith(action);
+        expect(mockArchiveOperationHandler.enqueueLocalOperation).toHaveBeenCalledWith(
+          action,
+        );
         done();
       });
 
       actions$.next(action);
     });
 
-    it('should call handleOperation for deleteTag action', (done) => {
+    it('should call enqueueLocalOperation for deleteTag action', (done) => {
       const action = deleteTag({ id: 'tag-1' });
 
       effects.handleArchiveOperations$.subscribe(() => {
-        expect(mockArchiveOperationHandler.handleOperation).toHaveBeenCalledWith(action);
+        expect(mockArchiveOperationHandler.enqueueLocalOperation).toHaveBeenCalledWith(
+          action,
+        );
         done();
       });
 
       actions$.next(action);
     });
 
-    it('should NOT call handleOperation for non-archive-affecting actions', (done) => {
+    it('should NOT call enqueueLocalOperation for non-archive-affecting actions', (done) => {
       const task = createMockTask('task-1');
       // Use addTask which is NOT archive-affecting (updateTask is now archive-affecting)
       const action = TaskSharedActions.addTask({
@@ -142,13 +154,13 @@ describe('ArchiveOperationHandlerEffects', () => {
 
       // Give some time for async processing
       setTimeout(() => {
-        expect(mockArchiveOperationHandler.handleOperation).not.toHaveBeenCalled();
+        expect(mockArchiveOperationHandler.enqueueLocalOperation).not.toHaveBeenCalled();
         subscription.unsubscribe();
         done();
       }, 50);
     });
 
-    it('should NOT call handleOperation for addTask action', (done) => {
+    it('should NOT call enqueueLocalOperation for addTask action', (done) => {
       const task = createMockTask('task-1');
       const action = TaskSharedActions.addTask({
         task,
@@ -162,7 +174,7 @@ describe('ArchiveOperationHandlerEffects', () => {
       actions$.next(action);
 
       setTimeout(() => {
-        expect(mockArchiveOperationHandler.handleOperation).not.toHaveBeenCalled();
+        expect(mockArchiveOperationHandler.enqueueLocalOperation).not.toHaveBeenCalled();
         subscription.unsubscribe();
         done();
       }, 50);
@@ -177,7 +189,7 @@ describe('ArchiveOperationHandlerEffects', () => {
 
       // First call rejects, second call resolves
       let callCount = 0;
-      mockArchiveOperationHandler.handleOperation.and.callFake(() => {
+      mockArchiveOperationHandler.enqueueLocalOperation.and.callFake(() => {
         callCount++;
         if (callCount === 1) {
           return Promise.reject(new Error('Handler failed'));
@@ -195,7 +207,9 @@ describe('ArchiveOperationHandlerEffects', () => {
           emitCount++;
           if (emitCount === 2) {
             // Effect should continue processing even after error
-            expect(mockArchiveOperationHandler.handleOperation).toHaveBeenCalledTimes(2);
+            expect(
+              mockArchiveOperationHandler.enqueueLocalOperation,
+            ).toHaveBeenCalledTimes(2);
             // Restore window functions
             window.alert = originalAlert;
             window.confirm = originalConfirm;
@@ -216,34 +230,29 @@ describe('ArchiveOperationHandlerEffects', () => {
       }, 100);
     });
 
-    it('should process actions sequentially using concatMap', (done) => {
-      const callOrder: string[] = [];
-
-      mockArchiveOperationHandler.handleOperation.and.callFake(async (action: any) => {
-        const delay = action.tasks?.[0]?.id === 'task-1' ? 100 : 10;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        callOrder.push(action.tasks?.[0]?.id || 'unknown');
-      });
-
+    it('should enqueue every action as soon as it is dispatched (#9952)', () => {
+      // Ordering is the queue's job (ArchiveOperationHandler). The effect must
+      // hand each action over synchronously, so a caller that dispatches and
+      // then awaits whenLocalOperationsSettled() also waits for that action.
+      mockArchiveOperationHandler.enqueueLocalOperation.and.returnValue(
+        new Promise<void>(() => undefined),
+      );
       const action1 = TaskSharedActions.moveToArchive({
         tasks: [createMockTaskWithSubTasks('task-1')],
       });
       const action2 = TaskSharedActions.moveToArchive({
         tasks: [createMockTaskWithSubTasks('task-2')],
       });
-
-      let completionCount = 0;
-      effects.handleArchiveOperations$.subscribe(() => {
-        completionCount++;
-        if (completionCount === 2) {
-          // Even though task-1 takes longer, it should complete first due to concatMap
-          expect(callOrder).toEqual(['task-1', 'task-2']);
-          done();
-        }
-      });
+      const subscription = effects.handleArchiveOperations$.subscribe();
 
       actions$.next(action1);
       actions$.next(action2);
+
+      expect(mockArchiveOperationHandler.enqueueLocalOperation.calls.allArgs()).toEqual([
+        [action1],
+        [action2],
+      ]);
+      subscription.unsubscribe();
     });
   });
 
@@ -287,6 +296,34 @@ describe('ArchiveOperationHandlerEffects', () => {
           `Expected ${action.type} to NOT be archive-affecting`,
         );
       });
+    });
+  });
+
+  describe('with a real store', () => {
+    it('should enqueue a dispatched action before dispatch() returns (#9952)', () => {
+      // whenLocalOperationsSettled() only covers what is already queued, so
+      // the REST restore relies on the store delivering the action to this
+      // effect synchronously.
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideStore({}),
+          provideEffects(ArchiveOperationHandlerEffects),
+          { provide: ArchiveOperationHandler, useValue: mockArchiveOperationHandler },
+          { provide: SnackService, useValue: mockSnackService },
+        ],
+      });
+      const store = TestBed.inject(Store);
+      const action = TaskSharedActions.restoreTask({
+        task: createMockTask('task-1'),
+        subTasks: [],
+      });
+
+      store.dispatch(action);
+
+      expect(mockArchiveOperationHandler.enqueueLocalOperation).toHaveBeenCalledOnceWith(
+        action,
+      );
     });
   });
 });

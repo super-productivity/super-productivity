@@ -12,6 +12,7 @@ export {
   PluginInstance,
   PluginHookHandlerRegistration,
   PluginCreateTaskData,
+  PluginUpdateTaskOptions,
   PluginShortcutCfg,
   PluginMenuEntryCfg,
   PluginTaskContextMenuContext,
@@ -25,6 +26,8 @@ export {
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
   WorkContextChangePayload,
+  PluginDayContext,
+  DayChangePayload,
   // Export the new unified types
   Task,
   Project,

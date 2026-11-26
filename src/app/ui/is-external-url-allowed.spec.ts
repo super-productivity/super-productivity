@@ -38,6 +38,10 @@ describe('isExternalUrlSchemeAllowed', () => {
       'x-devonthink-item://23082026-1234-5678-9ABC-DEF012345678',
       // Parallel Code: opaque task id, only pre-fills its New Task form.
       'parallelcode://new-task?spTaskId=abc123',
+      // Claude Desktop: opaque chat id, opens chat
+      'claude://claude.ai/chat/12345678-abcd-1234-abcd-1234567890ab',
+      // Claude Desktop: opaque project id, opens project
+      'claude://claude.ai/project/abcdefgh-1234-5678-9abc-def012345678',
     ];
     allowed.forEach((url) => {
       it(`allows "${url}"`, () => {
@@ -69,6 +73,7 @@ describe('isExternalUrlSchemeAllowed', () => {
         'webexteams:',
         'x-devonthink-item:',
         'parallelcode:',
+        'claude:',
       ]);
     });
   });
@@ -104,6 +109,13 @@ describe('isExternalUrlSchemeAllowed', () => {
       'file:///\t//host/share',
       'file:\\\\host\\share',
       'FILE://HOST/share', // case-insensitive
+      // Claude Deep Links: blocked if attempting pre-fills, settings, or arbitrary code pathways
+      'claude://code/new',
+      'claude://claude.ai/new?q=tell-me-a-secret',
+      'claude://claude.ai/settings',
+      'claude://arbitrary-path',
+      'claude://claude.ai/chat/12345670?q=hi',
+      'claude://evil/chat/12345670',
     ];
     blocked.forEach((url) => {
       it(`blocks "${url}"`, () => {

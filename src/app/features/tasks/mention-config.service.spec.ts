@@ -9,6 +9,7 @@ import { MentionConfig } from '../../ui/mentions/mention-config';
 import { shortSyntax } from './short-syntax';
 import { REPEAT_SUGGESTIONS } from './add-task-bar/add-task-bar.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { Project } from '../project/project.model';
 
 const ALL_ENABLED: ShortSyntaxConfig = {
   isEnableTag: true,
@@ -36,10 +37,23 @@ describe('MentionConfigService', () => {
         MentionConfigService,
         { provide: GlobalConfigService, useValue: { shortSyntax$: of(ALL_ENABLED) } },
         { provide: TagService, useValue: { tagsNoMyDayAndNoListSorted$: of([]) } },
-        { provide: ProjectService, useValue: { listSortedForUI$: of([]) } },
+        {
+          provide: ProjectService,
+          useValue: {
+            listSorted$: of([
+              { id: 'p1', title: 'Hidden', isHiddenFromMenu: true } as Project,
+            ]),
+          },
+        },
       ],
     });
     service = TestBed.inject(MentionConfigService);
+  });
+
+  // isHiddenFromMenu only hides from the sidebar; +project suggestions keep it (#11190)
+  it('offers projects hidden from the menu as project suggestions', async () => {
+    const cfg = await firstValueFrom(service.mentionConfig$);
+    expect(titlesFor(cfg, '+')).toContain('Hidden');
   });
 
   it('offers recurrence phrases only for the add task bar due-date trigger', async () => {

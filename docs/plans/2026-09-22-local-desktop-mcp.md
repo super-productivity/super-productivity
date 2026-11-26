@@ -1,6 +1,6 @@
 # Local desktop MCP for Super Productivity
 
-Implementation plan · 22 September 2026 · **rev. 4** · implemented 23 September 2026 (see §8). Revised after three independent reviews: repo claims, external facts, and an implementation-readiness review. The rev. 1–3 history is in git (`git log -p -- docs/plans/2026-09-22-local-desktop-mcp.md`).
+Implementation plan · 22 September 2026 · **rev. 4** · shipped in #10251 (see §8). Revised after three independent reviews: repo claims, external facts, and an implementation-readiness review. The rev. 1–3 history is in git (`git log -p -- docs/plans/2026-09-22-local-desktop-mcp.md`).
 
 **Decision.** Add an opt-in MCP endpoint to the running desktop app. It is served by the existing loopback listener and reuses the REST API's renderer routes for reads. The protocol handler is small and built in-repo, with no new dependency. There is a single credential with explicit scopes. Bounded read access ships first, then Inbox capture. Editing is out of scope until usage shows a need.
 

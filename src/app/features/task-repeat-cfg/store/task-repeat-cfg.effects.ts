@@ -17,6 +17,7 @@ import { Task, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskService } from '../../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { TaskRepeatCfg, TaskRepeatCfgCopy } from '../task-repeat-cfg.model';
 import { MatDialog } from '@angular/material/dialog';
@@ -49,11 +50,13 @@ import {
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { clampPastTimedOccurrence } from './clamp-past-timed-occurrence.util';
 import { SCHEDULE_AFFECTING_FIELDS } from './schedule-affecting-fields.const';
+import { getRepeatDeadlineDay } from './get-repeat-deadline-day.util';
 
 @Injectable()
 export class TaskRepeatCfgEffects {
   private _localActions$ = inject(LOCAL_ACTIONS);
   private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _taskArchiveService = inject(TaskArchiveService);
@@ -203,6 +206,13 @@ export class TaskRepeatCfgEffects {
         const isFirstOccurrenceToday_ = firstOccurrence
           ? this._dateService.isToday(firstOccurrence)
           : true;
+        // The task itself is the first occurrence, so it gets the cfg deadline
+        // too; a deadline with a time is left alone (#10983).
+        const deadlineDay = getRepeatDeadlineDay(taskRepeatCfg, firstOccurrenceStr);
+        const deadlineUpdate: Partial<TaskCopy> =
+          deadlineDay && !task.deadlineWithTime && task.deadlineDay !== deadlineDay
+            ? { deadlineDay }
+            : {};
 
         // Update repeat config with subtask templates AND the correct lastTaskCreationDay
         this._taskRepeatCfgService.updateTaskRepeatCfg(taskRepeatCfg.id, {
@@ -219,9 +229,14 @@ export class TaskRepeatCfgEffects {
           // Also align dueDay with the first occurrence: for future occurrences
           // this removes the task from today's view (#6856); for past occurrences
           // this is a no-op when dueDay already matches (#7344 preservation).
+          // Timed tasks are skipped: addRepeatCfgToTaskUpdateTask$ schedules
+          // them via scheduleTaskWithTime, which clears dueDay. Setting it here
+          // afterwards leaves dueDay + dueWithTime and a planner.days entry, so
+          // the task renders twice in planner and schedule (#11212).
           this._taskService.update(task.id, {
             created: firstOccurrence.getTime(),
-            dueDay: firstOccurrenceStr,
+            ...(isTimedTask ? {} : { dueDay: firstOccurrenceStr }),
+            ...deadlineUpdate,
           });
           // planTaskForDay (below) also sets dueDay redundantly, plus handles
           // planner days and TODAY_TAG removal
@@ -229,7 +244,7 @@ export class TaskRepeatCfgEffects {
           // TODAY FIRST OCCURRENCE:
           // Keep the stable occurrence identity aligned even if the task was
           // originally created before it became repeatable.
-          const update: Partial<TaskCopy> = {};
+          const update: Partial<TaskCopy> = { ...deadlineUpdate };
           if (firstOccurrence && getDbDateStr(task.created) !== firstOccurrenceStr) {
             update.created = firstOccurrence.getTime();
           }
@@ -308,15 +323,22 @@ export class TaskRepeatCfgEffects {
 
                 // If the user moved startDate earlier than the existing
                 // lastTaskCreationDay, the anchor is stale — re-anchor on
-                // the new startDate (#7423). Skip for repeatFromCompletionDate
-                // configs: there startDate is decoupled from scheduling
-                // (getEffectiveRepeatStartDate uses lastTaskCreationDay), so
-                // editing startDate must not clear completion history.
+                // the new startDate (#7423). A repeatFromCompletionDate config
+                // does so only with an open copy: there is no completion after
+                // it to protect, and moving the copy forward moved the anchor
+                // along (#11266). Without one, the anchor is the completion day,
+                // which an earlier startDate must not clear.
                 const changes = taskRepeatCfg.changes as Partial<TaskRepeatCfgCopy>;
+                // A pause or resume alone moves no occurrence: the open copy
+                // stays where it is, as for an end date (#10091). Relocating
+                // it took an overdue copy out of Overdue and Today on resume.
+                const isPauseToggleOnly = SCHEDULE_AFFECTING_FIELDS.every(
+                  (field) => field === 'isPaused' || !(field in changes),
+                );
                 const lastCreationDay = getEffectiveLastTaskCreationDay(fullCfg);
                 const isStartDateMovedEarlier =
                   'startDate' in changes &&
-                  !fullCfg.repeatFromCompletionDate &&
+                  (!fullCfg.repeatFromCompletionDate || undoneInstances.length > 0) &&
                   !!fullCfg.startDate &&
                   !!lastCreationDay &&
                   fullCfg.startDate < lastCreationDay;
@@ -335,7 +357,7 @@ export class TaskRepeatCfgEffects {
                       { inclusive: true },
                     );
 
-                if (undoneInstances.length === 0) {
+                if (undoneInstances.length === 0 || isPauseToggleOnly) {
                   // No live instance to reschedule. But when startDate moved
                   // earlier, the stale lastTaskCreationDay would still suppress
                   // every projected/created instance between the new startDate
@@ -365,6 +387,21 @@ export class TaskRepeatCfgEffects {
                     if (this._dateService.isToday(firstOccurrence)) {
                       this._addTasksForTomorrowService.addAllDueToday();
                     }
+                  } else if (
+                    // Resumed (#3589) or replanned onto today, e.g. startDate
+                    // moved forward to today after the last copy was done
+                    // (#11213): today's occurrence would otherwise wait for
+                    // the next day change, same as #7768 Bug 2 above. Paused
+                    // configs returned early, so this is never a pause. Skip
+                    // when today was already processed: the sweep would create
+                    // nothing for this series (e.g. repeat-from-completion
+                    // re-anchoring to today on every completion).
+                    (!lastCreationDay ||
+                      lastCreationDay < this._dateService.todayStr()) &&
+                    firstOccurrence &&
+                    this._dateService.isToday(firstOccurrence)
+                  ) {
+                    this._addTasksForTomorrowService.addAllDueToday();
                   }
                   return EMPTY;
                 }
@@ -623,7 +660,9 @@ export class TaskRepeatCfgEffects {
 
                 // fallback to archive
                 return from(
-                  this._taskService.getArchiveTasksForRepeatCfgId(repeatCfgId),
+                  this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(
+                    repeatCfgId,
+                  ),
                 ).pipe(
                   switchMap((arch) => {
                     if (!arch || arch.length === 0) {
@@ -702,9 +741,9 @@ export class TaskRepeatCfgEffects {
         const today = this._dateService.todayStr();
         const isLatestInstance = this._isLatestInstance(task, cfg);
 
-        // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay
-        // because getEffectiveRepeatStartDate() prioritizes lastTaskCreationDay when set.
-        // Without updating lastTaskCreationDay, the recurrence stays anchored to the old date.
+        // For repeatFromCompletionDate, update both startDate AND lastTaskCreationDay.
+        // getEffectiveRepeatStartDate() counts from lastTaskCreationDay, and a later
+        // startDate alone would make today due again and create another copy (#11266).
         if (cfg.repeatFromCompletionDate && isLatestInstance) {
           return rxOf([
             updateTaskRepeatCfg({
@@ -745,7 +784,7 @@ export class TaskRepeatCfgEffects {
           return forkJoin([
             rxOf(taskRepeatCfg),
             this._taskService.getTasksByRepeatCfgId$(id).pipe(first()),
-            this._taskService.getArchiveTasksForRepeatCfgId(id),
+            this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(id),
           ]);
         }),
         concatMap(([{ id, changes }, todayTasks, archiveTasks]) => {
@@ -814,7 +853,7 @@ export class TaskRepeatCfgEffects {
                     }
                     return { id: task.id, changes: changesForArchiveTask };
                   });
-                  this._taskService.updateArchiveTasks(archiveUpdates);
+                  this._taskArchiveOrchestrator.updateArchiveTasks(archiveUpdates);
                 }
               }),
             );

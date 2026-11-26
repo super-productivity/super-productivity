@@ -1,6 +1,7 @@
 import {
   createCipheriv,
   createECDH,
+  ECDH,
   createHash,
   createPublicKey,
   hkdfSync,
@@ -105,3 +106,25 @@ export const sealCapture = (
 };
 
 export const SEAL_HEADER_BYTES = 1 + EC_POINT_BYTES + IV_BYTES;
+const TAG_BYTES = 16;
+
+/**
+ * Shape check for a capture a device sealed itself: canonical base64,
+ * version byte, an ephemeral key on the curve, room for the tag. The content
+ * stays unverifiable here; the importing app validates it after opening.
+ */
+export const isWellFormedSeal = (sealedBase64: string, maxBytes: number): boolean => {
+  const bytes = Buffer.from(sealedBase64, 'base64');
+  if (bytes.toString('base64') !== sealedBase64) return false;
+  if (bytes.length <= SEAL_HEADER_BYTES + TAG_BYTES || bytes.length > maxBytes) {
+    return false;
+  }
+  if (bytes[0] !== SEAL_VERSION) return false;
+  try {
+    // Throws for a point that is not on P-256.
+    ECDH.convertKey(bytes.subarray(1, 1 + EC_POINT_BYTES), 'prime256v1');
+    return bytes[1] === 0x04;
+  } catch {
+    return false;
+  }
+};

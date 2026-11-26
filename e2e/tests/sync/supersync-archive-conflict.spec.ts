@@ -9,13 +9,18 @@ import {
   renameTask,
   archiveDoneTasks,
   expectTaskInWorklog,
-  hasTaskInWorklog,
   navigateToWorkView,
   getArchiveYoungTaskIds,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { expectTaskNotVisible } from '../../utils/supersync-assertions';
 import { waitForAppReady } from '../../utils/waits';
+import {
+  expectArchivedNotLive,
+  getActiveTasks,
+  getArchiveYoungTasks,
+  getTaskIdByTitle,
+} from '../../utils/audit-archive-helpers';
 
 /**
  * SuperSync Archive Conflict E2E Tests
@@ -47,7 +52,8 @@ test.describe('@supersync Archive Conflict Resolution', () => {
    * 6. Client A syncs again (retry — fix re-uploads with merged clock)
    * 7. Client B syncs (downloads the archive operation)
    *
-   * Expected: Both clients have tasks in worklog, not in active task list.
+   * Expected: Both clients have both tasks in archive_young and not in the live
+   * store (and not in the work view under either title).
    */
   test('moveToArchive should sync after concurrent conflict @supersync', async ({
     browser,
@@ -75,6 +81,10 @@ test.describe('@supersync Archive Conflict Resolution', () => {
 
       await clientA.sync.syncAndWait();
       console.log('[ArchConflict] Client A synced (uploaded tasks)');
+      const archConflictIds = [
+        await getTaskIdByTitle(clientA, task1Name),
+        await getTaskIdByTitle(clientA, task2Name),
+      ];
 
       // ============ PHASE 2: Client B downloads tasks ============
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
@@ -143,8 +153,14 @@ test.describe('@supersync Archive Conflict Resolution', () => {
       console.log('[ArchConflict] Client A: tasks not visible in active list');
 
       await expectTaskNotVisible(clientB, task1Renamed);
+      await expectTaskNotVisible(clientB, task1Name);
       await expectTaskNotVisible(clientB, task2Name);
       console.log('[ArchConflict] Client B: tasks not visible in active list');
+
+      // The work view hides what the store still holds; the archive is the
+      // source of truth. Membership is the anchor for the store absence.
+      await expectArchivedNotLive(clientA, archConflictIds, 'Client A');
+      await expectArchivedNotLive(clientB, archConflictIds, 'Client B');
 
       // ============ PHASE 8: Verify tasks IN worklog ============
       // Client A archived with original names — worklog shows original task data
@@ -182,8 +198,10 @@ test.describe('@supersync Archive Conflict Resolution', () => {
    * 6. Client B syncs (downloads the replacement)
    *
    * Expected: no active tasks on either client; ALL THREE tasks in BOTH
-   * worklogs. T2/T3 in Client B's worklog is the load-bearing assertion —
-   * they can only arrive via the scoped replacement op.
+   * worklogs. The load-bearing assertion is T2/T3 being absent from Client B's
+   * work view (TODAY's Done section is expanded by default, so a done-but-live
+   * task would still render): only the scoped replacement op archives them
+   * there. The worklog alone would not prove it, since it lists live tasks too.
    */
   test('bulk archive resolves when both clients archived an overlapping task @supersync', async ({
     browser,
@@ -292,8 +310,8 @@ test.describe('@supersync Archive Conflict Resolution', () => {
       await expectTaskInWorklog(clientA, task3Name);
       console.log('[ArchVsArch] Client A: all three tasks in worklog');
 
-      // T2/T3 here prove the scoped replacement arrived — without it Client B
-      // would keep them active forever (or, pre-fix, sync would wedge).
+      // Presence only: the worklog merges live and archived tasks. The work-view
+      // absence above is what proves the scoped replacement arrived.
       await expectTaskInWorklog(clientB, task1Name);
       await expectTaskInWorklog(clientB, task2Name);
       await expectTaskInWorklog(clientB, task3Name);
@@ -319,7 +337,8 @@ test.describe('@supersync Archive Conflict Resolution', () => {
    *    → With fix: archive wins, rename discarded
    *    → Without fix: rename wins LWW → LWW Update recreates task
    *
-   * Expected: Task NOT visible in active list, appears in worklog.
+   * Expected: Task NOT in the live store on either client, in archive_young on
+   * both, with the original (pre-rename) title.
    */
   test('LWW Update should not resurrect archived tasks @supersync', async ({
     browser,
@@ -345,6 +364,7 @@ test.describe('@supersync Archive Conflict Resolution', () => {
 
       await clientA.sync.syncAndWait();
       console.log('[BugB] Client A synced (uploaded task)');
+      const bugBTaskId = await getTaskIdByTitle(clientA, taskName);
 
       // ============ PHASE 2: Client B downloads task ============
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
@@ -418,32 +438,28 @@ test.describe('@supersync Archive Conflict Resolution', () => {
       await expectTaskNotVisible(clientB, taskName, archivedAssertionTimeout);
       console.log('[BugB] Client B: task not visible in active list');
 
-      // ============ PHASE 7: Verify task IN worklog ============
-      // After archive-wins conflict + sync rounds, the archived task may appear under
-      // either the original title (if archive applied first) or the renamed title (if
-      // the rename op was also synced). Accept either to avoid brittleness.
-      const clientAFound =
-        (await hasTaskInWorklog(clientA, taskName)) ||
-        (await hasTaskInWorklog(clientA, taskRenamed));
-      if (!clientAFound) {
-        throw new Error(
-          `[BugB] Client A: Expected task to be in worklog under "${taskName}" or "${taskRenamed}"`,
+      // ============ PHASE 7: Verify the archived entity on both clients ============
+      // The archive wins the conflict, so both clients must hold the task in
+      // archive_young under its ORIGINAL title: Client B's later rename was
+      // discarded, it must not be overlaid onto the archived entity.
+      for (const [label, client] of [
+        ['Client A', clientA],
+        ['Client B', clientB],
+      ] as const) {
+        await expectArchivedNotLive(client, [bugBTaskId], label);
+        const archived = (await getArchiveYoungTasks(client))?.find(
+          (t) => t.id === bugBTaskId,
         );
+        // The harness only prefixes titles with a client marker, so the
+        // archived title must END with the original title: that rules out
+        // the rename and any other overlay.
+        expect(
+          archived?.title.endsWith(taskName),
+          `${label}: archived title must end with the original title`,
+        ).toBe(true);
+        expect(archived?.title, `${label}: archived title`).not.toContain(taskRenamed);
       }
-      console.log('[BugB] Client A: task found in worklog');
-
-      // Client B applied the rename locally before archive was received, so the task
-      // is archived under the renamed title. But also accept the original in case the
-      // archive was applied before the rename reached Client B.
-      const clientBFound =
-        (await hasTaskInWorklog(clientB, taskRenamed)) ||
-        (await hasTaskInWorklog(clientB, taskName));
-      if (!clientBFound) {
-        throw new Error(
-          `[BugB] Client B: Expected task to be in worklog under "${taskRenamed}" or "${taskName}"`,
-        );
-      }
-      console.log('[BugB] Client B: task found in worklog');
+      console.log('[BugB] Both clients: task archived under its original title');
 
       console.log('[BugB] ✓ Test B passed: LWW Update did not resurrect archived task');
     } finally {
@@ -565,31 +581,6 @@ test.describe('@supersync Archive Conflict Resolution', () => {
     });
   }
 });
-
-type TaskSummary = { id: string; title: string; isDone: boolean };
-
-const getActiveTasks = (client: SimulatedE2EClient): Promise<TaskSummary[]> =>
-  client.page.evaluate(() => {
-    type StoreLike = {
-      subscribe: (next: (state: unknown) => void) => { unsubscribe: () => void };
-    };
-    const store = (window as unknown as { __e2eTestHelpers?: { store?: StoreLike } })
-      .__e2eTestHelpers?.store;
-    let state: { tasks?: { entities?: Record<string, TaskSummary | undefined> } } = {};
-    store?.subscribe((s) => (state = s as typeof state)).unsubscribe();
-    return Object.values(state.tasks?.entities ?? {})
-      .filter((task): task is TaskSummary => !!task)
-      .map(({ id, title, isDone }) => ({ id, title, isDone }));
-  });
-
-const getTaskIdByTitle = async (
-  client: SimulatedE2EClient,
-  title: string,
-): Promise<string> => {
-  const task = (await getActiveTasks(client)).find((t) => t.title.includes(title));
-  if (!task) throw new Error(`Task not found in state: ${title}`);
-  return task.id;
-};
 
 /** `null` when the task is not in the active store. */
 const getTaskDoneState = async (

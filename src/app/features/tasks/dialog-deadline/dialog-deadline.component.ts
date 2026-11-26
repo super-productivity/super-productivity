@@ -14,13 +14,14 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { Task, TaskReminderOption, TaskReminderOptionId } from '../task.model';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-alarm-hint.component';
 import { T } from 'src/app/t.const';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DEADLINE_REMINDER_OPTIONS } from './deadline-reminder-options.const';
 import { FormsModule } from '@angular/forms';
-import { millisecondsDiffToDeadlineRemindOption } from '../util/remind-option-to-milliseconds';
+import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
@@ -108,7 +109,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
           },
         );
         if (this.task.deadlineRemindAt) {
-          this.selectedReminderCfgId = millisecondsDiffToDeadlineRemindOption(
+          this.selectedReminderCfgId = millisecondsDiffToRemindOption(
             this.task.deadlineWithTime,
             this.task.deadlineRemindAt,
           );

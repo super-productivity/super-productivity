@@ -66,6 +66,19 @@ class TrackingForegroundService : Service() {
         var isStartPending: Boolean = false
             private set
 
+        // The web app's estimate for a task (#11896). Kept apart from the
+        // session and keyed by task id, so it may arrive before or after the
+        // ACTION_START it belongs to. Memory only: the web app re-sends it on
+        // every launch.
+        @Volatile
+        private var timeEstimate: TimeEstimate? = null
+
+        // When the last "estimate exceeded" notice for [timeEstimate] was shown,
+        // so a re-arm (time edit, estimate re-send, service restart after focus
+        // mode) never repeats it sooner than TimeEstimateAlarm.REPEAT_INTERVAL_MS.
+        @Volatile
+        private var timeEstimateNotifiedAtMs: Long? = null
+
         fun markStartPending() {
             isStartPending = true
         }
@@ -82,6 +95,61 @@ class TrackingForegroundService : Service() {
             }
         }
 
+        data class ActionSnapshot(val taskId: String, val elapsedMs: Long, val at: Long)
+
+        /**
+         * Samples the task total for a notification Pause/Done tap and ends the
+         * session in the same locked step (#10683). Clearing memory AND the
+         * persisted session right away makes getTrackingElapsed() report "not
+         * tracking" before the service is torn down, so neither a live WebView
+         * draining the action nor a later restoreIfIdle() can credit the
+         * post-tap time a second time. Restores first, so a tap that reaches a
+         * new process after a kill still finds the session (#7390).
+         * Returns null when nothing is being tracked.
+         */
+        @Synchronized
+        fun takeForNotificationAction(context: Context): ActionSnapshot? {
+            restoreIfIdle(context)
+            val taskId = currentTaskId
+            if (!isTracking || taskId == null) return null
+            val snapshot = ActionSnapshot(taskId, getElapsedMs(), System.currentTimeMillis())
+            clearState(context)
+            return snapshot
+        }
+
+        /**
+         * Stops the service without risking ForegroundServiceDidNotStartInTimeException:
+         * a start that may still be promoting is stopped through onStartCommand
+         * (ACTION_STOP) so it promotes first; otherwise stopService() is safe.
+         */
+        fun requestStop(context: Context) {
+            val intent = Intent(context, TrackingForegroundService::class.java)
+            if (isStartPending || isTracking) {
+                intent.action = ACTION_STOP
+                try {
+                    context.startService(intent)
+                } catch (e: IllegalStateException) {
+                    // App is in the background: startService() is disallowed here.
+                    // Only fall back to stopService() if no start is still pending
+                    // — stopping a not-yet-promoted service would re-trigger the
+                    // same crash. If a start IS pending, leave it: the pending
+                    // start promotes and a later foreground sync stops it cleanly.
+                    Log.d(TAG, "requestStop: app backgrounded, falling back to stopService()", e)
+                    if (!isStartPending) {
+                        context.stopService(Intent(context, TrackingForegroundService::class.java))
+                        // onDestroy never runs if no instance is alive: clear
+                        // the persisted session directly so it is never recovered.
+                        clearState(context)
+                    }
+                }
+            } else {
+                context.stopService(intent)
+                // In a fresh process after a kill nothing is in memory, but the
+                // session may still be persisted with no service to clear it.
+                clearState(context)
+            }
+        }
+
         // The state helpers below share the companion lock so a bridge-thread
         // restoreIfIdle() cannot re-load a session that a main-thread stop is
         // in the middle of clearing.
@@ -95,6 +163,10 @@ class TrackingForegroundService : Service() {
 
         @Synchronized
         fun clearState(context: Context) {
+            // timeEstimateNotifiedAtMs survives: focus mode stops and restarts
+            // the service, and the next notice must still wait out the repeat
+            // interval. setTimeEstimate resets it for a new task or estimate.
+            TimeEstimateAlarm.cancel(context)
             isTracking = false
             currentTaskId = null
             startTimestamp = 0
@@ -159,6 +231,74 @@ class TrackingForegroundService : Service() {
             } else {
                 null
             }
+        }
+
+        /**
+         * Sets (or clears, with null) the estimate the web app wants to be
+         * notified about and re-arms the alarm accordingly.
+         */
+        @Synchronized
+        fun setTimeEstimate(context: Context, estimate: TimeEstimate?) {
+            val prev = timeEstimate
+            if (prev?.taskId != estimate?.taskId ||
+                prev?.timeEstimateMs != estimate?.timeEstimateMs
+            ) {
+                timeEstimateNotifiedAtMs = null
+            }
+            timeEstimate = estimate
+            rearmTimeEstimateAlarm(context)
+        }
+
+        /**
+         * Arms the alarm for the moment the tracked task reaches its estimate,
+         * or cancels it when the estimate is for another task, unset, or
+         * nothing is tracked.
+         */
+        @Synchronized
+        internal fun rearmTimeEstimateAlarm(context: Context) {
+            val estimate = timeEstimate
+            if (!isTracking || !resumeAfterRestore || estimate == null ||
+                estimate.taskId != currentTaskId || estimate.timeEstimateMs <= 0
+            ) {
+                TimeEstimateAlarm.cancel(context)
+                return
+            }
+            TimeEstimateAlarm.schedule(
+                context,
+                estimate,
+                TimeEstimateAlarm.nextTriggerAtMs(
+                    System.currentTimeMillis(),
+                    getElapsedMs(),
+                    estimate.timeEstimateMs,
+                    timeEstimateNotifiedAtMs
+                )
+            )
+        }
+
+        /**
+         * Called when the alarm fires. Returns the notice to show, or null when
+         * it no longer applies (tracking moved on or stopped). Re-arms the next
+         * repeat while the same task keeps being tracked.
+         *
+         * Deliberately no restoreIfIdle(): an alarm that outlived a process
+         * kill must not revive the session without its service — a killed
+         * session stays frozen at its death until the app is reopened (#7390),
+         * and the web app's own check notifies then.
+         */
+        @Synchronized
+        fun onTimeEstimateAlarm(context: Context, fired: TimeEstimate): TimeEstimate? {
+            val estimate = timeEstimate
+            if (!isTracking || !resumeAfterRestore || currentTaskId != fired.taskId ||
+                estimate?.taskId != fired.taskId
+            ) {
+                return null
+            }
+            val isDue = TimeEstimateAlarm.isReached(getElapsedMs(), estimate.timeEstimateMs)
+            if (isDue) {
+                timeEstimateNotifiedAtMs = System.currentTimeMillis()
+            }
+            rearmTimeEstimateAlarm(context)
+            return if (isDue) estimate else null
         }
 
         private fun applyInMemory(state: TrackingState) {
@@ -315,6 +455,7 @@ class TrackingForegroundService : Service() {
         // risking a second startForeground() failure resetting tracking state.
         // The chronometer in the notification ticks on its own — no update
         // loop needed (#8243).
+        rearmTimeEstimateAlarm(this)
         return updateNotification()
     }
 
@@ -339,6 +480,7 @@ class TrackingForegroundService : Service() {
             )
         )
 
+        rearmTimeEstimateAlarm(this)
         // Update notification immediately
         updateNotification()
     }

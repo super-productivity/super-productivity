@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import { info } from 'electron-log/main';
 import { getWin, getWasMaximizedBeforeHide } from './main-window';
+import { getWasFullScreen } from './window-full-screen-state';
 import {
   getIsTaskWidgetAlwaysShow,
   getIsTaskWidgetUserForcedVisible,
@@ -29,15 +30,23 @@ export function showOrFocus(passedWin: BrowserWindow): void {
     return;
   }
 
-  // Preserve this before restore(): its synchronous unmaximize event can clear it.
+  // Preserve these before restore(): its synchronous unmaximize and
+  // leave-full-screen events can clear them.
   const wasMaximized = getWasMaximizedBeforeHide();
+  const wasFullScreen = getWasFullScreen();
   // Always show the window even if isVisible() is stale (#8448), but avoid
-  // unmaximizing an already-visible window just to bring it to the front.
-  if (!win.isVisible() || !win.isMaximized() || win.isMinimized()) {
+  // restoring an already-visible maximized or full-screen window just to bring
+  // it to the front: restore() un-maximizes it and leaves full screen.
+  const isMaximizedOrFullScreen = win.isMaximized() || win.isFullScreen();
+  if (!win.isVisible() || !isMaximizedOrFullScreen || win.isMinimized()) {
     win.restore();
   }
   win.show();
-  if (wasMaximized) win.maximize();
+  // maximize() on a full-screen window leaves full screen on X11.
+  if (wasMaximized && !win.isFullScreen()) win.maximize();
+  // After maximize(), so leaving full screen lands on the maximized window.
+  // Also covers a --start-minimized window, which skipped it at creation.
+  if (wasFullScreen && !win.isFullScreen()) win.setFullScreen(true);
 
   _hideTaskWidgetUnlessPinned();
 

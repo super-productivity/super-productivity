@@ -1,11 +1,29 @@
-<input
-  type="time"
-  inputTime
-  step="60"
-  [name]="props.name"
-  [required]="!!props.required"
-  [readonly]="props.readonly"
-  [formControl]="formControl"
-  [formlyAttributes]="field"
-  matInput
-/>
+<!-- MatTimepicker only when the native input would show the wrong 12h/24h clock (#8565) -->
+@if (useNativeTimeInput()) {
+  <input
+    type="time"
+    inputTime
+    step="60"
+    [name]="props.name"
+    [required]="!!props.required"
+    [readonly]="props.readonly"
+    [formControl]="formControl"
+    [formlyAttributes]="field"
+    matInput
+  />
+} @else {
+  <input
+    [matTimepicker]="timepicker"
+    [spClockStr]="formControl.value"
+    (spClockStrChange)="onClockStrChange($event)"
+    (blur)="formControl.markAsTouched()"
+    [name]="props.name"
+    [required]="!!props.required"
+    [readonly]="props.readonly"
+    [disabled]="formControl.disabled"
+    [errorStateMatcher]="errorStateMatcher"
+    [formlyAttributes]="field"
+    matInput
+  />
+  <mat-timepicker #timepicker />
+}

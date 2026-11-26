@@ -6,7 +6,9 @@ import * as actions from './store/focus-mode.actions';
 import * as selectors from './store/focus-mode.selectors';
 import { GlobalConfigService } from '../config/global-config.service';
 import { selectFocusModeConfig } from '../config/store/global-config.reducer';
-import { FocusModeMode } from './focus-mode.model';
+import { FocusModeMode, getCountdownDurationForTask } from './focus-mode.model';
+import { FocusModeStrategyFactory } from './focus-mode-strategies';
+import { TaskCopy } from '../tasks/task.model';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 
 @Injectable({
@@ -16,6 +18,8 @@ export class FocusModeService {
   private _store = inject(Store);
   private _globalConfigService = inject(GlobalConfigService);
   private _globalTrackingInterval = inject(GlobalTrackingIntervalService);
+  private _strategyFactory = inject(FocusModeStrategyFactory);
+  private _timer = this._store.selectSignal(selectors.selectTimer);
 
   // State signals
   currentScreen = this._store.selectSignal(selectors.selectCurrentScreen);
@@ -79,5 +83,28 @@ export class FocusModeService {
   /** Open the rich focus-mode overlay. Used by the header button. */
   openOverlay(): void {
     this._store.dispatch(actions.showFocusOverlay());
+  }
+
+  /**
+   * Start a session for `task` right away in the last-used mode and show the
+   * overlay, skipping the setup screen. Returns false (and does nothing) when a
+   * session or break is already active or the user opted into the preparation
+   * screen — callers then fall back to just opening the overlay.
+   */
+  tryStartSessionForTask(task: TaskCopy): boolean {
+    if (this._timer().purpose !== null || this.focusModeConfig()?.isShowPreparation) {
+      return false;
+    }
+    const mode = this.mode();
+    const defaultDuration =
+      this._strategyFactory.getStrategy(mode).initialSessionDuration;
+    const duration =
+      mode === FocusModeMode.Countdown
+        ? getCountdownDurationForTask(defaultDuration, task)
+        : defaultDuration;
+    // the startFocusSession effect activates tracking for taskId
+    this._store.dispatch(actions.startFocusSession({ duration, taskId: task.id }));
+    this._store.dispatch(actions.showFocusOverlay());
+    return true;
   }
 }

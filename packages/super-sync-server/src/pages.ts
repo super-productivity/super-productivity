@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { verifyEmail } from './auth';
 import { Logger } from './logger';
+import { CONNECT_REQUEST_ID_PATTERN } from './connect/connect-request.store';
 
 // Error response helper
 const errorMessage = (err: unknown): string =>
@@ -18,7 +19,14 @@ const escapeHtml = (unsafe: string): string => {
 
 interface VerifyEmailQuery {
   token?: string;
+  r?: string;
 }
+
+// Back to the login page in Connect mode when the email came from a new device's sign-in.
+const loginPageHref = (connectRequestId?: string): string =>
+  connectRequestId && CONNECT_REQUEST_ID_PATTERN.test(connectRequestId)
+    ? `/?r=${connectRequestId}`
+    : '/';
 
 interface RecoverPasskeyQuery {
   token?: string;
@@ -26,6 +34,7 @@ interface RecoverPasskeyQuery {
 
 interface MagicLoginQuery {
   token?: string;
+  r?: string;
 }
 
 export async function pageRoutes(fastify: FastifyInstance) {
@@ -41,7 +50,7 @@ export async function pageRoutes(fastify: FastifyInstance) {
     },
     async (req, reply) => {
       try {
-        const { token } = req.query;
+        const { token, r } = req.query;
         if (!token) {
           return reply.status(400).send('Token is required');
         }
@@ -62,7 +71,7 @@ export async function pageRoutes(fastify: FastifyInstance) {
             <div class="container">
               <h1>Email Verified!</h1>
               <p>Your account has been successfully verified.</p>
-              <a href="/">Return to Login</a>
+              <a href="${loginPageHref(r)}">Return to Login</a>
             </div>
           </body>
         </html>
@@ -169,14 +178,14 @@ export async function pageRoutes(fastify: FastifyInstance) {
               a:hover { text-decoration: underline; }
             </style>
           </head>
-          <body data-token="${escapeHtml(token)}">
+          <body data-token="${escapeHtml(token)}" data-login-page="${loginPageHref(req.query.r)}">
             <div class="container">
               <h1>Complete Your Login</h1>
               <p>Click the button below to finish logging in to SuperSync.</p>
               <button id="login-btn">Log In</button>
               <p class="error" id="error"></p>
               <p class="success" id="success">Login successful! Redirecting...</p>
-              <p style="margin-top: 1.5rem;"><a href="/">Request a new login link</a></p>
+              <p style="margin-top: 1.5rem;"><a href="${loginPageHref(req.query.r)}">Request a new login link</a></p>
             </div>
             <script src="/magic-login-confirm.js"></script>
           </body>

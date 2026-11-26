@@ -3,6 +3,7 @@ import { TaskRepeatCfgService } from './task-repeat-cfg.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import {
   addTaskRepeatCfgToTask,
@@ -17,6 +18,7 @@ import { WorkContextType } from '../work-context/work-context.model';
 import {
   selectAllTaskRepeatCfgs,
   selectAllUnprocessedTaskRepeatCfgs,
+  selectTaskRepeatCfgByIdAllowUndefined,
   selectTaskRepeatCfgsForExactDay,
 } from './store/task-repeat-cfg.selectors';
 import {
@@ -32,12 +34,16 @@ import { getRepeatableTaskId } from './get-repeatable-task-id.util';
 import { DateService } from '../../core/date/date.service';
 import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
+import { addTaskToSection } from '../section/store/section.actions';
+import { selectSectionFeatureState } from '../section/store/section.selectors';
+import { Section, SectionState } from '../section/section.model';
 
 describe('TaskRepeatCfgService', () => {
   let service: TaskRepeatCfgService;
   let store: MockStore;
   let matDialog: jasmine.SpyObj<MatDialog>;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let dispatchSpy: jasmine.Spy;
 
   const formatIsoDate = (d: Date): string => getDbDateStr(d);
@@ -78,6 +84,8 @@ describe('TaskRepeatCfgService', () => {
       'createNewTaskWithDefaults',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getTasksByRepeatCfgId$',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
       'getArchiveTasksForRepeatCfgId',
     ]);
     const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
@@ -98,6 +106,7 @@ describe('TaskRepeatCfgService', () => {
         }),
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         {
           provide: DateService,
@@ -609,6 +618,18 @@ describe('TaskRepeatCfgService', () => {
   });
 
   describe('getActionsForTaskRepeatCfg', () => {
+    it('creates nothing for a paused config, even when a copy is completed', async () => {
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        { ...mockTaskRepeatCfg, isPaused: true, waitForCompletion: true },
+        Date.now(),
+      );
+
+      expect(actions).toEqual([]);
+      expect(taskService.createNewTaskWithDefaults).not.toHaveBeenCalled();
+    });
+
     it('should return updateTaskRepeatCfg (not addTask) when task already exists for day (#7923)', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
@@ -679,6 +700,29 @@ describe('TaskRepeatCfgService', () => {
       expect(actions[0].type).toBe(updateTaskRepeatCfg.type);
       expect((actions[0] as any).taskRepeatCfg.changes.lastTaskCreationDay).toBe(
         expectedDueDay,
+      );
+    });
+
+    it('should give each occurrence a deadline offset from its day (#10983)', async () => {
+      const targetDayDate = new Date().getTime();
+      const dueDay = getDbDateStr(targetDayDate);
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.returnValue({ ...mockTask, dueDay });
+
+      await service._getActionsForTaskRepeatCfg(
+        { ...mockTaskRepeatCfg, deadlineOffsetDays: 4 },
+        targetDayDate,
+      );
+
+      const expected = new Date(targetDayDate);
+      expected.setDate(expected.getDate() + 4);
+      expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          additional: jasmine.objectContaining({
+            dueDay,
+            deadlineDay: getDbDateStr(expected),
+          }),
+        }),
       );
     });
 
@@ -817,7 +861,7 @@ describe('TaskRepeatCfgService', () => {
       expect(scheduleAction).toBeDefined();
 
       // What scheduleRepeatReminders$ computes for the same (cfg, day) — see
-      // _getUpcomingRepeatReminders in mobile-notification.effects.ts.
+      // getUpcomingRepeatReminders in get-upcoming-repeat-reminders.ts.
       const dueDayStr = getDbDateStr(targetDayDate);
       const expectedId = getRepeatableTaskId(cfg.id, dueDayStr);
       const expectedDueWithTime = getDateTimeFromClockString('09:00', targetDayDate);
@@ -867,6 +911,180 @@ describe('TaskRepeatCfgService', () => {
 
       // Should return empty array when no valid target date can be computed
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('detachTaskRepeatCfgInstance (#11694)', () => {
+    const OCCURRENCE_DAY = '2026-06-20';
+    let nextGeneratedId: number;
+
+    const dispatched = (): { type: string }[] =>
+      dispatchSpy.calls.allArgs().map(([action]) => action as { type: string });
+
+    /** Detaches OCCURRENCE_DAY from the series as the store holds it. */
+    const detach = async (cfg: TaskRepeatCfg = mockTaskRepeatCfg): Promise<void> => {
+      store.overrideSelector(selectTaskRepeatCfgByIdAllowUndefined, cfg);
+      store.refreshState();
+      await service.detachTaskRepeatCfgInstance(cfg.id, OCCURRENCE_DAY);
+    };
+
+    beforeEach(() => {
+      nextGeneratedId = 1;
+      // Like the real one: a generated id unless one is passed, and
+      // `additional` spread over the defaults.
+      taskService.createNewTaskWithDefaults.and.callFake(
+        ({ title, id, additional }) =>
+          ({
+            ...DEFAULT_TASK,
+            projectId: 'default-project',
+            ...additional,
+            id: id ?? `generated-${nextGeneratedId++}`,
+            title: title ?? '',
+          }) as Task,
+      );
+    });
+
+    it('skips the occurrence first, then adds an unlinked task for that day', async () => {
+      await detach();
+
+      expect(dispatched().map((a) => a.type)).toEqual([
+        '[TaskRepeatCfg] Update TaskRepeatCfg',
+        TaskSharedActions.addTask.type,
+      ]);
+      // Only the skipped dates: the creation cursor of the series stays put.
+      expect(
+        (dispatchSpy.calls.argsFor(0)[0] as ReturnType<typeof updateTaskRepeatCfg>)
+          .taskRepeatCfg,
+      ).toEqual({
+        id: 'test-cfg-id',
+        changes: { deletedInstanceDates: [OCCURRENCE_DAY] },
+      });
+      const addTaskAction = dispatchSpy.calls.argsFor(1)[0] as ReturnType<
+        typeof TaskSharedActions.addTask
+      >;
+      expect(addTaskAction.task).toEqual(
+        jasmine.objectContaining({
+          id: 'generated-1',
+          title: 'Test Repeat Task',
+          notes: 'Test notes',
+          timeEstimate: 3600000,
+          projectId: 'test-project',
+          tagIds: ['tag1', 'tag2'],
+          dueDay: OCCURRENCE_DAY,
+        }),
+      );
+      expect(addTaskAction.task.repeatCfgId).toBeUndefined();
+      expect(addTaskAction.workContextId).toBe('test-project');
+      expect(addTaskAction.workContextType).toBe(WorkContextType.PROJECT);
+    });
+
+    it('keeps the dates the series already skips', async () => {
+      await detach({
+        ...mockTaskRepeatCfg,
+        deletedInstanceDates: ['2026-06-18', OCCURRENCE_DAY],
+      });
+      expect(
+        (dispatchSpy.calls.argsFor(0)[0] as ReturnType<typeof updateTaskRepeatCfg>)
+          .taskRepeatCfg.changes,
+      ).toEqual({ deletedInstanceDates: ['2026-06-18', OCCURRENCE_DAY] });
+
+      dispatchSpy.calls.reset();
+      await detach({ ...mockTaskRepeatCfg, deletedInstanceDates: ['2026-06-18'] });
+      expect(
+        (dispatchSpy.calls.argsFor(0)[0] as ReturnType<typeof updateTaskRepeatCfg>)
+          .taskRepeatCfg.changes,
+      ).toEqual({ deletedInstanceDates: ['2026-06-18', OCCURRENCE_DAY] });
+    });
+
+    it('does nothing when the series no longer exists', async () => {
+      store.overrideSelector(selectTaskRepeatCfgByIdAllowUndefined, undefined);
+      store.refreshState();
+
+      await service.detachTaskRepeatCfgInstance('test-cfg-id', OCCURRENCE_DAY);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not use the deterministic id of a series instance', async () => {
+      await detach();
+
+      expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: undefined }),
+      );
+      expect(taskService.createNewTaskWithDefaults).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: `rpt_test-cfg-id_${OCCURRENCE_DAY}` }),
+      );
+    });
+
+    it('schedules the task at the start time of the series on that day', async () => {
+      await detach({
+        ...mockTaskRepeatCfg,
+        startTime: '10:00',
+        remindAt: TaskReminderOptionId.AtStart,
+      });
+
+      expect(dispatched().map((a) => a.type)).toEqual([
+        '[TaskRepeatCfg] Update TaskRepeatCfg',
+        TaskSharedActions.addTask.type,
+        TaskSharedActions.scheduleTaskWithTime.type,
+      ]);
+      const tenOClock = new Date(2026, 5, 20, 10, 0).getTime();
+      expect(dispatchSpy.calls.argsFor(2)[0]).toEqual(
+        jasmine.objectContaining({
+          task: jasmine.objectContaining({ id: 'generated-1' }),
+          dueWithTime: tenOClock,
+          remindAt: tenOClock,
+          isSkipAutoRemoveFromToday: false,
+        }),
+      );
+    });
+
+    it('adds the subtask templates under the new task, with ids of their own', async () => {
+      await detach({
+        ...mockTaskRepeatCfg,
+        shouldInheritSubtasks: true,
+        subTaskTemplates: [
+          { title: 'SubTask 1', notes: 'Notes 1', timeEstimate: 60000 },
+          { title: 'SubTask 2' },
+        ],
+      });
+
+      expect(dispatched().map((a) => a.type)).toEqual([
+        '[TaskRepeatCfg] Update TaskRepeatCfg',
+        TaskSharedActions.addTask.type,
+        '[Task] Add SubTask',
+        '[Task] Add SubTask',
+      ]);
+      expect(dispatchSpy.calls.argsFor(2)[0]).toEqual(
+        jasmine.objectContaining({
+          parentId: 'generated-1',
+          task: jasmine.objectContaining({
+            id: 'generated-2',
+            title: 'SubTask 1',
+            notes: 'Notes 1',
+            timeEstimate: 60000,
+            parentId: 'generated-1',
+            projectId: 'test-project',
+            isDone: false,
+          }),
+        }),
+      );
+      expect(dispatchSpy.calls.argsFor(3)[0]).toEqual(
+        jasmine.objectContaining({
+          parentId: 'generated-1',
+          task: jasmine.objectContaining({ id: 'generated-3', title: 'SubTask 2' }),
+        }),
+      );
+    });
+
+    it('adds no subtasks when the series does not inherit them', async () => {
+      await detach({
+        ...mockTaskRepeatCfg,
+        shouldInheritSubtasks: false,
+        subTaskTemplates: [{ title: 'SubTask 1' }],
+      });
+
+      expect(dispatched().map((a) => a.type)).not.toContain('[Task] Add SubTask');
     });
   });
 
@@ -1714,7 +1932,9 @@ describe('TaskRepeatCfgService', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([uncompletedTask]),
       );
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithWaitForCompletion,
@@ -1748,7 +1968,9 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -1779,7 +2001,9 @@ describe('TaskRepeatCfgService', () => {
 
       // No prior instances exist
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -1819,7 +2043,9 @@ describe('TaskRepeatCfgService', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([uncompletedTask]),
       );
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithBothFlags,
@@ -1854,7 +2080,9 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
 
       const actions = await service._getActionsForTaskRepeatCfg(
@@ -1903,7 +2131,9 @@ describe('TaskRepeatCfgService', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([uncompletedTask1, uncompletedTask2]),
       );
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithWaitForCompletion,
@@ -1937,7 +2167,7 @@ describe('TaskRepeatCfgService', () => {
         isDone: false,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
         Promise.resolve([archivedUncompletedTask]),
       );
 
@@ -1948,7 +2178,7 @@ describe('TaskRepeatCfgService', () => {
 
       // Should block creation because archived uncompleted instance exists
       expect(actions).toEqual([]);
-      expect(taskService.getArchiveTasksForRepeatCfgId).toHaveBeenCalledWith(
+      expect(taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId).toHaveBeenCalledWith(
         cfgWithWaitForCompletion.id,
       );
     });
@@ -1976,7 +2206,7 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
         Promise.resolve([archivedCompletedTask]),
       );
       taskService.createNewTaskWithDefaults.and.returnValue(mockTask);
@@ -2014,7 +2244,9 @@ describe('TaskRepeatCfgService', () => {
         isDone: true,
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([completedTask]));
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
 
       const actions = await service._getActionsForTaskRepeatCfg(
         cfgWithWaitForCompletion,
@@ -2210,6 +2442,99 @@ describe('TaskRepeatCfgService', () => {
       expect(addTaskAction?.task?.id)
         .withContext('task must use deterministic id')
         .toBe(expectedId);
+    });
+  });
+
+  describe('a repeat instance goes into the section of the previous one (#10812)', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const previous: TaskWithSubTasks = {
+      ...mockTaskWithSubTasks,
+      id: 'previous-instance',
+      repeatCfgId: mockTaskRepeatCfg.id,
+      created: Date.now() - DAY_MS,
+    };
+    const older: TaskWithSubTasks = {
+      ...previous,
+      id: 'older-instance',
+      created: previous.created - DAY_MS,
+    };
+    const section = (
+      id: string,
+      taskIds: string[],
+      contextId = 'test-project',
+      contextType = WorkContextType.PROJECT,
+    ): Section => ({ id, contextId, contextType, title: id, taskIds });
+    const withSections = (...sections: Section[]): void => {
+      store.overrideSelector(selectSectionFeatureState, {
+        ids: sections.map((s) => s.id),
+        entities: Object.fromEntries(sections.map((s) => [s.id, s])),
+      } as SectionState);
+      store.refreshState();
+    };
+    const actionsFor = async (
+      cfg: TaskRepeatCfg = mockTaskRepeatCfg,
+    ): Promise<{ type: string }[]> => {
+      taskService.createNewTaskWithDefaults.and.callFake(
+        (args: any) => ({ ...mockTask, ...args.additional, id: args.id }) as Task,
+      );
+      return service._getActionsForTaskRepeatCfg(cfg, Date.now());
+    };
+    const newId = getRepeatableTaskId(mockTaskRepeatCfg.id, getDbDateStr());
+
+    it('adds it to the project section right before the previous instance, after addTask', async () => {
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([older, previous]),
+      );
+      withSections(
+        section('first', ['previous-instance', 'x']),
+        section('later', ['a', 'previous-instance']),
+        section('older-only', ['older-instance']),
+      );
+
+      const actions = await actionsFor();
+
+      expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
+      expect(actions.slice(1, 3)).toEqual([
+        addTaskToSection({
+          sectionId: 'first',
+          taskId: newId,
+          afterTaskId: null,
+          sourceSectionId: null,
+        }),
+        addTaskToSection({
+          sectionId: 'later',
+          taskId: newId,
+          afterTaskId: 'a',
+          sourceSectionId: null,
+        }),
+      ]);
+      expect(actions[3].type).toBe(updateTaskRepeatCfg.type);
+    });
+
+    it('leaves the sections of other contexts alone', async () => {
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([previous]));
+      withSections(
+        section('other-project', ['previous-instance'], 'other-project'),
+        section('today', ['previous-instance'], TODAY_TAG.id, WorkContextType.TAG),
+      );
+
+      const actions = await actionsFor();
+
+      expect(actions.some((a) => a.type === addTaskToSection.type)).toBe(false);
+    });
+
+    it('adds it to no section for the first instance, or a config without project', async () => {
+      withSections(section('first', ['previous-instance']));
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      expect((await actionsFor()).some((a) => a.type === addTaskToSection.type)).toBe(
+        false,
+      );
+
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([previous]));
+      const noProject = { ...mockTaskRepeatCfg, projectId: null };
+      expect(
+        (await actionsFor(noProject)).some((a) => a.type === addTaskToSection.type),
+      ).toBe(false);
     });
   });
 });

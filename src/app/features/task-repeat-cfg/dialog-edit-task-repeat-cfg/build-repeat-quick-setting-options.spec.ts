@@ -50,6 +50,26 @@ describe('buildRepeatQuickSettingOptions', () => {
     expect(monthlyNthWeekdayOption?.label).not.toContain('F.TASK_REPEAT.F.ORD_FIRST:');
   });
 
+  it('gives each preset an icon for its cadence, shared by the monthly variants', () => {
+    const options = buildRepeatQuickSettingOptions(
+      new Date(2026, 5, 2),
+      'en-US',
+      translateService,
+      'en-US',
+    );
+    expect(options.map((o) => o.icon)).toEqual([
+      'today',
+      'work',
+      'calendar_view_week',
+      'calendar_month',
+      'calendar_month',
+      'calendar_month',
+      'calendar_month',
+      'cake',
+      'tune',
+    ]);
+  });
+
   // Regression test for #7945: a Date the form's `defaultValue` left unparsed
   // would reach `dateStrToUtcDate`, return Invalid Date, make weekOfMonth NaN,
   // and `ORDINAL_KEYS[NaN-1]` → undefined → instant(undefined) threw.

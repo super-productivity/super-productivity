@@ -1,27 +1,27 @@
 PODS:
-  - Capacitor (7.6.0):
+  - Capacitor (8.5.3):
     - CapacitorCordova
-  - CapacitorApp (7.1.2):
+  - CapacitorApp (8.1.2):
     - Capacitor
-  - CapacitorBrowser (7.0.4):
+  - CapacitorBrowser (8.0.5):
     - Capacitor
-  - CapacitorCordova (7.6.0)
-  - CapacitorFilesystem (7.1.8):
+  - CapacitorCordova (8.5.3)
+  - CapacitorFilesystem (8.1.4):
     - Capacitor
-    - IONFilesystemLib (~> 1.1.1)
-  - CapacitorKeyboard (7.0.5):
+    - IONFilesystemLib (~> 2.0.0)
+  - CapacitorKeyboard (8.0.6):
     - Capacitor
-  - CapacitorLocalNotifications (7.0.6):
+  - CapacitorLocalNotifications (8.3.1):
     - Capacitor
-  - CapacitorPluginSafeArea (4.0.3):
+  - CapacitorPluginSafeArea (5.0.1):
     - Capacitor
-  - CapacitorShare (7.0.4):
+  - CapacitorShare (8.0.3):
     - Capacitor
-  - CapacitorStatusBar (7.0.5):
+  - CapacitorStatusBar (8.0.4):
     - Capacitor
-  - CapawesomeCapacitorBackgroundTask (7.0.1):
+  - CapawesomeCapacitorBackgroundTask (8.0.3):
     - Capacitor
-  - IONFilesystemLib (1.1.2)
+  - IONFilesystemLib (2.0.1)
 
 DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
@@ -65,19 +65,19 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capawesome/capacitor-background-task"
 
 SPEC CHECKSUMS:
-  Capacitor: 6e644e9e3369368ac601c77a0fad57f34b78aaa6
-  CapacitorApp: f01a913211780e0718dae9750442c3e23f96e106
-  CapacitorBrowser: affdd32ab6a1822942eb55095b3c5ecf3f656a9d
-  CapacitorCordova: f163aa2e84b79efc54d6a75b305bc7e05fb80c5d
-  CapacitorFilesystem: c63fc54df41e5a6761785a7f3c49dc696c22e296
-  CapacitorKeyboard: 2fa1e17aec16aef8b01adbc20e8fc295db46104d
-  CapacitorLocalNotifications: 2e3f5b717ec9cd2bd64d93c99a9470941e1c80be
-  CapacitorPluginSafeArea: 1abd81c6facac9eae0c6ae3cb0b3b53ccc135522
-  CapacitorShare: 25f7fc5dd0e4edbde5d6801c6de5d14a8b450a41
-  CapacitorStatusBar: 6de542f202c0dd3f9d0a73b240d4c9d3dddc49b4
-  CapawesomeCapacitorBackgroundTask: e17ea2608e9bdd14889d8eba2d793ff9c337db6c
-  IONFilesystemLib: 21a63377696b2d8fab5632ecfb7d2ac67bddb68a
+  Capacitor: 2f67eaeb8ed79909cd35b5e7439a5c2a9ca58e0f
+  CapacitorApp: 7b7e43debe505bc61beedb83796aa1368c86078b
+  CapacitorBrowser: f94f92654e92a97981bf346b3681af76527dace0
+  CapacitorCordova: 0b7326439c7a09fc5d20eced5e0dab986327a493
+  CapacitorFilesystem: 17ee1862a45ef2e5012311a87e18de1d45a6811b
+  CapacitorKeyboard: f9e85e685082e9f63404de15db4a4291448b0912
+  CapacitorLocalNotifications: e0747a329ddde3074d52dc74a003688af90e42be
+  CapacitorPluginSafeArea: 874619c00586248f1694210e72038123d422c2d9
+  CapacitorShare: 5b5e53347556bee89ae6163ed20b5b3c25fe75f1
+  CapacitorStatusBar: ff844df1f126da6c4fbc4028272425fa3a91e7e3
+  CapawesomeCapacitorBackgroundTask: 4aa93c0743a17df5b34d2ede15689afc0fc22245
+  IONFilesystemLib: 306469e4c563f61de82d7bca2bbfed9e64d1b2d2
 
 PODFILE CHECKSUM: 4409a51ed03f4ba0e523ba9e063dae69c327d22a
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.17.0

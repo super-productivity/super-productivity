@@ -12,13 +12,12 @@ import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedu
 import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
-import { TaskWithSubTasks } from '../task.model';
 import { SectionService } from '../../section/section.service';
 import { moveSubTask } from '../store/task.actions';
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { Task } from '../task.model';
+import { Task, TaskWithSubTasks } from '../task.model';
 import { Section } from '../../section/section.model';
 
 describe('TaskListComponent', () => {
@@ -92,6 +91,7 @@ describe('TaskListComponent', () => {
             previewTasks: () => [],
             selectionSize: () => 0,
             isListGroupDrag: () => false,
+            isCancelled: () => false,
             start: () => {},
             clear: () => {},
             finish: () => {},
@@ -144,6 +144,120 @@ describe('TaskListComponent', () => {
     fixture.componentRef.setInput('listId', 'PARENT');
     fixture.componentRef.setInput('listModelId', 'UNDONE');
     fixture.detectChanges();
+  });
+
+  describe("a view's lists (VIEW / VIEW_DONE)", () => {
+    const dragFrom = (task: MockDragTask, sourceModelId: unknown): CdkDrag =>
+      ({
+        data: task,
+        dropContainer: { data: { listId: 'PARENT', listModelId: sourceModelId } },
+      }) as unknown as CdkDrag;
+
+    // A drag within one list: its own drop container.
+    const dragWithin = (task: MockDragTask, drop: CdkDropList): CdkDrag =>
+      ({ data: task, dropContainer: drop }) as unknown as CdkDrag;
+
+    it('accepts rows of its own list, subtasks shown on their own included', () => {
+      const drop = createMockDrop('VIEW');
+      expect(component.enterPredicate(dragWithin({ id: 'a' }, drop), drop)).toBe(true);
+      expect(
+        component.enterPredicate(dragWithin({ id: 'sub', parentId: 'p' }, drop), drop),
+      ).toBe(true);
+    });
+
+    it("accepts another section's row only where the section's rules can make it match", () => {
+      const canEnter = jasmine
+        .createSpy('canEnter')
+        .and.callFake((task: { id: string }) => task.id === 'fits');
+      (component as unknown as { _viewTaskList: unknown })._viewTaskList = { canEnter };
+      expect(
+        component.enterPredicate(
+          dragFrom({ id: 'fits' }, 'VIEW'),
+          createMockDrop('VIEW'),
+        ),
+      ).toBe(true);
+      expect(
+        component.enterPredicate(
+          dragFrom({ id: 'overdue-only' }, 'VIEW'),
+          createMockDrop('VIEW'),
+        ),
+      ).toBe(false);
+    });
+
+    it('rejects drags from other lists, issue items and anything into done rows', () => {
+      expect(
+        component.enterPredicate(dragFrom({ id: 'a' }, 'UNDONE'), createMockDrop('VIEW')),
+      ).toBe(false);
+      expect(
+        component.enterPredicate(
+          dragFrom({ id: 'issue' }, 'issue-provider-id'),
+          createMockDrop('VIEW'),
+        ),
+      ).toBe(false);
+      expect(
+        component.enterPredicate(
+          dragFrom({ id: 'a' }, 'VIEW'),
+          createMockDrop('VIEW_DONE'),
+        ),
+      ).toBe(false);
+    });
+
+    it('places a dropped row after the row before it, through the view', async () => {
+      const placeRow = jasmine.createSpy('placeRow');
+      (component as unknown as { _viewTaskList: unknown })._viewTaskList = {
+        placeRow,
+        isManualOrder: () => true,
+      };
+      const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }] as TaskWithSubTasks[];
+      const container = {
+        data: { listId: 'PARENT', listModelId: 'VIEW', filteredTasks: rows },
+      };
+      await component.drop({
+        previousContainer: container,
+        container,
+        item: { data: rows[0] },
+        previousIndex: 0,
+        currentIndex: 2,
+      } as never);
+
+      expect(placeRow).toHaveBeenCalledOnceWith('a', 'c');
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('moves a selected row alone, even when a project was open before', async () => {
+      const placeRow = jasmine.createSpy('placeRow');
+      const internals = component as unknown as {
+        _viewTaskList: unknown;
+        isInView: boolean;
+      };
+      internals._viewTaskList = { placeRow, isManualOrder: () => true };
+      internals.isInView = true;
+      // A stale project context turns a selection drag into a group drag
+      // elsewhere; a view must not depend on it.
+      spyOn(component.multiDrag, 'isListGroupDrag').and.returnValue(true);
+      const groupDrop = spyOn(component.multiDrag, 'drop').and.resolveTo();
+      const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }] as TaskWithSubTasks[];
+      const container = {
+        data: { listId: 'PARENT', listModelId: 'VIEW', filteredTasks: rows },
+      };
+      const dropAt = (currentIndex: number): Promise<void> =>
+        component.drop({
+          previousContainer: container,
+          container,
+          item: { data: rows[1] },
+          previousIndex: 1,
+          currentIndex,
+        } as never);
+
+      // Released where it was picked up: nothing to write.
+      await dropAt(1);
+      expect(placeRow).not.toHaveBeenCalled();
+
+      await dropAt(0);
+      expect(placeRow).toHaveBeenCalledOnceWith('b', null);
+      expect(groupDrop).not.toHaveBeenCalled();
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
   });
 
   describe('enterPredicate', () => {
@@ -473,7 +587,9 @@ describe('TaskListComponent', () => {
         expect(component.enterPredicate(drag, drop)).toBe(true);
       });
 
-      it('should block timed, repeating, and issue-linked parent tasks from dropping to subtask list', () => {
+      // #11027: the drop unschedules the task first (see _move), so a timed
+      // task or one with a reminder must be accepted as a drop target.
+      it('should allow timed and reminder parent tasks to drop to subtask list', () => {
         const drop = createMockDrop('some-task-id', 'SUB');
 
         expect(
@@ -483,10 +599,15 @@ describe('TaskListComponent', () => {
               parentId: null,
               subTaskIds: [],
               dueWithTime: 4070908800000,
+              remindAt: 4070908800000,
             }),
             drop,
           ),
-        ).toBe(false);
+        ).toBe(true);
+      });
+
+      it('should block repeating and issue-linked parent tasks from dropping to subtask list', () => {
+        const drop = createMockDrop('some-task-id', 'SUB');
 
         expect(
           component.enterPredicate(
@@ -642,6 +763,7 @@ describe('TaskListComponent', () => {
       srcListId: 'PARENT' | 'SUB',
       targetListId: 'PARENT' | 'SUB',
       newOrderedIds: string[] = [taskId],
+      taskOverrides: Partial<TaskWithSubTasks> = {},
     ): void => {
       (
         component as unknown as {
@@ -658,6 +780,7 @@ describe('TaskListComponent', () => {
       )._move(taskId, src, target, srcListId, targetListId, newOrderedIds, {
         id: taskId,
         parentId: srcListId === 'SUB' ? src : undefined,
+        ...taskOverrides,
       } as TaskWithSubTasks);
     };
 
@@ -686,6 +809,41 @@ describe('TaskListComponent', () => {
       expect(dispatchedAction.afterTaskId).toBe('before');
     });
 
+    it('unschedules a timed task before converting it to a subtask (#11027)', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB', ['before', 'task1'], {
+        dueWithTime: 4070908800000,
+        remindAt: 4070908800000,
+      });
+
+      const dispatched = (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0] as { type: string });
+      expect(dispatched).toEqual([
+        TaskSharedActions.unscheduleTask({ id: 'task1', isSkipToast: false }),
+        TaskSharedActions.convertToSubTask({
+          taskId: 'task1',
+          targetParentId: 'parentB',
+          afterTaskId: 'before',
+        }),
+      ]);
+    });
+
+    it('skips the reminder toast when unscheduling a timed task without a reminder', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB', ['task1'], {
+        dueWithTime: 4070908800000,
+      });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.unscheduleTask({ id: 'task1', isSkipToast: true }),
+      );
+    });
+
+    it('does not unschedule an unscheduled task converted to a subtask', () => {
+      callMove('task1', 'UNDONE', 'parentB', 'PARENT', 'SUB');
+
+      expect(store.dispatch).toHaveBeenCalledTimes(1);
+    });
+
     it('routes a subtask drop into a parent list to convertToMainTask', () => {
       callMove('sub1', 'parentA', 'UNDONE', 'SUB', 'PARENT', ['before', 'sub1']);
 
@@ -697,6 +855,32 @@ describe('TaskListComponent', () => {
       expect(dispatchedAction.task.parentId).toBe('parentA');
       expect(dispatchedAction.afterTaskId).toBe('before');
       expect(dispatchedAction.isDone).toBe(false);
+    });
+
+    // A won't-do task is one whose `wontDoOn` equals its `doneOn`: a new stamp
+    // would turn it into a completion.
+    it("keeps the done stamp of a won't-do subtask dropped on DONE", () => {
+      callMove('sub1', 'parentA', 'DONE', 'SUB', 'PARENT', ['sub1'], {
+        isDone: true,
+        doneOn: 5,
+        wontDoOn: 5,
+      });
+
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof TaskSharedActions.convertToMainTask>;
+      expect(dispatchedAction.isDone).toBe(true);
+      expect(dispatchedAction.doneOn).toBe(5);
+    });
+
+    it('stamps a completed subtask dropped on DONE as done now', () => {
+      callMove('sub1', 'parentA', 'DONE', 'SUB', 'PARENT', ['sub1'], {
+        isDone: true,
+        doneOn: 5,
+      });
+
+      const dispatchedAction = (store.dispatch as jasmine.Spy).calls.mostRecent()
+        .args[0] as ReturnType<typeof TaskSharedActions.convertToMainTask>;
+      expect(dispatchedAction.doneOn).toBeGreaterThan(5);
     });
 
     it('routes a parent drop into a section drop-list (PARENT + non-reserved id) to addTaskToSection', () => {
@@ -1049,8 +1233,8 @@ describe('TaskListComponent', () => {
   });
 
   // Grouped-by-tag view: a task dragged into a DIFFERENT tag group has its tags
-  // reassigned (move: drop the source group's tag, add the target's) instead of
-  // being reordered. groupTagId is undefined outside that view, null for a
+  // reassigned (move: drop the source group's tag, add the target's) and is
+  // placed at the drop slot (#11921). groupTagId is undefined outside that view, null for a
   // no-single-tag bucket ('No tag' / 'Unknown tag' / duplicate-titled).
   describe('drop() tag-group retag', () => {
     type GroupListData = {
@@ -1111,8 +1295,95 @@ describe('TaskListComponent', () => {
       const [task, newTags] = taskService.updateTags.calls.mostRecent().args;
       expect(task.id).toBe('t1');
       expect(newTags).toEqual(['tagC', 'tagB']);
-      // Retag short-circuits the reorder path.
-      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    // #11921: the retagged task lands at the drop slot, not at the group's end.
+    const movedAfter = (): (string | null)[] =>
+      (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0])
+        .filter((a) => a.type === moveTaskInTodayList.type)
+        .map((a) => a.afterTaskId);
+
+    it('places the retagged task before the row it was dropped on', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup(NO_TAG_GROUP_ID),
+          target: undoneGroup('tagB', [{ id: 'b1' }, { id: 'b2' }, { id: 'b3' }]),
+          dragged: { id: 't1', parentId: null, tagIds: [] },
+          currentIndex: 2,
+        }),
+      );
+
+      expect(taskService.updateTags).toHaveBeenCalledTimes(1);
+      expect(movedAfter()).toEqual(['b2']);
+    });
+
+    it('places the retagged task first when dropped on the first row', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup('tagA'),
+          target: undoneGroup('tagB', [{ id: 'b1' }, { id: 'b2' }]),
+          dragged: { id: 't1', parentId: null, tagIds: ['tagA'] },
+          currentIndex: 0,
+        }),
+      );
+
+      expect(movedAfter()).toEqual([null]);
+    });
+
+    it('places the retagged task last when dropped below the last row', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup('tagA'),
+          target: undoneGroup('tagB', [{ id: 'b1' }, { id: 'b2' }]),
+          dragged: { id: 't1', parentId: null, tagIds: ['tagA'] },
+          currentIndex: 2,
+        }),
+      );
+
+      expect(movedAfter()).toEqual(['b2']);
+    });
+
+    it('moves within the active tag context, keeping the context tag', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup(NO_TAG_GROUP_ID),
+          target: undoneGroup('tagB', [{ id: 'b1' }, { id: 'b2' }]),
+          dragged: { id: 't1', parentId: null, tagIds: ['test-context'] },
+          currentIndex: 1,
+        }),
+      );
+
+      const [, newTags] = taskService.updateTags.calls.mostRecent().args;
+      expect(newTags).toEqual(['test-context', 'tagB']);
+      const move = (store.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .map((args) => args[0])
+        .find((a) => a.type === moveTaskInTodayList.type);
+      expect(move).toEqual(
+        jasmine.objectContaining({
+          taskId: 't1',
+          afterTaskId: 'b1',
+          workContextId: 'test-context',
+          workContextType: 'TAG',
+        }),
+      );
+    });
+
+    it('retags before it moves', async () => {
+      const order: string[] = [];
+      taskService.updateTags.and.callFake(() => order.push('retag'));
+      (store.dispatch as jasmine.Spy).and.callFake(() => order.push('move'));
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup('tagA'),
+          target: undoneGroup('tagB', [{ id: 'b1' }]),
+          dragged: { id: 't1', parentId: null, tagIds: ['tagA'] },
+        }),
+      );
+
+      expect(order).toEqual(['retag', 'move']);
     });
 
     it('adds the target tag when dragging out of the "No tag" bucket (no removal)', async () => {
@@ -1142,7 +1413,20 @@ describe('TaskListComponent', () => {
       const [task, newTags] = taskService.updateTags.calls.mostRecent().args;
       expect(task.id).toBe('t1');
       expect(newTags).toEqual([]);
-      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(movedAfter()).toEqual([null]);
+    });
+
+    it('keeps the active tag when dropping onto "No tag" inside that tag view (#9630)', async () => {
+      await component.drop(
+        dropEvent({
+          previous: undoneGroup('tagA'),
+          target: undoneGroup(NO_TAG_GROUP_ID),
+          dragged: { id: 't1', parentId: null, tagIds: ['test-context', 'tagA'] },
+        }),
+      );
+
+      const [, newTags] = taskService.updateTags.calls.mostRecent().args;
+      expect(newTags).toEqual(['test-context']);
     });
 
     it('appends the target tag even if the task already has it (relies on updateTags de-dupe)', async () => {
@@ -1158,6 +1442,7 @@ describe('TaskListComponent', () => {
       const [, newTags] = taskService.updateTags.calls.mostRecent().args;
       // Source 'tagA' dropped, 'tagB' appended → duplicate left for updateTags to collapse.
       expect(newTags).toEqual(['tagB', 'tagB']);
+      expect(movedAfter()).toEqual([null]);
     });
 
     it('adds the target tag (no removal) when dragging from an ambiguous/unknown source bucket (src null)', async () => {

@@ -30,4 +30,20 @@
   <exclude
     domain="sharedpref"
     path="SuperProductivityTracking.xml" />
+  <!--
+    LaunchUrlReplayGuard's last base URL is stamped against THIS install's
+    update time; restored onto a newer install it would drop the first
+    identical launch URL as a replay (#11153).
+  -->
+  <exclude
+    domain="sharedpref"
+    path="SuperProductivityLaunchUrl.xml" />
+  <!--
+    Per-widget project selections are keyed by appWidgetId, which a restore or
+    device transfer does not preserve, and the pending "open project" request
+    is for a tap on THIS device. Restored, both would point at the wrong thing.
+  -->
+  <exclude
+    domain="sharedpref"
+    path="task_list_widget.xml" />
 </full-backup-content>

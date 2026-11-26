@@ -7,6 +7,7 @@
   "description": "Shows all tasks you worked on yesterday with time spent on each.",
   "hooks": [],
   "permissions": ["getTasks", "getArchivedTasks", "showIndexHtmlAsView", "openDialog"],
+  "dataSharing": [],
   "i18n": {
     "languages": ["en", "de"]
   },

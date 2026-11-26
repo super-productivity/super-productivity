@@ -18,3 +18,20 @@
 :host-context(body.isTouchPrimary) ::ng-deep .cm-content {
   @include noIosFocusZoom();
 }
+
+// Opt-in for hosts given a fixed height (the fullscreen note dialog): stretch
+// the editor to fill it so a click anywhere in the empty area below the text
+// focuses the editor. CodeMirror's `.cm-content` already has `min-height: 100%`
+// of its scroller; it only needs the chain above it to have a definite height,
+// which moves scrolling from the host into `.cm-scroller` (CodeMirror's own
+// full-height setup).
+:host(.fill-height) {
+  .cm-host,
+  ::ng-deep .cm-editor {
+    height: 100%;
+  }
+
+  ::ng-deep .cm-scroller {
+    @include scrollY;
+  }
+}

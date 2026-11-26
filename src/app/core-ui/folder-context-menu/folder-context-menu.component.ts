@@ -1,9 +1,15 @@
-import { ChangeDetectionStrategy, Component, inject, Input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  Input,
+  viewChild,
+} from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { take } from 'rxjs/operators';
 
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
-import { MatMenuItem } from '@angular/material/menu';
+import { MatMenu, MatMenuContent, MatMenuItem } from '@angular/material/menu';
 import { MatIcon } from '@angular/material/icon';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
@@ -19,13 +25,14 @@ import {
 } from '../../features/menu-tree/store/menu-tree.model';
 import { TagService } from '../../features/tag/tag.service';
 import { Router } from '@angular/router';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 @Component({
   selector: 'folder-context-menu',
   templateUrl: './folder-context-menu.component.html',
   styleUrls: ['./folder-context-menu.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatMenuItem, MatIcon, TranslateModule],
+  imports: [MatMenu, MatMenuContent, MatMenuItem, MatIcon, TranslateModule],
   standalone: true,
 })
 export class FolderContextMenuComponent {
@@ -34,6 +41,9 @@ export class FolderContextMenuComponent {
   private readonly _menuTreeService = inject(MenuTreeService);
   private readonly _tagService = inject(TagService);
   private readonly _router = inject(Router);
+
+  /** For a trigger: `[menu]="folderContextMenu.menu()"`. */
+  readonly menu = viewChild.required(MatMenu);
 
   @Input() folderId!: string;
   @Input() treeKind: MenuTreeKind = MenuTreeKind.PROJECT;
@@ -49,6 +59,7 @@ export class FolderContextMenuComponent {
       this.treeKind === MenuTreeKind.PROJECT ? T.F.PROJECT_FOLDER : T.F.TAG_FOLDER;
 
     const dialogRef = this._matDialog.open(DialogPromptComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       restoreFocus: true,
       data: {
         txtLabel: this._translateService.instant(folderNs.DIALOG.NAME_LABEL),
@@ -111,6 +122,7 @@ export class FolderContextMenuComponent {
 
   addSubfolder(): void {
     const dialogRef = this._matDialog.open(DialogPromptComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       restoreFocus: true,
       data: {
         placeholder: this._translateService.instant(
@@ -144,6 +156,7 @@ export class FolderContextMenuComponent {
       await import('../../features/project/dialogs/create-project/dialog-create-project.component');
     this._matDialog
       .open(DialogCreateProjectComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         restoreFocus: true,
       })
       .afterClosed()
@@ -161,6 +174,7 @@ export class FolderContextMenuComponent {
 
   addTag(): void {
     const dialogRef = this._matDialog.open(DialogCreateTagComponent, {
+      autoFocus: DIALOG_AUTO_FOCUS_TYPING,
       restoreFocus: true,
     });
 

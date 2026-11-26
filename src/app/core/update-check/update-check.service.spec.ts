@@ -177,13 +177,13 @@ describe('UpdateCheckService', () => {
       banner = bannerService.open.calls.mostRecent().args[0];
     });
 
-    it('should persist the version and open the locally-built release page on download', () => {
+    it('should persist the version and open the download page on download', () => {
       const openExternalUrl = jasmine.createSpy('openExternalUrl');
       (window as unknown as { ea: unknown }).ea = { openExternalUrl };
       banner.action?.fn();
       expect(localStorage.getItem(LS.UPDATE_CHECK_DISMISSED_VERSION)).toBe('v99.0.0');
       expect(openExternalUrl).toHaveBeenCalledWith(
-        'https://github.com/super-productivity/super-productivity/releases/tag/v99.0.0',
+        'https://super-productivity.com/download/',
       );
     });
 

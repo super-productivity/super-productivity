@@ -32,7 +32,7 @@ export type NextSceneOptions = {
  *   caption = await nextScene(page, {
  *     caption: 'Navigate Boards with arrow keys.',
  *     pointer,
- *     setup: () => page.goto('/#/boards'),
+ *     setup: () => page.goto('/#/boards/EISENHOWER_MATRIX'),
  *   });
  */
 export const nextScene = async (

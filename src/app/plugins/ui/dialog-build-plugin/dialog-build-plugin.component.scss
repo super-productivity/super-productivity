@@ -1,0 +1,22 @@
+h3 {
+  margin-top: 0;
+}
+
+mat-form-field {
+  width: 100%;
+}
+
+.callout {
+  margin: var(--s2) 0;
+}
+
+.code {
+  font-family: var(--font-mono-stack);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.spacer {
+  flex: 1;
+}

@@ -27,6 +27,11 @@ import {
   expectTaskUpdate,
   expectTaskUpdates,
 } from './test-utils';
+import {
+  getWontDoChanges,
+  isCompletedTask,
+  isWontDoTask,
+} from '../../../features/tasks/util/is-wont-do-task';
 
 describe('taskSharedCrudMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -37,6 +42,130 @@ describe('taskSharedCrudMetaReducer', () => {
     mockReducer = jasmine.createSpy('reducer').and.callFake((state, action) => state);
     metaReducer = taskSharedCrudMetaReducer(mockReducer);
     baseState = createBaseState();
+  });
+
+  describe('addTask action for a repeat instance (#10812)', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const todayStr = getDbDateStr();
+    const yesterday = new Date(Date.now() - DAY_MS);
+    const yesterdayStr = getDbDateStr(yesterday);
+
+    const createAddInstanceAction = (taskOverrides: Partial<Task> = {}) =>
+      TaskSharedActions.addTask({
+        task: createMockTask({
+          id: 'rpt_today',
+          repeatCfgId: 'cfg1',
+          dueDay: todayStr,
+          created: Date.now(),
+          ...taskOverrides,
+        }),
+        workContextId: 'project1',
+        workContextType: WorkContextType.PROJECT,
+        isAddToBottom: false,
+        isAddToBacklog: false,
+      });
+
+    it('takes the place of the previous instance in the project and tag lists', () => {
+      const state = createStateWithExistingTasks(
+        ['a', 'rpt_yesterday', 'b'],
+        [],
+        ['c', 'rpt_yesterday'],
+      );
+      state[TASK_FEATURE_NAME].entities.rpt_yesterday = {
+        ...(state[TASK_FEATURE_NAME].entities.rpt_yesterday as Task),
+        repeatCfgId: 'cfg1',
+        dueDay: yesterdayStr,
+        created: yesterday.getTime(),
+        isDone: true,
+      };
+      const action = createAddInstanceAction();
+
+      metaReducer(state, action);
+
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', {
+            taskIds: ['a', 'rpt_today', 'rpt_yesterday', 'b'],
+          }),
+          ...expectTagUpdate('tag1', { taskIds: ['c', 'rpt_today', 'rpt_yesterday'] }),
+        },
+        action,
+        mockReducer,
+        state,
+      );
+    });
+
+    it('follows the most recently created instance when several are left', () => {
+      const state = createStateWithExistingTasks(['rpt_old', 'a', 'rpt_yesterday', 'b']);
+      for (const [id, created] of [
+        ['rpt_old', yesterday.getTime() - DAY_MS],
+        ['rpt_yesterday', yesterday.getTime()],
+      ] as const) {
+        state[TASK_FEATURE_NAME].entities[id] = {
+          ...(state[TASK_FEATURE_NAME].entities[id] as Task),
+          repeatCfgId: 'cfg1',
+          created,
+        };
+      }
+      const action = createAddInstanceAction();
+
+      metaReducer(state, action);
+
+      expectStateUpdate(
+        expectProjectUpdate('project1', {
+          taskIds: ['rpt_old', 'a', 'rpt_today', 'rpt_yesterday', 'b'],
+        }),
+        action,
+        mockReducer,
+        state,
+      );
+    });
+
+    it('goes to the top as before when the previous instance is already archived', () => {
+      // The archived instance is no longer in task state or any list
+      const state = createStateWithExistingTasks(['a', 'b'], [], ['c'], ['d', 'e']);
+      const action = createAddInstanceAction();
+
+      metaReducer(state, action);
+
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: ['rpt_today', 'a', 'b'] }),
+          ...expectTagUpdates({
+            tag1: { taskIds: ['rpt_today', 'c'] },
+            TODAY: { taskIds: ['rpt_today', 'd', 'e'] },
+          }),
+        },
+        action,
+        mockReducer,
+        state,
+      );
+    });
+
+    it('goes to the top when the previous instance sits in the backlog, not the task list', () => {
+      const state = createStateWithExistingTasks(['a', 'rpt_yesterday'], ['b']);
+      state[TASK_FEATURE_NAME].entities.b = {
+        ...(state[TASK_FEATURE_NAME].entities.b as Task),
+        repeatCfgId: 'cfg1',
+        created: yesterday.getTime(),
+      };
+      state[TASK_FEATURE_NAME].entities.rpt_yesterday = {
+        ...(state[TASK_FEATURE_NAME].entities.rpt_yesterday as Task),
+        repeatCfgId: 'cfg1',
+        created: yesterday.getTime() - DAY_MS,
+      };
+      const action = createAddInstanceAction();
+
+      metaReducer(state, action);
+
+      // anchor 'b' is only in backlogTaskIds, so the main list falls back to the top
+      expectStateUpdate(
+        expectProjectUpdate('project1', { taskIds: ['rpt_today', 'a', 'rpt_yesterday'] }),
+        action,
+        mockReducer,
+        state,
+      );
+    });
   });
 
   describe('addTask action', () => {
@@ -1073,6 +1202,21 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    it('should remove the task from a project other than the payload`s (#11685)', () => {
+      // The receiving client still lists the task in the project it left:
+      // the payload names the project the deleting client held it in.
+      const testState = createStateWithExistingTasks(['task1', 'other-task'], [], [], []);
+      const action = createDeleteAction({ projectId: 'project-elsewhere' });
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        expectProjectUpdate('project1', { taskIds: ['other-task'] }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should delete task entity and handle subtasks', () => {
       const testState = createStateWithExistingTasks(
         ['task1', 'subtask1', 'other-task'],
@@ -1756,55 +1900,6 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
-    // `isWontDo` is normalized after the update is merged, so neither a
-    // contradictory update nor a redundant done write can leave it wrong.
-    describe('isWontDo', () => {
-      const isWontDoAfter = (
-        task: Partial<Task>,
-        changes: Partial<Task>,
-      ): boolean | undefined => {
-        const testState = createStateWithExistingTasks(['task1']);
-        testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
-          id: 'task1',
-          ...task,
-        });
-        metaReducer(testState, createUpdateTaskAction('task1', changes));
-        const nextState = mockReducer.calls.mostRecent().args[0] as RootState;
-        return (nextState[TASK_FEATURE_NAME].entities.task1 as Task).isWontDo;
-      };
-
-      it('should store the flag when a task is finished as wont do', () => {
-        expect(isWontDoAfter({}, { isDone: true, isWontDo: true })).toBe(true);
-      });
-
-      it('should not store the flag from an update that un-does the task', () => {
-        expect(
-          isWontDoAfter(
-            { isDone: true, isWontDo: true },
-            { isDone: false, isWontDo: true },
-          ),
-        ).toBeUndefined();
-      });
-
-      it('should clear the flag when a wont do task is un-done', () => {
-        expect(
-          isWontDoAfter({ isDone: true, isWontDo: true }, { isDone: false }),
-        ).toBeUndefined();
-      });
-
-      it('should keep the flag when an already done task is marked done again', () => {
-        expect(isWontDoAfter({ isDone: true, isWontDo: true }, { isDone: true })).toBe(
-          true,
-        );
-      });
-
-      it('should not revive a stale flag when a task is finished normally', () => {
-        expect(
-          isWontDoAfter({ isDone: false, isWontDo: true }, { isDone: true }),
-        ).toBeUndefined();
-      });
-    });
-
     it('should atomically move a task and its subtasks to another project', () => {
       const testState = createStateWithExistingTasks(['task1'], ['subtask1']);
       testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
@@ -2373,6 +2468,22 @@ describe('taskSharedCrudMetaReducer', () => {
       ).not.toContain('task1');
     });
 
+    // Won't do is a `wontDoOn` equal to `doneOn`: reopening clears `doneOn`
+    // and completing stamps a new one, so the old `wontDoOn` stops counting.
+    it("leaves a completed task after won't do, reopen and complete", () => {
+      let state: RootState = createStateWithExistingTasks(['task1'], [], ['task1']);
+      const taskAfter = (changes: Partial<Task>): Task => {
+        state = metaReducer(state, createUpdateTaskAction('task1', changes));
+        return state[TASK_FEATURE_NAME].entities['task1'] as Task;
+      };
+
+      expect(isWontDoTask(taskAfter(getWontDoChanges(1000)))).toBe(true);
+      const reopened = taskAfter({ isDone: false });
+      expect(reopened.doneOn).toBeUndefined();
+      expect(reopened.wontDoOn).toBe(1000);
+      expect(isCompletedTask(taskAfter({ isDone: true }))).toBe(true);
+    });
+
     it('should add completed task to TODAY_TAG.taskIds', () => {
       const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
       (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = getDbDateStr();
@@ -2831,61 +2942,6 @@ describe('taskSharedCrudMetaReducer', () => {
 
   describe('parent/sub-task tag interaction', () => {
     describe('convertToMainTask action', () => {
-      const convertWontDoSubTask = (
-        subTaskOverrides: Partial<Task>,
-        isDone: boolean,
-      ): Task => {
-        const testState = createStateWithExistingTasks(
-          ['parent-task', 'sub-task'],
-          [],
-          ['parent-task'],
-        );
-        testState[TASK_FEATURE_NAME].entities['parent-task'] = createMockTask({
-          id: 'parent-task',
-          subTaskIds: ['sub-task'],
-          tagIds: ['tag1'],
-        });
-        testState[TASK_FEATURE_NAME].entities['sub-task'] = createMockTask({
-          id: 'sub-task',
-          parentId: 'parent-task',
-          tagIds: [],
-          ...subTaskOverrides,
-        });
-
-        metaReducer(
-          testState,
-          TaskSharedActions.convertToMainTask({
-            task: testState[TASK_FEATURE_NAME].entities['sub-task'] as Task,
-            parentTagIds: ['tag1'],
-            isPlanForToday: false,
-            isDone,
-          }),
-        );
-        const passedState = mockReducer.calls.mostRecent().args[0] as RootState;
-        return passedState[TASK_FEATURE_NAME].entities['sub-task'] as Task;
-      };
-
-      it("should clear isWontDo when a won't-do sub-task is dropped outside DONE", () => {
-        const task = convertWontDoSubTask({ isDone: true, isWontDo: true }, false);
-
-        expect(task.isDone).toBe(false);
-        expect(task.isWontDo).toBeUndefined();
-      });
-
-      it("should keep isWontDo when a won't-do sub-task is dropped on DONE", () => {
-        const task = convertWontDoSubTask({ isDone: true, isWontDo: true }, true);
-
-        expect(task.isDone).toBe(true);
-        expect(task.isWontDo).toBe(true);
-      });
-
-      it('should not revive a stale isWontDo when an undone sub-task is dropped on DONE', () => {
-        const task = convertWontDoSubTask({ isDone: false, isWontDo: true }, true);
-
-        expect(task.isDone).toBe(true);
-        expect(task.isWontDo).toBeUndefined();
-      });
-
       it('should keep parent tags when converting sub-task to main task with same tag', () => {
         // Setup: parent and sub-task exist, parent is in tag
         const testState = createStateWithExistingTasks(

@@ -1,5 +1,15 @@
 :host {
   overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+}
+
+// work-view's wrapper is absolutely positioned; without its own box it covers the notice
+work-view {
+  display: block;
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 .archived-notice {

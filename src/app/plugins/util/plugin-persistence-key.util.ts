@@ -69,3 +69,18 @@ export const assertPluginPersistenceKey = (key: unknown): void => {
     );
   }
 };
+
+/** Returns only the owner's non-empty keys, with a literal prefix match. */
+export const listPluginPersistenceKeys = (
+  entityIds: Iterable<string>,
+  pluginId: string,
+  prefix?: string,
+): string[] => {
+  assertPluginPersistenceKey(prefix);
+  const namespace = `${composeId(pluginId)}:`;
+  return [...new Set(entityIds)]
+    .filter((id) => id.startsWith(namespace))
+    .map((id) => id.slice(namespace.length))
+    .filter((key) => key.length > 0 && key.startsWith(prefix ?? ''))
+    .sort();
+};

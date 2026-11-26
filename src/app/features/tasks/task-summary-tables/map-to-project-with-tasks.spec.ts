@@ -10,6 +10,8 @@ describe('mapToProjectWithTasks()', () => {
       id: 'PID',
       title: 'P_TITLE',
       color: undefined,
+      icon: 'list_alt',
+      isEmojiIcon: false,
       tasks: [],
       timeSpentToday: 0,
       timeSpentYesterday: undefined,
@@ -33,6 +35,8 @@ describe('mapToProjectWithTasks()', () => {
       id: 'PID',
       title: 'P_TITLE',
       color: undefined,
+      icon: 'list_alt',
+      isEmojiIcon: false,
       tasks: [
         { projectId: 'PID', parentId: 'IGNORE', timeSpentOnDay: { [TDS]: 100000 } },
         { projectId: 'PID', timeSpentOnDay: { [TDS]: 111 } },
@@ -62,6 +66,8 @@ describe('mapToProjectWithTasks()', () => {
       id: 'PID',
       title: 'P_TITLE',
       color: undefined,
+      icon: 'list_alt',
+      isEmojiIcon: false,
       tasks: [
         { projectId: 'PID', parentId: 'IGNORE', timeSpentOnDay: { [TDS]: 100000 } },
         { projectId: 'PID', timeSpentOnDay: { [TDS]: 111 } },
@@ -71,5 +77,30 @@ describe('mapToProjectWithTasks()', () => {
       timeSpentToday: 111,
       timeSpentYesterday: 666,
     });
+  });
+
+  it('should use the project icon and color', () => {
+    const project = {
+      id: 'PID',
+      title: 'P',
+      icon: 'work',
+      theme: { primary: '#3f51b5' },
+    };
+    expect(mapToProjectWithTasks(project as any, [], 'TODAY_STR')).toEqual(
+      jasmine.objectContaining({ icon: 'work', isEmojiIcon: false, color: '#3f51b5' }),
+    );
+  });
+
+  it('should flag an emoji project icon', () => {
+    const project = { id: 'PID', title: 'P', icon: '🚀' };
+    expect(mapToProjectWithTasks(project as any, [], 'TODAY_STR')).toEqual(
+      jasmine.objectContaining({ icon: '🚀', isEmojiIcon: true }),
+    );
+  });
+
+  it('should have no icon for the without-project group', () => {
+    const result = mapToProjectWithTasks({ id: null, title: 'None' }, [], 'TODAY_STR');
+    expect(result.icon).toBeUndefined();
+    expect(result.isEmojiIcon).toBe(false);
   });
 });

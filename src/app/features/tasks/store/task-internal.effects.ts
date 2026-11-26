@@ -55,6 +55,11 @@ export class TaskInternalEffects {
           return false;
         }
         const parent = state.entities[task.parentId] as Task;
+        // Marking a done parent done again would only stamp a new `doneOn`,
+        // which turns a won't-do parent into a completed one.
+        if (parent.isDone) {
+          return false;
+        }
         const subTasks = parent.subTaskIds.map((id) => state.entities[id] as Task);
         // A parent whose subtasks were all finished as won't do wasn't completed.
         return subTasks.every((t) => t.isDone) && subTasks.some(isCompletedTask);

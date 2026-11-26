@@ -51,6 +51,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { getTaskRepeatInfoText } from './get-task-repeat-info-text.util';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { MatIconButton } from '@angular/material/button';
@@ -64,16 +65,23 @@ import { MatIcon } from '@angular/material/icon';
 import { TaskListComponent } from '../task-list/task-list.component';
 import { MatButton } from '@angular/material/button';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueHeaderComponent } from '../../issue/issue-header/issue-header.component';
 import { MatProgressBar } from '@angular/material/progress-bar';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueContentComponent } from '../../issue/issue-content/issue-content.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
+import { IssueSyncStateComponent } from '../../issue/issue-sync-state/issue-sync-state.component';
+import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
 import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-markdown.component';
 import { TaskAttachmentListComponent } from '../task-attachment/task-attachment-list/task-attachment-list.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagEditComponent } from '../../tag/tag-edit/tag-edit.component';
 import { DialogSelectDateTimeComponent } from '../dialog-select-date-time/dialog-select-date-time.component';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
@@ -93,6 +101,7 @@ import {
 } from '../add-subtask-input/add-subtask-input.component';
 import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
+import { isWontDoTask } from '../util/is-wont-do-task';
 
 @Component({
   selector: 'task-detail-panel',
@@ -117,6 +126,7 @@ import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu
     IssueHeaderComponent,
     MatProgressBar,
     IssueContentComponent,
+    IssueSyncStateComponent,
     InlineMarkdownComponent,
     TaskAttachmentListComponent,
     TagEditComponent,
@@ -143,6 +153,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
   private _translateService = inject(TranslateService);
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
@@ -331,8 +342,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   });
 
   // Panel expansion computed signals
+  // Open on a sync notice too: a task Plainspace no longer lists has no issue
+  // data to load, and the notice is the reason to look.
   isExpandedIssuePanel = computed(() => {
-    return !this.layoutService.isXs() && !!this.issueData();
+    const taskId = this.task().id;
+    const hasSyncNotice =
+      this._issueSyncState.missingTaskIds().has(taskId) ||
+      this._issueSyncState.failures().has(taskId);
+    return !this.layoutService.isXs() && (!!this.issueData() || hasSyncNotice);
   });
 
   isExpandedNotesPanel = computed(() => {
@@ -655,7 +672,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   addAttachment(): void {
     this._matDialog
       .open(DialogEditTaskAttachmentComponent, {
-        data: {},
+        data: { taskId: this.task().id },
       })
       .afterClosed()
       .subscribe((result) => {
@@ -761,7 +778,13 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
     dialogRef.afterClosed().subscribe((doneOn) => {
       if (typeof doneOn === 'number') {
-        this.taskService.update(this.task().id, { doneOn });
+        // A won't-do task is one whose `wontDoOn` matches its `doneOn`, so a
+        // new date moves both; moving `doneOn` alone would complete it.
+        const task = this.task();
+        this.taskService.update(task.id, {
+          doneOn,
+          ...(isWontDoTask(task) && { wontDoOn: doneOn }),
+        });
       }
     });
   }
@@ -854,6 +877,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       // task shortcuts — a typed note scheduled the task instead (#9910).
       const activeEl = document.activeElement;
       if (activeEl instanceof HTMLElement && isInputElement(activeEl)) {
+        return;
+      }
+      // Nor from a sub-task row the user focused in this panel meanwhile: the
+      // next task shortcut (move, done, …) would otherwise find no focused task.
+      if (
+        activeEl?.closest('task') &&
+        this._elementRef.nativeElement.contains(activeEl)
+      ) {
         return;
       }
       if (this.task().id === scheduledForTaskId) {

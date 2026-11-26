@@ -74,7 +74,7 @@ describe('IndexedDB Error Recovery Integration', () => {
     });
 
     it('should throw StorageQuotaExceededError when quota is exceeded during batch append', async () => {
-      spyOn(storeService, 'appendBatch').and.callFake(async () => {
+      spyOn(storeService, 'appendBatchSkipDuplicates').and.callFake(async () => {
         throw new StorageQuotaExceededError();
       });
 

@@ -159,6 +159,11 @@
       }
 
       > tr.week-row {
+        // days of the neighbouring month in a week crossing the month boundary (#9950)
+        &.isOtherMonth > td {
+          color: var(--text-color-muted);
+        }
+
         // :focus-within highlights the row when its day-toggle button is focused
         &:hover,
         &:focus-within,

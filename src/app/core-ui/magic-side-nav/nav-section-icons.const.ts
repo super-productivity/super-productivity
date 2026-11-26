@@ -6,7 +6,7 @@ export const NAV_SECTION_ICON = {
   BOARDS: 'grid_view',
   HABITS: 'heart_check',
   SEARCH: 'search',
-  SCHEDULED_LIST: 'list',
+  RECURRING_TASKS: 'repeat',
   DONATE: 'favorite',
   SETTINGS: 'settings',
   ARCHIVED_PROJECTS: 'archive',

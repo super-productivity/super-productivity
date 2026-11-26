@@ -20,6 +20,7 @@ import {
   OpType,
 } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
+import { TAG_DELETE_WINS_MARKER } from '../../features/tag/store/tag.actions';
 import { OpLog } from '../../core/log';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import { toEntityKey } from '../util/entity-key.util';
@@ -27,6 +28,7 @@ import { firstValueFrom } from 'rxjs';
 import { ENTITY_REGISTRY, isSingletonEntityId } from '../core/entity-registry';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { foldSyncTimeSpentDeltas, isSyncTimeSpentOp } from './fold-sync-time-spent.util';
+import { replayUpdateOnRecreatedEntity } from './replay-update-on-recreated-entity.util';
 
 /**
  * Reads current entity state and entity-shaped payloads for conflict resolution.
@@ -178,7 +180,14 @@ export class ConflictEntityStateService {
           toLwwUpdateActionType(entityType as EntityType),
         isSingletonEntityId,
         // A task delete carries `TaskWithSubTasks`; `subTasks` is no task field.
+        // A tag delete's `{ id, tagDeleteWins }` payload is read as the entity;
+        // the delete-wins marker is no tag field (#11489).
         toBaseEntity: (entity, entityType) => {
+          if (entityType === 'TAG' && TAG_DELETE_WINS_MARKER in entity) {
+            const tag = { ...entity };
+            delete tag[TAG_DELETE_WINS_MARKER];
+            return tag;
+          }
           if (entityType !== 'TASK' || !('subTasks' in entity)) return entity;
           const task = { ...entity };
           delete task['subTasks'];
@@ -186,10 +195,12 @@ export class ConflictEntityStateService {
         },
         // A winning syncTimeSpent delta adds to the recreated task's time, as
         // its reducer does everywhere else; its arguments are no fields (#10380).
+        // Types with semantic updates (a counter's `setSimpleCounterCounterToday`)
+        // replay them through their own reducer instead (#11465).
         applyAdditiveUpdate: (entity, op) =>
           isSyncTimeSpentOp(op)
             ? foldSyncTimeSpentDeltas(conflict.entityId, entity, [op])
-            : undefined,
+            : replayUpdateOnRecreatedEntity(entity, op),
         onMissingBaseEntity: ({ localDeletePayloadKeys, remoteOp }) => {
           // Fallback: no full base entity available. Returning the op unchanged
           // is equivalent to rewriting actionType to LWW Update — both no-op at

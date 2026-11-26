@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's FindFine: `everything was find` wants `fine`.
+#
+# Harper takes a form of `be`, then `find`, and drops the match when a noun,
+# pronoun or determiner follows -- because that is the ordinary verb, as in
+# "I was find the file". The trailing slot carries that guard.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean `fine`?"
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "fine"
+tokens:
+  - pattern: 'am|is|are|was|were|be|been|being'
+  - pattern: 'find'
+    target: true
+  - upos: NOUN|PROPN|PRON|DET
+    negate: true

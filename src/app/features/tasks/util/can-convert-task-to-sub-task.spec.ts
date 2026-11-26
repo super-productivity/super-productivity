@@ -2,6 +2,7 @@ import { Task } from '../task.model';
 import {
   canApplyConvertToSubTask,
   canConvertTaskToSubTask,
+  canDropTaskIntoSubTaskList,
 } from './can-convert-task-to-sub-task';
 
 // An eligible top-level task: every guard field empty.
@@ -51,6 +52,23 @@ describe('canConvertTaskToSubTask', () => {
     expect(canConvertTaskToSubTask({ ...eligible(), dueWithTime: 1234 })).toBe(false);
     expect(canConvertTaskToSubTask({ ...eligible(), reminderId: 'rem1' })).toBe(false);
     expect(canConvertTaskToSubTask({ ...eligible(), remindAt: 1234 })).toBe(false);
+  });
+});
+
+describe('canDropTaskIntoSubTaskList', () => {
+  // #11027: the drop unschedules first, so time and reminder don't block it.
+  it('accepts a timed task with a reminder', () => {
+    expect(
+      canDropTaskIntoSubTaskList({ ...eligible(), dueWithTime: 1234, remindAt: 1234 }),
+    ).toBe(true);
+  });
+
+  it('still rejects the other blocking fields', () => {
+    expect(canDropTaskIntoSubTaskList({ ...eligible(), repeatCfgId: 'r1' })).toBe(false);
+    expect(canDropTaskIntoSubTaskList({ ...eligible(), issueId: 'i1' })).toBe(false);
+    expect(canDropTaskIntoSubTaskList({ ...eligible(), subTaskIds: ['s1'] })).toBe(false);
+    // legacy reminder: unscheduleTask doesn't clear reminderId
+    expect(canDropTaskIntoSubTaskList({ ...eligible(), reminderId: 'rem1' })).toBe(false);
   });
 });
 

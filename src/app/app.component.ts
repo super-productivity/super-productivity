@@ -13,6 +13,8 @@ import {
   OnDestroy,
   signal,
   ViewChild,
+  afterRenderEffect,
+  viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ShortcutService } from './core-ui/shortcut/shortcut.service';
@@ -22,6 +24,8 @@ import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
 import { IS_MAC } from './util/is-mac';
+import { handleHomeEndInTextField } from './util/handle-home-end-in-text-field';
+import { handleMenuItemHotkey } from './util/handle-menu-item-hotkey';
 import { expandAnimation } from './ui/animations/expand.ani';
 import { warpRouteAnimation } from './ui/animations/warp-route';
 import { firstValueFrom, Subscription } from 'rxjs';
@@ -37,7 +41,8 @@ import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
 import { ActivatedRoute, RouterOutlet } from '@angular/router';
-import { first, take } from 'rxjs/operators';
+import { first, map, take } from 'rxjs/operators';
+import { BreakpointObserver } from '@angular/cdk/layout';
 
 import { recordSearchNavDebug } from './util/search-nav-debug';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
@@ -60,7 +65,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MarkdownPasteService } from './features/tasks/markdown-paste.service';
 import { TaskService } from './features/tasks/task.service';
 import { TaskAttachmentService } from './features/tasks/task-attachment/task-attachment.service';
-import { MatMenuItem } from '@angular/material/menu';
+import { MatMenu, MatMenuContent, MatMenuItem } from '@angular/material/menu';
 import { MatIcon } from '@angular/material/icon';
 import { NoteStartupBannerService } from './features/note/note-startup-banner.service';
 import { SyncSafetyBannerService } from './imex/sync/sync-safety-banner.service';
@@ -78,6 +83,7 @@ import { getDroppedUrl } from './core/drop-paste-input/drop-paste-input';
 import { readableUrl } from './util/readable-url';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
+import { CertTrustService } from './features/issue/cert-trust.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { AppUriTaskActionsService } from './features/tasks/app-uri-actions/app-uri-task-actions.service';
 import { IosShareService } from './features/tasks/ios-share/ios-share.service';
@@ -89,10 +95,18 @@ import { TaskMultiSelectBarComponent } from './features/tasks/task-multi-select-
 import { TaskMultiSelectService } from './features/tasks/task-multi-select.service';
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
+import { QuickTourService } from './features/onboarding/quick-tour.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
 import { BrowserTitleService } from './core/browser-title/browser-title.service';
-
-const ENTRANCE_ANIMATION_DURATION = 1500;
+import { ViewTaskListRegistry } from './features/tasks/view-task-list-registry.service';
+import { BoardsService } from './features/boards/boards.service';
+import { DIALOG_AUTO_FOCUS_TYPING } from './util/dialog-auto-focus';
+import {
+  fadeOutBootSplash,
+  showShellUnderBootSplash,
+  whenAnimationsSettle,
+} from './core/startup/boot-splash';
+import { saveLaunchFrame } from './core/startup/launch-frame';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -121,6 +135,8 @@ interface BeforeInstallPromptEvent extends Event {
     RouterOutlet,
     GlobalProgressBarComponent,
     FocusModeOverlayComponent,
+    MatMenu,
+    MatMenuContent,
     MatMenuItem,
     MatIcon,
     TranslatePipe,
@@ -144,6 +160,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _matDialog = inject(MatDialog);
   private _markdownPasteService = inject(MarkdownPasteService);
   private _taskService = inject(TaskService);
+  private _boardsService = inject(BoardsService);
   private _taskAttachmentService = inject(TaskAttachmentService);
   private _translateService = inject(TranslateService);
   private _projectService = inject(ProjectService);
@@ -157,6 +174,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _ngZone = inject(NgZone);
   private _document = inject(DOCUMENT, { optional: true });
   private _startupService = inject(StartupService);
+  private _certTrustService = inject(CertTrustService);
   // Injected for side-effect: creates example tasks on first run
   private _exampleTasksService = inject(ExampleTasksService);
   // Injected for side-effect: loads per-instance task widget settings from
@@ -172,10 +190,17 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _iosShareService = inject(IosShareService);
   private _agentCaptureService = inject(AgentCaptureService);
   readonly onboardingHintService = inject(OnboardingHintService);
+  readonly quickTourService = inject(QuickTourService);
 
   private _syncTriggerService = inject(SyncTriggerService);
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
+  private readonly _viewTaskListRegistry = inject(ViewTaskListRegistry);
+  // On a view shown as a task list, the add-task bar adds into the view (its
+  // rules applied) instead of the project or tag that was open before.
+  readonly viewAddTarget = computed(
+    () => this._viewTaskListRegistry.addTarget()?.newTaskTarget() ?? null,
+  );
   readonly globalThemeService = inject(GlobalThemeService);
   readonly _store = inject(Store);
   private _sectionService = inject(SectionService);
@@ -198,10 +223,21 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return this._isDisableAnimations();
   }
 
-  private _isDisableAnimations = computed(() => {
-    const misc = this._globalConfigService.misc();
-    return misc?.isDisableAnimations ?? false;
-  });
+  // The OS setting turns off motion like the in-app setting does. Material
+  // components follow it on their own; the rest of the Angular animations
+  // (route changes, expand, slide-ins) only stop through this binding.
+  private _isReducedMotion = toSignal(
+    inject(BreakpointObserver)
+      .observe('(prefers-reduced-motion: reduce)')
+      .pipe(map((state) => state.matches)),
+    { requireSync: true },
+  );
+
+  private _isDisableAnimations = computed(
+    () =>
+      this._isReducedMotion() ||
+      (this._globalConfigService.misc()?.isDisableAnimations ?? false),
+  );
 
   // Experimental: vertical action strip on the right edge instead of the
   // horizontal top header. Switches the DOM layout live (see template).
@@ -232,17 +268,36 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _subs: Subscription = new Subscription();
 
   constructor() {
+    // Claim the one-shot certificate-trust API before plugins load (#11097)
+    this._certTrustService.init();
     this._startupService.init();
+    // Once the shell has rendered, uncover the phone bottom bar; once data is
+    // loaded too, fade the boot splash out, and end the entrance when its
+    // animation has played (at once if animations are off).
+    afterRenderEffect({
+      write: () => {
+        const mainContent = this._mainContent()?.nativeElement;
+        if (!mainContent) {
+          return;
+        }
+        const doc = this._document ?? undefined;
+        if (!this.isDataLoaded()) {
+          showShellUnderBootSplash(doc);
+          return;
+        }
+        fadeOutBootSplash(doc);
+        if (this.isAppEntrance() && !this._isEntranceEndScheduled) {
+          this._isEntranceEndScheduled = true;
+          void whenAnimationsSettle(mainContent).then(() => {
+            this.isAppEntrance.set(false);
+            this._saveLaunchFrame();
+          });
+        }
+      },
+    });
     this._iosShareService.start();
     this._agentCaptureService.start();
     void this._materialIconsLoaderService.ensureFontReady();
-
-    // Clear app entrance animation after it completes
-    if (this.isAppEntrance()) {
-      setTimeout(() => {
-        this.isAppEntrance.set(false);
-      }, ENTRANCE_ANIMATION_DURATION);
-    }
 
     // Use effect to react to language RTL changes
     effect(() => {
@@ -403,7 +458,16 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   getPage(outlet: RouterOutlet): string {
-    return outlet.activatedRouteData.page || 'one';
+    const page = outlet.activatedRouteData.page || 'one';
+    // A view just created gets its own forward motion (see warpRoute).
+    if (
+      page === 'boards' &&
+      outlet.isActivated &&
+      outlet.activatedRoute.snapshot.params['boardId'] === this._boardsService.arrivalId()
+    ) {
+      return 'view-arrival';
+    }
+    return page;
   }
 
   /**
@@ -423,7 +487,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return this._activeWorkContextId() ?? null;
   }
 
-  onTaskAdded({ taskId }: TaskAddEvent): void {
+  onTaskAdded(ev: TaskAddEvent): void {
+    // Read when the task is added: the view may have closed meanwhile.
+    void this._viewTaskListRegistry.addTarget()?.afterTaskAdd(ev);
+    const { taskId } = ev;
     this.layoutService.setPendingFocusTaskId(taskId);
     this.layoutService.scrollToNewTask(taskId);
     if (this.onboardingHintService.shouldAutoCloseFirstTaskComposer(taskId)) {
@@ -470,7 +537,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (!ctxId || !ctxType) return;
     const title = await firstValueFrom(
       this._matDialog
-        .open(DialogPromptComponent, { data: { placeholder: T.WW.ADD_SECTION_TITLE } })
+        .open(DialogPromptComponent, {
+          data: { placeholder: T.WW.ADD_SECTION_TITLE },
+          autoFocus: DIALOG_AUTO_FOCUS_TYPING,
+        })
         .afterClosed(),
     );
     if (typeof title === 'string' && title.trim()) {
@@ -478,7 +548,18 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     }
   }
 
-  isAppEntrance = signal(true);
+  /**
+   * The shell renders before data is loaded, so on phones the bottom bar shows
+   * early while the boot splash (index.html) still covers the content area; on
+   * desktop the splash covers the window until then. Once data is loaded, the content's CSS entrance plays while the splash fades out.
+   */
+  readonly isDataLoaded = toSignal(this._dataInitStateService.isAllDataLoadedInitially$, {
+    initialValue: false,
+  });
+  /** Cleared when the entrance ends, so rebuilding the shell (focus mode) does not replay it. */
+  readonly isAppEntrance = signal(true);
+  private _isEntranceEndScheduled = false;
+  private readonly _mainContent = viewChild<ElementRef<HTMLElement>>('mainContent');
 
   ngAfterViewInit(): void {
     this._ngZone.runOutsideAngular(() => {
@@ -504,16 +585,49 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         });
       };
 
+      // Capture phase: fields like the task title stop keydown propagation, and
+      // an open menu's type-ahead must not see a shortcut the menu lists.
+      const onKeyDownCapture = (ev: KeyboardEvent): void => {
+        if (handleMenuItemHotkey(ev)) {
+          return;
+        }
+        if (IS_MAC) {
+          handleHomeEndInTextField(ev);
+        }
+      };
+
+      // Keep the launch screen's frame current: theme or layout changes made in
+      // this session show from the next launch on. Hidden covers mobile
+      // backgrounding, pagehide a closing window.
+      const onVisibilityChange = (): void => {
+        if (doc.visibilityState === 'hidden') {
+          this._saveLaunchFrame();
+        }
+      };
+      const onPageHide = (): void => this._saveLaunchFrame();
+
       doc.addEventListener('dragover', onDragOver, { passive: false });
       doc.addEventListener('drop', onDrop, { passive: false });
       doc.addEventListener('keydown', onKeyDown);
+      doc.addEventListener('keydown', onKeyDownCapture, true);
+      doc.addEventListener('visibilitychange', onVisibilityChange);
+      window.addEventListener('pagehide', onPageHide);
 
       this._destroyRef.onDestroy(() => {
         doc.removeEventListener('dragover', onDragOver);
         doc.removeEventListener('drop', onDrop);
         doc.removeEventListener('keydown', onKeyDown);
+        doc.removeEventListener('keydown', onKeyDownCapture, true);
+        doc.removeEventListener('visibilitychange', onVisibilityChange);
+        window.removeEventListener('pagehide', onPageHide);
       });
     });
+  }
+
+  private _saveLaunchFrame(): void {
+    if (this._document) {
+      saveLaunchFrame(this._document, this._globalThemeService.isDarkTheme());
+    }
   }
 
   ngOnDestroy(): void {

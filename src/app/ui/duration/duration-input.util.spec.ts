@@ -157,6 +157,44 @@ describe('processDurationInput', () => {
     });
   });
 
+  describe('units written out, separated by a space or with decimal commas', () => {
+    const cases: [string, number][] = [
+      ['1 h 30 m', 90 * 60 * 1000],
+      ['1 hour 30 minutes', 90 * 60 * 1000],
+      ['2 hours', 2 * 60 * 60 * 1000],
+      ['45 m', 45 * 60 * 1000],
+      ['30 min', 30 * 60 * 1000],
+      ['1,5h 2,5m', 5_400_000 + 150_000], // 1.5 h + 2.5 min
+    ];
+    cases.forEach(([input, ms]) => {
+      it(`should process "${input}"`, () => {
+        const result = processDurationInput(input);
+        expect(result.isValid).toBe(true);
+        expect(result.milliseconds).toBe(ms);
+        expect(result.shouldUpdate).toBe(true);
+      });
+    });
+
+    it('should still not update for a unit that is only partly typed', () => {
+      const result = processDurationInput('1 hou');
+      expect(result.isValid).toBe(false);
+      expect(result.shouldUpdate).toBe(false);
+    });
+
+    it('should not read a comma between units as a decimal of the next part', () => {
+      // "1h,30m" would otherwise become "1h.30m" = 1 h 0.3 min.
+      expect(processDurationInput('1h,30m').isValid).toBe(false);
+      expect(processDurationInput('1h.30m').isValid).toBe(false);
+      expect(processDurationInput('5m,30s', true).isValid).toBe(false);
+      expect(processDurationInput('1h 30m').milliseconds).toBe(90 * 60 * 1000);
+    });
+
+    it('should not accept spelled-out seconds when seconds are not allowed', () => {
+      expect(processDurationInput('30 seconds', false).isValid).toBe(false);
+      expect(processDurationInput('30 seconds', true).milliseconds).toBe(30 * 1000);
+    });
+  });
+
   describe('inputs that should not update', () => {
     it('should not update for incomplete typing like "2h 3"', () => {
       const result = processDurationInput('2h 3');

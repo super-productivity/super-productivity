@@ -20,7 +20,10 @@ import {
   VectorClockComparison,
 } from '../../core/util/vector-clock';
 import { getLwwEntityType, isLwwUpdateActionType } from '../core/lww-update-action-types';
-import { areCommutingSectionOperations } from './section-conflict-commutativity.util';
+import {
+  areCommutingSectionOperations,
+  isSectionTaskListWrite,
+} from './section-conflict-commutativity.util';
 import {
   SectionReplayProjection,
   SectionReplaySnapshot,
@@ -204,12 +207,15 @@ const isUnroutedLwwRow = (order: Operation, edit: Operation): boolean =>
 /**
  * The one rule: a reorder commutes with a single-entity patch of one of the
  * entities it lists when the patch keeps the entity's identity and writes
- * neither the reordered list nor its membership.
+ * neither the reordered list nor its membership. A section placement or
+ * removal is such a list write on the sections it declares (`taskIds`), so a
+ * collapse or rename of either section of a cross-section move commutes with
+ * it (#10969).
  */
 const isReorderAndEdit = (order: Operation, edit: Operation): boolean => {
   if (
     order.entityType !== edit.entityType ||
-    !isContentReorderOperation(order) ||
+    (!isContentReorderOperation(order) && !isSectionTaskListWrite(order)) ||
     !getOpEntityIds(order).includes(edit.entityId!)
   )
     return false;

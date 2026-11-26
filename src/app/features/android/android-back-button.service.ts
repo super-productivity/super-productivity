@@ -7,6 +7,8 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { HISTORY_STATE } from '../../app.constants';
 import { GlobalConfigService } from '../config/global-config.service';
 import { getStartPageUrlPath } from '../config/default-start-page.util';
+import { DefaultStartPage, getStartPageViewId } from '../config/default-start-page.const';
+import { selectAllBoards } from '../boards/store/boards.selectors';
 import { selectIsOverlayShown } from '../focus-mode/store/focus-mode.selectors';
 import { selectAllProjects } from '../project/store/project.selectors';
 import { hideFocusOverlay } from '../focus-mode/store/focus-mode.actions';
@@ -43,6 +45,7 @@ export class AndroidBackButtonService {
 
   private readonly _isFocusOverlayShown = this._store.selectSignal(selectIsOverlayShown);
   private readonly _allProjects = this._store.selectSignal(selectAllProjects);
+  private readonly _allBoards = this._store.selectSignal(selectAllBoards);
 
   handleBackButton(canGoBack = true): void {
     // 1. Focus mode is store-based rather than history-backed.
@@ -105,7 +108,14 @@ export class AndroidBackButtonService {
     // 7. A top-level destination → pop to the start destination, or exit if
     //    already there.
     const startUrl = this._getStartPageUrl();
-    if (this._pathOf(currentUrl) === this._pathOf(startUrl)) {
+    const currentPath = this._pathOf(currentUrl);
+    const startPath = this._pathOf(startUrl);
+    if (
+      currentPath === startPath ||
+      // The views start page `/boards` opens the last view, `/boards/<id>`:
+      // popping to `/boards` would land on the same view and never exit.
+      (startPath === '/boards' && /^\/boards\/[^/]+$/.test(currentPath))
+    ) {
       this._minimizeApp();
     } else {
       this._router.navigateByUrl(startUrl, { replaceUrl: true });
@@ -157,7 +167,9 @@ export class AndroidBackButtonService {
     const path = this._pathOf(url);
     return (
       /^\/(?:tag|project)\/[^/]+\/tasks$/.test(path) ||
-      ['/planner', '/schedule', '/boards', '/habits'].includes(path)
+      // `/boards` redirects to `/boards/<id>`, and each view is its own page.
+      /^\/boards(?:\/[^/]+)?$/.test(path) ||
+      ['/planner', '/schedule', '/habits'].includes(path)
     );
   }
 
@@ -168,7 +180,14 @@ export class AndroidBackButtonService {
    * to Today.
    */
   private _getStartPageUrl(): string {
-    const startPage = this._globalConfigService.misc()?.defaultStartPage;
+    const storedStartPage = this._globalConfigService.misc()?.defaultStartPage;
+    const viewId = getStartPageViewId(storedStartPage);
+    // A deleted start view redirects to the last opened view; resolve it as
+    // the generic Views start page so back still exits from there.
+    const startPage =
+      viewId && !this._allBoards().some((board) => board.id === viewId)
+        ? DefaultStartPage.Boards
+        : storedStartPage;
     const startProject =
       typeof startPage === 'string'
         ? this._allProjects().find((project) => project.id === startPage)

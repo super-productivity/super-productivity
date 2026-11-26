@@ -7,56 +7,277 @@
 </h2>
 
 <mat-dialog-content>
-  <p class="intro">{{ T.PLAINSPACE.CONNECT.INTRO | translate }}</p>
+  @switch (step()) {
+    @case ('email') {
+      <p class="intro">{{ T.PLAINSPACE.CONNECT.INTRO | translate }}</p>
+      <mat-form-field class="full-width">
+        <mat-label>{{ T.PLAINSPACE.CONNECT.EMAIL_LABEL | translate }}</mat-label>
+        <input
+          matInput
+          type="email"
+          autocomplete="email"
+          maxlength="255"
+          class="e2e-plainspace-email"
+          [(ngModel)]="email"
+          (keydown.enter)="requestCode()"
+        />
+        <mat-hint>{{ T.PLAINSPACE.CONNECT.EMAIL_HINT | translate }}</mat-hint>
+      </mat-form-field>
+      <p
+        class="legal"
+        [innerHTML]="T.PLAINSPACE.CONNECT.LEGAL | translate: legalParams"
+      ></p>
+    }
+    @case ('code') {
+      <p class="intro">
+        {{ T.PLAINSPACE.CONNECT.CODE_SENT | translate: { email: sentTo() } }}
+      </p>
+      <mat-form-field class="full-width">
+        <mat-label>{{ T.PLAINSPACE.CONNECT.CODE_LABEL | translate }}</mat-label>
+        <input
+          matInput
+          type="text"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength="6"
+          class="e2e-plainspace-code"
+          [(ngModel)]="code"
+          (keydown.enter)="submitCode()"
+        />
+        <mat-hint>{{ T.PLAINSPACE.CONNECT.CODE_HINT | translate }}</mat-hint>
+      </mat-form-field>
+      <div class="secondary-actions">
+        <button
+          mat-button
+          type="button"
+          [disabled]="resendIn() > 0 || isBusy()"
+          (click)="requestCode()"
+        >
+          @if (resendIn() > 0) {
+            {{ T.PLAINSPACE.CONNECT.RESEND_IN | translate: { seconds: resendIn() } }}
+          } @else {
+            {{ T.PLAINSPACE.CONNECT.RESEND | translate }}
+          }
+        </button>
+        <button
+          mat-button
+          type="button"
+          [disabled]="isBusy()"
+          (click)="changeEmail()"
+        >
+          {{ T.PLAINSPACE.CONNECT.CHANGE_EMAIL | translate }}
+        </button>
+      </div>
+    }
+    @case ('name') {
+      <p class="intro">{{ T.PLAINSPACE.CONNECT.NEW_ACCOUNT | translate }}</p>
+      <mat-form-field class="full-width">
+        <mat-label>{{ T.PLAINSPACE.CONNECT.NAME_LABEL | translate }}</mat-label>
+        <input
+          matInput
+          type="text"
+          autocomplete="name"
+          class="e2e-plainspace-name"
+          [maxlength]="maxDisplayNameLength"
+          [(ngModel)]="displayName"
+          (keydown.enter)="createAccount()"
+        />
+        <mat-hint>{{ T.PLAINSPACE.CONNECT.NAME_HINT | translate }}</mat-hint>
+      </mat-form-field>
+    }
+    @case ('replace') {
+      <p class="intro">
+        {{ T.PLAINSPACE.CONNECT.ALREADY_CONNECTED | translate: { email: sentTo() } }}
+      </p>
+      @if (activeKey().createdAt; as createdAt) {
+        <p class="hint">
+          {{ T.PLAINSPACE.CONNECT.KEY_CREATED | translate: { date: createdAt | date } }}
+          @if (activeKey().lastUsedAt; as lastUsedAt) {
+            ·
+            {{
+              T.PLAINSPACE.CONNECT.KEY_LAST_USED | translate: { date: lastUsedAt | date }
+            }}
+          }
+        </p>
+      }
+      @if (existingToken()) {
+        <p>{{ T.PLAINSPACE.CONNECT.USE_EXISTING_HINT | translate }}</p>
+      }
+      <div class="callout callout--warning">
+        <mat-icon aria-hidden="true">warning</mat-icon>
+        <p>{{ T.PLAINSPACE.CONNECT.REPLACE_WARNING | translate }}</p>
+      </div>
+    }
+    @case ('retry') {
+      <p class="intro">{{ T.PLAINSPACE.CONNECT.KEY_NOT_STORED | translate }}</p>
+    }
+    @case ('browser') {
+      <p class="intro">
+        {{
+          (isBrowserFallback()
+            ? T.PLAINSPACE.CONNECT.BROWSER_FALLBACK
+            : T.PLAINSPACE.CONNECT.INTRO
+          ) | translate
+        }}
+      </p>
 
-  <a
-    mat-stroked-button
-    color="primary"
-    class="open-link"
-    [href]="connectUrl"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    <mat-icon>open_in_new</mat-icon>
-    {{ T.PLAINSPACE.CONNECT.OPEN_LINK | translate }}
-  </a>
+      <a
+        mat-stroked-button
+        color="primary"
+        class="open-link"
+        [href]="connectUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <mat-icon>open_in_new</mat-icon>
+        {{ T.PLAINSPACE.CONNECT.OPEN_LINK | translate }}
+      </a>
 
-  <p class="hint">{{ T.PLAINSPACE.CONNECT.TOKEN_HELP | translate }}</p>
+      <p class="hint">{{ T.PLAINSPACE.CONNECT.TOKEN_HELP | translate }}</p>
 
-  <mat-form-field class="token-field">
-    <mat-label>{{ T.PLAINSPACE.CONNECT.TOKEN_LABEL | translate }}</mat-label>
-    <input
-      matInput
-      type="password"
-      autocomplete="off"
-      [(ngModel)]="token"
-      [placeholder]="T.PLAINSPACE.CONNECT.TOKEN_PLACEHOLDER | translate"
-      (keydown.enter)="connect()"
-    />
-  </mat-form-field>
+      <mat-form-field class="full-width">
+        <mat-label>{{ T.PLAINSPACE.CONNECT.TOKEN_LABEL | translate }}</mat-label>
+        <input
+          matInput
+          type="password"
+          autocomplete="off"
+          [(ngModel)]="token"
+          [placeholder]="T.PLAINSPACE.CONNECT.TOKEN_PLACEHOLDER | translate"
+          (keydown.enter)="connect()"
+        />
+      </mat-form-field>
+    }
+  }
 
-  @if (errorMsg(); as msg) {
-    <p class="error">{{ msg | translate }}</p>
+  @if (error(); as err) {
+    <p
+      class="error"
+      role="alert"
+    >
+      {{ err.key | translate: err.params }}
+    </p>
+  }
+
+  @if (step() === 'email' || step() === 'code') {
+    <button
+      mat-button
+      type="button"
+      (click)="useBrowser()"
+    >
+      {{ T.PLAINSPACE.CONNECT.USE_BROWSER | translate }}
+    </button>
   }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button
-    mat-button
-    [disabled]="isConnecting()"
-    (click)="cancel()"
-  >
-    {{ T.G.CANCEL | translate }}
-  </button>
-  <button
-    mat-flat-button
-    color="primary"
-    [disabled]="!token.trim() || isConnecting()"
-    (click)="connect()"
-  >
-    {{
-      (isConnecting() ? T.PLAINSPACE.CONNECT.CONNECTING : T.PLAINSPACE.CONNECT.CONNECT)
-        | translate
-    }}
-  </button>
+  @if (step() !== 'retry') {
+    <button
+      mat-button
+      [disabled]="isBusy()"
+      (click)="step() === 'replace' ? changeEmail() : cancel()"
+    >
+      {{ (step() === 'replace' ? T.PLAINSPACE.CONNECT.BACK : T.G.CANCEL) | translate }}
+    </button>
+  }
+  @switch (step()) {
+    @case ('email') {
+      <button
+        mat-flat-button
+        color="primary"
+        [disabled]="!email.trim() || isBusy()"
+        (click)="requestCode()"
+      >
+        {{ T.PLAINSPACE.CONNECT.SEND_CODE | translate }}
+      </button>
+    }
+    @case ('code') {
+      <button
+        mat-flat-button
+        color="primary"
+        [disabled]="!isCodeValid() || isBusy()"
+        (click)="submitCode()"
+      >
+        {{
+          (isBusy() ? T.PLAINSPACE.CONNECT.CONNECTING : T.PLAINSPACE.CONNECT.CONNECT)
+            | translate
+        }}
+      </button>
+    }
+    @case ('name') {
+      <button
+        mat-flat-button
+        color="primary"
+        [disabled]="!displayName.trim() || isBusy()"
+        (click)="createAccount()"
+      >
+        {{
+          (isBusy() ? T.PLAINSPACE.CONNECT.CONNECTING : T.PLAINSPACE.CONNECT.CREATE)
+            | translate
+        }}
+      </button>
+    }
+    @case ('replace') {
+      @if (existingToken()) {
+        <button
+          mat-stroked-button
+          color="warn"
+          [disabled]="isBusy()"
+          (click)="replaceKey()"
+        >
+          {{ T.PLAINSPACE.CONNECT.REPLACE | translate }}
+        </button>
+        <button
+          mat-flat-button
+          color="primary"
+          [disabled]="isBusy()"
+          (click)="useExistingKey()"
+        >
+          {{
+            (isBusy()
+              ? T.PLAINSPACE.CONNECT.CONNECTING
+              : T.PLAINSPACE.CONNECT.USE_EXISTING
+            ) | translate
+          }}
+        </button>
+      } @else {
+        <button
+          mat-flat-button
+          color="warn"
+          [disabled]="isBusy()"
+          (click)="replaceKey()"
+        >
+          {{
+            (isBusy() ? T.PLAINSPACE.CONNECT.CONNECTING : T.PLAINSPACE.CONNECT.REPLACE)
+              | translate
+          }}
+        </button>
+      }
+    }
+    @case ('retry') {
+      <button
+        mat-flat-button
+        color="primary"
+        [disabled]="isBusy()"
+        (click)="retryStore()"
+      >
+        {{
+          (isBusy() ? T.PLAINSPACE.CONNECT.CONNECTING : T.PLAINSPACE.CONNECT.RETRY)
+            | translate
+        }}
+      </button>
+    }
+    @case ('browser') {
+      <button
+        mat-flat-button
+        color="primary"
+        [disabled]="!token.trim() || isBusy()"
+        (click)="connect()"
+      >
+        {{
+          (isBusy() ? T.PLAINSPACE.CONNECT.CONNECTING : T.PLAINSPACE.CONNECT.CONNECT)
+            | translate
+        }}
+      </button>
+    }
+  }
 </mat-dialog-actions>

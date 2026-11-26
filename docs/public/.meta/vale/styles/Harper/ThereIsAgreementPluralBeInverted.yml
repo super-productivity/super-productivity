@@ -1,0 +1,38 @@
+---
+# Hand-written companion to ThereIsAgreementPluralBe: the inverted question
+# form, where the verb comes before `there`.
+#
+#   are there solution   ->  is there a solution
+#   were there cow       ->  was there a cow
+#
+# Present and past share one file because neither can carry a fix, so the two
+# differ only in the word matched. Their singular-be counterparts are split
+# across ThereIsAgreementInverted.yml and ThereIsAgreementInvertedPast.yml
+# because those can each offer a one-word replacement, and it is a different
+# word in each.
+#
+# Matched on the verbs themselves rather than on a tag: at the start of a
+# sentence the tagger reads `Are` and `Were` as proper nouns, which is exactly
+# the position this rule is for.
+#
+# The noun slot and the trailing guard are the statement rule's, for the
+# reasons set out there. Harper's question form excepts `or` from the compound
+# guard where the statement form excepts `but`, `in` and `like`; that
+# difference is not reproduced, because no finding in the corpus turns on it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "There is disagreement in number between the verb and the noun."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'are|were'
+    target: true
+  - pattern: 'there'
+  - tag: '^NNP?$'
+    pattern: '(?i)^(?!(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|zero|hundred|thousand|million|billion|problem)$).+'
+  - tag: 'NNP?S?|WP|WDT|CC|JJ'
+    negate: true

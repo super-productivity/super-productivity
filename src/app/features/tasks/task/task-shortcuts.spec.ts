@@ -1,4 +1,11 @@
-import { signal, WritableSignal } from '@angular/core';
+import {
+  createComponent,
+  EnvironmentInjector,
+  Injector,
+  signal,
+  WritableSignal,
+} from '@angular/core';
+import { VIEW_TASK_LIST, ViewTaskListHost } from '../view-task-list.token';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
@@ -221,6 +228,7 @@ describe('TaskComponent shortcut handling', () => {
           useValue: jasmine.createSpyObj('GlobalTrackingIntervalService', [], {
             todayDateStr: signal('2026-05-05'),
             clockTimestamp: signal(new Date(2026, 4, 5, 12).getTime()),
+            clockMinute: signal(Math.floor(new Date(2026, 4, 5, 12).getTime() / 60000)),
           }),
         },
         {
@@ -257,6 +265,31 @@ describe('TaskComponent shortcut handling', () => {
     fixture.componentRef.setInput('isBacklog', false);
   });
 
+  describe('focused component lifetime', () => {
+    it('releases a focused component when its row is destroyed', () => {
+      const focus = TestBed.inject(TaskFocusService);
+      focus.lastFocusedTaskComponent.set(component);
+
+      fixture.destroy();
+
+      expect(focus.lastFocusedTaskComponent()).toBeNull();
+    });
+
+    it('keeps a newer focused copy of the same task when the old row is destroyed', () => {
+      const newer = TestBed.createComponent(TaskComponent);
+      newer.componentRef.setInput('task', createSubTask(''));
+      newer.componentRef.setInput('isInSubTaskList', true);
+      newer.componentRef.setInput('isBacklog', false);
+      const focus = TestBed.inject(TaskFocusService);
+      focus.lastFocusedTaskComponent.set(newer.componentInstance);
+
+      fixture.destroy();
+
+      expect(focus.lastFocusedTaskComponent()).toBe(newer.componentInstance);
+      newer.destroy();
+    });
+  });
+
   describe('scheduled-date badge colors', () => {
     beforeEach(() => {
       const dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
@@ -285,6 +318,7 @@ describe('TaskComponent shortcut handling', () => {
       });
       expect(component.scheduledDateColor()).toBe('');
       (clock.clockTimestamp as WritableSignal<number>).set(scheduled);
+      (clock.clockMinute as WritableSignal<number>).set(scheduled / 60000);
       expect(component.scheduledDateColor()).toBe('overdue');
     });
 
@@ -302,6 +336,7 @@ describe('TaskComponent shortcut handling', () => {
       currentId.set('top-1');
       expect(component.scheduledDateColor()).toBe('');
       (clock.clockTimestamp as WritableSignal<number>).set(scheduled + 1);
+      (clock.clockMinute as WritableSignal<number>).set(scheduled / 60000);
       expect(component.scheduledDateColor()).toBe('');
       currentId.set(null);
       expect(component.scheduledDateColor()).toBe('overdue');
@@ -1039,6 +1074,72 @@ describe('TaskComponent shortcut handling', () => {
       component.onToggleDetailPanelBtnClick();
 
       expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(null);
+    });
+  });
+
+  describe('inside a view (VIEW_TASK_LIST)', () => {
+    const createInView = (
+      host: Partial<ViewTaskListHost>,
+    ): { component: TaskComponent; destroy: () => void } => {
+      const ref = createComponent(TaskComponent, {
+        environmentInjector: TestBed.inject(EnvironmentInjector),
+        elementInjector: Injector.create({
+          providers: [{ provide: VIEW_TASK_LIST, useValue: host }],
+        }),
+      });
+      ref.setInput('task', createTopLevelTask('In a view'));
+      return { component: ref.instance, destroy: () => ref.destroy() };
+    };
+
+    it('reorders the view, not the list that was open before', () => {
+      const moveRow = jasmine.createSpy('moveRow');
+      const { component: inView, destroy } = createInView({
+        isRow: () => true,
+        moveRow,
+      });
+
+      inView.moveTaskUp();
+      inView.moveTaskToBottom();
+
+      expect(moveRow.calls.allArgs()).toEqual([
+        ['top-1', 'up'],
+        ['top-1', 'bottom'],
+      ]);
+      expect(taskServiceSpy.moveUp).not.toHaveBeenCalled();
+      destroy();
+    });
+
+    it('refocuses a row that stays, not one that left for another section', fakeAsync(() => {
+      const { component: inView, destroy } = createInView({
+        isRow: () => true,
+        moveRow: (_id: string, to: string) => to === 'down',
+      });
+      const focusSelf = spyOn(inView, 'focusSelf');
+
+      inView.moveTaskUp();
+      tick(20);
+      expect(focusSelf).toHaveBeenCalledTimes(2);
+
+      focusSelf.calls.reset();
+      inView.moveTaskDown();
+      tick(20);
+      expect(focusSelf).not.toHaveBeenCalled();
+      destroy();
+    }));
+
+    it('never treats the view as the Today list and has no backlog key', () => {
+      const { component: inView, destroy } = createInView({ isRow: () => true });
+      expect(inView.isTodayListActive()).toBeFalse();
+      expect(inView.isInView).toBeTrue();
+      destroy();
+    });
+
+    it("hides the column's required tags, and nothing extra outside a view", () => {
+      const tagsToHide = signal(['required']);
+      const { component: inView, destroy } = createInView({ tagsToHide });
+      expect(inView.viewTagsToHide()).toEqual(['required']);
+      destroy();
+      expect(component.viewTagsToHide()).toBeUndefined();
     });
   });
 });

@@ -1,41 +1,44 @@
-For all current downloads, package links, and platform-specific notes: [check the wiki](https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install).
+For all current downloads, package links, and platform-specific notes: [see the docs](https://super-productivity.com/docs/how-to/downloads-and-install/).
 
-### New features
+### Planning and tasks
 
-- Set numeric task priorities with icon presets.
-- Drag selected tasks between sections and projects, and select multiple tasks in the mobile planner.
-- Find projects and tags in search.
-- Undo task unscheduling and preview the next recurring task and inherited subtasks.
-- Added App Auto Track and TickTick CSV import plugins, plus Caffeine Tracker to the community plugin list.
-- Moved Redmine and Nextcloud Deck integrations to plugins.
-- Simplified first-run setup with an offer to track your first task.
-- Custom styles.css changes now reload automatically.
+- Drag selected tasks together in Today, tag views and the planner.
+- Set recurring deadlines or turn a future repeating occurrence into a normal task.
+- Use the schedule's new tray mode for tasks without a time, and see overdue tasks in the day panel.
+- See deadlines on board cards and open tasks from planner deadline cards.
+- Add tasks from section and group headers, and search by attached link URLs.
+- Hide sidebar task counts with a new option. Boards is now called Views.
+- Fixed drops into empty sections, multi-select shortcuts, Markdown checklist pasting and Escape to cancel dragging.
 
-### Mobile and reminders
+### Time tracking and focus
 
-- Android: receive native deadline reminders up to one week ahead; reminders are rescheduled as exact alarms when permission is granted.
-- Android: fixed double-counted time, lost time after app termination or restart, background Pomodoro tracking, and missing focus notifications.
-- iOS: share links and text to your inbox, and recover focus sessions after a web view restart.
-- Session endings no longer steal focus; Windows reminders bring the window forward without taking focus.
+- Optionally bring the window forward when a focus session or break ends.
+- See an indicator on the play button when another device is tracking time.
+- View time per project in the worklog export dialog.
+- Fixed tracked-time saving when hiding the page, quitting the desktop app or choosing “finish day and close.”
+- Fixed lost time around sleep and backward clock changes; desktop sleep now counts as a break for break reminders.
+- Improved duration parsing for spaces, spelled-out units and decimal commas.
 
-### Sync and backups
+### Sync and integrations
 
-- Fixed sync issues that could lose tracked time or overwrite concurrent task edits.
-- Fixed conflicts involving task restores and bulk archiving, note deletions, habit edits, and list reordering.
-- Improved concurrent OneDrive writes, WebDAV upload handling, and recovery from interrupted mobile sync downloads.
-- Failed desktop backups are no longer recorded as successful; backups still invalid after repair are rejected.
-- Kept HTTP error URLs and bodies out of exported logs.
+- See local changes in the sync import conflict dialog, a distinct syncing icon and clearer error guidance.
+- Fixed cases where concurrent edits, task completion, notes or tracked time could be lost during sync.
+- Manual-only sync no longer runs on desktop quit, while tracked time is still saved.
+- Added a Microsoft To Do importer and support for importing Todoist repeats.
+- Added a bundled invoicing plugin, disabled by default, and listed Cat Court, Desk Pet and Gamify community plugins.
+- New CalDAV providers import todos automatically by default. Fixed polling intervals and handling of deleted todos.
+- Fixed calendar updates overwriting task notes and issue refreshes deleting tasks when an issue is not found.
 
-### Fixes and polish
+### Mobile
 
-- Fixed calendar month navigation, unwanted jumps to the current time, and all-day events spanning multiple dates.
-- Preserved subtask due dates when duplicating tasks and corrected recurring times before a custom day start.
-- Saved pending note edits before switching tasks, fixed repeated checklist insertion, and kept hover controls clear of note text.
-- Improved CalDAV/iCloud discovery, mobile OneDrive sign-in, and GitLab, Gitea, and Azure DevOps integrations.
-- Improved dialog keyboard focus, mobile onboarding hints, and settings search.
-- Updated Romanian, Brazilian Portuguese, Polish, and Vietnamese translations, plus localized planner labels and heatmap dates.
-- Reduced planner processing during time tracking and removed looping Flowtime animations.
+- Open the navigation drawer with a swipe from the right edge.
+- Android repeating reminders stay visible after firing, and reminders are skipped for the task currently being tracked.
+- Fixed Android focus breaks automatically starting work when they finish.
+- Added iOS background focus-session notifications and prioritized the soonest reminders within the notification limit.
+- Fixed mobile SuperSync sign-in and request timeouts.
 
-### Self-hosting
+### Other improvements
 
-- Added ARM64 SuperSync server images, versioned release images, configurable trusted proxy ranges and daily cleanup time, and fixes for fresh deployments.
+- In-app help now opens the website documentation.
+- Updated Dutch and Simplified Chinese translations and fixed missing plural forms.
+- Reduced the initial app bundle by 197 kB and unnecessary planner processing.

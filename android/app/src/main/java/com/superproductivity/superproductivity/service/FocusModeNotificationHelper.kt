@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.superproductivity.superproductivity.CapacitorMainActivity
 import com.superproductivity.superproductivity.R
+import com.superproductivity.superproductivity.receiver.NotificationActionReceiver
 
 object FocusModeNotificationHelper {
     private const val TAG = "FocusModeNotifHelper"
@@ -87,54 +88,34 @@ object FocusModeNotificationHelper {
 
         // Add Pause/Resume action
         if (isPaused) {
-            val resumeIntent = Intent(context, CapacitorMainActivity::class.java).apply {
-                action = FocusModeForegroundService.ACTION_RESUME
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val resumePendingIntent = PendingIntent.getActivity(
+            val resumePendingIntent = NotificationActionReceiver.pendingIntent(
                 context,
-                11,
-                resumeIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                FocusModeForegroundService.ACTION_RESUME,
+                11
             )
             builder.addAction(0, "Resume", resumePendingIntent)
         } else {
-            val pauseIntent = Intent(context, CapacitorMainActivity::class.java).apply {
-                action = FocusModeForegroundService.ACTION_PAUSE
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val pausePendingIntent = PendingIntent.getActivity(
+            val pausePendingIntent = NotificationActionReceiver.pendingIntent(
                 context,
-                12,
-                pauseIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                FocusModeForegroundService.ACTION_PAUSE,
+                12
             )
             builder.addAction(0, "Pause", pausePendingIntent)
         }
 
         // Add Skip (for breaks) or Complete (for work sessions) action
         if (isBreak) {
-            val skipIntent = Intent(context, CapacitorMainActivity::class.java).apply {
-                action = FocusModeForegroundService.ACTION_SKIP
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val skipPendingIntent = PendingIntent.getActivity(
+            val skipPendingIntent = NotificationActionReceiver.pendingIntent(
                 context,
-                13,
-                skipIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                FocusModeForegroundService.ACTION_SKIP,
+                13
             )
             builder.addAction(0, "Skip", skipPendingIntent)
         } else {
-            val completeIntent = Intent(context, CapacitorMainActivity::class.java).apply {
-                action = FocusModeForegroundService.ACTION_COMPLETE
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val completePendingIntent = PendingIntent.getActivity(
+            val completePendingIntent = NotificationActionReceiver.pendingIntent(
                 context,
-                14,
-                completeIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                FocusModeForegroundService.ACTION_COMPLETE,
+                14
             )
             builder.addAction(0, "Complete", completePendingIntent)
         }
@@ -212,27 +193,17 @@ object FocusModeNotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
 
         if (isBreak) {
-            val skipIntent = Intent(context, CapacitorMainActivity::class.java).apply {
-                action = FocusModeForegroundService.ACTION_SKIP
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val skipPendingIntent = PendingIntent.getActivity(
+            val skipPendingIntent = NotificationActionReceiver.pendingIntent(
                 context,
-                21,
-                skipIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                FocusModeForegroundService.ACTION_SKIP,
+                21
             )
             builder.addAction(0, "Skip Break", skipPendingIntent)
         } else {
-            val completeIntent = Intent(context, CapacitorMainActivity::class.java).apply {
-                action = FocusModeForegroundService.ACTION_COMPLETE
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val completePendingIntent = PendingIntent.getActivity(
+            val completePendingIntent = NotificationActionReceiver.pendingIntent(
                 context,
-                22,
-                completeIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                FocusModeForegroundService.ACTION_COMPLETE,
+                22
             )
             builder.addAction(0, "Complete", completePendingIntent)
         }

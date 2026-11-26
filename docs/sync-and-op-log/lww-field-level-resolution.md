@@ -5,7 +5,7 @@ implemented (see [Implementation](#implementation-pr-1)); "How it works today"
 below describes the code before it. Tracker: #10393, queue item 1. Findings:
 #10382.
 
-**Sections:** [Problem](#problem) · [How it works today](#how-it-works-today) · [Options](#options) · [Released clients and graceful degradation](#released-clients-and-graceful-degradation) · [Fuzz pins and E2E proof](#fuzz-pins-and-e2e-proof) · [Recommendation](#recommendation) · [Decisions for @johannesjo](#decisions-for-johannesjo) · [Outcome](#outcome) · [Implementation (PR 1)](#implementation-pr-1) · [Per-field winners (#10422)](#per-field-winners-10422)
+**Sections:** [Problem](#problem) · [How it works today](#how-it-works-today) · [Options](#options) · [Released clients and graceful degradation](#released-clients-and-graceful-degradation) · [Fuzz pins and E2E proof](#fuzz-pins-and-e2e-proof) · [Recommendation](#recommendation) · [Decisions for @johannesjo](#decisions-for-johannesjo) · [Outcome](#outcome) · [Implementation (PR 1)](#implementation-pr-1) · [Per-field winners (#10422)](#per-field-winners-10422) · [Merged snapshot types (#10958)](#merged-snapshot-types-10958)
 
 Line numbers: `rg -n '^#{1,3} ' <this file>`, then read one section with `sed -n`.
 
@@ -308,7 +308,9 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    by decisions 5a and 5a extended below: a conflict may read a row's keys,
    never its values.
 6. **Opaque ops:** stay on whole-entity LWW, with the narrow time-preserving
-   exception below.
+   exception below. Narrowed by #11184: when an opaque op wins remotely
+   (also one planning several tasks), the losing device re-emits the local fields that survived it
+   (see "A later round").
 7. **Time on a remote win:** ~~local-win direction only, for now.~~ Replaced
    on 2026-10-01 ([#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5936659621)):
    a pending time delta survives a remote win whose winner writes no time
@@ -470,7 +472,14 @@ holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op
   applied are re-emitted as a patch, in the same transaction as their
   rejection (`survivingLocalFields`). That path reads no part of the row (decision
   5); a replace row used to hide this case by overwriting the fields
-  everywhere.
+  everywhere. Since #11184 the same applies when an opaque op (a habit
+  count, `planTasksForToday` for one or several tasks, tracking) wins: a done lost to another
+  device's add to Today never reached that device. A local time delta kept
+  pending beside the winner (decision 7) does not block the re-send: it stays
+  as it is and the patch never carries time. The device's own pending
+  patch rows (a re-send whose upload failed or was killed) are read by key,
+  like its edits; a replace row, a reminder clear or a remote delete keep the
+  whole-entity path.
 - **Content banner:** a patch reports a content field only where both sides
   wrote it (`findPatchContentConflicts`).
 
@@ -501,8 +510,9 @@ holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op
   path (`_buildNoPendingConcurrentConflict`, #9073), still resolve as before.
   The WebDAV E2E converges in both directions without it, so no guard is
   added (no evidence of harm).
-- **Opaque ops, NOTE, deletes and archives** keep whole-entity LWW, so the
-  habit, note and task-tracking pins of #10379 and #10260 stay.
+- **NOTE, deletes and archives** keep whole-entity LWW, so the note pins of
+  #10379 and #10260 stay. A remote opaque winner re-emits the surviving local fields (#11184); an opaque local side
+  that wins still sends its snapshot.
 - **Released resolvers:** a v19.1.0 device that resolves still emits replace
   snapshots; patches take over as clients update.
 - **Asymmetric time rule:** a local delta admits the patch, a remote one
@@ -629,3 +639,53 @@ against any row; it now meets rows stamped at their fields' own, older times.
   side has already applied, so the whole-entity fallback re-resolves over
   that state; a local-win snapshot then carries the remote values of the
   shared fields. Before #10422 the remote ops stayed unapplied for it.
+
+## Merged snapshot types (#10958)
+
+**The report.** Enabling a repeat config's `skipOverdue` on one device was
+reverted when another device's repeat generation wrote `lastTaskCreation*`
+to the same config concurrently. TASK_REPEAT_CFG has no
+`RECREATE_FALLBACK` entry, so the crossing took whole-entity LWW, and the
+later generation's replace snapshot carried the stale `skipOverdue`.
+
+**The rule.** A type in `MERGED_SNAPSHOT_TYPES`
+([`conflict-field-patch.util.ts`](../../src/app/op-log/sync/conflict-field-patch.util.ts),
+today only TASK_REPEAT_CFG) decides per field like the types above, but
+re-sends ONE full `'replace'` snapshot instead of `'patch'` rows
+(`mergedSnapshotState`): the resolving device's entity, then every remote
+write, then the local fields that won, without cleared fields. It is stamped
+at the newest local write that won. A remote LWW row on the remote side
+keeps whole-entity LWW, since its values are never read (decision 5).
+
+**Why not a `RECREATE_FALLBACK` entry.** Every released client lacks an
+entry for this type. One that applied a concurrent `deleteTaskRepeatCfg` and
+loses to a patch adds the partial config raw; it fails validation and data
+repair has no rule for it. A replace snapshot is the shape every released
+client already receives for this type, so it recreates the config whole
+(`lww-update.meta-reducer.spec.ts`, "merged snapshot on a receiver").
+
+**What it leaves (residuals):**
+
+- The snapshot claims every field at its timestamp. A third device's
+  concurrent edit of another field that is older than the snapshot loses to
+  it, as it lost to the whole-entity snapshot before.
+- Like every local-win snapshot, it is read before the batch's other ops
+  apply (#10385 class), so a same-batch undeclared write to the config, such
+  as a tag delete's `tagIds` cleanup, is overwritten. The only such writers
+  are `deleteTag(s)` and `deleteProject`: the config keeps the deleted id or
+  comes back, the same on every device. A task it generates then fails
+  validation and data repair drops the id from that task; repair clears a
+  stale `projectId` on the config but not stale `tagIds`. No data is lost.
+  On master only the local-win direction had this.
+- A released device that resolves the crossing still uses whole-entity LWW.
+- A device that receives the snapshot while it holds its own pending edit of
+  the config meets a row, so it resolves whole-entity (decision 5). If its
+  edit is newer, its snapshot of its pre-batch config carries the old values
+  again, as on master. Two devices suffice: when the editing device resolved,
+  the other device's next-day generation reverts the edit if it runs before
+  that device downloads the snapshot (offline, or a sync that fails or
+  outlasts the 30s `waitForSyncWindow` wait). Reading the row's values would
+  need a new decision (#11003).
+
+Admitting another type needs a reported loss (fix intake), an adapter
+entity, and no derived upkeep on LWW apply (NOTE stays out, decision 4).

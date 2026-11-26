@@ -4,6 +4,12 @@ import { uuidv7 } from 'uuidv7';
 import { prisma } from '../db';
 import { hashCaptureSecret, isCaptureSecretValid } from './capture-token';
 import {
+  CaptureReviewAccess,
+  isCaptureReviewCode,
+  normalizeCaptureCode,
+} from './capture-review';
+import { Logger } from '../logger';
+import {
   ACCESS_TTL_MS,
   REFRESH_TTL_MS,
   REFRESH_GRACE_MS,
@@ -85,34 +91,71 @@ export const createCaptureAuthorization = async (
   return id;
 };
 
+/** The account a consent-page code approves for, before its checks run. */
+interface ApprovingCode {
+  userId: number;
+  /** A connect code is only good for the token version it was minted under. */
+  tokenVersion?: number;
+  isReview: boolean;
+}
+
 export const approveCaptureAuthorization = async (
   authId: string,
   code: string,
   issuer: string,
+  review?: CaptureReviewAccess,
   now = Date.now(),
 ): Promise<string | null> => {
-  const codeHash = hashCaptureSecret(code.replace(/[-\s]/g, '').toUpperCase());
+  const codeHash = hashCaptureSecret(normalizeCaptureCode(code));
+  // Connect codes are 10 characters and review codes at least 20, so one
+  // submitted code can never match both.
+  const isReview = isCaptureReviewCode(review, code);
   return prisma.$transaction(async (tx) => {
-    const codes = await tx.$queryRaw<Array<{ user_id: number; token_version: number }>>`
-      SELECT user_id, token_version FROM capture_connect_codes
-      WHERE code_hash = ${codeHash} AND expires_at > ${BigInt(now)}`;
-    const connect = codes[0];
-    if (!connect) return null;
-    const version = await lockCaptureUser(tx, connect.user_id);
-    if (version === null || version !== connect.token_version) return null;
+    let approving: ApprovingCode;
+    if (isReview) {
+      const users = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM users WHERE email = ${review.email}`;
+      if (!users[0]) return null;
+      approving = { userId: users[0].id, isReview: true };
+    } else {
+      const codes = await tx.$queryRaw<Array<{ user_id: number; token_version: number }>>`
+        SELECT user_id, token_version FROM capture_connect_codes
+        WHERE code_hash = ${codeHash} AND expires_at > ${BigInt(now)}`;
+      if (!codes[0]) return null;
+      approving = {
+        userId: codes[0].user_id,
+        tokenVersion: codes[0].token_version,
+        isReview: false,
+      };
+    }
+    // Verified, capture switched on, and (for a connect code) not signed out since.
+    const version = await lockCaptureUser(tx, approving.userId);
+    if (
+      version === null ||
+      (approving.tokenVersion !== undefined && version !== approving.tokenVersion)
+    )
+      return null;
     const rows = await tx.$queryRaw<AuthRow[]>`
       SELECT * FROM capture_auth WHERE id = ${authId} FOR UPDATE`;
     const auth = rows[0];
     if (!auth || auth.code_hash || Number(auth.expires_at) <= now) return null;
-    const consumed = await tx.$executeRaw`
-      DELETE FROM capture_connect_codes WHERE user_id = ${connect.user_id}
-        AND code_hash = ${codeHash} AND expires_at > ${BigInt(now)}`;
-    if (!consumed) return null;
+    // A connect code is single use; the review code stays valid until unset.
+    if (!approving.isReview) {
+      const consumed = await tx.$executeRaw`
+        DELETE FROM capture_connect_codes WHERE user_id = ${approving.userId}
+          AND code_hash = ${codeHash} AND expires_at > ${BigInt(now)}`;
+      if (!consumed) return null;
+    }
     const authCode = randomOAuthSecret();
     await tx.$executeRaw`
-      UPDATE capture_auth SET user_id = ${connect.user_id}, token_version = ${version},
+      UPDATE capture_auth SET user_id = ${approving.userId}, token_version = ${version},
         code_hash = ${hashCaptureSecret(authCode)}, expires_at = ${BigInt(now + 60_000)}
       WHERE id = ${authId}`;
+    if (approving.isReview) {
+      Logger.info(
+        `[capture] Reviewer code approved an authorization for ${auth.client_name}`,
+      );
+    }
     const redirect = new URL(auth.redirect_uri);
     redirect.searchParams.set('code', authCode);
     redirect.searchParams.set('state', auth.state);

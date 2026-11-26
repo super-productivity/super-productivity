@@ -1,4 +1,5 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import { merge } from 'rxjs';
@@ -7,13 +8,16 @@ import {
   debounceTime,
   filter,
   first,
+  map,
   pairwise,
+  startWith,
   switchMap,
   tap,
 } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import { WidgetDataService } from '../widget-data.service';
+import { TrackingPresenceService } from '../../tracking-presence/tracking-presence.service';
 import { TaskService } from '../../tasks/task.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { DroidLog } from '../../../core/log';
@@ -24,6 +28,9 @@ import { selectAndroidWidgetData } from './android-widget.selectors';
 import { selectTaskEntities } from '../../tasks/store/task.selectors';
 import { Dictionary } from '@ngrx/entity';
 import { Task } from '../../tasks/task.model';
+import { selectProjectById } from '../../project/store/project.selectors';
+import { Project } from '../../project/project.model';
+import { Router } from '@angular/router';
 
 /**
  * Decides which queued widget checkbox taps become setDone()/setUnDone() calls.
@@ -54,14 +61,22 @@ export const getTaskDoneChangesToApply = (
     .map(([id, isDone]) => ({ id, isDone: isDone as boolean }));
 };
 
+export const getWidgetProjectRoute = (
+  projectId: string,
+  project: Project | undefined,
+): string | null => (project ? `project/${projectId}/tasks` : null);
+
 @Injectable()
 export class AndroidWidgetEffects {
   private _store = inject(Store);
+  private _injector = inject(Injector);
   private _widgetDataService = inject(WidgetDataService);
+  private _trackingPresence = inject(TrackingPresenceService);
   private _taskService = inject(TaskService);
   private _snackService = inject(SnackService);
   private _hydrationState = inject(HydrationStateService);
   private _dataInitState = inject(DataInitStateService);
+  private _router = inject(Router);
 
   // The selector emission is only a change trigger; pushCurrent() re-reads the
   // store at push time (fresher than debounce-stale data) and dedupes itself.
@@ -70,6 +85,23 @@ export class AndroidWidgetEffects {
     createEffect(
       () =>
         this._store.select(selectAndroidWidgetData).pipe(
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          debounceTime(500),
+          tap(() => this._widgetDataService.pushCurrent()),
+        ),
+      { dispatch: false },
+    );
+
+  // Remote tracking-presence (SuperSync only) lives in a service signal, not the
+  // store, so store-selector emissions never fire for it — this is its own
+  // trigger for the widget's currentTask fallback.
+  pushOnRemoteSessionChange$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        toObservable(this._trackingPresence.remoteSessionView, {
+          injector: this._injector,
+        }).pipe(
           filter(() => !this._hydrationState.isApplyingRemoteOps()),
           debounceTime(500),
           tap(() => this._widgetDataService.pushCurrent()),
@@ -102,10 +134,11 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
-  // Single delivery path for widget done-taps: cold start and background→
-  // foreground are covered by onResume$ (ReplaySubject(1)), taps while the app
-  // is alive by the contentless native drain signal. The queue read is
-  // get-and-clear, so overlapping triggers drain at most once.
+  // Single delivery path for widget done-taps: cold start by startWith (the
+  // native onResume call runs before this bundle defines onResume$ and is
+  // dropped), background→foreground by onResume$, taps while the app is alive
+  // by the contentless native drain signal. The queue read is get-and-clear, so
+  // overlapping triggers drain at most once.
   drainWidgetDoneQueue$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
@@ -114,6 +147,7 @@ export class AndroidWidgetEffects {
           androidInterface.onResume$,
           androidInterface.onWidgetDoneDrainRequest$,
         ).pipe(
+          startWith(undefined),
           concatMap(() =>
             this._dataInitState.isAllDataLoadedInitially$.pipe(
               first(),
@@ -121,6 +155,43 @@ export class AndroidWidgetEffects {
             ),
           ),
           tap((taskEntities) => this._drainDoneQueue(taskEntities)),
+        ),
+      { dispatch: false },
+    );
+
+  drainWidgetProjectOpenQueue$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        androidInterface.onWidgetProjectOpenDrainRequest$.pipe(
+          tap(() => {
+            const projectId = androidInterface.getWidgetProjectToOpen?.();
+            if (projectId) {
+              androidInterface.onWidgetProjectOpen$.next(projectId);
+            }
+          }),
+        ),
+      { dispatch: false },
+    );
+
+  openWidgetProject$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        androidInterface.onWidgetProjectOpen$.pipe(
+          concatMap((projectId) =>
+            this._dataInitState.isAllDataLoadedInitially$.pipe(
+              first(),
+              switchMap(() =>
+                this._store.select(selectProjectById, { id: projectId }).pipe(
+                  first(),
+                  map((project) => getWidgetProjectRoute(projectId, project)),
+                ),
+              ),
+            ),
+          ),
+          filter((route): route is string => route !== null),
+          tap((route) => this._router.navigate([route])),
         ),
       { dispatch: false },
     );

@@ -117,69 +117,15 @@
 }
 
 .quick-access {
-  display: flex;
-  @include extraBorder('-bottom');
-
-  button + button {
-    // Logical, not physical: in RTL a border-left would land on the row's
-    // outer edge and drop the separator between the first two buttons.
-    @include extraBorder('-inline-start');
-  }
+  @include quickAccessRow;
 }
 
 .quick-access-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s-quarter);
-  // Equal share of the row regardless of label length, so a long locale
-  // wraps inside its own button instead of squeezing its neighbours.
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: var(--s6);
-  padding: var(--s-half) var(--s-quarter);
-  border: 0;
-  background: transparent;
-  // A plain button does not inherit the app font — the UA stylesheet would
-  // render these four labels in Arial while the rest of the picker uses the
-  // theme font.
-  font: inherit;
-  color: var(--text-color);
-  border-radius: var(--card-border-radius);
-  cursor: pointer;
-  transition: background-color var(--transition-duration-s) ease;
-
-  // Touch has no hover, so :active carries the tap feedback the Material
-  // ripple used to provide.
-  -webkit-tap-highlight-color: transparent;
-
-  &:hover,
-  &:active {
-    background-color: var(--calendar-hover-bg);
-  }
-
-  &:focus-visible {
-    outline: var(--focus-ring-width) solid var(--focus-ring-color);
-    // Inset — a positive offset would be clipped by the row's bottom border.
-    outline-offset: calc(-1 * var(--focus-ring-offset));
-  }
-
-  mat-icon {
-    // Matched set — the glyph must equal its box or it decenters.
-    font-size: 20px;
-    width: 20px;
-    height: 20px;
-    color: var(--text-color-muted);
-  }
+  @include quickAccessBtn(var(--calendar-hover-bg));
 }
 
 .quick-access-label {
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-tight);
-  text-align: center;
-  // Long locales ("Nächsten Monat") wrap to a second line rather than overflow.
-  overflow-wrap: anywhere;
+  @include quickAccessLabel;
 }
 
 :host ::ng-deep mat-month-view .mat-calendar-body-today {
@@ -232,7 +178,7 @@
 .form-ctrl-wrapper {
   // No bottom margin: each field already carries ~16px of trailing space, which
   // matches the gap between the stacked fields. Adding a bottom margin here would
-  // double it, leaving whatever follows (repeat button, dialog actions) sitting
+  // double it, leaving whatever follows (e.g. dialog actions) sitting
   // twice as far from the inputs as the inputs sit from each other.
   margin: 0 var(--s2);
   display: flex;
@@ -240,6 +186,26 @@
 
   mat-form-field {
     width: 100%;
+  }
+
+  // Projected controls (see the timeRowEnd slot) size themselves: emulated
+  // encapsulation keeps these styles from reaching them. The row wraps once the
+  // time field would drop below a readable width.
+  .time-row {
+    // Two inputs side by side have a wide natural width; left to it they widen
+    // the dialog surface past the host's max-width, leaving an empty strip on
+    // the right. The row just fills whatever width the rest of the dialog sets
+    // (widening it would also grow the calendar's height).
+    contain: inline-size;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    column-gap: var(--s);
+
+    .time-form-field {
+      flex: 1 1 180px;
+      width: auto;
+    }
   }
 
   .time-clear-btn {

@@ -9,6 +9,7 @@ import {
   Signal,
   signal,
   viewChild,
+  viewChildren,
 } from '@angular/core';
 import { combineLatest, fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
@@ -17,6 +18,7 @@ import {
   selectEnabledIssueProviders,
 } from '../../issue/store/issue-provider.selectors';
 import { HiddenCalendarProvidersService } from '../../calendar-integration/hidden-calendar-providers.service';
+import { selectUndoneDeadlineTasksByDay } from '../../planner/store/planner.selectors';
 import {
   getIssueProviderTooltip,
   sanitizeIcalUrlForDisplay,
@@ -47,6 +49,7 @@ import { LS } from 'src/app/core/persistence/storage-keys.const';
 import { selectTimelineWorkStartEndHours } from '../../config/store/global-config.reducer';
 import { FH } from '../schedule.const';
 import { mapScheduleDaysToScheduleEvents } from '../map-schedule-data/map-schedule-days-to-schedule-events';
+import { mapScheduleDaysToTrays } from '../map-schedule-data/with-schedule-day-tray';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ScheduleWeekComponent } from '../schedule-week/schedule-week.component';
 import { ScheduleMonthComponent } from '../schedule-month/schedule-month.component';
@@ -156,13 +159,14 @@ export class ScheduleComponent {
   };
   // Materialized once per provider-list change; method calls inside the menu
   // @for would re-run the hash and URL parsing on every change detection.
-  readonly calProviderRows = computed(() =>
-    this.enabledCalendarProviders().map((p) => ({
+  readonly calProviderRows = computed(() => {
+    const calendarColors = this.scheduleService.calendarColorByProviderId();
+    return this.enabledCalendarProviders().map((p) => ({
       id: p.id,
-      color: getCalendarProviderColor(p),
+      color: getCalendarProviderColor(p, calendarColors.get(p.id)),
       label: this.calProviderLabel(p),
-    })),
-  );
+    }));
+  });
 
   toggleCalProvider(providerId: string): void {
     this._hiddenCalendarProviders.toggle(providerId);
@@ -348,13 +352,20 @@ export class ScheduleComponent {
       contextNow: this._contextNow(),
       realNow: Date.now(),
       currentTaskId: this.taskService.currentTaskId() ?? null,
+      isAutoPlacementOnly: this.isMonthView(),
     });
   });
+  trays = computed(() => mapScheduleDaysToTrays(this.scheduleDays()));
 
   private _eventsAndBeyondBudget = computed(() => {
     const days = this.scheduleDays();
     return mapScheduleDaysToScheduleEvents(days, FH);
   });
+
+  deadlineTasksByDay = toSignal(
+    this._store.pipe(select(selectUndoneDeadlineTasksByDay)),
+    { initialValue: {} },
+  );
 
   private _workStartEndHours = toSignal(
     this._store.pipe(select(selectTimelineWorkStartEndHours)),
@@ -395,6 +406,11 @@ export class ScheduleComponent {
   isPagerWarm = signal(false);
   readonly dayPageKey = scheduleDayPageKey;
   private _dayPager = viewChild(SwipePagerComponent);
+  // the week view's schedule-week, or one per rendered page of the day pager
+  private _scheduleWeeks = viewChildren(ScheduleWeekComponent);
+  private _scheduleWeekEls = viewChildren(ScheduleWeekComponent, {
+    read: ElementRef<HTMLElement>,
+  });
 
   currentDayPage = computed<ScheduleDayPage | undefined>(() => {
     const day = this.daysToShow()[0];
@@ -537,7 +553,7 @@ export class ScheduleComponent {
   // position carried over from week view clamps to the bottom and opens the
   // month with its first row above the viewport (#9463 review). scrollTo is
   // safe here where _scrollAnchorToTop's measured offsets would not be, since
-  // a fixed origin is independent of the warpRoute scale.
+  // a fixed origin is independent of the warpRoute transform.
   private _resetScrollWrapper(): void {
     this._scrollWrapper()?.nativeElement.scrollTo({
       top: 0,
@@ -554,9 +570,9 @@ export class ScheduleComponent {
   //
   // scrollIntoView is used rather than scrollTo with measured offsets because
   // it resolves the target in layout coordinates: the route enter animation
-  // (warpRoute) starts this view at scale(1.2) and the scroll runs on a
-  // setTimeout(0), so anything measured from getBoundingClientRect() while that
-  // is in flight overshoots by the animation's current scale.
+  // (warpRoute) transforms this view and the scroll runs on a setTimeout(0), so
+  // anything measured from getBoundingClientRect() while that is in flight is
+  // off by the animation's current transform.
   //
   // The lookup is scoped to this component's own element: the right panel
   // embeds a second schedule-week that renders its own #current-time. The day
@@ -566,7 +582,27 @@ export class ScheduleComponent {
       this._elRef.nativeElement.querySelectorAll<HTMLElement>(`#${elementId}`),
     ).find((el) => !el.closest('[inert]'));
 
-    element?.scrollIntoView({ block: 'start', inline: 'start', behavior: 'instant' });
+    if (!element) {
+      return;
+    }
+    // The tray makes the sticky header taller than the scroll-padding allows
+    // for; a scroll margin on the target adds the difference in the same
+    // scroll, so it is still clamped at the end of the day. offsetHeight is a
+    // layout value: the enter animation's transform does not skew it.
+    const weekIndex = this._scheduleWeekEls().findIndex((ref) =>
+      ref.nativeElement.contains(element),
+    );
+    const trayHeight =
+      this._scheduleWeeks()[weekIndex]?.getVisibleTrayEl()?.offsetHeight ?? 0;
+    element.style.scrollMarginTop = `${trayHeight}px`;
+    element.scrollIntoView({ block: 'start', inline: 'start', behavior: 'instant' });
+  }
+
+  openDayView(day: string): void {
+    // same rule as onDayPagerNavigate: (logical) today is the "today" mode
+    const today = this._todayDateStr();
+    this._selectedDate.set(today && day > today ? parseDbDateStr(day) : null);
+    this.selectTimeView('day');
   }
 
   selectTimeView(view: 'week' | 'month' | 'day'): void {
@@ -578,7 +614,10 @@ export class ScheduleComponent {
     const preservedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
     if (preservedView === 'month') return 'month';
     if (preservedView === 'day') return 'day';
-    return 'week';
+    if (preservedView === 'week') return 'week';
+    // No saved choice yet: a phone fits under three of the week's seven columns,
+    // so it starts on one readable day instead.
+    return this.layoutService.isXs() ? 'day' : 'week';
   }
 
   constructor() {

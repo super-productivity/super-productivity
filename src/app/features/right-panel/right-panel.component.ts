@@ -40,6 +40,8 @@ import { isInputElement } from '../../util/dom-element';
 import { BottomPanelStateService } from '../../core-ui/bottom-panel-state.service';
 import { slideRightPanelAni } from './slide-right-panel-out.ani';
 import { MatBottomSheet, MatBottomSheetRef } from '@angular/material/bottom-sheet';
+import { InputModalityDetector } from '@angular/cdk/a11y';
+import { getBottomPanelSheetConfig } from './bottom-panel-sheet-config';
 import { PanelContentService } from '../panels/panel-content.service';
 // Right panel resize constants
 const RIGHT_PANEL_CONFIG = {
@@ -167,6 +169,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   private readonly _boundOnPointerUp = this._handlePointerUp.bind(this);
   private readonly _boundOnWindowResize = this._throttledWindowResize.bind(this);
   private _bottomSheet = inject(MatBottomSheet);
+  private _inputModality = inject(InputModalityDetector);
   private _bottomSheetRef: MatBottomSheetRef | null = null;
   private _bottomSheetSubscription: Subscription | null = null;
 
@@ -254,15 +257,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
             }
             this._bottomSheetRef = this._bottomSheet.open(
               m.BottomPanelContainerComponent,
-              {
-                hasBackdrop: true,
-                closeOnNavigation: false,
-                panelClass: 'bottom-panel-sheet',
-                // Default 'first-tabbable' otherwise focuses the tag-edit
-                // input, which on touch makes mat-autocomplete pop open
-                // immediately on every task open in portrait.
-                autoFocus: false,
-              },
+              getBottomPanelSheetConfig(this._inputModality.mostRecentModality),
             );
 
             // Force-blur on backdrop click so pending edits (e.g. task title)
@@ -412,7 +407,6 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     this._taskService.setSelectedId(null);
     this._layoutService.hideNotes();
     this._layoutService.hideAddTaskPanel();
-    this._layoutService.hideTaskViewCustomizerPanel();
     this._layoutService.hideScheduleDayPanel();
     this._store.dispatch(hidePluginPanel());
 

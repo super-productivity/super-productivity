@@ -1,12 +1,15 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { SyncTriggerService } from './sync-trigger.service';
+import { SYNC_TRIGGER_ANDROID_EVENTS, SyncTriggerService } from './sync-trigger.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { IdleService } from '../../features/idle/idle.service';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
 import { Store } from '@ngrx/store';
-import { BehaviorSubject, Observable, of, ReplaySubject } from 'rxjs';
+import { BehaviorSubject, merge, Observable, of, ReplaySubject, Subject } from 'rxjs';
+import { mapTo } from 'rxjs/operators';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { SyncLog } from '../../core/log';
 
 describe('SyncTriggerService', () => {
   let service: SyncTriggerService;
@@ -331,6 +334,107 @@ describe('SyncTriggerService', () => {
 
       sub.unsubscribe();
     }));
+  });
+
+  describe('getSyncTrigger$ on Android', () => {
+    const SYNC_INTERVAL = 60_000;
+    let onResume$: ReplaySubject<void>;
+    let onPause$: Subject<void>;
+    let androidService: SyncTriggerService;
+    let triggers: string[];
+
+    beforeEach(() => {
+      // Same shapes as android-interface.ts
+      onResume$ = new ReplaySubject(1);
+      onPause$ = new Subject();
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          SyncTriggerService,
+          { provide: GlobalConfigService, useValue: globalConfigService },
+          { provide: DataInitStateService, useValue: dataInitStateService },
+          { provide: IdleService, useValue: idleService },
+          { provide: SyncWrapperService, useValue: syncWrapperService },
+          { provide: Store, useValue: store },
+          { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
+          {
+            provide: SYNC_TRIGGER_ANDROID_EVENTS,
+            useValue: {
+              onResume$,
+              onPause$,
+              isInBackground$: merge(
+                onResume$.pipe(mapTo(false)),
+                onPause$.pipe(mapTo(true)),
+              ),
+            },
+          },
+        ],
+      });
+      androidService = TestBed.inject(SyncTriggerService);
+
+      // Immediate triggers are logged by label before any debounce/audit merging.
+      triggers = [];
+      spyOn(SyncLog, 'log').and.callFake((msg: unknown, label?: unknown) => {
+        if (msg === 'immediate sync trigger') {
+          triggers.push(label as string);
+        }
+      });
+    });
+
+    const count = (label: string): number => triggers.filter((t) => t === label).length;
+
+    it('fires on the interval in the foreground for file-based providers (#10685)', fakeAsync(() => {
+      const sub = androidService.getSyncTrigger$(SYNC_INTERVAL, true).subscribe();
+      onResume$.next();
+      tick(30 * SYNC_INTERVAL);
+
+      expect(count('I_RESUME_APP')).toBe(1);
+      expect(count('I_INTERVAL_TIMER')).toBe(30);
+      expect(count('I_MOBILE_ONLY_BACKGROUND_TIMER')).toBe(0);
+      sub.unsubscribe();
+    }));
+
+    it('fires on the interval before any resume has arrived', fakeAsync(() => {
+      const sub = androidService.getSyncTrigger$(SYNC_INTERVAL, true).subscribe();
+      tick(3 * SYNC_INTERVAL);
+
+      expect(count('I_INTERVAL_TIMER')).toBe(3);
+      sub.unsubscribe();
+    }));
+
+    it('hands over to the unchanged background timer while paused, and back on resume', fakeAsync(() => {
+      const sub = androidService.getSyncTrigger$(SYNC_INTERVAL, true).subscribe();
+      onResume$.next();
+      tick(SYNC_INTERVAL / 2);
+      onPause$.next();
+      tick(3 * SYNC_INTERVAL);
+
+      expect(count('I_INTERVAL_TIMER')).toBe(0);
+      expect(count('I_MOBILE_ONLY_BACKGROUND_TIMER')).toBe(3);
+
+      tick(20_000); // leave the resume throttle window
+      onResume$.next();
+      tick(2 * SYNC_INTERVAL);
+
+      expect(count('I_INTERVAL_TIMER')).toBe(2);
+      expect(count('I_MOBILE_ONLY_BACKGROUND_TIMER')).toBe(3);
+      sub.unsubscribe();
+    }));
+
+    it('does not poll in the foreground for SuperSync (useIntervalTimer=false)', fakeAsync(() => {
+      const sub = androidService.getSyncTrigger$(SYNC_INTERVAL, false).subscribe();
+      onResume$.next();
+      tick(30 * SYNC_INTERVAL);
+
+      expect(triggers).toEqual(['I_RESUME_APP']);
+      sub.unsubscribe();
+    }));
+
+    it('opens the sync window on the injected resume event', () => {
+      const openSpy = spyOn(TestBed.inject(HydrationStateService), 'openSyncWindow');
+      onResume$.next();
+      expect(openSpy).toHaveBeenCalled();
+    });
   });
 
   // Regression for the wake-up race: the visibilitychange listener must open

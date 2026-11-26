@@ -3,8 +3,8 @@ import { app } from 'electron';
 import * as path from 'path';
 import { error, log } from 'electron-log/main';
 
-// Lazy getter: userData path can be changed by start-app.ts (--user-data-dir, Snap)
-// before any store function is called, so we must not cache it at import time.
+// Lazy getter: userData moves after import (Snap in main.ts, --user-data-dir in
+// start-app.ts), so we must not cache it at import time.
 const getDataPath = (): string => path.join(app.getPath('userData'), 'simpleSettings');
 
 type SimpleStoreData = { [key: string]: unknown };

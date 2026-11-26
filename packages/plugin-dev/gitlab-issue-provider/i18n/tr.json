@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "Proje ID veya kullanıcı adı/projesi",
+    "PROJECT_HINT": "örn. johannesjo/süper-üretkenlik",
+    "TOKEN": "Erişim Jetonu",
+    "HOW_TO_GET_TOKEN": "Bir token nasıl alınır?",
+    "SCOPE": "Kapsam",
+    "SCOPE_ALL": "Herşey",
+    "SCOPE_CREATED": "Benim tarafımdan oluşturuldu",
+    "SCOPE_ASSIGNED": "Beni görevlendirdi",
+    "GITLAB_BASE_URL": "Özel GitLab temel URL'si",
+    "FILTER_USER": "Kullanıcı adı (örneğin, değişiklikleri kendiniz filtrelemek için)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Özel Filtre",
+    "FILTER_DESCRIPTION": "Bkz. https://docs.gitlab.com/ee/api/issues.html#list-issues.Birden çok '&' işaretiyle birleştirilebilir ",
+    "SUBMIT_TIMELOGS": "Zaman günlüklerini Gitlab'a gönderin",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Bitiş gününe tıkladıktan sonra Zaman İzleme İletişim Kutusunu göster"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Özet",
+    "STATE": "Durum",
+    "ASSIGNEE": "Atanan",
+    "LABELS": "Etiketler",
+    "DESCRIPTION": "Açıklama"
+  },
+  "FORM_HELP": "<p> Burada SuperProductivity'yi günlük planlama görünümünde görev oluşturma panelinde belirli bir proje için açık GitLab (çevrimiçi sürümü veya kendi kendine barındırılan bir örnek) sorunlarını listeleyecek şekilde yapılandırabilirsiniz. Bunlar öneri olarak listelenecek ve sorunla ilgili bir bağlantı ve bununla ilgili daha fazla bilgi sağlayacaktır. </p> <p> Buna ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listesine ekleyebilir ve senkronize edebilirsiniz. </p>"
+}

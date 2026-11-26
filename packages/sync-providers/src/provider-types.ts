@@ -158,6 +158,18 @@ export interface FileSnapshotOpDownloadResponse extends OpDownloadResponseBase {
    * applied on top of the snapshot before the download cursor is committed.
    */
   snapshotAppliedOpIds?: string[];
+  /**
+   * The remote file no longer carries uploads this client already saw there,
+   * and no full-state replacement explains it: a writer on a stale copy lost
+   * them (#10916). Hydrating `snapshotState` would delete them locally too.
+   */
+  ownUploadsMissing?: boolean;
+  /**
+   * The remote only appended to the file this client last committed: no
+   * full-state replacement since (#10972). Its snapshot is a catch-up past
+   * trimmed ops, so pending local ops may be kept on top of it.
+   */
+  snapshotExtendsLastSeen?: boolean;
 }
 
 export type OpDownloadResponse =

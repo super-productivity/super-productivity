@@ -50,6 +50,19 @@ export enum PluginHooks {
   ANY_TASK_UPDATE = 'anyTaskUpdate',
   PROJECT_LIST_UPDATE = 'projectListUpdate',
   WORK_CONTEXT_CHANGE = 'workContextChange',
+  /**
+   * Tasks, projects or tags changed from any source (remote sync included), or
+   * the selected or tracked task changed. Coalesced; no payload. Refresh views
+   * only: it fires on every device for a synced change, so do not write data
+   * in response.
+   */
+  DATA_CHANGED = 'dataChanged',
+  /**
+   * The user's logical day changed while the app runs (see DayChangePayload).
+   * Not fired at startup; read getDayContext() on load. Fires on every device,
+   * so refresh views only and do not write data in response.
+   */
+  DAY_CHANGE = 'dayChange',
 }
 
 export type Hooks = PluginHooks;
@@ -152,6 +165,37 @@ export interface PluginNodeScriptResult {
   };
 }
 
+/**
+ * Kinds of user data a plugin can declare in `dataSharing`. The host renders each as a
+ * translated label; values unknown to an older app render as "other data".
+ */
+export type PluginSharedData =
+  | 'credentials' // tokens or passwords the user entered for this recipient
+  | 'userText' // free text the user types for the recipient: search terms, a request
+  | 'taskTitles'
+  | 'taskNotes'
+  | 'taskSchedule' // due dates and times, estimates, free time
+  | 'taskStatus' // done state
+  | 'timeTracked' // worklogs and their comments, time spent
+  | 'projectAndTagNames'
+  | 'ids'; // task, project or tag ids
+
+/** One recipient of a plugin's data. See `PluginManifest.dataSharing`. */
+export interface PluginDataDestination {
+  /** Shown as-is, e.g. "GitHub". */
+  recipient: string;
+  /** Exact hostnames, like `allowedHosts`. */
+  hosts?: string[];
+  /** The user enters the server, e.g. a self-hosted instance or a webhook URL. */
+  userServer?: boolean;
+  /** Sent whenever the plugin is in use. */
+  data: PluginSharedData[];
+  /** Sent only after the user turns on a plugin setting, e.g. pushing notes. */
+  optionalData?: PluginSharedData[];
+  /** Must be an `https:` URL. */
+  privacyPolicyUrl?: string;
+}
+
 export interface PluginManifest {
   name: string;
   id: string;
@@ -159,6 +203,8 @@ export interface PluginManifest {
   version: string;
   minSupVersion: string;
   description?: string;
+  /** Shown as "by {author}" on the plugins page. */
+  author?: string;
   hooks: Hooks[];
   permissions: string[];
   /**
@@ -183,6 +229,14 @@ export interface PluginManifest {
    * remains out of scope.
    */
   allowedHosts?: string[];
+  /**
+   * What user data this plugin sends off the device, and to whom. `[]` declares that it
+   * sends nothing. Shown to the user at install, in the integration setup dialog and in
+   * the plugin's details. Declared by the author: the host checks only `PluginAPI.request`
+   * against `allowedHosts`, so every `allowedHosts` entry must appear in some
+   * destination's `hosts`.
+   */
+  dataSharing?: PluginDataDestination[];
   iFrame?: boolean;
   isSkipMenuEntry?: boolean;
   type?: 'standard' | 'issueProvider';
@@ -236,7 +290,8 @@ export interface LanguageChangePayload {
 }
 
 export interface ActionPayload {
-  action: string;
+  /** The dispatched app action; read `action.type` to tell actions apart. */
+  action: { type: string; [key: string]: unknown };
   payload?: unknown;
 }
 
@@ -289,6 +344,26 @@ export interface ActiveWorkContext {
  */
 export type WorkContextChangePayload = ActiveWorkContext;
 
+/**
+ * Payload for DAY_CHANGE: the new logical day, which honours the user's
+ * "start of next day" setting. Fires when the day changes while the app runs: at
+ * the rollover, or when that setting moves it.
+ */
+export interface DayChangePayload {
+  todayStr: string;
+}
+
+/**
+ * The user's logical day, for plugins that bucket tasks by date.
+ * `todayStr` is the logical day as YYYY-MM-DD: before the configured start of
+ * the next day, it is still the previous calendar day. To find a timestamp's
+ * logical day, subtract `startOfNextDayDiffMs` before taking its local date.
+ */
+export interface PluginDayContext {
+  todayStr: string;
+  startOfNextDayDiffMs: number;
+}
+
 // Map hook types to their payload types
 export interface HookPayloadMap {
   [PluginHooks.TASK_CREATED]: TaskCreatedPayload;
@@ -303,6 +378,8 @@ export interface HookPayloadMap {
   [PluginHooks.ANY_TASK_UPDATE]: AnyTaskUpdatePayload;
   [PluginHooks.PROJECT_LIST_UPDATE]: ProjectListUpdatePayload;
   [PluginHooks.WORK_CONTEXT_CHANGE]: WorkContextChangePayload;
+  [PluginHooks.DATA_CHANGED]: void;
+  [PluginHooks.DAY_CHANGE]: DayChangePayload;
 }
 
 // Generic hook handler with typed payload
@@ -517,6 +594,58 @@ export interface PluginTaskRepeatCfg {
   lastTaskCreationDay?: string;
   quickSetting?: string;
   remindAt?: string;
+  skipOverdue?: boolean;
+  repeatFromCompletionDate?: boolean;
+  repeatUntilDay?: string;
+}
+
+/**
+ * The schedule of a repeat config, as the app's repeat dialog sets it.
+ * Accepted by `addTaskRepeatCfg` and `updateTaskRepeatCfg`; any other field
+ * is rejected.
+ *
+ * A preset `quickSetting` derives the cycle, interval and weekdays from
+ * `startDate` (e.g. `MONTHLY_NTH_WEEKDAY` with a start date on the second
+ * Tuesday repeats every second Tuesday). Only `'CUSTOM'` accepts
+ * `repeatCycle`, `repeatEvery` and the weekday flags; a weekly custom schedule
+ * needs at least one weekday.
+ */
+export interface PluginTaskRepeatCfgSchedule {
+  quickSetting?:
+    | 'DAILY'
+    | 'WEEKLY_CURRENT_WEEKDAY'
+    | 'MONTHLY_CURRENT_DATE'
+    | 'MONTHLY_FIRST_DAY'
+    | 'MONTHLY_LAST_DAY'
+    | 'MONTHLY_NTH_WEEKDAY'
+    | 'MONDAY_TO_FRIDAY'
+    | 'YEARLY_CURRENT_DATE'
+    | 'CUSTOM';
+  /** YYYY-MM-DD, the first day an instance may be created on. */
+  startDate?: string;
+  repeatCycle?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  /** Integer from 1 to 1000. */
+  repeatEvery?: number;
+  monday?: boolean;
+  tuesday?: boolean;
+  wednesday?: boolean;
+  thursday?: boolean;
+  friday?: boolean;
+  saturday?: boolean;
+  sunday?: boolean;
+  /**
+   * `'CUSTOM'` only: count the interval from the day a copy is completed
+   * ("every 3 days after I finish it"); the next copy is only created then.
+   * A weekly interval is stored as days. A `'CUSTOM'` schedule change without
+   * it keeps it; a preset or `false` turns it off, and new copies then no
+   * longer wait for completion.
+   */
+  repeatFromCompletionDate?: boolean;
+  isPaused?: boolean;
+  /** Skip missed (overdue) instances instead of creating them. */
+  skipOverdue?: boolean;
+  /** YYYY-MM-DD, the last day a copy may be created on; `null` removes it. */
+  repeatUntilDay?: string | null;
 }
 
 export interface PluginSimpleCounterFull {
@@ -600,6 +729,22 @@ export interface PluginAPI {
   getActiveWorkContext(): Promise<ActiveWorkContext | null>;
 
   /**
+   * The user's logical day and its start-of-next-day offset. Re-read it on the DAY_CHANGE hook.
+   * Feature-detect on older hosts.
+   */
+  getDayContext?(): Promise<PluginDayContext>;
+
+  /**
+   * Start tracking time on a task. Rejects for an unknown or done task (the play
+   * button would reopen it) and for a parent whose subtasks are all done. For a
+   * parent, tracks its first unfinished subtask. Feature-detect on older hosts.
+   */
+  startTracking?(taskId: string): Promise<void>;
+
+  /** Stop time tracking. Feature-detect on older hosts. */
+  stopTracking?(): Promise<void>;
+
+  /**
    * Mount this plugin's index.html inside the work-view body, in place of
    * the task list.
    *
@@ -629,13 +774,14 @@ export interface PluginAPI {
 
   // teardown signal — register a callback the host invokes when the plugin is
   // disabled, reloaded, or uninstalled. Code-based plugins run directly in the
-  // renderer, so timers/listeners they create survive unload unless cleared
-  // here (clearInterval, removeEventListener, speechSynthesis.cancel, …).
-  // The returned promise is NOT awaited — do synchronous cleanup before any
-  // await. In iframe plugins this is a no-op: the iframe is unmounted on
-  // unload and takes its timers with it. Registering again replaces the
-  // previous callback. Optional so older plugin API typings remain assignable;
-  // the host always provides it.
+  // renderer: the host stops plain setTimeout/setInterval timers and ignores
+  // API calls after unload, but listeners etc. survive unless cleared here
+  // (removeEventListener, speechSynthesis.cancel, …). The returned promise is
+  // NOT awaited — do cleanup and API calls before any await. In iframe
+  // plugins this is a no-op: the iframe is unmounted on unload and takes its
+  // timers with it. Registering again replaces the previous callback.
+  // Optional so older plugin API typings remain assignable; the host always
+  // provides it.
   onUnload?(fn: () => void | Promise<void>): void;
 
   // cross-process communication
@@ -694,7 +840,11 @@ export interface PluginAPI {
    * follow, and for a recurring task the repeat config and every instance
    * (archived ones included) move without a confirmation.
    */
-  updateTask(taskId: string, updates: Partial<Task>): Promise<void>;
+  updateTask(
+    taskId: string,
+    updates: Partial<Task>,
+    options?: PluginUpdateTaskOptions,
+  ): Promise<void>;
 
   addTask(taskData: PluginCreateTaskData): Promise<string>;
 
@@ -723,6 +873,33 @@ export interface PluginAPI {
   addTag(tagData: Partial<Tag>): Promise<string>;
 
   updateTag(tagId: string, updates: Partial<Tag>): Promise<void>;
+
+  // task repeat configs (read them via getAppState().taskRepeatCfgs)
+
+  /**
+   * Makes an existing top-level task repeat, like "Repeat" in the task's
+   * schedule dialog: title, notes, tags, estimate, priority, day and time are
+   * taken from the task. Without a schedule the task repeats daily from its
+   * due day (or today). Rejects subtasks, tasks linked to an issue, tasks that
+   * already repeat, invalid fields and a `startDate` before the task's day or
+   * today. Resolves with the new repeat config's id.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  addTaskRepeatCfg(
+    taskId: string,
+    schedule?: PluginTaskRepeatCfgSchedule,
+  ): Promise<string>;
+
+  /**
+   * Changes a repeat config's schedule or flags. Changing the schedule
+   * requires `quickSetting`, since a preset is re-derived from the start date.
+   * Rejects unknown ids and invalid fields.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  updateTaskRepeatCfg(
+    repeatCfgId: string,
+    updates: PluginTaskRepeatCfgSchedule,
+  ): Promise<void>;
 
   // task ordering
   reorderTasks(
@@ -755,6 +932,25 @@ export interface PluginAPI {
   persistDataSynced(dataStr: string, key?: string): Promise<void>;
 
   loadSyncedData(key?: string): Promise<string | null>;
+
+  /**
+   * Requests normal sync with the configured provider from plugin.js or an iframe.
+   * The promise also resolves on handled errors (HANDLED_ERROR) and skipped syncs.
+   * Resolution does not confirm successful sync or publication of specific plugin
+   * data. Bridge promise rejections propagate to the caller. The iframe's 30-second
+   * timeout does not cancel sync that has already started in the host.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  triggerSync(): Promise<void>;
+
+  /**
+   * Lists this plugin's sorted, non-empty keys from applied application state.
+   * Excludes the legacy unkeyed entry. The optional prefix is matched literally.
+   * New keys appear only after their writes reach applied application state.
+   * Existing keys remain listed while replacements are pending or compressing.
+   * Re-read after persistedDataChanged; this is not a disk or sync acknowledgement.
+   */
+  listSyncedDataKeys(prefix?: string): Promise<string[]>;
 
   getConfig<T = Record<string, unknown>>(): Promise<T | null>;
 
@@ -808,7 +1004,9 @@ export interface PluginAPI {
   // main-process user consent)
   executeNodeScript?(request: PluginNodeScriptRequest): Promise<PluginNodeScriptResult>;
 
-  // action execution - dispatch NgRx actions (limited to allowed subset)
+  // action execution - dispatch NgRx actions (limited to allowed subset).
+  // `{ type: '[Layout] Show PluginPanel', pluginId }` opens the plugin's own
+  // side panel, e.g. from a shortcut; another plugin's id is rejected.
   dispatchAction(action: { type: string; [key: string]: unknown }): void;
 
   // window state
@@ -853,6 +1051,17 @@ export interface PluginCreateTaskData {
   isDone?: boolean;
   /** Due date as ISO date string (YYYY-MM-DD) */
   dueDay?: string | null;
+  /**
+   * Keep the title verbatim: skip short syntax parsing (`#tag`, `@date`,
+   * `+project`, `30m/1h`). Set this when the title comes from user content or
+   * a model rather than from the user typing short syntax.
+   */
+  isIgnoreShortSyntax?: boolean;
+}
+
+export interface PluginUpdateTaskOptions {
+  /** Keep a changed title verbatim, see `PluginCreateTaskData.isIgnoreShortSyntax`. */
+  isIgnoreShortSyntax?: boolean;
 }
 
 export interface PluginShortcutCfg {
@@ -954,14 +1163,3 @@ export enum PluginIframeMessageType {
   // Plugin lifecycle
   READY = 'plugin-ready',
 }
-
-// Global PluginAPI interface for runtime use
-// Note: This is commented out to avoid conflicts with node_modules version
-// declare global {
-//   interface Window {
-//     PluginAPI: PluginAPI;
-//   }
-//
-//   // For plugin development without window reference
-//   const PluginAPI: PluginAPI;
-// }

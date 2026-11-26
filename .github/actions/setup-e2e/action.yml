@@ -14,7 +14,7 @@ runs:
       uses: ./.github/actions/setup-deps
 
     - name: Cache Playwright Browsers
-      uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
       id: playwright-cache
       with:
         path: ~/.cache/ms-playwright

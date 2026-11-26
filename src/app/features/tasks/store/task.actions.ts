@@ -41,6 +41,9 @@ export const __updateMultipleTaskSimple = createAction(
 // NOTE: despite the "Ui" name this carries _hideSubTasksMode, which is task
 // data that must survive a restart. It is persisted (op-log) like updateTask so
 // the collapse state is not lost on reload. See issue #8781.
+// It is a plain field update: no effect and no task meta-reducer reacts to it.
+// Two-way sync relies on that to write a post-push baseline together with the
+// pushed fields' unchanged values, isDone included (#11034).
 export const updateTaskUi = createAction(
   '[Task] Update Task Ui',
   (taskProps: { task: Update<Task> }) => ({

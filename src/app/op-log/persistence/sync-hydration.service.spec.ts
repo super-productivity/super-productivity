@@ -559,6 +559,80 @@ describe('SyncHydrationService', () => {
         expect(commitCall.args[0].rejectOpIds).toEqual([pendingBeforeHydration.op.id]);
       });
 
+      it('keeps pending ops instead of rejecting them for a catch-up snapshot (#10972)', async () => {
+        const pending: OperationLogEntry = {
+          seq: 1,
+          op: {
+            id: 'kept-pending',
+            clientId: 'localClient',
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { title: 'x' },
+            vectorClock: { localClient: 1 },
+            timestamp: 1,
+            schemaVersion: 1,
+          },
+          appliedAt: 1,
+          source: 'local',
+        };
+        mockOpLogStore.getUnsynced.and.resolveTo([pending]);
+
+        await service.hydrateFromRemoteSync({ task: {} }, undefined, {
+          keepPendingOps: { discardOpIds: [] },
+        });
+
+        const commitArgs =
+          mockOpLogStore.commitFileSnapshotBaseline.calls.mostRecent().args[0];
+        expect(commitArgs.keepOpIds).toEqual([pending.op.id]);
+        expect(commitArgs.rejectOpIds).toBeUndefined();
+        expect(mockSnackService.open).not.toHaveBeenCalled();
+      });
+
+      it('does not keep a pending op the catch-up snapshot already contains (#10972)', async () => {
+        const pendingAt = (counter: number): OperationLogEntry => ({
+          seq: counter,
+          op: {
+            id: `pending-${counter}`,
+            clientId: 'localClient',
+            actionType: ActionType.TASK_SHARED_UPDATE,
+            opType: OpType.Update,
+            entityType: 'TASK',
+            entityId: 'task-1',
+            payload: { title: 'x' },
+            vectorClock: { localClient: counter },
+            timestamp: counter,
+            schemaVersion: 1,
+          },
+          appliedAt: counter,
+          source: 'local',
+        });
+        // Uploaded before a crash skipped markSynced: the snapshot holds op 1.
+        mockOpLogStore.getUnsynced.and.resolveTo([pendingAt(1), pendingAt(2)]);
+
+        await service.hydrateFromRemoteSync(
+          { task: {} },
+          { localClient: 1, remoteClient: 5 },
+          { keepPendingOps: { discardOpIds: [] } },
+        );
+
+        const commitArgs =
+          mockOpLogStore.commitFileSnapshotBaseline.calls.mostRecent().args[0];
+        expect(commitArgs.keepOpIds).toEqual(['pending-2']);
+        expect(commitArgs.rejectOpIds).toEqual(['pending-1']);
+        expect(mockSnackService.open).not.toHaveBeenCalled();
+
+        // Startup ops to discard are rejected in the same baseline transaction.
+        await service.hydrateFromRemoteSync({ task: {} }, undefined, {
+          keepPendingOps: { discardOpIds: ['pending-2'] },
+        });
+        const discardArgs =
+          mockOpLogStore.commitFileSnapshotBaseline.calls.mostRecent().args[0];
+        expect(discardArgs.keepOpIds).toEqual(['pending-1']);
+        expect(discardArgs.rejectOpIds).toEqual(['pending-2']);
+      });
+
       it('should commit the file snapshot baseline', async () => {
         mockOpLogStore.getLastSeq.and.resolveTo(42);
 

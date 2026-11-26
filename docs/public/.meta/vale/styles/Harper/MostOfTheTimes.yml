@@ -1,0 +1,16 @@
+---
+# Hand-written from Harper's MostOfTheTimes: the idiom takes singular `time`.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Singular `time` is usually the correct form in this phrase."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\bmost\s+of\s+the\s)times\b': "time"

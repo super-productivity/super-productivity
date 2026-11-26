@@ -3,6 +3,10 @@ import { IPC } from '../../../electron/shared-with-frontend/ipc-events.const';
 import { map, filter } from 'rxjs/operators';
 import { EMPTY, Observable } from 'rxjs';
 import { IS_ELECTRON } from '../app.constants';
+import {
+  AppUriQuickAction,
+  parseAppUriQuickAction,
+} from './app-uri-actions/parse-app-uri-quick-action';
 
 export interface AddTaskFromAppUriPayload {
   title: string;
@@ -102,3 +106,11 @@ export const ipcCompleteTaskFromAppUri$: Observable<CompleteTaskFromAppUriPayloa
         filter((data): data is CompleteTaskFromAppUriPayload => data !== null),
       )
     : EMPTY;
+
+// Replayed for the same cold-launch reason as `ipcAddTaskFromAppUri$`.
+export const ipcAppUriQuickAction$: Observable<AppUriQuickAction> = IS_ELECTRON
+  ? ipcEventReplay$(IPC.APP_URI_QUICK_ACTION).pipe(
+      map(([url]) => (typeof url === 'string' ? parseAppUriQuickAction(url) : null)),
+      filter((action): action is AppUriQuickAction => action !== null),
+    )
+  : EMPTY;

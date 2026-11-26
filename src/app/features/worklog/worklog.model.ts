@@ -27,7 +27,11 @@ export interface WorklogWeekSimple {
   };
 }
 
-export interface WorklogWeek extends WeeksInMonth, WorklogWeekSimple {}
+export interface WorklogWeek extends WeeksInMonth, WorklogWeekSimple {
+  // full week range; can cross a month boundary
+  startDateStr: string;
+  endDateStr: string;
+}
 
 export interface WorklogMonth {
   timeSpent: number;

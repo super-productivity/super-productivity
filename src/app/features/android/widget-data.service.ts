@@ -2,8 +2,13 @@ import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import { androidInterface } from './android-interface';
-import { ANDROID_WIDGET_DATA_KEY } from './android-widget.model';
-import { selectAndroidWidgetData } from './store/android-widget.selectors';
+import { ANDROID_WIDGET_DATA_KEY, AndroidWidgetData } from './android-widget.model';
+import {
+  resolveRemoteCurrentTask,
+  selectAndroidWidgetData,
+} from './store/android-widget.selectors';
+import { selectTaskEntities } from '../tasks/store/task.selectors';
+import { TrackingPresenceService } from '../tracking-presence/tracking-presence.service';
 import { DroidLog } from '../../core/log';
 
 /**
@@ -14,11 +19,24 @@ import { DroidLog } from '../../core/log';
 @Injectable({ providedIn: 'root' })
 export class WidgetDataService {
   private _store = inject(Store);
+  private _trackingPresence = inject(TrackingPresenceService);
   private _lastPushedJson: string | null = null;
 
   async pushCurrent(): Promise<void> {
     const data = await firstValueFrom(this._store.select(selectAndroidWidgetData));
-    const json = JSON.stringify(data);
+    // The selector only knows about local tracking; when nothing is tracked here,
+    // fall back to the last-known remote tracking-presence session (SuperSync
+    // only) so the widget can still say "tracking on <device>".
+    let currentTask = data.currentTask;
+    if (!currentTask) {
+      const taskEntities = await firstValueFrom(this._store.select(selectTaskEntities));
+      currentTask = resolveRemoteCurrentTask(
+        this._trackingPresence.remoteSessionView(),
+        taskEntities,
+      );
+    }
+    const payload: AndroidWidgetData = { ...data, currentTask };
+    const json = JSON.stringify(payload);
     // Compare the WHOLE blob, not just the tasks: at day rollover the list is often
     // byte-identical and only the staleness stamp moves, and that push is the single
     // thing that un-outdates the widget. Narrowing this key would silently restore

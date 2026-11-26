@@ -8,6 +8,7 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { expectTaskVisible } from '../../utils/supersync-assertions';
+import { getStoreTaskTitlesContaining } from '../../utils/audit-winners-helpers';
 
 /**
  * SuperSync Late Join E2E Tests
@@ -20,6 +21,18 @@ import { expectTaskVisible } from '../../utils/supersync-assertions';
  * These tests verify the correct behavior after that choice, and that
  * subsequent operations sync normally.
  */
+
+/**
+ * Store titles of this run's tasks without the `<client>-<runId>-` prefix that
+ * the simulated clients' addTask adds, sorted.
+ */
+const baseTitles = async (
+  client: SimulatedE2EClient,
+  testRunId: string,
+): Promise<string[]> =>
+  (await getStoreTaskTitlesContaining(client.page, testRunId))
+    .map((title) => title.replace(new RegExp(`^\\w+-${testRunId}-`), ''))
+    .sort();
 
 test.describe('@supersync SuperSync Late Join', () => {
   test('Late joiner adopts server data and then contributes new tasks', async ({
@@ -99,6 +112,13 @@ test.describe('@supersync SuperSync Late Join', () => {
         await waitForTask(clientB.page, task);
         await expectTaskVisible(clientB, task);
       }
+
+      // "Use Server Data" means B's pre-sync local tasks are gone: exactly the
+      // server's tasks plus B's post-join tasks, on both clients (store read,
+      // after the tasks above anchored that both syncs landed).
+      for (const client of [clientA, clientB]) {
+        expect(await baseTitles(client, testRunId)).toEqual([...allTasks].sort());
+      }
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -167,10 +187,11 @@ test.describe('@supersync SuperSync Late Join', () => {
         await expectTaskVisible(clientA, task);
       }
 
-      // Both clients should have the same task count
-      const countA = await clientA.page.locator(`task:has-text("${testRunId}")`).count();
-      const countB = await clientB.page.locator(`task:has-text("${testRunId}")`).count();
-      expect(countA).toBe(countB);
+      // "Use My Data" replaced the server state: both clients hold exactly B's
+      // tasks, and A's own tasks are gone (store read, after the anchor above).
+      for (const client of [clientA, clientB]) {
+        expect(await baseTitles(client, testRunId)).toEqual([taskB1, taskB2].sort());
+      }
 
       console.log('SUCCESS: Late joiner kept local data, other client adopted it');
     } finally {

@@ -224,6 +224,7 @@ describe('OperationLogHydratorService boot after a mid-batch archive failure (in
           provide: ValidateStateService,
           useValue: {
             validateState: () => Promise.resolve({ isValid: true, typiaErrors: [] }),
+            validateStateWhenIdle: () => undefined,
           },
         },
         {

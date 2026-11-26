@@ -1,0 +1,19 @@
+---
+# Generated from Harper's CoursingThroughVeins rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# In English idioms, `to course` means to flow rapidly—so avoid the eggcorn `cursing through veins.`
+extends: existence
+message: "In this idiom, blood `courses` (flows) through veins, not `curses`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "coursing through veins"
+tokens:
+  - "cursing(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+veins(?!['\\x{2019}]s\\b)"

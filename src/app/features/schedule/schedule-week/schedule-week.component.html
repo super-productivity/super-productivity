@@ -6,28 +6,57 @@
   <div class="week-header-dates">
     <div class="filler"><!--for time --></div>
     @for (day of daysToShow(); track $index) {
-      <div class="day">
+      <!-- in tray mode the day header takes drops too: "this day, no time" -->
+      <div
+        class="day"
+        [class.drag-over]="dragOverTrayDay() === day"
+        [attr.data-tray-day]="trays() ? day : null"
+      >
         @if (day === todayDateStr()) {
           <mat-icon>wb_sunny</mat-icon>
         }
         <div class="day-num">{{ dayHeaderLabels()[day].num }}</div>
         <div class="day-day">{{ dayHeaderLabels()[day].day }}</div>
-        @if (beyondBudgetStats()[$index].count > 0) {
-          <span
-            class="over-budget-badge"
-            tabindex="0"
-            [matTooltipPosition]="'below'"
-            [matTooltip]="beyondBudgetTooltips()[$index]"
-            [attr.aria-label]="beyondBudgetTooltips()[$index]"
-          >
-            <span
-              class="over-budget-symbol"
-              aria-hidden="true"
-              >!</span
-            >
-            @if (beyondBudgetStats()[$index].count > 1) {
-              <span class="over-budget-count">
-                {{ beyondBudgetStats()[$index].count }}
+        @if (beyondBudgetStats()[$index].count > 0 || deadlineStats()[$index].count > 0) {
+          <span class="day-badges">
+            @if (beyondBudgetStats()[$index].count > 0) {
+              <span
+                class="over-budget-badge"
+                tabindex="0"
+                [matTooltipPosition]="'below'"
+                [matTooltip]="beyondBudgetTooltips()[$index]"
+                [attr.aria-label]="beyondBudgetTooltips()[$index]"
+              >
+                <span
+                  class="over-budget-symbol"
+                  aria-hidden="true"
+                  >!</span
+                >
+                @if (beyondBudgetStats()[$index].count > 1) {
+                  <span class="over-budget-count">
+                    {{ beyondBudgetStats()[$index].count }}
+                  </span>
+                }
+              </span>
+            }
+            @if (deadlineStats()[$index].count > 0) {
+              <span
+                class="deadline-badge"
+                tabindex="0"
+                [matTooltipPosition]="'below'"
+                [matTooltip]="deadlineTooltips()[$index]"
+                [attr.aria-label]="deadlineTooltips()[$index]"
+              >
+                <mat-icon
+                  class="deadline-icon"
+                  aria-hidden="true"
+                  >flag</mat-icon
+                >
+                @if (deadlineStats()[$index].count > 1) {
+                  <span class="deadline-count">
+                    {{ deadlineStats()[$index].count }}
+                  </span>
+                }
               </span>
             }
           </span>
@@ -36,6 +65,17 @@
     }
   </div>
   <ng-content select="[weekHeaderEnd]"></ng-content>
+  @if (trays(); as trays) {
+    <schedule-tray
+      [class.isInPanel]="isInPanel()"
+      [days]="daysToShow()"
+      [trays]="trays"
+      [isHorizontalScroll]="isHorizontalScrollMode()"
+      (openDay)="openDay.emit($event)"
+    ></schedule-tray>
+  }
+  <!-- Below the date row, sticky with it. -->
+  <ng-content select="[weekHeaderBelow]"></ng-content>
 </header>
 
 <div

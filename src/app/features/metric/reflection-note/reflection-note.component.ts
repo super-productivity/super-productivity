@@ -55,6 +55,8 @@ export class ReflectionNoteComponent {
   private readonly _matDialog = inject(MatDialog);
 
   readonly dayStr = input<string | null>(null);
+  /** Finish week asks about the week; the text is still saved on `dayStr`. */
+  readonly isWeek = input(false);
   readonly T = T;
 
   private readonly _placeholderKeys: string[] = [

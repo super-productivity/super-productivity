@@ -42,6 +42,7 @@ model User {
   captureItems                CaptureItem[]
   captureConnectCode          CaptureConnectCode?
   captureAuthorizations       CaptureAuth[]
+  connectRequests             ConnectRequest[]
 
   @@index([verificationToken])
   @@index([resetPasswordToken])
@@ -260,4 +261,22 @@ model CaptureAuth {
   @@index([userId])
   @@index([expiresAt])
   @@map("capture_auth")
+}
+
+// Browser sign-in of a new device; see src/connect/connect-request.store.ts.
+model ConnectRequest {
+  id             String @id
+  pollSecretHash String @map("poll_secret_hash")
+  matchCode      String @map("match_code")
+  deviceName     String @map("device_name")
+  platform       String
+  status         String @default("pending")
+  userId         Int?   @map("user_id")
+  tokenVersion   Int?   @map("token_version")
+  expiresAt      BigInt @map("expires_at")
+  user           User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("connect_requests")
 }

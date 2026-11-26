@@ -464,6 +464,7 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
           provide: ValidateStateService,
           useValue: {
             validateState: () => Promise.resolve({ isValid: true, typiaErrors: [] }),
+            validateStateWhenIdle: () => undefined,
           },
         },
         { provide: SyncHydrationService, useValue: {} },
@@ -2322,7 +2323,7 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
       if (!keepOriginalPending) {
         await opLogStore.markRejected([bulkOp.id]);
       }
-      await opLogStore.appendBatch(copies, 'local');
+      await opLogStore.appendBatchSkipDuplicates(copies, 'local');
       expect((await unsyncedOps()).map(({ id }) => id)).toEqual(
         [...(keepOriginalPending ? [bulkOp] : []), ...copies].map(({ id }) => id),
       );

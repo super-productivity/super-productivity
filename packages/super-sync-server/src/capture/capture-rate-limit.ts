@@ -139,6 +139,22 @@ export const recordAuthSuccess = (grantId: string, now: number = Date.now()): vo
   recentGrants.set(grantId, now + RECENT_GRANT_MS);
 };
 
+/**
+ * Drops expired counters and recent-grant entries. Run by the daily cleanup,
+ * so an IP address held for a limit is gone within a day of its window ending
+ * even on a server too quiet for the size-triggered prune in `count`. The
+ * privacy policy states this bound.
+ */
+export const pruneCaptureRateLimits = (now: number = Date.now()): void => {
+  for (const [key, counter] of counters) if (now >= counter.resetAt) counters.delete(key);
+  for (const [grantId, until] of recentGrants)
+    if (now >= until) recentGrants.delete(grantId);
+};
+
+/** @internal tests only */
+export const countCaptureRateLimitEntriesForTests = (): number =>
+  counters.size + recentGrants.size;
+
 /** @internal tests only */
 export const resetCaptureRateLimitForTests = (): void => {
   counters.clear();

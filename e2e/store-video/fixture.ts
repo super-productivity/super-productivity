@@ -168,7 +168,9 @@ export const test = base.extend<VideoFixtures>({
     if (isMobile) {
       await installTapRipple(page);
     } else {
-      await installCursor(page, { style: VARIANT === 'updates' ? 'arrow' : 'ring' });
+      await installCursor(page, {
+        style: VARIANT === 'updates' || VARIANT === 'ms-todo' ? 'arrow' : 'ring',
+      });
     }
 
     // Suppress UI noise that fights with the choreographed reel:
@@ -233,8 +235,11 @@ export const test = base.extend<VideoFixtures>({
           zoom: 1.6;
         }
         /* Mobile and hero use small CSS viewports that activate SP's
-           responsive layouts; DPR, not zoom, gives them their pixels. */
+           responsive layouts; DPR, not zoom, gives them their pixels.
+           ms-todo does too: Playwright cannot click inside an iframe
+           under an ancestor's CSS zoom. */
         body[data-sp-video-variant="mobile"] app-root,
+        body[data-sp-video-variant="ms-todo"] app-root,
         body[data-sp-video-variant="hero"] app-root,
         body[data-sp-video-variant="hero-light"] app-root {
           zoom: 1;

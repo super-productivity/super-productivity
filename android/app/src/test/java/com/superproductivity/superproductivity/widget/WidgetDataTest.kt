@@ -1,6 +1,7 @@
 package com.superproductivity.superproductivity.widget
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -30,7 +31,23 @@ class WidgetDataTest {
             {"id": "t2", "title": "Task two", "isDone": true},
             {"id": "t3", "title": "Task three", "isDone": false, "projectId": null}
           ],
-          "projectColors": {"p1": "#ff0000"}
+          "projectColors": {"p1": "#ff0000"},
+          "projects": [
+            {
+              "id": "p1",
+              "title": "Work",
+              "tasks": [
+                {"id": "t1", "title": "Task one", "isDone": false, "projectId": "p1"}
+              ]
+            },
+            {
+              "id": "p2",
+              "title": "Personal",
+              "tasks": [
+                {"id": "t3", "title": "Task three", "isDone": false}
+              ]
+            }
+          ]
         }
         """.trimIndent()
 
@@ -65,6 +82,184 @@ class WidgetDataTest {
     }
 
     @Test
+    fun selectsTasksForEachProjectIndependently() {
+        assertEquals(
+            listOf(WidgetTask("t1", "Task one", false, "#ff0000")),
+            WidgetData.parse(blob, selectedProjectId = "p1")
+        )
+        assertEquals(
+            listOf(WidgetTask("t3", "Task three", false, null)),
+            WidgetData.parse(blob, selectedProjectId = "p2")
+        )
+    }
+
+    /** Project "p" as Angular pushes it once it has applied a widget tap on t1. */
+    private val projectBlobAfterTapApplied =
+        """{"v":1,"tasks":[],"projects":[{"id":"p","title":"Project","tasks":[{"id":"t1","title":"Tapped","isDone":true},{"id":"t2","title":"Open","isDone":false}]}]}"""
+
+    @Test
+    fun checkedProjectRowStaysForFiveSecondsAfterTheTap() {
+        val tappedAt = 1_000L
+        val pending = mapOf("t1" to true)
+        val tapTimes = mapOf("t1" to tappedAt)
+        val checked = listOf(WidgetTask("t1", "Task one", true, "#ff0000"))
+
+        assertEquals(
+            checked,
+            WidgetData.parse(blob, pending, "p1", tapTimes, nowMs = tappedAt + 1)
+        )
+        assertEquals(
+            checked,
+            WidgetData.parse(blob, pending, "p1", tapTimes, nowMs = tappedAt + 4_999)
+        )
+        assertTrue(
+            WidgetData.parse(blob, pending, "p1", tapTimes, nowMs = tappedAt + 5_000).isEmpty()
+        )
+    }
+
+    @Test
+    fun checkedProjectRowKeepsItsGraceAfterTheAppAppliesTheTap() {
+        // The drain clears the pending target but not the tap time, so the first
+        // push after the tap does not cut the five seconds short.
+        val tapTimes = mapOf("t1" to 1_000L)
+
+        assertEquals(
+            listOf(WidgetTask("t1", "Tapped", true, null), WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(projectBlobAfterTapApplied, emptyMap(), "p", tapTimes, nowMs = 2_000L)
+        )
+        assertEquals(
+            listOf(WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(projectBlobAfterTapApplied, emptyMap(), "p", tapTimes, nowMs = 6_000L)
+        )
+    }
+
+    @Test
+    fun projectTaskCompletedOutsideTheWidgetIsHidden() {
+        // Done in the app or on another device: no local tap time, so no grace.
+        // A synced doneOn is deliberately not used; it is another device's clock.
+        assertEquals(
+            listOf(WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(projectBlobAfterTapApplied, selectedProjectId = "p", nowMs = 2_000L)
+        )
+    }
+
+    @Test
+    fun pendingProjectCompletionWithoutTapTimeIsHidden() {
+        // Only a queue written before tap times existed lacks one. Treating it as
+        // "just now" would never expire.
+        assertTrue(
+            WidgetData.parse(
+                blob,
+                pendingDoneTargets = mapOf("t1" to true),
+                selectedProjectId = "p1",
+                nowMs = 2_000L
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun undoingACheckedProjectRowKeepsItListed() {
+        assertEquals(
+            listOf(WidgetTask("t1", "Tapped", false, null), WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(
+                projectBlobAfterTapApplied,
+                pendingDoneTargets = mapOf("t1" to false),
+                selectedProjectId = "p",
+                nowMs = 2_000L
+            )
+        )
+    }
+
+    @Test
+    fun todayKeepsCompletedTasksWithoutAGracePeriod() {
+        val today = WidgetData.parse(blob, nowMs = Long.MAX_VALUE)
+        assertEquals(listOf("t1", "t2", "t3"), today.map { it.id })
+        assertTrue(today[1].isDone)
+    }
+
+    @Test
+    fun hiddenCompletedTasksDoNotTakeProjectRows() {
+        val done = (1..20).joinToString(",") { """{"id":"done-$it","title":"Done","isDone":true}""" }
+        val open = (1..20).joinToString(",") { """{"id":"open-$it","title":"Open","isDone":false}""" }
+        val json = """{"v":1,"tasks":[],"projects":[{"id":"p","title":"P","tasks":[$done,$open]}]}"""
+
+        val rows = WidgetData.parse(json, selectedProjectId = "p", nowMs = 2_000L).take(20)
+        assertEquals((1..20).map { "open-$it" }, rows.map { it.id })
+    }
+
+    @Test
+    fun doneGraceCoversFiveSecondsFromTheTap() {
+        assertTrue(WidgetData.isInDoneGrace(1_000L, 1_000L))
+        assertTrue(WidgetData.isInDoneGrace(1_000L, 5_999L))
+        assertFalse(WidgetData.isInDoneGrace(1_000L, 6_000L))
+        // A missing or zeroed tap time grants nothing.
+        assertFalse(WidgetData.isInDoneGrace(0L, 1L))
+    }
+
+    @Test
+    fun missingSelectedProjectFallsBackToToday() {
+        assertEquals(
+            WidgetData.parse(blob),
+            WidgetData.parse(blob, selectedProjectId = "deleted-project")
+        )
+        assertNull(WidgetData.projectTitle(blob, "deleted-project"))
+    }
+
+    @Test
+    fun snapshotWithoutProjectsFallsBackToToday() {
+        // A v:1 blob written before `projects` existed (app updated, not opened yet).
+        val legacy = """{"v":1,"tasks":[{"id":"t1","title":"Today","isDone":false}]}"""
+        assertEquals(WidgetData.parse(legacy), WidgetData.parse(legacy, selectedProjectId = "p1"))
+        assertNull(WidgetData.projectTitle(legacy, "p1"))
+        assertTrue(WidgetData.parseProjects(legacy).isEmpty())
+    }
+
+    @Test
+    fun unusableProjectFallsBackToTodayForHeaderAndTasks() {
+        val json =
+            """{"v":1,"tasks":[{"id":"t1","title":"Today","isDone":false}],"projects":[{"id":"no-tasks","title":"No tasks"},{"id":"untitled","title":"","tasks":[{"id":"p1","title":"Project task","isDone":false}]}]}"""
+
+        assertEquals(WidgetData.parse(json), WidgetData.parse(json, selectedProjectId = "no-tasks"))
+        assertNull(WidgetData.projectTitle(json, "no-tasks"))
+        assertEquals(WidgetData.parse(json), WidgetData.parse(json, selectedProjectId = "untitled"))
+        assertNull(WidgetData.projectTitle(json, "untitled"))
+    }
+
+    @Test
+    fun projectTitleNamesTheSelectedProject() {
+        assertEquals("Work", WidgetData.projectTitle(blob, "p1"))
+        assertEquals("Personal", WidgetData.projectTitle(blob, "p2"))
+        assertNull(WidgetData.projectTitle("""{"v":2,"projects":[]}""", "p1"))
+    }
+
+    @Test
+    fun exposesOnlyUsableSnapshotProjectsToThePicker() {
+        assertEquals(
+            listOf(WidgetProject("p1", "Work"), WidgetProject("p2", "Personal")),
+            WidgetData.parseProjects(blob)
+        )
+        val unusableProjects =
+            """{"v":1,"projects":[{"id":"empty","title":"","tasks":[]},{"id":"missing","title":"Missing tasks"},{"title":"No id","tasks":[]},{"id":"ok","title":"Okay","tasks":[]}] }"""
+        assertEquals(
+            listOf(WidgetProject("ok", "Okay")),
+            WidgetData.parseProjects(unusableProjects)
+        )
+    }
+
+    @Test
+    fun projectOpenRequestIsFreshOnlyWithinItsTtl() {
+        val queuedAt = 1_000_000L
+        val ttl = WidgetData.PROJECT_OPEN_REQUEST_TTL_MS
+        assertTrue(WidgetData.isProjectOpenRequestFresh(queuedAt, queuedAt))
+        assertTrue(WidgetData.isProjectOpenRequestFresh(queuedAt, queuedAt + ttl - 1))
+        // A launch Android blocked silently must not open the project on a later start.
+        assertFalse(WidgetData.isProjectOpenRequestFresh(queuedAt, queuedAt + ttl))
+        // No stamp (an entry from before the stamp existed) or a clock set back.
+        assertFalse(WidgetData.isProjectOpenRequestFresh(0L, queuedAt))
+        assertFalse(WidgetData.isProjectOpenRequestFresh(queuedAt, queuedAt - 1))
+    }
+
+    @Test
     fun unknownVersionParsesToEmpty() {
         assertTrue(WidgetData.parse("""{"v": 2, "tasks": [{"id": "x"}]}""").isEmpty())
         assertTrue(WidgetData.parse("""{"tasks": []}""").isEmpty())
@@ -81,6 +276,53 @@ class WidgetDataTest {
         val json =
             """{"v":1,"tasks":[{"id":"a","title":"A","isDone":false,"projectId":"px"}],"projectColors":{}}"""
         assertNull(WidgetData.parse(json)[0].projectColor)
+    }
+
+    // --- parseCurrentTask: the "which task, which device" contract ---
+
+    private val NOW = 1_700_000_000_000L
+
+    @Test
+    fun parsesCurrentTask() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"Write report","deviceLabel":"Desktop","isLocal":false}}"""
+        assertEquals(WidgetCurrentTask("Write report", "Desktop"), WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun nullCurrentTaskParsesToNull() {
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[],"currentTask":null}""", NOW))
+    }
+
+    @Test
+    fun missingCurrentTaskParsesToNull() {
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[]}""", NOW))
+    }
+
+    @Test
+    fun currentTaskUnknownVersionParsesToNull() {
+        val json =
+            """{"v":2,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false}}"""
+        assertNull(WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun remoteCurrentTaskIsShownBeforeItsExpiry() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false,"expiresAt":${NOW + 1}}}"""
+        assertEquals(WidgetCurrentTask("X", "Desktop"), WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun expiredRemoteCurrentTaskParsesToNull() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false,"expiresAt":$NOW}}"""
+        assertNull(WidgetData.parseCurrentTask(json, NOW))
+    }
+
+    @Test
+    fun currentTaskUnparseableBlobDegradesInsteadOfThrowing() {
+        assertNull(WidgetData.parseCurrentTask("not json", NOW))
     }
 
     @Test
@@ -260,5 +502,90 @@ class WidgetDataTest {
         // the last case — either way labelling a confidently wrong day.
         assertNull(WidgetData.dayStrToMs("2026-02-30"))
         assertNull(WidgetData.dayStrToMs("2026-07-17garbage"))
+    }
+
+    // CaptureInbox.pendingJson shape: oldest first.
+    private val captures =
+        """
+        [
+          {"v": 1, "id": "c1", "title": "Older @tomorrow", "source": "widget", "createdAt": 1},
+          {"v": 1, "id": "c2", "title": "Newer", "source": "widget", "createdAt": 2}
+        ]
+        """.trimIndent()
+
+    @Test
+    fun showsQuickAddsNotYetImportedAboveTheSnapshotNewestFirst() {
+        val tasks = WidgetData.withPendingCaptures(WidgetData.parse(blob), captures)
+        assertEquals(listOf("c2", "c1", "t1", "t2", "t3"), tasks.map { it.id })
+        // Raw title: short syntax is only applied when the app imports it.
+        assertEquals(
+            WidgetTask("c1", "Older @tomorrow", isDone = false, projectColor = null, isPending = true),
+            tasks[1]
+        )
+        assertTrue(tasks.drop(2).none { it.isPending })
+    }
+
+    @Test
+    fun aQuickAddAlreadyInTheSnapshotIsShownOnce() {
+        // Imported (capture id = task id) but not yet acknowledged.
+        val imported = WidgetData.parse(blob.replace("\"t1\"", "\"c1\""))
+        val tasks = WidgetData.withPendingCaptures(imported, captures)
+        assertEquals(listOf("c2", "c1", "t2", "t3"), tasks.map { it.id })
+        assertEquals(false, tasks[1].isPending)
+    }
+
+    @Test
+    fun noQuickAddsLeavesTheSnapshotAsIs() {
+        val tasks = WidgetData.parse(blob)
+        assertEquals(tasks, WidgetData.withPendingCaptures(tasks, "[]"))
+    }
+
+    @Test
+    fun eachWidgetListsOnlyTheQuickAddsHeadedForIt() {
+        val captures = """[{"id":"today","title":"Today"},{"id":"p1-add","title":"P1","projectId":"p1"},{"id":"p2-add","title":"P2","projectId":"p2"},{"id":"null-add","title":"Null","projectId":null}]"""
+
+        assertEquals(
+            listOf("null-add", "today"),
+            WidgetData.withPendingCaptures(emptyList(), captures).map { it.id }
+        )
+        assertEquals(
+            listOf("p1-add"),
+            WidgetData.withPendingCaptures(emptyList(), captures, "p1").map { it.id }
+        )
+        assertTrue(WidgetData.withPendingCaptures(emptyList(), captures, "p3").isEmpty())
+    }
+
+    @Test
+    fun checkboxOfAnOpenTaskMarksItDone() {
+        assertEquals(
+            WidgetCheckboxAction.MARK_DONE,
+            WidgetData.checkboxActionFor(WidgetTask("t1", "Task one", false, null))
+        )
+    }
+
+    @Test
+    fun checkboxOfADoneTaskMarksItNotDone() {
+        assertEquals(
+            WidgetCheckboxAction.MARK_UNDONE,
+            WidgetData.checkboxActionFor(WidgetTask("t2", "Task two", true, null))
+        )
+    }
+
+    @Test
+    fun checkboxFollowsAPendingDoneTapNotTheSnapshot() {
+        // The label must describe what the next tap does: t1 is open in the blob
+        // but checked on the widget, so the next tap un-checks it.
+        val tapped = WidgetData.parse(blob, pendingDoneTargets = mapOf("t1" to true))
+            .first { it.id == "t1" }
+        assertEquals(WidgetCheckboxAction.MARK_UNDONE, WidgetData.checkboxActionFor(tapped))
+    }
+
+    @Test
+    fun checkboxOfAPendingQuickAddOpensTheApp() {
+        val pending = WidgetData.withPendingCaptures(
+            emptyList(),
+            """[{"id": "c1", "title": "Buy milk"}]"""
+        ).single()
+        assertEquals(WidgetCheckboxAction.OPEN_APP, WidgetData.checkboxActionFor(pending))
     }
 }

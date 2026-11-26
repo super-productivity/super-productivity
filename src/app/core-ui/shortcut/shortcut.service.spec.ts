@@ -16,6 +16,7 @@ import { DialogAddNoteComponent } from '../../features/note/dialog-add-note/dial
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogFullscreenMarkdownComponent } from '../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { OverlayContainer } from '@angular/cdk/overlay';
+import { TaskViewCustomizerService } from '../../features/task-view-customizer/task-view-customizer.service';
 import { signal } from '@angular/core';
 import { Observable, of, Subject } from 'rxjs';
 
@@ -29,6 +30,7 @@ describe('ShortcutService', () => {
   let mockMatDialog: any;
   let mockPluginBridgeService: any;
   let mockLayoutService: any;
+  let mockTaskViewCustomizerService: { requestOpenMenu: jasmine.Spy };
 
   beforeEach(() => {
     mockMatDialog = {
@@ -42,6 +44,9 @@ describe('ShortcutService', () => {
       handleTogglePlayFallback: jasmine
         .createSpy('handleTogglePlayFallback')
         .and.returnValue(false),
+    };
+    mockTaskViewCustomizerService = {
+      requestOpenMenu: jasmine.createSpy('requestOpenMenu'),
     };
     mockRouter = {
       navigate: jasmine.createSpy('navigate'),
@@ -62,6 +67,7 @@ describe('ShortcutService', () => {
           showSearchBar: 'Shift+F',
           showHelp: '?',
           [PLUGIN_SHORTCUT_CFG_KEY]: 'Ctrl+Shift+U',
+          toggleTaskViewCustomizerPanel: 'C',
         },
       }),
       appFeatures: signal({
@@ -86,6 +92,7 @@ describe('ShortcutService', () => {
         { provide: SyncWrapperService, useValue: {} },
         { provide: Store, useValue: { dispatch: jasmine.createSpy('dispatch') } },
         { provide: PluginBridgeService, useValue: mockPluginBridgeService },
+        { provide: TaskViewCustomizerService, useValue: mockTaskViewCustomizerService },
         {
           provide: OverlayContainer,
           useValue: {
@@ -102,6 +109,15 @@ describe('ShortcutService', () => {
   });
 
   describe('handleKeyDown', () => {
+    it('should open the header filter menu on the filter shortcut', async () => {
+      const ev = new KeyboardEvent('keydown', { key: 'c', code: 'KeyC' });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      await service.handleKeyDown(ev);
+
+      expect(mockTaskViewCustomizerService.requestOpenMenu).toHaveBeenCalledTimes(1);
+    });
+
     it('should NOT navigate to schedule if TaskShortcutService handled Shift+S', () => {
       mockTaskShortcutService.handleTaskShortcuts.and.returnValue(true);
       const ev = new KeyboardEvent('keydown', {
@@ -146,6 +162,30 @@ describe('ShortcutService', () => {
         code: 'KeyS',
         shiftKey: true,
       });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      service.handleKeyDown(ev);
+
+      expect(mockRouter.navigate).not.toHaveBeenCalled();
+    });
+
+    it('should navigate to planner when Shift+L is pressed and planner is enabled', () => {
+      mockConfigService.cfg.set({ keyboard: { goToPlanner: 'Shift+L' } });
+      mockConfigService.appFeatures.set({ isPlannerEnabled: true });
+
+      const ev = new KeyboardEvent('keydown', { code: 'KeyL', shiftKey: true });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      service.handleKeyDown(ev);
+
+      expect(mockRouter.navigate).toHaveBeenCalledWith(['/planner']);
+    });
+
+    it('should NOT navigate to planner when planner is disabled', () => {
+      mockConfigService.cfg.set({ keyboard: { goToPlanner: 'Shift+L' } });
+      mockConfigService.appFeatures.set({ isPlannerEnabled: false });
+
+      const ev = new KeyboardEvent('keydown', { code: 'KeyL', shiftKey: true });
       Object.defineProperty(ev, 'target', { value: document.body });
 
       service.handleKeyDown(ev);

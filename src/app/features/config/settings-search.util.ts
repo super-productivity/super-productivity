@@ -2,6 +2,7 @@ import { FormlyFieldConfig } from '@ngx-formly/core';
 import { GenericConfigFormSection } from './global-config.model';
 import { T } from '../../t.const';
 import { IMEX_FORM } from './form-cfgs/imex-form.const';
+import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 
 /** A single search hit — everything needed to render the row and jump to it. */
 export interface SettingsSearchTarget {
@@ -16,8 +17,14 @@ export interface SettingsSearchTarget {
   matchedLabelKey?: string;
 }
 
+/** Index of the Time & Tracking tab in the config page's `mat-tab-group`. */
+export const SETTINGS_TIME_TRACKING_TAB_INDEX = 2;
+
 /** Index of the Plugins tab in the config page's `mat-tab-group`. */
 export const SETTINGS_PLUGINS_TAB_INDEX = 4;
+
+/** Index of the Sync & Backup tab, the last one in the config page's `mat-tab-group`. */
+export const SETTINGS_SYNC_BACKUP_TAB_INDEX = 5;
 
 /** Tab order must mirror the `mat-tab-group` in `config-page.component.html`. */
 export interface SettingsSearchTab {
@@ -56,6 +63,13 @@ const CUSTOM_TARGETS: readonly SettingsSearchTarget[] = [
     tabIndex: 0,
     scrollSelector: '.wallpaper-select',
   },
+  // The App Features switch, repeated atop the Time & Tracking tab.
+  {
+    labelKey: T.GCF.APP_FEATURES.TIME_TRACKING,
+    tabLabelKey: T.PS.TABS.TIME_TRACKING,
+    tabIndex: SETTINGS_TIME_TRACKING_TAB_INDEX,
+    scrollSelector: '.time-tracking-switch',
+  },
   {
     labelKey: T.GCF.SOUND.TITLE,
     tabLabelKey: T.PS.TABS.TASKS,
@@ -71,7 +85,7 @@ const CUSTOM_TARGETS: readonly SettingsSearchTarget[] = [
   {
     labelKey: T.PS.SYNC.SET_UP_SYNC,
     tabLabelKey: T.PS.TABS.SYNC_BACKUP,
-    tabIndex: 5,
+    tabIndex: SETTINGS_SYNC_BACKUP_TAB_INDEX,
     scrollSelector: '.sync-summary',
   },
   // The importer buttons live inside the Import/Export custom section, whose
@@ -79,17 +93,29 @@ const CUSTOM_TARGETS: readonly SettingsSearchTarget[] = [
   {
     labelKey: T.FILE_IMEX.IMPORT_FROM_TODOIST,
     tabLabelKey: T.PS.TABS.SYNC_BACKUP,
-    tabIndex: 5,
+    tabIndex: SETTINGS_SYNC_BACKUP_TAB_INDEX,
     scrollSelector: `.section-${IMEX_FORM.key}`,
     sectionKey: IMEX_FORM.key,
   },
   {
     labelKey: T.FILE_IMEX.IMPORT_FROM_TICKTICK,
     tabLabelKey: T.PS.TABS.SYNC_BACKUP,
-    tabIndex: 5,
+    tabIndex: SETTINGS_SYNC_BACKUP_TAB_INDEX,
     scrollSelector: `.section-${IMEX_FORM.key}`,
     sectionKey: IMEX_FORM.key,
   },
+  // the Microsoft To Do button is hidden on Android/iOS (no sign-in there)
+  ...(IS_NATIVE_PLATFORM
+    ? []
+    : [
+        {
+          labelKey: T.FILE_IMEX.IMPORT_FROM_MS_TODO,
+          tabLabelKey: T.PS.TABS.SYNC_BACKUP,
+          tabIndex: SETTINGS_SYNC_BACKUP_TAB_INDEX,
+          scrollSelector: `.section-${IMEX_FORM.key}`,
+          sectionKey: IMEX_FORM.key,
+        },
+      ]),
 ];
 
 /** Every field of a section, with `fieldGroup` wrappers (sync providers) flattened out. */

@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "フルパスまたはユーザー名/プロジェクト",
+    "PROJECT_HINT": "例：ヨハネスジョ／超生産性",
+    "TOKEN": "アクセストークン",
+    "HOW_TO_GET_TOKEN": "トークンの入手方法は？",
+    "SCOPE": "範囲",
+    "SCOPE_ALL": "すべて",
+    "SCOPE_CREATED": "自分で作成",
+    "SCOPE_ASSIGNED": "私に割り当てられた",
+    "GITLAB_BASE_URL": "カスタムGitLabベースURL",
+    "FILTER_USER": "ユーザー名（例：自分で変更を除外するため）",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "カスタムフィルター",
+    "FILTER_DESCRIPTION": "Https://docs.gitlab.com/ee/api/issues.html#list-issues を参照。複数の組み合わせは",
+    "SUBMIT_TIMELOGS": "タイムログをGitlabに提出する",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "終了日をクリックした後、タイムトラッキングダイアログを表示する"
+  },
+  "DISPLAY": {
+    "SUMMARY": "概要",
+    "STATE": "状態",
+    "ASSIGNEE": "担当者",
+    "LABELS": "ラベル",
+    "DESCRIPTION": "説明"
+  },
+  "FORM_HELP": "<p>ここでは、SuperProductivityを構成して、特定のプロジェクトの開いているGitLab（オンラインバージョンまたはセルフホストインスタンス）の課題を日次計画ビューのタスク作成パネルに一覧表示できます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報を提供します。</p> <p>さらに、すべての未解決の課題をタスクバックログに自動的に追加して同期できます。</p>"
+}

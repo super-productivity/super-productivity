@@ -21,6 +21,7 @@ import {
   timeLapse,
   typeText,
 } from './index';
+import { hideById } from './dom';
 
 const ORIGIN = 'http://vk.test';
 
@@ -84,6 +85,21 @@ test.describe('layer ownership', () => {
     await b.hide();
     await expect(page.locator('.vk-end-card', { hasText: 'Card B' })).toHaveCount(0);
     await expect(page.locator('.vk-end-card', { hasText: 'Card A' })).toHaveCount(1);
+  });
+
+  test('a layer hidden before its fade-in started is still removed', async ({ page }) => {
+    await page.goto(`${ORIGIN}/`);
+    // A busy renderer can skip the frame that starts the fade-in, so hide()
+    // sees opacity 0 -> 0: no transition runs and no transition event fires.
+    await page.evaluate(() => {
+      const el = document.createElement('div');
+      el.id = 'vk-unstarted';
+      el.style.transition = 'opacity 60ms';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+    });
+    await hideById(page, 'vk-unstarted', 60);
+    await expect(page.locator('#vk-unstarted')).toHaveCount(0);
   });
 
   test('a replaced caption handle cannot touch its replacement', async ({ page }) => {
@@ -209,6 +225,77 @@ test.describe('pointer', () => {
       .evaluate((el) => new DOMMatrix(getComputedStyle(el).transform));
     expect(cursor.m41).toBeCloseTo(target.x, 0);
     expect(cursor.m42).toBeCloseTo(target.y, 0);
+  });
+
+  test('one cursor follows the mouse into an iframe and marks its clicks', async ({
+    page,
+  }) => {
+    await page.route(`${ORIGIN}/host`, (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: `<!doctype html><html><body style="margin: 0">
+          <iframe src="${ORIGIN}/inner"
+            style="position: absolute; left: 300px; top: 200px; width: 600px; height: 400px; border: 0">
+          </iframe></body></html>`,
+      }),
+    );
+    await installCursor(page);
+    await page.goto(`${ORIGIN}/host`);
+    const inner = page.frameLocator('iframe');
+    const target = inner.locator('#top-left');
+    await expect(target).toBeVisible();
+    await createPointer(page).glideTo(target, { durationMs: 200 });
+    await expect(inner.locator('#vk-cursor')).toHaveCount(0);
+    const center = await centerOf(target);
+    // Forwarded by postMessage, so the cursor catches up asynchronously.
+    await expect
+      .poll(() =>
+        page.locator('#vk-cursor').evaluate((el) => {
+          const m = new DOMMatrix(getComputedStyle(el).transform);
+          return { x: Math.round(m.m41), y: Math.round(m.m42) };
+        }),
+      )
+      .toEqual({ x: Math.round(center.x), y: Math.round(center.y) });
+    await target.click();
+    await expect(page.locator('.vk-click-ripple')).toHaveCount(1);
+  });
+
+  test('the iframe cursor stays on target under a camera zoom', async ({ page }) => {
+    await page.route(`${ORIGIN}/host`, (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: `<!doctype html><html><body style="margin: 0">
+          <app-root style="display: block; width: 100vw; height: 100vh">
+          <iframe src="${ORIGIN}/inner"
+            style="position: absolute; left: 100px; top: 80px; width: 600px; height: 400px; border: 4px solid #888">
+          </iframe></app-root></body></html>`,
+      }),
+    );
+    await installCursor(page);
+    await page.goto(`${ORIGIN}/host`);
+    const target = page.frameLocator('iframe').locator('#top-left');
+    await expect(target).toBeVisible();
+    await createCamera(page, 'app-root').zoomTo(target, { scale: 1.5, durationMs: 0 });
+    await createPointer(page).glideTo(target, { durationMs: 200 });
+    const center = await centerOf(target);
+    await expect
+      .poll(() =>
+        page.locator('#vk-cursor').evaluate((el) => {
+          const m = new DOMMatrix(getComputedStyle(el).transform);
+          return { x: Math.round(m.m41), y: Math.round(m.m42) };
+        }),
+      )
+      .toEqual({ x: Math.round(center.x), y: Math.round(center.y) });
+  });
+
+  test('a second install draws no second ripple', async ({ page }) => {
+    await installCursor(page);
+    await installCursor(page);
+    await page.goto(`${ORIGIN}/`);
+    await createPointer(page).glideTo(page.locator('#mid'), { durationMs: 100 });
+    await page.mouse.down();
+    await expect(page.locator('.vk-click-ripple')).toHaveCount(1);
+    await page.mouse.up();
   });
 });
 

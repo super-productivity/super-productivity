@@ -1312,9 +1312,9 @@ test('the enable IPC persists the choice and a restart restores it', async () =>
   }
 });
 
-// initLocalRestApi() runs before start-app.ts moves userData for Snap and
-// --user-data-dir, so the persisted switch must only be read once the app is
-// ready — otherwise every Snap launch reads the wrong profile.
+// initLocalRestApi() runs before start-app.ts applies --user-data-dir, so the
+// persisted switch must only be read once the app is ready — otherwise such a
+// launch reads the wrong profile.
 test('the persisted switch is read from the final userData dir', async () => {
   const earlyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-early-'));
   const finalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-final-'));

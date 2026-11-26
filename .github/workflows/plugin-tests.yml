@@ -8,6 +8,11 @@ on:
       - 'packages/plugin-dev/**'
       - 'packages/plugin-api/**'
       - 'packages/vite-plugin/**'
+      - 'packages/plugin-starter/**'
+      - 'tools/check-plugin-starter.js'
+      # A TypeScript bump can break the starter check.
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/plugin-tests.yml'
   workflow_dispatch:
 
@@ -114,3 +119,26 @@ jobs:
       - name: Run plugin tests
         working-directory: packages/plugin-dev/${{ matrix.plugin }}
         run: npm test --if-present
+
+  # The starter is copied out of the repo by plugin authors, so nothing else
+  # would notice it falling behind the API. Typecheck it against the packed
+  # plugin-api (what npm would publish) and check that it packs into an
+  # installable ZIP.
+  starter:
+    name: Plugin starter
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version-file: .nvmrc
+      # plugin-api's own dependencies only; the starter needs no others.
+      # --ignore-scripts skips the root install scripts, whose tools this
+      # partial install does not include.
+      - name: Install plugin-api dependencies
+        run: npm ci --workspace=@super-productivity/plugin-api --ignore-scripts --no-audit --no-fund
+      - name: Typecheck and pack the starter
+        run: npm run plugin-starter:check

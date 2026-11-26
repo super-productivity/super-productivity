@@ -138,4 +138,49 @@ test.describe('Android tracking recovery on a cold start', () => {
       .toBe(taskId);
     await expectTaskTime(page, taskId, HOUR + TEN_MINUTES);
   });
+
+  // Recovery reads the native session, then waits for the full hydration. A
+  // Pause tapped on the notification in that window ends the native session
+  // and queues the tap (#10683); recovery must not resume the paused task.
+  test('keeps a Pause tapped during startup paused', async ({ page, workViewPage }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('Android cold start pause tap');
+    await page.waitForFunction(
+      () => !!(window as unknown as TrackingWindow).__e2eTestHelpers,
+    );
+    const taskId = Object.keys((await readState(page)).tasks.entities)[0];
+    expect(taskId).toBeTruthy();
+
+    await page.evaluate(
+      (id) =>
+        (window as unknown as TrackingWindow).__e2eTestHelpers.store.dispatch({
+          type: '[Task] SetCurrentTask',
+          id,
+        }),
+      taskId,
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (window as unknown as TrackingWindow).SUPAndroid.getTrackingElapsed(),
+        ),
+      )
+      .not.toBe('null');
+    await page.clock.fastForward(HOUR);
+    await expectTaskTime(page, taskId, HOUR);
+    await pauseAndFlush(page);
+
+    await page.clock.fastForward(TEN_MINUTES);
+    await page.evaluate(() =>
+      sessionStorage.setItem('test-tap-after-next-tracking-read', 'PAUSE'),
+    );
+    await page.reload();
+    await workViewPage.waitForTaskList();
+
+    // Credited once, up to the tap, and not tracked any further.
+    await expectTaskTime(page, taskId, HOUR + TEN_MINUTES);
+    await page.clock.fastForward(TEN_MINUTES);
+    expect((await readState(page)).tasks.currentTaskId).toBeNull();
+    await expectTaskTime(page, taskId, HOUR + TEN_MINUTES);
+  });
 });

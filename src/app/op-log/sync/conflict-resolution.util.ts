@@ -12,6 +12,7 @@ import {
 } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { PROJECT_DELETE_WINS_MARKER } from '../../root-store/meta/task-shared.actions';
+import { TAG_DELETE_WINS_MARKER } from '../../features/tag/store/tag.actions';
 import { toEntityKey } from '../util/entity-key.util';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import { SCOPED_PLAN_MULTI_ACTIONS } from './preserve-partial-bulk-plan.util';
@@ -76,6 +77,46 @@ const isProjectDeleteWinsOperation = (operation: Operation): boolean => {
 };
 
 /**
+ * A marked single-tag delete (#11489) wins over a concurrent edit of that tag,
+ * like a marked project delete. Unlike projects there is no schema barrier: a
+ * released client ignores the marker and resolves by timestamp exactly as
+ * before, which only leaves today's membership divergence, never data loss
+ * (ARCHITECTURE-DECISIONS.md #7). The marker is therefore the only
+ * discriminator. `deleteTags` declares several tag ids and stays LWW: it is
+ * never stamped, and the action type is checked as well.
+ *
+ * This only classifies the op. Whether it wins is decided by the shared
+ * planner's frontier guard (`hasFrontierDeleteWins` in @sp/sync-core): a
+ * same-side op causally after the delete that re-creates the tag (a Create or
+ * an LWW Update) returns the entity to timestamp LWW.
+ */
+const isTagDeleteWinsOperation = (operation: Operation): boolean => {
+  // Same hardening as the project classifier: a null/undefined payload must not
+  // throw inside `extractActionPayload` and wedge the conflict pass.
+  if (
+    operation.actionType !== ActionType.TAG_DELETE ||
+    operation.opType !== OpType.Delete ||
+    operation.entityType !== 'TAG' ||
+    !operation.payload
+  ) {
+    return false;
+  }
+  const actionPayload = extractActionPayload(operation.payload);
+  // Gate on the AUTHENTICATED tag `id` matching the plaintext `entityId` the
+  // conflict is grouped by, so a tampered delete retargeted onto another tag
+  // falls back to timestamp LWW (GHSA-8pxh metadata-tampering class).
+  return (
+    actionPayload[TAG_DELETE_WINS_MARKER] === true &&
+    typeof actionPayload['id'] === 'string' &&
+    operation.entityId === actionPayload['id']
+  );
+};
+
+/** Classifier handed to the shared LWW planner (`isDeleteWinsAction`). */
+export const isDeleteWinsOperation = (operation: Operation): boolean =>
+  isProjectDeleteWinsOperation(operation) || isTagDeleteWinsOperation(operation);
+
+/**
  * Concurrent tabs can capture more than one marked `deleteProject` for the same
  * project before syncing, and the local store has applied EVERY one's cascade
  * (the task reducer removes entities by explicit `allTaskIds`, not by
@@ -85,11 +126,26 @@ const isProjectDeleteWinsOperation = (operation: Operation): boolean => {
  * arrays are widened — `projectId` and every other field are identical across
  * same-project deletes, so the first op is a safe base.
  */
-export const mergeMarkedProjectDeleteOps = (
+export const mergeMarkedDeleteWinsOps = (
   localOps: Operation[],
 ): Operation | undefined => {
   const deletes = localOps.filter(isProjectDeleteWinsOperation);
-  if (deletes.length <= 1) {
+  if (deletes.length === 0) {
+    // A marked tag delete cascades by tag id alone (`{ id }` payload), so any
+    // same-tag delete is a complete replacement. Take the LATEST one: the
+    // replacement keeps its timestamp, which released clients compare by LWW,
+    // and an earlier one may predate a re-create. Ties break by op id.
+    let latest: Operation | undefined;
+    for (const op of localOps.filter(isTagDeleteWinsOperation)) {
+      const isLater =
+        !latest ||
+        op.timestamp > latest.timestamp ||
+        (op.timestamp === latest.timestamp && op.id > latest.id);
+      if (isLater) latest = op;
+    }
+    return latest;
+  }
+  if (deletes.length === 1) {
     return deletes[0];
   }
   const unionIds = (key: string): string[] => {
@@ -323,7 +379,7 @@ const ORDERING_ONLY_MULTI_ACTIONS = new Set<ActionType>([
 export const LWW_PLANNING_OPTIONS = {
   isArchiveAction: (op: Operation): boolean =>
     op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
-  isDeleteWinsAction: isProjectDeleteWinsOperation,
+  isDeleteWinsAction: isDeleteWinsOperation,
   toEntityKey: (entityType: string, entityId: string): string =>
     toEntityKey(entityType as EntityType, entityId),
 };

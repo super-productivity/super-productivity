@@ -213,7 +213,7 @@ test.describe('@video updates reel', () => {
     caption = await nextScene(page, {
       caption: 'Navigate Boards with arrow keys.',
       setup: async () => {
-        await page.goto('/#/boards');
+        await page.goto('/#/boards/EISENHOWER_MATRIX');
         await expect(page.locator('boards')).toBeVisible();
       },
     });

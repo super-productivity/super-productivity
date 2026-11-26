@@ -1,0 +1,20 @@
+@if (isRejected()) {
+  <div class="callout callout--danger">
+    <mat-icon aria-hidden="true">link_off</mat-icon>
+    <div>
+      <p>{{ T.PLAINSPACE.RECONNECT.MSG | translate }}</p>
+      <button
+        mat-stroked-button
+        (click)="reconnect()"
+      >
+        {{ T.PLAINSPACE.RECONNECT.ACTION | translate }}
+      </button>
+    </div>
+  </div>
+}
+@if (isServerTooOld()) {
+  <div class="callout callout--warning">
+    <mat-icon aria-hidden="true">update</mat-icon>
+    <p>{{ T.PLAINSPACE.SYNC.SERVER_TOO_OLD | translate }}</p>
+  </div>
+}

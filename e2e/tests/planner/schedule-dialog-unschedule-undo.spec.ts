@@ -237,7 +237,7 @@ test.describe('Schedule dialog: undo unschedule button', () => {
     // Save a daily repeat starting the day after tomorrow from the Repeat
     // sub-dialog. This moves the live task's dueDay while the schedule dialog
     // (opened with the "tomorrow" snapshot) stays open.
-    await scheduleDialog.locator('.repeat-btn').click();
+    await scheduleDialog.locator('[data-test-id="schedule-repeat-field"]').click();
     const repeatDialog = page.locator(
       'mat-dialog-container:has(dialog-edit-task-repeat-cfg)',
     );

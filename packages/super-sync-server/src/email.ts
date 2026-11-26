@@ -45,16 +45,21 @@ const getTransporter = async (): Promise<nodemailer.Transporter> => {
   return transporter;
 };
 
+// `r`: a browser sign-in request a new device waits on; the link brings the user back to it.
+const connectQuery = (connectRequestId?: string): string =>
+  connectRequestId ? `&r=${connectRequestId}` : '';
+
 export const sendVerificationEmail = async (
   to: string,
   token: string,
+  connectRequestId?: string,
 ): Promise<boolean> => {
   try {
     const mailTransporter = await getTransporter();
     const config = loadConfigFromEnv();
     const from = config.smtp?.from || '"SuperSync" <noreply@example.com>';
 
-    const verificationLink = `${config.publicUrl}/verify-email?token=${token}`;
+    const verificationLink = `${config.publicUrl}/verify-email?token=${token}${connectQuery(connectRequestId)}`;
 
     const info = await mailTransporter.sendMail({
       from,
@@ -155,13 +160,14 @@ export const sendPasskeyRecoveryEmail = async (
 export const sendLoginMagicLinkEmail = async (
   to: string,
   token: string,
+  connectRequestId?: string,
 ): Promise<boolean> => {
   try {
     const mailTransporter = await getTransporter();
     const config = loadConfigFromEnv();
     const from = config.smtp?.from || '"SuperSync" <noreply@example.com>';
 
-    const loginLink = `${config.publicUrl}/magic-login?token=${token}`;
+    const loginLink = `${config.publicUrl}/magic-login?token=${token}${connectQuery(connectRequestId)}`;
 
     const info = await mailTransporter.sendMail({
       from,

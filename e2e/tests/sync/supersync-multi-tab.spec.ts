@@ -12,6 +12,7 @@ import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForAppReady } from '../../utils/waits';
 import { ImportPage } from '../../pages/import.page';
 import type { BrowserContext, Page } from '@playwright/test';
+import { countLocalFullStateOps as countFullStateOps } from '../../utils/audit-error-paths-helpers';
 
 const UPLOAD_LOCK_NAME = 'sp_op_log_upload';
 
@@ -355,6 +356,7 @@ test.describe('@supersync Multi-Tab Same Account', () => {
       expect(cursorBeforeDownload).not.toBeNull();
       const pendingBeforeRace = await getUnsyncedOperationCount(tab2);
       expect(pendingBeforeRace).toBe(0);
+      const fullStateOpsBeforeRace = await countFullStateOps(tab1);
 
       await acquireUploadLock(tab1);
       await tab1Sync.syncBtn.click();
@@ -377,6 +379,10 @@ test.describe('@supersync Multi-Tab Same Account', () => {
       expect(await getSuperSyncCursor(tab1)).toBe(cursorBeforeDownload);
       expect(await getUnsyncedOperationCount(tab2)).toBeGreaterThan(pendingBeforeRace);
       await expect(tab2.locator('task', { hasText: lateTask })).toBeVisible();
+      // Atomic: nothing of the downloaded full-state op was stored or applied.
+      expect(await countFullStateOps(tab1)).toBe(fullStateOpsBeforeRace);
+      await expect(tab1.locator('task', { hasText: baselineTask })).toBeVisible();
+      await expect(tab2.locator('task', { hasText: baselineTask })).toBeVisible();
     } finally {
       if (clientB && !clientB.page.isClosed()) {
         await releaseUploadLock(clientB.page).catch(() => undefined);

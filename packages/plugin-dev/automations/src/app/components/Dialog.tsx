@@ -31,14 +31,16 @@ export function Dialog(props: DialogProps) {
       }}
     >
       <article>
-        <header>
-          <h3 style={{ margin: 0 }}>{props.title}</h3>
-          <button aria-label="Close" class="close-btn" onClick={props.onClose}>
-            ✕
+        <header class="page-header">
+          <h3>{props.title}</h3>
+          <button aria-label="Close" class="btn-icon" onClick={props.onClose}>
+            <span class="material-icons" aria-hidden="true">
+              close
+            </span>
           </button>
         </header>
         {props.children}
-        {props.footer && <footer>{props.footer}</footer>}
+        {props.footer && <footer class="actions">{props.footer}</footer>}
       </article>
     </dialog>
   );

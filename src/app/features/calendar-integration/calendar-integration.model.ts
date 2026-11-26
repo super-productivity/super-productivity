@@ -36,6 +36,8 @@ export interface CalendarIntegrationEvent {
    * informational context only. Task-creation actions are hidden in the UI.
    */
   isReferenceCalendar?: boolean;
-  /** Hex color configured on the calendar provider (e.g. '#4caf50'). */
+  /** Display color: see `getCalendarProviderColor`. */
   color?: string;
+  /** Color the calendar source reported for the event's calendar (plugin providers). */
+  calendarColor?: string;
 }

@@ -1,6 +1,6 @@
 ## Problem
 
-<!-- Describe the problem that these changes solve (links to issues are welcome). -->
+<!-- Describe the problem these changes solve. Link issues as "Fixes #1, fixes #2" (one keyword per issue, so each closes on merge). -->
 
 ## Solution
 

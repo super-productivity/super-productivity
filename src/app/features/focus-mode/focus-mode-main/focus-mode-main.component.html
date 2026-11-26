@@ -13,7 +13,8 @@
   <!-- Mode selector (Preparation) and simple counters (In Progress) are mutually
        exclusive; whichever is active projects into the layout's top slot. That
        slot is positioned out of flow (absolute), so swapping the active control
-       in/out never shifts the centered task/clock/bottom group below. The
+       in/out never shifts the centered task/clock/bottom group below — except
+       the mode selector on short phones, which sits in flow (#10179). The
        selector is removed from the DOM when not in preparation — hiding it via
        visibility would leave its mat-icons painted (the global
        isMaterialSymbolsLoaded rule forces icons visible), so removal is the only
@@ -241,17 +242,6 @@
       fmBottom
       class="bottom-controls"
     >
-      <!-- Back to Planning (cancels the session + closes the focus overlay) -->
-      <button
-        mat-icon-button
-        class="exit-session-btn"
-        [matTooltip]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
-        [attr.aria-label]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
-        (click)="exitToPlanning()"
-      >
-        <mat-icon>arrow_back</mat-icon>
-      </button>
-
       <!-- Pause / resume the session (the task-row time stack is read-only). -->
       @if (focusModeService.isSessionPaused()) {
         <button
@@ -287,7 +277,7 @@
         </button>
       }
 
-      @if (isXs() && (isPomodoro() || displayed)) {
+      @if (isXs()) {
         <button
           mat-icon-button
           class="secondary-actions-menu-btn"
@@ -343,6 +333,17 @@
             }
           </button>
         }
+
+        <!-- Cancel discards the session, so it sits last, away from pause. -->
+        <button
+          mat-icon-button
+          class="cancel-session-btn"
+          [matTooltip]="T.F.FOCUS_MODE.CANCEL_SESSION | translate"
+          [attr.aria-label]="T.F.FOCUS_MODE.CANCEL_SESSION | translate"
+          (click)="cancelSession()"
+        >
+          <mat-icon>stop_circle</mat-icon>
+        </button>
       }
     </section>
   }
@@ -386,6 +387,14 @@
         <span>{{ T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate }}</span>
       </button>
     }
+
+    <button
+      mat-menu-item
+      (click)="cancelSession()"
+    >
+      <mat-icon>stop_circle</mat-icon>
+      <span>{{ T.F.FOCUS_MODE.CANCEL_SESSION | translate }}</span>
+    </button>
   </ng-template>
 </mat-menu>
 

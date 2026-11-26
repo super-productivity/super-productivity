@@ -12,11 +12,19 @@ import {
 
 const TOOL = {
   name: 'create_task',
+  title: 'Add task',
   description: 'Adds a task',
   inputSchema: {
     type: 'object' as const,
     properties: {},
     additionalProperties: false as const,
+  },
+  annotations: {
+    title: 'Add task',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
   },
 };
 
@@ -72,6 +80,21 @@ describe('handleMcpMessage', () => {
 
     expect(versionOf(await init('2025-03-26'))).toBe('2025-03-26');
     expect(versionOf(await init('2099-01-01'))).toBe('2025-11-25');
+  });
+
+  it('names the server with a title and website', async () => {
+    const reply = await handle({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { protocolVersion: '2025-11-25' },
+    });
+    expect(reply.body && 'result' in reply.body && reply.body.result.serverInfo).toEqual({
+      name: 'super-productivity',
+      title: 'Super Productivity',
+      version: '1.0.0',
+      websiteUrl: 'https://super-productivity.com',
+    });
   });
 
   it('answers a modern-era request with a plain 400 so the client falls back', async () => {

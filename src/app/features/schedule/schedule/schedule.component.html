@@ -148,6 +148,7 @@
       [daysToShow]="daysToShow()"
       [weeksToShow]="weeksToShow()"
       [firstDayOfWeek]="firstDayOfWeek()"
+      [deadlineTasksByDay]="deadlineTasksByDay()"
     ></schedule-month>
   } @else if (isDayView()) {
     @if (currentDayPage(); as current) {
@@ -166,10 +167,12 @@
           <schedule-week
             [events]="page.events"
             [beyondBudget]="page.beyondBudget"
+            [trays]="page.trays"
             [daysToShow]="page.daysToShow"
             [workStartEnd]="workStartEnd() || null"
             [currentTimeRow]="page.day === _todayDateStr() ? nowRow() : null"
             [todayDateStr]="_todayDateStr()"
+            [deadlineTasksByDay]="deadlineTasksByDay()"
           ></schedule-week>
         </ng-template>
       </swipe-pager>
@@ -178,12 +181,15 @@
     <schedule-week
       [events]="events()"
       [beyondBudget]="beyondBudget()"
+      [trays]="trays()"
+      (openDay)="openDayView($event)"
       [daysToShow]="daysToShow()"
       [workStartEnd]="workStartEnd() || null"
       [currentTimeRow]="currentTimeRow()"
       [todayDateStr]="_todayDateStr()"
       [isHorizontalScrollMode]="shouldEnableHorizontalScroll()"
       [isHScrolled]="isHScrolled()"
+      [deadlineTasksByDay]="deadlineTasksByDay()"
     ></schedule-week>
   }
 </div>

@@ -3,7 +3,7 @@
   "name": "Solid.js Boilerplate Plugin",
   "version": "1.0.0",
   "manifestVersion": 1,
-  "minSupVersion": "8.0.0",
+  "minSupVersion": "19.3.0",
   "description": "A boilerplate plugin demonstrating Solid.js integration with Super Productivity",
   "author": "Your Name",
   "homepage": "https://github.com/yourusername/your-plugin",
@@ -12,7 +12,7 @@
     "url": "https://github.com/yourusername/your-plugin.git"
   },
   "permissions": [],
-  "hooks": ["taskComplete", "taskUpdate", "contextChange"],
+  "hooks": ["taskComplete", "taskUpdate", "workContextChange"],
   "iFrame": true,
   "sidePanel": false,
   "isSkipMenuEntry": false,

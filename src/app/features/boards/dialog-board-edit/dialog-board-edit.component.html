@@ -1,14 +1,13 @@
-<h2 mat-dialog-title>{{ T.F.BOARDS.V.EDIT_BOARD | translate }}</h2>
-<mat-dialog-content>
-  @if (data.board) {
-    <board-edit
-      #boarEditCmp
-      [isHideBtns]="true"
-      [boardCfg]="data.board"
-    ></board-edit>
-  }
-  <!--  <pre>{{ data.board | json }}</pre>-->
-</mat-dialog-content>
+<!-- The editor renders the title (the view's name) and the content. -->
+@if (data.board) {
+  <board-edit
+    #boarEditCmp
+    [board]="data.board"
+    [openPanelId]="data.openPanelId"
+    [hints]="data.hints ?? []"
+    (afterSave)="close($event)"
+  ></board-edit>
+}
 
 <mat-dialog-actions align="end">
   <button
@@ -18,17 +17,18 @@
     {{ T.G.CANCEL | translate }}
   </button>
 
-  <button
-    (click)="removeBoard()"
-    mat-button
-    color="warn"
-  >
-    <mat-icon>delete_forever</mat-icon>
-    {{ T.G.DELETE | translate }}
-  </button>
+  @if (!data.isCreate) {
+    <button
+      (click)="removeBoard()"
+      mat-button
+      color="warn"
+    >
+      <mat-icon>delete_forever</mat-icon>
+      {{ T.G.DELETE | translate }}
+    </button>
+  }
 
   <button
-    [disabled]="!boarEditCmp()?.form.valid"
     (click)="save()"
     color="primary"
     mat-flat-button

@@ -28,6 +28,7 @@
             <button
               class="additional-btn"
               mat-icon-button
+              [attr.data-nav-btn]="btn.id"
               [matTooltip]="btn.tooltip | translate"
               (click)="btn.action?.()"
             >

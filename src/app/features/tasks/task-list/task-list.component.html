@@ -36,7 +36,7 @@
       : $safeNavigationMigration(filteredTasks()?.length)
   "
   [attr.data-id]="listModelId()"
-  [class.is-multi-dragging]="multiDrag.isListGroupDrag()"
+  [class.is-multi-dragging]="!isInView && multiDrag.isListGroupDrag()"
   class="task-list-inner"
 >
   @for (task of filteredTasks(); track trackByFn($index, task); let i = $index) {
@@ -50,38 +50,27 @@
       [cdkDragDisabled]="listModelId() === 'LATER_TODAY' || isTouchSelectionMode()"
       [cdkDragData]="task"
       [class.multi-drag-source]="
-        multiDrag.isListGroupDrag() && multiDrag.draggedIds().has(task.id)
+        !isInView && multiDrag.isListGroupDrag() && multiDrag.draggedIds().has(task.id)
       "
       (pointerdown)="onDragPointerDown(task, $event)"
       (cdkDragStarted)="onDragStarted(task, $event)"
       (cdkDragEnded)="onDragEnded()"
     >
       @if (
-        !task.parentId &&
+        listId() === 'PARENT' &&
         multiDrag.selectedIds().has(task.id) &&
         multiDrag.selectionSize() > 1
       ) {
         <ng-template cdkDragPreview>
-          <div class="multi-task-drag-preview">
-            <div class="multi-task-drag-preview-count">
-              {{
-                T.F.TASK.MULTI_SELECT.SELECTED_COUNT
-                  | translate
-                    : { count: multiDrag.ids().length || multiDrag.selectionSize() }
-              }}
-            </div>
-            <div class="multi-task-drag-preview-tasks">
-              @for (draggedTask of multiDrag.previewTasks(); track draggedTask.id) {
-                <div class="multi-task-drag-preview-row">{{ draggedTask.title }}</div>
-              }
-            </div>
-          </div>
+          <task-group-drag-preview
+            [count]="multiDrag.ids().length || multiDrag.selectionSize()"
+            [tasks]="multiDrag.previewTasks()"
+          ></task-group-drag-preview>
         </ng-template>
       }
     </task>
   }
+  @if (noTasksMsg() && !allTasksLength()) {
+    <div class="no-tasks">{{ noTasksMsg() }}</div>
+  }
 </div>
-
-@if (noTasksMsg() && !allTasksLength()) {
-  <div class="no-tasks">{{ noTasksMsg() }}</div>
-}

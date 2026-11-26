@@ -62,18 +62,18 @@ describe('source task snapshots preserve additive time', () => {
     expect(isTimePreservingTaskSnapshot(actual.localWinOp)).toBeTrue();
   });
 
-  // v19.2.0 builds snapshots before `isWontDo` existed, so it isn't in their clears.
-  it('still recognises a snapshot whose clears predate isWontDo', () => {
+  // v19.2.0 builds snapshots before `wontDoOn` existed, so it isn't in their clears.
+  it('still recognises a snapshot whose clears predate wontDoOn', () => {
     const [actual] = preserveTaskSnapshotTimes([resolution], []);
     const payload = actual.localWinOp.payload as { clearedFields: string[] };
     const released = {
       ...actual.localWinOp,
       payload: {
         ...payload,
-        clearedFields: payload.clearedFields.filter((field) => field !== 'isWontDo'),
+        clearedFields: payload.clearedFields.filter((field) => field !== 'wontDoOn'),
       },
     };
-    expect(payload.clearedFields).toContain('isWontDo');
+    expect(payload.clearedFields).toContain('wontDoOn');
     expect(isTimePreservingTaskSnapshot(released)).toBeTrue();
   });
 

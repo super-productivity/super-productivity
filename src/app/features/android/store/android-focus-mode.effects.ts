@@ -1,6 +1,6 @@
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
-import { createSelector, Store } from '@ngrx/store';
+import { Action, createSelector, Store } from '@ngrx/store';
 import {
   exhaustMap,
   filter,
@@ -49,6 +49,7 @@ import { DataInitStateService } from '../../../core/data-init/data-init-state.se
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
 import { bulkApplyOperations } from '../../../op-log/apply/bulk-hydration.action';
+import { AndroidNotificationActionService } from '../android-notification-action.service';
 
 type FocusNotificationTask = Pick<Task, 'id' | 'title'> | null | undefined;
 
@@ -179,6 +180,25 @@ export const shouldHandleNativeTimerComplete = (
   return now - timer.startedAt >= timer.duration - NATIVE_COMPLETE_TOLERANCE_MS;
 };
 
+/**
+ * The state change for a native timer completion that passed
+ * `shouldHandleNativeTimerComplete`. A finished break only stops (via a
+ * wall-clock tick) and stays on the break screen until the user leaves it, like
+ * on desktop; skipping it would auto-start the next Pomodoro session and loop
+ * endlessly while the user is away.
+ */
+export const getNativeTimerCompleteAction = (
+  isBreak: boolean,
+  // Lazy: computing it credits tracked time, which only a work completion should do.
+  getCompletedDuration: () => number,
+): Action =>
+  isBreak
+    ? focusModeActions.tick()
+    : focusModeActions.completeFocusSession({
+        isManual: false,
+        completedDuration: getCompletedDuration(),
+      });
+
 export type NativeFocusModeData = {
   durationMs: number;
   /** Countdown remainder, or elapsed time for Flowtime (durationMs === 0). */
@@ -276,6 +296,7 @@ export class AndroidFocusModeEffects {
   private _syncTrigger = inject(SyncTriggerService);
   private _dataInitState = inject(DataInitStateService);
   private _operationWriteFlush = inject(OperationWriteFlushService);
+  private _notificationActions = inject(AndroidNotificationActionService);
   // Set on resume so the next emission checks the native service even when a
   // quick return keeps the elapsed jump below the 5s update gate (#9531).
   private _isNativeServiceCheckDue = false;
@@ -672,6 +693,8 @@ export class AndroidFocusModeEffects {
       if (task && data.isTaskTracking) {
         this._taskService.setCurrentId(task.id);
       }
+      // Skip/Complete tapped while the store had no session (#10683).
+      this._notificationActions.drainFocus(true);
       await this._operationWriteFlush.flushPendingWrites();
     } catch (error) {
       DroidLog.err('Failed to recover focus task time', error);
@@ -718,20 +741,11 @@ export class AndroidFocusModeEffects {
             'AndroidFocusModeEffects: Native timer complete received, isBreak=' + isBreak,
           ),
         ),
-        withLatestFrom(
-          this._store.select(selectTimer),
-          this._store.select(selectPausedTaskId),
-        ),
+        withLatestFrom(this._store.select(selectTimer)),
         filter(([isBreak, timer]) => shouldHandleNativeTimerComplete(isBreak, timer)),
-        map(([isBreak, timer, pausedTaskId]) => {
-          if (isBreak) {
-            return focusModeActions.skipBreak({ pausedTaskId });
-          }
-          return focusModeActions.completeFocusSession({
-            isManual: false,
-            completedDuration: this._completionDuration(timer),
-          });
-        }),
+        map(([isBreak, timer]) =>
+          getNativeTimerCompleteAction(isBreak, () => this._completionDuration(timer)),
+        ),
       ),
     );
 

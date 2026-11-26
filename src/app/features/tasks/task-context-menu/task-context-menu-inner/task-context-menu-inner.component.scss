@@ -4,25 +4,15 @@
 @use '../../menu-item-styles';
 
 .quick-access {
-  display: flex;
-  justify-content: space-evenly;
-  @include extraBorder('-bottom');
-  height: 48px;
+  @include quickAccessRow;
 
   > button {
-    height: 48px;
-    min-width: 40px;
-    flex-grow: 1;
-    border-radius: var(--card-border-radius) !important;
-
-    ::ng-deep .mat-mdc-button-persistent-ripple {
-      border-radius: var(--card-border-radius) !important;
-    }
+    @include quickAccessBtn(var(--state-hover));
   }
+}
 
-  button + button {
-    border-left: 1px solid var(--extra-border-color) !important;
-  }
+.quick-access-label {
+  @include quickAccessLabel;
 }
 
 .label {

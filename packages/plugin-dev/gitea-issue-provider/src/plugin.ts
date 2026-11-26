@@ -36,6 +36,7 @@ interface GiteaConfig {
   scope?: string;
   filterLabels?: string;
   excludeLabels?: string;
+  includePullRequests?: boolean;
 }
 
 interface GiteaUser {
@@ -190,6 +191,12 @@ registerIssueProvider({
       label: t('CFG.EXCLUDE_LABELS'),
       advanced: true,
     },
+    {
+      key: 'includePullRequests',
+      type: 'checkbox' as const,
+      label: t('CFG.INCLUDE_PULL_REQUESTS'),
+      advanced: true,
+    },
   ],
 
   getHeaders: (config) => giteaHeaders(asConfig<GiteaConfig>(config)),
@@ -207,9 +214,11 @@ registerIssueProvider({
     const params: Record<string, string> = {
       limit: '100',
       state: 'open',
-      type: 'issues',
       q: searchTerm,
     };
+    if (!cfg.includePullRequests) {
+      params['type'] = 'issues';
+    }
     if (cfg.scope === SCOPE_CREATED_BY_ME) {
       params['created'] = 'true';
     } else if (cfg.scope === SCOPE_ASSIGNED_TO_ME) {
@@ -308,9 +317,11 @@ registerIssueProvider({
       const params: Record<string, string> = {
         limit: '100',
         state: 'open',
-        type: 'issues',
         page: page.toString(),
       };
+      if (!cfg.includePullRequests) {
+        params['type'] = 'issues';
+      }
       if (cfg.scope === SCOPE_CREATED_BY_ME || cfg.scope === SCOPE_ASSIGNED_TO_ME) {
         user = user || (await http.get<GiteaUser>(`${base}/user`));
         if (cfg.scope === SCOPE_CREATED_BY_ME) {

@@ -110,3 +110,21 @@ export const getFocusModeSoundVolume = (
   const relative = focusModeSoundVolume ?? DEFAULT_FOCUS_MODE_SOUND_VOLUME;
   return Math.round((main * Math.min(Math.max(relative, 0), 100)) / 100);
 };
+
+const MINUTE_MS = 60 * 1000;
+
+/**
+ * Countdown length for a task: the default, unless the task's remaining
+ * estimate is shorter — a 15 min task shouldn't get a 25 min countdown.
+ * Rounded up to whole minutes to match the duration slider.
+ */
+export const getCountdownDurationForTask = (
+  defaultDuration: number,
+  task: Readonly<{ timeEstimate: number; timeSpent: number }>,
+): number => {
+  const remaining = task.timeEstimate - task.timeSpent;
+  if (remaining <= 0) {
+    return defaultDuration;
+  }
+  return Math.min(defaultDuration, Math.ceil(remaining / MINUTE_MS) * MINUTE_MS);
+};

@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Task } from '../task.model';
-import { TaskService } from '../task.service';
+import { isWontDoTask } from '../util/is-wont-do-task';
+import { TaskArchiveOrchestratorService } from '../task-archive-orchestrator.service';
 import { T } from '../../../t.const';
 import { DateService } from 'src/app/core/date/date.service';
 import { DialogViewArchivedTaskComponent } from '../dialog-view-archived-task/dialog-view-archived-task.component';
@@ -47,7 +48,7 @@ import { TranslatePipe } from '@ngx-translate/core';
   ],
 })
 export class TaskSummaryTableComponent {
-  private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _dateService = inject(DateService);
   private _matDialog = inject(MatDialog);
 
@@ -56,9 +57,10 @@ export class TaskSummaryTableComponent {
   readonly updated = output<void>();
 
   T: typeof T = T;
+  readonly isWontDoTask = isWontDoTask;
 
   updateTimeSpentTodayForTask(task: Task, newVal: number | string): void {
-    this._taskService.updateEverywhere(task.id, {
+    this._taskArchiveOrchestrator.updateEverywhere(task.id, {
       timeSpentOnDay: {
         ...task.timeSpentOnDay,
         [this.day()]: +newVal,
@@ -68,7 +70,7 @@ export class TaskSummaryTableComponent {
   }
 
   updateTaskTitle(task: Task, newVal: string): void {
-    this._taskService.updateEverywhere(task.id, {
+    this._taskArchiveOrchestrator.updateEverywhere(task.id, {
       title: newVal,
     });
     this.updated.emit();
@@ -82,7 +84,7 @@ export class TaskSummaryTableComponent {
   }
 
   toggleTaskDone(task: Task): void {
-    this._taskService.updateEverywhere(task.id, {
+    this._taskArchiveOrchestrator.updateEverywhere(task.id, {
       isDone: !task.isDone,
     });
     // task.isDone

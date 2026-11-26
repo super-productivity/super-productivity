@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { MatTab, MatTabContent, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
+import { TabHeaderWheelScrollDirective } from '../../ui/tab-header-wheel-scroll/tab-header-wheel-scroll.directive';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { IssueProviderTabComponent } from './issue-provider-tab/issue-provider-tab.component';
@@ -39,6 +40,7 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
   selector: 'issue-panel',
   imports: [
     MatTabGroup,
+    TabHeaderWheelScrollDirective,
     MatTab,
     MatTabLabel,
     MatIcon,
@@ -76,15 +78,18 @@ export class IssuePanelComponent {
       tooltip: string;
       missingPluginName?: string;
     }[]
-  > = computed(
-    () =>
+  > = computed(() => {
+    // Re-evaluate when a provider's plugin registers after this panel opened.
+    this._pluginRegistry.registrationVersion();
+    return (
       this.issueProviders()?.map((p) => ({
         issueProvider: this._withPluginAvailability(p),
         initials: getIssueProviderInitials(p),
         tooltip: getIssueProviderTooltip(p),
         missingPluginName: this._getMissingPluginName(p),
-      })) || [],
-  );
+      })) || []
+    );
+  });
 
   constructor() {
     this._setSelectedTabIndex();

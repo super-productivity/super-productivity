@@ -3,7 +3,8 @@ import typia from 'typia';
 import { distinctUntilChanged, first, map, take, withLatestFrom } from 'rxjs/operators';
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Observable } from 'rxjs';
+import { merge, Observable } from 'rxjs';
+import { pageHidden$ } from '../../util/page-hidden';
 import {
   ArchiveTask,
   DEFAULT_TASK,
@@ -82,7 +83,6 @@ import {
   moveProjectTaskToTopInBacklogList,
   moveProjectTaskUpInBacklogList,
 } from '../project/store/project.actions';
-import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-store/root-state';
 import { DateService } from '../../core/date/date.service';
 import {
@@ -91,11 +91,10 @@ import {
   syncTimeTracking,
 } from '../time-tracking/store/time-tracking.actions';
 import { selectTimeTrackingState } from '../time-tracking/store/time-tracking.selectors';
-import { ArchiveService } from '../archive/archive.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
+import { isDBDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
@@ -117,13 +116,11 @@ export class TaskService {
   private readonly _timeTrackingService = inject(GlobalTrackingIntervalService);
   private readonly _dateService = inject(DateService);
   private readonly _router = inject(Router);
-  private readonly _archiveService = inject(ArchiveService);
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private readonly _timeBlockDeleteSidecar = inject(TimeBlockDeleteSidecarService);
-  private readonly _archiveTaskPromisesById = new Map<string, Promise<void>>();
   private readonly _taskTimeSync = inject(TaskTimeSyncService);
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
@@ -197,7 +194,7 @@ export class TaskService {
     ),
   );
 
-  private _lastFocusedTaskEl: HTMLElement | null = null;
+  private _lastFocusedTaskEl: WeakRef<HTMLElement> | null = null;
   private _allTasks$: Observable<Task[]> = this._store.pipe(select(selectAllTasks));
   private _taskEntities = this._store.selectSignal(selectTaskEntities);
 
@@ -215,7 +212,7 @@ export class TaskService {
           ev.target instanceof HTMLElement &&
           ev.target.tagName.toLowerCase() === 'task'
         ) {
-          this._lastFocusedTaskEl = ev.target;
+          this._lastFocusedTaskEl = new WeakRef(ev.target);
         }
       },
       true,
@@ -244,8 +241,8 @@ export class TaskService {
         }
       });
 
-    // Flush accumulated time when task stops (currentTaskId becomes null or changes)
-    this.currentTaskId$.subscribe(() => {
+    // Flush when the task stops or changes, and when the page is hidden (tab/app switch)
+    merge(this.currentTaskId$, pageHidden$()).subscribe(() => {
       this._flushAccumulatedTimeSpent();
     });
 
@@ -434,8 +431,9 @@ export class TaskService {
     additional: Partial<Task> = {},
     due: number,
     remindCfg?: TaskReminderOptionId,
+    isIgnoreShortSyntax = false,
   ): Promise<string> {
-    const id = this.add(title, undefined, additional, undefined);
+    const id = this.add(title, undefined, additional, undefined, isIgnoreShortSyntax);
     const task = await this.getByIdOnce$(id).toPromise();
     this.scheduleTask(
       task,
@@ -509,7 +507,7 @@ export class TaskService {
     this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds, tasks }));
   }
 
-  update(id: string, changedFields: Partial<Task>): void {
+  update(id: string, changedFields: Partial<Task>, isIgnoreShortSyntax = false): void {
     if (Object.prototype.hasOwnProperty.call(changedFields, 'timeSpentOnDay')) {
       this._taskTimeSync.flushOne(id);
     }
@@ -535,6 +533,7 @@ export class TaskService {
       TaskSharedActions.updateTask({
         task: { id, changes: changedFields },
         ...(projectMoveSubTaskIds !== undefined && { projectMoveSubTaskIds }),
+        ...(isIgnoreShortSyntax && { isIgnoreShortSyntax }),
       }),
     );
   }
@@ -702,7 +701,6 @@ export class TaskService {
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
 
-      // this.
       if (isBacklog) {
         const undoneBacklogTaskIds = await this._workContextService.undoneBacklogTaskIds$
           .pipe(take(1))
@@ -923,9 +921,7 @@ export class TaskService {
   }
 
   focusLastFocusedTask(): void {
-    if (this._lastFocusedTaskEl) {
-      this._lastFocusedTaskEl.focus();
-    }
+    this._lastFocusedTaskEl?.deref()?.focus();
   }
 
   focusTaskIfPossible(id: string): void {
@@ -940,120 +936,6 @@ export class TaskService {
     const tEl = document.getElementsByTagName('task');
     if (tEl && tEl[0]) {
       (tEl[0] as HTMLElement).focus();
-    }
-  }
-
-  async moveToArchive(tasks: TaskWithSubTasks | TaskWithSubTasks[]): Promise<void> {
-    if (!tasks) {
-      TaskLog.err('[TaskService] moveToArchive called with null/undefined tasks');
-      return;
-    }
-
-    if (!Array.isArray(tasks)) {
-      TaskLog.warn('[TaskService] moveToArchive converting single task to array', {
-        id: tasks.id,
-      });
-      tasks = [tasks];
-    }
-
-    if (!tasks.length) {
-      TaskLog.log('[TaskService] No tasks to archive');
-      return;
-    }
-
-    TaskLog.log('[TaskService] moveToArchive called with:', {
-      count: tasks.length,
-      taskIds: tasks.map((t) => t?.id),
-      tasksType: typeof tasks,
-      isArray: Array.isArray(tasks),
-    });
-
-    // NOTE: malformed tasks (missing/invalid ids) are dropped inside archive.service
-    // via sanitizeTasksForArchiving, which also covers writeTasksToArchiveForRemoteSync.
-    // We only update real parents here since otherwise we'd move sub-tasks without
-    // their parent into the archive.
-    const subTasks = tasks.filter((t) => t?.parentId);
-    const parentTasks = tasks.filter((t) => t && !t.parentId);
-
-    TaskLog.log('[TaskService] Filtered tasks:', {
-      parentTasks: parentTasks.map((t) => t.id),
-      subTasks: subTasks.map((t) => t.id),
-    });
-
-    if (subTasks.length) {
-      if (this._workContextService.activeWorkContextType !== WorkContextType.TAG) {
-        // this should be handled by moving parentTasks to archive
-        devError('Trying to move sub tasks into archive for project');
-      } else {
-        // when on a tag such as today, we simply remove the tag instead of attempting to move to archive
-        const tagToRemove = this._workContextService.activeWorkContextId;
-        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
-        TaskLog.log('[TaskService] Removing tag from subtasks:', tagToRemove);
-        subTasks.forEach((st) => {
-          this.updateTags(
-            st,
-            st.tagIds.filter((tid) => tid !== tagToRemove),
-          );
-        });
-      }
-    }
-
-    const parentTasksToArchive: TaskWithSubTasks[] = [];
-    const reservedTaskIds = new Set<string>();
-    const existingArchivePromises = new Set<Promise<void>>();
-    for (const task of parentTasks) {
-      if (task.id) {
-        const existingArchivePromise = this._archiveTaskPromisesById.get(task.id);
-        if (existingArchivePromise) {
-          TaskLog.log('[TaskService] Archive already in progress', { id: task.id });
-          existingArchivePromises.add(existingArchivePromise);
-          continue;
-        }
-        if (reservedTaskIds.has(task.id)) {
-          continue;
-        }
-        reservedTaskIds.add(task.id);
-      }
-      parentTasksToArchive.push(task);
-    }
-
-    if (parentTasksToArchive.length) {
-      // Only move parent tasks to archive, never subtasks
-      // Note: Full task payload required for sync - see docs/sync-and-op-log/operation-log-architecture.md
-      // Persist first: dispatch removes the tasks from NgRx and makes the captured
-      // operation eligible for a full-state snapshot. If archive persistence were
-      // still in flight, that snapshot could acknowledge the operation while
-      // omitting its archived task data.
-      const archivePromise = (async (): Promise<void> => {
-        TaskLog.log('[TaskService] Calling archive service to persist tasks');
-        await this._archiveService.moveTasksToArchiveAndFlushArchiveIfDue(
-          parentTasksToArchive,
-        );
-        TaskLog.log('[TaskService] Dispatching moveToArchive action for parent tasks');
-        this._store.dispatch(
-          TaskSharedActions.moveToArchive({ tasks: parentTasksToArchive }),
-        );
-        TaskLog.log('[TaskService] Archive operation completed successfully');
-      })();
-      for (const taskId of reservedTaskIds) {
-        this._archiveTaskPromisesById.set(taskId, archivePromise);
-      }
-
-      try {
-        await Promise.all([...existingArchivePromises, archivePromise]);
-      } finally {
-        for (const taskId of reservedTaskIds) {
-          if (this._archiveTaskPromisesById.get(taskId) === archivePromise) {
-            this._archiveTaskPromisesById.delete(taskId);
-          }
-        }
-      }
-    } else if (existingArchivePromises.size > 0) {
-      // A duplicate caller observes the same success/failure and does not return
-      // before the durable archive write plus NgRx removal have completed.
-      await Promise.all(existingArchivePromises);
-    } else {
-      TaskLog.log('[TaskService] No parent tasks to archive');
     }
   }
 
@@ -1091,10 +973,6 @@ export class TaskService {
     if (this.isTimeTrackingEnabled() || this.currentTaskId() != null) {
       this._store.dispatch(toggleStart());
     }
-  }
-
-  restoreTask(task: Task, subTasks: Task[]): void {
-    this._store.dispatch(TaskSharedActions.restoreTask({ task, subTasks }));
   }
 
   async roundTimeSpentForDayEverywhere({
@@ -1220,8 +1098,8 @@ export class TaskService {
     return this._store.pipe(select(selectTasksByTag, { tagId }));
   }
 
-  setDone(id: string, isWontDo?: boolean): void {
-    this.update(id, { isDone: true, ...(isWontDo ? { isWontDo } : {}) });
+  setDone(id: string): void {
+    this.update(id, { isDone: true });
   }
 
   markIssueUpdatesAsRead(id: string): void {
@@ -1304,98 +1182,6 @@ export class TaskService {
 
   // GLOBAL TASK MODEL STUFF
   // -----------------------
-
-  // BEWARE: does only work for task model updates, but not for related models
-  async updateEverywhere(id: string, changedFields: Partial<Task>): Promise<void> {
-    const state = await this.taskFeatureState$.pipe(first()).toPromise();
-    const { entities } = state;
-    if (entities[id]) {
-      this.update(id, changedFields);
-    } else {
-      await this.updateArchiveTask(id, changedFields);
-    }
-  }
-
-  // TODO remove in favor of calling this directly
-  // BEWARE: does only work for task model updates, but not the meta models
-  async updateArchiveTask(id: string, changedFields: Partial<Task>): Promise<void> {
-    return this._taskArchiveService.updateTask(id, changedFields);
-  }
-
-  // BEWARE: does only work for task model updates, but not the meta models
-  async updateArchiveTasks(updates: Update<Task>[]): Promise<void> {
-    return this._taskArchiveService.updateTasks(updates);
-  }
-
-  async getByIdFromEverywhere(id: string, isArchive?: boolean): Promise<Task> {
-    if (isArchive === undefined) {
-      const task = await this.getByIdOnce$(id).toPromise();
-      if (task) {
-        return task;
-      }
-      return await this._taskArchiveService.getById(id);
-    }
-
-    if (isArchive) {
-      return await this._taskArchiveService.getById(id);
-    } else {
-      return await this.getByIdOnce$(id).toPromise();
-    }
-  }
-
-  async getAllTasksForProject(projectId: string): Promise<Task[]> {
-    const allTasks = await this._allTasks$.pipe(first()).toPromise();
-    const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
-    const ids = (archiveTaskState && (archiveTaskState.ids as string[])) || [];
-    const archiveTasks = ids
-      .map((id) => archiveTaskState.entities[id])
-      .filter((task): task is Task => !!task);
-    return [...allTasks, ...archiveTasks].filter((task) => task.projectId === projectId);
-  }
-
-  async getArchiveTasksForRepeatCfgId(repeatCfgId: string): Promise<Task[]> {
-    const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
-    const ids = (archiveTaskState && (archiveTaskState.ids as string[])) || [];
-    const archiveTasks = ids
-      .map((id) => archiveTaskState.entities[id])
-      .filter((task): task is Task => !!task);
-    return archiveTasks.filter((task) => task.repeatCfgId === repeatCfgId);
-  }
-
-  async getArchivedTasks(): Promise<Task[]> {
-    const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
-    const ids = (archiveTaskState && (archiveTaskState.ids as string[])) || [];
-    return ids
-      .map((id) => archiveTaskState.entities[id])
-      .filter((task): task is Task => !!task);
-  }
-
-  async getAllIssueIdsForProject(
-    projectId: string,
-    issueProviderKey: IssueProviderKey,
-  ): Promise<string[]> {
-    const allTasks = await this.getAllTasksForProject(projectId);
-    return allTasks
-      .filter((task) => task.issueType === issueProviderKey)
-      .map((task) => task.issueId) as string[];
-  }
-
-  async getAllIssueIdsForProviderEverywhere(issueProviderId: string): Promise<string[]> {
-    const allTasks = await this.getAllTasksEverywhere();
-    return allTasks
-      .filter((task) => task.issueProviderId === issueProviderId)
-      .map((task) => task.issueId) as string[];
-  }
-
-  async getAllTasksEverywhere(): Promise<Task[]> {
-    const allTasks = await this._allTasks$.pipe(first()).toPromise();
-    const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
-    const ids = (archiveTaskState && (archiveTaskState.ids as string[])) || [];
-    const archiveTasks = ids
-      .map((id) => archiveTaskState.entities[id])
-      .filter((task): task is Task => !!task);
-    return [...allTasks, ...archiveTasks] as Task[];
-  }
 
   async checkForTaskWithIssueEverywhere(
     issueId: string | number,
@@ -1489,7 +1275,7 @@ export class TaskService {
       !additional.parentId &&
       !additional.dueWithTime &&
       !('dueDay' in additional)
-        ? { dueDay: getDbDateStr() }
+        ? { dueDay: this._dateService.todayStr() }
         : {}),
 
       ...additional,

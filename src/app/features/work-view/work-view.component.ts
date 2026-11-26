@@ -9,6 +9,7 @@ import {
   afterNextRender,
   inject,
   input,
+  linkedSignal,
   OnDestroy,
   OnInit,
   signal,
@@ -18,14 +19,16 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   animationFrameScheduler,
+  firstValueFrom,
   from,
   fromEvent,
   Observable,
@@ -46,9 +49,16 @@ import {
   CustomizedUndoneTasks,
   TaskViewCustomizerService,
 } from '../task-view-customizer/task-view-customizer.service';
+import { DEFAULT_OPTIONS } from '../task-view-customizer/types';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
+import { groupTasksBySection } from '../section/section.util';
+import { WorkContextType } from '../work-context/work-context.model';
+import {
+  AddTaskBarComponent,
+  TaskAddEvent,
+} from '../tasks/add-task-bar/add-task-bar.component';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -59,7 +69,7 @@ import {
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
-import { MatButton, MatMiniFabButton } from '@angular/material/button';
+import { MatButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { TaskListComponent } from '../tasks/task-list/task-list.component';
 import { SplitComponent } from './split/split.component';
 import { BacklogComponent } from './backlog/backlog.component';
@@ -90,6 +100,7 @@ import { GlobalConfigService } from '../config/global-config.service';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TODAY_TAG } from '../tag/tag.const';
+import { getEmptyStateHint } from './get-empty-state-hint';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { FinishDayBtnComponent } from './finish-day-btn/finish-day-btn.component';
 import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe';
@@ -106,6 +117,7 @@ import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PlainspaceClaimPoolComponent } from '../plainspace/claim-pool/claim-pool.component';
 import { PlainspaceSharedTask } from '../plainspace/plainspace-shared-task.model';
+import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 // Stable reference used as the toSignal initial value below so the deselect
 // effect can tell "the customized list hasn't emitted yet" apart from a
@@ -132,6 +144,8 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     MatIcon,
     MatMiniFabButton,
     MatButton,
+    MatIconButton,
+    RouterLink,
     TaskListComponent,
     SplitComponent,
     BacklogComponent,
@@ -147,6 +161,7 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     PluginIndexComponent,
     PlainspaceClaimPoolComponent,
     PlannerCalendarEventComponent,
+    AddTaskBarComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
@@ -154,12 +169,14 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private static readonly _FOCUS_ITEM_MAX_RETRIES = 20;
 
   taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   takeABreakService = inject(TakeABreakService);
   layoutService = inject(LayoutService);
   sectionService = inject(SectionService);
   customizerService = inject(TaskViewCustomizerService);
   workContextService = inject(WorkContextService);
   private _activatedRoute = inject(ActivatedRoute);
+  private _router = inject(Router);
   private _projectService = inject(ProjectService);
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
@@ -177,11 +194,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     initialValue: false,
   });
 
-  private _isTodayContext = toSignal(
-    this.workContextService.activeWorkContext$.pipe(
-      map((ctx) => ctx.id === TODAY_TAG.id),
-    ),
-    { initialValue: false },
+  private _activeWorkContext = toSignal(this.workContextService.activeWorkContext$);
+
+  private _isTodayContext = computed(
+    () => this._activeWorkContext()?.id === TODAY_TAG.id,
   );
 
   /**
@@ -281,6 +297,24 @@ export class WorkViewComponent implements OnInit, OnDestroy {
 
   hasDoneTasks = computed(() => this.doneTasks().length > 0);
 
+  // Only when the list is truly empty: overdue, later-today or backlog tasks
+  // on screen would contradict a sentence telling the user to add tasks.
+  emptyStateHint = computed(() => {
+    const ctx = this._activeWorkContext();
+    const hasLaterToday =
+      this.isOnTodayList() &&
+      (this.laterTodayTasks().length > 0 || this.laterTodayCalendarEvents().length > 0);
+    if (
+      !ctx ||
+      this.isShowOverduePanel() ||
+      hasLaterToday ||
+      (this.backlogTasks()?.length ?? 0) > 0
+    ) {
+      return null;
+    }
+    return getEmptyStateHint(ctx);
+  });
+
   todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
     initialValue: 0,
   });
@@ -294,6 +328,13 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   selectedTaskId = this.taskService.selectedTaskId;
   isOnTodayList = toSignal(this.workContextService.isTodayList$, { initialValue: false });
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
+  // Projected content is built even while its collapsible is closed, so the Done
+  // list is created on first expand only; it is kept afterwards so collapsing
+  // animates the rows out and re-expanding is free.
+  isDoneListBuilt = linkedSignal<boolean, boolean>({
+    source: this.isDoneHidden,
+    computation: (isHidden, previous) => !!previous?.value || !isHidden,
+  });
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
   isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
@@ -340,37 +381,15 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     { initialValue: [] as readonly Section[] },
   );
 
-  undoneTasksBySection = computed(() => {
-    const tasks = this.undoneTasks();
-    const sections = this.sections();
+  undoneTasksBySection = computed(() =>
+    groupTasksBySection(this.undoneTasks(), this.sections()),
+  );
 
-    if (!sections.length) {
-      return { dict: {} as Record<string, TaskWithSubTasks[]>, noSection: tasks };
-    }
-
-    // section.taskIds is authoritative for in-section order — drag-drop
-    // reorders go through addTaskToSection's reducer. Walking sections
-    // first (rather than tasks first) lets us respect that order while
-    // staying defensive against stale ids and tasks that aren't yet in
-    // any section.
-    const taskById = new Map(tasks.map((t) => [t.id, t]));
-    const dict: Record<string, TaskWithSubTasks[]> = {};
-    const inSection = new Set<string>();
-    for (const s of sections) {
-      const list: TaskWithSubTasks[] = [];
-      for (const tId of s.taskIds ?? []) {
-        const t = taskById.get(tId);
-        if (t) {
-          list.push(t);
-          inSection.add(tId);
-        }
-      }
-      dict[s.id] = list;
-    }
-    const noSection = tasks.filter((t) => !inSection.has(t.id));
-
-    return { dict, noSection };
-  });
+  /**
+   * The section (`s:<id>`) or group (`g:<key>`) whose header "+" opened its
+   * inline add bar; one at a time. Local UI state, never persisted.
+   */
+  inlineAddKey = signal<string | null>(null);
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
@@ -553,6 +572,87 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this.layoutService.isWorkViewScrolled.set(false);
   }
 
+  openSectionAddTask(section: Section): void {
+    if (!section.isExpanded) {
+      this.sectionService.updateSection(section.id, { isExpanded: true });
+    }
+    this.inlineAddKey.set('s:' + section.id);
+  }
+
+  openGroupAddTask(key: string): void {
+    if (this.customizerService.collapsedGroupIds().includes(key)) {
+      this.customizerService.toggleGroupExpansion(key);
+    }
+    this.inlineAddKey.set('g:' + key);
+  }
+
+  /** Moves the task the section's add bar created (or picked) into the section. */
+  async addToSection(
+    section: Section,
+    { taskId, isAddToBottom }: TaskAddEvent,
+  ): Promise<void> {
+    const sectionId = section.id;
+    // The bar's chips (project, date, backlog toggle) can send the task out of
+    // the section's list; a section entry for it would be stale.
+    if (!(await this._isShownInSectionContext(section, taskId))) {
+      return;
+    }
+    const sourceSectionId =
+      this.sections().find((s) => s.taskIds.includes(taskId))?.id ?? null;
+    if (sourceSectionId === sectionId) {
+      return;
+    }
+    const sectionTasks = this.undoneTasksBySection().dict[sectionId] ?? [];
+    const afterTaskId = isAddToBottom ? (sectionTasks.at(-1)?.id ?? null) : null;
+    this.sectionService.addTaskToSection(sectionId, taskId, afterTaskId, sourceSectionId);
+  }
+
+  /**
+   * Closes only the given bar: clicking another header's "+" while a bar is open
+   * makes the old bar's click-outside `done` fire after the new key is set.
+   */
+  closeInlineAdd(key: string): void {
+    if (this.inlineAddKey() === key) {
+      this.inlineAddKey.set(null);
+    }
+  }
+
+  /** A collapsed section or group drops its add bar, so it doesn't come back on expand. */
+  onSectionExpandedChange(section: Section, isExpanded: boolean): void {
+    this.sectionService.updateSection(section.id, { isExpanded });
+    if (!isExpanded) {
+      this.closeInlineAdd('s:' + section.id);
+    }
+  }
+
+  onGroupExpandedChange(key: string): void {
+    this.customizerService.toggleGroupExpansion(key);
+    this.closeInlineAdd('g:' + key);
+  }
+
+  private async _isShownInSectionContext(
+    section: Section,
+    taskId: string,
+  ): Promise<boolean> {
+    const task = await firstValueFrom(this.taskService.getByIdOnce$(taskId));
+    if (!task) {
+      return false;
+    }
+    if (section.contextType === WorkContextType.PROJECT) {
+      const project = await firstValueFrom(
+        this._projectService.getByIdOnce$(section.contextId),
+      );
+      return (
+        task.projectId === section.contextId && !project?.backlogTaskIds.includes(taskId)
+      );
+    }
+    // TODAY is the only tag with sections; its membership is the due date.
+    return (
+      task.dueDay === this._dateService.todayStr() ||
+      (!!task.dueWithTime && this._dateService.isToday(task.dueWithTime))
+    );
+  }
+
   deleteSection(id: string): void {
     this._matDialog
       .open(DialogConfirmComponent, {
@@ -572,6 +672,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   editSection(id: string, title: string): void {
     this._matDialog
       .open(DialogPromptComponent, {
+        autoFocus: DIALOG_AUTO_FOCUS_TYPING,
         data: {
           placeholder: T.WW.ADD_SECTION_TITLE,
           txtValue: title,
@@ -591,13 +692,15 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   }
 
   async moveDoneToArchive(): Promise<void> {
-    const doneTasks = this.doneTasks();
+    // not this.doneTasks(): on Today that hides done tasks from earlier days,
+    // which should still be swept
+    const doneTasks = await firstValueFrom(this.workContextService.doneTasksToArchive$);
 
     if (!doneTasks || doneTasks.length === 0) {
       return;
     }
 
-    await this.taskService.moveToArchive(doneTasks);
+    await this._taskArchiveOrchestrator.moveToArchive(doneTasks);
     this._snackService.open({
       msg: T.F.TASK.S.MOVED_TO_ARCHIVE,
       type: 'SUCCESS',
@@ -605,6 +708,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       translateParams: {
         nr: doneTasks.length,
       },
+      // archived tasks leave every list; History is where they can be viewed and restored
+      actionStr: T.MH.HISTORY,
+      actionFn: () => this._router.navigate(['/active/history']),
     });
   }
 
@@ -741,6 +847,16 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Skip the first attempt: the customized list trails `undoneTasks` by an
+    // animation frame, so right after a route change the two can disagree.
+    if (
+      retriesLeft < WorkViewComponent._FOCUS_ITEM_MAX_RETRIES &&
+      this._isTaskHiddenByFilter(taskId)
+    ) {
+      this._offerToClearFilterFor(taskId);
+      return;
+    }
+
     if (retriesLeft <= 0) {
       // Give up for good: leaving the id pending would let the `splitTopEl`
       // setter replay the whole loop on every later context change, re-opening
@@ -761,6 +877,59 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       this._pendingFocusItemTimeout = undefined;
       this._focusItemInWorkViewWhenReady(taskId, retriesLeft - 1);
     }, WorkViewComponent._FOCUS_ITEM_RETRY_DELAY);
+  }
+
+  /**
+   * A filtered-out task has no row in any container, so no amount of expanding
+   * or retrying can reveal it. Panels outside the undone list ignore the
+   * filter, so a task listed there is still reachable. (#11482)
+   */
+  private _isTaskHiddenByFilter(taskId: string): boolean {
+    const customized = this.customizedUndoneTasks();
+    return (
+      // A plugin embed replaces the undone list: clearing the filter can't help.
+      !this.pluginEmbedId() &&
+      !!this.customizerService.selectedFilter().type &&
+      customized !== INITIAL_CUSTOMIZED_UNDONE_TASKS &&
+      this._hasTaskInList(this.undoneTasks(), taskId) &&
+      !this._hasTaskInList(customized.list, taskId) &&
+      !this._hasTaskInList(this.doneTasks(), taskId) &&
+      // Global lists, but their panels render on Today only.
+      !(this.isShowOverduePanel() && this._hasTaskInList(this.overdueTasks(), taskId)) &&
+      !(this.isOnTodayList() && this._hasTaskInList(this.laterTodayTasks(), taskId))
+    );
+  }
+
+  /**
+   * Keeps the user's filter and says why the reveal stopped, instead of
+   * expiring silently; clearing the filter is their call. (#11482)
+   */
+  private _offerToClearFilterFor(taskId: string): void {
+    const isFromSearch = this._isPendingFocusItemFromSearch;
+    const contextId = this.workContextService.activeWorkContextId;
+    this._pendingFocusItemTaskId = null;
+    this._isPendingFocusItemFromSearch = false;
+    recordSearchNavDebug('workView:hiddenByFilter', { taskId });
+    this._snackService.open({
+      msg: T.GLOBAL_SNACK.NAVIGATE_TO_TASK_FILTERED,
+      actionStr: T.GLOBAL_SNACK.NAVIGATE_TO_TASK_FILTERED_BTN,
+      actionFn: (): void => {
+        // The snack outlives the view: never reset another context's filter or
+        // cancel a reveal the user started since.
+        if (
+          this._destroyRef.destroyed ||
+          this.workContextService.activeWorkContextId !== contextId ||
+          (this._pendingFocusItemTaskId !== null &&
+            this._pendingFocusItemTaskId !== taskId)
+        ) {
+          return;
+        }
+        this.customizerService.setFilter(DEFAULT_OPTIONS.filter);
+        this._pendingFocusItemTaskId = taskId;
+        this._isPendingFocusItemFromSearch = isFromSearch;
+        this._focusItemInWorkViewWhenReady(taskId);
+      },
+    });
   }
 
   /**

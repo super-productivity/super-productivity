@@ -11,41 +11,8 @@
       /* Theme vars + UI Kit are injected automatically before this style block.
          Only plugin-specific layout rules are needed here. */
 
-      body {
-        padding: var(--s3);
-      }
-
-      .container {
-        max-width: 800px;
-        margin: 0 auto;
-      }
-
-      .date {
-        margin-bottom: var(--s3);
-        color: var(--text-color-muted);
-      }
-
-      .loading,
-      .no-tasks {
-        text-align: center;
-        padding: var(--s4);
-        color: var(--text-color-muted);
-      }
-
-      .task-item {
-        padding: var(--s) 0;
-        border-bottom: 1px solid var(--divider-color);
-        display: flex;
-        align-items: flex-start;
-      }
-
-      .task-item:last-child {
-        border-bottom: none;
-      }
-
       .task-title {
         flex: 1;
-        margin-right: var(--s2);
       }
 
       .task-time {
@@ -55,26 +22,20 @@
       }
 
       .project-tag {
-        display: inline-block;
-        padding: var(--s-quarter) var(--s);
         margin-left: var(--s);
-        font-size: 0.85em;
-        color: var(--text-color-muted);
-        border: 1px solid var(--divider-color);
-        border-radius: 12px;
       }
     </style>
   </head>
   <body>
-    <div class="container">
+    <div class="page">
       <div
-        class="date"
+        class="text-muted"
         id="yesterday-date"
       ></div>
 
       <div id="content">
         <div
-          class="loading"
+          class="empty-state"
           data-i18n="MESSAGES.LOADING_TASKS"
         >
           Loading tasks...
@@ -317,7 +278,7 @@
           console.error('Error loading tasks:', error);
           const errorMsg = await translate('MESSAGES.ERROR_LOADING_TASKS');
           document.getElementById('content').innerHTML =
-            `<div class="no-tasks">${escapeHtml(errorMsg)}</div>`;
+            `<div class="empty-state">${escapeHtml(errorMsg)}</div>`;
         }
       }
 
@@ -326,7 +287,7 @@
 
         if (tasks.length === 0) {
           const noTasksMsg = await translate('MESSAGES.NO_TASKS_LAST_30_DAYS');
-          contentEl.innerHTML = `<div class="no-tasks">${escapeHtml(noTasksMsg)}</div>`;
+          contentEl.innerHTML = `<div class="empty-state">${escapeHtml(noTasksMsg)}</div>`;
           return;
         }
 
@@ -346,11 +307,11 @@
               ? projectMap[task.projectId]
               : task.projectId;
           const projectTag = projectTitle
-            ? `<span class="project-tag">${escapeHtml(projectTitle)}</span>`
+            ? `<span class="project-tag chip">${escapeHtml(projectTitle)}</span>`
             : '';
 
           html += `
-          <div class="task-item">
+          <div class="list-item">
             <div class="task-title ${isDone}">
               ${escapeHtml(task.title)}${projectTag}
             </div>

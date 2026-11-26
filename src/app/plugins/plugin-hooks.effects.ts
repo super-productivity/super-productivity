@@ -1,18 +1,21 @@
 import { inject, Injectable } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import { createEffect, ofType } from '@ngrx/effects';
 import { select, Store } from '@ngrx/store';
 import {
+  auditTime,
   distinctUntilChanged,
   filter,
   map,
   pairwise,
+  skip,
   startWith,
   switchMap,
   take,
   tap,
   withLatestFrom,
 } from 'rxjs/operators';
-import { EMPTY } from 'rxjs';
+import { combineLatest, EMPTY } from 'rxjs';
 
 import {
   selectCurrentTask,
@@ -20,10 +23,10 @@ import {
   selectTaskFeatureState,
 } from '../features/tasks/store/task.selectors';
 import { selectProjectFeatureState } from '../features/project/store/project.selectors';
-import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
-import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
+import { selectTagFeatureState } from '../features/tag/store/tag.reducer';
 import { Task } from '../features/tasks/task.model';
 import { isWontDoTask } from '../features/tasks/util/is-wont-do-task';
+import { DataInitStateService } from '../core/data-init/data-init-state.service';
 import { PluginService } from './plugin.service';
 import { PluginHooks } from './plugin-api.model';
 import { PluginI18nService } from './plugin-i18n.service';
@@ -47,14 +50,20 @@ import {
 } from '../features/work-context/store/work-context-meta.actions';
 import { LOCAL_ACTIONS } from '../util/local-actions.token';
 import { PlannerActions } from '../features/planner/store/planner.actions';
-import { LanguageCode } from '../core/locale.constants';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { toActiveWorkContext } from './util/active-work-context.util';
 import { SyncTriggerService } from '../imex/sync/sync-trigger.service';
 import { selectPluginUserDataFeatureState } from './store/plugin-user-data.reducer';
 import { diffChangedPluginIds } from './util/plugin-data-diff.util';
+import { GlobalTrackingIntervalService } from '../core/global-tracking-interval/global-tracking-interval.service';
 import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
 import { PluginLog } from '../core/log';
+import { LanguageService } from '../core/language/language.service';
+
+// Coalesces a sync batch or bulk action into one DATA_CHANGED call while
+// keeping views responsive. Time tracking updates the tracked task once a
+// second, so while it runs the hook fires about once a second.
+const DATA_CHANGED_AUDIT_MS = 250;
 
 @Injectable()
 export class PluginHooksEffects {
@@ -64,7 +73,10 @@ export class PluginHooksEffects {
   private readonly pluginI18nService = inject(PluginI18nService);
   private readonly workContextService = inject(WorkContextService);
   private readonly syncTrigger = inject(SyncTriggerService);
+  private readonly _dataInitState = inject(DataInitStateService);
   private readonly _beforeFinishDayService = inject(BeforeFinishDayService);
+  private readonly _globalTrackingInterval = inject(GlobalTrackingIntervalService);
+  private readonly _languageService = inject(LanguageService);
 
   taskComplete$ = createEffect(
     () =>
@@ -226,15 +238,10 @@ export class PluginHooksEffects {
     { dispatch: false },
   );
 
-  // Language change effect - listens to actual language config changes
+  // Notify plugins after the UI language has actually been applied.
   languageChange$ = createEffect(
     () =>
-      this.actions$.pipe(
-        ofType(updateGlobalConfigSection),
-        filter((action) => action.sectionKey === 'localization'),
-        withLatestFrom(this.store.pipe(select(selectLocalizationConfig))),
-        map(([_, localizationConfig]) => localizationConfig.lng),
-        filter((lng): lng is LanguageCode => typeof lng === 'string' && lng.length > 0),
+      toObservable(this._languageService.currentLanguage).pipe(
         distinctUntilChanged(),
         tap((newLanguage) => {
           // Update plugin i18n service with new language
@@ -423,6 +430,50 @@ export class PluginHooksEffects {
             }),
           ),
         ),
+      ),
+    { dispatch: false },
+  );
+
+  // Selector-based for the same reasons as firePersistedDataChanged$: remote
+  // ops, planning, archiving and bulk actions change task, project and tag
+  // state without passing anyTaskUpdate$'s local action list. Same gate and
+  // the same reason for having no skipDuringSyncWindow: no ops are created,
+  // and the remote changes are the point.
+  dataChanged$ = createEffect(
+    () =>
+      this.syncTrigger.afterInitialSyncDoneAndDataLoadedInitially$.pipe(
+        filter((done) => done),
+        switchMap(() =>
+          combineLatest([
+            this.store.select(selectTaskFeatureState),
+            this.store.select(selectProjectFeatureState),
+            this.store.select(selectTagFeatureState),
+          ]).pipe(skip(1), auditTime(DATA_CHANGED_AUDIT_MS)),
+        ),
+        tap(() => {
+          this.pluginService.dispatchHook(PluginHooks.DATA_CHANGED);
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  // The logical day (start-of-next-day offset applied) rolled over while the
+  // app ran. todayDateStr$ also re-checks after sleep and focus. Gated on the
+  // data load: before it, todayDateStr$ uses offset 0 and corrects itself once
+  // the config arrives, which is not a day change. Not the sync gate: its 8 s
+  // timeout can open it before the data (and the offset) are loaded.
+  dayChange$ = createEffect(
+    () =>
+      this._dataInitState.isAllDataLoadedInitially$.pipe(
+        switchMap(() =>
+          this._globalTrackingInterval.todayDateStr$.pipe(
+            distinctUntilChanged(),
+            skip(1),
+          ),
+        ),
+        tap((todayStr) => {
+          this.pluginService.dispatchHook(PluginHooks.DAY_CHANGE, { todayStr });
+        }),
       ),
     { dispatch: false },
   );

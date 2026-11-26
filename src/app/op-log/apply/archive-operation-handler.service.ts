@@ -1,5 +1,6 @@
 import { inject, Injectable, Injector } from '@angular/core';
-import { Action } from '@ngrx/store';
+import { Action, Store } from '@ngrx/store';
+import { firstValueFrom } from 'rxjs';
 import type { ArchiveSideEffectPort } from '@sp/sync-core';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
@@ -24,6 +25,8 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { OpType } from '../core/operation.types';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { selectAllTagIds } from '../../features/tag/store/tag.reducer';
+import { dropDeletedTagsFromArchivedTasks } from './drop-deleted-tags-from-archived-tasks';
 
 /**
  * Creates an empty ArchiveModel with default values.
@@ -79,7 +82,8 @@ export const isArchiveAffectingAction = (action: Action): action is PersistentAc
  *
  * ## Entry Points
  *
- * 1. **Local operations**: Called by ArchiveOperationHandlerEffects after action dispatch
+ * 1. **Local operations**: Called by ArchiveOperationHandlerEffects after action dispatch,
+ *    through the local queue (enqueueLocalOperation)
  * 2. **Remote operations**: Called by OperationApplierService after applying remote operations
  *
  * ## Why This Architecture
@@ -95,7 +99,7 @@ export const isArchiveAffectingAction = (action: Action): action is PersistentAc
  *
  * ## Operations Handled
  *
- * - **moveToArchive**: Writes archived tasks to archiveYoung storage
+ * - **moveToArchive**: Writes archived tasks to archiveYoung storage (minus deleted tags)
  * - **restoreTask**: Removes task from archive storage
  * - **flushYoungToOld**: Moves old tasks from archiveYoung to archiveOld
  * - **deleteProject**: Removes all tasks for the deleted project from archive
@@ -134,6 +138,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
   private _injector = inject(Injector);
   private _archiveDbAdapter = inject(ArchiveDbAdapter);
   private _lockService = inject(LockService);
+  private _getStore = lazyInject<Store>(this._injector, Store);
   private _getArchiveService = lazyInject(this._injector, ArchiveService);
   private _getTaskArchiveService = lazyInject(this._injector, TaskArchiveService);
   private _getTimeTrackingService = lazyInject(this._injector, TimeTrackingService);
@@ -141,6 +146,32 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
     this._injector,
     ArchiveCompressionService,
   );
+
+  // Tail of the local operation queue. Never rejects, so one failed operation
+  // does not block the ones after it.
+  private _localQueue: Promise<void> = Promise.resolve();
+
+  /**
+   * Queue a local action's archive side effects behind every local action
+   * queued before it. ArchiveOperationHandlerEffects calls this synchronously
+   * on dispatch, so a caller that dispatches and then awaits
+   * whenLocalOperationsSettled() knows the archive reflects its action (#9952).
+   *
+   * @returns Promise that settles with this action's own outcome
+   */
+  enqueueLocalOperation(action: PersistentAction): Promise<void> {
+    const run = this._localQueue.then(() => this.handleOperation(action));
+    this._localQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  /**
+   * Resolves once every local operation queued so far has finished,
+   * whether it succeeded or failed.
+   */
+  whenLocalOperationsSettled(): Promise<void> {
+    return this._localQueue;
+  }
 
   /**
    * Process an action and handle any archive-related side effects.
@@ -212,14 +243,24 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * Writes archived tasks to archiveYoung storage.
    *
    * @localBehavior SKIP - Archive written by ArchiveService.moveToArchive() before dispatch
-   * @remoteBehavior Executes - Writes tasks to archiveYoung
+   * @remoteBehavior Executes - Writes tasks to archiveYoung, without tag ids
+   *   this client does not have (#11466). A tag delete is last-write-wins, so
+   *   a concurrent rename can bring the tag back afterwards (#11489); see
+   *   dropDeletedTagsFromArchivedTasks for what this does and does not settle.
    */
   private async _handleMoveToArchive(action: PersistentAction): Promise<void> {
     if (!action.meta?.isRemote) {
       return; // Local: already written by ArchiveService before dispatch
     }
     const tasks = (action as ReturnType<typeof TaskSharedActions.moveToArchive>).tasks;
-    await this._getArchiveService().writeTasksToArchiveForRemoteSync(tasks);
+    // Archive side effects run after the whole batch's reducers, so this is the
+    // tag state after every op in the batch, deletes and recreations alike.
+    const existingTagIds = new Set(
+      (await firstValueFrom(this._getStore().select(selectAllTagIds))) as string[],
+    );
+    await this._getArchiveService().writeTasksToArchiveForRemoteSync(
+      dropDeletedTagsFromArchivedTasks(tasks, existingTagIds),
+    );
   }
 
   /**

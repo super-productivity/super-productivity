@@ -1,7 +1,9 @@
-import { TestBed } from '@angular/core/testing';
+import { Injector } from '@angular/core';
+import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { IssueService } from './issue.service';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
@@ -22,7 +24,6 @@ import { PlainspaceCommonInterfacesService } from './providers/plainspace/plains
 import { PlainspaceApiService } from './providers/plainspace/plainspace-api.service';
 import { SnackParams } from '../../core/snack/snack.model';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
-import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
@@ -30,7 +31,9 @@ import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
-import { IssueProvider } from './issue.model';
+import { IssueData, IssueProvider } from './issue.model';
+import { TagService } from '../tag/tag.service';
+import { AddTaskBarIssueSearchService } from '../tasks/add-task-bar/add-task-bar-issue-search.service';
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { Action } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
@@ -38,14 +41,18 @@ import { RootState } from '../../root-store/root-state';
 import { TASK_FEATURE_NAME } from '../tasks/store/task.reducer';
 import { selectAllTasksWithReminder } from '../tasks/store/task.selectors';
 import { createCombinedTaskSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/test-helpers';
+import { PendingRemoteIssueDeleteService } from './two-way-sync/pending-remote-issue-delete.service';
+import { DateService } from '../../core/date/date.service';
 import {
   createBaseState,
   createMockTask as createReducerTask,
 } from '../../root-store/meta/task-shared-meta-reducers/test-utils';
+import { ISSUE_PROVIDER_FEATURE_KEY } from './store/issue-provider.reducer';
 
 describe('IssueService', () => {
   let service: IssueService;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestratorSpy: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let workContextServiceSpy: jasmine.SpyObj<WorkContextService>;
   let issueProviderServiceSpy: jasmine.SpyObj<IssueProviderService>;
@@ -96,16 +103,18 @@ describe('IssueService', () => {
   beforeEach(() => {
     taskServiceSpy = jasmine.createSpyObj('TaskService', [
       'checkForTaskWithIssueEverywhere',
-      'getAllIssueIdsForProviderEverywhere',
       'getByIdWithSubTaskData$',
       'moveToCurrentWorkContext',
       'add',
       'addAndSchedule',
       'addSubTaskTo',
-      'restoreTask',
       'update',
       'remove',
       'removeMultipleTasks',
+    ]);
+    taskArchiveOrchestratorSpy = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'restoreTask',
+      'getAllIssueIdsForProviderEverywhere',
     ]);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [], {
@@ -178,6 +187,7 @@ describe('IssueService', () => {
       providers: [
         IssueService,
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestratorSpy },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         { provide: IssueProviderService, useValue: issueProviderServiceSpy },
@@ -188,7 +198,6 @@ describe('IssueService', () => {
         { provide: GlobalProgressBarService, useValue: globalProgressBarServiceSpy },
         { provide: NavigateToTaskService, useValue: navigateToTaskServiceSpy },
         { provide: JiraCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: GitlabCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: CaldavCommonInterfacesService, useValue: mockCommonInterfaceService },
         {
           provide: OpenProjectCommonInterfacesService,
@@ -211,6 +220,97 @@ describe('IssueService', () => {
       ],
     });
     service = TestBed.inject(IssueService);
+  });
+
+  describe('addTaskFromIssue - concurrent imports', () => {
+    const options = {
+      issueDataReduced: { id: 'JIRA-1', title: 'Synthetic issue' },
+      issueProviderId: 'provider-1',
+      issueProviderKey: 'JIRA' as const,
+    };
+
+    beforeEach(() => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      service.ISSUE_SERVICE_MAP['JIRA'].getAddTaskData = () => ({
+        title: 'Synthetic issue',
+      });
+    });
+
+    it('imports only once when the same issue is requested before archive lookup resolves', async () => {
+      const results = await Promise.all([
+        service.addTaskFromIssue(options),
+        service.addTaskFromIssue(options),
+      ]);
+      expect(taskServiceSpy.add).toHaveBeenCalledTimes(1);
+      expect(results).toEqual(['new-task-id', undefined]);
+    });
+
+    it('returns a pending background import ID to only the first foreground issue selection', fakeAsync(() => {
+      const injector = Injector.create({
+        parent: TestBed.inject(Injector),
+        providers: [AddTaskBarIssueSearchService, { provide: TagService, useValue: {} }],
+      });
+      const issueSearch = injector.get(AddTaskBarIssueSearchService);
+      const suggestion = {
+        title: options.issueDataReduced.title,
+        issueData: options.issueDataReduced as IssueData,
+        issueType: options.issueProviderKey,
+        issueProviderId: options.issueProviderId,
+        projectId: 'project-1',
+      };
+      let releaseBackgroundLookup!: () => void;
+      const backgroundLookup = new Promise<null>((resolve) => {
+        releaseBackgroundLookup = () => resolve(null);
+      });
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.returnValues(
+        backgroundLookup,
+        Promise.resolve(null),
+        Promise.resolve(null),
+      );
+
+      const backgroundImport = service.addTaskFromIssue({
+        ...options,
+        isAutoImport: true,
+        isAddToBacklog: true,
+      });
+      let results: (string | undefined)[] = [];
+      Promise.all([
+        backgroundImport,
+        issueSearch.addTaskFromExistingTaskOrIssue(suggestion, false, true),
+        issueSearch.addTaskFromExistingTaskOrIssue(suggestion, false, true),
+      ]).then((ids) => (results = ids));
+      flushMicrotasks();
+
+      // Both foreground lookups saw no task while the background owns the import.
+      expect(taskServiceSpy.checkForTaskWithIssueEverywhere).toHaveBeenCalledTimes(3);
+      expect(taskServiceSpy.add).not.toHaveBeenCalled();
+      releaseBackgroundLookup();
+      flushMicrotasks();
+
+      expect(taskServiceSpy.add).toHaveBeenCalledTimes(1);
+      expect(taskServiceSpy.add.calls.mostRecent().args[1]).toBeTrue();
+      // The Planner caller needs this ID to plan its selected day and emit
+      // afterTaskAdd. A duplicate selection must not emit a second completion.
+      expect(results).toEqual(['new-task-id', 'new-task-id', undefined]);
+      injector.destroy();
+    }));
+
+    it('keeps separate provider configurations independent', async () => {
+      await Promise.all([
+        service.addTaskFromIssue(options),
+        service.addTaskFromIssue({ ...options, issueProviderId: 'provider-2' }),
+      ]);
+      expect(taskServiceSpy.add).toHaveBeenCalledTimes(2);
+    });
+
+    it('allows a retry after a failed lookup', async () => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.rejectWith(new Error('lookup'));
+      await expectAsync(service.addTaskFromIssue(options)).toBeRejected();
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      await expectAsync(service.addTaskFromIssue(options)).toBeResolvedTo('new-task-id');
+      expect(taskServiceSpy.add).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('addTaskFromIssue - ICAL task already exists', () => {
@@ -734,6 +834,63 @@ describe('IssueService', () => {
       const taskData = addCall.args[2] as Partial<Task>;
       expect(taskData.dueDay).toBeDefined();
     });
+
+    // Past midnight but before the configured start of the next day, Today
+    // is still the previous day; the calendar date would plan it for tomorrow.
+    it('should set dueDay to the logical today', async () => {
+      setupForNewTask();
+      spyOn(TestBed.inject(DateService), 'todayStr').and.returnValue('2026-01-05');
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const taskData = taskServiceSpy.add.calls.mostRecent().args[2] as Partial<Task>;
+      expect(taskData.dueDay).toBe('2026-01-05');
+    });
+  });
+
+  describe('addTaskFromIssue - short syntax', () => {
+    const setupForNewTask = (key: 'JIRA' | 'PLAINSPACE'): void => {
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+      (service.ISSUE_SERVICE_MAP[key] as any).getAddTaskData = () => ({
+        title: 'Fix login #bug 1h',
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({ defaultProjectId: 'proj-1', defaultTagIds: [] } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+    };
+
+    // The title is shared and pushed back: a parsed title would strip
+    // "#bug 1h" for everyone in the Space.
+    it('is not parsed from a Plainspace title', async () => {
+      setupForNewTask('PLAINSPACE');
+      await service.addTaskFromIssue({
+        issueDataReduced: { id: 'ps-1', title: 'Fix login #bug 1h' } as any,
+        issueProviderId: 'ps-provider-1',
+        issueProviderKey: 'PLAINSPACE',
+      });
+      expect(taskServiceSpy.add.calls.mostRecent().args[4]).toBe(true);
+    });
+
+    it("is still parsed from other providers' titles", async () => {
+      setupForNewTask('JIRA');
+      await service.addTaskFromIssue({
+        issueDataReduced: { id: 'JIRA-1', title: 'Fix login #bug 1h' } as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+      expect(taskServiceSpy.add.calls.mostRecent().args[4]).toBe(false);
+    });
   });
 
   describe('addTaskFromIssue - existing task already in project backlog', () => {
@@ -959,6 +1116,38 @@ describe('IssueService', () => {
       expect(changesOfLastUpdate().remindAt).toBe(newDue);
     });
 
+    // Re-stamping `doneOn` would turn a won't-do task into a completed one.
+    it('single refresh: does not write isDone again to a task that is already done', async () => {
+      const task = createCaldavTask({ isDone: true, doneOn: 5, wontDoOn: 5 });
+      commonInterfaceServiceSpy.getFreshDataForIssueTask.and.returnValue(
+        Promise.resolve({
+          taskChanges: { isDone: true, title: 'renamed', issueWasUpdated: true },
+          issue: {},
+          issueTitle: 'x',
+        }),
+      );
+
+      await service.refreshIssueTask(task, false, false);
+
+      expect('isDone' in changesOfLastUpdate()).toBeFalse();
+      expect(changesOfLastUpdate().title).toBe('renamed');
+    });
+
+    it('single refresh: still writes isDone to an open task', async () => {
+      const task = createCaldavTask({ isDone: false });
+      commonInterfaceServiceSpy.getFreshDataForIssueTask.and.returnValue(
+        Promise.resolve({
+          taskChanges: { isDone: true, issueWasUpdated: true },
+          issue: {},
+          issueTitle: 'x',
+        }),
+      );
+
+      await service.refreshIssueTask(task, false, false);
+
+      expect(changesOfLastUpdate().isDone).toBeTrue();
+    });
+
     describe('remote unschedule clears the reminder on every device (#9776 shape)', () => {
       let dispatched: Action[];
 
@@ -1090,7 +1279,9 @@ describe('IssueService', () => {
         issue,
       ]);
       // the issue is known: its task was imported before and then archived
-      taskServiceSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([ISSUE_ID]);
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([
+        ISSUE_ID,
+      ]);
       return service.checkAndImportNewIssuesToBacklogForProject(
         'PLAINSPACE',
         PROVIDER_ID,
@@ -1111,7 +1302,7 @@ describe('IssueService', () => {
         subTasks: null,
         isFromArchive: true,
       });
-      taskServiceSpy.restoreTask.and.callFake((task, subTasks) => {
+      taskArchiveOrchestratorSpy.restoreTask.and.callFake((task, subTasks) => {
         storeSpy.dispatch(TaskSharedActions.restoreTask({ task, subTasks }));
       });
       taskServiceSpy.update.and.callFake((id, changes) => {
@@ -1124,8 +1315,20 @@ describe('IssueService', () => {
       const action = dispatched[0];
       expect(action.type).toBe(TaskSharedActions.restoreTask.type);
       const reducer = createCombinedTaskSharedMetaReducer((state) => state);
+      // createBaseState() omits the issueProvider slice; the app always registers
+      // it. Seed the provider so normalizeRestoredTask keeps a valid link.
+      const stateWithProvider = createBaseState();
+      stateWithProvider[ISSUE_PROVIDER_FEATURE_KEY] = {
+        ids: [PROVIDER_ID],
+        entities: {
+          [PROVIDER_ID]: {
+            id: PROVIDER_ID,
+            issueProviderKey: 'PLAINSPACE',
+          } as IssueProvider,
+        },
+      };
       return [action, JSON.parse(JSON.stringify(action))].map((restoreAction) =>
-        reducer(createBaseState(), restoreAction),
+        reducer(stateWithProvider, restoreAction),
       );
     };
 
@@ -1175,14 +1378,14 @@ describe('IssueService', () => {
     it('does NOT restore a non-recurring archived task', async () => {
       await importForIssue(createPlainspaceIssue({ isRecurring: false }));
 
-      expect(taskServiceSpy.restoreTask).not.toHaveBeenCalled();
+      expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
       expect(taskServiceSpy.checkForTaskWithIssueEverywhere).not.toHaveBeenCalled();
     });
 
     it('does NOT restore while the remote occurrence is still done', async () => {
       await importForIssue(createPlainspaceIssue({ isDone: true }));
 
-      expect(taskServiceSpy.restoreTask).not.toHaveBeenCalled();
+      expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
       expect(taskServiceSpy.checkForTaskWithIssueEverywhere).not.toHaveBeenCalled();
     });
 
@@ -1195,7 +1398,7 @@ describe('IssueService', () => {
 
       await importForIssue(createPlainspaceIssue());
 
-      expect(taskServiceSpy.restoreTask).not.toHaveBeenCalled();
+      expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
       expect(taskServiceSpy.update).not.toHaveBeenCalled();
     });
 
@@ -1334,12 +1537,110 @@ describe('IssueService', () => {
         .and.resolveTo([
           { ...createPlainspaceIssue(), issueProviderKey: 'ICAL' } as unknown,
         ]);
-      taskServiceSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([ISSUE_ID]);
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([
+        ISSUE_ID,
+      ]);
 
       await service.checkAndImportNewIssuesToBacklogForProject('ICAL', PROVIDER_ID, true);
 
       expect(taskServiceSpy.checkForTaskWithIssueEverywhere).not.toHaveBeenCalled();
-      expect(taskServiceSpy.restoreTask).not.toHaveBeenCalled();
+      expect(taskArchiveOrchestratorSpy.restoreTask).not.toHaveBeenCalled();
+    });
+
+    // Review finding: a poll inside a delete's undo window found the item
+    // still assigned and its task gone, and imported it again.
+    it('does not import an issue whose remote delete is pending', async () => {
+      const pending = TestBed.inject(PendingRemoteIssueDeleteService);
+      const addSpy = spyOn(service, 'addTaskFromIssue').and.resolveTo(undefined);
+      (plainspaceService.getNewIssuesToAddToBacklog as jasmine.Spy).and.resolveTo([
+        createPlainspaceIssue({ isRecurring: false }),
+      ]);
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([]);
+      const poll = (): Promise<void> =>
+        service.checkAndImportNewIssuesToBacklogForProject(
+          'PLAINSPACE',
+          PROVIDER_ID,
+          true,
+        );
+
+      pending.add(PROVIDER_ID, ISSUE_ID);
+      await poll();
+      expect(addSpy).not.toHaveBeenCalled();
+
+      pending.remove(PROVIDER_ID, ISSUE_ID);
+      await poll();
+      expect(addSpy).toHaveBeenCalledTimes(1);
+    });
+
+    // Re-review finding: the remote delete completed while the list request
+    // was in flight, so the list still had the item and nothing was pending.
+    it('does not import an issue whose remote delete ends during the request', async () => {
+      const pending = TestBed.inject(PendingRemoteIssueDeleteService);
+      const addSpy = spyOn(service, 'addTaskFromIssue').and.resolveTo(undefined);
+      (plainspaceService.getNewIssuesToAddToBacklog as jasmine.Spy).and.callFake(
+        async () => {
+          pending.remove(PROVIDER_ID, ISSUE_ID);
+          return [createPlainspaceIssue({ isRecurring: false })];
+        },
+      );
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo([]);
+
+      pending.add(PROVIDER_ID, ISSUE_ID);
+      await service.checkAndImportNewIssuesToBacklogForProject(
+        'PLAINSPACE',
+        PROVIDER_ID,
+        true,
+      );
+
+      expect(addSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // #11223: OpenProject returns numeric work package ids while task.issueId is
+  // stored as a string, so already imported work packages were re-imported
+  // (and moved to the current context) on every poll.
+  describe('checkAndImportNewIssuesToBacklogForProject - numeric OpenProject ids', () => {
+    const PROVIDER_ID = 'op-provider-1';
+
+    const pollWith = async (
+      existingIssueIds: string[] | number[],
+      workPackageId: number,
+    ): Promise<jasmine.Spy> => {
+      const addSpy = spyOn(service, 'addTaskFromIssue').and.resolveTo(undefined);
+      const openProjectService = service.ISSUE_SERVICE_MAP['OPEN_PROJECT'] as unknown as {
+        getNewIssuesToAddToBacklog: jasmine.Spy;
+        getAddTaskData: jasmine.Spy;
+      };
+      openProjectService.getAddTaskData.and.returnValue({ title: 'Work package' });
+      // OpenProject's API returns the work package id as a number
+      openProjectService.getNewIssuesToAddToBacklog = jasmine
+        .createSpy('getNewIssuesToAddToBacklog')
+        .and.resolveTo([{ id: workPackageId, subject: 'Work package' } as unknown]);
+      taskArchiveOrchestratorSpy.getAllIssueIdsForProviderEverywhere.and.resolveTo(
+        existingIssueIds as string[],
+      );
+      translateServiceSpy.instant.and.returnValue('work packages');
+      await service.checkAndImportNewIssuesToBacklogForProject(
+        'OPEN_PROJECT',
+        PROVIDER_ID,
+        true,
+      );
+      return addSpy;
+    };
+
+    it('does not re-import a work package stored with a string issueId', async () => {
+      const addSpy = await pollWith(['62'], 62);
+      expect(addSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not re-import a work package stored with a numeric issueId', async () => {
+      const addSpy = await pollWith([62], 62);
+      expect(addSpy).not.toHaveBeenCalled();
+    });
+
+    it('still imports a work package that is not yet imported', async () => {
+      const addSpy = await pollWith(['62'], 63);
+      expect(addSpy).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -8,25 +8,7 @@
     />
     <title>API Test Plugin Dashboard</title>
     <style>
-      /* Theme vars + UI Kit are injected automatically.
-         Only layout rules that the UI Kit can't provide. */
-
-      body {
-        padding: var(--s3);
-      }
-
-      .button-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--s);
-      }
-
-      .api-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--s-half);
-      }
-
+      /* Theme vars + UI Kit are injected automatically. */
       .console {
         max-height: 200px;
         overflow-y: auto;
@@ -45,11 +27,21 @@
       }
     </style>
   </head>
-  <body>
-    <h1>API Test Plugin</h1>
+  <body class="page stack">
+    <header class="page-header">
+      <h1>API Test Plugin</h1>
+      <div class="actions">
+        <button
+          class="btn-primary"
+          onclick="runAllTests()"
+        >
+          Run All API Tests
+        </button>
+      </div>
+    </header>
 
     <h3>Available API Methods</h3>
-    <p class="api-list">
+    <p class="row">
       <code>getTasks()</code>
       <code>getArchivedTasks()</code>
       <code>getCurrentContextTasks()</code>
@@ -79,18 +71,14 @@
     </p>
     <hr />
 
-    <button onclick="runAllTests()">Run All API Tests</button>
-
-    <hr />
-
     <h2>Data Persistence Tests</h2>
-    <div class="button-grid">
+    <div class="row">
       <button onclick="testPersistData()">Test Save Data</button>
       <button onclick="testLoadData()">Test Load Data</button>
     </div>
 
     <h2>Task Operations</h2>
-    <div class="button-grid">
+    <div class="row">
       <button onclick="testGetTasks()">Get All Tasks</button>
       <button onclick="testGetArchivedTasks()">Get Archived Tasks</button>
       <button onclick="testGetContextTasks()">Get Context Tasks</button>
@@ -99,7 +87,7 @@
     </div>
 
     <h2>Project &amp; Tag Operations</h2>
-    <div class="button-grid">
+    <div class="row">
       <button onclick="testGetProjects()">Get All Projects</button>
       <button onclick="testCreateProject()">Create Test Project</button>
       <button onclick="testGetTags()">Get All Tags</button>
@@ -107,7 +95,7 @@
     </div>
 
     <h2>UI Operations</h2>
-    <div class="button-grid">
+    <div class="row">
       <button onclick="testSnackSuccess()">Success Snack</button>
       <button onclick="testSnackError()">Error Snack</button>
       <button onclick="testSnackCustom()">Info Snack</button>
@@ -116,7 +104,7 @@
     </div>
 
     <h2>Advanced Dialog Examples</h2>
-    <div class="button-grid">
+    <div class="row">
       <button onclick="showTaskPlannerDialog()">Task Planner</button>
       <button onclick="showAnalyticsDialog()">Analytics Dashboard</button>
     </div>
@@ -126,111 +114,187 @@
       id="console"
     ><span class="console-entry info">Console output will appear here...</span></pre>
 
-    <hr />
+    <h2>UI Kit Showcase</h2>
 
-    <h2>UI Kit Component Showcase</h2>
+    <section class="stack">
+      <h3>Buttons</h3>
+      <div class="row">
+        <button>Default</button>
+        <button class="btn-primary">Primary</button>
+        <button class="btn-outline">Outline</button>
+        <button class="btn-text">Text</button>
+        <button class="btn-primary btn-danger">Danger</button>
+        <button class="btn-outline btn-danger">Danger outline</button>
+        <button
+          class="btn-icon"
+          aria-label="Edit"
+        >
+          <span
+            class="material-icons"
+            aria-hidden="true"
+            >edit</span
+          >
+        </button>
+        <button class="btn-primary">
+          <span
+            class="material-icons"
+            aria-hidden="true"
+            >add</span
+          >
+          With icon
+        </button>
+        <button
+          class="btn-icon"
+          aria-label="Add"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z" />
+          </svg>
+        </button>
+        <button aria-pressed="true">Pressed</button>
+        <button aria-pressed="false">Not pressed</button>
+        <button disabled>Disabled</button>
+        <button
+          class="btn-primary"
+          disabled
+        >
+          Primary disabled
+        </button>
+      </div>
 
-    <h3>Headings</h3>
-    <h1>Heading 1</h1>
-    <h2>Heading 2</h2>
-    <h3>Heading 3</h3>
-    <h4>Heading 4</h4>
-    <h5>Heading 5</h5>
-    <h6>Heading 6</h6>
+      <h3>Form</h3>
+      <div>
+        <div class="field">
+          <label for="kit-name">Name</label>
+          <input
+            id="kit-name"
+            type="text"
+            placeholder="Text input"
+          />
+          <p class="field-hint">Helper text below the input.</p>
+        </div>
+        <div class="field">
+          <label for="kit-email">Email</label>
+          <input
+            id="kit-email"
+            type="email"
+            value="not-an-email"
+            aria-invalid="true"
+          />
+          <p class="field-error">Enter a valid email address.</p>
+        </div>
+        <div class="field">
+          <label for="kit-select">Select</label>
+          <select id="kit-select">
+            <option>Option 1</option>
+            <option>Option 2</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="kit-text">Textarea</label>
+          <textarea
+            id="kit-text"
+            placeholder="Textarea"
+          ></textarea>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" /> Checkbox label</label>
+          <label
+            ><input
+              type="radio"
+              name="kit-radio"
+            />
+            Radio A</label
+          >
+          <label
+            ><input
+              type="radio"
+              name="kit-radio"
+            />
+            Radio B</label
+          >
+        </div>
+      </div>
 
-    <h3>Text</h3>
-    <p>
-      This is a paragraph with <strong>bold</strong>, <em>italic</em>, and
-      <a href="#">link</a> styles.
-    </p>
-    <p>Inline <code>code</code> is styled automatically.</p>
+      <h3>Callouts</h3>
+      <div>
+        <div class="callout"><p>Info: default tone.</p></div>
+        <div class="callout callout--success"><p>Success: it worked.</p></div>
+        <div class="callout callout--warning"><p>Warning: check this.</p></div>
+        <div class="callout callout--danger"><p>Danger: something failed.</p></div>
+      </div>
 
-    <h3>Buttons</h3>
-    <div class="button-grid">
-      <button>Default</button>
-      <button class="btn-primary">Primary</button>
-      <button class="btn-outline">Outline</button>
-      <button disabled>Disabled</button>
-      <button
-        class="btn-primary"
-        disabled
-      >
-        Primary Disabled
-      </button>
-      <button
-        class="btn-outline"
-        disabled
-      >
-        Outline Disabled
-      </button>
-    </div>
+      <h3>Cards</h3>
+      <div class="grid">
+        <div class="card">
+          <h4>Card</h4>
+          <p>Static surface.</p>
+        </div>
+        <button class="card card-clickable">
+          <h4>Clickable card</h4>
+          <p>Hover for the highlight.</p>
+        </button>
+      </div>
 
-    <h3>Inputs</h3>
-    <input
-      type="text"
-      placeholder="Text input"
-    />
-    <textarea placeholder="Textarea"></textarea>
-    <select>
-      <option>Select option 1</option>
-      <option>Select option 2</option>
-      <option>Select option 3</option>
-    </select>
-    <label><input type="checkbox" /> Checkbox label</label>
+      <h3>List</h3>
+      <ul class="list">
+        <li class="list-item">
+          <span class="grow">List item with a trailing control</span>
+          <button class="btn-text">Action</button>
+        </li>
+        <li class="list-item">
+          <span class="grow">Another row</span>
+          <input
+            type="checkbox"
+            aria-label="Select row"
+          />
+        </li>
+      </ul>
 
-    <h3>Code Block</h3>
-    <pre><code>const tasks = await PluginAPI.getTasks();
+      <h3>Chips, spinner, empty state</h3>
+      <div class="row">
+        <span class="chip">Chip</span>
+        <span class="chip">Another</span>
+        <span
+          class="spinner"
+          role="status"
+          aria-label="Loading"
+        ></span>
+        <span class="text-muted">muted</span>
+        <span class="text-primary">primary</span>
+        <span class="text-danger">danger</span>
+        <span class="text-sm">small</span>
+      </div>
+      <div class="empty-state">Nothing here yet.</div>
+
+      <h3>Table</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>getTasks()</code></td>
+            <td>Get all active tasks</td>
+          </tr>
+          <tr>
+            <td><code>addTask(data)</code></td>
+            <td>Create a new task</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Code</h3>
+      <pre><code>const tasks = await PluginAPI.getTasks();
 console.log(tasks.length);</code></pre>
-
-    <h3>Table</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Method</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><code>getTasks()</code></td>
-          <td>Get all active tasks</td>
-        </tr>
-        <tr>
-          <td><code>addTask(data)</code></td>
-          <td>Create a new task</td>
-        </tr>
-        <tr>
-          <td><code>showSnack(cfg)</code></td>
-          <td>Show a notification</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h3>Lists</h3>
-    <ul>
-      <li>Unordered list item 1</li>
-      <li>Unordered list item 2</li>
-      <li>Unordered list item 3</li>
-    </ul>
-    <ol>
-      <li>Ordered list item 1</li>
-      <li>Ordered list item 2</li>
-      <li>Ordered list item 3</li>
-    </ol>
-
-    <h3>Cards</h3>
-    <div class="card">
-      <h4>Default Card</h4>
-      <p>A static card with background, shadow, and border.</p>
-    </div>
-    <br />
-    <div class="card card-clickable">
-      <h4>Clickable Card</h4>
-      <p>Hover to see the lift effect and primary border highlight.</p>
-    </div>
-
-    <h3>Horizontal Rule</h3>
-    <hr />
+    </section>
 
     <script>
       // #9526: captured at parse time — the host injects the PluginAPI bridge
@@ -527,81 +591,6 @@ console.log(tasks.length);</code></pre>
           ],
         });
         log('Dialog closed with result: ' + result, 'success');
-      }
-
-      function testThemeInfo() {
-        try {
-          const themeInfo = PluginAPI.getThemeInfo();
-          log('Theme Info:', 'info');
-          log('  Dark Theme: ' + themeInfo.isDarkTheme, 'info');
-          log('  Primary Color: ' + themeInfo.primaryColor, 'info');
-          log('  Accent Color: ' + themeInfo.accentColor, 'info');
-          log('  Warn Color: ' + themeInfo.warnColor, 'info');
-          log('  Background: ' + themeInfo.backgroundColor, 'info');
-          log('  Text Color: ' + themeInfo.textColor, 'info');
-
-          // Also show in a dialog
-          PluginAPI.openDialog({
-            title: 'Current Theme Information',
-            htmlContent: `
-              <div style="padding: 20px; font-family: monospace;">
-                <h3 style="margin: 0 0 15px 0;">Theme Variables</h3>
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tr style="border-bottom: 1px solid var(--divider-color, #333);">
-                    <td style="padding: 8px;">Dark Theme</td>
-                    <td style="padding: 8px; text-align: right;">${themeInfo.isDarkTheme ? 'Yes' : 'No'}</td>
-                  </tr>
-                  <tr style="border-bottom: 1px solid var(--divider-color, #333);">
-                    <td style="padding: 8px;">Primary Color</td>
-                    <td style="padding: 8px; text-align: right;">
-                      <span style="display: inline-block; width: 20px; height: 20px; background: ${themeInfo.primaryColor}; vertical-align: middle; margin-right: 8px; border: 1px solid var(--divider-color, #333);"></span>
-                      ${themeInfo.primaryColor}
-                    </td>
-                  </tr>
-                  <tr style="border-bottom: 1px solid var(--divider-color, #333);">
-                    <td style="padding: 8px;">Accent Color</td>
-                    <td style="padding: 8px; text-align: right;">
-                      <span style="display: inline-block; width: 20px; height: 20px; background: ${themeInfo.accentColor}; vertical-align: middle; margin-right: 8px; border: 1px solid var(--divider-color, #333);"></span>
-                      ${themeInfo.accentColor}
-                    </td>
-                  </tr>
-                  <tr style="border-bottom: 1px solid var(--divider-color, #333);">
-                    <td style="padding: 8px;">Warn Color</td>
-                    <td style="padding: 8px; text-align: right;">
-                      <span style="display: inline-block; width: 20px; height: 20px; background: ${themeInfo.warnColor}; vertical-align: middle; margin-right: 8px; border: 1px solid var(--divider-color, #333);"></span>
-                      ${themeInfo.warnColor}
-                    </td>
-                  </tr>
-                  <tr style="border-bottom: 1px solid var(--divider-color, #333);">
-                    <td style="padding: 8px;">Background</td>
-                    <td style="padding: 8px; text-align: right;">
-                      <span style="display: inline-block; width: 20px; height: 20px; background: ${themeInfo.backgroundColor}; vertical-align: middle; margin-right: 8px; border: 1px solid var(--divider-color, #333);"></span>
-                      ${themeInfo.backgroundColor}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 8px;">Text Color</td>
-                    <td style="padding: 8px; text-align: right;">
-                      <span style="display: inline-block; width: 20px; height: 20px; background: ${themeInfo.textColor}; vertical-align: middle; margin-right: 8px; border: 1px solid var(--divider-color, #333);"></span>
-                      ${themeInfo.textColor}
-                    </td>
-                  </tr>
-                </table>
-                <p style="margin-top: 15px; font-size: 12px; color: var(--text-color-muted, #999);">
-                  Plugins automatically receive all CSS variables from the host application, allowing seamless theme integration.
-                </p>
-              </div>
-            `,
-            buttons: [
-              {
-                label: 'Close',
-                color: 'primary',
-              },
-            ],
-          });
-        } catch (error) {
-          log('Failed to get theme info: ' + error.message, 'error');
-        }
       }
 
       async function runAllTests() {

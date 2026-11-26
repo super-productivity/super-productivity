@@ -12,4 +12,11 @@ export interface TaskCardList {
   addButton(): HTMLElement | null;
 }
 
+/**
+ * A card list's add button (`TaskCardList.addButton()`), e.g. a board column's
+ * header "+". The marker sits on the button itself, so no button of an open
+ * add-task bar matches.
+ */
+export const TASK_CARD_LIST_ADD_BTN_SELECTOR = 'button[data-add-task-btn]';
+
 export const TASK_CARD_LIST = new InjectionToken<TaskCardList>('TASK_CARD_LIST');

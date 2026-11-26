@@ -35,6 +35,9 @@ import { ColorInputComponent } from '../features/config/color-input/color-input.
 import { StartPageSelectComponent } from '../features/config/start-page-select/start-page-select.component';
 import { FormlySlideToggleComponent } from './formly-slide-toggle/formly-slide-toggle.component';
 import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-picker.component';
+import { FormlyIconSelectComponent } from './formly-icon-select/formly-icon-select.component';
+import { FormlyChipCheckboxComponent } from './formly-chip-checkbox/formly-chip-checkbox.component';
+import { FormlyLabelledGroupWrapperComponent } from './formly-labelled-group/formly-labelled-group.wrapper';
 
 /**
  * Root-only module. Import ONLY in main.ts via importProvidersFrom().
@@ -118,6 +121,8 @@ import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-pick
           extends: 'input',
           wrappers: ['form-field'],
         },
+        { name: 'icon-select', component: FormlyIconSelectComponent, extends: 'select' },
+        { name: 'chip-checkbox', component: FormlyChipCheckboxComponent, wrappers: [] },
         {
           name: 'start-page-select',
           component: StartPageSelectComponent,
@@ -145,6 +150,9 @@ import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-pick
           name: 'date',
           component: FormlyDatePickerComponent,
         },
+      ],
+      wrappers: [
+        { name: 'labelled-group', component: FormlyLabelledGroupWrapperComponent },
       ],
       extras: {
         immutable: true,

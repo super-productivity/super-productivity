@@ -16,6 +16,8 @@ import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.s
 import { TimeTrackingService } from '../../../features/time-tracking/time-tracking.service';
 import { flattenTasks } from '../../../features/tasks/store/task.selectors';
 import { ArchiveModel } from '../../../features/archive/archive.model';
+import { provideMockStore } from '@ngrx/store/testing';
+import { selectAllTagIds } from '../../../features/tag/store/tag.reducer';
 
 /**
  * Integration tests for archive subtask sync.
@@ -507,6 +509,7 @@ describe('Archive Subtask Sync - Handler Integration', () => {
         { provide: TaskArchiveService, useValue: mockTaskArchiveService },
         { provide: ArchiveDbAdapter, useValue: mockArchiveDbAdapter },
         { provide: TimeTrackingService, useValue: mockTimeTrackingService },
+        provideMockStore({ selectors: [{ selector: selectAllTagIds, value: [] }] }),
       ],
     });
 

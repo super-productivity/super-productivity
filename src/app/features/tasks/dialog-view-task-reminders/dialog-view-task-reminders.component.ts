@@ -23,8 +23,8 @@ import { ReminderService } from '../../reminder/reminder.service';
 import { distinctUntilChanged, first, map, switchMap, takeWhile } from 'rxjs/operators';
 import { T } from '../../../t.const';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
-import { getTomorrow } from '../../../util/get-tomorrow';
 import { ProjectService } from '../../project/project.service';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatIconButton } from '@angular/material/button';
@@ -35,6 +35,7 @@ import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -50,6 +51,7 @@ import {
   isTaskDeleteConfirmRequired,
 } from '../util/get-task-delete-confirm';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state.service';
 
 const MINUTES_TO_MILLISECONDS = 1000 * 60;
 
@@ -105,6 +107,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   private _reminderService = inject(ReminderService);
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
+  private readonly _issueSyncState = inject(IssueSyncStateService);
   private _elementRef = inject(ElementRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   data = inject<{
@@ -363,7 +366,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._store.dispatch(
       PlannerActions.planTaskForDay({
         task,
-        day: getDbDateStr(getTomorrow()),
+        day: getDbDateStr(this._dateService.getLogicalTomorrowMs()),
         isShowSnack: true,
       }),
     );
@@ -403,11 +406,12 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     }
     const isConfirmBeforeDelete =
       this._globalConfigService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
-    if (isTaskDeleteConfirmRequired(task, isConfirmBeforeDelete)) {
+    const isNoLongerListed = this._issueSyncState.isMissing(task.id);
+    if (isTaskDeleteConfirmRequired(task, isConfirmBeforeDelete, isNoLongerListed)) {
       this._subs.add(
         this._matDialog
           .open(DialogConfirmComponent, {
-            data: getTaskDeleteConfirmData(task),
+            data: getTaskDeleteConfirmData(task, undefined, isNoLongerListed),
           })
           .afterClosed()
           .subscribe((isConfirm) => {

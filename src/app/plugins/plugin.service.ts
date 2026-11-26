@@ -16,6 +16,7 @@ import { PluginUserPersistenceService } from './plugin-user-persistence.service'
 import { PluginCacheService } from './plugin-cache.service';
 import {
   MAX_PLUGIN_CODE_SIZE,
+  MAX_PLUGIN_INDEX_HTML_SIZE,
   MAX_PLUGIN_MANIFEST_SIZE,
   MAX_PLUGIN_TRANSLATIONS_TOTAL_SIZE,
   MAX_PLUGIN_ZIP_SIZE,
@@ -83,6 +84,7 @@ export class PluginService implements OnDestroy {
   private readonly _snackService = inject(SnackService);
 
   private _isInitialized = false;
+  private _initRun: Promise<void> | null = null;
   private _loadedPlugins: PluginInstance[] = [];
   private _pluginPaths: Map<string, string> = new Map(); // Store plugin ID -> path mapping
   private _pluginIndexHtml: Map<string, string> = new Map(); // Store plugin ID -> index.html content
@@ -110,23 +112,24 @@ export class PluginService implements OnDestroy {
       PluginLog.err(this._translateService.instant(T.PLUGINS.ALREADY_INITIALIZED));
       return;
     }
+    // One shared run: a concurrent second run (startup vs. an early-opened plugin view)
+    // reloaded every enabled plugin, dropping an open iframe view's API calls meanwhile.
+    this._initRun ??= this._runInitialization().finally(() => (this._initRun = null));
+    return this._initRun;
+  }
 
+  // Callers log failures; a failed run leaves _isInitialized false, so a later call retries.
+  private async _runInitialization(): Promise<void> {
     PluginLog.log('Initializing plugin system...');
+    // Only load manifests, not the actual plugin code
+    await this._discoverBuiltInPlugins();
+    await this._discoverUploadedPlugins();
 
-    try {
-      // Only load manifests, not the actual plugin code
-      await this._discoverBuiltInPlugins();
-      await this._discoverUploadedPlugins();
+    // Load all enabled plugins on startup
+    await this._loadEnabledPlugins();
 
-      // Load all enabled plugins on startup
-      await this._loadEnabledPlugins();
-
-      this._isInitialized = true;
-      PluginLog.log('Plugin system initialized successfully');
-    } catch (error) {
-      PluginLog.err('Failed to initialize plugin system:', error);
-      throw error;
-    }
+    this._isInitialized = true;
+    PluginLog.log('Plugin system initialized successfully');
   }
 
   private async _discoverBuiltInPlugins(): Promise<void> {
@@ -758,11 +761,8 @@ export class PluginService implements OnDestroy {
       platform = 'android';
     }
 
-    const darkModeValue = this._globalThemeService.darkMode();
-    const isDark = darkModeValue === 'dark';
-
     return {
-      theme: isDark ? 'dark' : 'light',
+      theme: this._globalThemeService.isDarkTheme() ? 'dark' : 'light',
       appVersion: environment.version,
       platform,
       isDev: !environment.production,
@@ -1092,11 +1092,10 @@ export class PluginService implements OnDestroy {
         manifest.iFrame === true && extractedFiles['index.html'] !== undefined;
       if (hasIndexHtml) {
         const indexHtmlBytes = extractedFiles['index.html'];
-        // Reuse the manifest size limit for index.html.
-        if (indexHtmlBytes.length > MAX_PLUGIN_MANIFEST_SIZE) {
+        if (indexHtmlBytes.length > MAX_PLUGIN_INDEX_HTML_SIZE) {
           throw new Error(
             this._translateService.instant(T.PLUGINS.INDEX_HTML_TOO_LARGE, {
-              maxSize: (MAX_PLUGIN_MANIFEST_SIZE / 1024).toFixed(1),
+              maxSize: (MAX_PLUGIN_INDEX_HTML_SIZE / 1024).toFixed(1),
             }),
           );
         }

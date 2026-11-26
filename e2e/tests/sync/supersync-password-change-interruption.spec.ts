@@ -1,4 +1,4 @@
-import { SuperSyncSnapshotUploadResponseSchema } from '../../../packages/shared-schema/src';
+import { SuperSyncSnapshotUploadResponseSchema } from '../../../packages/shared-schema/src/supersync-http-contract';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   archiveTask,

@@ -13,7 +13,7 @@ import { Log } from '../../../core/log';
 import { from, Observable, of, Subject, Subscription, timer } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
-import { debounceTime, switchMap, take } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { fadeAnimation, fadeSwapAnimation } from '../../../ui/animations/fade.ani';
 import { IssueService } from '../../issue/issue.service';
@@ -90,7 +90,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
   animations: [
     trigger('modeSwitchFade', [
       transition('* => *', [
-        style({ opacity: 0, transform: 'scale(0.8)' }),
+        style({ opacity: 0, transform: 'scale(0.95)' }),
         animate(ANI_STANDARD_TIMING, style({ opacity: 1, transform: 'scale(1)' })),
       ]),
     ]),
@@ -146,7 +146,7 @@ export class FocusModeMainComponent {
   private readonly _LAUNCH_DURATION_MS = 800;
   // True while the brief inline rocket launch plays (default, prep screen off).
   readonly isLaunching = signal(false);
-  private _launchSubscription: Subscription | null = null;
+  private _launch: { taskId: string; subscription: Subscription } | null = null;
 
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly taskService = inject(TaskService);
@@ -309,16 +309,20 @@ export class FocusModeMainComponent {
   defaultTaskNotes = signal('');
   T: typeof T = T;
 
-  issueUrl$: Observable<string | null> = this.taskService.currentTask$.pipe(
-    switchMap((v) => {
-      if (!v) {
-        return of(null);
-      }
-      return v.issueType && v.issueId && v.issueProviderId
+  // Follows the displayed task so switching tasks updates the link; the
+  // distinct check avoids re-resolving on every time-tracking tick.
+  issueUrl$: Observable<string | null> = toObservable(this.displayedTask).pipe(
+    distinctUntilChanged(
+      (a, b) =>
+        a?.issueType === b?.issueType &&
+        a?.issueId === b?.issueId &&
+        a?.issueProviderId === b?.issueProviderId,
+    ),
+    switchMap((v) =>
+      v?.issueType && v.issueId && v.issueProviderId
         ? from(this._issueService.issueLink(v.issueType, v.issueId, v.issueProviderId))
-        : of(null);
-    }),
-    take(1),
+        : of(null),
+    ),
   );
 
   private _dragEnterTarget?: HTMLElement;
@@ -372,6 +376,11 @@ export class FocusModeMainComponent {
     this._pomodoroDurationToPersist$
       .pipe(debounceTime(400), takeUntilDestroyed())
       .subscribe((duration) => this._persistPomodoroDuration(duration));
+
+    // Closing the overlay (Escape, close button, Android back) destroys this
+    // component. If that happens mid-launch, the user has already pressed
+    // Start, so start the session now instead of silently dropping it.
+    this._destroyRef.onDestroy(() => this._finishInlineLaunch());
   }
 
   @HostListener('window:focus') onWindowFocus(): void {
@@ -541,17 +550,27 @@ export class FocusModeMainComponent {
     }
 
     this.isLaunching.set(true);
-    this._launchSubscription = timer(this._LAUNCH_DURATION_MS)
-      .pipe(takeUntilDestroyed(this._destroyRef))
-      .subscribe(() => {
-        this._launchSubscription = null;
-        this.isLaunching.set(false);
-        if (!this._isPreparation()) {
-          this._pendingTaskId.set(null);
-          return;
-        }
-        this._dispatchStartSession(taskId);
-      });
+    this._launch = {
+      taskId,
+      subscription: timer(this._LAUNCH_DURATION_MS).subscribe(() =>
+        this._finishInlineLaunch(),
+      ),
+    };
+  }
+
+  private _finishInlineLaunch(): void {
+    const launch = this._launch;
+    if (!launch) {
+      return;
+    }
+    launch.subscription.unsubscribe();
+    this._launch = null;
+    this.isLaunching.set(false);
+    if (!this._isPreparation()) {
+      this._pendingTaskId.set(null);
+      return;
+    }
+    this._dispatchStartSession(launch.taskId);
   }
 
   private _prefersReducedMotion(): boolean {
@@ -586,9 +605,9 @@ export class FocusModeMainComponent {
     this._store.dispatch(resetCycles());
   }
 
-  exitToPlanning(): void {
-    // Cancelling the session clears tracking and hides the overlay, returning
-    // the user to wherever they were before focus mode (no forced navigation).
+  cancelSession(): void {
+    // Ends the session without logging it: unlike completing, it advances no
+    // Pomodoro cycle and starts no break. Clears tracking and hides the overlay.
     this._store.dispatch(cancelFocusSession());
   }
 
@@ -639,8 +658,8 @@ export class FocusModeMainComponent {
   }
 
   private _cancelInlineLaunch(): void {
-    this._launchSubscription?.unsubscribe();
-    this._launchSubscription = null;
+    this._launch?.subscription.unsubscribe();
+    this._launch = null;
     this.isLaunching.set(false);
   }
 

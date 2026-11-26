@@ -1,3 +1,4 @@
+import { Task } from '@super-productivity/plugin-api';
 import { AutomationContext, IAutomationAction } from './definitions';
 
 const resolveTagId = async (ctx: AutomationContext, value: string): Promise<string | null> => {
@@ -8,6 +9,10 @@ const resolveTagId = async (ctx: AutomationContext, value: string): Promise<stri
   }
   return tag.id;
 };
+
+// The event's task is a snapshot from trigger time; earlier actions may have changed its tags since.
+const getCurrentTask = async (ctx: AutomationContext, task: Task): Promise<Task> =>
+  (await ctx.plugin.getTasks()).find((t) => t.id === task.id) ?? task;
 
 export const ActionCreateTask: IAutomationAction = {
   id: 'createTask',
@@ -46,10 +51,11 @@ export const ActionAddTag: IAutomationAction = {
     }
     const tagId = await resolveTagId(ctx, value);
     if (!tagId) return;
-    if (event.task.tagIds.includes(tagId)) return;
+    const task = await getCurrentTask(ctx, event.task);
+    if (task.tagIds.includes(tagId)) return;
 
-    await ctx.plugin.updateTask(event.task.id, {
-      tagIds: [...event.task.tagIds, tagId],
+    await ctx.plugin.updateTask(task.id, {
+      tagIds: [...task.tagIds, tagId],
     });
     ctx.plugin.log.info(`[Automation] Action: Added tag "${value}"`);
   },
@@ -65,10 +71,11 @@ export const ActionRemoveTag: IAutomationAction = {
     }
     const tagId = await resolveTagId(ctx, value);
     if (!tagId) return;
-    if (!event.task.tagIds.includes(tagId)) return;
+    const task = await getCurrentTask(ctx, event.task);
+    if (!task.tagIds.includes(tagId)) return;
 
-    await ctx.plugin.updateTask(event.task.id, {
-      tagIds: event.task.tagIds.filter((id) => id !== tagId),
+    await ctx.plugin.updateTask(task.id, {
+      tagIds: task.tagIds.filter((id) => id !== tagId),
     });
     ctx.plugin.log.info(`[Automation] Action: Removed tag "${value}"`);
   },

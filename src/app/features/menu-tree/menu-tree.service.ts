@@ -54,9 +54,8 @@ export class MenuTreeService {
   readonly tagTree = computed(() => this._tagTree());
 
   readonly projectFolderMap = computed(() => {
-    const projects = this._allProjects().filter(
-      (p) => !p.isArchived && !p.isHiddenFromMenu,
-    );
+    // keep menu-hidden projects: pickers still offer them and need their paths (#11190)
+    const projects = this._allProjects().filter((p) => !p.isArchived);
     return this._buildFolderMap(projects, this.projectTree(), MenuTreeKind.PROJECT);
   });
 

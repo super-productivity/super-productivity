@@ -13,12 +13,12 @@ import {
 import { waitForMenuSettled } from '../../utils/waits';
 
 /**
- * A task finished as "won't do" on one client and un-done on the other has to
- * end up in the same state on both, whichever client syncs first and whichever
- * edit is newer. A won't-do task is `isDone` plus `isWontDo`, so a field-level
- * merge that took the newer `isDone: false` but kept the older `isWontDo` would
- * leave a stale flag, and one that took the newer `isDone: true` without its
- * `isWontDo` would turn the won't-do into a plain completion.
+ * A task finished as "won't do" on one client and un-done or completed on the
+ * other has to end up in the same state on both, whichever client syncs first
+ * and whichever edit is newer. A won't-do task is done with a `wontDoOn` equal
+ * to its `doneOn`, so a field-level merge keeps the pair of the newer edit: a
+ * newer reopen or completion leaves the older `wontDoOn` beside another
+ * `doneOn`, which no longer counts.
  */
 
 const markUndone = async (
@@ -49,7 +49,7 @@ const finishAsWontDo = async (
 
 type StoredState = { isDone: boolean; isWontDo: boolean };
 
-/** The task's `isDone` and `isWontDo` as stored in the client's NgRx state. */
+/** The task's `isDone`, and whether its stored fields mark it won't do. */
 const getStoredState = (
   client: SimulatedE2EClient,
   taskName: string,
@@ -73,8 +73,14 @@ const getStoredState = (
       ?.entities;
     const task = Object.values(entities ?? {}).find(
       (t) => !!(t as { title?: string }).title?.includes(name),
-    ) as { isDone?: boolean; isWontDo?: boolean } | undefined;
-    return task ? { isDone: !!task.isDone, isWontDo: !!task.isWontDo } : null;
+    ) as { isDone?: boolean; doneOn?: number; wontDoOn?: number } | undefined;
+    return task
+      ? {
+          isDone: !!task.isDone,
+          isWontDo:
+            !!task.isDone && task.wontDoOn != null && task.wontDoOn === task.doneOn,
+        }
+      : null;
   }, taskName);
 
 const SCENARIOS = (['undone', 'wontDo'] as const).flatMap((newerEdit) =>
@@ -135,8 +141,8 @@ test.describe("@supersync Won't do vs un-done convergence", () => {
         expect(stateB).toEqual(stateA);
 
         if (newerEdit === 'wontDo') {
-          // A's won't-do is the later edit, so it wins on both clients and
-          // keeps its `isWontDo`.
+          // A's won't-do is the later edit, so it wins on both clients with
+          // its matching `doneOn` and `wontDoOn`.
           expect(stateA).toEqual({ isDone: true, isWontDo: true });
           for (const client of [clientA, clientB]) {
             await expect(
@@ -148,8 +154,8 @@ test.describe("@supersync Won't do vs un-done convergence", () => {
           return;
         }
 
-        // B's reopen is the later edit, so it wins on both clients, and un-doing
-        // the task also clears A's older `isWontDo`.
+        // B's reopen is the later edit, so it wins on both clients; A's older
+        // `wontDoOn` no longer counts.
         expect(stateA).toEqual({ isDone: false, isWontDo: false });
         for (const client of [clientA, clientB]) {
           await expect(
@@ -171,6 +177,61 @@ test.describe("@supersync Won't do vs un-done convergence", () => {
               'done-toggle .done-check--cross',
             ),
           ).toHaveCount(0);
+        }
+      } finally {
+        if (clientA) await closeClient(clientA);
+        if (clientB) await closeClient(clientB);
+      }
+    });
+  }
+
+  // Concurrently, A finishes an open task as won't do and B completes it
+  // later. B's completion is the newer edit, so it wins on both clients: an
+  // older won't do must not survive beside it.
+  for (const firstToSync of ['wontDo', 'completed'] as const) {
+    test(`converges on a newer completion when the ${firstToSync} client syncs first`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      const appUrl = baseURL || 'http://localhost:4242';
+      let clientA: SimulatedE2EClient | null = null;
+      let clientB: SimulatedE2EClient | null = null;
+
+      try {
+        const syncConfig = getSuperSyncConfig(await createTestUser(testRunId));
+        clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
+        await clientA.sync.setupSuperSync(syncConfig);
+        clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
+        await clientB.sync.setupSuperSync(syncConfig);
+
+        const taskName = `WontDo-completed-${firstToSync}-${testRunId}`;
+        await clientA.workView.addTask(taskName);
+        await clientA.sync.syncAndWait();
+        await clientB.sync.syncAndWait();
+        await waitForTask(clientB.page, taskName);
+
+        await finishAsWontDo(clientA, taskName);
+        await markTaskDone(clientB, taskName);
+
+        const [first, second] =
+          firstToSync === 'wontDo' ? [clientA, clientB] : [clientB, clientA];
+        await first.sync.syncAndWait();
+        await second.sync.syncAndWait();
+        await first.sync.syncAndWait();
+        await second.sync.syncAndWait();
+
+        for (const client of [clientA, clientB]) {
+          await expect(getDoneTaskElement(client, taskName)).toHaveCount(1);
+          await expect(
+            getDoneTaskElement(client, taskName).locator(
+              'done-toggle .done-check--cross',
+            ),
+          ).toHaveCount(0);
+          expect(await getStoredState(client, taskName)).toEqual({
+            isDone: true,
+            isWontDo: false,
+          });
         }
       } finally {
         if (clientA) await closeClient(clientA);

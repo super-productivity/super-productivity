@@ -145,6 +145,22 @@ describe('SelectTaskComponent', () => {
       expect(result.map((task) => task.id)).toEqual(['task-1', 'task-3']);
     });
 
+    it('should filter tasks by short syntax for a project hidden from the menu (#11190)', () => {
+      projectsSubject.next([
+        { id: 'project-1', title: 'Work', isHiddenFromMenu: true } as Project,
+        { id: 'project-2', title: 'Home' } as Project,
+      ]);
+      tasksSubject.next([
+        { ...validTask, id: 'task-1', title: 'Write report', projectId: 'project-1' },
+        { ...validTask, id: 'task-2', title: 'Write report', projectId: 'project-2' },
+      ]);
+
+      component.taskSelectCtrl.setValue('write +wor');
+      fixture.detectChanges();
+
+      expect(component.filteredTasks().map((task) => task.id)).toEqual(['task-1']);
+    });
+
     it('should treat project short syntax as literal search text when disabled', () => {
       shortSyntaxConfig.set({
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,

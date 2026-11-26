@@ -33,7 +33,7 @@ import {
   LWWResolution,
   MergedResolution,
   ResolvedConflicts,
-  mergeMarkedProjectDeleteOps,
+  mergeMarkedDeleteWinsOps,
   DECOMPOSABLE_MULTI_ACTION_FIELDS,
   isRoundTimePayloadValidForStaticFields,
   doesRoundTimeOpWriteTask,
@@ -41,6 +41,12 @@ import {
   LWW_PLANNING_OPTIONS,
   isResolvableTodayListAction,
 } from './conflict-resolution.util';
+
+/** Log detail for an LWW plan; only timestamp wins carry the compared timestamps. */
+const describeLwwPlan = (plan: LwwConflictResolutionPlan<EntityConflict>): string =>
+  plan.localMaxTimestamp === undefined
+    ? plan.reason
+    : `${plan.reason}, local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp}`;
 
 /**
  * Plans LWW winners per conflict and builds the local-win, field-patch and reconciliation ops.
@@ -132,7 +138,7 @@ export class ConflictResolutionPlannerService {
       if (plan.localWinOperationKind === 'archive-win') {
         localWinOp = archiveWinOpByConflict.get(plan.conflict);
       } else if (plan.localWinOperationKind === 'delete-win') {
-        const deleteOp = mergeMarkedProjectDeleteOps(plan.conflict.localOps);
+        const deleteOp = mergeMarkedDeleteWinsOps(plan.conflict.localOps);
         if (!deleteOp) {
           throw new Error(
             `ConflictResolutionService: Missing delete-wins operation for ` +
@@ -168,19 +174,19 @@ export class ConflictResolutionPlannerService {
         plan.reason === 'local-delete-wins'
       ) {
         OpLog.normal(
-          `ConflictResolutionService: Project deletion wins over concurrent update ` +
+          `ConflictResolutionService: ${plan.conflict.entityType} deletion wins over concurrent update ` +
             `(${plan.winner} delete) for ` +
             `${plan.conflict.entityType}:${plan.conflict.entityId}`,
         );
       } else if (plan.winner === 'local') {
         OpLog.normal(
           `ConflictResolutionService: LWW resolved ${plan.conflict.entityType}:${plan.conflict.entityId} as LOCAL ` +
-            `(local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
+            `(${describeLwwPlan(plan)})`,
         );
       } else {
         OpLog.normal(
           `ConflictResolutionService: LWW resolved ${plan.conflict.entityType}:${plan.conflict.entityId} as REMOTE ` +
-            `(local: ${plan.localMaxTimestamp}, remote: ${plan.remoteMaxTimestamp})`,
+            `(${describeLwwPlan(plan)})`,
         );
       }
     }

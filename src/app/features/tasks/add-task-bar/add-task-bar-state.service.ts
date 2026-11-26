@@ -7,7 +7,7 @@ import {
 } from './add-task-bar.const';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { SS } from '../../../core/persistence/storage-keys.const';
-import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
+import { TimeSpentOnDay, TaskPriority, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { ShortSyntaxRange } from '../short-syntax';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
@@ -207,6 +207,10 @@ export class AddTaskBarStateService {
     return time ? normalizeClockStr(time) : time;
   }
 
+  updatePriority(priority: TaskPriority | null): void {
+    this._taskInputState.update((state) => ({ ...state, priority }));
+  }
+
   updateDeadlineRemindOption(deadlineRemindOption: TaskReminderOptionId | null): void {
     this._taskInputState.update((state) => ({ ...state, deadlineRemindOption }));
   }
@@ -236,6 +240,7 @@ export class AddTaskBarStateService {
       deadlineDate: null,
       deadlineTime: null,
       deadlineRemindOption: null,
+      priority: null,
     }));
     this.inputTxt.set('');
     this.syntaxHighlight.set(null);

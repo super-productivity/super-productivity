@@ -27,6 +27,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.superproductivity.superproductivity.app.LaunchDecider
+import com.superproductivity.superproductivity.receiver.NotificationActionReceiver
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.util.printWebViewVersion
 import com.superproductivity.superproductivity.webview.JavaScriptInterface
@@ -47,7 +48,12 @@ class FullscreenActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var wvContainer: FrameLayout
     private var isForegroundServiceFailureReceiverRegistered = false
-    private var webViewRequestHandler = WebViewRequestHandler(this, BuildConfig.ONLINE_SERVICE_HOST)
+    private var isNotificationActionDrainReceiverRegistered = false
+    private var webViewRequestHandler = WebViewRequestHandler(
+        this,
+        BuildConfig.ONLINE_SERVICE_PROTOCOL,
+        BuildConfig.ONLINE_SERVICE_HOST,
+    )
     val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
     val appUrl =
@@ -69,10 +75,36 @@ class FullscreenActivity : AppCompatActivity() {
         }
     }
 
+    // A tracking/focus notification tap over a visible app must reach JS now,
+    // not at the next resume: JS keeps ticking the task the tap paused (#10683).
+    private val notificationActionDrainReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == NotificationActionReceiver.ACTION_DRAIN) {
+                callJSInterfaceFunctionIfExists("next", "onNotificationActionDrainRequest$")
+            }
+        }
+    }
+
     @Suppress("ReplaceCallWithBinaryOperator")
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.v("TW", "FullScreenActivity: onCreate")
         super.onCreate(savedInstanceState)
+
+        // A launcher start into a task that is already running (this activity is
+        // not singleTask): some launchers, or a task first opened via the Play
+        // Store "Open" button, send an intent that does not match the task's base
+        // intent, so Android stacks a new instance instead of bringing the task to
+        // front. Finish it at once, uncovering the running app: no second WebView
+        // in online mode, no extra trampoline hop and flash in offline mode.
+        if (!isTaskRoot &&
+            intent?.action == Intent.ACTION_MAIN &&
+            intent?.hasCategory(Intent.CATEGORY_LAUNCHER) == true
+        ) {
+            finish()
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+            return
+        }
 
         val compatibility = try {
             WebViewCompatibilityChecker.evaluate(this)
@@ -94,10 +126,17 @@ class FullscreenActivity : AppCompatActivity() {
         // Determines which launch mode to use. (Online-old or Offline-new)
         val launchDecider = LaunchDecider(this)
         if (launchDecider.shouldSwitchToNewActivity()) {
-            // Switch to CapacitorMainActivity
-            val intent = intent.setComponent(ComponentName(this, CapacitorMainActivity::class.java))
+            // Switch to CapacitorMainActivity. This hop runs on every launch, under
+            // the system splash: without NO_ANIMATION (open) and the zero pending
+            // transition (close) the default activity animation plays between the
+            // two windows and reads as a flash on app open.
+            val intent = intent
+                .setComponent(ComponentName(this, CapacitorMainActivity::class.java))
+                .addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
             startActivity(intent)
             finish()
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
             return
         }
 
@@ -133,6 +172,11 @@ class FullscreenActivity : AppCompatActivity() {
             IntentFilter(ForegroundServiceFailure.ACTION)
         )
         isForegroundServiceFailureReceiverRegistered = true
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            notificationActionDrainReceiver,
+            IntentFilter(NotificationActionReceiver.ACTION_DRAIN)
+        )
+        isNotificationActionDrainReceiverRegistered = true
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
         } else {
@@ -407,6 +451,12 @@ class FullscreenActivity : AppCompatActivity() {
                 foregroundServiceFailureReceiver
             )
             isForegroundServiceFailureReceiverRegistered = false
+        }
+        if (isNotificationActionDrainReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(
+                notificationActionDrainReceiver
+            )
+            isNotificationActionDrainReceiverRegistered = false
         }
         super.onDestroy()
     }

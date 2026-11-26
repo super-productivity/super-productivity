@@ -1,4 +1,9 @@
-import { getDbDateStr, isDBDateStr, isValidDBDateStr } from './get-db-date-str';
+import {
+  getDbDateStr,
+  getDbDateStrWithOffset,
+  isDBDateStr,
+  isValidDBDateStr,
+} from './get-db-date-str';
 
 describe('getDbDateStr', () => {
   it('should return YYYY-MM-DD for a given date', () => {
@@ -12,6 +17,29 @@ describe('getDbDateStr', () => {
   it('should accept a timestamp number', () => {
     const ts = new Date(2026, 11, 25).getTime();
     expect(getDbDateStr(ts)).toBe('2026-12-25');
+  });
+});
+
+describe('getDbDateStrWithOffset', () => {
+  const FOUR_HOURS = 4 * 60 * 60 * 1000;
+  const at = (y: number, mo: number, d: number, h: number, mi: number): number =>
+    new Date(y, mo, d, h, mi).getTime();
+
+  it('should match getDbDateStr without an offset', () => {
+    expect(getDbDateStrWithOffset(at(2026, 2, 21, 0, 30), 0)).toBe('2026-03-21');
+  });
+
+  it('should count times before the offset to the previous day', () => {
+    expect(getDbDateStrWithOffset(at(2026, 0, 1, 3, 59), FOUR_HOURS)).toBe('2025-12-31');
+    expect(getDbDateStrWithOffset(at(2026, 0, 1, 4, 0), FOUR_HOURS)).toBe('2026-01-01');
+  });
+
+  // Spring-forward days in the US and the EU, so the Berlin and LA runs each cross one
+  it('should keep the logical day on a DST switch day', () => {
+    expect(getDbDateStrWithOffset(at(2026, 2, 8, 3, 30), FOUR_HOURS)).toBe('2026-03-07');
+    expect(getDbDateStrWithOffset(at(2026, 2, 8, 6, 0), FOUR_HOURS)).toBe('2026-03-08');
+    expect(getDbDateStrWithOffset(at(2026, 2, 29, 3, 30), FOUR_HOURS)).toBe('2026-03-28');
+    expect(getDbDateStrWithOffset(at(2026, 2, 29, 6, 0), FOUR_HOURS)).toBe('2026-03-29');
   });
 });
 

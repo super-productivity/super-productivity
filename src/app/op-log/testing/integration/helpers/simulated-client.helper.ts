@@ -92,7 +92,7 @@ export class SimulatedClient {
   /**
    * Create and store a batch of local operations.
    * Uses testClient.createOperation() per op for correct vector clock increments,
-   * then stores all at once via appendBatch().
+   * then stores all at once via appendBatchSkipDuplicates().
    */
   async createLocalOpsBatch(
     items: Array<{
@@ -112,7 +112,7 @@ export class SimulatedClient {
         payload: item.payload,
       }),
     );
-    await this.store.appendBatch(ops, 'local');
+    await this.store.appendBatchSkipDuplicates(ops, 'local');
     return ops;
   }
 

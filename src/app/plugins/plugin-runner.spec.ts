@@ -7,6 +7,7 @@ import { SnackService } from '../core/snack/snack.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginManifest, PluginBaseCfg } from './plugin-api.model';
 import { PluginI18nService } from './plugin-i18n.service';
+import { PluginLog } from '../core/log';
 
 describe('PluginRunner', () => {
   let service: PluginRunner;
@@ -129,6 +130,24 @@ describe('PluginRunner', () => {
 
       expect(instance.loaded).toBe(true);
       expect(instance.error).toBeUndefined();
+    });
+
+    it('warns about invented PluginAPI members while real ones keep working', async () => {
+      const warn = spyOn(PluginLog, 'warn');
+      const pluginCode = `
+        if (PluginAPI.showIframe !== undefined) {
+          throw new Error('unknown members must stay undefined');
+        }
+        PluginAPI.registerSidePanelButton({ label: 'Panel', onClick: () => {} });
+      `;
+
+      const instance = await service.loadPlugin(mockManifest, pluginCode, mockBaseCfg);
+
+      expect(instance.error).toBeUndefined();
+      expect(registerSidePanelButtonSpy).toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledOnceWith(
+        jasmine.stringContaining('[test-plugin] PluginAPI.showIframe does not exist.'),
+      );
     });
 
     it('should capture plugin execution errors', async () => {
@@ -469,6 +488,115 @@ describe('PluginRunner', () => {
       service.unloadPlugin(mockManifest.id);
       expect(aSpy).toHaveBeenCalledTimes(1);
       expect(bSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('after unload', () => {
+    const LEAK_GLOBAL = '__pluginRunnerSpec_leak__';
+    const getLeak = (): Record<string, unknown> =>
+      (globalThis as unknown as Record<string, Record<string, unknown>>)[LEAK_GLOBAL];
+
+    beforeEach(() => {
+      (globalThis as unknown as Record<string, unknown>)[LEAK_GLOBAL] = {};
+      jasmine.clock().install();
+    });
+
+    afterEach(() => {
+      jasmine.clock().uninstall();
+      delete (globalThis as unknown as Record<string, unknown>)[LEAK_GLOBAL];
+    });
+
+    it('turns API calls from leaked plugin code into no-ops', async () => {
+      const warnSpy = spyOn(PluginLog, 'warn');
+      await service.loadPlugin(
+        mockManifest,
+        `globalThis['${LEAK_GLOBAL}'].api = plugin;`,
+        mockBaseCfg,
+      );
+      service.unloadPlugin(mockManifest.id);
+
+      const leakedApi = getLeak()['api'] as PluginAPI;
+      leakedApi.registerTaskContextMenuEntry({
+        id: 'late',
+        label: 'Late',
+        onClick: () => undefined,
+      });
+
+      expect(registerTaskContextMenuEntrySpy).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets the onUnload callback use the API synchronously for cleanup', async () => {
+      await service.loadPlugin(
+        mockManifest,
+        `plugin.onUnload(() => plugin.registerTaskContextMenuEntry({
+          id: 'cleanup',
+          label: 'Cleanup',
+          onClick: () => undefined,
+        }));`,
+        mockBaseCfg,
+      );
+
+      service.unloadPlugin(mockManifest.id);
+
+      expect(registerTaskContextMenuEntrySpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops intervals of a plugin that registered no onUnload', async () => {
+      const tick = jasmine.createSpy('tick');
+      getLeak()['tick'] = tick;
+      await service.loadPlugin(
+        mockManifest,
+        `setInterval(() => globalThis['${LEAK_GLOBAL}'].tick(), 10);`,
+        mockBaseCfg,
+      );
+      jasmine.clock().tick(25);
+      expect(tick).toHaveBeenCalledTimes(2);
+
+      service.unloadPlugin(mockManifest.id);
+      jasmine.clock().tick(100);
+
+      expect(tick).toHaveBeenCalledTimes(2);
+    });
+
+    it('stops timers and revokes the API of a plugin whose code throws on load', async () => {
+      const tick = jasmine.createSpy('tick');
+      getLeak()['tick'] = tick;
+      await service.loadPlugin(
+        mockManifest,
+        `globalThis['${LEAK_GLOBAL}'].api = plugin;
+        setInterval(() => globalThis['${LEAK_GLOBAL}'].tick(), 10);
+        throw new Error('activation failed');`,
+        mockBaseCfg,
+      );
+
+      jasmine.clock().tick(50);
+      (getLeak()['api'] as PluginAPI).registerTaskContextMenuEntry({
+        id: 'late',
+        label: 'Late',
+        onClick: () => undefined,
+      });
+
+      expect(tick).not.toHaveBeenCalled();
+      expect(registerTaskContextMenuEntrySpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps timers of other plugins running', async () => {
+      const tickB = jasmine.createSpy('tickB');
+      getLeak()['tickB'] = tickB;
+      const manifestB = { ...mockManifest, id: 'plugin-b', name: 'Plugin B' };
+      await service.loadPlugin(mockManifest, `setInterval(() => {}, 10);`, mockBaseCfg);
+      await service.loadPlugin(
+        manifestB,
+        `setInterval(() => globalThis['${LEAK_GLOBAL}'].tickB(), 10);`,
+        mockBaseCfg,
+      );
+
+      service.unloadPlugin(mockManifest.id);
+      jasmine.clock().tick(25);
+
+      expect(tickB).toHaveBeenCalledTimes(2);
+      service.unloadPlugin(manifestB.id);
     });
   });
 

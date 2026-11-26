@@ -3,6 +3,7 @@ import {
   composeId,
   isPluginIdMatch,
   MAX_PLUGIN_PERSISTENCE_KEY_LENGTH,
+  listPluginPersistenceKeys,
 } from './plugin-persistence-key.util';
 
 describe('composeId', () => {
@@ -87,5 +88,64 @@ describe('isPluginIdMatch', () => {
     // 'plugin-abc' should NOT match cleanup for 'plugin-a'.
     expect(isPluginIdMatch('plugin-abc', 'plugin-a')).toBe(false);
     expect(isPluginIdMatch('plugin-abc:doc', 'plugin-a')).toBe(false);
+  });
+});
+
+describe('listPluginPersistenceKeys', () => {
+  it('isolates the owner and excludes the legacy entry', () => {
+    expect(
+      listPluginPersistenceKeys(
+        [
+          'plugin-a',
+          'plugin-a:',
+          'plugin-a:z',
+          'plugin-a:a',
+          'plugin-ab:чужой',
+          'plugin-b:чужой',
+          'plugin-a:a',
+        ],
+        'plugin-a',
+      ),
+    ).toEqual(['a', 'z']);
+  });
+
+  it('accepts empty input and an empty prefix', () => {
+    expect(listPluginPersistenceKeys([], 'plugin-a')).toEqual([]);
+    expect(listPluginPersistenceKeys(['plugin-a:k'], 'plugin-a', '')).toEqual(['k']);
+  });
+
+  it('preserves Unicode and colons without normalizing keys', () => {
+    const keys = ['вложение:я', 'вложение:ё', 'вложение:e\u0301', 'вложение:é'];
+    expect(
+      listPluginPersistenceKeys(
+        keys.map((key) => `plugin-a:${key}`),
+        'plugin-a',
+        'вложение:',
+      ),
+    ).toEqual([...keys].sort());
+    expect(
+      listPluginPersistenceKeys(['plugin-a:вложение:a:b'], 'plugin-a', 'вложение:a:'),
+    ).toEqual(['вложение:a:b']);
+  });
+
+  it('treats prefixes literally without addressing another owner', () => {
+    const ids = ['plugin-a:*', 'plugin-a:../x', 'plugin-a:plugin-b:key', 'plugin-b:key'];
+    expect(listPluginPersistenceKeys(ids, 'plugin-a', '*')).toEqual(['*']);
+    expect(listPluginPersistenceKeys(ids, 'plugin-a', '../')).toEqual(['../x']);
+    expect(listPluginPersistenceKeys(ids, 'plugin-a', 'plugin-b:')).toEqual([
+      'plugin-b:key',
+    ]);
+  });
+
+  it('reuses the existing prefix type and length validation', () => {
+    expect(() =>
+      listPluginPersistenceKeys([], 'plugin-a', null as unknown as string),
+    ).toThrowError(/must be a string/);
+    expect(() => listPluginPersistenceKeys([], 'plugin-a', 'x'.repeat(257))).toThrowError(
+      /exceeds maximum length/,
+    );
+    expect(() => listPluginPersistenceKeys([], 'bad:plugin')).toThrowError(
+      /must not contain ':'/,
+    );
   });
 });

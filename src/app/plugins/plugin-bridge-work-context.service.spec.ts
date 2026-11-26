@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { PluginBridgeRepeatCfgService } from './plugin-bridge-repeat-cfg.service';
 import { Injector, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { BehaviorSubject, of } from 'rxjs';
@@ -6,6 +7,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { PluginBridgeService } from './plugin-bridge.service';
+import { PluginBridgeContextService } from './plugin-bridge-context.service';
 import { TaskService } from '../features/tasks/task.service';
 import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
@@ -92,6 +94,11 @@ describe('PluginBridgeService.workContext — header buttons + embed slot', () =
 
     TestBed.configureTestingModule({
       providers: [
+        // its real dependencies need a full Store; not under test here
+        {
+          provide: PluginBridgeRepeatCfgService,
+          useValue: { createBoundMethods: () => ({}) },
+        },
         PluginBridgeService,
         {
           provide: Store,
@@ -359,14 +366,16 @@ describe('PluginBridgeService.workContext — header buttons + embed slot', () =
     });
   });
 
-  describe('getActiveWorkContext', () => {
+  describe('PluginBridgeContextService.getActiveWorkContext', () => {
     it('returns a defensive copy of taskIds, not the live store array', async () => {
       // The ActiveWorkContext type promises taskIds is a safe snapshot. A
       // plugin mutating it must not corrupt NgRx state.
       const liveTaskIds = ['task-1', 'task-2'];
-      const { service } = setup({ ...projectCtx, taskIds: liveTaskIds });
+      setup({ ...projectCtx, taskIds: liveTaskIds });
 
-      const result = await service.getActiveWorkContext();
+      const result = await TestBed.inject(
+        PluginBridgeContextService,
+      ).getActiveWorkContext();
 
       expect(result).not.toBeNull();
       expect(result!.taskIds).toEqual(liveTaskIds);
@@ -378,18 +387,22 @@ describe('PluginBridgeService.workContext — header buttons + embed slot', () =
     it("reports type 'TODAY' for the Today context", async () => {
       // The Today tag is a TAG internally but is surfaced to plugins as its
       // own type, matching registerWorkContextHeaderButton's showFor values.
-      const { service } = setup(todayCtx);
+      setup(todayCtx);
 
-      const result = await service.getActiveWorkContext();
+      const result = await TestBed.inject(
+        PluginBridgeContextService,
+      ).getActiveWorkContext();
 
       expect(result?.id).toBe('TODAY');
       expect(result?.type).toBe('TODAY');
     });
 
     it("reports type 'PROJECT' for a project context", async () => {
-      const { service } = setup(projectCtx);
+      setup(projectCtx);
 
-      const result = await service.getActiveWorkContext();
+      const result = await TestBed.inject(
+        PluginBridgeContextService,
+      ).getActiveWorkContext();
 
       expect(result?.type).toBe('PROJECT');
     });

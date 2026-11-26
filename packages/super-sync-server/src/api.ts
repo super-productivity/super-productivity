@@ -25,6 +25,10 @@ import { Logger } from './logger';
 import { prisma } from './db';
 import { authCache } from './auth-cache';
 import { getWsConnectionService } from './sync/services/websocket-connection.service';
+import {
+  CONNECT_REQUEST_ID_PATTERN,
+  pendingConnectRequestId,
+} from './connect/connect-request.store';
 
 // Zod Schemas
 const VerifyEmailSchema = z.object({
@@ -35,6 +39,14 @@ const VerifyEmailSchema = z.object({
 // privacy policy, in which case the consent label reads "I agree to the Privacy Policy"
 // and naming a document that is not served would be wrong.
 const TERMS_REQUIRED_MESSAGE = 'You must accept the linked legal documents to register';
+
+// The browser sign-in request a new device is waiting on (`/?r=…`), carried into the
+// emailed link. A malformed one is dropped, never an error: it only affects the link.
+const ConnectRequestIdField = z
+  .string()
+  .regex(CONNECT_REQUEST_ID_PATTERN)
+  .optional()
+  .catch(undefined);
 
 /**
  * Registration body, with consent required only where legal pages exist. The generic image
@@ -50,17 +62,19 @@ const TERMS_REQUIRED_MESSAGE = 'You must accept the linked legal documents to re
  */
 export const buildRegisterBodySchema = (
   requireConsent: boolean,
-): z.ZodType<{ email: string; termsAccepted?: boolean }> =>
+): z.ZodType<{ email: string; termsAccepted?: boolean; r?: string }> =>
   z.object({
     email: z.string().email('Invalid email format'),
     termsAccepted: requireConsent
       ? z.literal(true, { message: TERMS_REQUIRED_MESSAGE })
       : z.boolean().optional(),
+    r: ConnectRequestIdField,
   });
 
 const PasskeyRegisterVerifySchema = z.object({
   email: z.string().email('Invalid email format'),
   credential: z.object({}).passthrough(), // WebAuthn credential response
+  r: ConnectRequestIdField,
 });
 
 const PasskeyLoginOptionsSchema = z.object({
@@ -88,6 +102,7 @@ const PasskeyRecoveryCompleteSchema = z.object({
 // Magic Link Schemas
 const MagicLinkRequestSchema = z.object({
   email: z.string().email('Invalid email format'),
+  r: ConnectRequestIdField,
 });
 
 const MagicLinkVerifySchema = z.object({
@@ -95,7 +110,7 @@ const MagicLinkVerifySchema = z.object({
 });
 
 type VerifyEmailBody = z.infer<typeof VerifyEmailSchema>;
-type RegisterBody = { email: string; termsAccepted?: boolean };
+type RegisterBody = { email: string; termsAccepted?: boolean; r?: string };
 type PasskeyRegisterOptionsBody = RegisterBody;
 type PasskeyRegisterVerifyBody = z.infer<typeof PasskeyRegisterVerifySchema>;
 type PasskeyLoginOptionsBody = z.infer<typeof PasskeyLoginOptionsSchema>;
@@ -327,7 +342,7 @@ export const apiRoutes = async (
             details: parseResult.error.issues,
           });
         }
-        const { email, credential } = parseResult.data;
+        const { email, credential, r } = parseResult.data;
 
         if (!isEmailAllowed(email)) {
           return reply
@@ -335,7 +350,10 @@ export const apiRoutes = async (
             .send({ error: 'Registration is not allowed for this email address.' });
         }
 
-        const result = await verifyRegistration(email, credential as any, Date.now());
+        const result = await verifyRegistration(email, credential as any, {
+          termsAcceptedAt: Date.now(),
+          connectRequestId: await pendingConnectRequestId(r),
+        });
         return reply.status(201).send(result);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -562,7 +580,7 @@ export const apiRoutes = async (
             details: parseResult.error.issues,
           });
         }
-        const { email } = parseResult.data;
+        const { email, r } = parseResult.data;
 
         if (!isEmailAllowed(email)) {
           return reply
@@ -570,7 +588,11 @@ export const apiRoutes = async (
             .send({ error: 'Registration is not allowed for this email address.' });
         }
 
-        const result = await registerWithMagicLink(email, Date.now());
+        const result = await registerWithMagicLink(
+          email,
+          Date.now(),
+          await pendingConnectRequestId(r),
+        );
         return reply.status(201).send(result);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -602,9 +624,12 @@ export const apiRoutes = async (
             details: parseResult.error.issues,
           });
         }
-        const { email } = parseResult.data;
+        const { email, r } = parseResult.data;
 
-        const result = await requestLoginMagicLink(email);
+        const result = await requestLoginMagicLink(
+          email,
+          await pendingConnectRequestId(r),
+        );
         return reply.send(result);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';

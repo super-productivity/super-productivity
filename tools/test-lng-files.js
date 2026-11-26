@@ -2,6 +2,7 @@
 
 const { readdirSync, readFileSync } = require('node:fs');
 const { join, relative } = require('node:path');
+const { isLocaleOnlyPluralForm } = require('./clean-translations');
 
 const BASE_PATH = join(__dirname, '..', 'src', 'assets', 'i18n');
 const BASELINE_PATH = join(__dirname, 'test-lng-files.baseline.json');
@@ -30,10 +31,20 @@ const collectLeafKeys = (value) => {
 
 const compareKeyLists = (referenceKeys, referenceKeySet, translationKeys) => {
   const translationKeySet = new Set(translationKeys);
+  const notInReference = translationKeys.filter((key) => !referenceKeySet.has(key));
+
+  // A locale that needs FEW or MANY has plural forms en.json cannot contain.
+  // Those are live translations; reporting them beside genuinely dead keys is
+  // what let one get deleted in #9938.
+  const localePluralKeys = notInReference.filter((key) =>
+    isLocaleOnlyPluralForm(key, referenceKeys),
+  );
+  const localePluralKeySet = new Set(localePluralKeys);
 
   return {
     missingKeys: referenceKeys.filter((key) => !translationKeySet.has(key)),
-    unnecessaryKeys: translationKeys.filter((key) => !referenceKeySet.has(key)),
+    unnecessaryKeys: notInReference.filter((key) => !localePluralKeySet.has(key)),
+    localePluralKeys,
   };
 };
 
@@ -86,10 +97,14 @@ const comparePlaceholders = (reference, translation, sharedKeys, baseline) => {
   const newDroppedPlaceholderKeys = [];
   const unexpectedPlaceholderKeys = [];
   const malformedKeys = [];
+  const emptyKeys = [];
   const droppedByKey = new Map();
 
   for (const key of sharedKeys) {
     const translationValue = getValueAtPath(translation, key);
+    // ngx-translate treats "" as a defined value and renders it blank; only a
+    // missing key falls back to English (#11189).
+    if (translationValue === '') emptyKeys.push(key);
     const defect = findBraceDefect(translationValue);
     if (defect) malformedKeys.push(`${key} (${defect})`);
 
@@ -142,6 +157,7 @@ const comparePlaceholders = (reference, translation, sharedKeys, baseline) => {
     staleBaselineKeys,
     unexpectedPlaceholderKeys,
     malformedKeys,
+    emptyKeys,
   };
 };
 
@@ -203,6 +219,10 @@ const inspectTranslationDirectory = (directory, baseline = {}) => {
       (total, file) => total + file.unnecessaryKeys.length,
       0,
     ),
+    totalLocalePlural: files.reduce(
+      (total, file) => total + file.localePluralKeys.length,
+      0,
+    ),
     totalPlaceholderMismatches: files.reduce(
       (total, file) => total + file.placeholderMismatches.length,
       0,
@@ -212,6 +232,7 @@ const inspectTranslationDirectory = (directory, baseline = {}) => {
       0,
     ),
     totalMalformed: files.reduce((total, file) => total + file.malformedKeys.length, 0),
+    totalEmpty: files.reduce((total, file) => total + file.emptyKeys.length, 0),
     totalNewDroppedPlaceholders: files.reduce(
       (total, file) => total + file.newDroppedPlaceholderKeys.length,
       0,
@@ -228,6 +249,7 @@ const inspectTranslationDirectory = (directory, baseline = {}) => {
 const hasBlockingDefects = (report) =>
   report.totalUnexpectedPlaceholders > 0 ||
   report.totalMalformed > 0 ||
+  report.totalEmpty > 0 ||
   report.totalNewDroppedPlaceholders > 0 ||
   report.totalStaleBaseline > 0 ||
   report.staleBaselineFiles.length > 0;
@@ -257,20 +279,25 @@ const printReport = (report) => {
   for (const file of report.files) {
     const missing = file.missingKeys.length;
     const unnecessary = file.unnecessaryKeys.length;
+    const localePluralKeys = file.localePluralKeys ?? [];
+    const localePlural = localePluralKeys.length;
     const mismatched = file.placeholderMismatches.length;
     const dropped = file.newDroppedPlaceholderKeys.length;
     const stale = file.staleBaselineKeys.length;
     const unexpected = file.unexpectedPlaceholderKeys.length;
     const malformed = file.malformedKeys.length;
+    const empty = file.emptyKeys.length;
 
     if (
       missing === 0 &&
       unnecessary === 0 &&
+      localePlural === 0 &&
       mismatched === 0 &&
       dropped === 0 &&
       stale === 0 &&
       unexpected === 0 &&
-      malformed === 0
+      malformed === 0 &&
+      empty === 0
     ) {
       console.log(`${formatLogValue(file.file)}: OK`);
       continue;
@@ -279,11 +306,13 @@ const printReport = (report) => {
     console.log(
       `${formatLogValue(file.file)}: ${missing} missing${formatExamples(file.missingKeys)}; ` +
         `${unnecessary} not in en.json${formatExamples(file.unnecessaryKeys)}; ` +
+        `${localePlural} locale-only plural forms${formatExamples(localePluralKeys)}; ` +
         `${mismatched} placeholder mismatches${formatExamples(file.placeholderMismatches)}; ` +
         `${dropped} dropped placeholders not in baseline${formatExamples(file.newDroppedPlaceholderKeys)}; ` +
         `${stale} stale baseline entries${formatExamples(file.staleBaselineKeys)}; ` +
         `${unexpected} unexpected placeholders${formatExamples(file.unexpectedPlaceholderKeys)}; ` +
-        `${malformed} broken braces${formatExamples(file.malformedKeys)}`,
+        `${malformed} broken braces${formatExamples(file.malformedKeys)}; ` +
+        `${empty} empty values${formatExamples(file.emptyKeys)}`,
     );
   }
 
@@ -291,16 +320,24 @@ const printReport = (report) => {
     `Checked ${report.files.length} translation files against en.json ` +
       `(${report.referenceKeyCount} keys): ${report.totalMissing} missing, ` +
       `${report.totalUnnecessary} not in en.json, ` +
+      `${report.totalLocalePlural ?? 0} locale-only plural forms, ` +
       `${report.totalPlaceholderMismatches} placeholder mismatches, ` +
       `${report.totalNewDroppedPlaceholders} dropped placeholders not in baseline, ` +
       `${report.totalStaleBaseline} stale baseline entries, ` +
       `${report.totalUnexpectedPlaceholders} unexpected placeholders, ` +
-      `${report.totalMalformed} broken braces.`,
+      `${report.totalMalformed} broken braces, ` +
+      `${report.totalEmpty} empty values.`,
   );
   console.log(
     'Key differences and baselined placeholder mismatches are informational; ' +
       'missing translations use the English fallback.',
   );
+  if ((report.totalLocalePlural ?? 0) > 0) {
+    console.log(
+      'Locale-only plural forms are live translations for CLDR categories ' +
+        'English does not have (FEW, MANY, ...). Do not delete them.',
+    );
+  }
   if (report.staleBaselineFiles.length > 0) {
     console.log(
       `Baseline lists files that do not exist${formatExamples(report.staleBaselineFiles)}.`,
@@ -310,6 +347,12 @@ const printReport = (report) => {
     console.error(
       'Unexpected placeholder names in an English placeholder contract and ' +
         'broken braces render literally; fix them.',
+    );
+  }
+  if (report.totalEmpty > 0) {
+    console.error(
+      'An empty value renders blank instead of falling back to English; delete ' +
+        'the key instead (see docs/TRANSLATING.md, "Fallback Language").',
     );
   }
   if (report.totalNewDroppedPlaceholders > 0) {

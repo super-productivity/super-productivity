@@ -14,6 +14,7 @@ import { Project } from '../../features/project/project.model';
 import { Tag } from '../../features/tag/tag.model';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { runWithBulkReplayFailureCollector } from './bulk-replay-failure-collector';
+import { OpLog } from '../../core/log';
 
 // Set to true to run stress tests (10k+ operations)
 // These tests take 1-2 seconds each and are skipped by default to speed up test runs
@@ -621,6 +622,32 @@ describe('bulkHydrationMetaReducer', () => {
 
       expect(() => reducer(state, action)).not.toThrow();
       expect(callCount).toBe(3);
+    });
+
+    it('should name the failed op by ids and types, never by payload', () => {
+      const errSpy = spyOn(OpLog, 'err');
+      const reducer = bulkHydrationMetaReducer(
+        jasmine.createSpy('errorReducer').and.throwError(new TypeError('reducer failed')),
+      );
+      const operation = createMockOperation({ id: 'op-failed' });
+
+      reducer(
+        createMockState(),
+        bulkApplyHydrationOperations({ operations: [operation] }),
+      );
+
+      expect(errSpy).toHaveBeenCalledOnceWith(
+        'bulkOperationsMetaReducer: Skipping reducer-failed operation op-failed',
+        {
+          name: 'TypeError',
+          opId: 'op-failed',
+          actionType: '[Task] Update Task',
+          entityType: 'TASK',
+          entityIds: [TASK_ID],
+          entityCount: 1,
+        },
+      );
+      expect(JSON.stringify(errSpy.calls.allArgs())).not.toContain('Updated Title');
     });
 
     it('should roll back every migrated child when one child reducer fails', () => {

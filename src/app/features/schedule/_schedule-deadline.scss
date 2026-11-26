@@ -1,0 +1,42 @@
+@mixin badge($background) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 calc(var(--s2) + var(--s-half));
+  width: calc(var(--s2) + var(--s-half));
+  height: calc(var(--s2) + var(--s-half));
+  box-sizing: border-box;
+  border: 1px solid var(--color-warning);
+  border-radius: 50%;
+  background: $background;
+  color: var(--color-warning);
+  line-height: 1;
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+@mixin badge-icon {
+  flex: 0 0 var(--font-size-md);
+  width: var(--font-size-md);
+  height: var(--font-size-md);
+  font-size: var(--font-size-md);
+  line-height: var(--font-size-md);
+}
+
+@mixin badge-count($background) {
+  position: absolute;
+  right: calc(-1 * var(--s-quarter));
+  bottom: calc(-1 * var(--s-quarter));
+  min-width: var(--s);
+  padding: 0 var(--s-quarter);
+  border-radius: var(--s);
+  background: $background;
+  color: var(--color-warning);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}

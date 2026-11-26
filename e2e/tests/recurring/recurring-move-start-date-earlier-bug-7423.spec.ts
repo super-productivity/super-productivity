@@ -69,7 +69,7 @@ test.describe('Recurring Task - Move Start Date Earlier (#7423)', () => {
     await setRecurStartDate(page, '02/05/2026');
     await saveRecurDialog(page);
 
-    // 4. Verify in planner: task lands on May 2 ("2/5"), NOT on May 5 ("5/5").
+    // 4. Verify in planner: task lands on May 2 ("02/05"), NOT on May 5 ("05/05").
     //    The planner header for each day uses the format DD/M (locale-aware).
     await gotoHashRoute(page, '/#/planner', page.locator('planner-day').first());
 
@@ -78,14 +78,14 @@ test.describe('Recurring Task - Move Start Date Earlier (#7423)', () => {
     // The bug puts the live task on May 5; the fix puts it on May 2.
     const dayMay2 = page
       .locator('planner-day')
-      .filter({ has: page.locator('.date', { hasText: /^2\/5$/ }) });
+      .filter({ has: page.locator('.date', { hasText: /^02\/05$/ }) });
     await expect(
       dayMay2.locator('planner-task').filter({ hasText: taskTitle }),
     ).toHaveCount(1, { timeout: 15000 });
 
     const dayMay5 = page
       .locator('planner-day')
-      .filter({ has: page.locator('.date', { hasText: /^5\/5$/ }) });
+      .filter({ has: page.locator('.date', { hasText: /^05\/05$/ }) });
     await expect(
       dayMay5.locator('planner-task').filter({ hasText: taskTitle }),
     ).toHaveCount(0);

@@ -1,8 +1,6 @@
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
-import {
-  AppFeaturesConfig,
-  GlobalConfigState,
-} from '../../features/config/global-config.model';
+import { GlobalConfigState } from '../../features/config/global-config.model';
+import { NewInstallConfigSections } from '../../features/config/new-install-config.const';
 import {
   applyLocalOnlySyncSettingsToAppData,
   LocalOnlySyncSettings,
@@ -24,15 +22,15 @@ type RemoteRebuildBaselineState = Record<string, unknown> & {
  * interrupted rebuild can hydrate enough configuration to sync again.
  *
  * The rebuild's live reset keeps the device's config, so without a snapshot the
- * shell takes the device's own app features: a restart then loads what the
- * device shows. The defaults have every feature on, while a new install starts
- * with fewer (#10361), so they would switch features on at the restart
- * (#10399). A snapshot's own appFeatures win.
+ * shell takes the device's own new-install sections: a restart then loads what
+ * the device shows. A new install starts calmer than the defaults (#10361), so
+ * the defaults would switch features and reminders on at the restart (#10399).
+ * A snapshot's own sections win.
  */
 export const buildRemoteRebuildBaselineState = (
   baselineSource: Record<string, unknown>,
   localOnlySyncSettings: LocalOnlySyncSettings,
-  liveAppFeatures: AppFeaturesConfig,
+  liveConfig: NewInstallConfigSections,
 ): RemoteRebuildBaselineState => {
   const baselineGlobalConfig = asRecord(baselineSource['globalConfig']);
   return applyLocalOnlySyncSettingsToAppData(
@@ -40,7 +38,7 @@ export const buildRemoteRebuildBaselineState = (
       ...baselineSource,
       globalConfig: {
         ...DEFAULT_GLOBAL_CONFIG,
-        appFeatures: liveAppFeatures,
+        ...liveConfig,
         ...baselineGlobalConfig,
         sync: {
           ...DEFAULT_GLOBAL_CONFIG.sync,

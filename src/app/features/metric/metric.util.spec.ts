@@ -189,7 +189,7 @@ describe('metric.util', () => {
       it('should not count a task finished as wont do as completed', () => {
         const tasks: Task[] = [
           createTask({ id: '1', isDone: true }),
-          createTask({ id: '2', isDone: true, isWontDo: true }),
+          createTask({ id: '2', isDone: true, doneOn: 5, wontDoOn: 5 }),
           createTask({ id: '3', isDone: false }),
         ];
         const breakNr: BreakNr = {};
@@ -204,9 +204,9 @@ describe('metric.util', () => {
         expect(result.nrOfAllTasks).toBe(3);
       });
 
-      // Data written before the field existed carries no `isWontDo`, so it has
+      // Data written before the field existed carries no `wontDoOn`, so it has
       // to read as a normally completed task with no migration or heal.
-      it('should count a task stored before isWontDo existed', () => {
+      it('should count a task stored before wontDoOn existed', () => {
         const legacyTask = createTask({ id: '1', isDone: true });
         const breakNr: BreakNr = {};
         const breakTime: BreakTime = {};
@@ -214,7 +214,7 @@ describe('metric.util', () => {
           { year: 2025, months: [{ month: 1, days: [{ day: 15, timeSpent: 1000 }] }] },
         ]);
 
-        expect('isWontDo' in legacyTask).toBe(false);
+        expect('wontDoOn' in legacyTask).toBe(false);
 
         const result = mapSimpleMetrics([
           breakNr,

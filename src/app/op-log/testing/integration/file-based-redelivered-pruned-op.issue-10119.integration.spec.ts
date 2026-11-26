@@ -142,11 +142,19 @@ for (const isUseSplitSyncFiles of [false, true]) {
 
     /**
      * This device uploads ops the way OperationLogUploadService does for a
-     * file-based provider: the adapter merges into the CURRENT remote file and
-     * the returned latestSeq becomes the cursor.
+     * file-based provider: the ops are in the local log, the adapter merges them
+     * into the CURRENT remote file, they are marked synced and the returned
+     * latestSeq becomes the cursor. A cursor without synced ops in the log reads
+     * as one that outlived a lost op log (#11099).
      */
     const linuxUploads = async (...ops: Operation[]): Promise<void> => {
+      const seqs: number[] = [];
+      for (const op of ops) {
+        const existing = await opLogStore.getOpById(op.id);
+        seqs.push(existing ? existing.seq : await opLogStore.append(op, 'local'));
+      }
       const response = await linux.uploadOps(ops as SyncOperation[], ownClientId);
+      await opLogStore.markSynced(seqs);
       await linux.setLastServerSeq(response.latestSeq);
     };
 

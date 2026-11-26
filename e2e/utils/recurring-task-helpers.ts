@@ -28,7 +28,7 @@ export const openRecurDialog = async (page: Page): Promise<Locator> => {
 
   const scheduleDialog = page.locator(SCHEDULE_DIALOG);
   await scheduleDialog.waitFor({ state: 'visible', timeout: 10000 });
-  await scheduleDialog.locator('.repeat-btn').click();
+  await scheduleDialog.locator('[data-test-id="schedule-repeat-field"]').click();
 
   const dialog = page.locator(DIALOG_CONTAINER);
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
@@ -137,6 +137,30 @@ export const setRecurQuickSetting = async (
   await option.click();
 };
 
+/**
+ * Set `skipOverdue` through "If you fall behind" in the dialog's Options:
+ * "Only keep the latest" turns it on, "Keep every copy" off (neither waits).
+ * Opens Options first when it is collapsed.
+ */
+export const setRecurSkipOverdue = async (
+  page: Page,
+  isChecked: boolean,
+): Promise<void> => {
+  const dialog = page.locator(DIALOG_CONTAINER);
+  const fallBehind = dialog
+    .locator('mat-form-field')
+    .filter({ hasText: /If you fall behind/i });
+  if (!(await fallBehind.isVisible())) {
+    await dialog.locator('.collapsible-header', { hasText: 'Options' }).click();
+  }
+  await expect(fallBehind).toBeVisible({ timeout: 5000 });
+  const choice = isChecked ? /Only keep the latest/i : /Keep every copy/i;
+  await fallBehind.locator('mat-select').click();
+  await page.locator('mat-option').filter({ hasText: choice }).click();
+  await expect(page.locator('mat-option')).toHaveCount(0, { timeout: 5000 });
+  await expect(fallBehind).toContainText(choice);
+};
+
 /** Click Save in the recurring-config dialog and wait for it to close. */
 export const saveRecurDialog = async (page: Page): Promise<void> => {
   const dialog = page.locator(DIALOG_CONTAINER);
@@ -158,9 +182,9 @@ export const saveRecurDialog = async (page: Page): Promise<void> => {
  * hashchange when goto lands mid-bootstrap — leaving the previous view mounted
  * (e.g. the work-view stays on "Today" instead of switching to the Inbox
  * project) and sometimes rewriting the fragment back to the old route. When the
- * expected marker doesn't render, hop through about:blank so the next goto is a
- * cross-document load that bootstraps the app fresh on the target URL and reads
- * the fragment on init.
+ * expected marker doesn't render, or the fragment was rewritten, hop through
+ * about:blank so the next goto is a cross-document load that bootstraps the app
+ * fresh on the target URL and reads the fragment on init.
  */
 export const gotoHashRoute = async (
   page: Page,
@@ -169,14 +193,112 @@ export const gotoHashRoute = async (
 ): Promise<void> => {
   await page.goto(route);
   await page.waitForLoadState('networkidle');
-  const landed = await marker
+  const markerVisible = await marker
     .waitFor({ state: 'visible', timeout: 5000 })
     .then(() => true)
     .catch(() => false);
-  if (!landed) {
+  // A marker that also exists on the old view passes even after the router
+  // rewrote the fragment back to it, so check the URL as well.
+  if (!markerVisible || !page.url().endsWith(route)) {
     await page.goto('about:blank');
     await page.goto(route);
     await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL((url) => url.href.endsWith(route));
     await expect(marker).toBeVisible({ timeout: 15000 });
   }
 };
+
+/**
+ * Navigate to Today and wait for its title. Task and list markers also render
+ * on the project view the router can fall back to, so assertions about what
+ * is "in Today" would silently run against that view.
+ */
+export const gotoToday = (page: Page): Promise<void> =>
+  gotoHashRoute(
+    page,
+    '/#/tag/TODAY/tasks',
+    page.locator('page-title .page-title-text', { hasText: /^\s*Today\s*$/ }),
+  );
+
+export interface RepeatSeriesTaskView {
+  id: string;
+  dueDay: string | null;
+  repeatCfgId: string | null;
+  isDone: boolean;
+}
+
+export interface RepeatSeriesView {
+  /** The repeat config titled `title`, or null when there is none. */
+  cfg: {
+    deletedInstanceDates: string[];
+    quickSetting: string | null;
+    lastTaskCreationDay: string | null;
+  } | null;
+  /** Every top-level task titled `title`, linked to the series or not. */
+  tasks: RepeatSeriesTaskView[];
+}
+
+/**
+ * The repeat config and the top-level tasks whose title contains `title`,
+ * read from the live store, so tasks on days no view renders are included.
+ */
+export const getRepeatSeriesView = (
+  page: Page,
+  title: string,
+): Promise<RepeatSeriesView> =>
+  page.evaluate((name: string) => {
+    type CfgLike = {
+      title?: string | null;
+      deletedInstanceDates?: string[];
+      quickSetting?: string;
+      lastTaskCreationDay?: string;
+    };
+    type TaskLike = {
+      id: string;
+      title?: string;
+      dueDay?: string | null;
+      repeatCfgId?: string | null;
+      parentId?: string | null;
+      isDone?: boolean;
+    };
+    type StoreState = {
+      taskRepeatCfg?: { entities?: Record<string, CfgLike | undefined> };
+      tasks?: { entities?: Record<string, TaskLike | undefined> };
+    };
+    type StoreLike = {
+      subscribe: (next: (s: StoreState) => void) => { unsubscribe: () => void };
+    };
+    const store = (window as unknown as { __e2eTestHelpers?: { store?: StoreLike } })
+      .__e2eTestHelpers?.store;
+    if (!store) {
+      throw new Error('__e2eTestHelpers.store missing');
+    }
+    let latest: StoreState | undefined;
+    store
+      .subscribe((s) => {
+        latest = s;
+      })
+      .unsubscribe();
+    const cfg = Object.values(latest?.taskRepeatCfg?.entities ?? {}).find((c) =>
+      c?.title?.includes(name),
+    );
+    const tasks = Object.values(latest?.tasks?.entities ?? {})
+      .filter((t): t is TaskLike => !!t && !t.parentId && !!t.title?.includes(name))
+      .map((t) => ({
+        id: t.id,
+        dueDay: t.dueDay ?? null,
+        repeatCfgId: t.repeatCfgId ?? null,
+        isDone: !!t.isDone,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    return {
+      cfg: cfg
+        ? {
+            deletedInstanceDates: cfg.deletedInstanceDates ?? [],
+            quickSetting: cfg.quickSetting ?? null,
+            lastTaskCreationDay: cfg.lastTaskCreationDay ?? null,
+          }
+        : null,
+      tasks,
+    };
+  }, title);

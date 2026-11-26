@@ -112,7 +112,10 @@ export class DialogSimpleCounterEditComponent {
   });
 
   readonly currentStreak = computed(() =>
-    getSimpleCounterStreakDuration(this.localCounter()),
+    getSimpleCounterStreakDuration(
+      this.localCounter(),
+      this._dateService.getStartOfNextDayDiffMs(),
+    ),
   );
 
   readonly chartData = computed((): LineChartData => {
@@ -277,7 +280,7 @@ export class DialogSimpleCounterEditComponent {
 
     // Fill in missing dates from first entry to today
     const startDate = dateStrToUtcDate(allDates[0]);
-    const endDate = new Date();
+    const endDate = dateStrToUtcDate(this.todayStr);
     const dates: string[] = [];
 
     for (const d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {

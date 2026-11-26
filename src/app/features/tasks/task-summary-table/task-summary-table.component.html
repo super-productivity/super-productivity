@@ -122,7 +122,7 @@
             >undo
           </mat-icon>
           <!-- Keeps the check class so the done styling applies unchanged. -->
-          @if (task.isDone && task.isWontDo) {
+          @if (isWontDoTask(task)) {
             <mat-icon
               aria-label="Finished as won't do"
               class="check"

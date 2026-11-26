@@ -11,6 +11,7 @@
   },
   "homepage": "https://github.com/super-productivity/super-productivity",
   "license": "MIT",
+  "icon": "icon.png",
   "server": {
     "type": "node",
     "entry_point": "server/index.js",

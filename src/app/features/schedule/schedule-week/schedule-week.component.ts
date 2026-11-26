@@ -10,10 +10,16 @@ import {
   input,
   OnDestroy,
   OnInit,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
-import { isScheduleCalendarEvent, ScheduleEvent } from '../schedule.model';
+import {
+  isScheduleCalendarEvent,
+  ScheduleDayTray,
+  ScheduleEvent,
+} from '../schedule.model';
+import { ScheduleTrayComponent } from '../schedule-tray/schedule-tray.component';
 import { CdkDragMove, CdkDragRelease, CdkDragStart } from '@angular/cdk/drag-drop';
 import { FH, SVEType } from '../schedule.const';
 import { isDraggableSE } from '../map-schedule-data/is-schedule-types-type';
@@ -35,6 +41,7 @@ import { formatScheduleDragPreviewLabel } from './format-schedule-drag-preview-l
 import { truncate } from '../../../util/truncate';
 import { LS } from '../../../core/persistence/storage-keys.const';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
+import { TaskCopy } from '../../tasks/task.model';
 
 const D_HOURS = 24;
 const DEFAULT_ROW_HEIGHT_PX = 9;
@@ -54,6 +61,7 @@ interface ScheduleTaskDataLike {
   selector: 'schedule-week',
   imports: [
     ScheduleEventComponent,
+    ScheduleTrayComponent,
     CreateTaskPlaceholderComponent,
     MatIcon,
     TranslatePipe,
@@ -86,10 +94,14 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   isHScrolled = input<boolean>(false);
   events = input<ScheduleEvent[] | null>([]);
   beyondBudget = input<ScheduleEvent[][] | null>([]);
+  // set in tray mode only: tasks without a time, by day
+  trays = input<Record<string, ScheduleDayTray> | null>(null);
+  openDay = output<string>();
   daysToShow = input<string[]>([]);
   workStartEnd = input<{ workStartRow: number; workEndRow: number } | null>(null);
   currentTimeRow = input<number | null>(null);
   todayDateStr = input<string | undefined>(undefined);
+  deadlineTasksByDay = input<Record<string, TaskCopy[]> | null>(null);
   isCtrlPressed = signal<boolean>(false);
   isTaskDragActive = input<boolean>(false);
   scheduleRowHeightPx = signal<number>(readStoredScheduleRowHeight());
@@ -206,6 +218,33 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
     ),
   );
 
+  deadlineStats = computed(() => {
+    const deadlinesByDay = this.deadlineTasksByDay() || {};
+    return (this.daysToShow() || []).map((day) => {
+      const deadlineTasks = deadlinesByDay[day] || [];
+      return {
+        count: deadlineTasks.length,
+        tasks: deadlineTasks,
+      };
+    });
+  });
+
+  deadlineTooltips = computed(() =>
+    this.deadlineStats().map((stats) => {
+      if (stats.count === 0) return '';
+      const titles = stats.tasks.map((task) => task.title).join(', ');
+      return this._translateService.instant(
+        stats.count === 1
+          ? T.F.SCHEDULE.DEADLINE_TASKS_TOOLTIP_ONE
+          : T.F.SCHEDULE.DEADLINE_TASKS_TOOLTIP,
+        {
+          count: stats.count,
+          titles,
+        },
+      );
+    }),
+  );
+
   // Split projections (RepeatProjectionSplit, SplitTaskContinued, …) share the
   // task/repeat-cfg id across segments. Combine day + start hour so each visual
   // segment has a unique @for track key and Angular can reconcile them.
@@ -230,6 +269,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   } | null>(null);
 
   isDragging = this._service.isDragging;
+  dragOverTrayDay = this._service.dragOverTrayDay;
   isAnyEventResizing = signal(false);
   isCreateTaskActive = signal(false);
   currentDragEvent = this._service.currentDragEvent;
@@ -245,6 +285,19 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   });
 
   readonly gridContainer = viewChild.required<ElementRef>('gridContainer');
+  private readonly _trayRef = viewChild(ScheduleTrayComponent, {
+    read: ElementRef<HTMLElement>,
+  });
+
+  /**
+   * The tray's element while it takes up space in the sticky header; undefined
+   * outside tray mode and while the shown days have no task without a time
+   * (an empty tray renders nothing).
+   */
+  getVisibleTrayEl(): HTMLElement | undefined {
+    const el = this._trayRef()?.nativeElement;
+    return el?.offsetHeight ? el : undefined;
+  }
 
   // Drag preview properties for time indicator
   private readonly _dragPreviewContext = this._service.dragPreviewContext;

@@ -38,6 +38,31 @@
   border-bottom-color: var(--divider-color);
 }
 
+// Flat sections (a view's sections): no line under the header; the rows'
+// edges draw none either (`.task-list-no-top-line`), space separates them.
+:host(.task-section.task-section-flat) .collapsible-header {
+  min-height: var(--bar-height-small);
+  border-bottom-color: transparent;
+}
+
+// With no line under it, the heading itself carries the section.
+:host(.task-section.task-section-flat) .collapsible-title {
+  font-size: var(--font-size-md);
+  letter-spacing: normal;
+  color: var(--text-color);
+}
+
+:host(.hasCount) .collapsible-title {
+  flex-grow: 0;
+}
+
+// Takes the free space the title leaves, so the count stays next to it.
+.collapsible-count {
+  margin-right: auto;
+  font-weight: 400;
+  color: var(--text-color-muted);
+}
+
 .collapsible-header {
   &:focus-visible {
     outline: var(--focus-ring-width) solid var(--focus-ring-color);

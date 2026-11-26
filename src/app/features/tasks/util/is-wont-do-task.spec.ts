@@ -1,70 +1,85 @@
-import { getNextIsWontDo, isCompletedTask, isWontDoTask } from './is-wont-do-task';
+import { Task } from '../task.model';
+import { getWontDoChanges, isCompletedTask, isWontDoTask } from './is-wont-do-task';
+
+type DoneFields = Pick<Task, 'isDone' | 'doneOn' | 'wontDoOn'>;
+
+/**
+ * What every client, released ones included, does with a done toggle: a done
+ * write stamps `doneOn` (the op's own, else now), an un-done write clears it,
+ * and any other field, `wontDoOn` too, is merged as it is.
+ */
+const applyDoneToggle = (
+  task: DoneFields,
+  changes: Partial<DoneFields>,
+  now: number,
+): DoneFields => ({
+  ...task,
+  ...changes,
+  ...(changes.isDone === true ? { doneOn: changes.doneOn ?? now } : {}),
+  ...(changes.isDone === false ? { doneOn: undefined } : {}),
+});
 
 describe('is-wont-do-task', () => {
   describe('isWontDoTask', () => {
-    it('is true only for a done task marked as wont do', () => {
-      expect(isWontDoTask({ isDone: true, isWontDo: true })).toBe(true);
-      expect(isWontDoTask({ isDone: true })).toBe(false);
+    it('is true for a done task whose wontDoOn matches its doneOn', () => {
+      expect(isWontDoTask({ isDone: true, doneOn: 5, wontDoOn: 5 })).toBe(true);
     });
 
-    // A stale flag left on a reopened task must not count.
-    it('ignores the flag on a task that is not done', () => {
-      expect(isWontDoTask({ isDone: false, isWontDo: true })).toBe(false);
+    it('is false for a plain completion', () => {
+      expect(isWontDoTask({ isDone: true, doneOn: 5 })).toBe(false);
+    });
+
+    it('ignores a wontDoOn from an earlier finish', () => {
+      expect(isWontDoTask({ isDone: true, doneOn: 9, wontDoOn: 5 })).toBe(false);
+    });
+
+    it('ignores wontDoOn on a task that is not done', () => {
+      expect(isWontDoTask({ isDone: false, doneOn: 5, wontDoOn: 5 })).toBe(false);
+      expect(isWontDoTask({ isDone: false, wontDoOn: 5 })).toBe(false);
+    });
+
+    it('is false for a done task without doneOn', () => {
+      expect(isWontDoTask({ isDone: true, wontDoOn: 5 })).toBe(false);
     });
   });
 
   describe('isCompletedTask', () => {
     it('excludes wont do tasks', () => {
-      expect(isCompletedTask({ isDone: true })).toBe(true);
-      expect(isCompletedTask({ isDone: true, isWontDo: true })).toBe(false);
+      expect(isCompletedTask({ isDone: true, doneOn: 5 })).toBe(true);
+      expect(isCompletedTask({ isDone: true, doneOn: 9, wontDoOn: 5 })).toBe(true);
+      expect(isCompletedTask({ isDone: true, doneOn: 5, wontDoOn: 5 })).toBe(false);
       expect(isCompletedTask({ isDone: false })).toBe(false);
     });
   });
 
-  describe('getNextIsWontDo', () => {
-    const WONT_DO = { isDone: true, isWontDo: true };
+  // A released client stores `wontDoOn` as a plain field and never clears it.
+  describe('on a client that does not know wontDoOn', () => {
+    it('finishes the task as wont do', () => {
+      const task = applyDoneToggle({ isDone: false }, getWontDoChanges(1000), 1001);
+      expect(isWontDoTask(task)).toBe(true);
+    });
 
-    it('sets the flag when a task is finished as wont do', () => {
-      expect(getNextIsWontDo({ isDone: false }, { isDone: true, isWontDo: true })).toBe(
-        true,
+    it('leaves a completed task after wont do, reopen, complete', () => {
+      let task: DoneFields = { isDone: false };
+      task = applyDoneToggle(task, getWontDoChanges(1000), 1000);
+      task = applyDoneToggle(task, { isDone: false }, 2000);
+      expect(isWontDoTask(task)).toBe(false);
+      task = applyDoneToggle(task, { isDone: true, doneOn: 3000 }, 3000);
+      expect(task.wontDoOn).toBe(1000);
+      expect(isWontDoTask(task)).toBe(false);
+      expect(isCompletedTask(task)).toBe(true);
+    });
+
+    // e.g. an op from before capture stored `doneOn`, replayed later
+    it('leaves a completed task when a done write carries no doneOn', () => {
+      let task: DoneFields = applyDoneToggle(
+        { isDone: false },
+        getWontDoChanges(1000),
+        1,
       );
-    });
-
-    it('leaves the flag unset when a task is finished normally', () => {
-      expect(getNextIsWontDo({ isDone: false }, { isDone: true })).toBe(false);
-    });
-
-    it('clears the flag when a task is un-done', () => {
-      expect(getNextIsWontDo(WONT_DO, { isDone: false })).toBe(false);
-    });
-
-    it('clears the flag even if the un-doing update restates it', () => {
-      expect(getNextIsWontDo(WONT_DO, { isDone: false, isWontDo: true })).toBe(false);
-    });
-
-    // e.g. auto-mark-parent-done or an issue-sync refresh writing `isDone` again
-    it('keeps the flag when an already done task is marked done again', () => {
-      expect(getNextIsWontDo(WONT_DO, { isDone: true })).toBe(true);
-    });
-
-    it('keeps the flag for an update that does not touch isDone', () => {
-      expect(getNextIsWontDo(WONT_DO, {})).toBe(true);
-    });
-
-    it('does not set the flag on a task that is not done', () => {
-      expect(getNextIsWontDo({ isDone: false }, { isWontDo: true })).toBe(false);
-    });
-
-    // `undefined` doesn't survive the op's JSON round-trip, so receivers never see it.
-    it('treats an undefined flag in the update as absent', () => {
-      expect(getNextIsWontDo(WONT_DO, { isDone: true, isWontDo: undefined })).toBe(true);
-    });
-
-    // A stale flag on an undone task must not survive finishing it normally.
-    it('does not revive a stale flag when a task is finished normally', () => {
-      expect(getNextIsWontDo({ isDone: false, isWontDo: true }, { isDone: true })).toBe(
-        false,
-      );
+      task = applyDoneToggle(task, { isDone: false }, 2000);
+      task = applyDoneToggle(task, { isDone: true }, 3000);
+      expect(isWontDoTask(task)).toBe(false);
     });
   });
 });

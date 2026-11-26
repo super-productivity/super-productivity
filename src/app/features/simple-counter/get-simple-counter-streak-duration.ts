@@ -1,10 +1,16 @@
 import { SimpleCounterCopy } from './simple-counter.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 
+/**
+ * @param startOfNextDayDiffMs the "start of next day" offset (DateService.getStartOfNextDayDiffMs()),
+ * so the streak is keyed on the same logical day the counter ticks are stored on
+ */
 export const getSimpleCounterStreakDuration = (
   simpleCounter: SimpleCounterCopy,
+  startOfNextDayDiffMs: number = 0,
 ): number => {
   const countOnDay = simpleCounter.countOnDay || {};
+  const today = new Date(Date.now() - startOfNextDayDiffMs);
 
   if (!simpleCounter.streakMinValue) {
     return 0;
@@ -12,7 +18,7 @@ export const getSimpleCounterStreakDuration = (
 
   // Handle weekly frequency mode
   if (simpleCounter.streakMode === 'weekly-frequency') {
-    return calculateWeeklyFrequencyStreak(simpleCounter);
+    return calculateWeeklyFrequencyStreak(simpleCounter, today);
   }
 
   // Handle specific days mode (existing logic)
@@ -21,12 +27,12 @@ export const getSimpleCounterStreakDuration = (
   }
 
   let streak = 0;
-  const date = new Date();
+  const date = new Date(today);
   // set date to last weekday set in streakWeekDays
   setDayToLastConsideredWeekday(date, simpleCounter.streakWeekDays);
 
   if (
-    getDbDateStr(date) === getDbDateStr(new Date()) &&
+    getDbDateStr(date) === getDbDateStr(today) &&
     (!countOnDay[getDbDateStr(date)] ||
       countOnDay[getDbDateStr(date)] < simpleCounter.streakMinValue)
   ) {
@@ -43,14 +49,16 @@ export const getSimpleCounterStreakDuration = (
   return streak;
 };
 
-const calculateWeeklyFrequencyStreak = (simpleCounter: SimpleCounterCopy): number => {
+const calculateWeeklyFrequencyStreak = (
+  simpleCounter: SimpleCounterCopy,
+  today: Date,
+): number => {
   const { countOnDay, streakMinValue, streakWeeklyFrequency } = simpleCounter;
 
   if (!streakWeeklyFrequency || streakWeeklyFrequency < 1) {
     return 0;
   }
 
-  const today = new Date();
   const currentWeekStart = getWeekStart(today);
 
   // Check if current week has met the frequency requirement

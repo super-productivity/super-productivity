@@ -19,6 +19,12 @@
   } @else {
     <p>{{ T.PLAINSPACE.SPACE_PICKER.NONE | translate }}</p>
   }
+  <div class="callout data-notice">
+    <mat-icon aria-hidden="true">cloud_upload</mat-icon>
+    <p>
+      {{ T.PLAINSPACE.SPACE_PICKER.DATA_NOTICE | translate: { host: hostLabel } }}
+    </p>
+  </div>
   <p id="plainspace-disconnect-hint">
     {{ T.PLAINSPACE.SPACE_PICKER.DISCONNECT_HINT | translate }}
   </p>

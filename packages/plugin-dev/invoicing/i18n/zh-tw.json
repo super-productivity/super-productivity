@@ -1,0 +1,58 @@
+{
+  "TITLE": "請款單",
+  "LOADING": "載入中…",
+  "LIST": {
+    "EMPTY": "尚無請款單。",
+    "PRINT": "列印 / PDF",
+    "CSV": "CSV",
+    "DELETE": "刪除",
+    "CONFIRM_DELETE": "刪除請款單 {{number}}？其工時將重新計為未請款。"
+  },
+  "NEW": {
+    "TITLE": "新增請款單",
+    "PROJECT": "專案",
+    "NO_PROJECTS": "請先建立專案。每個專案會分開請款。",
+    "FROM": "開始",
+    "TO": "結束",
+    "RATE": "時薪",
+    "LANGUAGE": "請款單語言",
+    "CLIENT": "付款方",
+    "CLIENT_HINT": "客戶名稱與地址。會為此專案記住。",
+    "INCLUDE": "包含",
+    "NO_HOURS": "此專案在這段期間沒有未請款的時間。",
+    "NUMBER": "請款單號碼",
+    "ISSUE_DATE": "開立日期",
+    "ISSUE": "開立並列印",
+    "BLOCK": {
+      "PERIOD": "請選擇開始與結束日期；開始日期必須在前。",
+      "LINES": "請至少勾選一行有工時的項目。",
+      "RATE": "請輸入時薪。",
+      "NUMBER": "請輸入請款單號碼。",
+      "NUMBER_USED": "此請款單號碼已被使用。",
+      "DATE": "請輸入開立日期。"
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "您的資料",
+    "SELLER": "您的姓名、地址與稅號",
+    "PAYMENT_NOTE": "付款資訊",
+    "PAYMENT_NOTE_HINT": "銀行資料或付款條件，會列印在底部。",
+    "CURRENCY": "貨幣代碼",
+    "TAX": "稅 / 營業稅 %",
+    "PAYMENT_DAYS": "到期天數",
+    "ROUNDING": "每行無條件進位至",
+    "ROUNDING_NONE": "不進位",
+    "ROUNDING_MIN": "{{min}} 分鐘",
+    "PREFIX": "請款單號碼前綴",
+    "SAVE": "儲存",
+    "SAVED": "已儲存。"
+  },
+  "INVOICE": {
+    "DESCRIPTION": "說明",
+    "HOURS": "工時",
+    "TOTAL": "合計"
+  },
+  "ERROR": {
+    "GENERIC": "發生錯誤：{{error}}"
+  }
+}

@@ -24,3 +24,15 @@ export interface FieldMapping {
   /** Task fields to clear when this field is set (e.g. dueWithTime and dueDay are mutually exclusive) */
   mutuallyExclusive?: (keyof Task)[];
 }
+
+/**
+ * A push the provider refused for this task, with a translated reason shown as
+ * "Couldn't sync" in the task's issue section (e.g. a title over the provider's
+ * limit). Any other push error shows its error text there.
+ */
+export class IssueSyncPushError extends Error {
+  constructor(readonly msgKey: string) {
+    super(msgKey);
+    this.name = 'IssueSyncPushError';
+  }
+}

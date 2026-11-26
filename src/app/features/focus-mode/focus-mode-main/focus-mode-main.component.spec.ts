@@ -260,6 +260,7 @@ describe('FocusModeMainComponent', () => {
         issueProviderId: undefined,
       };
       currentTaskSubject.next(taskWithoutIssue);
+      fixture.detectChanges();
 
       component.issueUrl$.subscribe((url) => {
         expect(url).toBeNull();
@@ -269,12 +270,65 @@ describe('FocusModeMainComponent', () => {
 
     it('should return null when no current task', (done) => {
       currentTaskSubject.next(null);
+      fixture.detectChanges();
 
       component.issueUrl$.subscribe((url) => {
         expect(url).toBeNull();
         done();
       });
     });
+
+    it('should update the URL when switching to another issue task', fakeAsync(() => {
+      mockIssueService.issueLink.and.callFake((_type, id) =>
+        Promise.resolve(`https://github.com/test/repo/issues/${id}`),
+      );
+      const urls: (string | null)[] = [];
+      const sub = component.issueUrl$.subscribe((url) => urls.push(url));
+      tick();
+
+      currentTaskSubject.next({ ...mockTask, id: 'task-2', issueId: '456' });
+      fixture.detectChanges();
+      tick();
+
+      expect(urls).toEqual([
+        'https://github.com/test/repo/issues/123',
+        'https://github.com/test/repo/issues/456',
+      ]);
+      sub.unsubscribe();
+    }));
+
+    it('should update the rendered link href when switching issue tasks', fakeAsync(() => {
+      mockIssueService.issueLink.and.callFake((_type, id) =>
+        Promise.resolve(`https://github.com/test/repo/issues/${id}`),
+      );
+      mainStateSignal.set(FocusMainUIState.InProgress);
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      const link = (): HTMLAnchorElement =>
+        fixture.nativeElement.querySelector('.open-issue-btn');
+      expect(link().getAttribute('href')).toBe('https://github.com/test/repo/issues/123');
+
+      currentTaskSubject.next({ ...mockTask, id: 'task-2', issueId: '456' });
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+
+      expect(link().getAttribute('href')).toBe('https://github.com/test/repo/issues/456');
+    }));
+
+    it('should not re-resolve the URL when only non-issue fields change', fakeAsync(() => {
+      const sub = component.issueUrl$.subscribe();
+      tick();
+      mockIssueService.issueLink.calls.reset();
+
+      currentTaskSubject.next({ ...mockTask, timeSpent: 1000 });
+      fixture.detectChanges();
+      tick();
+
+      expect(mockIssueService.issueLink).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    }));
   });
 
   describe('drag and drop', () => {
@@ -564,6 +618,47 @@ describe('FocusModeMainComponent', () => {
           ([action]) => action.type === actions.startFocusSession({ duration: 0 }).type,
         ).length;
       expect(startSessionDispatchCount).toBe(1);
+    }));
+
+    it('should still start the session when the overlay closes during the inline launch', fakeAsync(() => {
+      component.displayDuration.set(900000);
+      focusModeServiceSpy.focusModeConfig.and.returnValue({
+        isSkipPreparation: false,
+      });
+
+      component.startSession();
+      expect(component.isLaunching()).toBe(true);
+
+      // Escape, the close button and Android back hide the overlay, which
+      // destroys this component before the rocket finishes. The Start the
+      // user already pressed must not be dropped.
+      fixture.destroy();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.startFocusSession({ duration: 900000, taskId: mockTask.id }),
+      );
+
+      tick(800);
+
+      const startSessionDispatchCount = (mockStore.dispatch as jasmine.Spy).calls
+        .allArgs()
+        .filter(([action]) => action.type === actions.startFocusSession.type).length;
+      expect(startSessionDispatchCount).toBe(1);
+    }));
+
+    it('should not start a session on destroy when the inline launch was cancelled', fakeAsync(() => {
+      focusModeServiceSpy.focusModeConfig.and.returnValue({
+        isSkipPreparation: false,
+      });
+
+      component.startSession();
+      component.openTaskSelector();
+      fixture.destroy();
+      tick(800);
+
+      expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: actions.startFocusSession.type }),
+      );
     }));
 
     it('should use zero duration for Flowtime on the default inline-start path', fakeAsync(() => {
@@ -914,8 +1009,9 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       controls.querySelectorAll(':scope > button, :scope > a'),
     ) as HTMLElement[];
 
-    expect(buttons.length).toBe(4);
+    expect(buttons.length).toBe(3);
     expect(controls.querySelector('.secondary-actions-menu-btn')).not.toBeNull();
+    expect(controls.querySelector('.cancel-session-btn')).toBeNull();
   });
 
   it('should restore direct secondary session actions and issue points on desktop', () => {
@@ -935,6 +1031,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     expect(controls.querySelector('.open-issue-btn')).not.toBeNull();
     expect(controls.querySelector('.show-notes-btn')).not.toBeNull();
     expect(controls.querySelector('.mini-badge')?.textContent?.trim()).toBe('5');
+    expect(buttons[buttons.length - 1].classList).toContain('cancel-session-btn');
   });
 
   it('should disable the in-session reset cycles button while on the first cycle (#9893)', () => {
@@ -991,6 +1088,28 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     fixture.detectChanges();
 
     expect(component.isFocusNotes()).toBe(true);
+  });
+
+  it('should offer Cancel session in the mobile More menu without a task or Pomodoro', async () => {
+    modeSignal.set(FocusModeMode.Countdown);
+    currentTaskSubject.next(null);
+    fixture.detectChanges();
+
+    const trigger = fixture.nativeElement.querySelector(
+      '.secondary-actions-menu-btn',
+    ) as HTMLButtonElement;
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const cancelButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel button'),
+    ).find((button) => button.textContent?.includes('F.FOCUS_MODE.CANCEL_SESSION'));
+
+    expect(cancelButton).toBeDefined();
+    cancelButton!.click();
+
+    expect(mockStore.dispatch).toHaveBeenCalledWith(actions.cancelFocusSession());
   });
 
   it('should label every icon-only primary session action', () => {

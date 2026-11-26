@@ -1,0 +1,27 @@
+# Explanation discusses; it doesn't tell the reader to do anything. A list
+# of commands to run belongs in a how-to guide.
+# https://diataxis.fr/explanation/#the-language-of-explanation
+extends: existence
+message: "'%s' is an instruction. Explanation discusses; put the steps in a how-to guide."
+link: https://diataxis.fr/explanation/#the-language-of-explanation
+level: warning
+scope: list
+ignorecase: true
+tokens:
+  - '^\s*(?:run|click|open|install|type|enter|select|press|create|edit|save|restart|configure|set)\b'
+
+tests:
+  - name: fires
+    input: |
+      1. Run the build.
+      2. Open the page.
+
+    want: |
+      1:4:Explanation.Instruction:'Run' is an instruction. Explanation discusses; put the steps in a how-to guide.
+      2:4:Explanation.Instruction:'Open' is an instruction. Explanation discusses; put the steps in a how-to guide.
+  - name: clean
+    input: |
+      - The build is cached by layer.
+      - The page is served from the cache.
+
+    want: ""

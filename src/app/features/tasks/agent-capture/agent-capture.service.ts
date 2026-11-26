@@ -140,6 +140,16 @@ export class AgentCaptureService {
     return (await this._superSyncOrError().listCaptureGrants()).grants;
   }
 
+  /** Everything switching off would delete: grant captures and Android shares. */
+  async countPending(): Promise<number> {
+    const { grants, otherPendingCount } =
+      await this._superSyncOrError().listCaptureGrants();
+    return grants.reduce(
+      (sum, grant) => sum + grant.pendingCount,
+      otherPendingCount ?? 0,
+    );
+  }
+
   revokeGrant(grantId: string, discardPending: boolean): Promise<void> {
     return this._superSyncOrError().revokeCaptureGrant(grantId, discardPending);
   }
@@ -212,6 +222,7 @@ export class AgentCaptureService {
         this._globalConfig.cfg()?.reminder.defaultTaskRemindOption ??
         DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
       todayStr: this._dateService.todayStr(),
+      startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
       assertUnchanged: (context) => {
         // The epoch bumps only after a provider swap completes; the identity
         // check covers the moment in between.

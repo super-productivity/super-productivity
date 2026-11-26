@@ -39,4 +39,12 @@ describe('get-task-delete-confirm', () => {
       title: 'Sh…',
     });
   });
+
+  it('treats a task Plainspace no longer lists for me like a local one', () => {
+    expect(isTaskDeleteConfirmRequired(plainspaceTask, false, true)).toBe(false);
+    expect(isTaskDeleteConfirmRequired(plainspaceTask, true, true)).toBe(true);
+    expect(getTaskDeleteConfirmData(plainspaceTask, 'Shared', true).message).toBe(
+      T.F.TASK.D_CONFIRM_DELETE.MSG,
+    );
+  });
 });

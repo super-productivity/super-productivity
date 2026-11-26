@@ -15,6 +15,24 @@
       >
         <div class="month-day-header">
           <span class="month-day-number">{{ dayNumberByDay()[day] }}</span>
+          @if (deadlineBadgesByDay()[day]; as deadlineBadge) {
+            <span
+              class="deadline-badge"
+              tabindex="0"
+              [matTooltipPosition]="'below'"
+              [matTooltip]="deadlineBadge.tooltip"
+              [attr.aria-label]="deadlineBadge.tooltip"
+            >
+              <mat-icon
+                class="deadline-icon"
+                aria-hidden="true"
+                >flag</mat-icon
+              >
+              @if (deadlineBadge.count > 1) {
+                <span class="deadline-count">{{ deadlineBadge.count }}</span>
+              }
+            </span>
+          }
         </div>
         <div class="month-day-events">
           @for (ev of dayEvents; track ev.id) {

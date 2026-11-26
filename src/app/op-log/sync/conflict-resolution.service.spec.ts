@@ -33,6 +33,7 @@ import {
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
+import { MAX_DATA_LENGTH, OpLog } from '../../core/log';
 import {
   buildEntityRegistry,
   ENTITY_REGISTRY,
@@ -1562,6 +1563,234 @@ describe('ConflictResolutionService', () => {
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith([
           'remote-retargeted-delete',
         ]);
+      });
+
+      describe('tag delete-wins (#11489)', () => {
+        const createTagDelete = (
+          id: string,
+          clientId: string,
+          timestamp: number,
+          marked: boolean = true,
+        ): Operation => ({
+          ...createOpWithTimestamp(id, clientId, timestamp, OpType.Delete, 'tag-1'),
+          actionType: ActionType.TAG_DELETE,
+          entityType: 'TAG',
+          payload: {
+            actionPayload: { id: 'tag-1', ...(marked ? { tagDeleteWins: true } : {}) },
+            entityChanges: [],
+          },
+        });
+        const createTagUpdate = (
+          id: string,
+          clientId: string,
+          timestamp: number,
+        ): Operation => ({
+          ...createOpWithTimestamp(id, clientId, timestamp, OpType.Update, 'tag-1'),
+          actionType: ActionType.TAG_UPDATE,
+          entityType: 'TAG',
+          payload: {
+            actionPayload: { tag: { id: 'tag-1', changes: { title: 'Renamed' } } },
+            entityChanges: [],
+          },
+        });
+        const tagConflict = (
+          localOps: Operation[],
+          remoteOps: Operation[],
+        ): EntityConflict => ({
+          entityType: 'TAG',
+          entityId: 'tag-1',
+          localOps,
+          remoteOps,
+          suggestedResolution: 'manual',
+        });
+
+        it('keeps a marked local tag deletion when a concurrent rename is newer', async () => {
+          const localDelete = createTagDelete('local-tag-delete', 'client-a', 1_000);
+          const remoteRename = createTagUpdate('remote-tag-rename', 'client-b', 2_000);
+
+          const result = await service.autoResolveConflictsLWW([
+            tagConflict([localDelete], [remoteRename]),
+          ]);
+
+          const replacementDelete = getFirstMixedLocalOp();
+          expect(replacementDelete.opType).toBe(OpType.Delete);
+          expect(replacementDelete.actionType).toBe(ActionType.TAG_DELETE);
+          expect(replacementDelete.entityId).toBe('tag-1');
+          // The replacement keeps the marker, so it still wins downstream.
+          expect(replacementDelete.payload).toEqual(localDelete.payload);
+          expect(replacementDelete.timestamp).toBe(localDelete.timestamp);
+          expect(replacementDelete.vectorClock['client-a']).toBeGreaterThanOrEqual(1);
+          expect(replacementDelete.vectorClock['client-b']).toBeGreaterThanOrEqual(1);
+          expect(replacementDelete.vectorClock[TEST_CLIENT_ID]).toBeGreaterThanOrEqual(1);
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-tag-rename']);
+          expect(result.localWinOpsCreated).toBe(1);
+        });
+
+        it('applies a marked remote tag deletion even when the local rename is newer', async () => {
+          const localRename = createTagUpdate('local-tag-rename', 'client-a', 2_000);
+          const remoteDelete = createTagDelete('remote-tag-delete', 'client-b', 1_000);
+          mockOperationApplier.applyOperations.and.resolveTo({
+            appliedOps: [remoteDelete],
+          });
+
+          const result = await service.autoResolveConflictsLWW([
+            tagConflict([localRename], [remoteDelete]),
+          ]);
+
+          expect(mockOpLogStore.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+            [remoteDelete],
+            'remote',
+            { pendingApply: true },
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-tag-rename']);
+          expect(getMixedLocalOps()).toEqual([]);
+          const appliedOps = mockOperationApplier.applyOperations.calls.mostRecent()
+            .args[0] as Operation[];
+          expect(appliedOps).toContain(remoteDelete);
+          expect(result.localWinOpsCreated).toBe(0);
+        });
+
+        it('keeps timestamp LWW for an unmarked tag deletion (released client)', async () => {
+          const localRename = createTagUpdate('local-tag-rename', 'client-a', 2_000);
+          const remoteDelete = createTagDelete(
+            'remote-tag-delete',
+            'client-b',
+            1_000,
+            false,
+          );
+          mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localRename], [remoteDelete]),
+          ]);
+
+          expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalledWith(
+            [remoteDelete],
+            'remote',
+            { pendingApply: true },
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-tag-delete']);
+        });
+
+        it('does not apply a remote marked tag delete that a later remote re-create superseded', async () => {
+          // A deleted (t1); a released client then won by timestamp and
+          // uploaded a re-creating update that saw the delete (t2); this
+          // device's rename (t3) is newer. One conflict per remote op.
+          const localRename: Operation = {
+            ...createTagUpdate('local-tag-rename', 'client-n', 3_000),
+            vectorClock: { clientN: 1 },
+          };
+          const remoteDelete: Operation = {
+            ...createTagDelete('remote-tag-delete', 'client-a', 1_000),
+            vectorClock: { clientA: 1 },
+          };
+          // A released client's re-creating LWW Update (no lwwUpdateMode).
+          const remoteRecreate: Operation = {
+            ...createTagUpdate('remote-tag-recreate', 'client-o', 2_000),
+            actionType: '[TAG] LWW Update' as ActionType,
+            payload: { id: 'tag-1', title: 'Renamed', taskIds: [] },
+            vectorClock: { clientA: 1, clientO: 1 },
+          };
+          mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localRename], [remoteDelete]),
+            tagConflict([localRename], [remoteRecreate]),
+          ]);
+
+          expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalledWith(
+            jasmine.arrayContaining([
+              jasmine.objectContaining({ id: 'remote-tag-delete' }),
+            ]),
+            'remote',
+            { pendingApply: true },
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(
+            jasmine.arrayContaining(['remote-tag-delete']),
+          );
+        });
+
+        it('does not let a local marked tag delete win over its own later same-id re-create', async () => {
+          const localDelete: Operation = {
+            ...createTagDelete('local-tag-delete', 'client-a', 1_000),
+            vectorClock: { clientA: 1 },
+          };
+          const localRecreate: Operation = {
+            ...createOpWithTimestamp(
+              'local-tag-recreate',
+              'client-a',
+              3_000,
+              OpType.Create,
+              'tag-1',
+            ),
+            actionType: ActionType.TAG_ADD,
+            entityType: 'TAG',
+            vectorClock: { clientA: 2 },
+          };
+          const remoteRename: Operation = {
+            ...createTagUpdate('remote-tag-rename', 'client-b', 2_000),
+            vectorClock: { clientB: 1 },
+          };
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localDelete, localRecreate], [remoteRename]),
+          ]);
+
+          expect(getMixedLocalOps().some((op) => op.opType === OpType.Delete)).toBe(
+            false,
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-tag-rename']);
+        });
+
+        it('keeps a marked local tag delete winning past a later plain tag update', async () => {
+          // A plain update of a deleted id is a no-op on replay and must not
+          // block the delete (it would be rejected without a replacement).
+          const localDelete: Operation = {
+            ...createTagDelete('local-tag-delete', 'client-a', 1_000),
+            vectorClock: { clientA: 1 },
+          };
+          const localStrayUpdate: Operation = {
+            ...createTagUpdate('local-tag-stray-update', 'client-a', 3_000),
+            vectorClock: { clientA: 2 },
+          };
+          const remoteRename: Operation = {
+            ...createTagUpdate('remote-tag-rename', 'client-b', 2_000),
+            vectorClock: { clientB: 1 },
+          };
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localDelete, localStrayUpdate], [remoteRename]),
+          ]);
+
+          const replacement = getFirstMixedLocalOp();
+          expect(replacement.opType).toBe(OpType.Delete);
+          expect(replacement.actionType).toBe(ActionType.TAG_DELETE);
+        });
+
+        it('ignores a marked tag deletion retargeted onto another tag', async () => {
+          const retargeted: Operation = {
+            ...createTagDelete('remote-retargeted-delete', 'client-b', 1_000),
+            payload: {
+              actionPayload: { id: 'tag-original', tagDeleteWins: true },
+              entityChanges: [],
+            },
+          };
+          const localRename = createTagUpdate('local-tag-rename', 'client-a', 2_000);
+          mockOperationApplier.applyOperations.and.resolveTo({ appliedOps: [] });
+
+          await service.autoResolveConflictsLWW([
+            tagConflict([localRename], [retargeted]),
+          ]);
+
+          expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalledWith(
+            [retargeted],
+            'remote',
+            { pendingApply: true },
+          );
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledWith([
+            'remote-retargeted-delete',
+          ]);
+        });
       });
 
       it('restamps a converted remote update to the current schema version (#8990)', async () => {
@@ -6931,6 +7160,48 @@ describe('ConflictResolutionService', () => {
       expect(result.conflicts).toEqual([]);
     });
 
+    it('should log a superseded skip with author counters that survive the log export cap', async () => {
+      // #11184: the skip is permanent, so the exported log must show why.
+      // Full-size clocks must not push the author counters past the cap.
+      const fullClock = (counter: number): VectorClock =>
+        Object.fromEntries(
+          Array.from({ length: MAX_VECTOR_CLOCK_SIZE }, (_, i) => [
+            `client_${String(i).padStart(2, '0')}`,
+            counter,
+          ]),
+        );
+      const remoteOp: Operation = {
+        ...createMockOp('remote-regressed', 'client_00'),
+        entityId: 'task-1',
+        vectorClock: { ...fullClock(99999), client_00: 2 },
+      };
+      const appliedFrontierByEntity = new Map<string, VectorClock>([
+        ['TASK:task-1', { ...fullClock(99999), client_00: 4 }],
+      ]);
+      const verboseSpy = spyOn(OpLog, 'verbose');
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ appliedFrontierByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBeTrue();
+      const args = verboseSpy.calls
+        .allArgs()
+        .find((a) => String(a[0]).includes('Skipping superseded'))!;
+      for (const arg of args.slice(1)) {
+        expect(JSON.stringify(arg).length).toBeLessThanOrEqual(MAX_DATA_LENGTH);
+      }
+      expect(args[1]).toEqual(
+        jasmine.objectContaining({
+          entityKey: 'TASK:task-1',
+          opClientId: 'client_00',
+          localCounter: 4,
+          remoteCounter: 2,
+        }),
+      );
+    });
+
     it('should skip an atomic multi-entity operation when any entity is superseded', async () => {
       const remoteOp: Operation = {
         ...createMockOp('remote-multi-delete', 'clientB'),
@@ -7238,18 +7509,21 @@ describe('ConflictResolutionService', () => {
       });
     });
 
-    it('should still conflict when a section move and removal target different tasks', async () => {
+    // Different tasks commute (#10969); a move of the same task into the
+    // section it is removed from does not.
+    it('should still conflict when a task moves into the section it is removed from', async () => {
       const remoteOp = createSectionMoveOp(
         'remote-move',
         'clientB',
-        'section-left',
+        'section-right',
         'task-1',
+        'section-left',
       );
       const localOp = createSectionRemoveOp(
         'local-remove',
         'clientA',
         'section-left',
-        'task-2',
+        'task-1',
       );
       const localPendingOpsByEntity = new Map<string, Operation[]>([
         ['SECTION:section-left', [localOp]],
@@ -8058,6 +8332,209 @@ describe('ConflictResolutionService', () => {
       localOps,
       remoteOps,
       suggestedResolution: 'manual',
+    });
+
+    // #11489: the losing marked tag delete is the re-create base here.
+    it('drops the tag delete-wins marker from the re-created tag', () => {
+      const localDelete: Operation = {
+        ...createOpWithTimestamp('local-del', 'client-a', 1000, OpType.Delete, 'tag-1'),
+        entityType: 'TAG',
+        actionType: ActionType.TAG_DELETE,
+        payload: {
+          actionPayload: { id: 'tag-1', tagDeleteWins: true },
+          entityChanges: [],
+        },
+      };
+      const remoteRename: Operation = {
+        ...createOpWithTimestamp('remote-upd', 'client-b', 2000, OpType.Update, 'tag-1'),
+        entityType: 'TAG',
+        actionType: ActionType.TAG_UPDATE,
+        payload: {
+          actionPayload: { tag: { id: 'tag-1', changes: { title: 'Renamed' } } },
+          entityChanges: [],
+        },
+      };
+
+      const [converted] = (
+        TestBed.inject(ConflictEntityStateService) as any
+      )._convertToLWWUpdatesIfNeeded({
+        entityType: 'TAG',
+        entityId: 'tag-1',
+        localOps: [localDelete],
+        remoteOps: [remoteRename],
+        suggestedResolution: 'manual',
+      } satisfies EntityConflict) as Operation[];
+
+      const recreated = extractActionPayload(converted.payload);
+      expect(recreated['title']).toBe('Renamed');
+      expect('tagDeleteWins' in recreated).toBe(false);
+    });
+
+    describe('SIMPLE_COUNTER delete vs update (#11465)', () => {
+      const DAY = '2026-11-04';
+      const PREV_DAY = '2026-11-03';
+      const counter = {
+        id: 'counter-1',
+        title: 'Push-ups',
+        type: 'ClickCounter',
+        isEnabled: true,
+        isOn: false,
+        icon: null,
+        countOnDay: { [PREV_DAY]: 4, [DAY]: 1 },
+      };
+      const counterOp = (
+        id: string,
+        clientId: string,
+        timestamp: number,
+        opType: OpType,
+        actionType: ActionType,
+        actionPayload: Record<string, unknown>,
+      ): Operation => ({
+        ...createOpWithTimestamp(id, clientId, timestamp, opType, 'counter-1'),
+        entityType: 'SIMPLE_COUNTER',
+        actionType,
+        payload: { actionPayload, entityChanges: [] },
+      });
+      const localDelete = (actionPayload: Record<string, unknown>): Operation =>
+        counterOp(
+          'local-del',
+          'client-a',
+          1000,
+          OpType.Delete,
+          ActionType.COUNTER_DELETE,
+          actionPayload,
+        );
+      const setToday = (id: string, newVal: number, timestamp: number): Operation =>
+        counterOp(
+          id,
+          'client-b',
+          timestamp,
+          OpType.Update,
+          ActionType.COUNTER_SET_TODAY,
+          {
+            id: 'counter-1',
+            newVal,
+            today: DAY,
+          },
+        );
+      const convert = (deleteOp: Operation, remoteOps: Operation[]): Operation[] =>
+        (TestBed.inject(ConflictEntityStateService) as any)._convertToLWWUpdatesIfNeeded({
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'counter-1',
+          localOps: [deleteOp],
+          remoteOps,
+          suggestedResolution: 'manual',
+        } satisfies EntityConflict);
+
+      it('recreates the whole deleted counter with the winning count replayed by its reducer', () => {
+        const [result] = convert(
+          localDelete({ id: 'counter-1', simpleCounter: counter }),
+          [setToday('s1', 2, 2000)],
+        );
+
+        expect(result.actionType).toBe('[SIMPLE_COUNTER] LWW Update');
+        expect(result.payload).toEqual(
+          jasmine.objectContaining({
+            lwwUpdateMode: 'replace',
+            recreatesEntityAfterDelete: true,
+          }),
+        );
+        // Replayed by the reducer: the field read found no changes in
+        // `{ id, newVal, today }` and left `countOnDay` stale.
+        expect(extractActionPayload(result.payload)).toEqual({
+          ...counter,
+          countOnDay: { [PREV_DAY]: 4, [DAY]: 2 },
+        });
+      });
+
+      it('folds semantic and field updates in order', () => {
+        const rename = counterOp(
+          'r1',
+          'client-b',
+          3000,
+          OpType.Update,
+          ActionType.COUNTER_UPDATE,
+          { simpleCounter: { id: 'counter-1', changes: { title: 'Squats' } } },
+        );
+        const forDate = counterOp(
+          'f1',
+          'client-b',
+          4000,
+          OpType.Update,
+          ActionType.COUNTER_SET_FOR_DATE,
+          { id: 'counter-1', date: PREV_DAY, newVal: 7 },
+        );
+
+        const result = convert(localDelete({ id: 'counter-1', simpleCounter: counter }), [
+          setToday('s1', 2, 2000),
+          rename,
+          forDate,
+        ]);
+
+        for (const op of result) {
+          expect(extractActionPayload(op.payload)).toEqual({
+            ...counter,
+            title: 'Squats',
+            countOnDay: { [PREV_DAY]: 7, [DAY]: 2 },
+          });
+        }
+      });
+
+      it('adds a winning stopwatch duration to the recreated counter', () => {
+        const sync = counterOp(
+          'sync-1',
+          'client-b',
+          2000,
+          OpType.Update,
+          ActionType.COUNTER_SYNC_TIME,
+          { id: 'counter-1', date: DAY, duration: 60000 },
+        );
+        const stopwatch = { ...counter, type: 'StopWatch', countOnDay: { [DAY]: 1000 } };
+
+        const [result] = convert(
+          localDelete({ id: 'counter-1', simpleCounter: stopwatch }),
+          [sync],
+        );
+
+        expect(extractActionPayload(result.payload)).toEqual({
+          ...stopwatch,
+          countOnDay: { [DAY]: 61000 },
+        });
+      });
+
+      it('keeps the field read for a counter update its reducer does not handle', () => {
+        // A future or unknown counter action the reducer ignores must not be
+        // replayed as a no-op: its fields still apply.
+        const unknownUpdate = counterOp(
+          'u1',
+          'client-b',
+          2000,
+          OpType.Update,
+          '[SimpleCounter] Not handled by the reducer' as ActionType,
+          { simpleCounter: { id: 'counter-1', changes: { title: 'Squats' } } },
+        );
+
+        const [result] = convert(
+          localDelete({ id: 'counter-1', simpleCounter: counter }),
+          [unknownUpdate],
+        );
+
+        expect(extractActionPayload(result.payload)).toEqual({
+          ...counter,
+          title: 'Squats',
+        });
+      });
+
+      it('still recreates from an id-only delete of an older client', () => {
+        const [result] = convert(localDelete({ id: 'counter-1' }), [
+          setToday('s1', 2, 2000),
+        ]);
+
+        expect(extractActionPayload(result.payload)).toEqual({
+          id: 'counter-1',
+          countOnDay: { [DAY]: 2 },
+        });
+      });
     });
 
     it('should return remote ops unchanged when no local DELETE exists', () => {

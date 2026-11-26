@@ -133,25 +133,20 @@ export function RuleEditor(props: RuleEditorProps) {
         onClose={props.onCancel}
         title={localRule().id ? 'Edit Rule' : 'New Rule'}
         footer={
-          <div class="grid">
-            <div style={{ 'text-align': 'left' }}>
-              {localRule().id && (
-                <button onClick={() => props.onDelete(localRule())}>Delete Rule</button>
-              )}
-            </div>
-            <div style={{ 'text-align': 'right' }}>
-              <button
-                class="btn-outline"
-                onClick={props.onCancel}
-                style={{ 'margin-right': '0.5rem' }}
-              >
-                Cancel
+          <>
+            {localRule().id && (
+              <button class="btn-danger" onClick={() => props.onDelete(localRule())}>
+                Delete Rule
               </button>
-              <button class="btn-primary" onClick={saveLocalRule}>
-                Save Rule
-              </button>
-            </div>
-          </div>
+            )}
+            <span class="grow" />
+            <button class="btn-outline" onClick={props.onCancel}>
+              Cancel
+            </button>
+            <button class="btn-primary" onClick={saveLocalRule}>
+              Save Rule
+            </button>
+          </>
         }
       >
         <form onSubmit={(e) => e.preventDefault()}>
@@ -195,7 +190,7 @@ export function RuleEditor(props: RuleEditorProps) {
 
           {localRule().trigger.type === 'timeBased' && (
             <>
-              <div class="warning-box">
+              <div class="callout callout--warning">
                 <small>
                   <strong>Warning:</strong> Time-based triggers only work if the app is running.
                   They might not work reliably if the app is in the background.
@@ -226,20 +221,16 @@ export function RuleEditor(props: RuleEditorProps) {
               <hr />
 
               <div class="section">
-                <div class="grid">
-                  <div>
-                    <h4>Conditions</h4>
-                  </div>
-                  <div style={{ 'text-align': 'right' }}>
-                    <button
-                      onClick={() => {
-                        setEditingConditionIndex(-1);
-                        setIsConditionDialogOpen(true);
-                      }}
-                    >
-                      + Add
-                    </button>
-                  </div>
+                <div class="page-header">
+                  <h4>Conditions</h4>
+                  <button
+                    onClick={() => {
+                      setEditingConditionIndex(-1);
+                      setIsConditionDialogOpen(true);
+                    }}
+                  >
+                    + Add
+                  </button>
                 </div>
 
                 <table role="grid">
@@ -257,18 +248,27 @@ export function RuleEditor(props: RuleEditorProps) {
                       {(condition, i) => (
                         <tr>
                           <td>{formatConditionLabel(condition)}</td>
-                          <td style={{ 'text-align': 'right' }}>
-                            <button
-                              class="btn-outline"
-                              onClick={() => {
-                                setEditingConditionIndex(i());
-                                setIsConditionDialogOpen(true);
-                              }}
-                              style={{ 'margin-right': '0.5rem' }}
-                            >
-                              Edit
-                            </button>
-                            <button onClick={() => handleRemoveCondition(i())}>✕</button>
+                          <td>
+                            <div class="actions">
+                              <button
+                                class="btn-outline"
+                                onClick={() => {
+                                  setEditingConditionIndex(i());
+                                  setIsConditionDialogOpen(true);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                class="btn-icon"
+                                aria-label="Remove condition"
+                                onClick={() => handleRemoveCondition(i())}
+                              >
+                                <span class="material-icons" aria-hidden="true">
+                                  close
+                                </span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -282,20 +282,16 @@ export function RuleEditor(props: RuleEditorProps) {
           <hr />
 
           <div class="section">
-            <div class="grid">
-              <div>
-                <h4>Actions</h4>
-              </div>
-              <div style={{ 'text-align': 'right' }}>
-                <button
-                  onClick={() => {
-                    setEditingActionIndex(-1);
-                    setIsActionDialogOpen(true);
-                  }}
-                >
-                  + Add
-                </button>
-              </div>
+            <div class="page-header">
+              <h4>Actions</h4>
+              <button
+                onClick={() => {
+                  setEditingActionIndex(-1);
+                  setIsActionDialogOpen(true);
+                }}
+              >
+                + Add
+              </button>
             </div>
 
             <table role="grid">
@@ -313,18 +309,27 @@ export function RuleEditor(props: RuleEditorProps) {
                   {(action, i) => (
                     <tr>
                       <td>{formatActionLabel(action)}</td>
-                      <td style={{ 'text-align': 'right' }}>
-                        <button
-                          class="btn-outline"
-                          onClick={() => {
-                            setEditingActionIndex(i());
-                            setIsActionDialogOpen(true);
-                          }}
-                          style={{ 'margin-right': '0.5rem' }}
-                        >
-                          Edit
-                        </button>
-                        <button onClick={() => handleRemoveAction(i())}>✕</button>
+                      <td>
+                        <div class="actions">
+                          <button
+                            class="btn-outline"
+                            onClick={() => {
+                              setEditingActionIndex(i());
+                              setIsActionDialogOpen(true);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            class="btn-icon"
+                            aria-label="Remove action"
+                            onClick={() => handleRemoveAction(i())}
+                          >
+                            <span class="material-icons" aria-hidden="true">
+                              close
+                            </span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )}

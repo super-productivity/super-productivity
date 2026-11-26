@@ -13,7 +13,7 @@
     width: 100vw !important;
     // Smooth height transitions for non-drag changes (set-initial / keyboard).
     // The release-time animations (close, expand) set transitions inline.
-    transition: height 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: height var(--transition-duration-m) var(--ani-standard-timing);
     resize: vertical;
     overflow: hidden;
     background: var(--bottom-panel-bg);

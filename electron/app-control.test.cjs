@@ -14,6 +14,7 @@ let sharedState;
 let refreshIndicatorCalls;
 let localRestApiConfig;
 let focusCalls;
+let badgeCounts;
 
 const resetModule = () => {
   delete require.cache[appControlModulePath];
@@ -48,6 +49,7 @@ const installMocks = () => {
           SHOW_OR_FOCUS: 'SHOW_OR_FOCUS',
           LOCK_SCREEN: 'LOCK_SCREEN',
           SET_PROGRESS_BAR: 'SET_PROGRESS_BAR',
+          SET_DUE_TASK_BADGE: 'SET_DUE_TASK_BADGE',
           FLASH_FRAME: 'FLASH_FRAME',
         },
       };
@@ -65,6 +67,10 @@ const installMocks = () => {
           once: () => {},
         }),
       };
+    }
+
+    if (request === '../due-task-badge') {
+      return { setDueTaskBadge: (count) => badgeCounts.push(count) };
     }
 
     if (request === '../various-shared') {
@@ -160,6 +166,7 @@ test.beforeEach(() => {
   refreshIndicatorCalls = 0;
   localRestApiConfig = undefined;
   focusCalls = [];
+  badgeCounts = [];
 
   installMocks();
 });
@@ -167,6 +174,37 @@ test.beforeEach(() => {
 test.afterEach(() => {
   Module._load = originalModuleLoad;
   resetModule();
+});
+
+test('badge IPC accepts counts and rejects malformed input', () => {
+  const { initAppControlIpc } = loadAppControlModule();
+  initAppControlIpc();
+  const handler = ipcHandlers.get('SET_DUE_TASK_BADGE');
+  for (const count of [5, 0, 123]) handler({}, count);
+  for (const value of [
+    -1,
+    1.5,
+    NaN,
+    Infinity,
+    '5',
+    null,
+    {},
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    handler({}, value);
+  }
+  assert.deepEqual(badgeCounts, [5, 0, 123]);
+  for (const image of [
+    42,
+    'data:image/svg+xml;base64,AAAA',
+    'data:image/png;base64,!invalid',
+    'data:image/png;base64,' + 'A'.repeat(8192),
+  ]) {
+    handler({}, 5, image);
+  }
+  assert.deepEqual(badgeCounts, [5, 0, 123]);
+  handler({}, 5, 'data:image/png;base64,AAAA');
+  assert.deepEqual(badgeCounts, [5, 0, 123, 5]);
 });
 
 test('settings update reads current task tray setting from tasks config', async () => {

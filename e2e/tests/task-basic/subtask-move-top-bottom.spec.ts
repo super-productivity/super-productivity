@@ -2,6 +2,7 @@ import { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { TaskPage } from '../../pages/task.page';
+import { flushPendingWrites } from '../../utils/waits';
 
 // Move to top/bottom for subtasks via keyboard and context menu (#9460, #6650),
 // and via context menu for top-level tasks in the project backlog.
@@ -25,10 +26,13 @@ const seedParentWithSubTasks = async (
   return { parent, subTasks };
 };
 
-const clickContextMenuItem = async (page: Page, name: RegExp): Promise<void> => {
-  const menu = page.locator('.mat-mdc-menu-panel');
-  await expect(menu).toBeVisible();
-  await menu.getByRole('menuitem', { name }).click();
+// Move to top/bottom live in the context menu's "Reorder" submenu.
+const clickReorderItem = async (page: Page, name: RegExp): Promise<void> => {
+  const panels = page.locator('.mat-mdc-menu-panel');
+  await expect(panels).toHaveCount(1);
+  await panels.getByRole('menuitem', { name: /reorder/i }).click();
+  await expect(panels).toHaveCount(2);
+  await panels.last().getByRole('menuitem', { name }).click();
 };
 
 test.describe('Subtask move to top/bottom', () => {
@@ -57,6 +61,103 @@ test.describe('Subtask move to top/bottom', () => {
     await expect(subTasks.locator('task-title')).toHaveText([/Sub A/, /Sub B/, /Sub C/]);
   });
 
+  for (const isDone of [false, true]) {
+    test(`moves ${isDone ? 'completed' : 'unfinished'} detail-panel subtask to top of siblings via keyboard`, async ({
+      page,
+      workViewPage,
+      taskPage,
+      testPrefix,
+    }) => {
+      const { parent, subTasks } = await seedParentWithSubTasks(
+        workViewPage,
+        taskPage,
+        `${testPrefix}-Parent`,
+      );
+      if (isDone) {
+        await taskPage.markTaskAsDone(subTasks.filter({ hasText: 'Sub C' }));
+        await parent.locator('.toggle-sub-tasks-btn').first().click();
+        await expect(subTasks.filter({ hasText: 'Sub C' })).toBeHidden();
+      }
+
+      await parent.focus();
+      await page.keyboard.press('i');
+      const panel = page.locator('task-detail-panel');
+      // Let the panel's deferred open-time auto-focus land first; under load it
+      // can fire after subC.focus() below and steal focus from it.
+      await expect
+        .poll(async () =>
+          page.evaluate(() => !!document.activeElement?.closest('task-detail-panel')),
+        )
+        .toBe(true);
+      await panel
+        .locator('mat-expansion-panel-header')
+        .filter({ hasText: 'Subtasks' })
+        .click();
+      if (isDone) {
+        await panel.locator('.expand-tasks-btn').click();
+      }
+      const panelSubTasks = panel.locator('task');
+      const subC = panelSubTasks.filter({ hasText: 'Sub C' });
+      await expect(panelSubTasks.locator('task-title')).toHaveText([
+        /Sub A/,
+        /Sub B/,
+        /Sub C/,
+      ]);
+      await expect(subC).toBeVisible();
+      await subC.focus();
+      await expect(subC).toBeFocused();
+      await page.keyboard.press('Control+Alt+ArrowUp');
+      await expect(panelSubTasks.locator('task-title')).toHaveText([
+        /Sub C/,
+        /Sub A/,
+        /Sub B/,
+      ]);
+      await expect(subC).toBeFocused();
+    });
+  }
+
+  test('moves a subtask shown on its own in Today within Today via keyboard', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    // The parent stays unscheduled, so Today shows Sub B without it.
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    const { subTasks } = await seedParentWithSubTasks(
+      workViewPage,
+      taskPage,
+      `${testPrefix}-Parent`,
+    );
+    const subB = subTasks.filter({ hasText: 'Sub B' });
+    await subB.focus();
+    await page.keyboard.press('Shift+T');
+
+    await page.goto('/#/tag/TODAY/tasks');
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('Other');
+    const todayTitles = page.locator('work-view task task-title');
+    await expect(todayTitles).toHaveCount(2);
+    const subBInToday = page.locator('work-view task').filter({ hasText: 'Sub B' });
+
+    await subBInToday.focus();
+    await page.keyboard.press('Control+Alt+ArrowDown');
+    await expect(todayTitles).toHaveText([/Other/, /Sub B/]);
+    await expect(subBInToday).toBeFocused();
+    await page.keyboard.press('Control+Alt+ArrowUp');
+    await expect(todayTitles).toHaveText([/Sub B/, /Other/]);
+
+    await flushPendingWrites(page);
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(todayTitles).toHaveText([/Sub B/, /Other/]);
+
+    // Its siblings keep their order.
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    await workViewPage.waitForTaskList();
+    await expect(subTasks.locator('task-title')).toHaveText([/Sub A/, /Sub B/, /Sub C/]);
+  });
+
   test('moves a subtask to top and bottom of siblings via the context menu', async ({
     page,
     workViewPage,
@@ -71,11 +172,11 @@ test.describe('Subtask move to top/bottom', () => {
 
     const subC = subTasks.filter({ hasText: 'Sub C' });
     await subC.locator('task-title').click({ button: 'right' });
-    await clickContextMenuItem(page, /move to top/i);
+    await clickReorderItem(page, /move to top/i);
     await expect(subTasks.locator('task-title')).toHaveText([/Sub C/, /Sub A/, /Sub B/]);
 
     await subC.locator('task-title').click({ button: 'right' });
-    await clickContextMenuItem(page, /move to bottom/i);
+    await clickReorderItem(page, /move to bottom/i);
     await expect(subTasks.locator('task-title')).toHaveText([/Sub A/, /Sub B/, /Sub C/]);
   });
 
@@ -144,7 +245,7 @@ test.describe('Subtask move to top/bottom', () => {
 
     const firstTitle = await backlogTasks.first().locator('task-title').innerText();
     await backlogTasks.first().locator('task-title').click({ button: 'right' });
-    await clickContextMenuItem(page, /move to bottom/i);
+    await clickReorderItem(page, /move to bottom/i);
 
     await expect(backlogTasks.last().locator('task-title')).toHaveText(firstTitle);
     await expect(backlogTasks.first().locator('task-title')).not.toHaveText(firstTitle);

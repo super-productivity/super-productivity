@@ -30,7 +30,6 @@ import {
 } from '../../../../core/persistence/local-storage';
 import { T } from '../../../../t.const';
 import { WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG } from '../../../work-context/work-context.const';
-import { GitlabCfg } from 'src/app/features/issue/providers/gitlab/gitlab.model';
 import { CaldavCfg } from 'src/app/features/issue/providers/caldav/caldav.model';
 import { OpenProjectCfg } from '../../../issue/providers/open-project/open-project.model';
 import { getRandomWorkContextColor } from '../../../../ui/work-context-color';
@@ -69,7 +68,6 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
     theme: { ...DEFAULT_PROJECT.theme, primary: getRandomWorkContextColor() },
   };
   jiraCfg?: JiraCfg;
-  gitlabCfg?: GitlabCfg;
   caldavCfg?: CaldavCfg;
   openProjectCfg?: OpenProjectCfg;
 

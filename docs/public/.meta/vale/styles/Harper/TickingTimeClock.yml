@@ -1,0 +1,20 @@
+---
+# Generated from Harper's TickingTimeClock rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `ticking time clock` to `ticking time bomb` for idiomatic urgency or `ticking clock` otherwise.
+extends: existence
+message: "Use `ticking time bomb` for disastrous consequences, otherwise avoid redundancy with just `ticking clock`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "ticking time bomb"
+    - "ticking clock"
+tokens:
+  - "ticking(?!\\s*\\n\\s*\\n)\\s+time(?!\\s*\\n\\s*\\n)\\s+clock(?!['\\x{2019}]s\\b)"

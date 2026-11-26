@@ -16,7 +16,15 @@ import {
   parseCaptureRepeat,
   toCaptureRepeatCfg,
 } from './capture-repeat-cfg';
-import { parseDueDay, parseDueTime, toSchedule, toStartTime } from './capture-schedule';
+import {
+  parseDueDay,
+  parseDueTime,
+  parseEstimateMinutes,
+  toDeadline,
+  toSchedule,
+  toStartTime,
+} from './capture-schedule';
+import { getDeadlineAutoPlanFields } from '../util/get-deadline-auto-plan-fields';
 import { NativeCaptureSource } from '../native-capture/native-capture-importer.service';
 
 /** Never rename: installs keep their receipts under it. */
@@ -25,6 +33,7 @@ export const AGENT_CAPTURE_RECEIPTS_KEY = 'sp-agent-capture-receipts';
 // Server limits (capture.const.ts), re-checked before a payload becomes a synced task.
 const TITLE_MAX_CHARS = 500;
 const NOTES_MAX_CHARS = 8 * 1024;
+const LINK_MAX_CHARS = 2048;
 
 /** The server has no capture routes (feature off, rollback, other server). */
 export class CaptureUnsupportedError extends Error {
@@ -44,6 +53,14 @@ export interface AgentCapture {
     /** `[hours, minutes]` on `dueDay`, in this device's time zone. */
     dueTime?: [number, number];
     repeat?: CaptureRepeat;
+    /** An http(s) URL, added as the task's one LINK attachment. */
+    link?: string;
+    /** `YYYY-MM-DD`; a calendar day. */
+    deadlineDay?: string;
+    /** `[hours, minutes]` on `deadlineDay`, in this device's time zone. */
+    deadlineTime?: [number, number];
+    /** Whole minutes; replaces the default estimate. */
+    estimateMinutes?: number;
   } | null;
 }
 
@@ -58,6 +75,8 @@ export interface AgentCaptureRun {
   defaultRemindOption: TaskReminderOptionId;
   /** This device's logical today, `YYYY-MM-DD`: where an undated series starts. */
   todayStr: string;
+  /** With `todayStr`: decides whether a deadline today plans the task for today. */
+  startOfNextDayDiffMs: number;
   /** Throws SyncEpochChangedError once the account, provider or password changed. */
   assertUnchanged: (context: string) => void;
 }
@@ -104,7 +123,10 @@ export const createSuperSyncCaptureSource = (
     createTask: (capture) => {
       const active = currentRun('createTask');
       deps.dispatch(
-        addInboxTaskAction(capture, active.defaultEstimate, active.defaultRemindOption),
+        addInboxTaskAction(capture, active.defaultEstimate, active.defaultRemindOption, {
+          todayStr: () => active.todayStr,
+          getStartOfNextDayDiffMs: () => active.startOfNextDayDiffMs,
+        }),
       );
       const repeatAction = addRepeatCfgAction(capture, active);
       if (repeatAction) deps.dispatch(repeatAction);
@@ -182,8 +204,52 @@ const toDue = (
   return dueTime ? { dueDay, dueTime } : { dueDay };
 };
 
-/** Validates an opened payload; null when it cannot become a task. */
-export const toCaptureTask = (payload: unknown): AgentCapture['task'] => {
+/**
+ * Optional v1 fields, dropped when invalid like `toDue`. A deadline is dropped
+ * from a recurring capture: a repeat config has no deadline (the server never
+ * seals that combination).
+ */
+const toDeadlineAndEstimate = (
+  p: Record<string, unknown>,
+): Pick<
+  NonNullable<AgentCapture['task']>,
+  'deadlineDay' | 'deadlineTime' | 'estimateMinutes'
+> => {
+  const estimateMinutes = parseEstimateMinutes(p.estimateMinutes);
+  const estimate = estimateMinutes ? { estimateMinutes } : {};
+  const deadlineDay = parseDueDay(p.deadlineDate);
+  if (!deadlineDay || p.repeat !== undefined) return estimate;
+  const deadlineTime = parseDueTime(p.deadlineTime);
+  return deadlineTime
+    ? { deadlineDay, deadlineTime, ...estimate }
+    : { deadlineDay, ...estimate };
+};
+
+/**
+ * Optional v1 field (Android share): only http(s), so a crafted capture can't
+ * add a `javascript:` or `file:` link.
+ */
+const parseLink = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || value.length > LINK_MAX_CHARS) return undefined;
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname
+      ? value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Validates an opened payload; null when it cannot become a task.
+ * `notesMaxChars`: the server's limit by default; a share from this device's
+ * own inbox may keep more.
+ */
+export const toCaptureTask = (
+  payload: unknown,
+  notesMaxChars: number = NOTES_MAX_CHARS,
+): AgentCapture['task'] => {
   const p = payload as Record<string, unknown> | null;
   if (!p || p.v !== 1 || typeof p.title !== 'string') return null;
   const title = p.title.trim();
@@ -193,25 +259,35 @@ export const toCaptureTask = (payload: unknown): AgentCapture['task'] => {
   // Code points, so a cut never splits a surrogate pair.
   const notes =
     typeof p.notes === 'string'
-      ? neutralizeAutoloadMedia([...p.notes].slice(0, NOTES_MAX_CHARS).join(''))
+      ? neutralizeAutoloadMedia([...p.notes].slice(0, notesMaxChars).join(''))
       : '';
+  const link = parseLink(p.link);
   const createdAt = typeof p.createdAt === 'number' ? p.createdAt : Date.now();
   const repeat = parseCaptureRepeat(p.repeat);
   return {
     title,
-    ...(notes ? { notes } : {}),
+    // The link alone as notes is only there for apps that predate `link`.
+    ...(notes && notes.trim() !== link ? { notes } : {}),
     createdAt,
     ...toDue(p),
     ...(repeat ? { repeat } : {}),
+    ...(link ? { link } : {}),
+    ...toDeadlineAndEstimate(p),
   };
 };
 
-const addInboxTaskAction = (
+/**
+ * One Inbox addTask for a validated capture; its link and deadline, if any,
+ * ride along. `today`: when given, a deadline today plans the task for today.
+ */
+export const addInboxTaskAction = (
   capture: AgentCapture,
   defaultEstimate: number,
   defaultRemindOption: TaskReminderOptionId,
+  today?: Parameters<typeof getDeadlineAutoPlanFields>[0],
 ): ReturnType<typeof TaskSharedActions.addTask> => {
   const task = capture.task as NonNullable<AgentCapture['task']>;
+  const deadline = toDeadline(task);
   return TaskSharedActions.addTask({
     task: {
       ...DEFAULT_TASK,
@@ -220,14 +296,31 @@ const addInboxTaskAction = (
       notes: task.notes ?? '',
       projectId: INBOX_PROJECT.id,
       created: task.createdAt,
-      timeEstimate: defaultEstimate,
+      timeEstimate: task.estimateMinutes ? task.estimateMinutes * 60000 : defaultEstimate,
       ...toSchedule(task, defaultRemindOption),
+      ...deadline,
+      // Inside the addTask, so the capture stays one op. LINK is fixed: an
+      // IMG attachment would load the URL as soon as the task is shown.
+      attachments: task.link
+        ? [
+            {
+              id: nanoid(),
+              type: 'LINK',
+              path: task.link,
+              title: task.title,
+              icon: 'link',
+            },
+          ]
+        : [],
     },
     workContextId: INBOX_PROJECT.id,
     workContextType: WorkContextType.PROJECT,
     isAddToBacklog: false,
     isAddToBottom: true,
     isIgnoreShortSyntax: true,
+    ...(today && task.deadlineDay
+      ? getDeadlineAutoPlanFields(today, deadline.deadlineDay, deadline.deadlineWithTime)
+      : {}),
   });
 };
 
@@ -248,7 +341,9 @@ const addRepeatCfgAction = (
     projectId: INBOX_PROJECT.id,
     startDay: task.dueDay ?? run.todayStr,
     startTime,
-    defaultEstimate: run.defaultEstimate,
+    defaultEstimate: task.estimateMinutes
+      ? task.estimateMinutes * 60000
+      : run.defaultEstimate,
     remindOption: run.defaultRemindOption,
   });
   return addTaskRepeatCfgToTask({

@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -28,9 +28,6 @@ jobs:
             objects.githubusercontent.com:443
             registry.npmjs.org:443
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
-        with:
-          node-version: 22
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
@@ -44,7 +41,7 @@ jobs:
       - name: Install Node.js, NPM and Yarn
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: Get npm cache directory
         id: npm-cache-dir
         run: |

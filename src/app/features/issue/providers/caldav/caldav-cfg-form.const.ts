@@ -5,6 +5,10 @@ import {
 } from '../../../config/global-config.model';
 import { IssueProviderCaldav } from '../../issue.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
+import {
+  CALDAV_POLL_INTERVAL_MINUTES_MAX,
+  CALDAV_POLL_INTERVAL_MINUTES_MIN,
+} from './caldav.const';
 
 const SYNC_DIRECTION_OPTIONS = [
   { value: 'off', label: T.F.CALDAV.FORM.TWO_WAY_SYNC_OFF },
@@ -40,6 +44,26 @@ const TWO_WAY_SYNC_FORM_FIELDS: LimitedFormlyFieldConfig<IssueProviderCaldav>[] 
         props: {
           label: T.F.CALDAV.FORM.TWO_WAY_SYNC_NOTES,
           options: SYNC_DIRECTION_OPTIONS,
+        },
+      },
+      {
+        key: 'twoWaySync.createOnServer',
+        type: 'checkbox',
+        expressions: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'props.disabled': '!model.defaultProjectId',
+        },
+        props: {
+          label: T.F.CALDAV.FORM.TWO_WAY_SYNC_CREATE_ON_SERVER,
+          description: T.F.CALDAV.FORM.TWO_WAY_SYNC_CREATE_ON_SERVER_DESCRIPTION,
+        },
+      },
+      {
+        key: 'twoWaySync.deleteOnServer',
+        type: 'checkbox',
+        props: {
+          label: T.F.CALDAV.FORM.TWO_WAY_SYNC_DELETE_ON_SERVER,
+          description: T.F.CALDAV.FORM.TWO_WAY_SYNC_DELETE_ON_SERVER_DESCRIPTION,
         },
       },
     ],
@@ -112,7 +136,8 @@ export const CALDAV_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderCaldav>[]
         templateOptions: {
           label: T.F.CALDAV.FORM.POLL_INTERVAL_MINUTES,
           type: 'number',
-          min: 1,
+          min: CALDAV_POLL_INTERVAL_MINUTES_MIN,
+          max: CALDAV_POLL_INTERVAL_MINUTES_MAX,
         },
       },
     ],

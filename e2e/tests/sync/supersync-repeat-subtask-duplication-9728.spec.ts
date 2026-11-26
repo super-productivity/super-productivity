@@ -8,6 +8,7 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { openRecurDialog, saveRecurDialog } from '../../utils/recurring-task-helpers';
+import { getStoreSummary } from '../../utils/audit-error-paths-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/9728
@@ -211,6 +212,20 @@ test.describe('@supersync Recurring subtask duplication (#9728)', () => {
           instance.locator(`.sub-tasks task:has-text("${sub2}")`),
           `client ${name}: "${sub2}" should appear once`,
         ).toHaveCount(1);
+
+        // The store, not only the rendered instance: one undone instance with
+        // exactly the two inherited subtasks, and no copy attached elsewhere.
+        const tasks = (await getStoreSummary(client.page)).tasks;
+        const undoneInstances = tasks.filter(
+          (task) => task.title.includes(parentName) && !task.isDone && !task.parentId,
+        );
+        expect(undoneInstances, `client ${name}: one undone instance`).toHaveLength(1);
+        const children = tasks.filter((task) => task.parentId === undoneInstances[0].id);
+        expect(
+          children.map((task) => task.title).sort(),
+          `client ${name}: the instance's subtasks in the store`,
+        ).toEqual([sub1, sub2].sort());
+        expect(undoneInstances[0].subTaskIds).toHaveLength(2);
       }
     } finally {
       if (clientA) await closeClient(clientA);

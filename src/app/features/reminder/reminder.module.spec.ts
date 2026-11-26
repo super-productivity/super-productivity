@@ -1,4 +1,4 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { NEVER, Observable, of, ReplaySubject, Subject } from 'rxjs';
@@ -24,6 +24,8 @@ import { DialogViewTaskRemindersComponent } from '../tasks/dialog-view-task-remi
 import { DateService } from '../../core/date/date.service';
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { getRepeatableTaskId } from '../task-repeat-cfg/get-repeatable-task-id.util';
+import { closeAudioContext } from '../../util/audio-context';
+import { startLoopingAlarm, stopLoopingAlarm } from '../../util/looping-alarm';
 
 describe('ReminderModule dialog opening', () => {
   let matDialogSpy: jasmine.SpyObj<MatDialog>;
@@ -31,6 +33,7 @@ describe('ReminderModule dialog opening', () => {
   let remindersActive$: Subject<TaskWithReminderData[]>;
   let syncDone$: Subject<void>;
   let isFocusWindow: boolean;
+  let useAlarmStyleReminders: boolean;
 
   const reminder = {
     id: 'task-1',
@@ -47,6 +50,7 @@ describe('ReminderModule dialog opening', () => {
       'focusAppAfterNotification',
     ]);
     isFocusWindow = false;
+    useAlarmStyleReminders = false;
 
     const taskServiceSpy = jasmine.createSpyObj('TaskService', ['currentTaskId']);
     taskServiceSpy.currentTaskId.and.returnValue(null);
@@ -89,7 +93,9 @@ describe('ReminderModule dialog opening', () => {
         { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
         {
           provide: GlobalConfigService,
-          useValue: { cfg: () => ({ reminder: { isFocusWindow } }) },
+          useValue: {
+            cfg: () => ({ reminder: { isFocusWindow, useAlarmStyleReminders } }),
+          },
         },
         {
           provide: CapacitorReminderService,
@@ -106,6 +112,37 @@ describe('ReminderModule dialog opening', () => {
     syncDone$.next();
     tick(1000);
     remindersActive$.next([reminder]);
+  };
+
+  const mockAudioSources = (): jasmine.SpyObj<AudioBufferSourceNode>[] => {
+    const sources: jasmine.SpyObj<AudioBufferSourceNode>[] = [];
+    closeAudioContext();
+    spyOn(window as any, 'AudioContext').and.returnValue({
+      state: 'running',
+      destination: {},
+      close: jasmine.createSpy('close'),
+      createBufferSource: () => {
+        const source = jasmine.createSpyObj<AudioBufferSourceNode>('source', [
+          'connect',
+          'disconnect',
+          'start',
+          'stop',
+        ]);
+        sources.push(source);
+        return source;
+      },
+      createGain: () => ({
+        gain: {},
+        connect: () => undefined,
+        disconnect: () => undefined,
+      }),
+      decodeAudioData: () => Promise.resolve({}),
+    });
+    spyOn(window, 'fetch').and.resolveTo({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+    } as Response);
+    return sources;
   };
 
   it('focuses the app via the delayed notification path when the setting is on (#10410)', fakeAsync(() => {
@@ -138,6 +175,49 @@ describe('ReminderModule dialog opening', () => {
         reminders: [reminder],
       },
     });
+  }));
+
+  it('loops the alarm and focuses the app until the dialog closes when alarm-style is on', fakeAsync(() => {
+    useAlarmStyleReminders = true;
+    const afterClosed$ = new Subject<void>();
+    matDialogSpy.open.and.returnValue({ afterClosed: () => afterClosed$ } as never);
+    const sources = mockAudioSources();
+
+    triggerReminder();
+    flushMicrotasks();
+
+    expect(uiHelperSpy.focusAppAfterNotification).toHaveBeenCalledOnceWith({
+      isReminder: true,
+    });
+    expect(sources[0].loop).toBe(true);
+    expect(sources[0].start).toHaveBeenCalled();
+
+    afterClosed$.next();
+    flushMicrotasks();
+
+    expect(sources[0].stop).toHaveBeenCalled();
+    closeAudioContext();
+  }));
+
+  it('keeps a newer alarm loop running when the dialog closes', fakeAsync(() => {
+    useAlarmStyleReminders = true;
+    const afterClosed$ = new Subject<void>();
+    matDialogSpy.open.and.returnValue({ afterClosed: () => afterClosed$ } as never);
+    const sources = mockAudioSources();
+
+    triggerReminder();
+    flushMicrotasks();
+    // e.g. the focus-mode break-end alarm replaces the bell
+    startLoopingAlarm('positive.mp3', 50);
+    flushMicrotasks();
+
+    afterClosed$.next();
+    flushMicrotasks();
+
+    expect(sources.length).toBe(2);
+    expect(sources[1].stop).not.toHaveBeenCalled();
+    stopLoopingAlarm();
+    closeAudioContext();
   }));
 });
 

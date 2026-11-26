@@ -50,7 +50,12 @@ test('initialize echoes a supported version and advertises tools only', async ()
   assert.deepEqual(reply.body.result, {
     protocolVersion: '2025-06-18',
     capabilities: { tools: {} },
-    serverInfo: { name: 'super-productivity', version: '1.2.3' },
+    serverInfo: {
+      name: 'super-productivity',
+      title: 'Super Productivity',
+      version: '1.2.3',
+      websiteUrl: 'https://super-productivity.com',
+    },
   });
 });
 
@@ -211,6 +216,37 @@ test('only granted tools are listed', () => {
     assert.equal(tool.inputSchema.type, 'object');
     assert.equal(tool.inputSchema.additionalProperties, false);
   }
+});
+
+test('every tool has a title and explicit behaviour hints', () => {
+  const all = tools.listGrantedTools([...READ, 'tasks:read_notes', 'tasks:capture']);
+  for (const tool of all) {
+    assert.ok(tool.title, `${tool.name} needs a title`);
+    assert.equal(tool.annotations.title, tool.title);
+    for (const hint of [
+      'readOnlyHint',
+      'destructiveHint',
+      'idempotentHint',
+      'openWorldHint',
+    ]) {
+      assert.equal(typeof tool.annotations[hint], 'boolean', `${tool.name}.${hint}`);
+    }
+    assert.equal(tool.annotations.openWorldHint, false);
+    if (tool.annotations.readOnlyHint) {
+      assert.equal(tool.annotations.destructiveHint, false);
+    }
+  }
+  const readOnly = all.filter((t) => t.annotations.readOnlyHint).map((t) => t.name);
+  assert.deepEqual(readOnly, [
+    'get_status',
+    'list_tasks',
+    'get_task',
+    'list_projects',
+    'list_tags',
+  ]);
+  const capture = all.find((t) => t.name === 'create_task');
+  assert.equal(capture.annotations.destructiveHint, false);
+  assert.equal(capture.annotations.idempotentHint, false);
 });
 
 test('list_tasks returns summaries only and forwards filters', async () => {
@@ -398,6 +434,63 @@ test('create_task rejects invalid dates and repeats before forwarding', async ()
       { repeat: { cycle: 'weekly', weekdays: ['mon', 'mon'] } },
       'repeat.weekdays must be distinct days out of mon, tue, wed, thu, fri, sat, sun',
     ],
+  ];
+  for (const [extra, message] of cases) {
+    const { forward, calls } = fakeForward();
+    const result = await tools.runTool(
+      'create_task',
+      { title: 'x', ...extra },
+      () => ['tasks:capture'],
+      forward,
+    );
+    assert.equal(result.content[0].text, `INVALID_ARGUMENTS: ${message}`, message);
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('create_task forwards deadlineDate, deadlineTime and estimateMinutes', async () => {
+  const { forward, calls } = fakeForward({
+    '/assistant/capture': () => ({
+      status: 200,
+      body: { ok: true, data: { status: 'created', id: 'new1' } },
+    }),
+  });
+  const args = {
+    title: 'Lab report',
+    dueDate: '2026-11-04',
+    deadlineDate: '2026-11-06',
+    deadlineTime: '08:00',
+    estimateMinutes: 60,
+  };
+  const result = await tools.runTool(
+    'create_task',
+    args,
+    () => ['tasks:capture'],
+    forward,
+  );
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(calls[0].body, args);
+});
+
+test('create_task rejects invalid deadlines and estimates before forwarding', async () => {
+  const cases = [
+    [{ deadlineTime: '08:00' }, 'deadlineTime requires deadlineDate'],
+    [{ deadlineDate: '2026-02-30' }, 'deadlineDate must be a calendar day as YYYY-MM-DD'],
+    [
+      { deadlineDate: '2026-11-06', deadlineTime: '8:00' },
+      'deadlineTime must be a 24-hour time as HH:MM',
+    ],
+    [
+      { deadlineDate: '2026-11-06', repeat: { cycle: 'weekly' } },
+      'deadlineDate cannot be combined with repeat',
+    ],
+    [{ estimateMinutes: 0 }, 'estimateMinutes must be a whole number from 1 to 10080'],
+    [
+      { estimateMinutes: 10081 },
+      'estimateMinutes must be a whole number from 1 to 10080',
+    ],
+    [{ estimateMinutes: 2.5 }, 'estimateMinutes must be a whole number from 1 to 10080'],
+    [{ estimateMinutes: '30' }, 'estimateMinutes must be a whole number from 1 to 10080'],
   ];
   for (const [extra, message] of cases) {
     const { forward, calls } = fakeForward();

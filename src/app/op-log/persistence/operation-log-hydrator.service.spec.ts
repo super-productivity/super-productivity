@@ -40,6 +40,11 @@ import { reportBulkReplayReducerFailure } from '../apply/bulk-replay-failure-col
 import { reportLoadAllDataReducerFailure } from '../apply/load-all-data-failure-guard.meta-reducer';
 import { Action } from '@ngrx/store';
 import { T } from '../../t.const';
+import {
+  globalConfigReducer,
+  initialGlobalConfigState,
+} from '../../features/config/store/global-config.reducer';
+import { bulkOperationsMetaReducer } from '../apply/bulk-hydration.meta-reducer';
 
 describe('OperationLogHydratorService', () => {
   let service: OperationLogHydratorService;
@@ -142,6 +147,7 @@ describe('OperationLogHydratorService', () => {
     mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
       'validateAndRepair',
       'validateState',
+      'validateStateWhenIdle',
     ]);
     mockRepairOperationService = jasmine.createSpyObj('RepairOperationService', [
       'createRepairOperation',
@@ -719,6 +725,42 @@ describe('OperationLogHydratorService', () => {
         expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
       });
 
+      it('should defer tail validation off the boot path when there is no save to gate', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const tailOps = Array.from({ length: 10 }, (_, i) =>
+          createMockEntry(6 + i, createMockOperation(`op-${6 + i}`)),
+        );
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(tailOps));
+
+        await service.hydrateStore();
+
+        expect(mockValidateStateService.validateState).not.toHaveBeenCalled();
+        expect(mockValidateStateService.validateStateWhenIdle).toHaveBeenCalledOnceWith(
+          mockState,
+          'tail-replay',
+        );
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).not.toHaveBeenCalled();
+      });
+
+      it('should await tail validation when it gates a snapshot save', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const tailOps = Array.from({ length: 11 }, (_, i) =>
+          createMockEntry(6 + i, createMockOperation(`op-${6 + i}`)),
+        );
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve(tailOps));
+        mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(16));
+
+        await service.hydrateStore();
+
+        expect(mockValidateStateService.validateState).toHaveBeenCalledOnceWith(
+          mockState,
+        );
+        expect(mockValidateStateService.validateStateWhenIdle).not.toHaveBeenCalled();
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalled();
+      });
+
       it('should merge tail ops clocks into local clock after replay', async () => {
         // This test verifies that tail ops' clocks are merged into local clock
         // after replay to ensure subsequent ops have clocks that dominate them
@@ -796,6 +838,74 @@ describe('OperationLogHydratorService', () => {
     });
 
     describe('full state operations optimization', () => {
+      for (const importClientId of ['test-client', 'other-client']) {
+        it(`keeps the provider selected before a full-state op from ${importClientId}`, async () => {
+          const previousConfig = {
+            ...initialGlobalConfigState,
+            sync: {
+              ...initialGlobalConfigState.sync,
+              syncProvider: SyncProviderId.SuperSync,
+            },
+          };
+          const selectedSync = {
+            ...previousConfig.sync,
+            syncProvider: SyncProviderId.WebDAV,
+            isEnabled: true,
+            isEncryptionEnabled: true,
+            isManualSyncOnly: true,
+            syncInterval: 123456,
+          };
+          const importedConfig = {
+            ...previousConfig,
+            sync:
+              importClientId === 'test-client'
+                ? selectedSync
+                : { ...previousConfig.sync, syncProvider: SyncProviderId.Dropbox },
+          };
+          const configOp = createMockOperation('provider-change', OpType.Update, {
+            actionType: ActionType.GLOBAL_CONFIG_UPDATE_SECTION,
+            entityType: 'GLOBAL_CONFIG',
+            entityId: 'sync',
+            clientId: 'test-client',
+            payload: {
+              actionPayload: {
+                sectionKey: 'sync',
+                sectionCfg: selectedSync,
+              },
+              entityChanges: [],
+            },
+          });
+          const fullStateOp = createMockOperation('provider-import', OpType.SyncImport, {
+            entityType: 'ALL',
+            clientId: importClientId,
+            payload: { appDataComplete: { ...mockState, globalConfig: importedConfig } },
+          });
+          mockOpLogStore.loadStateCache.and.resolveTo(
+            createMockSnapshot({
+              state: { ...mockState, globalConfig: previousConfig },
+              lastAppliedOpSeq: 5,
+            }),
+          );
+          mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+            createMockEntry(6, configOp),
+            createMockEntry(7, fullStateOp),
+          ]);
+          const reducer = bulkOperationsMetaReducer(globalConfigReducer);
+          let config = initialGlobalConfigState;
+          mockStore.dispatch.and.callFake(((action: Action): void => {
+            config = reducer(config, action);
+          }) as Store['dispatch']);
+
+          await service.hydrateStore();
+
+          expect(config.sync.syncProvider).toBe(SyncProviderId.WebDAV);
+          expect(config.sync.isEnabled).toBe(true);
+          expect(config.sync.isEncryptionEnabled).toBe(true);
+          expect(config.sync.isManualSyncOnly).toBe(true);
+          expect(config.sync.syncInterval).toBe(123456);
+        });
+      }
+
       it('should not direct-load a full-state op while an earlier replay row is pending', async () => {
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
         const pendingOp = createMockOperation('pending-op');

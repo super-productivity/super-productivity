@@ -31,7 +31,7 @@ function App() {
   });
   const [newTaskTitle, setNewTaskTitle] = createSignal('');
   const [selectedProjectId, setSelectedProjectId] = createSignal<string>('');
-  const [settings, setSettings] = createSignal({ theme: 'light', showCompleted: true });
+  const [settings, setSettings] = createSignal({ showCompleted: true });
   const [isLoading, setIsLoading] = createSignal(true);
 
   // Translation signals for reactive i18n
@@ -127,16 +127,11 @@ function App() {
     sendMessage('saveSettings', currentSettings);
   });
 
-  // Apply theme
-  createEffect(() => {
-    document.body.setAttribute('data-theme', settings().theme);
-  });
-
   return (
-    <div class="app">
-      <header class="app-header">
+    <div class="page stack">
+      <header class="page-header">
         <h1>🚀 {appTitle()}</h1>
-        <button onClick={refreshData} class="refresh-btn">
+        <button onClick={refreshData} class="btn-primary">
           {refreshButton()}
         </button>
       </header>
@@ -144,61 +139,60 @@ function App() {
       <Show
         when={isLoading()}
         fallback={
-          <main class="app-main">
+          <main class="stack">
             {/* Stats Section */}
-            <section class="stats-section">
-              <div class="stat-card">
-                <div class="stat-value">{stats().totalTasks}</div>
-                <div class="stat-label">{totalTasksLabel()}</div>
+            <section class="grid">
+              <div class="card stat-card">
+                <div class="stat-value text-primary">{stats().totalTasks}</div>
+                <div class="text-muted text-sm">{totalTasksLabel()}</div>
               </div>
-              <div class="stat-card">
-                <div class="stat-value">{stats().completedToday}</div>
-                <div class="stat-label">{completedTodayLabel()}</div>
+              <div class="card stat-card">
+                <div class="stat-value text-primary">{stats().completedToday}</div>
+                <div class="text-muted text-sm">{completedTodayLabel()}</div>
               </div>
-              <div class="stat-card">
-                <div class="stat-value">{stats().pendingTasks}</div>
-                <div class="stat-label">{pendingLabel()}</div>
+              <div class="card stat-card">
+                <div class="stat-value text-primary">{stats().pendingTasks}</div>
+                <div class="text-muted text-sm">{pendingLabel()}</div>
               </div>
             </section>
 
             {/* Create Task Section */}
-            <section class="create-task-section">
+            <section class="card">
               <h2>{createNewLabel()}</h2>
-              <div class="create-task-form">
+              <div class="row">
                 <input
                   type="text"
                   placeholder={taskPlaceholder()}
                   value={newTaskTitle()}
                   onInput={(e) => setNewTaskTitle(e.currentTarget.value)}
                   onKeyPress={(e) => e.key === 'Enter' && createTask()}
-                  class="task-input"
+                  class="grow"
                 />
                 <select
                   value={selectedProjectId()}
                   onChange={(e) => setSelectedProjectId(e.currentTarget.value)}
-                  class="project-select"
                 >
                   <option value="">{noProjectLabel()}</option>
                   <For each={projects()}>
                     {(project) => <option value={project.id}>{project.title}</option>}
                   </For>
                 </select>
-                <button onClick={createTask} class="create-btn">
+                <button onClick={createTask} class="btn-primary">
                   {createButtonLabel()}
                 </button>
               </div>
             </section>
 
             {/* Tasks List Section */}
-            <section class="tasks-section">
+            <section class="card">
               <h2>Recent Tasks</h2>
-              <div class="tasks-list">
+              <div class="list">
                 <For each={tasks().slice(0, 10)}>
                   {(task) => (
-                    <div class="task-item" classList={{ completed: task.isDone }}>
-                      <span class="task-title">{task.title}</span>
+                    <div class="list-item" classList={{ completed: task.isDone }}>
+                      <span class="grow task-title">{task.title}</span>
                       <Show when={task.projectId}>
-                        <span class="task-project">
+                        <span class="chip">
                           {projects().find((p) => p.id === task.projectId)?.title}
                         </span>
                       </Show>
@@ -209,20 +203,10 @@ function App() {
             </section>
 
             {/* Settings Section */}
-            <section class="settings-section">
+            <section class="card">
               <h2>Settings</h2>
-              <div class="settings-form">
-                <label class="setting-item">
-                  <span>Theme:</span>
-                  <select
-                    value={settings().theme}
-                    onChange={(e) => setSettings({ ...settings(), theme: e.currentTarget.value })}
-                  >
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </label>
-                <label class="setting-item">
+              <div class="stack">
+                <label>
                   <input
                     type="checkbox"
                     checked={settings().showCompleted}
@@ -240,10 +224,13 @@ function App() {
           </main>
         }
       >
-        <div class="loading">{loadingLabel()}</div>
+        <div class="empty-state">
+          <span class="spinner" aria-hidden="true"></span>
+          <p>{loadingLabel()}</p>
+        </div>
       </Show>
 
-      <footer class="app-footer">
+      <footer class="text-muted text-sm">
         <p>Built with Solid.js and Super Productivity Plugin API</p>
       </footer>
     </div>

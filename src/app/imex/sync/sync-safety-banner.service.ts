@@ -9,6 +9,7 @@ import { OnboardingHintService } from '../../features/onboarding/onboarding-hint
 import { selectTaskFeatureState } from '../../features/tasks/store/task.selectors';
 import { devError } from '../../util/dev-error';
 import { T } from '../../t.const';
+import { openSyncSettingsDialog } from './open-sync-settings-dialog';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -101,8 +102,6 @@ export class SyncSafetyBannerService {
   }
 
   private async _openSyncCfgDialog(): Promise<void> {
-    const { DialogSyncCfgComponent } =
-      await import('./dialog-sync-cfg/dialog-sync-cfg.component');
-    this._matDialog.open(DialogSyncCfgComponent);
+    await openSyncSettingsDialog(this._matDialog, this._globalConfigService.sync());
   }
 }

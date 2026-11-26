@@ -25,6 +25,17 @@ export const canConvertTaskToSubTask = (task: ConvertibleTaskFields): boolean =>
   !task.remindAt;
 
 /**
+ * Whether a top-level task may be dropped into a subtask list. Looser than
+ * `canConvertTaskToSubTask`: a time schedule or reminder does not block the
+ * drop, because the drop dispatches `unscheduleTask` before `convertToSubTask`
+ * (#11027). The reducer guard stays strict on purpose — released clients
+ * (v18.9.0+) run the same guard on replay and would silently drop a
+ * `convertToSubTask` for a still-scheduled task, diverging the task tree.
+ */
+export const canDropTaskIntoSubTaskList = (task: ConvertibleTaskFields): boolean =>
+  canConvertTaskToSubTask({ ...task, dueWithTime: undefined, remindAt: undefined });
+
+/**
  * Whether a `convertToSubTask` op may be applied to the given (already
  * looked-up) task and target parent. Used by BOTH the section and crud
  * meta-reducers so their guards stay in lock-step — if they diverge, one

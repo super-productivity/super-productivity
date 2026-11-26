@@ -25,6 +25,8 @@ import {
   createJiraPreloadApiConsumer,
   toPayloadOnlyIpcListener,
 } from './shared-with-frontend/preload-api';
+import { createOneShotApiConsumer } from './shared-with-frontend/one-shot-api-consumer';
+import { CertTrustElectronApi } from './shared-with-frontend/cert-trust-hosts';
 
 let pluginNodeExecutionApiConsumed = false;
 
@@ -36,6 +38,10 @@ const _invoke: (channel: IPCEventValue, ...args: unknown[]) => Promise<unknown> 
 ) => ipcRenderer.invoke(channel, ...args);
 
 const consumeJiraApi = createJiraPreloadApiConsumer(_invoke);
+const consumeCertTrustApi = createOneShotApiConsumer<CertTrustElectronApi>(() => ({
+  setTrustedHosts: (hosts) =>
+    _invoke('SET_CERT_TRUSTED_HOSTS', hosts).then(() => undefined),
+}));
 
 const ea: ElectronAPI = {
   on: (channel: string, listener: (...args: unknown[]) => void) => {
@@ -201,6 +207,8 @@ const ea: ElectronAPI = {
   setDoneRegisterBeforeClose: (id) => _send('BEFORE_CLOSE_DONE', { id }),
 
   setProgressBar: (args) => _send('SET_PROGRESS_BAR', args),
+  setDueTaskBadge: (count, iconDataUrl) =>
+    _send('SET_DUE_TASK_BADGE', count, iconDataUrl),
 
   sendAppSettingsToElectron: (globalCfg) =>
     _send('TRANSFER_SETTINGS_TO_ELECTRON', globalCfg),
@@ -241,6 +249,8 @@ const ea: ElectronAPI = {
   },
 
   consumeJiraApi: () => consumeJiraApi(),
+
+  consumeCertTrustApi: () => consumeCertTrustApi(),
 
   // Plugin API
   consumePluginNodeExecutionApi: () => {

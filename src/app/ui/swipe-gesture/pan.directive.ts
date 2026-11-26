@@ -1,6 +1,6 @@
 import {
   Directive,
-  HostListener,
+  ElementRef,
   output,
   input,
   NgZone,
@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 
 import { DRAG_DELAY_FOR_TOUCH } from '../../app.constants';
+import { isTouchStartClaimedByEdgeSwipe } from './edge-swipe-claim';
 
 /**
  * If the touch has been held longer than this before moving,
@@ -58,8 +59,21 @@ export class PanDirective implements OnDestroy {
   private _scrollableParent: HTMLElement | null = null;
 
   private readonly _ngZone = inject(NgZone);
+  private readonly _el: HTMLElement = inject(ElementRef).nativeElement;
+
+  // Not @HostListener: that would run change detection on every touchmove.
+  constructor() {
+    this._el.addEventListener('touchstart', this._onTouchStart);
+    this._el.addEventListener('touchmove', this._onTouchMove);
+    this._el.addEventListener('touchend', this._onTouchEnd);
+    this._el.addEventListener('touchcancel', this._onTouchCancel);
+  }
 
   ngOnDestroy(): void {
+    this._el.removeEventListener('touchstart', this._onTouchStart);
+    this._el.removeEventListener('touchmove', this._onTouchMove);
+    this._el.removeEventListener('touchend', this._onTouchEnd);
+    this._el.removeEventListener('touchcancel', this._onTouchCancel);
     this._cleanup();
   }
 
@@ -125,11 +139,15 @@ export class PanDirective implements OnDestroy {
     });
   }
 
-  @HostListener('touchstart', ['$event'])
-  onTouchStart(event: TouchEvent): void {
+  private readonly _onTouchStart = (event: TouchEvent): void => {
     // Reset if we have a stale touchIdentifier
     if (this._touchIdentifier !== null) {
       this._reset();
+    }
+
+    // The mobile drawer's edge swipe took this touch (#4464).
+    if (isTouchStartClaimedByEdgeSwipe(event)) {
+      return;
     }
 
     const touch = event.touches[0];
@@ -145,10 +163,9 @@ export class PanDirective implements OnDestroy {
     this._startY = touch.clientY;
     this._startTime = Date.now();
     this._isPanning = false;
-  }
+  };
 
-  @HostListener('touchmove', ['$event'])
-  onTouchMove(event: TouchEvent): void {
+  private readonly _onTouchMove = (event: TouchEvent): void => {
     if (this._touchIdentifier === null) {
       return;
     }
@@ -226,10 +243,9 @@ export class PanDirective implements OnDestroy {
         }
       });
     }
-  }
+  };
 
-  @HostListener('touchend', ['$event'])
-  onTouchEnd(event: TouchEvent): void {
+  private readonly _onTouchEnd = (event: TouchEvent): void => {
     if (this._touchIdentifier === null) {
       return;
     }
@@ -256,10 +272,9 @@ export class PanDirective implements OnDestroy {
 
     // Reset state
     this._reset();
-  }
+  };
 
-  @HostListener('touchcancel')
-  onTouchCancel(): void {
+  private readonly _onTouchCancel = (): void => {
     if (this._touchIdentifier === null) {
       return;
     }
@@ -271,7 +286,7 @@ export class PanDirective implements OnDestroy {
     }
 
     this._reset();
-  }
+  };
 
   private _reset(): void {
     this._startX = 0;

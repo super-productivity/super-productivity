@@ -1,3 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <!-- Trigger node, flow path, action node. Filled shapes, so it matches the
+       Material icons in the nav; the path keeps its own fill="none" because
+       plugin-icon forces fill: currentColor on the svg root. -->
+  <circle cx="6" cy="6" r="3" />
+  <rect x="15" y="15" width="6" height="6" rx="1" />
+  <path d="M9 6h4.5a3.5 3.5 0 0 1 0 7h-3a3.5 3.5 0 0 0 0 7H15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
 </svg>
