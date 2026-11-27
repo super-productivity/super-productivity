@@ -309,7 +309,7 @@ export const selectAndroidWidgetData = createSelector(
         dayStr: plan.dayStr,
         validUntil: getWidgetValidUntil(plan.dayStr, startOfNextDayDiffMs),
         tasks: [
-          ...dayTasks.map(toWidgetTask),
+          ...dayTasks.filter((task) => !task.isDone).map(toWidgetTask),
           ...plan.repeatCfgs
             .filter((cfg) => !coveredRepeatCfgIds.has(cfg.id))
             .map((cfg) =>
@@ -323,7 +323,10 @@ export const selectAndroidWidgetData = createSelector(
                 cfg.projectId,
               ),
             ),
-          // The native list shows no more rows; the rest would only grow every push.
+          // As on Today, open tasks (including upcoming repeats) get the first rows.
+          ...sortDoneTasksByDoneDate(dayTasks.filter((task) => task.isDone)).map(
+            toWidgetTask,
+          ),
         ].slice(0, MAX_WIDGET_PROJECT_TASKS),
       };
     });

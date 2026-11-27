@@ -1,3 +1,4 @@
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 import { type Locator, type Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
 
@@ -28,6 +29,28 @@ const searchIncludingCompleted = async (page: Page, term: string): Promise<Locat
   await page.locator('search-page .include-completed-toggle input').check();
   return page.locator('search-page mat-list-item').filter({ hasText: term });
 };
+
+type TaskSnapshot = {
+  id: string;
+  title: string;
+  dueWithTime?: number;
+  remindAt?: number;
+};
+
+const readLiveTask = (page: Page, title: string): Promise<TaskSnapshot | undefined> =>
+  page.evaluate((name) => {
+    type State = { tasks: { entities: Record<string, TaskSnapshot> } };
+    type Store = { subscribe: (fn: (s: State) => void) => { unsubscribe: () => void } };
+    const { store } = (window as unknown as { __e2eTestHelpers: { store: Store } })
+      .__e2eTestHelpers;
+    let task: TaskSnapshot | undefined;
+    store
+      .subscribe((s) => {
+        task = Object.values(s.tasks.entities).find((t) => t.title.includes(name));
+      })
+      .unsubscribe();
+    return task;
+  }, title);
 
 test.describe('Global Search: restore an archived task', () => {
   test('restores an archived task from its details dialog', async ({
@@ -71,5 +94,74 @@ test.describe('Global Search: restore an archived task', () => {
         timeout: 2000,
       });
     }).toPass({ timeout: 15000 });
+  });
+
+  test('preserves a schedule received while the restore confirmation is open', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const title = `${testPrefix}-RemoteRestore`;
+    await workViewPage.addTask(title);
+    await taskPage.markTaskAsDone(taskPage.getTaskByText(title));
+    const task = (await readLiveTask(page, title))!;
+    await finishDay(page);
+    const result = await searchIncludingCompleted(page, title);
+    await result.locator('.view-details-btn').click();
+    await page.locator('.e2e-restore-archived-task').click();
+    const confirm = page.locator('dialog-confirm [e2e="confirmBtn"]');
+    await expect(confirm).toBeVisible();
+
+    const twoDays = 2 * 86_400_000;
+    const dueWithTime = Date.now() + twoDays;
+    const remindAt = dueWithTime - 3600000;
+    // Replay the other device's restore and subsequent schedule before the local
+    // confirmation. Use the task produced by this app's actual completion flow.
+    await page.evaluate(
+      (remote) => {
+        type Store = { dispatch: (a: unknown) => void };
+        const { store } = (window as unknown as { __e2eTestHelpers: { store: Store } })
+          .__e2eTestHelpers;
+        const base = {
+          clientId: 'remote',
+          schemaVersion: remote.schemaVersion,
+          entityType: 'TASK',
+          entityId: remote.task.id,
+          opType: 'UPD',
+          timestamp: Date.now(),
+        };
+        store.dispatch({
+          type: '[OperationLog] Bulk Apply Operations',
+          operations: [
+            {
+              ...base,
+              id: crypto.randomUUID(),
+              actionType: '[Task Shared] restoreTask',
+              payload: { task: remote.task, subTasks: [] },
+              vectorClock: { remote: 1 },
+            },
+            {
+              ...base,
+              id: crypto.randomUUID(),
+              actionType: '[Task Shared] scheduleTaskWithTime',
+              payload: {
+                task: remote.task,
+                dueWithTime: remote.dueWithTime,
+                remindAt: remote.remindAt,
+                isMoveToBacklog: false,
+              },
+              vectorClock: { remote: 2 },
+            },
+          ],
+        });
+      },
+      { task, dueWithTime, remindAt, schemaVersion: CURRENT_SCHEMA_VERSION },
+    );
+    expect(await readLiveTask(page, title)).toMatchObject({ dueWithTime, remindAt });
+    await confirm.click();
+    await expect(page.locator('dialog-view-archived-task')).toBeHidden();
+    expect(await readLiveTask(page, title)).toMatchObject({ dueWithTime, remindAt });
   });
 });

@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import type { DeferredLocalActionsPort } from '@sp/sync-core';
 import { ALL_ACTIONS, LOCAL_ACTIONS } from '../../util/local-actions.token';
-import { Subject } from 'rxjs';
+import { firstValueFrom, Subject } from 'rxjs';
 import { concatMap, filter, map, startWith, tap } from 'rxjs/operators';
 import { LockService } from '../sync/lock.service';
 import {
@@ -80,6 +80,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   private _deferredProcessingChain: Promise<void> = Promise.resolve();
   /** Emits after every deferred drain, succeeded or not. */
   private _deferredDrainSettled$ = new Subject<void>();
+
   /**
    * Dedupe timestamp for the storage-quota snackbar. #7700: when quota fires
    * inside the deferred-action retry loop, the retry loop calls handleQuotaExceeded
@@ -736,6 +737,16 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         window.location.reload();
       },
     });
+  }
+
+  /** Wait for actions already buffered during remote replay to become durable. */
+  async waitForDeferredWrites(): Promise<void> {
+    const buffered = getDeferredActions();
+    if (buffered.length) {
+      await firstValueFrom(
+        this._deferredDrainSettled$.pipe(filter(() => !buffered.some(isDeferredAction))),
+      );
+    }
   }
 
   /**

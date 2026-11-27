@@ -33,7 +33,7 @@ import { Project } from '../../project/project.model';
 import { Router } from '@angular/router';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 import { OperationCaptureService } from '../../../op-log/capture/operation-capture.service';
-import { getDeferredActions } from '../../../op-log/capture/operation-capture.meta-reducer';
+import { OperationLogEffects } from '../../../op-log/capture/operation-log.effects';
 
 /**
  * Decides which queued widget checkbox taps become setDone()/setUnDone() calls.
@@ -67,7 +67,7 @@ export const getTaskDoneChangesToApply = (
 export type WidgetDoneAckDeps = {
   flushPendingWrites: () => Promise<void>;
   hasUnrecoveredPersistFailure: () => boolean;
-  hasDeferredActions: () => boolean;
+  waitForDeferredWrites: () => Promise<void>;
   ack: (queueJson: string) => void;
 };
 
@@ -84,7 +84,7 @@ export const ackWidgetDoneQueueOnceWritten = async (
   deps: WidgetDoneAckDeps,
 ): Promise<void> => {
   try {
-    await deps.flushPendingWrites();
+    await Promise.all([deps.flushPendingWrites(), deps.waitForDeferredWrites()]);
   } catch (e) {
     DroidLog.err('Widget done queue kept: op writes did not finish', e);
     return;
@@ -93,12 +93,6 @@ export const ackWidgetDoneQueueOnceWritten = async (
   // memory and is gone after the reload the user is asked for.
   if (deps.hasUnrecoveredPersistFailure()) {
     DroidLog.err('Widget done queue kept: an op write failed');
-    return;
-  }
-  // A tap applied while remote ops were being applied is buffered, not counted
-  // by the flush, and stays buffered until its op is written.
-  if (deps.hasDeferredActions()) {
-    DroidLog.log('Widget done queue kept: a change is still buffered');
     return;
   }
   deps.ack(queueJson);
@@ -182,8 +176,8 @@ export class AndroidWidgetEffects {
   // Single delivery path for widget done-taps: cold start by startWith (the
   // native onResume call runs before this bundle defines onResume$ and is
   // dropped), background→foreground by onResume$, taps while the app is alive
-  // by the contentless native drain signal. The queue read does not clear, so
-  // overlapping triggers read the same taps; only the first finds a task to change.
+  // by the contentless native drain signal. Serialize the read through the ack
+  // so another drain cannot apply the same tap over a later in-app edit.
   drainWidgetDoneQueue$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
@@ -197,9 +191,9 @@ export class AndroidWidgetEffects {
             this._dataInitState.isAllDataLoadedInitially$.pipe(
               first(),
               switchMap(() => this._store.select(selectTaskEntities).pipe(first())),
+              switchMap((taskEntities) => this._drainDoneQueue(taskEntities)),
             ),
           ),
-          tap((taskEntities) => this._drainDoneQueue(taskEntities)),
         ),
       { dispatch: false },
     );
@@ -241,7 +235,7 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
-  private _drainDoneQueue(taskEntities: Dictionary<Task>): void {
+  private async _drainDoneQueue(taskEntities: Dictionary<Task>): Promise<void> {
     const ack = androidInterface.ackWidgetDoneQueue?.bind(androidInterface);
     // A native shell without ack (legacy online-mode APK) only has get-and-clear.
     const queueJson = ack
@@ -269,11 +263,12 @@ export class AndroidWidgetEffects {
     }
 
     if (ack) {
-      void ackWidgetDoneQueueOnceWritten(queueJson, {
+      await ackWidgetDoneQueueOnceWritten(queueJson, {
         flushPendingWrites: () => this._opWriteFlush.flushPendingWrites(),
         hasUnrecoveredPersistFailure: () =>
           this._opCapture.hasUnrecoveredPersistFailure(),
-        hasDeferredActions: () => getDeferredActions().length > 0,
+        waitForDeferredWrites: () =>
+          this._injector.get(OperationLogEffects).waitForDeferredWrites(),
         ack,
       });
     }

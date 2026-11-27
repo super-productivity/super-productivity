@@ -13,6 +13,12 @@ const QUEUE_KEY = 'test-native-widget-done';
 type TaskState = { tasks: { entities: Record<string, { isDone: boolean }> } };
 type WidgetWindow = Window & {
   __e2eTestHelpers: {
+    hydrationState: {
+      startApplyingRemoteOps: () => void;
+      endApplyingRemoteOps: () => void;
+    };
+    flushPendingWrites: () => Promise<void>;
+    processDeferredActions: () => Promise<void>;
     store: {
       subscribe: (callback: (state: TaskState) => void) => { unsubscribe: () => void };
     };
@@ -135,6 +141,44 @@ const stallOpLogWrites = (page: Page): Promise<void> =>
   });
 
 test.describe('Android widget done tap', () => {
+  test('keeps a later reopen after the widget tap was written at the end of sync', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('Reopen after a widget tap');
+    const taskId = Object.keys((await readState(page)).tasks.entities)[0];
+    await page.evaluate(
+      async ([key, id]) => {
+        const { __e2eTestHelpers: helpers, SUPAndroid } =
+          window as unknown as WidgetWindow;
+        await helpers.flushPendingWrites();
+        helpers.hydrationState.startApplyingRemoteOps();
+        localStorage.setItem(key, JSON.stringify({ [id]: true }));
+        SUPAndroid.onWidgetDoneDrainRequest$.next();
+        // Let the widget finish checking ordinary pending writes while the
+        // remote-apply window still owns any buffered writes.
+        await helpers.flushPendingWrites();
+        helpers.hydrationState.endApplyingRemoteOps();
+        await helpers.processDeferredActions();
+      },
+      [QUEUE_KEY, taskId],
+    );
+
+    const row = page.locator(`task.isDone[data-task-id="${taskId}"]`).first();
+    await row.locator('done-toggle').click();
+    await expect.poll(() => isTaskDone(page, taskId)).toBe(false);
+    await page.evaluate(() =>
+      (window as unknown as WidgetWindow).__e2eTestHelpers.flushPendingWrites(),
+    );
+    await page.reload();
+    await waitForAppReady(page);
+    await expect
+      .poll(() => page.evaluate((key) => localStorage.getItem(key), QUEUE_KEY))
+      .toBeNull();
+    await expect.poll(() => isTaskDone(page, taskId)).toBe(false);
+  });
+
   test('survives a process kill before its op was written', async ({
     page,
     workViewPage,

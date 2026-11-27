@@ -44,7 +44,7 @@ import { TimepickerClockStrDirective } from '../timepicker-clock-str/timepicker-
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
-import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
+import { formatTimeHHmm } from '../../util/format-time-hhmm';
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 
@@ -221,27 +221,27 @@ export class DateTimePickerComponent implements AfterViewInit {
     if (!this.selectedTime() && this.isInitValOnTimeFocus) {
       this.isInitValOnTimeFocus = false;
 
-      let targetTime: string;
-      let targetDate: Date | null = null;
-
+      const now = new Date();
+      const inAnHour = new Date(now);
+      inAnHour.setHours(inAnHour.getHours() + 1, 0, 0, 0);
       const selDate = this.selectedDate();
-      if (selDate) {
-        if (this._dateService.isToday(selDate)) {
-          targetTime = getClockStringFromHours((new Date().getHours() + 1) % 24);
-        } else {
-          targetTime = DEFAULT_TIME;
-        }
-      } else {
-        // get current time +1h
-        const inAnHour = new Date();
-        inAnHour.setHours(inAnHour.getHours() + 1, 0, 0, 0);
-        targetTime = getClockStringFromHours(inAnHour.getHours());
-        targetDate = this.isLogicalDay()
-          ? new Date(inAnHour.getTime() - this._dateService.getStartOfNextDayDiffMs())
-          : new Date();
-      }
+      const targetTime =
+        selDate && !this._dateService.isToday(selDate)
+          ? DEFAULT_TIME
+          : formatTimeHHmm(inAnHour);
 
-      if (targetDate) {
+      if (!selDate) {
+        let targetDate = now;
+        if (this.isLogicalDay()) {
+          targetDate = inAnHour;
+          // Invert the host's calendar-day shift using the local clock, including
+          // half-hour DST transitions where the next full hour becomes 02:30.
+          const hourMinutes = inAnHour.getHours() * 60;
+          const clockMinutes = hourMinutes + inAnHour.getMinutes();
+          if (clockMinutes * 60_000 < this._dateService.getStartOfNextDayDiffMs()) {
+            targetDate.setDate(targetDate.getDate() - 1);
+          }
+        }
         // mark as synced so the defaulted date doesn't pull the calendar back
         // from the month the user is browsing (#10528)
         this._lastSyncedDate = targetDate.getTime();
