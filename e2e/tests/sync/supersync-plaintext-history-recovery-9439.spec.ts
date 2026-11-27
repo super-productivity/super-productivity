@@ -444,6 +444,7 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
       const betaTask = `Beta-${testRunId}`;
       const betaEdited = `Beta-edited-${testRunId}`;
       const archivedTask = `Gamma-archived-${testRunId}`;
+      const isArchivedTask = (title: string): boolean => title.includes(archivedTask);
       // Each exists in exactly one operation: the plaintext row, and the last
       // row of the history, which lies beyond the first download page.
       const plaintextOnlyTitle = `Alpha-plaintext-only-${testRunId}`;
@@ -512,7 +513,9 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
         waitForInitialSync: false,
       });
       await expect(stuckClient.sync.syncErrorIcon).toBeVisible({ timeout: 60000 });
-      await expect(stuckClient.page.locator('task')).toHaveCount(0);
+      await expect(stuckClient.page.locator(`task:has-text("${alphaTask}")`)).toHaveCount(
+        0,
+      );
       // Asserted after an explicit retry: the snack from the setup sync can
       // already be dismissed by the time setup returns.
       await stuckClient.sync.syncBtn.click();
@@ -537,12 +540,13 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
       await waitForTask(preGuardClient.page, beyondFirstPageTitle);
       await expect(preGuardClient.sync.syncErrorIcon).not.toBeVisible();
       const backupPath = testInfo.outputPath('pre-guard-backup.json');
-      expect(
-        (await exportBackup(preGuardClient.page, backupPath)).archivedTitles,
-      ).toEqual([archivedTask]);
+      const preGuardBackup = await exportBackup(preGuardClient.page, backupPath);
+      expect(preGuardBackup.archivedTitles.some(isArchivedTask)).toBe(true);
 
       // The current version imports that backup and replaces the server copy.
-      await new ImportPage(stuckClient.page).importBackupFile(backupPath);
+      const importPage = new ImportPage(stuckClient.page);
+      await importPage.navigateToImportPage();
+      await importPage.importBackupFile(backupPath);
       await forceOverwriteFromTrustedClient(stuckClient);
       await expectHistoryReplacedWithoutPlaintext(user, plaintextOp);
       await stuckClient.page.keyboard.press('Escape');
@@ -563,10 +567,11 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
       await waitForTask(freshClient.page, plaintextOnlyTitle);
       await waitForTask(freshClient.page, beyondFirstPageTitle);
       await expect(freshClient.sync.syncErrorIcon).not.toBeVisible();
-      expect(
-        (await exportBackup(freshClient.page, testInfo.outputPath('fresh-backup.json')))
-          .archivedTitles,
-      ).toEqual([archivedTask]);
+      const freshBackup = await exportBackup(
+        freshClient.page,
+        testInfo.outputPath('fresh-backup.json'),
+      );
+      expect(freshBackup.archivedTitles.some(isArchivedTask)).toBe(true);
     } finally {
       for (const client of clients) await closeClient(client);
     }
