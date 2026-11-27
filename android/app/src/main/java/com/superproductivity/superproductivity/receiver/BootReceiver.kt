@@ -31,9 +31,24 @@ class BootReceiver : BroadcastReceiver() {
         val count = ReminderNotificationHelper.rescheduleAllFromStore(context)
         Log.d(TAG, "Re-registered $count alarms")
 
-        // Re-schedule the background sync worker if credentials are configured
-        if (BackgroundSyncCredentialStore.hasAnyCredentials(context)) {
-            SyncReminderScheduler.ensureScheduled(context)
-        }
+        // Re-schedule the background sync worker if credentials are configured.
+        // Off the main thread: the first credential read opens the encrypted
+        // store, and the Keystore can stall past the broadcast timeout right after
+        // boot, which Play vitals reported as BOOT_COMPLETED / MY_PACKAGE_REPLACED
+        // ANRs. No goAsync(): it would not extend the ANR timeout, so a
+        // stalled Keystore would still ANR. Without it the process may be
+        // killed before this finishes, which loses nothing: WorkManager
+        // restores persisted periodic work after reboot itself, and
+        // CapacitorMainActivity re-runs this check on the next app start.
+        val appContext = context.applicationContext
+        Thread({
+            try {
+                if (BackgroundSyncCredentialStore.hasAnyCredentials(appContext)) {
+                    SyncReminderScheduler.ensureScheduled(appContext)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Background sync scheduling check failed", e)
+            }
+        }, "boot-sync-schedule-check").start()
     }
 }
