@@ -214,10 +214,9 @@ class ImeInsetShimInstrumentedTest {
 
     /** Focuses the field and asks for the IME. */
     private fun showIme(activity: CapacitorMainActivity, webView: WebView): ImeRequest {
-        // The IME only serves the focused window. A system dialog over the app
-        // (a launcher ANR on a freshly booted emulator) keeps window focus, and
-        // every step below then silently does nothing — so wait for it first and
-        // name it in the failure if it never comes.
+        // The IME only serves the focused window. Without focus every step below
+        // silently does nothing, so wait for it first and name it in the failure
+        // if it never comes (logWindowState() records who has it instead).
         val windowFocused = awaitTrue("the activity window to gain focus") {
             onMainSync { activity.hasWindowFocus() }
         }
@@ -267,11 +266,12 @@ class ImeInsetShimInstrumentedTest {
     }
 
     /**
-     * Logs who holds window focus and which activity the system thinks is resumed,
-     * for a focus wait that missed: the activity reports RESUMED to the scenario
-     * while another window (the launcher, in the loop runs) keeps focus, and only
-     * the task stack can say whether the app's task fell behind home. System
-     * window and activity names only — no app content.
+     * Logs which window the system has focused and the task stack, for a focus
+     * wait that missed. Two causes look identical from inside the test: another
+     * window holding focus (a launcher ANR dialog, see android/close-anr-dialogs.sh)
+     * and the system focusing this window without the activity ever being told
+     * (seen once in 200 fresh boots, cause unknown). This tells them apart.
+     * System window and activity names only — no app content.
      */
     private fun logWindowState() {
         val uiAutomation = InstrumentationRegistry.getInstrumentation().uiAutomation
@@ -326,7 +326,7 @@ class ImeInsetShimInstrumentedTest {
                 "window had focus: ${request.windowFocused}, WebView had an input connection: " +
                 "${request.served} — false means the request was very likely dropped before " +
                 "reaching the IME; on an emulator make sure `settings put secure " +
-                "show_ime_with_hard_keyboard 1` and `settings put global hide_error_dialogs 1` ran)",
+                "show_ime_with_hard_keyboard 1` and android/close-anr-dialogs.sh ran)",
         ) { it.keyboardOpenPerListener }
     }
 
