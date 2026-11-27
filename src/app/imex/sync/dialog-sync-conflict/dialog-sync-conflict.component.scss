@@ -4,6 +4,11 @@
   font-weight: 600;
 }
 
+.wrap-buttons {
+  flex-wrap: wrap;
+  row-gap: var(--s-half);
+}
+
 h3 {
   margin-top: 20px;
   margin-bottom: 10px;

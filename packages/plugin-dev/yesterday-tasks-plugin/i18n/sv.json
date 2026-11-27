@@ -1,0 +1,19 @@
+{
+  "PLUGIN": {
+    "NAME": "Gårdagens uppgifter",
+    "DESCRIPTION": "Visar vilka uppgifter du arbetade med i går och hur mycket tid du lade på var och en."
+  },
+  "SHORTCUT": {
+    "SHOW_YESTERDAY_TASKS": "Visa gårdagens uppgifter"
+  },
+  "DATE": {
+    "YESTERDAY": "I går",
+    "DAYS_AGO": "För {{count}} dagar sedan"
+  },
+  "MESSAGES": {
+    "LOADING_TASKS": "Hämtar uppgifter…",
+    "NO_RECENT_TASKS_FOUND": "Inga uppgifter hittades för den senaste tiden",
+    "NO_TASKS_LAST_30_DAYS": "Ingen tid har registrerats för uppgifter de senaste 30 dagarna.",
+    "ERROR_LOADING_TASKS": "Det gick inte att hämta uppgifterna. Försök igen."
+  }
+}

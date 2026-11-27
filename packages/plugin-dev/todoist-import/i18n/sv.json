@@ -1,0 +1,77 @@
+{
+  "TITLE": {
+    "IMPORT": "Importera från Todoist",
+    "PREVIEW": "Förhandsvisning",
+    "IMPORTING": "Importerar…",
+    "FINISHED": "Importen är klar",
+    "INCOMPLETE": "Importen är ofullständig"
+  },
+  "TOKEN": {
+    "LABEL": "API-token för Todoist",
+    "PLACEHOLDER": "Klistra in din API-token för Todoist",
+    "INTRO": "Importera aktiva projekt, uppgifter, deluppgifter, etiketter och förfallodatum från Todoist till Super Productivity. Importen lägger bara till data. Det som redan finns i Super Productivity ligger kvar som förut.",
+    "HELP": "Du hittar din token i Todoist under Inställningar → Integrationer → Utvecklare. Den skickas bara till api.todoist.com och sparas inte.",
+    "REQUIRED": "Klistra först in din API-token för Todoist.",
+    "LOADING": "Hämtar dina uppgifter från Todoist…",
+    "NO_PROJECTS": "Inga aktiva projekt hittades för det här Todoist-kontot."
+  },
+  "ERROR": {
+    "LOAD_FAILED": "Det gick inte att hämta uppgifter från Todoist: {{error}}. Kontrollera din token och anslutningen.",
+    "IMPORT_FAILED": "Importen misslyckades: {{error}}",
+    "IMPORT_STOPPED": "Importen avbröts vid ”{{project}}”: {{error}}. Bara en del av projektet skapades. Ta bort ”{{project}}” innan du försöker igen och välj sedan projektet och de återstående projekten på nytt."
+  },
+  "BUTTON": {
+    "LOAD_PREVIEW": "Läs in förhandsvisning",
+    "IMPORT": "Importera",
+    "BACK": "Tillbaka"
+  },
+  "PREVIEW": {
+    "CHOOSE_PROJECTS": "Välj vilka projekt du vill importera:",
+    "PROJECT_COUNTS": "{{title}} – uppgifter: {{taskCount}}, deluppgifter: {{subTaskCount}}",
+    "ALREADY_EXISTS": "finns redan och kan ha importerats tidigare",
+    "PRIORITY_LEGEND": "Hur ska prioriteterna från Todoist importeras?",
+    "PRIORITY_NONE": "Hoppa över prioriteterna",
+    "PRIORITY_TAGS": "Taggarna p1–p3 (p4 får ingen tagg)",
+    "PRIORITY_EISENHOWER": "Eisenhowermatrisen med taggarna ”urgent” (brådskande) och ”important” (viktigt)",
+    "LOSS_HEADING": "Det här ändras eller utelämnas vid importen",
+    "SELECT_PROJECT": "Välj minst ett projekt att importera."
+  },
+  "LOSS": {
+    "NESTED_PROJECTS": "Underprojekt som läggs direkt i projektlistan: {{count}}.",
+    "SECTIONS": "Avsnitt som utelämnas: {{count}}. Uppgifterna behåller sin ordning i projektet.",
+    "DEMOTED_SUBTASKS": "Underordnade deluppgifter som flyttas direkt under huvuduppgiften (högst två nivåer): {{count}}.",
+    "RECURRING": "Återkommande uppgifter där bara nästa datum följer med: {{count}}. Regeln sparas i uppgiftens anteckningar.",
+    "DAY_DURATIONS": "Tidsåtgångar som anges i hela dagar och inte importeras: {{count}}.",
+    "SUBTASK_LABELS": "Etiketter på deluppgifter som inte importeras: {{count}}. Deluppgifter kan inte ha taggar.",
+    "SUBTASK_PRIORITIES": "Prioriterade deluppgifter som inte får någon prioritetstagg: {{count}}.",
+    "ASSIGNEES": "Tilldelningar av uppgifter till medarbetare som inte följer med: {{count}}.",
+    "ATTACHMENTS": "Bilagor i kommentarer där bara länken följer med: {{count}}.",
+    "TRUNCATED_FIELDS": "Ovanligt långa värden som kortas av för att rymmas vid importen: {{count}}.",
+    "COMPLETED_AND_REMINDERS": "Slutförda uppgifter och påminnelser importeras inte."
+  },
+  "IMPORT": {
+    "STARTING": "Startar…",
+    "PHASE_PROJECT": "skapar projekt",
+    "PHASE_TASKS": "skapar uppgifter",
+    "PHASE_DETAILS": "lägger till datum, taggar och upprepningar ({{current}}/{{total}})",
+    "PROGRESS": "Projekt {{current}} av {{total}}: {{title}} – {{detail}}"
+  },
+  "SUMMARY": {
+    "PROJECT_RESULT": "{{title}}: {{landedTasks}} av {{plannedTasks}} uppgifter, {{landedSubTasks}} av {{plannedSubTasks}} deluppgifter",
+    "SHORTFALL": "vissa poster saknas, kontrollera resultatet",
+    "UNVERIFIED": "Det gick inte att kontrollera hur många poster som importerades. Antalet ovan kan därför vara 0 även om uppgifter har importerats.",
+    "REPEATS_FAILED": "Återkommande uppgifter där upprepningen inte kunde ställas in: {{count}}. Regeln finns i uppgiftens anteckningar.",
+    "CREATED_TAGS": "Skapade taggar: {{tags}}",
+    "NOT_CARRIED_OVER": "Följde inte med",
+    "SNACK_FINISHED": "Importen från Todoist är klar",
+    "UNDO": "Ta bort de projekt som skapades för att ångra importen."
+  },
+  "PARSE": {
+    "UNTITLED_PROJECT": "Projekt utan namn",
+    "UNTITLED_TASK": "Uppgift utan namn",
+    "REPEATS": "Upprepning: {{rule}}",
+    "DEADLINE": "Tidsfrist: {{date}}",
+    "COMMENTS": "Kommentarer:",
+    "FILE": "fil"
+  }
+}

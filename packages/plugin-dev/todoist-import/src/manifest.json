@@ -33,7 +33,7 @@
   "iFrame": true,
   "isSkipMenuEntry": true,
   "i18n": {
-    "languages": ["en"]
+    "languages": ["en", "sv"]
   },
   "icon": "icon.svg"
 }

@@ -1,23 +1,28 @@
 {
   "CFG": {
-    "API_KEY": "Trello API key",
-    "API_KEY_DESC": "Insert the Trello API key here.",
-    "TOKEN": "Trello API token",
-    "TOKEN_DESC": "Insert the Trello API token here.",
-    "BOARD": "Trello board",
-    "BOARD_DESC": "Select the board to search and import cards from. Enter your API key and token first, then the list loads.",
-    "FILTER_USERNAME": "Filter by Trello username",
-    "FILTER_USERNAME_DESC": "If provided, only imports cards assigned to this Trello username.",
-    "HOW_TO_GET_TOKEN": "Hur får man en token?"
+    "API_KEY": "API-nyckel för Trello",
+    "API_KEY_DESC": "Ange din API-nyckel för Trello här.",
+    "TOKEN": "API-token för Trello",
+    "TOKEN_DESC": "Ange din API-token för Trello här.",
+    "BOARD": "Trello-tavla",
+    "BOARD_DESC": "Välj vilken tavla du vill söka på och importera kort från. Ange först din API-nyckel och token för att hämta listan med tavlor.",
+    "FILTER_USERNAME": "Filtrera efter Trello-användarnamn",
+    "FILTER_USERNAME_DESC": "Om du anger ett användarnamn importeras bara kort som den användaren har tilldelats.",
+    "DEFAULT_LIST_ID": "Standardlista i Trello",
+    "DEFAULT_LIST_ID_DESC": "Välj i vilken lista Trello-kort ska hamna när de skapas automatiskt. Om du lämnar fältet tomt används tavlans första öppna lista. Välj en tavla och klicka på ”Läs in alternativen igen” för att visa listorna här.",
+    "HOW_TO_GET_TOKEN": "Så skaffar du en åtkomsttoken"
+  },
+  "ERRORS": {
+    "DEFAULT_LIST_ID_REQUIRED": "Det finns ingen öppen lista där kort kan skapas på den valda Trello-tavlan."
   },
   "DISPLAY": {
     "SUMMARY": "Sammanfattning",
     "STATUS": "Status",
-    "DUE_DATE": "Två datum",
+    "DUE_DATE": "Förfallodatum",
     "LABELS": "Etiketter",
-    "ASSIGNEE": "Mottagare",
+    "ASSIGNEE": "Ansvarig",
     "ATTACHMENTS": "Bilagor",
     "DESCRIPTION": "Beskrivning"
   },
-  "FORM_HELP": "<p>Configure Super Productivity to list and import cards from a Trello board in the task creation panel. Generate an API key and token at <a href=\"https://trello.com/power-ups/admin\">trello.com/power-ups/admin</a>, then load and select your board. See the <a href=\"https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/\">Trello REST API docs</a> for details.</p>"
+  "FORM_HELP": "<p>Här kan du ställa in vilken Trello-tavla du vill visa och importera kort från när du skapar en uppgift i Super Productivity. Skapa en API-nyckel och en token på <a href=\"https://trello.com/power-ups/admin\">trello.com/power-ups/admin</a>. Hämta sedan listan med tavlor och välj din tavla. Läs mer i <a href=\"https://developer.atlassian.com/cloud/trello/guides/rest-api/api-introduction/\">dokumentationen för Trellos REST-API</a>.</p>"
 }
