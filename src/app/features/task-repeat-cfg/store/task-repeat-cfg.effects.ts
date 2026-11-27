@@ -531,6 +531,10 @@ export class TaskRepeatCfgEffects {
           moveSubTaskToBottom,
           TaskSharedActions.updateTask,
           TaskSharedActions.deleteTask,
+          // undo of a subtask delete: the templates dropped it, so add it back
+          TaskSharedActions.restoreDeletedTask,
+          // the subtask leaves its parent, the same as a delete for the templates
+          TaskSharedActions.convertToMainTask,
         ),
         // Ignore delete for parent tasks (no need to sync after parent removed)
         filter((action) => this._isRelevantSubtaskAction(action)),
@@ -967,7 +971,11 @@ export class TaskRepeatCfgEffects {
    * Resolves the parent task from an action that might affect subtasks
    */
   private _resolveParentTaskFromAction(action: any): Observable<Task | null> {
-    const parentId: string | undefined = action.parentId || action.srcTaskId;
+    // deleteTask, restoreDeletedTask and convertToMainTask carry the whole
+    // subtask. By now the store no longer has it under its parent (deleted or
+    // detached), so the parent comes from the payload.
+    const parentId: string | undefined =
+      action.parentId || action.srcTaskId || action.task?.parentId;
     const updatedTaskId: string | undefined = action.task?.id || action.id;
 
     if (!parentId && !updatedTaskId) {

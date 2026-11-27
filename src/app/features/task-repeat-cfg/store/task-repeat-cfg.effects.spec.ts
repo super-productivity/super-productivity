@@ -1447,6 +1447,147 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         expectObservable(effects.autoSyncSubtaskTemplatesFromNewest$).toBe('--');
       });
     });
+
+    it('should drop a deleted subtask from the templates', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const action = TaskSharedActions.deleteTask({
+          task: { ...mockSubTask2, subTasks: [] },
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        // Effects run after the reducer: the deleted subtask is no longer in
+        // the store, so only the parent can still be looked up.
+        const parentAfterDelete: Task = { ...mockTask, subTaskIds: ['sub1'] };
+        taskService.getByIdOnce$.and.callFake((id: string) =>
+          of((id === parentAfterDelete.id ? parentAfterDelete : undefined) as Task),
+        );
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+          of({
+            ...mockRepeatCfg,
+            shouldInheritSubtasks: true,
+            disableAutoUpdateSubtasks: false,
+            subTaskTemplates: [
+              { title: 'SubTask 1', notes: 'Notes 1', timeEstimate: 3600000 },
+              { title: 'SubTask 2', notes: 'Notes 2', timeEstimate: 7200000 },
+            ],
+          }),
+        );
+        taskService.getTasksByRepeatCfgId$.and.returnValue(of([parentAfterDelete]));
+        taskService.getByIdsLive$.and.returnValue(of([mockSubTask1]));
+
+        const expectedAction = updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: {
+              subTaskTemplates: [
+                { title: 'SubTask 1', notes: 'Notes 1', timeEstimate: 3600000 },
+              ],
+            },
+          },
+          isAskToUpdateAllTaskInstances: false,
+        });
+
+        expectObservable(effects.autoSyncSubtaskTemplatesFromNewest$).toBe('-a', {
+          a: expectedAction,
+        });
+      });
+    });
+
+    it('should drop a subtask that was converted to a main task from the templates', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const action = TaskSharedActions.convertToMainTask({ task: mockSubTask2 });
+
+        actions$ = hot('-a', { a: action });
+
+        // After the reducer the converted task has no parent any more, so the
+        // old parent is only known from the payload.
+        const parentAfterConvert: Task = { ...mockTask, subTaskIds: ['sub1'] };
+        taskService.getByIdOnce$.and.callFake((id: string) =>
+          of(
+            id === parentAfterConvert.id
+              ? parentAfterConvert
+              : ({ ...mockSubTask2, parentId: undefined } as Task),
+          ),
+        );
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+          of({
+            ...mockRepeatCfg,
+            shouldInheritSubtasks: true,
+            disableAutoUpdateSubtasks: false,
+            subTaskTemplates: [
+              { title: 'SubTask 1', notes: 'Notes 1', timeEstimate: 3600000 },
+              { title: 'SubTask 2', notes: 'Notes 2', timeEstimate: 7200000 },
+            ],
+          }),
+        );
+        taskService.getTasksByRepeatCfgId$.and.returnValue(of([parentAfterConvert]));
+        taskService.getByIdsLive$.and.returnValue(of([mockSubTask1]));
+
+        const expectedAction = updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: {
+              subTaskTemplates: [
+                { title: 'SubTask 1', notes: 'Notes 1', timeEstimate: 3600000 },
+              ],
+            },
+          },
+          isAskToUpdateAllTaskInstances: false,
+        });
+
+        expectObservable(effects.autoSyncSubtaskTemplatesFromNewest$).toBe('-a', {
+          a: expectedAction,
+        });
+      });
+    });
+
+    it('should put the subtask back into the templates when its delete is undone', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const action = TaskSharedActions.restoreDeletedTask({
+          task: { ...mockSubTask2, subTasks: [] },
+          parentContext: { parentTaskId: 'parent-task-id', subTaskIds: ['sub1', 'sub2'] },
+          tagTaskIdMap: {},
+          deletedTaskEntities: { sub2: mockSubTask2 },
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        // By id, so the parent can only come from the payload's parentId.
+        taskService.getByIdOnce$.and.callFake((id: string) =>
+          id === 'parent-task-id' ? of(mockTask) : of(undefined as unknown as Task),
+        );
+        taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+          of({
+            ...mockRepeatCfg,
+            shouldInheritSubtasks: true,
+            disableAutoUpdateSubtasks: false,
+            subTaskTemplates: [
+              { title: 'SubTask 1', notes: 'Notes 1', timeEstimate: 3600000 },
+            ],
+          }),
+        );
+        taskService.getTasksByRepeatCfgId$.and.returnValue(of([mockTask]));
+        taskService.getByIdsLive$.and.returnValue(of([mockSubTask1, mockSubTask2]));
+
+        const expectedAction = updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: {
+              subTaskTemplates: [
+                { title: 'SubTask 1', notes: 'Notes 1', timeEstimate: 3600000 },
+                { title: 'SubTask 2', notes: 'Notes 2', timeEstimate: 7200000 },
+              ],
+            },
+          },
+          isAskToUpdateAllTaskInstances: false,
+        });
+
+        expectObservable(effects.autoSyncSubtaskTemplatesFromNewest$).toBe('-a', {
+          a: expectedAction,
+        });
+      });
+    });
   });
 
   describe('enableAutoUpdateOrInheritSnapshot$', () => {

@@ -1990,6 +1990,7 @@
       "D_CONFIRM_DELETE": {
         "MSG": "Are you sure you want to delete the task \"{{title}}\"?",
         "MSG_PLAINSPACE": "Delete the task \"{{title}}\"? It is also deleted in Plainspace for everyone in the Space.",
+        "MSG_REPEAT_INSTANCE": "Delete only this copy of the recurring task \"{{title}}\"? The recurring task itself is kept. To pause or stop it, open the task's schedule and select Repeat.",
         "OK": "Delete"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
@@ -2331,7 +2332,7 @@
         "FIRST_OCCURRENCE": "First one on",
         "FRIDAY": "Friday",
         "INHERIT_SUBTASKS": "Inherit subtasks",
-        "INHERIT_SUBTASKS_DESCRIPTION": "When enabled, subtasks from the most recent copy are recreated in each new copy",
+        "INHERIT_SUBTASKS_DESCRIPTION": "Each new copy starts with the subtasks of the most recent copy, all unchecked. Subtasks you add, rename or delete there change the list for future copies, unless auto-updating is disabled below.",
         "IS_PAUSED": "Paused",
         "IS_PAUSED_DESCRIPTION": "No new copies are added while paused, and dates missed while paused are not added when you resume.",
         "MONDAY": "Monday",
@@ -2392,7 +2393,8 @@
         "WEEKDAY": "Weekday",
         "WEEKDAY_REQUIRED": "Select at least one weekday"
       },
-      "SNACK_REPEAT_DIALOG_FAIL": "Could not open repeat config dialog. You can configure it from the task menu."
+      "PREVIEW_HINT": "Preview of a recurring task: it can't be moved. To move only this day, click it and select \"Separate task\".",
+      "SNACK_REPEAT_DIALOG_FAIL": "Could not open the recurring task dialog. To set it up, open the task's schedule and select Repeat."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
