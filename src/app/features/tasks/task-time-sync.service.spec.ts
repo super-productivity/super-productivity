@@ -285,6 +285,71 @@ describe('TaskTimeSyncService', () => {
       expect(dispatchSpy).not.toHaveBeenCalled();
     });
 
+    it('drops pending time for a remote bulk that converts a task before addSubTask', () => {
+      const existing = createTask('existing', {
+        timeSpent: 2000,
+        timeSpentOnDay: { [day]: 2000 },
+      });
+      commit(
+        { ...before, ids: [parent.id, existing.id], entities: { parent, existing } },
+        { type: 'seed-existing' },
+      );
+      const child = createTask('child', { parentId: parent.id });
+      const operations: Operation[] = [
+        {
+          id: 'convert',
+          clientId: 'B',
+          actionType: TaskSharedActions.convertToSubTask.type as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: existing.id,
+          payload: TaskSharedActions.convertToSubTask({
+            taskId: existing.id,
+            targetParentId: parent.id,
+            afterTaskId: null,
+          }),
+          vectorClock: { B: 1 },
+          timestamp: 1,
+          schemaVersion: 1,
+        },
+        {
+          id: 'add',
+          clientId: 'B',
+          actionType: addSubTask.type as ActionType,
+          opType: OpType.Create,
+          entityType: 'TASK',
+          entityId: child.id,
+          payload: addSubTask({ task: child, parentId: parent.id }),
+          vectorClock: { B: 2 },
+          timestamp: 2,
+          schemaVersion: 1,
+        },
+      ];
+      // The state the bulk leaves: the converted task came first, so the new
+      // subtask inherits nothing and the parent is the subtask sum.
+      commit(
+        {
+          ...before,
+          ids: [parent.id, existing.id, child.id],
+          entities: {
+            parent: {
+              ...parent,
+              subTaskIds: [existing.id, child.id],
+              timeSpent: 2000,
+              timeSpentOnDay: { [day]: 2000 },
+            },
+            existing: { ...existing, parentId: parent.id },
+            child,
+          },
+          currentTaskId: child.id,
+        },
+        bulkApplyOperations({ operations }),
+      );
+
+      expect(changes).toBe(1);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
     it('keeps pending time when a first child comes back without a recalculation', () => {
       const restored = createTask('restored', { parentId: parent.id });
       // Like undoing a delete: the child returns, the parent keeps its time.
