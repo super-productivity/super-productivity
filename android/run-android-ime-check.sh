@@ -41,6 +41,16 @@ adb shell settings put secure show_ime_with_hard_keyboard 1
 # Suppress such dialogs for the run and close one that is already up.
 adb shell settings put global hide_error_dialogs 1
 adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null || true
+# Neither line closes an ANR dialog that is already up (loop run 45905549386);
+# force-stopping the process that ANR'd does. Same block as run-android-checks.sh.
+for _ in 1 2 3 4 5; do
+  anr_pkg=$(adb shell dumpsys window windows 2> /dev/null |
+    grep -oE 'Application Not Responding: [A-Za-z0-9._]+' | head -1 | sed 's/.*: //')
+  [ -z "$anr_pkg" ] && break
+  echo "Dismissing the ANR dialog of $anr_pkg"
+  adb shell am force-stop "$anr_pkg" || true
+  sleep 2
+done
 # Which band this image is actually in — the test branches on it and logs the
 # same, but the dumpsys line is the reading to compare a reporter's device to.
 adb shell dumpsys webviewupdate | grep -i 'Current WebView package' || true
