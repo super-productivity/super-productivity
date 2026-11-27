@@ -554,8 +554,9 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     const task = this.task();
     const displayedDay = this.day();
+    // the logical day of the time, as _scheduleForDay expects (#12012)
     const baseDate = task.dueWithTime
-      ? new Date(task.dueWithTime)
+      ? new Date(task.dueWithTime - this._dateService.getStartOfNextDayDiffMs())
       : displayedDay
         ? parseDbDateStr(displayedDay)
         : task.dueDay
@@ -571,7 +572,11 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _scheduleForDay(date: Date): void {
     const task = this.task();
     if (task.dueWithTime) {
-      const timestamp = combineDateAndTime(date, new Date(task.dueWithTime)).getTime();
+      const timestamp = combineDateAndTime(
+        date,
+        new Date(task.dueWithTime),
+        this._dateService.getStartOfNextDayDiffMs(),
+      ).getTime();
       const remindCfg = millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt);
       this._taskSchedulingService.scheduleTask(task, timestamp, remindCfg, false);
       return;

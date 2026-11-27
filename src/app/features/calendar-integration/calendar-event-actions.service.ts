@@ -148,7 +148,7 @@ export class CalendarEventActionsService {
 
     const dialogRef = this._matDialog.open(DialogScheduleTaskComponent, {
       restoreFocus: true,
-      data: { targetDay, targetTime, isSelectDueOnly: true },
+      data: { targetDay, targetTime, isSelectDueOnly: true, isCalendarDay: true },
     });
     const result = await firstValueFrom(dialogRef.afterClosed());
     if (!result || typeof result !== 'object' || !result.date) {
