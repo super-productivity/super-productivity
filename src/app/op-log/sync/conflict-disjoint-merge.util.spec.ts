@@ -4,6 +4,7 @@ import {
   isAdditiveTimeOp,
   isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
+  isPlanForTodayBesideDisjointUpdates,
   mergeChangedFields,
   touchesCrossEntityTaskFields,
   writesNoTaskTime,
@@ -617,6 +618,78 @@ describe('conflict-disjoint-merge.util', () => {
       expect(commutes([syncTimeSpentOp()], [planOp({ id: 'plan' }), replaceRow])).toBe(
         false,
       );
+    });
+  });
+
+  describe('isPlanForTodayBesideDisjointUpdates (#11883)', () => {
+    const planOp = (over: Partial<Operation> = {}): Operation =>
+      op({
+        id: 'plan',
+        actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+        entityId: undefined,
+        entityIds: ['task-1'],
+        payload: {
+          actionPayload: { taskIds: ['task-1'], today: DAY, startOfNextDayDiffMs: 0 },
+          entityChanges: [],
+        },
+        ...over,
+      });
+    const update = (changes: Record<string, unknown>): Operation =>
+      op({
+        id: 'update',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        payload: { task: { id: 'task-1', changes } },
+      });
+    const done = update({ isDone: true, doneOn: 1 });
+    const commutes = (localOps: Operation[], remoteOps: Operation[]): boolean =>
+      isPlanForTodayBesideDisjointUpdates({
+        localOps,
+        remoteOps,
+        payloadKey: 'task',
+        entityId: 'task-1',
+      });
+
+    it('is true for a done beside an add to Today, in both directions', () => {
+      expect(commutes([planOp()], [done])).toBe(true);
+      expect(commutes([done], [planOp()])).toBe(true);
+      expect(commutes([done, update({ title: 'A' })], [planOp()])).toBe(true);
+    });
+
+    it('is false beside the time deltas tracking emits (rebase gap)', () => {
+      expect(commutes([planOp(), syncTimeSpentOp()], [done])).toBe(false);
+      expect(commutes([done, syncTimeSpentOp()], [planOp()])).toBe(false);
+      expect(commutes([syncTimeSpentOp()], [done])).toBe(false);
+    });
+
+    it('is false when the edit writes a field the add to Today writes', () => {
+      for (const field of ['dueDay', 'remindAt', 'dueWithTime']) {
+        expect(commutes([planOp()], [update({ isDone: true, [field]: undefined })]))
+          .withContext(field)
+          .toBe(false);
+      }
+    });
+
+    it('is false for a plan of several tasks or of another task', () => {
+      const bulk = planOp({ entityIds: ['task-1', 'task-2'] });
+      expect(commutes([bulk], [done])).toBe(false);
+      expect(commutes([planOp({ entityIds: ['task-2'] })], [done])).toBe(false);
+    });
+
+    it('is false beside anything but plain updates', () => {
+      const replaceRow = op({
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: { id: 'task-1', isDone: true },
+          entityChanges: [],
+          lwwUpdateMode: 'patch',
+        },
+      });
+      expect(commutes([planOp()], [replaceRow])).toBe(false);
+      expect(commutes([planOp()], [syncTimeSpentOp()])).toBe(false);
+      expect(commutes([planOp()], [op({ opType: OpType.Delete })])).toBe(false);
+      expect(commutes([planOp()], [convertToSubTaskOp()])).toBe(false);
+      expect(commutes([planOp(), done], [update({ title: 'A' })])).toBe(false);
+      expect(commutes([planOp()], [planOp({ id: 'other-plan' })])).toBe(false);
     });
   });
 

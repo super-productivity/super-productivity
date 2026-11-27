@@ -104,7 +104,7 @@
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "fixed by #11184 (regression pin): the rename that loses whole-entity to the opaque plan-for-today and its delta is re-sent as a patch of the fields they left in state",
+    "ref": "fixed by #11184 (regression pin): the rename that loses whole-entity to the opaque plan-for-today and its delta is re-sent as a patch of the fields they left in state; since #11883 the rename and the plan commute, so the server rejects the raw rename once and its patch re-send follows",
     "name": "a task rename that loses to tracking reaches every device",
     "steps": [
       {
@@ -126,7 +126,7 @@
       }
     ],
     "signatures": [],
-    "rejections": []
+    "rejections": ["CONFLICT_CONCURRENT [Task Shared] updateTask"]
   },
   {
     "class": "whole-entity-lww-drops-fields",
@@ -2158,6 +2158,7 @@
       "CONFLICT_CONCURRENT [TASK] LWW Update",
       "CONFLICT_CONCURRENT [TIME_TRACKING] LWW Update",
       "CONFLICT_CONCURRENT [Task Shared] deleteTask",
+      "CONFLICT_CONCURRENT [Task Shared] updateTask",
       "CONFLICT_CONCURRENT [TimeTracking] Sync time spent"
     ]
   },
