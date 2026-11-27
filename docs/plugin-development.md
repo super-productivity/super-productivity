@@ -446,12 +446,13 @@ is [`types.ts`](../packages/plugin-api/src/types.ts) (`interface PluginAPI`).
 - `addTask(task)` - Create a new task. Short syntax in the title (`#tag`, `@date`, `+project`, `30m`) is parsed like typed input; pass `isIgnoreShortSyntax: true` to keep a title from user content or a model verbatim.
 - `updateTask(taskId, updates)` - Update existing task. Setting `dueDay` adds the task to that Planner day (or Today). A scheduled time (`dueWithTime`) and its reminder take precedence over `dueDay`, and `updateTask` cannot clear a reminder yet, so use this for tasks without a time. The task is added at the end of that day. Take day strings from `getDayContext().todayStr` so the user's start of next day is honoured. Pass `{ isIgnoreShortSyntax: true }` as the third argument to keep a new title verbatim.
 - `startTracking(taskId)` / `stopTracking()` - Start or stop time tracking. Rejects for an unknown or done task (unlike the play button, it does not reopen it) and for a parent whose subtasks are all done. For a parent task, tracking starts on its first unfinished subtask. The tracked task arrives with `currentTaskChange`.
+- `openProject(projectId)` - Navigate to a project's task list, for example to show what the plugin just created. Rejects for an unknown project.
 
 #### Day
 
 - `getDayContext()` - `{ todayStr, startOfNextDayDiffMs }`. `todayStr` is the user's logical day (YYYY-MM-DD): before the configured start of the next day it is still the previous calendar day. To find a timestamp's logical day, subtract `startOfNextDayDiffMs` before taking its local date. Re-read it on `DAY_CHANGE`.
 
-Feature-detect `getDayContext`, `startTracking` and `stopTracking` on older hosts.
+Feature-detect `getDayContext`, `startTracking`, `stopTracking` and `openProject` on older hosts.
 
 #### Application State
 
@@ -469,6 +470,19 @@ Feature-detect `getDayContext`, `startTracking` and `stopTracking` on older host
 - `getAllTags()` - Get all tags
 - `addTag(tag)` - Create new tag
 - `updateTag(tagId, updates)` - Update tag
+
+#### Repeating tasks
+
+Read repeat configs from `getAppState().taskRepeatCfgs`. Both methods accept only the schedule fields of `PluginTaskRepeatCfgSchedule` and reject anything else with an error saying why; older app versions lack them, so check `typeof PluginAPI.addTaskRepeatCfg === 'function'` first.
+
+- `addTaskRepeatCfg(taskId, schedule?)` - Make an existing top-level task repeat, like "Repeat" in its schedule dialog (title, tags, estimate, day, time and the gap to its deadline day come from the task). Without a schedule it repeats daily. `repeatFromCompletionDate` (with `quickSetting: 'CUSTOM'`) counts the interval from completion; `repeatUntilDay` sets the last day. Resolves with the repeat config id.
+- `updateTaskRepeatCfg(repeatCfgId, updates)` - Change the schedule, `isPaused`, `skipOverdue` or the end day `repeatUntilDay` (`null` removes it). Changing the schedule requires `quickSetting`.
+
+```js
+const taskId = await PluginAPI.addTask({ title: 'Team sync', dueDay: '2026-10-13' });
+// the second Tuesday of every month, derived from the task's day
+await PluginAPI.addTaskRepeatCfg(taskId, { quickSetting: 'MONTHLY_NTH_WEEKDAY' });
+```
 
 #### Simple Counters
 

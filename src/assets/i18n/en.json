@@ -190,6 +190,7 @@
         "MISSING_TAGS": "{{nr}} missing tags",
         "MOVE_DOWN": "Move down",
         "MOVE_UP": "Move up",
+        "NO_RULES_HINT": "Without rules, this lists every task from all projects.",
         "OTHER_KEPT": "Other (kept)",
         "PLANNED_HAS_DATE": "Has a date",
         "PLANNED_NO_DATE": "No date",
@@ -232,6 +233,7 @@
       "V": {
         "ADD_NEW_BOARD": "Create view",
         "ADD_TASK_TO": "Add task to {{title}}",
+        "ALL_TASKS_TITLE": "All tasks",
         "CONFIRM_DELETE": "Are you sure you want to delete this view?",
         "CREATE_NEW_TAG_BTN": "Create Tag",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
@@ -280,7 +282,7 @@
         "TWO_WAY_SYNC_TITLE": "Title sync direction"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list uncompleted CalDAV tasks for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the task as well as more information about it.</p><p>In addition, you can automatically add and sync all uncompleted tasks to your task backlog.</p><p>To make it work for Nextcloud in the webapp, you may need to allow \"https://app.super-productivity.com\" in the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
+        "HELP": "<p>Lists your open CalDAV tasks so you can add them, or adds them to your backlog automatically.</p><p>For Nextcloud in the web app, you may need to allow \"https://app.super-productivity.com\" in the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Description",
@@ -365,7 +367,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Unable to sync because offline",
-        "SYNC_ERROR": "Sync before closing failed. Your changes are saved on this device, and sync will try again the next time you open the app.",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sync requires a secure connection (HTTPS). Please ensure you're using the app over HTTPS or try the stable release."
       }
     },
@@ -702,19 +703,7 @@
       },
       "FORM_SECTION": {
         "ADV_CFG": "Advanced Config",
-        "HELP_ARR": {
-          "H1": "Basic configuration",
-          "H2": "Worklog settings",
-          "H3": "Default transitions",
-          "P1_1": "Please provide a login name (can be found on your profile page) and an <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> or password if you can't generate one for some reason. Please note that newer versions of Jira sometimes only work with the token. ",
-          "P1_2": "You also need to specify a JQL query which is used for the suggestions to add tasks from Jira. If you need help check out this link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "You can also configure if you want to automatically (e.g. every time you visit the planning view), to import all new issues specified by a custom JQL query.",
-          "P1_4": "Another option is \"Check if current ticket is assigned to current user\". If enabled and you're starting, a check will be made to ensure you're currently assigned to that ticket on Jira. If not, a dialog appears in which you can chose to assign the ticket to yourself.",
-          "P2_1": "There are several options to determine when and how you want to submit a worklog. Enabling <em>'Open worklog dialog for adding a worklog to Jira when task is completed'</em> opens a dialog to add an worklog every time you mark a Jira Task as completed. So keep in mind that worklogs will be added on top of everything tracked so far. If you mark a task as completed for a second time, you may not want to submit the complete worked time for the task again.",
-          "P2_2": "<em>'Open worklog dialog when subtask is completed and not for tasks with subtasks themselves'</em> opens a worklog dialog every time when you mark a subtask of a Jira issue as completed. Because you already track your time via the subtasks, no dialog is opened once you mark the Jira task itself as completed.",
-          "P2_3": "<em>'Send updates to worklog automatically without dialog'</em> does what it says. Because marking a task as completed several times leads to the whole worked time being tracked twice, this is not recommended.",
-          "P3_1": "Here you can reconfigure your default transitions. Jira enables a wide configuration of transitions usually coming into action as different columns on your Jira agile board we can't make assumptions about where and when to transition your tasks and you need to set it manually."
-        }
+        "HELP": "<p>Log in with your Jira user name and an <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\">API token</a>; newer Jira versions may only accept a token. The JQL query decides which issues are suggested.</p><p>Worklogs send a task's whole tracked time, so completing a task twice can log its time twice. Sending them automatically is therefore not recommended.</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -774,6 +763,7 @@
         "AVG_TIME_SPENT_PER_TASK": "Avg. time spent per task",
         "COUNTING_SUBTASKS": "(counting subtasks)",
         "DAYS_WORKED": "Days worked",
+        "ENABLE_DAILY_SUMMARY": "Turn on daily summary",
         "EVALUATION_OVER_TIME": "Impact & energy over time",
         "FOCUS_SESSION_TRENDS": "Focus sessions over time",
         "GLOBAL_METRICS": "Global Metrics",
@@ -782,6 +772,7 @@
         "HEATMAP_SHARED_TO_DEVICE": "Heatmap saved to device storage",
         "HEATMAP_SHARED_TO_PATH": "Heatmap saved to {{path}}",
         "NO_ADDITIONAL_DATA_YET": "No additional data collected yet. Use the form on the daily summary \"Evaluation\" panel to do so.",
+        "OPEN_DAILY_SUMMARY": "Open daily summary",
         "SHARE_HEATMAP": "Share heatmap",
         "SHARE_STATS": "Share your productivity stats",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Click Counters over time",
@@ -927,7 +918,7 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list open OpenProject work packages. Please note that for this to work in the web browser version, you need to probably configure CORS for your OpenProject server to allow access from app.super-productivity.com</p>"
+        "HELP": "<p>In the web version, your OpenProject server may need to allow CORS requests from app.super-productivity.com.</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -1030,7 +1021,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Adjust this value to blur the background image. The default is 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Adjust this value to make the background more or less transparent. The default is 20%.",
-        "HELP": "Theme settings for your project.",
         "L_BACKGROUND_IMAGE_BLUR": "Blur background image",
         "L_BACKGROUND_IMAGE_DARK": "Background Image URL (Dark Theme)",
         "L_BACKGROUND_IMAGE_LIGHT": "Background Image URL (Light Theme)",
@@ -1146,6 +1136,7 @@
       "PLAN_START_DAY": "Start of {{date}}",
       "SCHEDULE_TASK_PLACEHOLDER": "Schedule task...",
       "SHIFT_KEY_INFO": "Hold Shift to toggle day planning mode",
+      "SHOW_ALL_TASKS": "Show all tasks",
       "START": "Work Start",
       "TOGGLE_DAY_PLANNING_HINT": "Ctrl+1 to toggle day planning",
       "TOGGLE_TIME_SCHEDULING_HINT": "Ctrl+1 to toggle time scheduling",
@@ -1161,6 +1152,7 @@
       "INCLUDE_COMPLETED": "Include completed and archived tasks",
       "INFO": "Start typing to search for tasks, notes, projects or tags",
       "NO_RESULTS": "No tasks, notes, projects or tags found matching your search",
+      "NO_RESULTS_COMPLETED_HIDDEN": "Only completed or archived tasks match your search. Tick the option above to include them.",
       "PLACEHOLDER": "Search for tasks, notes, projects or tags"
     },
     "SIMPLE_COUNTER": {
@@ -1176,7 +1168,7 @@
       },
       "FORM": {
         "ADD_NEW": "Add simple counter / habit",
-        "HELP": "Here you can configure simple buttons which will appear at the top right. They can either be timers or simple counters that are counted up by clicking on them. By enabling 'Track Streaks' you can use these for habit tracking.",
+        "HELP": "Buttons at the top right that count clicks or run a timer. Turn on 'Track Streaks' to use one for a habit.",
         "L_COUNTDOWN_DURATION": "Countdown duration",
         "L_DAILY_GOAL": "Daily goal for successful streak",
         "L_ICON": "Icon",
@@ -1210,7 +1202,8 @@
     },
     "SYNC": {
       "A": {
-        "REMOTE_MODEL_VERSION_NEWER": "The remote model version is newer than the local one. Please update your local app to the newest version!"
+        "REMOTE_MODEL_VERSION_NEWER": "The remote model version is newer than the local one. Please update your local app to the newest version!",
+        "SERVER_STORAGE_FULL": "Sync storage is full! Your changes are saved on this device but are NOT syncing. Your account has reached its storage limit on the sync server. If you host the server yourself, raise this account's storage quota in its database. Otherwise, write to contact@super-productivity.com."
       },
       "B": {
         "CONTENT_CONFLICT_RESOLVED": "Conflicting edits to {{taskList}} were auto-resolved by keeping the most recent version. Older edits may have been discarded — please double-check.",
@@ -1389,6 +1382,7 @@
         "SERVER": "Server: {{host}}",
         "SIGN_IN": "Sign in with SuperSync",
         "START_FAILED": "Couldn't reach {{host}}. Check your connection and try again.",
+        "START_FAILED_HTTP": "{{host}} answered, but couldn't start sign-in (HTTP {{status}}). Check the server address or try again later.",
         "TIMED_OUT_TEXT": "Sign-in has to be finished within 10 minutes, or it was cancelled in the browser.",
         "TIMED_OUT_TITLE": "Sign-in timed out",
         "TITLE": "Sync your tasks",
@@ -1404,10 +1398,35 @@
         "TITLE": "Sync is on"
       },
       "D_SYNC_IMPORT_CONFLICT": {
+        "AUTOMATIC_CHANGES": "Not listed: {{count}} automatic background update(s), e.g. repeating tasks recording their last run.",
+        "CHANGE_CREATED": "created",
+        "CHANGE_DELETED": "deleted",
+        "CHANGE_IMPORTED": "imported",
+        "CHANGE_OTHER": "changed",
+        "CHANGE_UPDATED": "edited",
+        "ENTITY": {
+          "ALL": "All data",
+          "BOARD": "View",
+          "GLOBAL_CONFIG": "Settings",
+          "ISSUE_PROVIDER": "Issue provider",
+          "MENU_TREE": "Sidebar",
+          "METRIC": "Metrics",
+          "NOTE": "Note",
+          "PLANNER": "Planner",
+          "PROJECT": "Project",
+          "REMINDER": "Reminder",
+          "SECTION": "Section",
+          "SIMPLE_COUNTER": "Counter",
+          "TAG": "Tag",
+          "TASK": "Task",
+          "TASK_REPEAT_CFG": "Repeating task",
+          "TIME_TRACKING": "Time tracking"
+        },
         "FILTERED_CHANGES": "Affected changes",
         "FIRST_SYNC_USE_LOCAL_CONFIRM": "This device has never synced before. \"Use My Data\" will permanently replace the data on the server with this device's local data. This cannot be undone. Continue?",
         "FIRST_SYNC_WARNING": "This device hasn't synced before, so \"Use My Data\" would overwrite the server's existing data with this device's data.",
         "IMPORT_DATE": "Import date",
+        "LOCAL_CHANGES_TITLE": "Your changes on this device",
         "MSG_INCOMING": "Your data was fully replaced on another device. You have {{filteredOpCount}} local changes that may not carry over.",
         "MSG_INCOMING_NO_OPS": "Your data was fully replaced on another device. This device will sync to the new state.",
         "MSG_LOCAL_FILTERS": "Your local data was imported/restored, but the server has {{filteredOpCount}} changes from other devices that cannot be automatically merged.",
@@ -1636,7 +1655,7 @@
         },
         "ONEDRIVE": {
           "CLIENT_ID_DESCRIPTION": "Application (client) ID from your Microsoft Entra app registration",
-          "INFO_TEXT": "Microsoft 365 authentication uses OAuth. Fill in client and tenant first, then authenticate. <strong>Using your own Entra app registration?</strong> On desktop, register the redirect URI <code>superproductivity://oauth-callback/onedrive</code> under \"Mobile and desktop applications\", enable \"Allow public client flows\", and grant the <code>Files.ReadWrite.AppFolder</code> delegated permission. See the <a href=\"https://github.com/super-productivity/super-productivity/wiki/2.09-Configure-Sync-Backend\" target=\"_blank\" rel=\"noopener\">OneDrive setup guide</a>.",
+          "INFO_TEXT": "Microsoft 365 authentication uses OAuth. Fill in client and tenant first, then authenticate. <strong>Using your own Entra app registration?</strong> On desktop, register the redirect URI <code>superproductivity://oauth-callback/onedrive</code> under \"Mobile and desktop applications\", enable \"Allow public client flows\", and grant the <code>Files.ReadWrite.AppFolder</code> delegated permission. See the <a href=\"https://super-productivity.com/docs/how-to/configure-sync-backend/#onedrive\" target=\"_blank\" rel=\"noopener\">OneDrive setup guide</a>.",
           "L_CLIENT_ID": "Application (Client) ID",
           "L_SYNC_FOLDER_PATH": "Sync Folder Path",
           "L_TENANT_ID": "Tenant ID",
@@ -1682,6 +1701,7 @@
         "DEFERRED_ACTION_FAILED": "Some changes made during sync could not be saved yet. The next sync will retry; keep the app open.",
         "DEFERRED_ACTION_PERMANENT_FAILED": "A change could not be saved and sync is paused. Reload to restore the last saved state.",
         "DEFERRED_ACTIONS_STUCK": "Sync seems stuck. Your recent changes are waiting and have not been saved yet. Reloading the app recovers sync but discards them.",
+        "DEVICE_STORAGE_FULL": "This device has run out of storage space for the app, so your latest change was not saved. Free up disk space or browser storage, then reload.",
         "DISABLE_ENCRYPTION_FAILED": "Failed to disable encryption: {{message}}",
         "ENABLE_ENCRYPTION_FAILED": "Failed to enable encryption: {{message}}",
         "ENCRYPTION_PASSWORD_REQUIRED": "Encrypted data received but no encryption password is configured. Please set your encryption password in sync settings.",
@@ -1696,7 +1716,7 @@
         "ERROR_REMOTE_FILE_LOCKED": "Remote sync file is locked by the server. This may resolve on the next sync attempt.",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "The sync server answered with a web page instead of your sync data (e.g. a login, proxy or error page). Your remote data is probably intact — check your server URL, credentials and network, then try again. If the problem persists, you can overwrite the remote via Sync Settings → Force Overwrite.",
         "ERROR_SYNC_VERSION_MISMATCH": "Remote sync data uses an incompatible format version. Ensure all devices run the same version of Super Productivity.",
-        "ERROR_UNTRUSTED_CERTIFICATE_ANDROID": "Sync failed: the server's certificate is not trusted on this device, has expired, or does not match the server address.\n\nFor a self-signed certificate or private CA, search Android Settings for \"CA certificate\" and install it there (not as a \"VPN & app user certificate\"). The certificate must list the server's address as a Subject Alternative Name.",
+        "ERROR_UNTRUSTED_CERTIFICATE_ANDROID": "Sync failed: the server's certificate is not trusted on this device, has expired, or does not match the server address.\n\nFor a self-signed certificate or private CA, search Android Settings for \"CA certificate\" and install it there (not as a \"VPN & app user certificate\"). The certificate must list the server's address as a Subject Alternative Name. <a href=\"https://super-productivity.com/docs/how-to/sync-webdav-with-a-private-certificate-on-android/\" target=\"_blank\" rel=\"noopener\">Step-by-step guide</a>",
         "WARN_CLIENT_ID_REGENERATED": "Sync device ID was invalid and has been regenerated. A sync conflict may occur on next sync.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error while syncing. Unable to read remote data. Maybe you enabled encryption and your local password does not match the one used to encrypt the remote data?",
         "FINISH_DAY_SYNC_ERROR": "Sync error while finishing day. Please try again.",
@@ -1724,11 +1744,12 @@
         "NETWORK_ERROR": "Sync request failed because of a temporary network problem. Your changes remain local and sync will retry.",
         "NEWER_VERSION_AVAILABLE": "Some changes are from a newer app version. Consider updating for full compatibility.",
         "OAUTH_STATE_INVALID": "OAuth state mismatch — the callback URL did not match this device's request. Please try authenticating again.",
-        "ONEDRIVE_AUTH_FAILED": "OneDrive sign-in failed at the token step ({{error}}). This usually means your Microsoft Entra app registration isn't set up as a public client. See the OneDrive setup guide in the wiki.",
+        "ONEDRIVE_AUTH_FAILED": "OneDrive sign-in failed at the token step ({{error}}). This usually means your Microsoft Entra app registration isn't set up as a public client. See the <a href=\"https://super-productivity.com/docs/how-to/configure-sync-backend/#onedrive\" target=\"_blank\" rel=\"noopener\">OneDrive setup guide</a>.",
         "OPERATION_PERMANENTLY_FAILED": "Some sync operations failed and could not be applied. Data may be incomplete.",
         "OVERWRITE_SERVER_FAILED": "Failed to overwrite server data: {{message}}",
         "PARTIAL_APPLY_FAILURE": "Some downloaded changes could not be applied. Sync is paused to protect your data. Restart the app to retry.",
         "PERSIST_FAILED": "Failed to save changes. State may be inconsistent - please reload.",
+        "PERSIST_STORAGE_OFF": "Changes can't be saved while your device has storage turned off. Anything you enter now will be lost when the app closes.",
         "REMOTE_DATA_TOO_OLD": "Remote data is too old to be processed. Please update your remote app.",
         "REMOTE_NOT_ENCRYPTED": "The synced data is not encrypted, but encryption is enabled on this device, so it was rejected. If you turned off encryption on another device, disable it here too in Sync settings to continue.",
         "REPLAY_LOCAL_OPS_FAILED": "Failed to replay local operations after import. Some recent changes may be lost. Data has been validated.",
@@ -1737,10 +1758,10 @@
         "RESTORE_SUCCESS": "Data restored successfully",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Could not migrate data to server - local data validation failed. Please try importing a backup.",
         "SPLIT_FORMAT_ENABLE_SETTING": "This sync folder was upgraded to the split-file format. Turn on Surgical sync in Sync settings to continue.",
-        "STORAGE_QUOTA_EXCEEDED": "This device has run out of storage space for the app, so your latest change was not saved. Free up disk space or browser storage, then reload.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Storage was running low. Old data cleaned up successfully.",
         "SUCCESS_DOWNLOAD": "Synced data from remote",
         "SUCCESS_VIA_BUTTON": "Data successfully synced",
+        "SYNC_BEFORE_CLOSE_FAILED": "Sync before closing failed. Your changes are saved on this device, and sync will try again the next time you open the app.",
         "SYNC_DATA_RECOVERED_FROM_BACKUP": "Recovered sync data from backup after the main file could not be read.",
         "SYNC_VALIDATION_FAILED": "State validation failed after sync. Some data may be inconsistent.",
         "TIMEOUT_ERROR": "Sync operation timed out. {{suggestion}}",
@@ -1963,6 +1984,7 @@
       "D_CONFIRM_DELETE": {
         "MSG": "Are you sure you want to delete the task \"{{title}}\"?",
         "MSG_PLAINSPACE": "Delete the task \"{{title}}\"? It is also deleted in Plainspace for everyone in the Space.",
+        "MSG_REPEAT_INSTANCE": "Delete only this copy of the recurring task \"{{title}}\"? The recurring task itself is kept. To pause or stop it, open the task's schedule and select Repeat.",
         "OK": "Delete"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
@@ -2290,6 +2312,8 @@
         "C_YEAR": "Year",
         "C_YEARS": "Years",
         "DEFAULT_ESTIMATE": "Default Estimate",
+        "DEADLINE_OFFSET_DAYS": "Deadline (days after each occurrence)",
+        "DEADLINE_OFFSET_DAYS_DESCRIPTION": "Empty for no deadline. 0 = due on the same day.",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "Disable auto-updating subtasks",
         "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "Do not update inherited subtasks automatically when the newest copy changes",
         "FALL_BEHIND": "If you fall behind",
@@ -2302,7 +2326,7 @@
         "FIRST_OCCURRENCE": "First one on",
         "FRIDAY": "Friday",
         "INHERIT_SUBTASKS": "Inherit subtasks",
-        "INHERIT_SUBTASKS_DESCRIPTION": "When enabled, subtasks from the most recent copy are recreated in each new copy",
+        "INHERIT_SUBTASKS_DESCRIPTION": "Each new copy starts with the subtasks of the most recent copy, all unchecked. Subtasks you add, rename or delete there change the list for future copies, unless auto-updating is disabled below.",
         "IS_PAUSED": "Paused",
         "IS_PAUSED_DESCRIPTION": "No new copies are added while paused, and dates missed while paused are not added when you resume.",
         "MONDAY": "Monday",
@@ -2363,7 +2387,8 @@
         "WEEKDAY": "Weekday",
         "WEEKDAY_REQUIRED": "Select at least one weekday"
       },
-      "SNACK_REPEAT_DIALOG_FAIL": "Could not open repeat config dialog. You can configure it from the task menu."
+      "PREVIEW_HINT": "Preview of a recurring task: it can't be moved. To move only this day, click it and select \"Separate task\".",
+      "SNACK_REPEAT_DIALOG_FAIL": "Could not open the recurring task dialog. To set it up, open the task's schedule and select Repeat."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -2576,8 +2601,11 @@
       "WARNING_TITLE": "Warning"
     },
     "EXPORT_DATA": "Export Data",
+    "GROUP_BACKUP_RESTORE": "Backup & restore",
+    "GROUP_FROM_OTHER_APP": "Coming from another app",
     "IMPORT_FROM_FILE": "Import from File",
     "IMPORT_FROM_TICKTICK": "Import from TickTick",
+    "IMPORT_FROM_MS_TODO": "Import from Microsoft To Do",
     "IMPORT_FROM_TODOIST": "Import from Todoist",
     "IMPORT_FROM_URL": "Import from URL",
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Please enter the full URL of the Super Productivity backup JSON file to import.",
@@ -2592,6 +2620,7 @@
     "S_ERR_INVALID_URL": "Import failed: Invalid URL provided",
     "S_ERR_NETWORK": "Import failed: Network error while fetching data from URL",
     "S_ERR_TICKTICK_IMPORT_OPEN": "Could not open the TickTick importer",
+    "S_ERR_MS_TODO_IMPORT_OPEN": "Could not open the Microsoft To Do importer",
     "S_ERR_TODOIST_IMPORT_OPEN": "Could not open the Todoist importer",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Error: Could not decode the URL parameter for import. Please ensure it is correctly formatted.",
     "URL_PLACEHOLDER": "Enter URL to import from"
@@ -2618,6 +2647,8 @@
     "ENABLED": "Enabled",
     "EXAMPLE_VAL": "e.g. 32m",
     "EXTENSION_INFO": "Please <a target=\"_blank\" href=\"https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb\"> download the Chrome extension</a> to allow communication with the Jira API and Idle Time Handling. Note that this doesn't work for mobile. <strong>Without the extension, the features will not work!</strong>",
+    "HELP": "Help",
+    "HELP_READ_GUIDE": "Read the full guide",
     "HIDE": "Hide",
     "ICON_INP_DESCRIPTION": "All UTF-8 emojis are also supported!",
     "INBOX_PROJECT_TITLE": "Inbox",
@@ -2727,7 +2758,7 @@
       "FILTER_INCLUDE_REGEX": "Include events matching regex (optional)",
       "FILTER_INCLUDE_REGEX_DESCRIPTION": "Only events whose title matches this regular expression will be shown. Leave empty to include all events. Example: meeting|standup",
       "INVALID_REGEX": "Invalid regular expression",
-      "HELP": "You can integrate calendars to be reminded and add them as tasks within Super Productivity. The integration works by using the iCal format. For this to work your calendars need to be accessible either over the internet or via file system.",
+      "HELP": "Add calendars in iCal format to see their events, get reminders and add them as tasks. Each calendar must be reachable by URL or as a file.",
       "REFERENCE_CALENDAR": "Reference calendar (display only, no task creation)",
       "SHOW_BANNER_THRESHOLD": "Show a notification X before the event (blank for disabled)"
     },
@@ -2780,6 +2811,7 @@
     },
     "FOCUS_MODE_LOCAL": {
       "HELP": "These settings apply only to this device and are not synced.",
+      "L_IS_FOCUS_WINDOW_ON_SESSION_END": "Bring the app window to the front when a focus session or break ends",
       "L_IS_LOOP_BREAK_END_ALARM": "Loop the break-end sound until I dismiss the break (this device only)",
       "L_IS_NOTIFY_ON_SESSION_END": "Show a browser notification when a Pomodoro session or break ends",
       "S_NOTIFICATION_PERMISSION_DENIED": "Notifications are not allowed for this site. Allow them in your browser to use this option.",
@@ -2792,7 +2824,7 @@
       "OPACITY": "Task widget opacity"
     },
     "IDLE": {
-      "HELP": "<div><p>When idle time handling is enabled, a dialog will open after a specified amount of time to check if - and on which - task you want to track your time when you have been idle.</p></div>",
+      "HELP": "When you come back after being away for the set time, a dialog asks what to do with that time: track it on a task, count it as a break or discard it.",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Enable idle time handling",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Only trigger idle time dialog when the current task is selected",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Suppress idle dialog during focus mode sessions",
@@ -2801,7 +2833,7 @@
       "TITLE": "Idle Handling"
     },
     "IMEX": {
-      "HELP": "<p>Here you can export all your data as <strong>JSON</strong> for backups or to use it in a different context (e.g. you might want to export your projects in the web browser version and import them into the desktop version).</p><p>The import expects valid JSON to be copied into the text area. <strong>NOTE: Once you press the import button all your current settings and data will be overwritten!</strong></p>",
+      "HELP": "<p>Export all your data as <strong>JSON</strong> to keep a backup or move it to another device.</p><p><strong>Importing replaces all your current data and settings.</strong></p>",
       "TITLE": "Import/Export"
     },
     "KEYBOARD": {
@@ -2825,7 +2857,7 @@
       "GO_TO_PLANNER": "Go to Planner",
       "GO_TO_SETTINGS": "Go to settings",
       "GO_TO_WORK_VIEW": "Go to task list and focus first task",
-      "HELP": "<p>Here you can configure all keyboard shortcuts.</p><p>Click on the text input and press the desired keyboard key or key combination. Press <strong>Escape</strong> to leave the field without assigning a new shortcut.</p><p>There are three types of shortcuts:</p> <ul> <li> <strong>Global shortcuts:</strong> When the app is running it will trigger the action from every other application. </li> <li> <strong>Application level shortcuts:</strong> Will trigger from every screen of the application, but not if you're currently editing a text field. </li> <li> <strong>Task level shortcuts:</strong> They will only trigger if you have selected a task via mouse or keyboard and usually trigger an action specifically related to that one task.</li> </ul><p>Press <strong>Backspace</strong> or <strong>Delete</strong> to remove an existing shortcut.",
+      "HELP": "<p>Click a field and press the key combination you want. <strong>Escape</strong> cancels, <strong>Backspace</strong> removes a shortcut.</p><p><strong>Global</strong> shortcuts work even when another app is focused. <strong>Task</strong> shortcuts act on the selected task. Other shortcuts pause while you type in a text field.</p>",
       "MOVE_TASK_DOWN": "Move task down in the list",
       "MOVE_TASK_TO_BOTTOM": "Move task to the bottom of the list",
       "MOVE_TASK_TO_TOP": "Move task to the top of the list",
@@ -2944,6 +2976,7 @@
       "IS_DARK_MODE": "Dark Mode",
       "IS_DISABLE_ANIMATIONS": "Disable all animations",
       "IS_DISABLE_CELEBRATION": "Disable celebration in daily summary",
+      "IS_HIDE_NAV_TASK_COUNT": "Hide task count badges in the sidebar",
       "IS_LOCAL_REST_API_ENABLED": "Enable local REST API (desktop only)",
       "IS_LOCAL_REST_API_ENABLED_HINT": "Allows local scripts to control the running app via http://127.0.0.1:3876. Requests require the access token shown below; keep it private and regenerate it if it may have been exposed. Any application running as you on this computer can read the token and modify your tasks. This setting applies to this computer only and is not synced.",
       "LOCAL_REST_API_TOKEN": "Access Token",
@@ -3016,7 +3049,7 @@
       "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. On desktop, a bell rings until you act on the reminder (at most 10 minutes) and the window comes to the front. Recommended for critical reminders."
     },
     "SCHEDULE": {
-      "HELP": "The schedule feature provides you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
+      "HELP": "Shows how your planned tasks play out over time. Open it from <a href='#/schedule'>Schedule</a> in the menu.",
       "L_IS_LUNCH_BREAK_ENABLED": "Enable lunch break",
       "L_IS_WORK_START_END_ENABLED": "Limit unscheduled task flow to specific work times",
       "L_LUNCH_BREAK_END": "Lunch break end",
@@ -3033,7 +3066,7 @@
       "WORK_START_DESCRIPTION": "e.g. 9:00"
     },
     "SHORT_SYNTAX": {
-      "HELP": "<p>Here you can control short syntax options when creating a task</p>",
+      "HELP": "<p>Type <strong>#tag</strong>, <strong>+project</strong>, <strong>@due date</strong> or a time like <strong>30m</strong> in a task title to set it as you add the task.</p>",
       "IS_ENABLE_DEADLINE": "Enable deadline short syntax (!<deadline time>)",
       "IS_ENABLE_DUE": "Enable planned at short syntax (@<planned time>)",
       "IS_ENABLE_PRIORITY": "Enable priority short syntax (p1 = High, p2 = Medium, p3 = Low)",
@@ -3065,7 +3098,7 @@
     "TAKE_A_BREAK": {
       "ADD_NEW_IMG": "Add motivational image",
       "FULL_SCREEN_BLOCKER_DURATION": "Duration to display the fullscreen window (desktop only)",
-      "HELP": "<div> <p>Allows you to configure a reoccurring reminder when you have worked for a specified amount of time without taking a break.</p><p>You can modify the message displayed. ${duration} will be replaced with the time spent without a break.</p></div>",
+      "HELP": "<p>Reminds you to take a break once you have worked for a set time without one. In the message, ${duration} stands for the time worked without a break.</p>",
       "IS_ENABLED": "Enable take a break reminder",
       "IS_FOCUS_WINDOW": "Focus app window when reminder is active (desktop only)",
       "IS_FULL_SCREEN_BLOCKER": "Display message in fullscreen window (desktop only)",
@@ -3148,7 +3181,8 @@
     "NO_TASKS_TO_COPY": "No tasks to copy",
     "NO_TASKS_TO_UNPLAN": "No tasks to unplan",
     "OPEN_SETTINGS_ERROR": "Could not open settings",
-    "PERSISTENCE_DISALLOWED": "Data will not be persisted permanently. Be aware that this can lead to data loss!",
+    "PERSISTENCE_DISALLOWED": "Your browser may clear this app's data when storage runs low. Set up sync or export a backup to keep it safe.",
+    "PERSISTENCE_DISALLOWED_SET_UP_SYNC": "Set up sync",
     "PERSISTENCE_ERROR": "Error when requesting to persist data: {{err}}",
     "SAVE_BLOCKED_DURING_SYNC": "Sync in progress - some changes may need to be re-saved",
     "SHARE_FAILED": "Sharing failed. Please copy manually.",
@@ -3269,6 +3303,7 @@
       "NO_THANKS": "No thanks",
       "SHOW_ME_MORE": "Show me more ›",
       "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
+      "OR_IMPORT": "or import from another app",
       "OR_PRESS": "or press",
       "SKIP_ARIA": "Close tip"
     },
@@ -3521,6 +3556,7 @@
     "PLUGIN_INSTALLED": "Plugin \"{{name}}\" installed",
     "PLUGIN_JS_NOT_FOUND": "Plugin JavaScript file (plugin.js) not found in ZIP file",
     "PROJECT_DOES_NOT_EXIST": "Project does not exist",
+    "PROJECT_NAVIGATION_BLOCKED": "Could not open the project right now",
     "PROJECT_NOT_FOUND": "Project \"{{contextId}}\" not found",
     "RECOMMENDATION": "Only install plugins from trusted sources and review their code if possible. Always backup your data before installing new plugins!",
     "REMOVE": "Remove",

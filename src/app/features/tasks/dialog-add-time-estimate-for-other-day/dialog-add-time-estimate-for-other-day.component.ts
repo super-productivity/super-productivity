@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import {
   MatDialogActions,
   MatDialogClose,
@@ -9,6 +9,7 @@ import {
 import { T } from '../../../t.const';
 import { FormsModule } from '@angular/forms';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
+import { HelpToggleBtnComponent } from '../../../ui/help-section/help-toggle-btn.component';
 import { InputDurationSliderComponent } from '../../../ui/duration/input-duration-slider/input-duration-slider.component';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -32,6 +33,7 @@ export interface NewTimeEntry {
     FormsModule,
     MatDialogContent,
     HelpSectionComponent,
+    HelpToggleBtnComponent,
     InputDurationSliderComponent,
     MatDialogActions,
     MatButton,
@@ -52,6 +54,7 @@ export class DialogAddTimeEstimateForOtherDayComponent {
   readonly locale = this.dateTimeFormatService.currentLocale;
 
   T: typeof T = T;
+  readonly isShowHelp = signal(false);
   newEntry: NewTimeEntry = {
     date: null,
     timeSpent: 0,

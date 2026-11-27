@@ -42,6 +42,8 @@ export interface TaskFollowUp {
   dueWithTime?: number;
   /** resolved to tag IDs at run time (existing tags are reused by title) */
   tagTitles?: string[];
+  /** set up after the due date, which the repeat starts from */
+  repeat?: TodoistTask['repeat'];
 }
 
 export interface ProjectImportPlan {
@@ -213,7 +215,15 @@ export const planImport = (
         followUp.tagTitles = titlesForTask;
         titlesForTask.forEach((title) => tagTitles.add(title));
       }
-      if (followUp.dueDay || followUp.dueWithTime || followUp.tagTitles) {
+      if (t.repeat) {
+        followUp.repeat = t.repeat;
+      }
+      if (
+        followUp.dueDay ||
+        followUp.dueWithTime ||
+        followUp.tagTitles ||
+        followUp.repeat
+      ) {
         followUps.push(followUp);
       }
     }

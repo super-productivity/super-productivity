@@ -1,0 +1,19 @@
+---
+# Generated from Harper's DoubleCheckHyphen rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Normalizes the common two-word form `double check` to `double-check`.
+extends: existence
+message: "Use the hyphenated form in this compound."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "double-check"
+tokens:
+  - "double(?!\\s*\\n\\s*\\n)\\s+check(?!['\\x{2019}]s\\b)"

@@ -187,6 +187,7 @@ nothing); the app shows it to users. See
 - `deleteProject` - Delete a project and everything it contains (irreversible)
 - `getAllTags` - Read tags
 - `addTag` - Create tags
+- `addTaskRepeatCfg` / `updateTaskRepeatCfg` - Make a task repeat, change its schedule
 - `persistDataSynced` - Persist plugin data
 - `getAppState` - Read-only snapshot of application state
 

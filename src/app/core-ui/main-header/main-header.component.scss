@@ -522,7 +522,7 @@ button {
   }
 }
 
-// Clockwise, the way the arrows of the `sync_ring` icon point.
+// Clockwise, the way the arrows of the syncing icon point.
 @keyframes spin {
   from {
     transform: rotate(0deg) translateZ(0);
@@ -540,8 +540,7 @@ button {
     color: var(--text-color);
   }
 
-  // While syncing we intentionally keep the muted color: the spin animation
-  // already signals progress, and the brand color drew too much focus.
+  // The glyph signals progress, so the syncing button can keep the muted color.
 
   &.is-error,
   &.is-offline {

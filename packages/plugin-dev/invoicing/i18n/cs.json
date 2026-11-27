@@ -1,0 +1,58 @@
+{
+  "TITLE": "Faktury",
+  "LOADING": "Načítání…",
+  "LIST": {
+    "EMPTY": "Zatím žádné faktury.",
+    "PRINT": "Tisk / PDF",
+    "CSV": "CSV",
+    "DELETE": "Smazat",
+    "CONFIRM_DELETE": "Smazat fakturu {{number}}? Její hodiny se budou opět počítat jako nevyfakturované."
+  },
+  "NEW": {
+    "TITLE": "Nová faktura",
+    "PROJECT": "Projekt",
+    "NO_PROJECTS": "Nejdřív vytvořte projekt. Každý projekt se fakturuje zvlášť.",
+    "FROM": "Od",
+    "TO": "Do",
+    "RATE": "Hodinová sazba",
+    "LANGUAGE": "Jazyk faktury",
+    "CLIENT": "Odběratel",
+    "CLIENT_HINT": "Jméno a adresa klienta. Zapamatuje se pro tento projekt.",
+    "INCLUDE": "Zahrnout",
+    "NO_HOURS": "V tomto projektu není v tomto období žádný nevyfakturovaný čas.",
+    "NUMBER": "Číslo faktury",
+    "ISSUE_DATE": "Datum vystavení",
+    "ISSUE": "Vystavit a vytisknout",
+    "BLOCK": {
+      "PERIOD": "Zvolte data Od a Do; Od musí být dříve.",
+      "LINES": "Zaškrtněte alespoň jeden řádek s hodinami.",
+      "RATE": "Zadejte hodinovou sazbu.",
+      "NUMBER": "Zadejte číslo faktury.",
+      "NUMBER_USED": "Toto číslo faktury je již použito.",
+      "DATE": "Zadejte datum vystavení."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Vaše údaje",
+    "SELLER": "Vaše jméno, adresa a daňové ID",
+    "PAYMENT_NOTE": "Platební údaje",
+    "PAYMENT_NOTE_HINT": "Bankovní údaje nebo platební podmínky, vytištěné dole.",
+    "CURRENCY": "Kód měny",
+    "TAX": "Daň / DPH %",
+    "PAYMENT_DAYS": "Dnů do splatnosti",
+    "ROUNDING": "Zaokrouhlit každý řádek nahoru na",
+    "ROUNDING_NONE": "Nezaokrouhlovat",
+    "ROUNDING_MIN": "{{min}} minut",
+    "PREFIX": "Předpona čísla faktury",
+    "SAVE": "Uložit",
+    "SAVED": "Uloženo."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Popis",
+    "HOURS": "Hodiny",
+    "TOTAL": "Celkem"
+  },
+  "ERROR": {
+    "GENERIC": "Něco se pokazilo: {{error}}"
+  }
+}

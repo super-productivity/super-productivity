@@ -108,56 +108,15 @@ jobs:
 
       - name: 'Dependency Review'
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
+        uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v4
 
   # Lint, unit tests, E2E and PWA/Lighthouse run in parallel instead of in one
   # serial job behind lint: the critical path is the slowest branch, not the sum.
+  # Lint and the tooling/package tests share one job: separately, each spent
+  # longer queueing for and setting up a runner than running, and a PR push
+  # starts more jobs than the org's concurrent-runner cap, so every job counts.
   lint:
-    name: Lint
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-        with:
-          persist-credentials: false
-      - name: Setup Node Dependencies
-        uses: ./.github/actions/setup-deps
-      - run: npm run lint
-      - name: Test issue-triage helpers
-        run: node --test ".github/scripts/*.test.js"
-
-  # Angular specs, split by tools/test-shards.js: Karma runs one Chrome tab,
-  # so a single run uses about one core. Same split as the local `npm test`.
-  unit-tests:
-    name: Unit Tests (${{ matrix.suite }} ${{ matrix.shard }})
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [berlin, la]
-        shard: ['1/2', '2/2']
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-        with:
-          persist-credentials: false
-      - name: Setup Node Dependencies
-        uses: ./.github/actions/setup-deps
-      - run: npm run env # Generate env.generated.ts from environment variables
-      - name: Run Angular specs
-        env:
-          SUITE: ${{ matrix.suite }}
-          SHARD: ${{ matrix.shard }}
-        run: node tools/test-shards.js "$SUITE" --shard "$SHARD"
-
-  unit-tests-tooling:
-    name: Unit Tests (tooling and packages)
+    name: Lint and tooling tests
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
@@ -169,14 +128,56 @@ jobs:
           persist-credentials: false
       # Playwright chromium is needed by the video tool tests
       - name: Setup E2E Environment
+        id: setup
         uses: ./.github/actions/setup-e2e
+      - run: npm run lint
+      # A lint failure still lets the tests below report; a failed setup doesn't.
+      - name: Test issue-triage helpers
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: node --test ".github/scripts/*.test.js"
       - name: Test video tools
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: npm run video:kit-test -- --workers=1
+      - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: npm run env # Generate env.generated.ts from environment variables
+      - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: npm run int:test # Validate i18n JSON files
+      # Every PR, not only Android ones: the TS reminder function imports ~45
+      # app files, too many for a path filter to track.
+      - name: Check Android repeat-reminder fixtures match the TS function
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: node tools/generate-repeat-reminder-fixtures.mjs --check
+      - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: npm run test:electron # Node-side unit tests for electron/*.cjs
+      - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: npm run packages:test
+      - if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: npm run release-notes:test
+
+  # Angular specs, one job per timezone suite. Sharding further cost a runner
+  # per shard to save ~1 min; the E2E jobs are the critical path anyway.
+  unit-tests:
+    name: Unit Tests (${{ matrix.suite }})
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [berlin, la]
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
       - run: npm run env # Generate env.generated.ts from environment variables
-      - run: npm run int:test # Validate i18n JSON files
-      - run: npm run test:electron # Node-side unit tests for electron/*.cjs
-      - run: npm run packages:test
-      - run: npm run release-notes:test
+      - name: Run Angular specs
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: node tools/test-shards.js "$SUITE" --shards 1
 
   e2e-build:
     name: Build E2E Frontend
@@ -359,7 +360,6 @@ jobs:
       - changes
       - lint
       - unit-tests
-      - unit-tests-tooling
       - e2e-build
       - e2e
       - e2e-webkit-smoke

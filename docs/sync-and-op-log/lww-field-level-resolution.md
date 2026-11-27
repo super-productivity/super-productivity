@@ -308,7 +308,19 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    by decisions 5a and 5a extended below: a conflict may read a row's keys,
    never its values.
 6. **Opaque ops:** stay on whole-entity LWW, with the narrow time-preserving
-   exception below.
+   exception below. Narrowed by #11184: when an opaque op wins remotely
+   (also one planning several tasks), the losing device re-emits the local fields that survived it
+   (see "A later round"). Narrowed by #11883 (2026-11-27): a single-task
+   `planTasksForToday` and `updateTask` edits of fields it never writes
+   (anything but `dueDay`, `remindAt`, `dueWithTime`) commute: conflict
+   detection applies both as they are, in either order
+   (`isPlanForTodayBesideDisjointUpdates`). Not yet on the tracking device,
+   whose pending side holds the auto-plan beside its time delta: SuperSync's
+   delta rebase cannot re-send that past this pair. Other devices check the
+   tracker's remote ops one at a time, so its auto-plan commutes there. On SuperSync
+   the server still rejects the later upload once; its re-send follows. Before, a done that synced first
+   was undone by the auto-plan's winning snapshot, or the losing auto-plan
+   stayed on its own device.
 7. **Time on a remote win:** ~~local-win direction only, for now.~~ Replaced
    on 2026-10-01 ([#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5936659621)):
    a pending time delta survives a remote win whose winner writes no time
@@ -470,9 +482,17 @@ holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op
   applied are re-emitted as a patch, in the same transaction as their
   rejection (`survivingLocalFields`). That path reads no part of the row (decision
   5); a replace row used to hide this case by overwriting the fields
-  everywhere.
-- **Content banner:** a patch reports a content field only where both sides
-  wrote it (`findPatchContentConflicts`).
+  everywhere. Since #11184 the same applies when an opaque op (a habit
+  count, `planTasksForToday` for one or several tasks, tracking) wins: a done lost to another
+  device's add to Today never reached that device. A local time delta kept
+  pending beside the winner (decision 7) does not block the re-send: it stays
+  as it is and the patch never carries time. The device's own pending
+  patch rows (a re-send whose upload failed or was killed) are read by key,
+  like its edits; a replace row, a reminder clear or a remote delete keep the
+  whole-entity path.
+- **Content banner:** identical final writes to a task's title, notes, or
+  ordered subtask IDs do not trigger a warning. A patch only reports
+  differences in fields both sides wrote (`findPatchContentConflicts`).
 
 **Residuals:**
 
@@ -501,8 +521,9 @@ holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op
   path (`_buildNoPendingConcurrentConflict`, #9073), still resolve as before.
   The WebDAV E2E converges in both directions without it, so no guard is
   added (no evidence of harm).
-- **Opaque ops, NOTE, deletes and archives** keep whole-entity LWW, so the
-  habit, note and task-tracking pins of #10379 and #10260 stay.
+- **NOTE, deletes and archives** keep whole-entity LWW, so the note pins of
+  #10379 and #10260 stay. A remote opaque winner re-emits the surviving local fields (#11184); an opaque local side
+  that wins still sends its snapshot.
 - **Released resolvers:** a v19.1.0 device that resolves still emits replace
   snapshots; patches take over as clients update.
 - **Asymmetric time rule:** a local delta admits the patch, a remote one

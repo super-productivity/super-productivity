@@ -23,6 +23,7 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
 import { AppDataComplete } from '../model/model-config';
 import { dirtyDeepCopy } from '../../util/dirtyDeepCopy';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
+import { isRelatedModelDataValid } from './is-related-model-data-valid';
 
 const FAKE_PROJECT_ID = 'FAKE_PROJECT_ID';
 describe('dataRepair()', () => {
@@ -51,6 +52,97 @@ describe('dataRepair()', () => {
     };
     // to prevent side effects
     mock = dirtyDeepCopy(mock);
+  });
+
+  for (const archive of ['archiveYoung', 'archiveOld'] as const) {
+    it(`should clear stale issue and repeat references after promoting subtasks from ${archive}`, () => {
+      const parent: Task = {
+        ...DEFAULT_TASK,
+        id: 'parent',
+        projectId: FAKE_PROJECT_ID,
+        subTaskIds: ['child'],
+      };
+      const child: Task = {
+        ...DEFAULT_TASK,
+        id: 'child',
+        parentId: parent.id,
+        projectId: FAKE_PROJECT_ID,
+        issueProviderId: 'deleted-provider',
+        issueId: 'old-issue',
+        issueType: 'JIRA',
+        issueLastSyncedValues: { title: 'Old title' },
+        repeatCfgId: 'deleted-repeat',
+      };
+      const untouchedArchiveTask = { ...child, id: 'archived', parentId: undefined };
+      mock.task = { ...mock.task, ids: [parent.id], entities: { [parent.id]: parent } };
+      mock.project.entities[FAKE_PROJECT_ID] = {
+        ...mock.project.entities[FAKE_PROJECT_ID]!,
+        taskIds: [parent.id],
+      };
+      mock[archive].task = {
+        ids: [child.id, untouchedArchiveTask.id],
+        entities: { [child.id]: child, [untouchedArchiveTask.id]: untouchedArchiveTask },
+      };
+      const snapshot = structuredClone(mock);
+
+      const result = dataRepair(mock);
+
+      expect(result.data.task.entities.child).toEqual(
+        jasmine.objectContaining({
+          parentId: parent.id,
+          issueProviderId: undefined,
+          issueId: undefined,
+          issueType: undefined,
+          issueLastSyncedValues: undefined,
+          repeatCfgId: undefined,
+        }),
+      );
+      expect(result.data[archive].task.entities.archived).toEqual(untouchedArchiveTask);
+      expect(result.repairSummary.invalidReferencesRemoved).toBeGreaterThanOrEqual(2);
+      expect(isRelatedModelDataValid(result.data)).toBe(true);
+      expect(mock).toEqual(snapshot);
+    });
+  }
+
+  it('should unlink stale active issue providers without changing valid links or task content', () => {
+    const linked: Task = {
+      ...DEFAULT_TASK,
+      id: 'linked',
+      title: 'Keep my work',
+      projectId: FAKE_PROJECT_ID,
+      issueProviderId: 'provider',
+      issueId: 'issue-1',
+      issueType: 'JIRA',
+      issueLastSyncedValues: { title: 'Synced title' },
+      timeSpent: 12345,
+    };
+    const stale = { ...linked, id: 'stale', issueProviderId: 'deleted-provider' };
+    mock.task = {
+      ...mock.task,
+      ids: [linked.id, stale.id],
+      entities: { [linked.id]: linked, [stale.id]: stale },
+    };
+    mock.issueProvider = {
+      ids: ['provider'],
+      entities: {
+        provider: { id: 'provider', issueProviderKey: 'JIRA' } as IssueProvider,
+      },
+    };
+
+    const result = dataRepair(mock);
+
+    expect(result.data.task.entities.linked).toEqual(linked);
+    expect(result.data.task.entities.stale).toEqual(
+      jasmine.objectContaining({
+        title: stale.title,
+        timeSpent: stale.timeSpent,
+        issueProviderId: undefined,
+        issueId: undefined,
+        issueLastSyncedValues: undefined,
+      }),
+    );
+    expect(result.repairSummary.invalidReferencesRemoved).toBe(1);
+    expect(dataRepair(result.data).data).toEqual(result.data);
   });
 
   // Regression for #8333: production builds disable NgRx runtime freezing, so

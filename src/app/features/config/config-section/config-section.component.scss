@@ -106,13 +106,9 @@ $this-panel-padding-left-right: 12px;
   }
 }
 
-:host ::ng-deep .help-btn {
-  position: absolute;
-  top: -40px;
-  right: -2px;
-
-  display: block;
-  animation: var(--transition-duration-m) help-ico-animation var(--ani-standard-timing);
+// Help is about the open section; a closed one stays a plain row.
+collapsible:not(.isExpanded) .help-toggle {
+  display: none;
 }
 
 :host ::ng-deep .extra-margin-top {
@@ -123,16 +119,4 @@ $this-panel-padding-left-right: 12px;
   margin: auto;
   margin-top: var(--s2);
   text-align: center;
-}
-
-@keyframes help-ico-animation {
-  0% {
-    transform: scale(0);
-  }
-  50% {
-    transform: scale(1.4);
-  }
-  100% {
-    transform: scale(1);
-  }
 }

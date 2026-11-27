@@ -8,6 +8,7 @@ import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { SnackService } from '../../../core/snack/snack.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { DateService } from '../../../core/date/date.service';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -56,9 +57,9 @@ describe('DialogScheduleTaskComponent — repeat field', () => {
   ): Promise<DialogScheduleTaskComponent> => {
     const task = data['task'] as TaskCopy | undefined;
     const liveTask = opts.liveTask ?? task ?? null;
-    const taskServiceSpy = jasmine.createSpyObj('TaskService', [
+    const taskServiceSpy = jasmine.createSpyObj('TaskService', ['getByIdLive$']);
+    const taskSchedulingServiceSpy = jasmine.createSpyObj('TaskSchedulingService', [
       'scheduleTask',
-      'getByIdLive$',
     ]);
     taskServiceSpy.getByIdLive$.and.returnValue(opts.liveTask$ ?? of(liveTask));
     matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
@@ -94,6 +95,7 @@ describe('DialogScheduleTaskComponent — repeat field', () => {
           useValue: jasmine.createSpyObj('SnackService', ['open']),
         },
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskSchedulingService, useValue: taskSchedulingServiceSpy },
         {
           provide: ReminderService,
           useValue: jasmine.createSpyObj('ReminderService', ['getById']),
@@ -104,6 +106,7 @@ describe('DialogScheduleTaskComponent — repeat field', () => {
             isToday: () => false,
             todayStr: () => '2026-05-26',
             getStartOfNextDayDiffMs: () => 0,
+            getLogicalTodayDate: () => new Date(),
           },
         },
         {

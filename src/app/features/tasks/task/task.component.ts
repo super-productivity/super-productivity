@@ -17,6 +17,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
+import { TaskSchedulingService } from '../task-scheduling.service';
 import { TaskDuplicateService } from '../task-duplicate.service';
 import { VIEW_TASK_LIST } from '../view-task-list.token';
 import { TaskMultiSelectService } from '../task-multi-select.service';
@@ -201,6 +202,7 @@ const isInteractiveTarget = (target: EventTarget | null): boolean =>
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _taskService = inject(TaskService);
+  private readonly _taskSchedulingService = inject(TaskSchedulingService);
   private readonly _taskDuplicateService = inject(TaskDuplicateService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _location = inject(Location);
@@ -765,13 +767,17 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const day = getDbDateStr(dayDate);
     const task = this.task();
     if (task.dueWithTime) {
-      const newDate = combineDateAndTime(dayDate, new Date(task.dueWithTime));
+      const newDate = combineDateAndTime(
+        dayDate,
+        new Date(task.dueWithTime),
+        this._dateService.getStartOfNextDayDiffMs(),
+      );
       const remindCfg = task.reminderId
         ? millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt)
         : (this._configService.cfg()?.reminder.defaultTaskRemindOption ??
           DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!);
 
-      this._taskService.scheduleTask(task, newDate.getTime(), remindCfg, false);
+      this._taskSchedulingService.scheduleTask(task, newDate.getTime(), remindCfg, false);
       this._snackService.open({
         type: 'SUCCESS',
         msg: T.F.PLANNER.S.TASK_PLANNED_FOR,

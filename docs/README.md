@@ -13,6 +13,7 @@ Update these alongside the behavior or workflow they describe:
 - [`src/app` layer map](../src/app/README.md) — where things live, which way
   dependencies point, and which of those directions are lint-enforced
 - [Documentation guide](documentation-guide.md)
+- [Public documentation](public/README.md) — structure, quadrant map, and migration status
 - [Development environment variables](ENV_SETUP.md)
 - [Plugin development](plugin-development.md)
 - [Adding an issue integration](add-new-integration.md)
@@ -27,8 +28,21 @@ Update these alongside the behavior or workflow they describe:
 - [Apple release automation](apple-release-automation.md)
 - [Translation guide](TRANSLATING.md) and [i18n script usage](i18n-script-usage.md)
 
-User-facing documentation lives in [`wiki/`](wiki/). Sync and operation-log
-architecture lives in [`sync-and-op-log/`](sync-and-op-log/).
+Public-facing documentation is migrating to [`public/`](public/), organized by
+Diátaxis and checked with the [diataxis skill](../.agents/skills/diataxis/SKILL.md).
+The legacy [`wiki/`](wiki/) remains the GitHub Wiki source until the migration
+completes. Sync and operation-log architecture lives in
+[`sync-and-op-log/`](sync-and-op-log/).
+
+## Documentation tooling
+
+The public docs checks run from [`docs/public/.meta/`](public/.meta/):
+
+- [Vale](public/.meta/vale/README.md) checks prose and style.
+- [markdownlint-cli2](public/.meta/markdownlint/README.md) checks Markdown structure.
+- [lychee](public/.meta/lychee/README.md) checks links and anchors.
+- [`npm run docs:public:check`](../.agents/skills/diataxis/scripts/checks.sh)
+  runs all five checks, including the frontmatter and visual page checks.
 
 ## Decisions
 
@@ -99,4 +113,5 @@ When changing behavior or operations:
 4. Remove or mark superseded documents that now contradict the new source.
 5. Never put credentials, user data, or production-specific secret values in
    documentation.
-6. Run `npm run docs:check-links`.
+6. Run `npm run docs:check-links`; for a `docs/public/` change, also run
+   `npm run docs:public:check`.

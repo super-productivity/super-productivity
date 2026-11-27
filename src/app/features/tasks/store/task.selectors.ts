@@ -774,9 +774,9 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
   _laterTodayWithSubTasksMapper,
 );
 
-export const selectAllDoneIds = createSelector(
+export const selectOpenTaskIds = createSelector(
   selectTaskSchedulingSnapshot,
-  (snapshot): string[] => snapshot.filter((s) => s.isDone).map((s) => s.id),
+  (snapshot) => new Set(snapshot.filter((task) => !task.isDone).map((task) => task.id)),
 );
 
 // DYNAMIC SELECTORS

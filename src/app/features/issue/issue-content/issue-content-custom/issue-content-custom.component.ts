@@ -6,7 +6,7 @@ import { JiraLinkComponent } from './jira-link/jira-link.component';
 import { TaskCopy } from '../../../tasks/task.model';
 import { CaldavTimeComponent } from './caldav-time/caldav-time.component';
 import { MatIcon } from '@angular/material/icon';
-import { getByPath } from '../get-by-path.util';
+import { getIssueFieldValue } from '../get-by-path.util';
 
 @Component({
   selector: 'issue-content-custom',
@@ -27,10 +27,6 @@ export class IssueContentCustomComponent {
   readonly task = input.required<TaskCopy>();
 
   getFieldValue(field: IssueFieldConfig, issue: IssueData): any {
-    if (typeof field.value === 'function') {
-      return field.value(issue);
-    }
-
-    return getByPath(issue, field.value);
+    return getIssueFieldValue(issue, field.value);
   }
 }

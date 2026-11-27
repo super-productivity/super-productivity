@@ -45,7 +45,7 @@
     "NO_TASKS": "您的待办事项列表中当前没有任务"
   },
   "BN": {
-    "SHOW_ISSUE_PANEL": "显示问题看板",
+    "SHOW_ISSUE_PANEL": "显示问题面板",
     "SHOW_NOTES": "显示项目备注",
     "SHOW_SCHEDULE": "日程",
     "SLOT_CHANGE_HINT": "长按可更改此按钮",
@@ -97,7 +97,7 @@
   "EXAMPLE_TASKS": {
     "GETTING_STARTED": {
       "TITLE": "可选：入门小提示",
-      "NOTES": "这里的内容都不是必需的。您可以随时删除这个任务。\n\n- **今天和收件箱**：今天会显示今天计划的任务。没有自己项目的任务会留在收件箱。一个任务可以同时出现在两个列表中。\n- **项目**：使用侧边栏中**项目**旁的 **+**，按主题对任务分组。\n- **同步**：在**设置 → 同步与备份**中，让您的数据保存在多台设备上。\n- **从 Todoist 或 TickTick 转过来？** 在**设置 → 同步与备份 → 导入/导出**中导入您的任务。\n- **导览**：侧边栏菜单中的**帮助 → 快速导览**会用您自己的任务带您了解基本操作，而**帮助 → 操作指南**则会逐步介绍简短语法和键盘操作。您可以随时关闭导览。\n- **打造专属设置**：选择主题或深色模式，并在**设置 → 常规**中开启或关闭看板、计划、习惯、专注模式或集成等功能。插件还能带来更多。"
+      "NOTES": "这里的内容都不是必需的。您可以随时删除这个任务。\n\n- **今天和收件箱**：今天会显示今天计划的任务。没有自己项目的任务会留在收件箱。一个任务可以同时出现在两个列表中。\n- **项目**：使用侧边栏中**项目**旁的 **+**，按主题对任务分组。\n- **同步**：在**设置 → 同步与备份**中，让您的数据保存在多台设备上。\n- **从 Todoist 或 TickTick 转过来？** 在**设置 → 同步与备份 → 导入/导出**中导入您的任务。\n- **导览**：侧边栏菜单中的**帮助 → 快速导览**会用您自己的任务带您了解基本操作，而**帮助 → 操作指南**则会逐步介绍简短语法和键盘操作。您可以随时关闭导览。\n- **打造专属设置**：选择主题或深色模式，并在**设置 → 常规**中开启或关闭视图、计划、习惯、专注模式或集成等功能。插件还能带来更多。"
     }
   },
   "F": {
@@ -230,12 +230,12 @@
         "TASK_DONE_STATE_UNDONE": "未完成"
       },
       "V": {
-        "ADD_NEW_BOARD": "添加新看板",
+        "ADD_NEW_BOARD": "创建视图",
         "ADD_TASK_TO": "添加任务到 {{title}}",
-        "CONFIRM_DELETE": "您确实要删除此看板吗？",
+        "CONFIRM_DELETE": "您确实要删除此视图吗？",
         "CREATE_NEW_TAG_BTN": "创建标签",
         "CREATE_NEW_TAGS_BTN": "创建标签",
-        "EDIT_BOARD": "编辑看板",
+        "EDIT_BOARD": "编辑视图",
         "EDIT_COLUMN": "编辑列",
         "EMPTY_VIEW_ADD": "添加任务",
         "EMPTY_VIEW_HINT": "任务符合视图规则后会显示在这里。添加一个任务，或更改规则。",
@@ -243,8 +243,8 @@
         "HINT_FILTER_PART_NOT_SAVED": "列表的部分筛选条件无法在视图中与其项目或标签组合，已被略过。",
         "HINT_GROUPING_NOT_SAVED": "此分组不会被保存：只有按标签分组才会成为视图的分区。",
         "MISSING_TAGS_MSG": "此视图使用了尚不存在的标签：{{tags}}",
-        "NO_PANELS_BTN": "配置看板",
-        "NO_PANELS_MSG": "此看板没有配置任何看板。向其中添加一些看板。",
+        "NO_PANELS_BTN": "配置视图",
+        "NO_PANELS_MSG": "此视图还没有分区。添加一个分区以显示任务。",
         "NO_TASKS_IN_VIEW": "没有符合此视图的任务",
         "NO_VIEWS_BTN": "创建视图",
         "NO_VIEWS_MSG": "还没有视图。视图会把所有项目中符合规则的任务显示在一列或多列中。",
@@ -280,7 +280,7 @@
         "TWO_WAY_SYNC_TITLE": "标题同步方向"
       },
       "FORM_SECTION": {
-        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定项目的未完成 CalDav 待办事项。它们将列为建议，并提供指向待办事项的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加并同步所有未完成的待办事项到您的任务待办事项列表。</p><p>要在网页应用中为 nextcloud 启用此功能，您可能需要通过 nextcloud 应用 <a href='https://apps.nextcloud.com/apps/webapppassword '>webapppassword</a> 将 \"https://app.super-productivity.com \" 加入白名单。</p>"
+        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建面板中列出特定项目的未完成 CalDav 待办事项。它们将列为建议，并提供指向待办事项的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加并同步所有未完成的待办事项到您的任务待办事项列表。</p><p>要在网页应用中为 nextcloud 启用此功能，您可能需要通过 nextcloud 应用 <a href='https://apps.nextcloud.com/apps/webapppassword '>webapppassword</a> 将 \"https://app.super-productivity.com \" 加入白名单。</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "描述",
@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: 无法同步，因为离线",
-        "SYNC_ERROR": "Dropbox: 同步时出错",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: 无法生成 PKCE 挑战。"
       }
     },
@@ -479,7 +478,7 @@
         "TOKEN": "访问令牌"
       },
       "FORM_SECTION": {
-        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定存储库的未结 Gitea 问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加和导入所有未结问题。</p><p>为了通过使用限制并访问，您可以提供一个访问令牌。"
+        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建面板中列出特定存储库的未结 Gitea 问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加和导入所有未结问题。</p><p>为了通过使用限制并访问，您可以提供一个访问令牌。"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "负责人",
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Jira 链接的备用主机地址（例如 API 主机与公开 URL 不同时使用；允许带路径前缀）"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "高级配置",
-        "HELP_ARR": {
-          "H1": "基本配置",
-          "H2": "工作日志设置",
-          "H3": "默认转换",
-          "P1_1": "请提供登录名（可以在您的个人资料页面上找到）和 <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html \" target=\"_blank\">API 令牌</a> 或密码，如果您出于某种原因无法生成一个。请注意，较新版本的 Jira 有时仅使用令牌。",
-          "P1_2": "您还需要指定一个 JQL 查询，用于从 Jira 添加任务的建议。如果您需要帮助，请查看此链接 <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html \" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html </a>。",
-          "P1_3": "您还可以配置是否想要自动（例如，每次访问规划视图时）通过自定义 JQL 查询指定导入所有新问题。",
-          "P1_4": "另一个选项是 \"检查当前票证是否分配给当前用户\"。如果启用并且您正在启动，将检查您是否当前在 Jira 上分配给该票证，如果不是，则会出现一个对话框，您可以选择将票证分配给自己。",
-          "P2_1": "有几种选项可以确定何时以及如何提交工作日志。启用 <em>'在任务完成时打开工作日志对话框以向 Jira 添加工作日志'</em> 会在您每次将 Jira 任务标记为完成时打开一个对话框以添加工作日志。因此，请记住，工作日志将添加到迄今为止跟踪的所有内容之上。因此，如果您第二次将任务标记为完成，您可能不想再次提交任务的完整工作时间。",
-          "P2_2": "<em>'在子任务完成时打开工作日志对话框，而不是对具有子任务的任务本身打开工作日志对话框'</em> 会在您将 Jira 问题的子任务标记为完成时每次都打开一个工作日志对话框。因为您已经通过子任务跟踪了您的时间，所以在您将 Jira 任务本身标记为完成时不会打开任何对话框。",
-          "P2_3": "<em>'在没有对话框的情况下自动将更新发送到工作日志'</em> 会执行它所说的操作。因为多次将任务标记为完成会导致整个工作时间被跟踪两次，所以不推荐这样做。",
-          "P3_1": "在这里，您可以重新配置默认转换。Jira 支持转换的广泛配置，通常作为 Jira 敏捷板上的不同列生效，我们无法假设在哪里以及何时转换您的任务，您需要手动设置它。"
-        }
+        "ADV_CFG": "高级配置"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "负责人",
@@ -774,6 +760,7 @@
         "AVG_TIME_SPENT_PER_TASK": "平均每个任务花费时间",
         "COUNTING_SUBTASKS": "（计算子任务）",
         "DAYS_WORKED": "工作天数",
+        "ENABLE_DAILY_SUMMARY": "开启每日摘要",
         "EVALUATION_OVER_TIME": "影响与精力随时间的变化",
         "FOCUS_SESSION_TRENDS": "专注会话超时",
         "GLOBAL_METRICS": "全局指标",
@@ -781,7 +768,8 @@
         "HEATMAP_SHARE_TAGLINE": "{{title}} – 使用 Super Productivity 应用",
         "HEATMAP_SHARED_TO_DEVICE": "热力图已保存到设备存储",
         "HEATMAP_SHARED_TO_PATH": "热力图已保存到 {{path}}",
-        "NO_ADDITIONAL_DATA_YET": "尚未收集额外数据。使用每日摘要 \"评估\" 看板上的表单进行操作。",
+        "NO_ADDITIONAL_DATA_YET": "尚未收集额外数据。使用每日摘要 \"评估\" 面板上的表单进行操作。",
+        "OPEN_DAILY_SUMMARY": "打开每日摘要",
         "SHARE_HEATMAP": "分享热力图",
         "SHARE_STATS": "分享您的生产力数据",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "点击计数器随时间的变化",
@@ -1030,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "调整此值可模糊背景图片。默认值为 0px。",
         "D_BACKGROUND_OVERLAY_OPACITY": "调整此值使背景更透明或更不透明。默认为 20%。",
-        "HELP": "项目的主题设置。",
         "L_BACKGROUND_IMAGE_BLUR": "模糊背景图片",
         "L_BACKGROUND_IMAGE_DARK": "背景图片网址（暗主题）",
         "L_BACKGROUND_IMAGE_LIGHT": "背景图片网址（亮主题）",
@@ -1404,10 +1391,35 @@
         "TITLE": "同步已开启"
       },
       "D_SYNC_IMPORT_CONFLICT": {
+        "AUTOMATIC_CHANGES": "未列出：{{count}} 项自动后台更新，例如重复任务记录其上次运行时间。",
+        "CHANGE_CREATED": "已创建",
+        "CHANGE_DELETED": "已删除",
+        "CHANGE_IMPORTED": "已导入",
+        "CHANGE_OTHER": "已更改",
+        "CHANGE_UPDATED": "已编辑",
+        "ENTITY": {
+          "ALL": "所有数据",
+          "BOARD": "视图",
+          "GLOBAL_CONFIG": "设置",
+          "ISSUE_PROVIDER": "问题提供者",
+          "MENU_TREE": "侧边栏",
+          "METRIC": "指标",
+          "NOTE": "笔记",
+          "PLANNER": "规划表",
+          "PROJECT": "项目",
+          "REMINDER": "提醒",
+          "SECTION": "分区",
+          "SIMPLE_COUNTER": "计数器",
+          "TAG": "标签",
+          "TASK": "任务",
+          "TASK_REPEAT_CFG": "重复任务",
+          "TIME_TRACKING": "时间跟踪"
+        },
         "FILTERED_CHANGES": "受影响的更改",
         "FIRST_SYNC_USE_LOCAL_CONFIRM": "此设备以前从未同步过。“使用我的数据”会用此设备的本地数据永久替换服务器数据，且无法撤销。是否继续？",
         "FIRST_SYNC_WARNING": "此设备以前从未同步过，因此“使用我的数据”会用此设备的数据覆盖服务器上的现有数据。",
         "IMPORT_DATE": "导入日期",
+        "LOCAL_CHANGES_TITLE": "您在此设备上的更改",
         "MSG_INCOMING": "您的数据已在另一台设备上完全被替换。您有 {{filteredOpCount}} 个本地更改可能无法保留。",
         "MSG_INCOMING_NO_OPS": "您的数据已在另一台设备上完全被替换。此设备将同步到新状态。",
         "MSG_LOCAL_FILTERS": "您的本地数据已被导入/恢复，但服务器有 {{filteredOpCount}} 个来自其他设备的更改无法自动合并。",
@@ -1737,7 +1749,6 @@
         "RESTORE_SUCCESS": "数据恢复成功",
         "SERVER_MIGRATION_VALIDATION_FAILED": "无法将数据迁移到服务器——本地数据验证失败。请尝试导入备份。",
         "SPLIT_FORMAT_ENABLE_SETTING": "此同步文件夹已升级为拆分文件格式。请在同步设置中启用“精细同步”以继续。",
-        "STORAGE_QUOTA_EXCEEDED": "同步服务器存储空间已满。您的更改未同步。请归档旧任务或升级您的套餐。",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "存储空间即将不足。旧数据已成功清理。",
         "SUCCESS_DOWNLOAD": "已从远程同步数据",
         "SUCCESS_VIA_BUTTON": "数据已成功同步",
@@ -2290,6 +2301,8 @@
         "C_YEAR": "年",
         "C_YEARS": "年",
         "DEFAULT_ESTIMATE": "默认预估时间",
+        "DEADLINE_OFFSET_DAYS": "截止日期（每次重复后的天数）",
+        "DEADLINE_OFFSET_DAYS_DESCRIPTION": "留空表示无截止日期。0 表示当天到期。",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "禁用自动更新子任务",
         "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "当最新任务实例发生变化时，不自动更新继承的子任务",
         "FALL_BEHIND": "如果进度落后",
@@ -2578,6 +2591,7 @@
     "EXPORT_DATA": "导出数据",
     "IMPORT_FROM_FILE": "从文件导入",
     "IMPORT_FROM_TICKTICK": "从 TickTick 导入",
+    "IMPORT_FROM_MS_TODO": "从 Microsoft To Do 导入",
     "IMPORT_FROM_TODOIST": "从 Todoist 导入",
     "IMPORT_FROM_URL": "从 URL 导入",
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "请输入您要导入的超级生产力备份 JSON 文件的完整 URL。",
@@ -2592,6 +2606,7 @@
     "S_ERR_INVALID_URL": "导入失败：提供的 URL 无效",
     "S_ERR_NETWORK": "导入失败：从 URL 获取数据时网络错误",
     "S_ERR_TICKTICK_IMPORT_OPEN": "无法打开 TickTick 导入工具",
+    "S_ERR_MS_TODO_IMPORT_OPEN": "无法打开 Microsoft To Do 导入工具",
     "S_ERR_TODOIST_IMPORT_OPEN": "无法打开 Todoist 导入工具",
     "S_IMPORT_FROM_URL_ERR_DECODE": "错误：无法解码用于导入的 URL 参数。请确保其格式正确。",
     "URL_PLACEHOLDER": "输入要从中导入的 URL"
@@ -2653,7 +2668,7 @@
   },
   "GCF": {
     "APP_FEATURES": {
-      "BOARDS": "看板",
+      "BOARDS": "视图",
       "BOARDS_HINT": "侧边菜单中的已保存视图。每个视图按标签、项目、计划日期或完成状态展示所有项目中的任务，可用一列或多列，类似看板。",
       "DONATE_PAGE": "捐赠页面",
       "DONATE_PAGE_HINT": "在菜单中显示一个入口，提供支持应用开发的方式。",
@@ -2780,6 +2795,7 @@
     },
     "FOCUS_MODE_LOCAL": {
       "HELP": "这些设置仅适用于此设备，不会同步。",
+      "L_IS_FOCUS_WINDOW_ON_SESSION_END": "专注会话或休息结束时将应用窗口置于前台",
       "L_IS_LOOP_BREAK_END_ALARM": "循环播放休息结束提示音，直到我结束休息（仅此设备）",
       "L_IS_NOTIFY_ON_SESSION_END": "番茄钟会话或休息结束时显示浏览器通知",
       "S_NOTIFICATION_PERMISSION_DENIED": "此站点不允许通知。请在浏览器中允许通知以使用此选项。",
@@ -2863,11 +2879,11 @@
       "TASK_UNSCHEDULE": "取消任务安排",
       "TITLE": "键盘快捷键",
       "TOGGLE_BACKLOG": "显示/隐藏任务待办事项",
-      "TOGGLE_ISSUE_PANEL": "显示/隐藏问题看板",
+      "TOGGLE_ISSUE_PANEL": "显示/隐藏问题面板",
       "TOGGLE_PLAY": "开始/停止 任务",
       "TOGGLE_SIDE_NAV": "聚焦侧边导航",
       "TOGGLE_SIDE_NAV_MODE": "切换侧边栏紧凑/完整模式",
-      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "切换筛选/分组/排序看板",
+      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "切换筛选/分组/排序面板",
       "TRIGGER_SYNC": "触发同步（如果已配置）",
       "ZOOM_DEFAULT": "默认缩放（仅限桌面）",
       "ZOOM_IN": "放大（仅限桌面）",
@@ -2944,6 +2960,7 @@
       "IS_DARK_MODE": "深色模式",
       "IS_DISABLE_ANIMATIONS": "禁用所有动画",
       "IS_DISABLE_CELEBRATION": "在每日摘要中禁用庆祝",
+      "IS_HIDE_NAV_TASK_COUNT": "隐藏侧边栏中的任务数量徽章",
       "IS_LOCAL_REST_API_ENABLED": "启用本地 REST API（仅桌面端）",
       "IS_LOCAL_REST_API_ENABLED_HINT": "允许本地脚本通过 http://127.0.0.1:3876 控制正在运行的应用。此计算机上运行的任何应用都将能够读取和修改您的任务。",
       "LOCAL_REST_API_TOKEN": "访问令牌",
@@ -2994,7 +3011,7 @@
       "WALLPAPER": "壁纸",
       "WALLPAPER_BUTTON": "设置壁纸…",
       "WALLPAPER_DIALOG_TITLE": "全局壁纸",
-      "WALLPAPER_HINT": "显示在没有自定义背景的页面上（规划器、日程、看板、设置等）。拥有自定义图片的标签和项目会覆盖此壁纸。"
+      "WALLPAPER_HINT": "显示在没有自定义背景的页面上（规划器、日程、视图、设置等）。拥有自定义图片的标签和项目会覆盖此壁纸。"
     },
     "POMODORO": {
       "BREAK_DURATION": "短休息持续时间",
@@ -3149,6 +3166,7 @@
     "NO_TASKS_TO_UNPLAN": "没有任务需要取消",
     "OPEN_SETTINGS_ERROR": "无法打开设置",
     "PERSISTENCE_DISALLOWED": "数据将不会永久保留。请注意，这可能导致数据丢失！！",
+    "PERSISTENCE_DISALLOWED_SET_UP_SYNC": "设置同步",
     "PERSISTENCE_ERROR": "请求持久化数据时出错：{{err}}",
     "SAVE_BLOCKED_DURING_SYNC": "同步进行中 - 部分更改可能需要重新保存",
     "SHARE_FAILED": "共享失败。请手动复制。",
@@ -3167,7 +3185,7 @@
   "MH": {
     "ADD_NEW_TASK": "添加新任务",
     "ADD_SECTION": "添加分区",
-    "BOARDS": "看板",
+    "BOARDS": "视图",
     "COPY_TASK_LIST_MARKDOWN": "复制到剪贴板",
     "CREATE_PROJECT": "创建项目",
     "CREATE_TAG": "创建标签",
@@ -3230,7 +3248,7 @@
     "TASK_LIST": "任务列表",
     "TASKS": "任务",
     "TOGGLE_SHOW_BOOKMARKS": "显示/隐藏书签",
-    "TOGGLE_SHOW_ISSUE_PANEL": "显示/隐藏问题看板",
+    "TOGGLE_SHOW_ISSUE_PANEL": "显示/隐藏问题面板",
     "TOGGLE_SHOW_NOTES": "显示/隐藏项目备注",
     "TOGGLE_TRACK_TIME": "开始/停止跟踪时间",
     "TRIGGER_SYNC": "同步！",
@@ -3669,7 +3687,7 @@
     "LAST": "上一个：",
     "NEXT": "下一个",
     "NO_DEADLINES": "目前没有设置截止日期的任务。您可以通过任务的右键菜单或详细信息面板设置截止日期。",
-    "NO_REPEATABLE_TASKS": "当前没有重复任务。您可以通过在任务侧看板中选择 \"重复任务\" 来计划任务。要打开它，请点击悬停任务时出现的右侧图标（或在移动设备上点击任务）。",
+    "NO_REPEATABLE_TASKS": "当前没有重复任务。您可以通过在任务侧面板中选择 \"重复任务\" 来计划任务。要打开它，请点击悬停任务时出现的右侧图标（或在移动设备上点击任务）。",
     "NO_SCHEDULED": "当前没有计划任务。您可以通过在任务上下文菜单中选择 \"计划任务\" 来计划任务。要打开它，请右键单击（在移动设备上长按）任务。",
     "SCHEDULED_TASKS": "计划任务",
     "START_TASK": "开始任务并移除提醒"

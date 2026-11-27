@@ -10,7 +10,7 @@ import { TaskContextMenuInnerComponent } from './task-context-menu/task-context-
 import { KeyboardConfig } from '@sp/keyboard-config';
 import { isInputElement } from '../../util/dom-element';
 import { getDomFocusedTaskId } from './get-dom-focused-task-id';
-import { TaskMultiSelectService } from './task-multi-select.service';
+import { BulkSubmenu, TaskMultiSelectService } from './task-multi-select.service';
 import { TaskBulkActionService } from './task-bulk-action.service';
 import { taskToMarkdownChecklist } from './task-to-markdown-checklist';
 import { GROUP_NAV_SELECTOR } from '../../ui/collapsible/collapsible.component';
@@ -459,33 +459,18 @@ export class TaskShortcutService {
     // A shortcut on a focused row that is *not* part of the selection acts on
     // that row alone (file-manager rule): drop the selection and fall through.
     if (focusedTaskId && !this._multiSelect.has(focusedTaskId)) {
-      if (this._isBulkShortcut(ev, keys)) {
+      if (this._findBulkHandler(ev, keys, focusedTaskId) || isNativeContextMenuKey(ev)) {
         this._multiSelect.clear();
       }
       return false;
     }
 
-    // Bulk allowlist. Everything else keeps acting on the focused task only.
-    const bulkHandlers: [string | null | undefined, () => unknown][] = [
-      [keys.taskToggleDone, () => this._bulkActions.toggleDone()],
-      [keys.taskDelete, () => this._bulkActions.deleteSelected()],
-      [keys.taskSchedule, () => this._bulkActions.openScheduleDialog()],
-      [keys.taskScheduleDeadline, () => this._bulkActions.openDeadlineDialog()],
-      [keys.taskScheduleToday, () => this._bulkActions.addToToday()],
-      [keys.taskUnschedule, () => this._bulkActions.unschedule()],
-      [keys.moveToBacklog, () => this._bulkActions.moveToBacklog()],
-      [keys.taskMoveToProject, () => this._requestBulkMenu(focusedTaskId)],
-      [keys.taskEditTags, () => this._requestBulkMenu(focusedTaskId)],
-      [keys.taskOpenEstimationDialog, () => this._requestBulkMenu(focusedTaskId)],
-      [keys.taskOpenContextMenu, () => this._requestBulkMenu(focusedTaskId)],
-    ];
-    for (const [combo, handler] of bulkHandlers) {
-      if (combo && checkKeyCombo(ev, combo)) {
-        handler();
-        ev.preventDefault();
-        ev.stopPropagation();
-        return true;
-      }
+    const bulkHandler = this._findBulkHandler(ev, keys, focusedTaskId);
+    if (bulkHandler) {
+      bulkHandler();
+      ev.preventDefault();
+      ev.stopPropagation();
+      return true;
     }
     if (isNativeContextMenuKey(ev)) {
       this._requestBulkMenu(focusedTaskId);
@@ -495,28 +480,35 @@ export class TaskShortcutService {
     return false;
   }
 
+  /** Bulk allowlist: only these shortcuts act on the whole selection. */
+  private _findBulkHandler(
+    ev: KeyboardEvent,
+    keys: KeyboardConfig,
+    focusedTaskId: TaskId | null,
+  ): (() => unknown) | undefined {
+    const bulkHandlers: [string | null | undefined, () => unknown][] = [
+      [keys.taskToggleDone, () => this._bulkActions.toggleDone()],
+      [keys.taskDelete, () => this._bulkActions.deleteSelected()],
+      [keys.taskSchedule, () => this._bulkActions.openScheduleDialog()],
+      [keys.taskScheduleDeadline, () => this._bulkActions.openDeadlineDialog()],
+      [keys.taskScheduleToday, () => this._bulkActions.addToToday()],
+      [keys.taskUnschedule, () => this._bulkActions.unschedule()],
+      [keys.moveToBacklog, () => this._bulkActions.moveToBacklog()],
+      [keys.taskMoveToProject, () => this._requestBulkMenu(focusedTaskId, 'project')],
+      [keys.taskEditTags, () => this._requestBulkMenu(focusedTaskId, 'tags')],
+      [
+        keys.taskOpenEstimationDialog,
+        () => this._requestBulkMenu(focusedTaskId, 'estimate'),
+      ],
+      [keys.taskOpenContextMenu, () => this._requestBulkMenu(focusedTaskId)],
+    ];
+    return bulkHandlers.find(([combo]) => combo && checkKeyCombo(ev, combo))?.[1];
+  }
+
   /** True when any configured combo (task, global or plugin) matches `ev`. */
   private _isAnyConfiguredCombo(ev: KeyboardEvent, keys: KeyboardConfig): boolean {
     return Object.values(keys).some(
       (combo) => typeof combo === 'string' && !!combo && checkKeyCombo(ev, combo),
-    );
-  }
-
-  private _isBulkShortcut(ev: KeyboardEvent, keys: KeyboardConfig): boolean {
-    return (
-      [
-        keys.taskToggleDone,
-        keys.taskDelete,
-        keys.taskSchedule,
-        keys.taskScheduleDeadline,
-        keys.taskScheduleToday,
-        keys.taskUnschedule,
-        keys.moveToBacklog,
-        keys.taskMoveToProject,
-        keys.taskEditTags,
-        keys.taskOpenEstimationDialog,
-        keys.taskOpenContextMenu,
-      ].some((combo) => !!combo && checkKeyCombo(ev, combo)) || isNativeContextMenuKey(ev)
     );
   }
 
@@ -533,7 +525,7 @@ export class TaskShortcutService {
   }
 
   /** Opens the bulk actions menu next to the focused row (or the bar). */
-  private _requestBulkMenu(focusedTaskId: TaskId | null): void {
+  private _requestBulkMenu(focusedTaskId: TaskId | null, submenu?: BulkSubmenu): void {
     const rowEl = focusedTaskId
       ? (document.activeElement?.closest(
           'task, planner-task[data-task-selectable="true"]',
@@ -544,6 +536,7 @@ export class TaskShortcutService {
       rect
         ? { x: rect.left + Math.min(rect.width / 2, 200), y: rect.bottom }
         : { x: window.innerWidth / 2, y: window.innerHeight - 80 },
+      submenu,
     );
   }
 

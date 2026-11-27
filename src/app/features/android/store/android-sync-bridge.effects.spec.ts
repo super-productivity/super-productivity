@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideMockStore } from '@ngrx/store/testing';
 import { BehaviorSubject } from 'rxjs';
 import { distinctUntilChanged, filter, map } from 'rxjs/operators';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
@@ -14,6 +15,7 @@ import {
   AndroidSyncBridgeEffects,
   BackgroundSyncBridgeCommand,
   bridgeCommandEqual,
+  getBackgroundReminderBridgeSettings,
   getBackgroundReminderSettings,
   getCapturePublicKeyForNative,
   getFileSyncCredentialBridgeCommand,
@@ -260,6 +262,7 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
       TestBed.configureTestingModule({
         providers: [
           AndroidSyncBridgeEffects,
+          provideMockStore(),
           {
             provide: SyncProviderManager,
             useValue: { getProviderById: () => Promise.resolve(provider) },
@@ -310,6 +313,7 @@ describe('AndroidSyncBridgeEffects - credential mirroring logic', () => {
       TestBed.configureTestingModule({
         providers: [
           AndroidSyncBridgeEffects,
+          provideMockStore(),
           {
             provide: SyncProviderManager,
             useValue: {
@@ -452,6 +456,23 @@ describe('AndroidSyncBridgeEffects - reminder settings mirroring logic', () => {
       getBackgroundReminderSettings(reminderCfg({ useAlarmStyleReminders: true }))
         .useAlarmStyle,
     ).toBe(true);
+  });
+
+  it('includes a zero start-of-next-day offset when misc is missing', () => {
+    expect(getBackgroundReminderBridgeSettings(undefined)).toEqual({
+      isDisabled: false,
+      useAlarmStyle: false,
+      startOfNextDayDiffMs: 0,
+    });
+  });
+
+  it('mirrors a start-of-next-day time as milliseconds', () => {
+    expect(
+      getBackgroundReminderBridgeSettings({
+        reminder: reminderCfg({}),
+        misc: { startOfNextDayTime: '04:00' } as never,
+      }).startOfNextDayDiffMs,
+    ).toBe(4 * 60 * 60 * 1000);
   });
 });
 

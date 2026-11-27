@@ -61,9 +61,13 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'getAllTags',
   'addTag',
   'updateTag',
+  'addTaskRepeatCfg',
+  'updateTaskRepeatCfg',
   'showSnack',
   'notify',
   'request',
+  'startOAuthFlow',
+  'clearOAuthToken',
   'translate',
   'formatDate',
   'getCurrentLanguage',
@@ -76,6 +80,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'getDayContext',
   'startTracking',
   'stopTracking',
+  'openProject',
   'getAppState',
   'persistDataSynced',
   'loadPersistedData',
@@ -377,13 +382,14 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
               callId: id
             }, '*');
 
-            // Timeout after 30 seconds
+            // Timeout after 30 seconds; sign-in waits on the user, so it gets
+            // the host's OAUTH_REDIRECT_TIMEOUT_MS (5 min, plugin-oauth.service) plus a margin.
             setTimeout(() => {
               if (pendingCalls.has(id)) {
                 pendingCalls.delete(id);
                 reject(new Error('API call timeout'));
               }
-            }, 30000);
+            }, method === 'startOAuthFlow' ? 330000 : 30000);
           });
         }
 
@@ -426,6 +432,10 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           addTag: (tagData) => callApi('addTag', [tagData]),
           updateTag: (tagId, updates) => callApi('updateTag', [tagId, updates]),
 
+          // Task repeat config methods
+          addTaskRepeatCfg: (taskId, schedule) => callApi('addTaskRepeatCfg', [taskId, schedule]),
+          updateTaskRepeatCfg: (repeatCfgId, updates) => callApi('updateTaskRepeatCfg', [repeatCfgId, updates]),
+
           // Task ordering
           reorderTasks: (taskIds, contextId, contextType) => callApi('reorderTasks', [taskIds, contextId, contextType]),
 
@@ -438,6 +448,10 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           },
           notify: (cfg) => callApi('notify', [cfg]),
           request: (url, options) => callApi('request', [url, options]),
+          // published, unscoped OAuth API only — tokenKey is a host ↔ bundled
+          // Google Calendar contract
+          startOAuthFlow: (config) => callApi('startOAuthFlow', [config]),
+          clearOAuthToken: () => callApi('clearOAuthToken'),
           openDialog: (cfg) => callApi('openDialog', [cfg]),
           showIndexHtmlAsView: () => callApi('showIndexHtmlAsView'),
           showIndexHtmlInSidePanel: () => callApi('showIndexHtmlInSidePanel'),
@@ -447,6 +461,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           getDayContext: () => callApi('getDayContext'),
           startTracking: (taskId) => callApi('startTracking', [taskId]),
           stopTracking: () => callApi('stopTracking'),
+          openProject: (projectId) => callApi('openProject', [projectId]),
           getAppState: () => callApi('getAppState'),
 
           // Persistence methods (optional second arg = key, forwarded by callApi)

@@ -49,6 +49,15 @@
               {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
             </span>
           }
+          @if (isImportOffered()) {
+            <button
+              type="button"
+              class="import-link"
+              (click)="onboardingHintService.openImport()"
+            >
+              {{ T.ONBOARDING.HINTS.OR_IMPORT | translate }}
+            </button>
+          }
         </div>
         <button
           type="button"

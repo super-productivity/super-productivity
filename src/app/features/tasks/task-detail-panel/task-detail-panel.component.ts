@@ -37,6 +37,7 @@ import {
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { DialogTimeEstimateComponent } from '../dialog-time-estimate/dialog-time-estimate.component';
 import { MatDialog } from '@angular/material/dialog';
+import { Router } from '@angular/router';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
@@ -102,6 +103,7 @@ import {
 import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 import { isWontDoTask } from '../util/is-wont-do-task';
+import { hasModifierKey } from '@angular/cdk/keycodes';
 
 @Component({
   selector: 'task-detail-panel',
@@ -157,6 +159,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _translateService = inject(TranslateService);
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _router = inject(Router);
 
   // Exposed so the template can pass the reactive locale to the now-pure
   // `localeDate` pipe, preserving re-render on a locale change.
@@ -620,7 +623,12 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         .clearImgHeaders()
         .catch(() => IssueLog.err('Jira image authentication cleanup failed'));
     }
-    if (window.history.state?.[HISTORY_STATE.TASK_DETAIL_PANEL]) {
+    // Skip while navigating: the navigation closed the panel, and the popstate
+    // from back() would cancel it, swallowing the user's side-nav click.
+    if (
+      window.history.state?.[HISTORY_STATE.TASK_DETAIL_PANEL] &&
+      !this._router.currentNavigation()
+    ) {
       window.history.back();
     }
     window.clearTimeout(this._focusTimeout);
@@ -804,6 +812,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   onItemKeyPress(ev: KeyboardEvent): void {
+    // Modified arrows are task shortcuts (e.g. Ctrl+Alt+ArrowDown on a sub-task).
+    if (hasModifierKey(ev)) {
+      return;
+    }
     const itemEls = this.itemEls();
     if (!itemEls) {
       throw new Error();
@@ -877,6 +889,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       // task shortcuts — a typed note scheduled the task instead (#9910).
       const activeEl = document.activeElement;
       if (activeEl instanceof HTMLElement && isInputElement(activeEl)) {
+        return;
+      }
+      // Nor from a sub-task row the user focused in this panel meanwhile: the
+      // next task shortcut (move, done, …) would otherwise find no focused task.
+      if (
+        activeEl?.closest('task') &&
+        this._elementRef.nativeElement.contains(activeEl)
+      ) {
         return;
       }
       if (this.task().id === scheduledForTaskId) {

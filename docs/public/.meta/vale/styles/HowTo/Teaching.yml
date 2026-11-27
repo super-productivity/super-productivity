@@ -1,0 +1,28 @@
+# A how-to guide assumes competence. It doesn't teach, and it doesn't
+# promise that the reader will learn; that is the tutorial's job.
+# https://diataxis.fr/how-to-guides/#how-to-guides-are-not-tutorials
+extends: existence
+message: "'%s' is teaching. A how-to guide assumes the reader knows the basics; a tutorial teaches them."
+link: https://diataxis.fr/how-to-guides/#how-to-guides-are-not-tutorials
+level: warning
+ignorecase: true
+tokens:
+  - "(?:you|we)(?:'ll| will) learn"
+  - learn how to
+  - let's learn
+  - in this (?:guide|article|section),? you will understand
+  - don't worry if
+  - for beginners
+
+tests:
+  - name: fires
+    input: |
+      In this guide you'll learn how to deploy.
+
+    want: |
+      1:15:HowTo.Teaching:'you'll learn' is teaching. A how-to guide assumes the reader knows the basics; a tutorial teaches them.
+  - name: clean
+    input: |
+      This guide deploys the site to production.
+
+    want: ""

@@ -47,7 +47,7 @@ describe('Issue #4846: Move to Archive with Subtasks', () => {
         createMockTaskWithSubTasks(subTask2), // BUG: Subtask included as separate entry
       ];
 
-      // In moveToArchive method (task.service.ts:660-665):
+      // In moveToArchive method (task-archive-orchestrator.service.ts):
       const tasks = doneTasks; // This would be passed to moveToArchive
       const subTasks = tasks.filter((t) => t.parentId);
 

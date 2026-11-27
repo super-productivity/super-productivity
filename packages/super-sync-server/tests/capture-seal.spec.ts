@@ -239,4 +239,45 @@ describe('validateCreateTaskArgs', () => {
       expect(typeof validateCreateTaskArgs({ title: 'a', ...due })).toBe('string');
     }
   });
+
+  it('keeps a deadline day, an optional deadline time and an estimate', () => {
+    expect(
+      validateCreateTaskArgs({
+        title: 'a',
+        dueDate: '2026-10-15',
+        deadlineDate: '2026-10-16',
+        estimateMinutes: 45,
+      }),
+    ).toEqual({
+      title: 'a',
+      dueDate: '2026-10-15',
+      deadlineDate: '2026-10-16',
+      estimateMinutes: 45,
+    });
+    expect(
+      validateCreateTaskArgs({
+        title: 'a',
+        deadlineDate: '2026-10-16',
+        deadlineTime: '08:00',
+      }),
+    ).toEqual({ title: 'a', deadlineDate: '2026-10-16', deadlineTime: '08:00' });
+  });
+
+  it('refuses a bad deadline or estimate, and a deadline with repeat', () => {
+    for (const extra of [
+      { deadlineTime: '08:00' },
+      { deadlineDate: '2026-02-30' },
+      { deadlineDate: '0999-12-31' },
+      { deadlineDate: '2026-10-16T08:00' },
+      { deadlineDate: '2026-10-16', deadlineTime: '24:00' },
+      { deadlineDate: '2026-10-16', deadlineTime: '8:00' },
+      { deadlineDate: '2026-10-16', repeat: { cycle: 'weekly' } },
+      { estimateMinutes: 0 },
+      { estimateMinutes: 10081 },
+      { estimateMinutes: 1.5 },
+      { estimateMinutes: '30' },
+    ]) {
+      expect(typeof validateCreateTaskArgs({ title: 'a', ...extra })).toBe('string');
+    }
+  });
 });

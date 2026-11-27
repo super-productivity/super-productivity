@@ -1,10 +1,15 @@
+import { Capacitor } from '@capacitor/core';
 import { SyncLog } from '../../../core/log';
 import {
   ConnectPollAnswer,
   ConnectRequest,
+  ConnectHttpError,
   ConnectUnsupportedError,
+  connectNativeHttp,
   createConnectRequest,
   MAX_SIGN_IN_WAIT_MS,
+  NATIVE_CONNECT_TIMEOUT_MS,
+  NATIVE_READ_TIMEOUT_MS,
   pollConnectRequest,
   PollLoopDeps,
   waitForApproval,
@@ -78,6 +83,15 @@ describe('SuperSync browser sign-in API', () => {
       expect(error).not.toEqual(jasmine.any(ConnectUnsupportedError));
     });
 
+    for (const status of [400, 403, 429]) {
+      it(`reports HTTP ${status} as an answer from the server, with its status`, async () => {
+        fetchSpy.and.resolveTo(jsonResponse(status, {}));
+        const error = await createConnectRequest(BASE, DEVICE).catch((e) => e);
+        expect(error).toEqual(jasmine.any(ConnectHttpError));
+        expect(error.status).toBe(status);
+      });
+    }
+
     it('keeps the poll interval within 1 s and 60 s', async () => {
       fetchSpy.and.resolveTo(jsonResponse(200, { ...created, pollIntervalMs: 5 }));
       expect((await createConnectRequest(BASE, DEVICE)).pollIntervalMs).toBe(1000);
@@ -124,6 +138,69 @@ describe('SuperSync browser sign-in API', () => {
       await expectAsync(pollConnectRequest(BASE, request)).toBeRejected();
       fetchSpy.and.resolveTo(jsonResponse(200, { status: 'maybe' }));
       await expectAsync(pollConnectRequest(BASE, request)).toBeRejected();
+    });
+  });
+
+  // The server's CORS list only has the web app, so a WebView fetch from the
+  // native app's https://localhost origin is blocked (#11740).
+  describe('on native', () => {
+    let httpSpy: jasmine.Spy;
+    const request: ConnectRequest = {
+      requestId: REQUEST_ID,
+      pollSecret: created.pollSecret,
+      matchCode: 'ABC-DEF',
+      pollIntervalMs: 3000,
+    };
+
+    beforeEach(() => {
+      spyOn(Capacitor, 'isNativePlatform').and.returnValue(true);
+      httpSpy = spyOn(connectNativeHttp, 'request');
+    });
+
+    it('creates the request through native HTTP, not the WebView fetch', async () => {
+      httpSpy.and.resolveTo({ status: 200, data: created, headers: {}, url: '' });
+      expect((await createConnectRequest(BASE, DEVICE)).matchCode).toBe('ABC-DEF');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      const opts = httpSpy.calls.mostRecent().args[0];
+      expect(opts.url).toBe(`${BASE}/api/connect/requests`);
+      expect(opts.method).toBe('POST');
+      expect(JSON.parse(opts.data)).toEqual(DEVICE);
+      expect(opts.connectTimeout).toBe(NATIVE_CONNECT_TIMEOUT_MS);
+      expect(opts.readTimeout).toBe(NATIVE_READ_TIMEOUT_MS);
+    });
+
+    it('keeps the server-without-sign-in and HTML handling', async () => {
+      httpSpy.and.resolveTo({ status: 404, data: '', headers: {}, url: '' });
+      await expectAsync(createConnectRequest(BASE, DEVICE)).toBeRejectedWithError(
+        ConnectUnsupportedError,
+      );
+      httpSpy.and.resolveTo({ status: 200, data: '<html>', headers: {}, url: '' });
+      await expectAsync(createConnectRequest(BASE, DEVICE)).toBeRejectedWithError(
+        ConnectUnsupportedError,
+      );
+    });
+
+    it('polls through native HTTP and reads Retry-After in any case', async () => {
+      httpSpy.and.resolveTo({
+        status: 200,
+        data: JSON.stringify({ status: 'approved', token: 'jwt' }),
+        headers: {},
+        url: '',
+      });
+      expect(await pollConnectRequest(BASE, request)).toEqual({
+        status: 'approved',
+        token: 'jwt',
+      });
+      const firstOpts = httpSpy.calls.first().args[0];
+      expect(firstOpts.connectTimeout).toBe(NATIVE_CONNECT_TIMEOUT_MS);
+      expect(firstOpts.readTimeout).toBe(NATIVE_READ_TIMEOUT_MS);
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      httpSpy.and.resolveTo({ status: 429, data: {}, headers: { 'retry-after': '7' } });
+      expect(await pollConnectRequest(BASE, request)).toEqual({
+        status: 'slow-down',
+        retryAfterMs: 7000,
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
     });
   });
 

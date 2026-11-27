@@ -1,0 +1,32 @@
+---
+# Generated from Harper's CapitalizeOn rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `capitalise off` to `capitalise on`.
+extends: substitution
+message: "Did you mean %[1]s?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "capitalise(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)": "capitalise on"
+  "capitalise(?!\\s*\\n\\s*\\n)\\s+off(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "capitalise on"
+  "capitalised(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)": "capitalised on"
+  "capitalised(?!\\s*\\n\\s*\\n)\\s+off(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "capitalised on"
+  "capitalises(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)": "capitalises on"
+  "capitalises(?!\\s*\\n\\s*\\n)\\s+off(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "capitalises on"
+  "capitalising(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)": "capitalising on"
+  "capitalising(?!\\s*\\n\\s*\\n)\\s+off(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "capitalising on"
+  "capitalize(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)": "capitalize on"
+  "capitalize(?!\\s*\\n\\s*\\n)\\s+off(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "capitalize on"
+  "capitalized(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)": "capitalized on"
+  "capitalized(?!\\s*\\n\\s*\\n)\\s+off(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "capitalized on"
+  "capitalizes(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)": "capitalizes on"
+  "capitalizes(?!\\s*\\n\\s*\\n)\\s+off(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "capitalizes on"
+  "capitalizing(?!\\s*\\n\\s*\\n)\\s+off(?!['\\x{2019}]s\\b)": "capitalizing on"
+  "capitalizing(?!\\s*\\n\\s*\\n)\\s+off(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)": "capitalizing on"

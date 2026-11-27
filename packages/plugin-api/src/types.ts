@@ -594,6 +594,58 @@ export interface PluginTaskRepeatCfg {
   lastTaskCreationDay?: string;
   quickSetting?: string;
   remindAt?: string;
+  skipOverdue?: boolean;
+  repeatFromCompletionDate?: boolean;
+  repeatUntilDay?: string;
+}
+
+/**
+ * The schedule of a repeat config, as the app's repeat dialog sets it.
+ * Accepted by `addTaskRepeatCfg` and `updateTaskRepeatCfg`; any other field
+ * is rejected.
+ *
+ * A preset `quickSetting` derives the cycle, interval and weekdays from
+ * `startDate` (e.g. `MONTHLY_NTH_WEEKDAY` with a start date on the second
+ * Tuesday repeats every second Tuesday). Only `'CUSTOM'` accepts
+ * `repeatCycle`, `repeatEvery` and the weekday flags; a weekly custom schedule
+ * needs at least one weekday.
+ */
+export interface PluginTaskRepeatCfgSchedule {
+  quickSetting?:
+    | 'DAILY'
+    | 'WEEKLY_CURRENT_WEEKDAY'
+    | 'MONTHLY_CURRENT_DATE'
+    | 'MONTHLY_FIRST_DAY'
+    | 'MONTHLY_LAST_DAY'
+    | 'MONTHLY_NTH_WEEKDAY'
+    | 'MONDAY_TO_FRIDAY'
+    | 'YEARLY_CURRENT_DATE'
+    | 'CUSTOM';
+  /** YYYY-MM-DD, the first day an instance may be created on. */
+  startDate?: string;
+  repeatCycle?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  /** Integer from 1 to 1000. */
+  repeatEvery?: number;
+  monday?: boolean;
+  tuesday?: boolean;
+  wednesday?: boolean;
+  thursday?: boolean;
+  friday?: boolean;
+  saturday?: boolean;
+  sunday?: boolean;
+  /**
+   * `'CUSTOM'` only: count the interval from the day a copy is completed
+   * ("every 3 days after I finish it"); the next copy is only created then.
+   * A weekly interval is stored as days. A `'CUSTOM'` schedule change without
+   * it keeps it; a preset or `false` turns it off, and new copies then no
+   * longer wait for completion.
+   */
+  repeatFromCompletionDate?: boolean;
+  isPaused?: boolean;
+  /** Skip missed (overdue) instances instead of creating them. */
+  skipOverdue?: boolean;
+  /** YYYY-MM-DD, the last day a copy may be created on; `null` removes it. */
+  repeatUntilDay?: string | null;
 }
 
 export interface PluginSimpleCounterFull {
@@ -691,6 +743,12 @@ export interface PluginAPI {
 
   /** Stop time tracking. Feature-detect on older hosts. */
   stopTracking?(): Promise<void>;
+
+  /**
+   * Navigate to a project's task list, e.g. to show what the plugin just
+   * created. Rejects for an unknown project. Feature-detect on older hosts.
+   */
+  openProject?(projectId: string): Promise<void>;
 
   /**
    * Mount this plugin's index.html inside the work-view body, in place of
@@ -821,6 +879,33 @@ export interface PluginAPI {
   addTag(tagData: Partial<Tag>): Promise<string>;
 
   updateTag(tagId: string, updates: Partial<Tag>): Promise<void>;
+
+  // task repeat configs (read them via getAppState().taskRepeatCfgs)
+
+  /**
+   * Makes an existing top-level task repeat, like "Repeat" in the task's
+   * schedule dialog: title, notes, tags, estimate, priority, day and time are
+   * taken from the task. Without a schedule the task repeats daily from its
+   * due day (or today). Rejects subtasks, tasks linked to an issue, tasks that
+   * already repeat, invalid fields and a `startDate` before the task's day or
+   * today. Resolves with the new repeat config's id.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  addTaskRepeatCfg(
+    taskId: string,
+    schedule?: PluginTaskRepeatCfgSchedule,
+  ): Promise<string>;
+
+  /**
+   * Changes a repeat config's schedule or flags. Changing the schedule
+   * requires `quickSetting`, since a preset is re-derived from the start date.
+   * Rejects unknown ids and invalid fields.
+   * Feature-detect this method before calling it on older hosts.
+   */
+  updateTaskRepeatCfg(
+    repeatCfgId: string,
+    updates: PluginTaskRepeatCfgSchedule,
+  ): Promise<void>;
 
   // task ordering
   reorderTasks(

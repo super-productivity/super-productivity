@@ -1,0 +1,58 @@
+{
+  "TITLE": "請求書",
+  "LOADING": "読み込み中…",
+  "LIST": {
+    "EMPTY": "請求書はまだありません。",
+    "PRINT": "印刷 / PDF",
+    "CSV": "CSV",
+    "DELETE": "削除",
+    "CONFIRM_DELETE": "請求書 {{number}} を削除しますか？ この請求書の時間は未請求に戻ります。"
+  },
+  "NEW": {
+    "TITLE": "新しい請求書",
+    "PROJECT": "プロジェクト",
+    "NO_PROJECTS": "先にプロジェクトを作成してください。請求はプロジェクトごとに行います。",
+    "FROM": "開始日",
+    "TO": "終了日",
+    "RATE": "時間単価",
+    "LANGUAGE": "請求書の言語",
+    "CLIENT": "請求先",
+    "CLIENT_HINT": "取引先の名前と住所。このプロジェクトで記憶されます。",
+    "INCLUDE": "含める",
+    "NO_HOURS": "このプロジェクトには、この期間に未請求の時間がありません。",
+    "NUMBER": "請求書番号",
+    "ISSUE_DATE": "請求日",
+    "ISSUE": "発行して印刷",
+    "BLOCK": {
+      "PERIOD": "開始日と終了日を選んでください。開始日は終了日より前にしてください。",
+      "LINES": "時間のある行を少なくとも1つ選んでください。",
+      "RATE": "時間単価を入力してください。",
+      "NUMBER": "請求書番号を入力してください。",
+      "NUMBER_USED": "この請求書番号はすでに使われています。",
+      "DATE": "請求日を入力してください。"
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "あなたの情報",
+    "SELLER": "名前、住所、税番号",
+    "PAYMENT_NOTE": "支払情報",
+    "PAYMENT_NOTE_HINT": "銀行口座や支払条件。下部に印刷されます。",
+    "CURRENCY": "通貨コード",
+    "TAX": "税 / 消費税 %",
+    "PAYMENT_DAYS": "支払期限までの日数",
+    "ROUNDING": "各行を切り上げる単位",
+    "ROUNDING_NONE": "丸めなし",
+    "ROUNDING_MIN": "{{min}} 分",
+    "PREFIX": "請求書番号の接頭辞",
+    "SAVE": "保存",
+    "SAVED": "保存しました。"
+  },
+  "INVOICE": {
+    "DESCRIPTION": "内容",
+    "HOURS": "時間",
+    "TOTAL": "合計"
+  },
+  "ERROR": {
+    "GENERIC": "問題が発生しました: {{error}}"
+  }
+}

@@ -248,10 +248,20 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       }
     });
 
+    // LayoutService is root-provided and outlives this component, which is
+    // destroyed and rebuilt when focus mode opens/closes. Only presses made
+    // after construction count, otherwise the last one replays on every rebuild.
+    const initialFocusTrigger = untracked(() =>
+      this._layoutService.focusSideNavTrigger(),
+    );
+    const initialModeTrigger = untracked(() =>
+      this._layoutService.toggleSideNavModeTrigger(),
+    );
+
     // Listen for focus trigger from LayoutService
     effect(() => {
       const trigger = this._layoutService.focusSideNavTrigger();
-      if (trigger > 0) {
+      if (trigger > initialFocusTrigger) {
         // Small delay to ensure DOM is ready
         window.setTimeout(() => {
           this.toggleNavFocus();
@@ -261,7 +271,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
     effect(() => {
       const trigger = this._layoutService.toggleSideNavModeTrigger();
-      if (trigger > 0) {
+      if (trigger > initialModeTrigger) {
         untracked(() => {
           if (!this.isMobile()) this.toggleSideNavMode();
         });
@@ -449,8 +459,11 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       else window.history.replaceState(args.state, args.title);
     }
 
-    // Mobile menu is visible but still has state in history - restore it
-    else window.history.back();
+    // Mobile menu is hidden but still has state in history - restore it.
+    // Not while a navigation is in flight (e.g. a nav tap closed the menu): the
+    // popstate would cancel that navigation and drop the tap. The leftover
+    // entry costs one extra back press.
+    else if (!this._router.currentNavigation()) window.history.back();
   }
 
   toggleSideNavMode(): void {

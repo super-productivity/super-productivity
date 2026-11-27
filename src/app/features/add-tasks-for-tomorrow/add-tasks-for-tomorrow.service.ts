@@ -16,7 +16,10 @@ import { GlobalTrackingIntervalService } from '../../core/global-tracking-interv
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
+import {
+  selectTodayTaskIds,
+  selectTodayTaskIdsForDay,
+} from '../work-context/store/work-context.selectors';
 import { selectTasksForPlannerDay } from '../planner/store/planner.selectors';
 import { TaskLog } from '../../core/log';
 import { isTodayWithOffset } from '../../util/is-today.util';
@@ -216,8 +219,12 @@ export class AddTasksForTomorrowService {
       }
     });
 
+    // Captured day, not the store's: planning a timed task that only looks
+    // missing by the store's stale day would erase its reminder.
     const todaysTaskIds = await firstValueFrom(
-      this._store.select(selectTodayTaskIds).pipe(first()),
+      this._store
+        .select(selectTodayTaskIdsForDay(todayStr, startOfNextDayDiffMs))
+        .pipe(first()),
     );
     const allDueSorted = this._sortAll([
       ...allDue
@@ -255,7 +262,6 @@ export class AddTasksForTomorrowService {
           taskIds: plannedTasks.map((t) => t.id),
           today,
           startOfNextDayDiffMs,
-          isSkipRemoveReminder: true,
         }),
       );
     }

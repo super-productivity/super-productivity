@@ -313,7 +313,11 @@
             </section>
 
             @for (section of globalImexFormCfg; track section.key) {
-              <section class="config-section imex-section section-{{ section.key }}">
+              <!-- Import/Export is the only section linked to with a highlight (first-run tip) -->
+              <section
+                class="config-section imex-section section-{{ section.key }}"
+                [class.onboarding-pulse]="highlightedSection() === section.key"
+              >
                 <config-section
                   (save)="saveGlobalCfg($event)"
                   (isExpandedChange)="onSectionExpandedChange(section, $event)"

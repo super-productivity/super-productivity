@@ -10,6 +10,7 @@ import { TaskCopy } from '../../tasks/task.model';
 import { SnackService } from '../../../core/snack/snack.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { DateService } from '../../../core/date/date.service';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -37,6 +38,7 @@ import { selectTimelineConfig } from '../../config/store/global-config.reducer';
 describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
   let matDialogRefSpy: jasmine.SpyObj<MatDialogRef<DialogScheduleTaskComponent>>;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskSchedulingServiceSpy: jasmine.SpyObj<TaskSchedulingService>;
 
   const task: TaskCopy = {
     id: 'task-1',
@@ -62,9 +64,9 @@ describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
 
   beforeEach(async () => {
     matDialogRefSpy = jasmine.createSpyObj('MatDialogRef', ['close']);
-    taskServiceSpy = jasmine.createSpyObj('TaskService', [
+    taskServiceSpy = jasmine.createSpyObj('TaskService', ['getByIdLive$']);
+    taskSchedulingServiceSpy = jasmine.createSpyObj('TaskSchedulingService', [
       'scheduleTask',
-      'getByIdLive$',
     ]);
     taskServiceSpy.getByIdLive$.and.returnValue(of(task));
     // ngAfterViewInit reads viewChild.required(MatCalendar). With the template
@@ -93,6 +95,7 @@ describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
           useValue: jasmine.createSpyObj('SnackService', ['open']),
         },
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskSchedulingService, useValue: taskSchedulingServiceSpy },
         {
           provide: ReminderService,
           useValue: jasmine.createSpyObj('ReminderService', ['getById']),
@@ -103,6 +106,7 @@ describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
             isToday: () => false,
             todayStr: () => '2026-05-26',
             getStartOfNextDayDiffMs: () => 0,
+            getLogicalTodayDate: () => new Date(),
           },
         },
         {
@@ -168,8 +172,9 @@ describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
 
     await component.submit();
 
-    expect(taskServiceSpy.scheduleTask).toHaveBeenCalled();
-    const scheduledTs = taskServiceSpy.scheduleTask.calls.mostRecent().args[1] as number;
+    expect(taskSchedulingServiceSpy.scheduleTask).toHaveBeenCalled();
+    const scheduledTs = taskSchedulingServiceSpy.scheduleTask.calls.mostRecent()
+      .args[1] as number;
     const d = new Date(scheduledTs);
     expect(d.getHours()).toBe(13);
     expect(d.getMinutes()).toBe(30);
@@ -212,7 +217,7 @@ describe('DialogScheduleTaskComponent — malformed selectedTime', () => {
       }
       expect(err).toBeUndefined();
       // Invalid time must not reach scheduleTask — it would crash there too.
-      expect(taskServiceSpy.scheduleTask).not.toHaveBeenCalled();
+      expect(taskSchedulingServiceSpy.scheduleTask).not.toHaveBeenCalled();
     });
   });
 });

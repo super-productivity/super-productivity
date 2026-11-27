@@ -25,6 +25,7 @@ const SAFE_VALIDITY_INFO_KEYS = new Set([
   'defaultProjectId',
   'id',
   'ipId',
+  'issueProviderId',
   'nid',
   'nodeKind',
   'parentId',
@@ -259,6 +260,7 @@ const validateTasksToProjectsAndTags = (
   taskIds: Set<string>,
   taskRepeatCfgIds: Set<string>,
 ): boolean => {
+  const issueProviderIds = new Set(d.issueProvider.ids);
   // Validate tasks in projects
   for (const pid of d.project.ids) {
     const project = d.project.entities[pid];
@@ -331,6 +333,14 @@ const validateTasksToProjectsAndTags = (
           repeatCfgId: task.repeatCfgId,
         },
       );
+      return false;
+    }
+
+    if (task.issueProviderId && !issueProviderIds.has(task.issueProviderId)) {
+      _validityError('issueProviderId from task not existing', {
+        taskId: task.id,
+        issueProviderId: task.issueProviderId,
+      });
       return false;
     }
 

@@ -25,7 +25,7 @@ import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { devError } from '../../../util/dev-error';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 import { sumSubTaskTimeLeft } from '../../tasks/util/sum-sub-task-time-left';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStr, getDbDateStrWithOffset } from '../../../util/get-db-date-str';
 import { oneDayInMilliseconds } from '../../../util/month-time-conversion';
 import { ScheduleCalendarMapEntry } from '../../schedule/schedule.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -433,7 +433,7 @@ const groupPlannedTasksByDay = (
 ): Map<string, TaskWithDueTime[]> => {
   const byDay = new Map<string, TaskWithDueTime[]>();
   for (const task of allPlannedTasks) {
-    const dayKey = getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs));
+    const dayKey = getDbDateStrWithOffset(task.dueWithTime, startOfNextDayDiffMs);
     const tasksForDay = byDay.get(dayKey);
     if (tasksForDay) {
       tasksForDay.push(task);
@@ -512,7 +512,7 @@ const getCalendarEventDayKeys = (
   lastDayDate: string,
 ): string[] => {
   if (!isAllDayCalendarEvent(calEv)) {
-    return [getDbDateStr(new Date(calEv.start - startOfNextDayDiffMs))];
+    return [getDbDateStrWithOffset(calEv.start, startOfNextDayDiffMs)];
   }
 
   const offsetMs = calEv.isAllDay ? 0 : startOfNextDayDiffMs;
@@ -529,7 +529,7 @@ const getCalendarEventDayKeys = (
   } else {
     // The end is exclusive: an event ending exactly at the start of a day does
     // not cover that day.
-    lastEventDayKey = getDbDateStr(new Date(calEv.start + calEv.duration - 1 - offsetMs));
+    lastEventDayKey = getDbDateStrWithOffset(calEv.start + calEv.duration - 1, offsetMs);
   }
   const lastKey = lastEventDayKey < lastDayDate ? lastEventDayKey : lastDayDate;
 
@@ -583,7 +583,7 @@ export const groupDeadlineTasksByDay = (
 
     let dayKey: string | undefined;
     if (task.deadlineWithTime) {
-      dayKey = getDbDateStr(new Date(task.deadlineWithTime - startOfNextDayDiffMs));
+      dayKey = getDbDateStrWithOffset(task.deadlineWithTime, startOfNextDayDiffMs);
     } else if (task.deadlineDay) {
       dayKey = task.deadlineDay;
     }

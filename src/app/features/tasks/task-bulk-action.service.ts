@@ -4,6 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { TaskService } from './task.service';
+import { TaskSchedulingService } from './task-scheduling.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { ProjectService } from '../project/project.service';
@@ -21,12 +22,17 @@ import { PlannerActions } from '../planner/store/planner.actions';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 // eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../planner/dialog-schedule-task/dialog-schedule-task.component';
+import {
+  TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD,
+  toPersistableRemindOption,
+} from '../planner/dialog-schedule-task/task-reminder-options.const';
 import { DialogDeadlineComponent } from './dialog-deadline/dialog-deadline.component';
 import { T } from '../../t.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../util/is-valid-split-time';
 import { combineDateAndTime } from '../../util/combine-date-and-time';
+import { getRepeatDueWithTime } from '../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { truncate } from '../../util/truncate';
 import { remindOptionToMilliseconds } from './util/remind-option-to-milliseconds';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
@@ -77,6 +83,7 @@ interface DateTimePick {
 export class TaskBulkActionService {
   private readonly _store = inject(Store);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskSchedulingService = inject(TaskSchedulingService);
   private readonly _multiSelect = inject(TaskMultiSelectService);
   private readonly _moveToProjectService = inject(TaskMoveToProjectService);
   private readonly _projectService = inject(ProjectService);
@@ -346,7 +353,14 @@ export class TaskBulkActionService {
       this._matDialog
         .open(DialogScheduleTaskComponent, {
           autoFocus: false,
-          data: { isSelectDueOnly: true },
+          data: {
+            isSelectDueOnly: true,
+            // repeat configs hold at most a 1h lead (#11816); a mixed selection
+            // keeps every option and scheduleFor caps the repeating tasks
+            ...(tasks.every((task) => task.repeatCfgId)
+              ? { reminderOptions: TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD }
+              : {}),
+          },
         })
         .afterClosed(),
     );
@@ -363,7 +377,15 @@ export class TaskBulkActionService {
     }
     const day = getDbDateStr(pick.date);
     const todayStr = this._dateService.todayStr();
-    const hasTime = !!pick.time && isValidSplitTime(pick.time);
+    // a time before a custom day start lands at the end of the picked day (#12012)
+    const timedDue =
+      pick.time && isValidSplitTime(pick.time)
+        ? getRepeatDueWithTime(
+            pick.time,
+            pick.date,
+            this._dateService.getStartOfNextDayDiffMs(),
+          )
+        : null;
     const defaultRemindOption =
       this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
       DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
@@ -372,12 +394,13 @@ export class TaskBulkActionService {
     let applied = 0;
     await this._runSuppressed(() => {
       tasks.forEach((task) => {
-        if (hasTime) {
-          const due = getDateTimeFromClockString(pick.time as string, pick.date as Date);
-          this._taskService.scheduleTask(
+        if (timedDue !== null) {
+          const remindOption = pick.remindOption ?? TaskReminderOptionId.DoNotRemind;
+          // repeating tasks stay on the leads their series can hold (#11816)
+          this._taskSchedulingService.scheduleTask(
             task,
-            due,
-            pick.remindOption ?? TaskReminderOptionId.DoNotRemind,
+            timedDue,
+            task.repeatCfgId ? toPersistableRemindOption(remindOption) : remindOption,
             false,
           );
           applied++;
@@ -387,8 +410,17 @@ export class TaskBulkActionService {
         ) {
           // Day-only pick for a timed task: keep its time on the new day, as
           // the context menu's quick-access buttons do.
-          const due = combineDateAndTime(pick.date as Date, new Date(task.dueWithTime));
-          this._taskService.scheduleTask(task, due.getTime(), defaultRemindOption, false);
+          const due = combineDateAndTime(
+            pick.date as Date,
+            new Date(task.dueWithTime),
+            this._dateService.getStartOfNextDayDiffMs(),
+          );
+          this._taskSchedulingService.scheduleTask(
+            task,
+            due.getTime(),
+            defaultRemindOption,
+            false,
+          );
           applied++;
         } else if (day === todayStr) {
           // Already due today with a time → plain "add to today" (clears the
@@ -420,12 +452,10 @@ export class TaskBulkActionService {
       this._restoreFocus(focusTargetId);
       return;
     }
-    const date = hasTime
-      ? this._datePipe.transform(
-          getDateTimeFromClockString(pick.time as string, pick.date as Date),
-          'short',
-        )
-      : this._datePipe.transform(pick.date, 'shortDate');
+    const date =
+      timedDue !== null
+        ? this._datePipe.transform(timedDue, 'short')
+        : this._datePipe.transform(pick.date, 'shortDate');
     this._snack('SCHEDULED', applied, { date: date || '' }, 'schedule');
     this._finish(focusTargetId);
   }

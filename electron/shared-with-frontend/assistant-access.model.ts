@@ -42,4 +42,7 @@ export const ASSISTANT_CAPTURE_TIMEOUT_MS = 45000;
 
 export type AssistantCaptureResult =
   | { status: 'created'; id: string }
-  | { status: 'APP_BUSY' | 'PERSIST_DEGRADED' | 'OUTCOME_UNKNOWN'; id?: string };
+  | {
+      status: 'APP_BUSY' | 'PERSIST_DEGRADED' | 'OUTCOME_UNKNOWN' | 'TAG_NOT_FOUND';
+      id?: string;
+    };

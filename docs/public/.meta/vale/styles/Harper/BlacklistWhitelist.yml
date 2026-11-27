@@ -1,0 +1,23 @@
+---
+# Generated from Harper's BlacklistWhitelist rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Normalize the two-word sequence `black list`/`white list` so it matches the established compound noun or verb.
+extends: existence
+message: "Treat color-based deny/allow lists as single words like `blacklist` or `whitelist`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "blacklist"
+    - "whitelist"
+tokens:
+  - "black(?!\\s*\\n\\s*\\n)\\s+lists(?!['\\x{2019}]s\\b)"
+  - "white(?!\\s*\\n\\s*\\n)\\s+lists(?!['\\x{2019}]s\\b)"
+  - "black(?!\\s*\\n\\s*\\n)\\s+list(?!['\\x{2019}]s\\b)"
+  - "white(?!\\s*\\n\\s*\\n)\\s+list(?!['\\x{2019}]s\\b)"

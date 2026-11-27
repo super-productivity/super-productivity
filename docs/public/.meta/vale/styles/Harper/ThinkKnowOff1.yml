@@ -1,0 +1,23 @@
+---
+# Generated from Harper's ThinkKnowOff rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes the common preposition mix-up after verbs like `know` and `think` in phrases such as `know off` and `thought off` when a following token indicates the intended meaning is `of`.
+extends: sequence
+message: "This collocation usually takes `of` rather than `off`."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "of"
+tokens:
+  - pattern: 'thinking|thought|known|knows|think|knew|know'
+  - pattern: 'off'
+    target: true
+  - pattern: '^(?!(?:hand|the|of)$)[\p{L}\p{N}].*$'

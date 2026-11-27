@@ -51,6 +51,7 @@ import { IssueIconPipe } from '../issue-icon/issue-icon.pipe';
 import { JiraAdditionalCfgComponent } from '../providers/jira/jira-view-components/jira-cfg/jira-additional-cfg.component';
 import { JiraCfg } from '../providers/jira/jira.model';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
+import { HelpToggleBtnComponent } from '../../../ui/help-section/help-toggle-btn.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
@@ -99,6 +100,7 @@ type OptionsLoadState = 'idle' | 'loading' | 'loaded' | 'empty' | 'failed';
     ReactiveFormsModule,
     MatDialogContent,
     HelpSectionComponent,
+    HelpToggleBtnComponent,
     TranslatePipe,
     MatSlideToggle,
     FormlyModule,
@@ -123,6 +125,7 @@ export class DialogEditIssueProviderComponent {
   }>(MAT_DIALOG_DATA);
 
   isConnectionWorks = signal(false);
+  readonly isShowHelp = signal(false);
   isOAuthConnected = signal(false);
   isOAuthConnecting = signal(false);
   optionsLoadState = signal<OptionsLoadState>('idle');

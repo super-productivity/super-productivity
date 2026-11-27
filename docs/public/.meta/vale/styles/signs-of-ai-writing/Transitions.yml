@@ -1,0 +1,17 @@
+extends: existence
+message: "Formal transition word detected: '%s'"
+level: suggestion
+link: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
+tokens:
+  - 'furthermore,'
+  - 'moreover,'
+  - 'additionally,'
+  - 'in addition,'
+  - 'however,'
+  - 'nevertheless,'
+  - 'nonetheless,'
+  - 'on the other hand,'
+  - 'conversely,'
+  - 'consequently,'
+  - 'therefore,'
+  - 'thus,'

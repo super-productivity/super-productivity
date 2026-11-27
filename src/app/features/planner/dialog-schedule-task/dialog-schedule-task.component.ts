@@ -28,13 +28,21 @@ import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { truncate } from '../../../util/truncate';
-import { TASK_REMINDER_OPTIONS } from './task-reminder-options.const';
+import {
+  TASK_REMINDER_OPTIONS,
+  TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD,
+  toPersistableRemindOption,
+} from './task-reminder-options.const';
 import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
 import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { ReminderService } from '../../reminder/reminder.service';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import {
+  getLogicalDayOfTimestamp,
+  getRepeatDueWithTime,
+} from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -100,6 +108,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _snackService = inject(SnackService);
   private _datePipe = inject(LocaleDatePipe);
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
   private _reminderService = inject(ReminderService);
   private _translateService = inject(TranslateService);
   private _globalConfigService = inject(GlobalConfigService);
@@ -118,10 +127,19 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
   T: typeof T = T;
   readonly DO_NOT_REMIND = TaskReminderOptionId.DoNotRemind;
-  minDate = this.data.minDate === undefined ? new Date() : this.data.minDate;
+  // Logical today, so the day that is still running after midnight stays pickable
+  minDate =
+    this.data.minDate === undefined
+      ? this._dateService.getLogicalTodayDate()
+      : this.data.minDate;
 
-  remindAvailableOptions: TaskReminderOption[] =
-    this.data.reminderOptions ?? TASK_REMINDER_OPTIONS;
+  // A repeating task takes its reminder from the repeat config, which holds at
+  // most a 1h lead; offering longer leads would silently drop back (#11816).
+  readonly remindAvailableOptions = computed<TaskReminderOption[]>(() =>
+    this._liveTask()?.repeatCfgId
+      ? TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD
+      : (this.data.reminderOptions ?? TASK_REMINDER_OPTIONS),
+  );
   task: TaskCopy | undefined = this.data.task;
 
   // Recurrence only applies to top-level, non-issue tasks (mirrors the panel's
@@ -218,7 +236,11 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       return null;
     }
 
-    return getDateTimeFromClockString(normalizedTime, selectedDate as Date);
+    return getRepeatDueWithTime(
+      normalizedTime,
+      selectedDate as Date,
+      this._dateService.getStartOfNextDayDiffMs(),
+    );
   });
   scheduleWarnings = computed(() => {
     const plannedTimestamp = this.plannedTimestamp();
@@ -273,7 +295,14 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       if (this.data.task.dueWithTime) {
         // dueWithTime is a UTC timestamp - Date constructor handles timezone conversion automatically
         // Do NOT add timezone offset here as it would double-apply the conversion (fixes #5515)
-        this.selectedDate = new Date(this.data.task.dueWithTime);
+        // Show the logical day, or saving unchanged would push an early-morning
+        // time (before a custom day start) one day later (#12012)
+        this.selectedDate = dateStrToUtcDate(
+          getLogicalDayOfTimestamp(
+            this.data.task.dueWithTime,
+            this._dateService.getStartOfNextDayDiffMs(),
+          ),
+        );
         this.selectedTime = new Date(this.data.task.dueWithTime).toLocaleTimeString(
           'en-GB',
           {
@@ -301,7 +330,16 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       this.selectedTime = this.data.targetTime;
     }
 
+    this._capReminderForRepeat();
     this._cd.detectChanges();
+  }
+
+  // Shows the lead the repeat config will actually use instead of a longer one
+  // that is not on the list (and would be overwritten on the next series edit).
+  private _capReminderForRepeat(): void {
+    if (this._liveTask()?.repeatCfgId && this.selectedReminderCfgId) {
+      this.selectedReminderCfgId = toPersistableRemindOption(this.selectedReminderCfgId);
+    }
   }
 
   close(
@@ -363,6 +401,9 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
             task.repeatCfgId !== this._repeatCfgCreatedInDialogId,
           initialStartDate: targetDate,
           targetDate,
+          defaultRemindOption:
+            this.selectedReminderCfgId &&
+            toPersistableRemindOption(this.selectedReminderCfgId),
         },
       })
       .afterClosed()
@@ -371,6 +412,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         if (typeof createdRepeatCfgId === 'string') {
           this._repeatCfgCreatedInDialogId = createdRepeatCfgId;
         }
+        this._capReminderForRepeat();
+        this._cd.markForCheck();
       });
   }
 
@@ -501,16 +544,14 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _scheduleWithTime(): void {
     // Only schedule if task is provided and time is valid (submit() pre-validates;
     // belt-and-braces guard against direct callers / malformed paste — see #7802).
-    const normalizedTime = this._normalizedTime();
-    if (!this.data.task || !normalizedTime || !isValidSplitTime(normalizedTime)) {
+    const plannedTimestamp = this.plannedTimestamp();
+    if (!this.data.task || !plannedTimestamp) {
       return;
     }
 
     const task = this.data.task;
-    const newDate = new Date(
-      getDateTimeFromClockString(normalizedTime, this.selectedDate as Date),
-    );
-    this._taskService.scheduleTask(
+    const newDate = new Date(plannedTimestamp);
+    this._taskSchedulingService.scheduleTask(
       task,
       newDate.getTime(),
       this.selectedReminderCfgId,
@@ -539,7 +580,9 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   }
 
   onQuickAccessClick(option: 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'): void {
-    const tDate = new Date();
+    // Every caller combines the time on a logical day (#12012), so start from
+    // logical today
+    const tDate = this._dateService.getLogicalTodayDate();
     tDate.setMinutes(0, 0, 0);
 
     switch (option) {

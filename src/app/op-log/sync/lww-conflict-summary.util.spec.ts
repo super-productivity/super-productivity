@@ -7,8 +7,9 @@ import type { ActionType, EntityConflict, Operation } from '../core/operation.ty
 
 const payloadKeyFor = (entityType: string): string => entityType.toLowerCase();
 
+let nextOpId = 0;
 const op = (overrides: Partial<Operation> = {}): Operation => ({
-  id: 'op-1',
+  id: `op-${++nextOpId}`,
   actionType: '[Task] Update' as ActionType,
   opType: OpType.Update,
   entityType: 'TASK',
@@ -59,6 +60,86 @@ const resolution = (
 });
 
 describe('findLwwContentConflicts', () => {
+  for (const winner of ['local', 'remote'] as const) {
+    it(`ignores identical task content when the ${winner} side wins`, () => {
+      const content = (): Record<string, unknown> => ({
+        title: 'Daily review',
+        notes: 'Review the inbox',
+        subTaskIds: ['a', 'b'],
+      });
+
+      expect(
+        findLwwContentConflicts(
+          [resolution(winner, [wrappedUpdate(content())], [wrappedUpdate(content())])],
+          payloadKeyFor,
+        ),
+      ).toEqual([]);
+    });
+  }
+
+  it('only reports differences in the final content written on each side', () => {
+    expect(
+      findLwwContentConflicts(
+        [
+          resolution(
+            'remote',
+            [
+              wrappedUpdate({ title: 'Draft' }),
+              wrappedUpdate({ title: 'Review', notes: '', subTaskIds: ['a', 'b'] }),
+            ],
+            [
+              wrappedUpdate({ title: 'Old', notes: 'Keep these notes' }),
+              wrappedUpdate({ title: 'Review', subTaskIds: ['b', 'a'] }),
+            ],
+          ),
+        ],
+        payloadKeyFor,
+      ),
+    ).toEqual([{ entityId: 'task-1', discardedFields: ['notes', 'subTaskIds'] }]);
+  });
+
+  it('uses the retained update for sibling conflict rows on the same task', () => {
+    const local = wrappedUpdate({ title: 'Daily review' });
+    const create = op({ opType: OpType.Create });
+    const remote = wrappedUpdate({ title: 'Daily review' });
+
+    expect(
+      findLwwContentConflicts(
+        [
+          resolution('remote', [local], [create]),
+          resolution('remote', [local], [remote]),
+        ],
+        payloadKeyFor,
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps the warning when a retained snapshot can overwrite an equal field', () => {
+    const snapshot = op({
+      actionType: '[TASK] LWW Update' as ActionType,
+      payload: {
+        actionPayload: { id: 'task-1', title: 'Replacement' },
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      },
+    });
+
+    expect(
+      findLwwContentConflicts(
+        [
+          resolution(
+            'remote',
+            [wrappedUpdate({ title: 'Review' })],
+            [wrappedUpdate({ title: 'Review' }), snapshot],
+          ),
+        ],
+        payloadKeyFor,
+      ),
+    ).toEqual([
+      { entityId: 'task-1', discardedFields: ['title'], discardedTitle: 'Review' },
+    ]);
+  });
+
   it('flags a discarded title edit carried in a wrapped (production-shape) payload', () => {
     // Remote wins -> local op discarded; production wraps the change under
     // actionPayload with entityChanges: [].
@@ -355,6 +436,21 @@ describe('findPatchContentConflicts', () => {
     expect(result).toEqual([
       { entityId: 'task-1', discardedFields: ['title'], discardedTitle: 'Mine' },
     ]);
+  });
+
+  it('ignores identical writes to the same field', () => {
+    expect(
+      findPatchContentConflicts(
+        [
+          patch(
+            'remote',
+            [wrappedUpdate({ title: 'Review', notes: 'Only changed locally' })],
+            [wrappedUpdate({ title: 'Review' })],
+          ),
+        ],
+        payloadKeyFor,
+      ),
+    ).toEqual([]);
   });
 
   it('reports nothing when the patch kept every content edit', () => {

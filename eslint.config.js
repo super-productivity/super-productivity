@@ -479,7 +479,6 @@ module.exports = tseslint.config(
     'src/app/plugins/plugin-bridge.service.ts': 2307,
     'src/app/imex/sync/sync-wrapper.service.ts': 1801,
     'src/app/plugins/plugin.service.ts': 1851,
-    'src/app/features/tasks/task.service.ts': 1527,
   }).map(([file, max]) => ({
     files: [file],
     rules: {

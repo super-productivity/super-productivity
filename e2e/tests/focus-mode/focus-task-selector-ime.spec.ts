@@ -40,11 +40,6 @@ test('confirming an IME candidate with Enter keeps the focus task picker open', 
   await input.press('End');
   await page.keyboard.insertText('の予定');
   await expect(input).toHaveValue('日本の予定');
-  // The picker gets the text on the next zoneless change-detection pass;
-  // Playwright's next key can arrive before it.
-  await page.evaluate(
-    () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve))),
-  );
   await input.press('Enter');
   await session.detach();
   await expect.poll(() => readTitles(page)).toEqual(['日本の予定']);

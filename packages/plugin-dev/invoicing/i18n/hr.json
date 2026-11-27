@@ -1,0 +1,58 @@
+{
+  "TITLE": "Računi",
+  "LOADING": "Učitavanje…",
+  "LIST": {
+    "EMPTY": "Još nema računa.",
+    "PRINT": "Ispis / PDF",
+    "CSV": "CSV",
+    "DELETE": "Izbriši",
+    "CONFIRM_DELETE": "Izbrisati račun {{number}}? Njegovi sati ponovno se računaju kao nenaplaćeni."
+  },
+  "NEW": {
+    "TITLE": "Novi račun",
+    "PROJECT": "Projekt",
+    "NO_PROJECTS": "Prvo stvorite projekt. Svaki se projekt naplaćuje zasebno.",
+    "FROM": "Od",
+    "TO": "Do",
+    "RATE": "Satnica",
+    "LANGUAGE": "Jezik računa",
+    "CLIENT": "Kupac",
+    "CLIENT_HINT": "Ime i adresa klijenta. Pamti se za ovaj projekt.",
+    "INCLUDE": "Uključi",
+    "NO_HOURS": "Nema nenaplaćenog vremena na ovom projektu u ovom razdoblju.",
+    "NUMBER": "Broj računa",
+    "ISSUE_DATE": "Datum računa",
+    "ISSUE": "Izdaj i ispiši",
+    "BLOCK": {
+      "PERIOD": "Odaberite datume Od i Do; Od mora biti prvi.",
+      "LINES": "Označite barem jednu stavku sa satima.",
+      "RATE": "Unesite satnicu.",
+      "NUMBER": "Unesite broj računa.",
+      "NUMBER_USED": "Taj broj računa već je iskorišten.",
+      "DATE": "Unesite datum računa."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Vaši podaci",
+    "SELLER": "Vaše ime, adresa i porezni broj",
+    "PAYMENT_NOTE": "Podaci za plaćanje",
+    "PAYMENT_NOTE_HINT": "Bankovni podaci ili uvjeti plaćanja, ispisuju se na dnu.",
+    "CURRENCY": "Šifra valute",
+    "TAX": "Porez / PDV %",
+    "PAYMENT_DAYS": "Dana do dospijeća",
+    "ROUNDING": "Zaokruži svaku stavku prema gore na",
+    "ROUNDING_NONE": "Bez zaokruživanja",
+    "ROUNDING_MIN": "{{min}} min",
+    "PREFIX": "Prefiks broja računa",
+    "SAVE": "Spremi",
+    "SAVED": "Spremljeno."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Opis",
+    "HOURS": "Sati",
+    "TOTAL": "Ukupno"
+  },
+  "ERROR": {
+    "GENERIC": "Nešto je pošlo po zlu: {{error}}"
+  }
+}

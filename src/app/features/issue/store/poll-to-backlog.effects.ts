@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { combineLatest, EMPTY, from, merge, Observable, timer } from 'rxjs';
+import { combineLatest, EMPTY, from, merge, Observable, of, timer } from 'rxjs';
 import {
   catchError,
   concatMap,
@@ -27,6 +27,7 @@ import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provi
 import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
 import { getRefreshOnLook$ } from './refresh-on-look';
 import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { isLocalProvider } from './is-local-provider';
 import { pollWhileOnline } from '../../../util/poll-while-online';
 
 @Injectable()
@@ -81,7 +82,10 @@ export class PollToBacklogEffects {
                   provider.isAutoAddToBacklog &&
                   provider.pollingMode !== 'always' &&
                   !this._pluginRegistry.getUseAgendaView(provider.issueProviderKey) &&
-                  this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+                  this._issueService.getPollInterval(
+                    provider.issueProviderKey,
+                    provider,
+                  ) > 0,
               );
               if (matchingProviders.length === 0) {
                 return EMPTY;
@@ -122,7 +126,10 @@ export class PollToBacklogEffects {
                   provider.isAutoAddToBacklog &&
                   !!provider.defaultProjectId &&
                   !this._pluginRegistry.getUseAgendaView(provider.issueProviderKey) &&
-                  this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+                  this._issueService.getPollInterval(
+                    provider.issueProviderKey,
+                    provider,
+                  ) > 0,
               );
               if (alwaysProviders.length === 0) {
                 return EMPTY;
@@ -144,11 +151,11 @@ export class PollToBacklogEffects {
     stopOnContextSwitch = true,
   ): Observable<unknown> {
     const timer$ = pollWhileOnline(
-      this._isOnline$,
+      isLocalProvider(provider) ? of(true) : this._isOnline$,
       [
         timer(
           DELAY_BEFORE_ISSUE_POLLING,
-          this._issueService.getPollInterval(provider.issueProviderKey),
+          this._issueService.getPollInterval(provider.issueProviderKey, provider),
         ),
         getRefreshOnLook$(provider),
       ],

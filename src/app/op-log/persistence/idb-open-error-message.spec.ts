@@ -6,6 +6,7 @@ describe('buildIdbOpenErrorMessage', () => {
   const ctx = (overrides: Partial<IdbOpenErrorContext> = {}): IdbOpenErrorContext => ({
     channel: 'win-nsis',
     appVersion: '18.14.0W',
+    isIdbAvailable: true,
     ...overrides,
   });
 
@@ -136,6 +137,41 @@ describe('buildIdbOpenErrorMessage', () => {
           expect(msg).withContext(channel).toContain('portable executable');
         },
       );
+    });
+  });
+
+  describe('IndexedDB switched off by the platform (#11994)', () => {
+    // iOS Lockdown Mode removes the `indexedDB` global from the WebView, so
+    // `openDB` throws a ReferenceError (WebKit wording below, from the report).
+    // The generic text blames disk space/corruption and suggests clearing
+    // storage — wrong cause, and no way forward.
+    const unavailableError = (): IndexedDBOpenError =>
+      new IndexedDBOpenError(new ReferenceError("Can't find variable: indexedDB"));
+
+    it('names Lockdown Mode and how to exclude the app from it', () => {
+      const msg = buildIdbOpenErrorMessage(
+        unavailableError(),
+        ctx({ channel: 'ios', isIdbAvailable: false }),
+      );
+
+      expect(msg).toContain('Lockdown Mode');
+      expect(msg).toContain(
+        'Settings > Privacy & Security > Lockdown Mode > Configure Web Browsing',
+      );
+      expect(msg).toContain("Technical details: Can't find variable: indexedDB");
+    });
+
+    it('does not blame disk space or advise clearing storage', () => {
+      const msg = buildIdbOpenErrorMessage(
+        unavailableError(),
+        ctx({ channel: 'ios', isIdbAvailable: false }),
+      );
+
+      expect(msg).not.toContain('Low disk space');
+      expect(msg).not.toContain('may need to be cleared');
+      // Claims only what the app did: it never opened the database, so it
+      // cannot vouch for the stored data itself.
+      expect(msg).toContain('Super Productivity did not change or delete anything');
     });
   });
 

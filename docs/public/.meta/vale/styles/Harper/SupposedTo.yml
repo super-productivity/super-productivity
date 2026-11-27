@@ -1,0 +1,19 @@
+---
+# Generated from Harper's SupposedTo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes `suppose to` to the correct `supposed to`.
+extends: existence
+message: "Did you mean `supposed to`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "supposed to"
+tokens:
+  - "suppose(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"

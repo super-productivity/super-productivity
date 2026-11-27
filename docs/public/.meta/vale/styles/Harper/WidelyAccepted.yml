@@ -1,0 +1,17 @@
+---
+# Generated from Harper's WidelyAccepted linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reports the problem without a fix: Harper builds this correction in
+# code, from the text it matched, which the rule itself does not record.
+extends: sequence
+message: "Use the adverb `widely` in this context. For example, `widely accepted` or `widely used` is standard usage."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'wide'
+  - pattern: 'acceptable|accepted|used'

@@ -445,6 +445,11 @@ bootstrapApplication(AppComponent, {
       (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
         store: storeRef,
         hydrationState: appRef.injector.get(m.HydrationStateService),
+        processDeferredActions: async () => {
+          const { processDeferredActions } =
+            await import('./app/op-log/sync/process-deferred-actions-flush.util');
+          await processDeferredActions(appRef.injector, false);
+        },
         flushPendingWrites: () =>
           appRef.injector.get(OperationWriteFlushService).flushPendingWrites(),
         compact: async () => {

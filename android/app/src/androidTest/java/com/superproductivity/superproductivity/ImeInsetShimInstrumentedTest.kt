@@ -2,6 +2,7 @@ package com.superproductivity.superproductivity
 
 import android.graphics.Rect
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
@@ -208,8 +209,18 @@ class ImeInsetShimInstrumentedTest {
         }
     }
 
-    /** Focuses the field and asks for the IME. Returns whether an input connection existed. */
-    private fun showIme(activity: CapacitorMainActivity, webView: WebView): Boolean {
+    /** What [showIme] could establish before asking; only reported, never asserted. */
+    private data class ImeRequest(val windowFocused: Boolean, val served: Boolean)
+
+    /** Focuses the field and asks for the IME. */
+    private fun showIme(activity: CapacitorMainActivity, webView: WebView): ImeRequest {
+        // The IME only serves the focused window. Without focus every step below
+        // silently does nothing, so wait for it first and name it in the failure
+        // if it never comes (logWindowState() records who has it instead).
+        val windowFocused = awaitTrue("the activity window to gain focus") {
+            onMainSync { activity.hasWindowFocus() }
+        }
+        if (!windowFocused) logWindowState()
         // View focus first, then the editable inside it, then the request: a
         // programmatic focus() without a user gesture does not raise the IME by
         // itself, and show(ime()) needs an editor attached to the focused view.
@@ -221,35 +232,61 @@ class ImeInsetShimInstrumentedTest {
         // A request issued before then is dropped outright — "Ignoring
         // showSoftInput() as view ... is not served", the whole failure in run
         // 33975587718 — so wait for the connection instead of racing it.
-        val served = awaitServedView(activity, webView)
+        val served = awaitTrue("the WebView to get an input connection") {
+            onMainSync { inputMethodManager(activity).isActive(webView) }
+        }
         onMainSync {
             WindowInsetsControllerCompat(activity.window, webView)
                 .show(WindowInsetsCompat.Type.ime())
         }
-        return served
+        return ImeRequest(windowFocused, served)
     }
 
     /**
-     * Waits until the IME has an input connection to [webView], i.e. a show
-     * request would reach the IME instead of being ignored. Reports a miss
-     * rather than failing on it, so that a genuine never-opens failure still
-     * fails on the geometry with the full reading rather than dying here.
+     * Waits for a precondition of a show request reaching the IME (window focus,
+     * an input connection to the WebView). Reports a miss rather than failing on
+     * it, so that a genuine never-opens failure still fails on the geometry with
+     * the full reading rather than dying here.
      */
-    private fun awaitServedView(
-        activity: CapacitorMainActivity,
-        webView: WebView,
+    private fun awaitTrue(
+        waitingFor: String,
         timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
+        check: () -> Boolean,
     ): Boolean {
         val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(timeoutSeconds)
         do {
-            if (onMainSync { inputMethodManager(activity).isActive(webView) }) return true
-            // Coarser than POLL_MS: isActive() can hit system_server synchronously,
+            if (check()) return true
+            // Coarser than POLL_MS: the checks (isActive()) can hit system_server synchronously,
             // and this wait exists for the case where that server is already the
             // slow part. Detection latency does not matter at this granularity.
             SystemClock.sleep(SERVED_POLL_MS)
         } while (SystemClock.elapsedRealtime() < deadline)
-        Log.i(TAG, "WebView still has no input connection after ${timeoutSeconds}s")
+        Log.i(TAG, "Still waiting for $waitingFor after ${timeoutSeconds}s")
         return false
+    }
+
+    /**
+     * Logs which window the system has focused and the task stack, for a focus
+     * wait that missed. Two causes look identical from inside the test: another
+     * window holding focus (a launcher ANR dialog, see android/close-anr-dialogs.sh)
+     * and the system focusing this window without the activity ever being told
+     * (seen once in 200 fresh boots, cause unknown). This tells them apart.
+     * System window and activity names only — no app content.
+     */
+    private fun logWindowState() {
+        val uiAutomation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        for (command in listOf("dumpsys window displays", "dumpsys activity activities")) {
+            // Diagnostics only: a failing dump must not replace the geometry failure.
+            runCatching {
+                ParcelFileDescriptor.AutoCloseInputStream(uiAutomation.executeShellCommand(command))
+                    .bufferedReader()
+                    .useLines { lines ->
+                        lines.filter { WINDOW_STATE_LINE.containsMatchIn(it) }
+                            .take(WINDOW_STATE_MAX_LINES)
+                            .forEach { Log.i(TAG, "focus-miss [$command] ${it.trim()}") }
+                    }
+            }.onFailure { Log.i(TAG, "focus-miss [$command] dump failed: $it") }
+        }
     }
 
     private fun inputMethodManager(activity: CapacitorMainActivity): InputMethodManager =
@@ -274,13 +311,13 @@ class ImeInsetShimInstrumentedTest {
         }
         if (first != null) return first
         // Re-enter the whole sequence rather than re-issuing show() alone: what
-        // the retry is really for is the second wait for an input connection,
-        // since the likeliest reason the first request did nothing is that there
-        // was none yet. (The JS focus it repeats is a no-op while the field still
+        // the retry is really for is the second wait for window focus and an
+        // input connection, since the likeliest reason the first request did
+        // nothing is that there was none yet. (The JS focus it repeats is a no-op while the field still
         // holds focus — the focusing steps return early and the renderer re-reports
         // nothing — so the wait, not the focus, is what makes this retry worth a try.)
         Log.i(TAG, "IME not open after show(ime()); retrying the request and the wait")
-        val served = showIme(activity, webView)
+        val request = showIme(activity, webView)
         onMainSync {
             inputMethodManager(activity)
                 .showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
@@ -289,9 +326,10 @@ class ImeInsetShimInstrumentedTest {
             activity,
             webView,
             "the IME to open (visible frame must drop by more than 15% of the root height; " +
-                "WebView had an input connection: $served — false means the request was " +
-                "very likely dropped before reaching the IME; on an emulator make sure " +
-                "`settings put secure show_ime_with_hard_keyboard 1` ran)",
+                "window had focus: ${request.windowFocused}, WebView had an input connection: " +
+                "${request.served} — false means the request was very likely dropped before " +
+                "reaching the IME; on an emulator make sure `settings put secure " +
+                "show_ime_with_hard_keyboard 1` and android/close-anr-dialogs.sh ran)",
         ) { it.keyboardOpenPerListener }
     }
 
@@ -398,6 +436,11 @@ class ImeInsetShimInstrumentedTest {
         const val SETTLE_MS = 300L
         // Sub-pixel rounding between the visible frame and the view bottom.
         const val TOLERANCE_PX = 2
+        const val WINDOW_STATE_MAX_LINES = 60
+        val WINDOW_STATE_LINE = Regex(
+            "mCurrentFocus|mFocusedApp|mFocusedWindow|ResumedActivity|mLastPausedActivity|" +
+                "\\* Task\\{|\\* Hist|mSleeping|isSleeping|mKeyguardShowing|mDreamingLockscreen"
+        )
 
         // The viewport meta mirrors src/index.html: SystemBars reads
         // viewport-fit=cover back from this tag at onDOMReady and only takes its

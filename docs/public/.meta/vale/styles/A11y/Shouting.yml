@@ -1,0 +1,19 @@
+# A run of words in capitals. Some screen readers spell an all-caps word
+# out, and everyone else reads it as shouting. Emphasis is markup.
+extends: existence
+message: "'%s' is in all caps. Use emphasis markup, which a screen reader can announce."
+level: suggestion
+nonword: true
+raw:
+  - '\b[A-Z]{4,}(?:\s+[A-Z]{4,}){2,}\b'
+
+tests:
+  - name: fires
+    input: |
+      READ THIS BEFORE INSTALLING anything.
+    want: |
+      1:1:A11y.Shouting:'READ THIS BEFORE INSTALLING' is in all caps. Use emphasis markup, which a screen reader can announce.
+  - name: clean
+    input: |
+      **Read this before installing** anything. The HTTP and JSON APIs are separate.
+    want: ""

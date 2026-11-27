@@ -27,6 +27,44 @@ const dragRow = async (page: Page, row: Locator, target: Locator): Promise<void>
 };
 
 test.describe('View sections', () => {
+  for (const width of [1280, 390]) {
+    test(`drops a row into an empty section at ${width}px`, async ({
+      page,
+      workViewPage,
+      testPrefix,
+    }) => {
+      await page.goto('/#/project/INBOX_PROJECT/tasks');
+      await workViewPage.waitForTaskList();
+      const title = `${testPrefix}-Move`;
+      await workViewPage.addTask(title);
+      await createView(page, {
+        title: `${testPrefix}-Empty section`,
+        sections: [
+          { title: 'Normal', rules: [{ rule: 'Priority', value: 'Not set' }] },
+          { title: 'High', rules: [{ rule: 'Priority', value: 'High' }] },
+        ],
+      });
+      await page.setViewportSize({ width, height: 900 });
+      const sections = page.locator('boards board-panel');
+      const row = (index: number): Locator =>
+        sections
+          .nth(index)
+          .locator('task:not(.cdk-drag-placeholder)')
+          .filter({ hasText: title });
+      await expect(row(0)).toBeVisible();
+      await expect(sections.nth(1).locator('task')).toHaveCount(0);
+
+      await dragRow(page, row(0), sections.nth(1).locator('task-list').first());
+      await expect(row(1)).toHaveCount(1);
+      await expect(row(0)).toHaveCount(0);
+
+      await waitForStatePersistence(page);
+      await page.reload();
+      await expect(row(1)).toHaveCount(1);
+      await expect(row(0)).toHaveCount(0);
+    });
+  }
+
   test('moves a row into the next section by keyboard and by drag, applying its rules', async ({
     page,
     workViewPage,

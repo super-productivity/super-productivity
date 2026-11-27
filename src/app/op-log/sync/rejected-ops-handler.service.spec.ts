@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
 import {
   RejectedOpsHandlerService,
   DownloadCallback,
@@ -78,6 +79,10 @@ describe('RejectedOpsHandlerService', () => {
         {
           provide: OperationLogDownloadService,
           useValue: { hasUnseenRemoteOps: () => false },
+        },
+        {
+          provide: TranslateService,
+          useValue: { instant: (key: string) => `translated:${key}` },
         },
       ],
     });
@@ -440,7 +445,9 @@ describe('RejectedOpsHandlerService', () => {
         { opId: 'op-1', error: 'quota exceeded', errorCode: 'STORAGE_QUOTA_EXCEEDED' },
       ]);
 
-      expect(alertSpy).toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalledOnceWith(
+        'translated:F.SYNC.A.SERVER_STORAGE_FULL',
+      );
       expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
     });
 

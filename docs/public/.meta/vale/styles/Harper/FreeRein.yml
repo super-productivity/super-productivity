@@ -1,0 +1,19 @@
+---
+# Generated from Harper's FreeRein rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures the correct use of `free rein`, avoiding confusion with `free reign`, which incorrectly suggests authority rather than freedom of action.
+extends: existence
+message: "Use the correct phrase for unrestricted control."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "free rein"
+tokens:
+  - "free(?!\\s*\\n\\s*\\n)\\s+reign(?!['\\x{2019}]s\\b)"

@@ -10,7 +10,9 @@ import com.superproductivity.superproductivity.service.BackgroundSyncCredentialS
 import com.superproductivity.superproductivity.service.QuickFetchCoalescer
 import com.superproductivity.superproductivity.service.ReminderChangeResult
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.RepeatReminderCache
 import com.superproductivity.superproductivity.service.SuperSyncBackgroundProvider
+import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.service.buildPayloadDecryptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,10 +64,10 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                 nowMs = SystemClock::elapsedRealtime,
             )
 
-        // Not tied to one alarm: a derivation that misses the deadline keeps
-        // running (best effort: Android may kill the idle process) and caches the
-        // key for the next alarm and SyncReminderWorker.
-        private val derivingScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        // Not tied to one alarm: work that misses the deadline keeps running
+        // (best effort: Android may kill the idle process). A late derivation
+        // still caches the key for the next alarm and SyncReminderWorker.
+        private val detachedScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
         // Whole stale check, both fetches included, must end inside the ~10s
         // goAsync() window. A cold derivation measured 1.4s on an x86 emulator
@@ -96,11 +98,32 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             return
         }
 
+        // Checked when the alarm fires, not by cancelling it when tracking starts:
+        // tracking can end natively (notification Pause/Done with the app swiped
+        // away) where no JS runs to re-arm a cancelled alarm (#6823). Memory
+        // only: a fresh process after a kill has none, and then it rings.
+        val trackedTaskId = TrackingForegroundService.currentTaskId.takeIf {
+            TrackingForegroundService.isTracking && TrackingForegroundService.resumeAfterRestore
+        }
+        if (isReminderForTrackedTask(reminderType, relatedId, trackedTaskId)) {
+            Log.d(TAG, "Task is being tracked, dropping alarm: id=$notificationId")
+            ReminderNotificationHelper.cancelReminder(context, notificationId)
+            return
+        }
+
         val pendingResult = goAsync()
 
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
-                val isStale = isTaskStale(context, relatedId, triggerAtMs, reminderType)
+                // Hard cap on top of the fetch timeouts: system DNS ignores
+                // OkHttp's callTimeout, and a lookup stuck past the goAsync()
+                // window was an ACTION_SHOW_REMINDER ANR in Play vitals.
+                val isStale = awaitWithin(CHECK_BUDGET_MS, detachedScope) {
+                    isTaskStale(context, relatedId, triggerAtMs, reminderType)
+                } ?: run {
+                    Log.d(TAG, "Stale check over budget, failing open: id=$notificationId")
+                    false
+                }
                 if (isStale) {
                     Log.d(TAG, "Suppressed stale notification: id=$notificationId, task=$relatedId")
                     ReminderNotificationHelper.cancelReminder(context, notificationId)
@@ -141,7 +164,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             context, credentials.baseUrl
         )
 
-        // Token in the key: a re-login on the same server keeps lastSeq, and one
+        // Token in the key: every login on a server restarts at lastSeq 0, and one
         // account's result must never answer for another's alarms.
         val cacheKey = Triple(credentials.baseUrl, credentials.accessToken, lastSeq)
         val result = staleCheckFetches.get(cacheKey) {
@@ -149,8 +172,11 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             // goAsync() window. Ops with unknown salts degrade to envelope-only
             // parsing and are reported in unreadableTaskIds.
             val decryptor = buildPayloadDecryptor(context, TAG, deriveOnMiss = false)
+            // The cached configs let a project or tag delete mark its repeat
+            // alarms stale; with an empty state only config deletes would.
             SuperSyncBackgroundProvider(decryptor).fetchQuick(
-                credentials.baseUrl, credentials.accessToken, lastSeq
+                credentials.baseUrl, credentials.accessToken, lastSeq,
+                repeatState = RepeatReminderCache.getState(context),
             )
         } ?: return false  // Error -> fail-open
 
@@ -176,14 +202,41 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val (baseUrl, accessToken, lastSeq) = cacheKey
         // No stored password: deriving is impossible, so a second GET would only repeat the first.
         val decryptor = buildPayloadDecryptor(context, TAG) ?: return null
-        val derived = derivingScope.async {
+        val waitMs = (deadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+        val result = awaitWithin(waitMs, detachedScope) {
             derivingFetches.get(cacheKey) {
-                SuperSyncBackgroundProvider(decryptor).fetchQuick(baseUrl, accessToken, lastSeq)
+                SuperSyncBackgroundProvider(decryptor).fetchQuick(
+                    baseUrl, accessToken, lastSeq,
+                    repeatState = RepeatReminderCache.getState(context),
+                )
             }
         }
-        val waitMs = deadlineMs - SystemClock.elapsedRealtime()
-        val result = withTimeoutOrNull(waitMs.coerceAtLeast(0L)) { derived.await() }
         if (result == null) Log.d(TAG, "No derived-key result by the alarm deadline, failing open")
         return result
     }
 }
+
+/**
+ * Waits at most [budgetMs] for [block], which runs in [scope] so blocking work
+ * that ignores cancellation (system DNS) cannot hold the caller past budget.
+ * Returns null on timeout; the work keeps running in [scope]. Failures from
+ * [block] are rethrown.
+ */
+internal suspend fun <T> awaitWithin(
+    budgetMs: Long,
+    scope: CoroutineScope,
+    block: suspend () -> T,
+): T? {
+    val work = scope.async { block() }
+    return withTimeoutOrNull(budgetMs) { work.await() }
+}
+
+/**
+ * A task's own reminder is pointless while its timer runs (#6823). Deadline and
+ * due-date reminders still ring, as before.
+ */
+internal fun isReminderForTrackedTask(
+    reminderType: String,
+    relatedId: String,
+    trackedTaskId: String?,
+): Boolean = reminderType == "TASK" && trackedTaskId != null && trackedTaskId == relatedId

@@ -1,9 +1,11 @@
+import { DOCS_URL } from '../../../app.constants';
 import { ConfigFormSection, TimeTrackingConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 
 export const TIME_TRACKING_FORM_CFG: ConfigFormSection<TimeTrackingConfig> = {
   title: T.GCF.TIME_TRACKING.TITLE,
   help: T.GCF.TIME_TRACKING.HELP,
+  docsUrl: `${DOCS_URL}explanation/timers-and-focus-mode/`,
   key: 'timeTracking',
   items: [
     {

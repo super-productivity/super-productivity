@@ -1,0 +1,20 @@
+---
+# Generated from Harper's FondOn rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags `fond on` and suggests `found on` or `fond of`.
+extends: existence
+message: "Use `found on` or `fond of` instead of `fond on`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "found on"
+    - "fond of"
+tokens:
+  - "fond(?!\\s*\\n\\s*\\n)\\s+on(?!['\\x{2019}]s\\b)"

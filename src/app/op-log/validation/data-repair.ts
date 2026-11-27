@@ -21,6 +21,7 @@ import { repairMenuTree } from './repair-menu-tree';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { RepairSummary } from '../core/operation.types';
 import { isValidEntityId } from './is-valid-entity-id';
+import { UNLINKED_ISSUE_FIELDS } from '../../features/tasks/task-issue-fields';
 
 export interface DataRepairResult {
   data: AppDataComplete;
@@ -114,7 +115,6 @@ export const dataRepair = (
   dataOut = _removeArchivedCopiesOfLiveTasks(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromIssueProviders(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromTaskRepeatCfg(dataOut, summary);
-  dataOut = _removeNonExistentRepeatCfgIdsFromTasks(dataOut, summary);
   dataOut = _moveArchivedSubTasksToUnarchivedParents(dataOut, summary);
   dataOut = _moveUnArchivedSubTasksToArchivedParents(dataOut, summary);
   dataOut = _cleanupOrphanedSubTasks(dataOut, summary);
@@ -133,6 +133,8 @@ export const dataRepair = (
   dataOut = _fixOrphanedNotes(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromTasks(dataOut, summary);
   dataOut = _removeNonExistentTagsFromTasks(dataOut, summary);
+  dataOut = _removeNonExistentRepeatCfgIdsFromTasks(dataOut, summary);
+  dataOut = _removeNonExistentIssueProviderIdsFromTasks(dataOut, summary);
   dataOut = _addInboxProjectIdIfNecessary(dataOut, summary);
   // Earlier repair passes can create new top-level tasks or reassign a dangling
   // projectId to the Inbox. Reconcile project-list membership after those passes
@@ -1182,6 +1184,28 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
     summary.invalidReferencesRemoved += removedCount;
   }
 
+  return data;
+};
+
+const _removeNonExistentIssueProviderIdsFromTasks = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  const providerIds = new Set(data.issueProvider.ids);
+  let removedCount = 0;
+
+  // Archives may retain deleted provider references; only active tasks require them.
+  for (const id of data.task.ids) {
+    const task = data.task.entities[id];
+    if (task?.issueProviderId && !providerIds.has(task.issueProviderId)) {
+      Object.assign(task, UNLINKED_ISSUE_FIELDS);
+      removedCount++;
+    }
+  }
+  if (removedCount > 0) {
+    OpLog.log(`Cleared non-existent issue providers from ${removedCount} active tasks`);
+    summary.invalidReferencesRemoved += removedCount;
+  }
   return data;
 };
 

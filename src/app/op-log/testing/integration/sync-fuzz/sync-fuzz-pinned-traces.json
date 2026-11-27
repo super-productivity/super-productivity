@@ -87,8 +87,8 @@
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260: divergence remains; the whole-entity winner carrying the creation baseline is an accepted residual (preservation oracle audit)",
-    "name": "a habit rename that loses to a count stays on its device only",
+    "ref": "fixed by #11184 (regression pin): the rename that loses whole-entity to the opaque count is re-sent as a patch of the fields the count left in state",
+    "name": "a habit rename that loses to a count reaches every device",
     "steps": [
       {
         "d": "C",
@@ -99,14 +99,13 @@
         "a": ["countHabit", "h1"]
       }
     ],
-    "primary": "divergence:.simpleCounter.entities.*.title",
-    "signatures": ["divergence:.simpleCounter.entities.*.title"],
+    "signatures": [],
     "rejections": []
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260: divergence remains; the whole-entity winner carrying the creation baseline is an accepted residual (preservation oracle audit)",
-    "name": "a task rename that loses to tracking stays on its device only",
+    "ref": "fixed by #11184 (regression pin): the rename that loses whole-entity to the opaque plan-for-today and its delta is re-sent as a patch of the fields they left in state; since #11883 the rename and the plan commute, so the server rejects the raw rename once and its patch re-send follows",
+    "name": "a task rename that loses to tracking reaches every device",
     "steps": [
       {
         "d": "C",
@@ -126,9 +125,8 @@
         "a": ["track", "t13", 2000]
       }
     ],
-    "primary": "divergence:.task.entities.*.title",
-    "signatures": ["divergence:.task.entities.*.title"],
-    "rejections": []
+    "signatures": [],
+    "rejections": ["CONFLICT_CONCURRENT [Task Shared] updateTask"]
   },
   {
     "class": "whole-entity-lww-drops-fields",
@@ -1997,6 +1995,362 @@
       }
     ],
     "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "whole-entity-lww-drops-fields",
+    "ref": "#11892 (accepted residual, #10379 class): a pending time-only local side wins with a whole-task snapshot and reverts the rename and move another device re-sent after losing to the #11184 re-send of a done (move:20725012; passes on the base of #11184, the snapshot loss is older)",
+    "name": "a tracked task's snapshot reverts a re-sent rename and move",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["track", "t1", 3000],
+        "c": 1
+      },
+      {
+        "d": "B",
+        "a": ["moveTask", "t2", "p1"]
+      },
+      {
+        "d": "C",
+        "a": ["addTask", "t11", "T"],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["doneTask", "t3", true]
+      },
+      {
+        "d": "C",
+        "a": ["moveTask", "t2", "p2"]
+      },
+      {
+        "d": "B",
+        "a": ["moveTask", "t1", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t1", 3000],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["deleteTask", "t1"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["track", "t3", 5000],
+        "s": 1,
+        "c": 1
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t11", "p2"]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t3", 2000]
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t11", "A11"]
+      },
+      {
+        "d": "B",
+        "a": ["editTaskNotes", "t2", "B12"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t2", 4000],
+        "c": 1
+      },
+      {
+        "d": "B",
+        "a": ["deleteTask", "t3"],
+        "r": 1
+      },
+      {
+        "d": "C",
+        "a": ["track", "t2", 1000],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t3", "p2"]
+      },
+      {
+        "d": "C",
+        "a": ["doneTask", "t2", true]
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t2", "INBOX_PROJECT"],
+        "r": 1
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t11", "B19"],
+        "c": 1
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t3", "A20"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["track", "t3", 4000],
+        "c": 1
+      },
+      {
+        "d": "B",
+        "a": ["doneTask", "t2", true]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t3", 3000]
+      },
+      {
+        "d": "B",
+        "a": ["editTaskNotes", "t11", "B24"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t11", "p1"],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["moveTask", "t11", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t2", 2000]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t11", 3000],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t2", "C29"],
+        "s": 1
+      }
+    ],
+    "primary": "older-write-won:task.title",
+    "signatures": [
+      "divergence:.tag.entities.*.taskIds.*",
+      "divergence:.task.ids.*",
+      "divergence:.timeTracking.project.*",
+      "divergence:.timeTracking.project.INBOX_PROJECT.*.e",
+      "divergence:.timeTracking.tag.TODAY.*.e",
+      "divergence:.timeTracking.tag.TODAY.*.s",
+      "older-write-won:task.title",
+      "recreated:field-reverted:task.projectId",
+      "recreated:time-loss:task",
+      "restart-changed:.tag.entities.*.taskIds.*",
+      "restart-changed:.task.ids.*"
+    ],
+    "rejections": [
+      "CONFLICT_CONCURRENT [TASK] LWW Update",
+      "CONFLICT_CONCURRENT [TIME_TRACKING] LWW Update",
+      "CONFLICT_CONCURRENT [Task Shared] deleteTask",
+      "CONFLICT_CONCURRENT [Task Shared] updateTask",
+      "CONFLICT_CONCURRENT [TimeTracking] Sync time spent"
+    ]
+  },
+  {
+    "class": "list-order-divergence",
+    "ref": "#10381, order only: the recreated task is appended to the task ids where the delete ran. The reverted done, project and title of this trace are fixed by this branch: the restored task's snapshot is followed by a patch of the edits that arrived in the same sync",
+    "name": "a done toggle that arrived beside a delete survives the restoring snapshot",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["doneTask", "t1", true]
+      },
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "divergence:.task.ids.*",
+    "signatures": ["divergence:.task.ids.*", "restart-changed:.task.ids.*"],
+    "rejections": []
+  },
+  {
+    "class": "list-order-divergence",
+    "ref": "#10381, order only: the recreated task is appended to the task ids where the delete ran. The reverted done, project and title of this trace are fixed by this branch: the restored task's snapshot is followed by a patch of the edits that arrived in the same sync",
+    "name": "a done toggle synced before a third device's delete survives the restoring snapshot",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["doneTask", "t1", true],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["deleteTask", "t1"],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "divergence:.task.ids.*",
+    "signatures": ["divergence:.task.ids.*", "restart-changed:.task.ids.*"],
+    "rejections": []
+  },
+  {
+    "class": "list-order-divergence",
+    "ref": "#10381, order only: the recreated task is appended to the task ids where the delete ran. The reverted done, project and title of this trace are fixed by this branch: the restored task's snapshot is followed by a patch of the edits that arrived in the same sync",
+    "name": "a project move that arrived beside a delete survives the restoring snapshot",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["moveTask", "t1", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "divergence:.task.ids.*",
+    "signatures": ["divergence:.task.ids.*", "restart-changed:.task.ids.*"],
+    "rejections": []
+  },
+  {
+    "class": "list-order-divergence",
+    "ref": "#10381, order only: the recreated task is appended to the task ids where the delete ran. The reverted done, project and title of this trace are fixed by this branch: the restored task's snapshot is followed by a patch of the edits that arrived in the same sync",
+    "name": "a rename and move that arrived beside a delete survive the restoring snapshot",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["renameTask", "t1", "A1"]
+      },
+      {
+        "d": "A",
+        "a": ["moveTask", "t1", "p2"]
+      },
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "divergence:.task.ids.*",
+    "signatures": ["divergence:.task.ids.*", "restart-changed:.task.ids.*"],
+    "rejections": []
+  },
+  {
+    "class": "whole-entity-lww-drops-fields",
+    "ref": "#11892 family: the deleting device's own done toggle sits beside its delete in the losing local side, so the newer tracked time restores the task whole-entity without it (fails with and without the same-sync snapshot patch)",
+    "name": "a newer tracked time restores a task without the deleting device's earlier done toggle",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["doneTask", "t1", true]
+      },
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "C",
+        "s": 1
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "recreated:field-reverted:task.isDone",
+    "signatures": [
+      "divergence:.task.entities.*.doneOn",
+      "divergence:.task.entities.*.isDone",
+      "divergence:.task.ids.*",
+      "recreated:field-reverted:task.isDone"
+    ],
+    "rejections": []
+  },
+  {
+    "class": "list-order-divergence",
+    "ref": "#10381, order only: the recreated task is appended to the task ids where the delete ran. The reverted done of this trace is fixed by this branch, also when a field merge of another task in the same sync puts the done toggle ahead of the snapshot",
+    "name": "a done toggle beside a delete survives the restoring snapshot when another task merges in the same sync",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["renameTask", "t2", "A2"]
+      },
+      {
+        "d": "A",
+        "a": ["doneTask", "t1", true]
+      },
+      {
+        "d": "A",
+        "a": ["deleteTask", "t1"],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t2", "C2"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 2000]
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "divergence:.task.ids.*",
+    "signatures": ["divergence:.task.ids.*", "restart-changed:.task.ids.*"],
     "rejections": []
   }
 ]

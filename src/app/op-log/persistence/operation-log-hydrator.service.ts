@@ -540,12 +540,12 @@ export class OperationLogHydratorService {
     // durable reducer outcome. An earlier pending row still needs bulk
     // replay/checkpointing even if a later full-state op replaces its
     // visible state; otherwise that row would quarantine sync forever.
-    const hasPendingReducerWork = tailOps.some(
-      (entry) => entry.applicationStatus === 'pending',
+    // Full-state loads preserve local sync settings, so replay earlier config changes.
+    const requiresReplay = tailOps.some(
+      (entry) =>
+        entry.applicationStatus === 'pending' || entry.op.entityType === 'GLOBAL_CONFIG',
     );
-    const appData = hasPendingReducerWork
-      ? undefined
-      : this._extractFullStateFromOp(lastOp);
+    const appData = requiresReplay ? undefined : this._extractFullStateFromOp(lastOp);
     if (appData) {
       OpLog.normal(
         `OperationLogHydratorService: Last of ${tailOps.length} tail ops is ${lastOp.opType}, loading directly`,
@@ -1180,6 +1180,7 @@ export class OperationLogHydratorService {
       buildIdbOpenErrorMessage(error, {
         channel: detectChannel(),
         appVersion: getAppVersionStr(),
+        isIdbAvailable: typeof indexedDB !== 'undefined',
       }),
     );
   }

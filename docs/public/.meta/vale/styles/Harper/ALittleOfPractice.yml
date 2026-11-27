@@ -1,0 +1,20 @@
+---
+# Generated from Harper's ALittleOfPractice rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `a little of practice` to `a little practice` or `a bit of practice`.
+extends: existence
+message: "Have you perhaps confused `a little practice` or `a bit of practice`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "a little practice"
+    - "a bit of practice"
+tokens:
+  - "a(?!\\s*\\n\\s*\\n)\\s+little(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+practice(?!['\\x{2019}]s\\b)"

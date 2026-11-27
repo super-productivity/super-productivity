@@ -20,6 +20,15 @@ const SELECTION_SCOPE_SELECTOR =
  *   ranges and keyboard navigation stay within the anchor's list. Nested
  *   subtasks of other parents are never swept in.
  */
+/** Bulk menu submenus a task shortcut can open directly, as for a single task. */
+export type BulkSubmenu = 'estimate' | 'tags' | 'project';
+
+export interface BulkMenuOpenRequest {
+  x: number;
+  y: number;
+  submenu?: BulkSubmenu;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -43,7 +52,7 @@ export class TaskMultiSelectService {
    * the wrong panel or nowhere at all.
    */
   private _selectionScopeEl: HTMLElement | null = null;
-  private readonly _menuOpenRequest = signal<{ x: number; y: number } | null>(null);
+  private readonly _menuOpenRequest = signal<BulkMenuOpenRequest | null>(null);
   private readonly _bulkFeedbackSuppressionDepth = signal(0);
   private readonly _isTouchSelectionMode = signal(false);
   private readonly _pendingRemovals = new Set<string>();
@@ -406,8 +415,9 @@ export class TaskMultiSelectService {
     this._selectionScopeEl = null;
   }
 
-  requestMenuOpen(pos: { x: number; y: number }): void {
-    this._menuOpenRequest.set(pos);
+  /** `submenu` opens that submenu of the bulk menu right away. */
+  requestMenuOpen(pos: { x: number; y: number }, submenu?: BulkSubmenu): void {
+    this._menuOpenRequest.set({ ...pos, submenu });
   }
 
   consumeMenuOpenRequest(): void {

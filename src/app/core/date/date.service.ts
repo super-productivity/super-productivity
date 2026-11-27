@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { getDbDateStr, getDbDateStrWithOffset } from '../../util/get-db-date-str';
 import { getStartOfNextDayDiffMs } from '../../util/start-of-next-day.util';
 
 @Injectable({ providedIn: 'root' })
@@ -75,7 +75,7 @@ export class DateService {
 
   isToday(date: number | Date): boolean {
     const ts = typeof date === 'number' ? date : date.getTime();
-    return getDbDateStr(new Date(ts - this.startOfNextDayDiff)) === this.todayStr();
+    return getDbDateStrWithOffset(ts, this.startOfNextDayDiff) === this.todayStr();
   }
 
   isYesterday(date: number | Date): boolean {
@@ -83,7 +83,7 @@ export class DateService {
     const yesterday = new Date(Date.now() - this.startOfNextDayDiff);
     yesterday.setDate(yesterday.getDate() - 1);
     return (
-      getDbDateStr(new Date(ts - this.startOfNextDayDiff)) === getDbDateStr(yesterday)
+      getDbDateStrWithOffset(ts, this.startOfNextDayDiff) === getDbDateStr(yesterday)
     );
   }
 }

@@ -5,7 +5,7 @@ import { SimpleMetrics } from './metric.model';
 import { delay, map, switchMap, take } from 'rxjs/operators';
 import { WorkContextType } from '../work-context/work-context.model';
 import { mapSimpleMetrics } from './metric.util';
-import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { ProjectService } from '../project/project.service';
 import { WorklogService } from '../worklog/worklog.service';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -14,7 +14,7 @@ import { WorkContextService } from '../work-context/work-context.service';
   providedIn: 'root',
 })
 export class ProjectMetricsService {
-  private _taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _projectService = inject(ProjectService);
   private _worklogService = inject(WorklogService);
   private _workContextService = inject(WorkContextService);
@@ -30,7 +30,7 @@ export class ProjectMetricsService {
               this._projectService.getBreakTimeForProject$(activeId),
               this._worklogService.worklog$,
               this._worklogService.totalTimeSpent$,
-              from(this._taskService.getAllTasksForProject(activeId)),
+              from(this._taskArchiveOrchestrator.getAllTasksForProject(activeId)),
             ]).pipe(
               map(mapSimpleMetrics),
               // because otherwise the page is always redrawn if a task is active

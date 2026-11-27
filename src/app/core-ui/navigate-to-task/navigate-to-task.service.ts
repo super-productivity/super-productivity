@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { SearchQueryParams } from '../../pages/search-page/search-page.model';
 import { devError } from '../../util/dev-error';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { Router } from '@angular/router';
 import { HideSubTasksMode, Task } from '../../features/tasks/task.model';
 import { INBOX_PROJECT } from '../../features/project/project.const';
@@ -34,6 +35,7 @@ interface NavTarget {
 export class NavigateToTaskService {
   private _store = inject<Store<RootState>>(Store);
   private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _router = inject(Router);
   private _snackService = inject(SnackService);
   private _dateService = inject(DateService);
@@ -54,7 +56,7 @@ export class NavigateToTaskService {
     { isFromSearch = false }: { isFromSearch?: boolean } = {},
   ): Promise<void> {
     try {
-      const task = await this._taskService.getByIdFromEverywhere(taskId);
+      const task = await this._taskArchiveOrchestrator.getByIdFromEverywhere(taskId);
       if (!task) {
         throw new Error(`Task with id ${taskId} not found`);
       }
@@ -134,7 +136,7 @@ export class NavigateToTaskService {
     if (!task.parentId) {
       return task;
     }
-    const parentTask = await this._taskService.getByIdFromEverywhere(
+    const parentTask = await this._taskArchiveOrchestrator.getByIdFromEverywhere(
       task.parentId,
       isArchiveTask,
     );
@@ -371,7 +373,7 @@ export class NavigateToTaskService {
     if (dateStr) return dateStr;
 
     if (task.parentId) {
-      const tasks = await this._taskService.getArchivedTasks();
+      const tasks = await this._taskArchiveOrchestrator.getArchivedTasks();
       const parentTask = tasks.find((innerTask) => innerTask.id === task.parentId);
       if (parentTask && parentTask.timeSpentOnDay) {
         dateStr = Object.keys(parentTask.timeSpentOnDay)[0];

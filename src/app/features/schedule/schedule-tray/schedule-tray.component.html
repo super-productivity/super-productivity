@@ -3,6 +3,8 @@
   @for (cell of cells(); track cell.day) {
     <div
       class="tray-cell"
+      cdkDropList
+      [cdkDropListSortingDisabled]="true"
       [class.drag-over]="dragOverDay() === cell.day"
       [attr.data-tray-day]="cell.day"
     >
@@ -56,11 +58,26 @@
               cdkDrag
               [cdkDragData]="chip.dragData"
               [cdkDragStartDelay]="dragDelayForTouch()"
-              [class.is-shown-in-grid]="chip.id === shownInGridId()"
               (cdkDragStarted)="dragStarted($event)"
               (cdkDragMoved)="dragMoved($event)"
-              (cdkDragReleased)="dragReleased($event)"
+              (cdkDragEnded)="dragReleased($event)"
             >
+              <ng-template
+                cdkDragPreview
+                [matchSize]="true"
+              >
+                <div
+                  class="chip"
+                  [class.is-shown-in-grid]="chip.id === shownInGridId()"
+                >
+                  <span class="chip-main">
+                    <span class="chip-title">{{ chip.title }}</span>
+                    @if (chip.time) {
+                      <span class="chip-time">{{ chip.time }}</span>
+                    }
+                  </span>
+                </div>
+              </ng-template>
               <button
                 type="button"
                 class="chip-main"

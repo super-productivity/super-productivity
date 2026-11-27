@@ -2,8 +2,9 @@
 /**
  * Runs the Angular specs as several `ng test --include=…` shards. Karma runs
  * every spec in one Chrome tab, so one run uses about one core; shards spread
- * the suite over several. Locally all shards run in parallel; CI runs one shard
- * per job with `--shard i/N`, so both split the specs the same way.
+ * the suite over several. Locally all shards run in parallel; `--shard i/N`
+ * runs one shard of a split, so separate jobs can share it the same way. CI
+ * runs each suite unsplit (`--shards 1`) to start fewer runners.
  *
  * Usage: node tools/test-shards.js <suite...> [--shards N | --shard i/N]
  *   berlin     all specs, TZ=Europe/Berlin

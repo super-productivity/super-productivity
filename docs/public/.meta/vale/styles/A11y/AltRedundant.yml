@@ -1,0 +1,22 @@
+# Alt text that opens by saying it's an image. A screen reader announces
+# the image before reading the alt, so the opener is read twice.
+# https://webaim.org/techniques/alttext/
+extends: existence
+message: "Alt text opens with '%s'. A screen reader already says it's an image; start with what it shows."
+link: https://webaim.org/techniques/alttext/
+level: suggestion
+scope: alt
+nonword: true
+raw:
+  - '(?i)^\s*(?:an?\s+|the\s+)?(?:image|picture|photo|photograph|graphic|icon|illustration)\s+(?:of|showing|depicting)\b'
+
+tests:
+  - name: fires
+    input: |
+      ![Image of a bar chart](chart.png)
+    want: |
+      1:3:A11y.AltRedundant:Alt text opens with 'Image of'. A screen reader already says it's an image; start with what it shows.
+  - name: clean
+    input: |
+      ![A bar chart of sales by quarter](chart.png)
+    want: ""

@@ -1,0 +1,17 @@
+---
+# Hand-written from Harper's DoMistake -- the quantifier phrases, which are
+# several tokens each and cannot sit in one sequence slot. See DoMistake.yml.
+#
+# The following-verb guard is a list here rather than a tag, for the same
+# reason: an existence rule cannot ask for a part of speech.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Use `make` with `mistake`, not `do`."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '\b(?:do|did|does|doing|done)\s+(?:a lot of|lots of|that kind of|these kinds of|this kind of|those kinds of|so many|too many|tons of|tonnes of)\s+(?:mistakes|mistake)\b(?!\s+(?:become|becomes|became|occur|occurs|occurred|happen|happens|happened|arise|arises|arose|lead|leads|led|cause|causes|caused|make|makes|made|come|comes|came|go|goes|went|get|gets|got|seem|seems|seemed|appear|appears|appeared|turn|turns|turned|prove|proves|proved|remain|remains|remained|exist|exists|existed|matter|matters|mattered|count|counts|counted)\b)'

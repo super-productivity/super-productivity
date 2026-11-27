@@ -97,7 +97,10 @@ test.describe('TickTick import plugin', () => {
       frame.getByText(`${list}: 1 of 1 tasks, 3 of 3 sub-tasks`),
     ).toBeVisible();
 
-    await projectPage.navigateToProjectByName(list);
+    // the summary hands the user straight to the imported tasks
+    await frame.getByRole('button', { name: `Open “${list}”` }).click();
+    await expect(page).toHaveURL(/#\/project\/[^/]+\/tasks/);
+    await expect(projectPage.workCtxTitle).toContainText(list);
     const root = taskPage.getTaskByText('Weekly shop').first();
     await expect(root).toBeVisible();
     expect(await taskPage.taskHasTag(root, 'errand')).toBe(true);

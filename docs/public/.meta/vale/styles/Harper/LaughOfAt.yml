@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's LaughOfAt: you laugh at someone, not of them.
+#
+# This is Harper's expression as written -- a form of `laugh`, then `of`, then
+# a pronoun or proper noun. It is kept exactly because it needs no token before
+# `laugh`, which is what lets it match Harper's "Laugh of John while he waits."
+# at the start of a sentence.
+#
+# LaughOfAt2.yml covers the determiner case it cannot reach.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use `laugh at ...` instead of `laugh of ...` when pointing at someone."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "at"
+tokens:
+  - pattern: 'laughing|laughed|laughs|laugh'
+  - pattern: 'of'
+    target: true
+  - upos: PRON|PROPN

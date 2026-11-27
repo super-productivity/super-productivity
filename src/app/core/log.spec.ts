@@ -85,19 +85,23 @@ describe('Log', () => {
     it('redacts macOS and Linux home folders', () => {
       Log.err('at fn (/Users/alice/Library/app.js:1:2)');
       Log.err('at file:///home/alice/.config/app.js:1:2');
+      Log.err('open /var/home/alice/sync/a.json');
 
       const exported = Log.exportLogHistory();
       expect(exported).not.toContain('alice');
       expect(exported).toContain('Library');
       expect(exported).toContain('.config');
+      expect(exported).toContain('/var/home/<user>/sync');
     });
 
     it('keeps URL paths that merely contain /home/ or /Users/', () => {
       Log.err('GET https://api.example.com/home/feed and https://x.example.com/Users/42');
+      Log.err('GET https://api.example.com/var/home/feed');
 
       const exported = Log.exportLogHistory();
       expect(exported).toContain('example.com/home/feed');
       expect(exported).toContain('example.com/Users/42');
+      expect(exported).toContain('example.com/var/home/feed');
     });
 
     it('redacts the text export too', () => {

@@ -25,6 +25,7 @@ import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
 import { IS_MAC } from './util/is-mac';
 import { handleHomeEndInTextField } from './util/handle-home-end-in-text-field';
+import { handleMenuItemHotkey } from './util/handle-menu-item-hotkey';
 import { expandAnimation } from './ui/animations/expand.ani';
 import { warpRouteAnimation } from './ui/animations/warp-route';
 import { firstValueFrom, Subscription } from 'rxjs';
@@ -584,9 +585,15 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         });
       };
 
-      // Capture phase: fields like the task title stop keydown propagation.
+      // Capture phase: fields like the task title stop keydown propagation, and
+      // an open menu's type-ahead must not see a shortcut the menu lists.
       const onKeyDownCapture = (ev: KeyboardEvent): void => {
-        handleHomeEndInTextField(ev);
+        if (handleMenuItemHotkey(ev)) {
+          return;
+        }
+        if (IS_MAC) {
+          handleHomeEndInTextField(ev);
+        }
       };
 
       // Keep the launch screen's frame current: theme or layout changes made in
@@ -602,9 +609,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       doc.addEventListener('dragover', onDragOver, { passive: false });
       doc.addEventListener('drop', onDrop, { passive: false });
       doc.addEventListener('keydown', onKeyDown);
-      if (IS_MAC) {
-        doc.addEventListener('keydown', onKeyDownCapture, true);
-      }
+      doc.addEventListener('keydown', onKeyDownCapture, true);
       doc.addEventListener('visibilitychange', onVisibilityChange);
       window.addEventListener('pagehide', onPageHide);
 

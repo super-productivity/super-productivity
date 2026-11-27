@@ -1,0 +1,23 @@
+---
+# Generated from Harper's ThieveNoun rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes accidental `thieve` in noun phrases where singular `thief` is intended.
+extends: sequence
+message: "Use `thief` for a single person who steals."
+level: error
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "thief"
+tokens:
+  - pattern: 'their|that|this|your|her|his|its|our|the|an|my|a'
+  - upos: ADJ
+  - pattern: 'thieve'
+    target: true

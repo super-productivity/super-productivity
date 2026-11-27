@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { ConfigPageComponent } from './config-page.component';
 import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -366,6 +366,7 @@ describe('ConfigPageComponent', () => {
       for (const key of [
         T.FILE_IMEX.IMPORT_FROM_TODOIST,
         T.FILE_IMEX.IMPORT_FROM_TICKTICK,
+        T.FILE_IMEX.IMPORT_FROM_MS_TODO,
       ]) {
         component.onSearchChange(key);
         const hit = component.searchResults.find((r) => r.labelKey === key);
@@ -393,6 +394,27 @@ describe('ConfigPageComponent', () => {
 
       expect(component.selectedTabIndex).toBe(0);
     });
+
+    it('opens and briefly highlights a linked section, e.g. Import/Export', fakeAsync(() => {
+      // this suite renders an empty template; stand in for the real section
+      const sectionEl = document.createElement('section');
+      sectionEl.className = 'section-IMEX_YEAH';
+      fixture.nativeElement.appendChild(sectionEl);
+      const scrollSpy = spyOn(sectionEl, 'scrollIntoView');
+      TestBed.inject(ActivatedRoute).queryParams = of({ tab: '5', section: 'IMEX_YEAH' });
+      component.ngOnInit();
+
+      expect(component.expandedSection).toBe('IMEX_YEAH');
+      expect(component.highlightedSection()).toBe('IMEX_YEAH');
+
+      tick(200);
+      expect(scrollSpy).toHaveBeenCalled();
+
+      tick(3800);
+      expect(component.highlightedSection()).toBeNull();
+      // still open: only the highlight fades
+      expect(component.expandedSection).toBe('IMEX_YEAH');
+    }));
   });
 
   describe('App Features open by default', () => {

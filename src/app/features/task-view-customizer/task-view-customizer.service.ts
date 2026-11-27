@@ -3,6 +3,7 @@ import { computed, effect, Injectable, inject, signal } from '@angular/core';
 import { Observable, Subject, animationFrameScheduler, combineLatest, of } from 'rxjs';
 import { map, observeOn, switchMap, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
+import type { ViewTaskPrefill } from '../tasks/view-task-list.token';
 import { selectAllProjects } from '../project/store/project.selectors';
 import { Store } from '@ngrx/store';
 import { Project } from '../project/project.model';
@@ -68,6 +69,12 @@ export interface CustomizedTaskGroup {
    * so `TaskMultiDragService.canDrop` must keep rejecting group drops here.
    */
   tagId: string | null;
+  /**
+   * What the group header's "add task" fills into the add-task bar so the new
+   * task lands in this group; `null` for buckets no field can target ('No tag',
+   * 'No date', or a title shared by several tags/projects).
+   */
+  newTaskPrefill: ViewTaskPrefill | null;
 }
 
 /** Result of {@link TaskViewCustomizerService.customizeUndoneTasks}. */
@@ -279,6 +286,21 @@ export class TaskViewCustomizerService {
     return sanitized;
   }
 
+  /** Groups tasks by the selected grouping only (no filter/sort); null if ungrouped. */
+  groupTasksBySelectedGroup(tasks: TaskWithSubTasks[]): CustomizedTaskGroup[] | null {
+    const group = this.selectedGroup();
+    if (!group.type || !tasks.length) {
+      return null;
+    }
+    const grouped = this.applyGrouping(tasks, group.type);
+    return this._orderGroupKeys(grouped, group.type).map((key) => ({
+      key,
+      tasks: grouped[key],
+      tagId: null,
+      newTaskPrefill: null,
+    }));
+  }
+
   customizeUndoneTasks(
     undoneTasks$: Observable<TaskWithSubTasks[]>,
   ): Observable<CustomizedUndoneTasks> {
@@ -322,6 +344,11 @@ export class TaskViewCustomizerService {
               key,
               tasks: grouped[key],
               tagId: groupTagIdByKey?.[key] ?? null,
+              newTaskPrefill: this._newTaskPrefillForGroup(
+                group.type,
+                key,
+                groupTagIdByKey?.[key] ?? null,
+              ),
             }))
           : undefined;
 
@@ -416,6 +443,37 @@ export class TaskViewCustomizerService {
     // Same comparators as board columns, so a saved view sorts like its list.
     const factor = order === SORT_ORDER.DESC ? -1 : 1;
     return [...tasks].sort((a, b) => compare(a, b) * factor);
+  }
+
+  private _newTaskPrefillForGroup(
+    groupType: GROUP_OPTION_TYPE | null,
+    key: string,
+    tagId: string | null,
+  ): ViewTaskPrefill | null {
+    // Date groups are keyed by their day; the "none" buckets are not a day.
+    const isDayKey = /^\d{4}-\d{2}-\d{2}$/.test(key);
+    switch (groupType) {
+      case GROUP_OPTION_TYPE.tag:
+        return tagId && tagId !== NO_TAG_GROUP_ID
+          ? { fields: { tagIds: [tagId] }, isHidden: (f) => !f.tagIds?.includes(tagId) }
+          : null;
+      case GROUP_OPTION_TYPE.project: {
+        const matches = this._allProjects.filter((p) => p.title === key);
+        const projectId = matches.length === 1 ? matches[0].id : null;
+        return projectId
+          ? { fields: { projectId }, isHidden: (f) => f.projectId !== projectId }
+          : null;
+      }
+      case GROUP_OPTION_TYPE.scheduledDate:
+        return isDayKey
+          ? { fields: { dueDay: key }, isHidden: (f) => f.dueDay !== key }
+          : null;
+      case GROUP_OPTION_TYPE.deadline:
+        // The bar reports no deadline to `isHidden`, so it can't tell.
+        return isDayKey ? { fields: { deadlineDay: key }, isHidden: () => false } : null;
+      default:
+        return null;
+    }
   }
 
   private applyGrouping(

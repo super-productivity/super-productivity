@@ -11,6 +11,7 @@ import {
 const HOUR = 60 * 60 * 1000;
 const THREE_HOURS = 3 * HOUR;
 const TEN_MINUTES = 10 * 60 * 1000;
+const SIX_MINUTES = 6 * 60 * 1000;
 const TOLERANCE = 15_000;
 
 type TimerState = {
@@ -366,6 +367,34 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
       .toBe(taskId);
     await page.clock.fastForward(TEN_MINUTES);
     await expectTaskTime(page, taskId, HOUR + TEN_MINUTES);
+  });
+
+  // A finished break waits for the user, like on desktop; auto-starting the
+  // next Pomodoro session looped endlessly when the user walked away.
+  test('a native break completion keeps the finished break instead of starting the next session', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await dispatch(page, { type: '[FocusMode] Set Mode', mode: 'Pomodoro' });
+    await dispatch(page, { type: '[FocusMode] Start Break', duration: 5 * 60_000 });
+    await expect
+      .poll(async () => (await readState(page)).focusMode.timer.purpose)
+      .toBe('break');
+    // Move the wall clock without firing timers, like a backgrounded WebView: the
+    // break is still running when the native completion arrives.
+    const pageNow = await page.evaluate(() => Date.now());
+    await page.clock.pauseAt(pageNow + 1000);
+    await page.clock.setSystemTime(pageNow + SIX_MINUTES);
+    expect((await readState(page)).focusMode.timer.isRunning).toBe(true);
+    await page.evaluate(() =>
+      (window as unknown as TimerWindow).SUPAndroid.onFocusModeTimerComplete$.next(true),
+    );
+    await expect
+      .poll(async () => (await readState(page)).focusMode.timer)
+      .toEqual(expect.objectContaining({ purpose: 'break', isRunning: false }));
+    await page.clock.fastForward(60_000);
+    expect((await readState(page)).focusMode.timer.purpose).toBe('break');
   });
 
   test('recreation during a break retains the task to resume without counting break time', async ({

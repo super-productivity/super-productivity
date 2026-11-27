@@ -1,0 +1,19 @@
+---
+# Generated from Harper's InDueCourse rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `do` to `due` in the eggcorn `in do course`.
+extends: existence
+message: "Use `in due course` instead of `in do course`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "in due course"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+do(?!\\s*\\n\\s*\\n)\\s+course(?!['\\x{2019}]s\\b)"

@@ -217,7 +217,7 @@ registerIssueProvider({
 
     return {
       id: issue.id,
-      title: issue.title,
+      title: `${issue.identifier} ${issue.title}`,
       body: issue.description || '',
       url: issue.url,
       state: issue.state?.name,

@@ -88,7 +88,12 @@ const renderTokenStep = (errorMsg?: string, tokenValue?: string): void => {
     );
     try {
       const raw = await loadTodoistData(api(), token);
-      const model = parseSyncResponse(raw || {}, parseStrings());
+      const dayContext = await api().getDayContext?.();
+      const model = parseSyncResponse(
+        raw || {},
+        parseStrings(),
+        dayContext?.startOfNextDayDiffMs ?? 0,
+      );
       if (!model.projects.length) {
         renderTokenStep(t('TOKEN.NO_PROJECTS'), token);
         return;
@@ -302,6 +307,15 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
         }),
       ]
     : [];
+  const failedRepeats = result.failedRepeatCount
+    ? [
+        el('p', {
+          className: 'callout callout--warning',
+          role: 'status',
+          text: t('SUMMARY.REPEATS_FAILED', { count: result.failedRepeatCount }),
+        }),
+      ]
+    : [];
   const tagLine = result.createdTagTitles.length
     ? [
         el('p', {
@@ -322,6 +336,27 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
       ]
     : [];
 
+  // hand the user straight to what landed instead of leaving them on this page
+  const landing = result.imported[0];
+  const openAction: HTMLElement[] = [];
+  if (landing && api().openProject) {
+    const openBtn = el('button', {
+      className: 'btn-primary',
+      text: t('SUMMARY.OPEN_PROJECT', { title: landing.title }),
+    });
+    openBtn.addEventListener('click', () => {
+      api()
+        .openProject?.(landing.projectId)
+        .catch((e: unknown) =>
+          api().showSnack({
+            msg: e instanceof Error ? e.message : String(e),
+            type: 'ERROR',
+          }),
+        );
+    });
+    openAction.push(el('p', {}, [openBtn]));
+  }
+
   if (!result.errorMessage) {
     api().showSnack({ msg: t('SUMMARY.SNACK_FINISHED'), type: 'SUCCESS' });
   }
@@ -331,6 +366,7 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
     }),
     el('ul', {}, items),
     ...unverified,
+    ...failedRepeats,
     ...tagLine,
     ...failure,
     ...lossy,
@@ -338,6 +374,8 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
       className: 'text-muted text-sm',
       text: t('SUMMARY.UNDO'),
     }),
+    // last, as the obvious next step after reading the summary
+    ...openAction,
   );
 };
 

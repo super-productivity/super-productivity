@@ -45,6 +45,7 @@ import {
 } from 'rxjs/operators';
 import { Project } from '../../../project/project.model';
 import { TaskService } from '../../task.service';
+import { TaskSchedulingService } from '../../task-scheduling.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
 import { SnackService } from '../../../../core/snack/snack.service';
@@ -132,6 +133,7 @@ import { DIALOG_AUTO_FOCUS_TYPING } from '../../../../util/dialog-auto-focus';
 export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _datePipe = inject(LocaleDatePipe);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskSchedulingService = inject(TaskSchedulingService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
   private readonly _elementRef = inject(ElementRef);
@@ -166,7 +168,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   // the dates quickAccessBtnClick schedules: tomorrow and the week's first day.
   private readonly _weekdayNames = this._dateAdapter.getDayOfWeekNames('short');
   protected readonly tomorrowLabel =
-    this._weekdayNames[(this._dateAdapter.getDayOfWeek(new Date()) + 1) % 7];
+    this._weekdayNames[
+      (this._dateAdapter.getDayOfWeek(this._dateService.getLogicalTodayDate()) + 1) % 7
+    ];
   protected readonly nextWeekLabel =
     this._weekdayNames[this._dateAdapter.getFirstDayOfWeek()];
   protected readonly PRIORITY_LEVELS = TASK_PRIORITY_LEVELS;
@@ -789,7 +793,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   quickAccessBtnClick(item: number): void {
-    const tDate = new Date();
+    // logical today, as _schedule combines times on a logical day (#12012)
+    const tDate = this._dateService.getLogicalTodayDate();
     tDate.setMinutes(0, 0, 0);
     switch (item) {
       case 1:
@@ -845,8 +850,12 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       return;
     } else if (this.task.dueWithTime) {
       const task = this.task;
-      const newDate = combineDateAndTime(newDayDate, new Date(this.task.dueWithTime));
-      this._taskService.scheduleTask(
+      const newDate = combineDateAndTime(
+        newDayDate,
+        new Date(this.task.dueWithTime),
+        this._dateService.getStartOfNextDayDiffMs(),
+      );
+      this._taskSchedulingService.scheduleTask(
         task,
         newDate.getTime(),
         this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??

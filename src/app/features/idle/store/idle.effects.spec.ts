@@ -18,10 +18,12 @@ import { selectIdleConfig } from '../../config/store/global-config.reducer';
 import { selectIsSessionRunning } from '../../focus-mode/store/focus-mode.selectors';
 import { selectIdleTime, selectIsIdle } from './idle.selectors';
 import { openIdleDialog, triggerIdle } from './idle.actions';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 
 describe('IdleEffects', () => {
   let effects: IdleEffects;
+  let wakeUpTick: jasmine.Spy;
   let actions$: Subject<Action>;
   let store: MockStore;
   let chromeInterfaceMock: {
@@ -39,6 +41,7 @@ describe('IdleEffects', () => {
     isFocusSessionRunning?: boolean;
   }): void => {
     idleCallback = null;
+    wakeUpTick = jasmine.createSpy('triggerWakeUpTick');
     const isSuppress = overrides?.isSuppressIdleDuringFocusMode ?? false;
     const isSessionRunning = overrides?.isFocusSessionRunning ?? false;
 
@@ -75,6 +78,10 @@ describe('IdleEffects', () => {
     TestBed.configureTestingModule({
       providers: [
         IdleEffects,
+        {
+          provide: GlobalTrackingIntervalService,
+          useValue: { triggerWakeUpTick: wakeUpTick },
+        },
         provideMockActions(() => actions$),
         { provide: LOCAL_ACTIONS, useValue: actions$ },
         provideMockStore({
@@ -121,6 +128,31 @@ describe('IdleEffects', () => {
   });
 
   describe('triggerIdleWhenEnabled$', () => {
+    it('accounts for the pending tracking interval before entering idle', () => {
+      setup();
+      const order: string[] = [];
+      wakeUpTick.and.callFake(() => order.push('tick'));
+      const sub = effects.triggerIdleWhenEnabled$.subscribe(() => order.push('idle'));
+
+      idleCallback?.(null as unknown as Event, 600000);
+
+      expect(order).toEqual(['tick', 'idle']);
+      sub.unsubscribe();
+    });
+
+    it('does not consume a tick for ignored or already-active idle notifications', () => {
+      setup();
+      const sub = effects.triggerIdleWhenEnabled$.subscribe();
+      idleCallback?.(null as unknown as Event, 1000);
+      idleCallback?.(null as unknown as Event, NaN);
+      store.overrideSelector(selectIsIdle, true);
+      store.refreshState();
+      idleCallback?.(null as unknown as Event, 600000);
+
+      expect(wakeUpTick).not.toHaveBeenCalled();
+      sub.unsubscribe();
+    });
+
     it('should suppress idle when isSuppressIdleDuringFocusMode is true and a work session is running', (done) => {
       setup({ isSuppressIdleDuringFocusMode: true, isFocusSessionRunning: true });
 

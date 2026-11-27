@@ -1,0 +1,20 @@
+---
+# Generated from Harper's WellKept rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags `highly-kept` and recommends `well-kept` as an alternative.
+extends: existence
+message: "`Highly-kept` is not standard. To describe secrets, `well-kept` is the most used phrase."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "well-kept"
+tokens:
+  - "highly(?!\\s*\\n\\s*\\n)\\s+kept(?!['\\x{2019}]s\\b)"
+  - "highly-kept(?!['\\x{2019}]s\\b)"

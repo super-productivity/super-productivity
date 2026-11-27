@@ -22,6 +22,10 @@ import { DialogServerMigrationConfirmComponent } from './dialog-server-migration
 import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 import { AppDataComplete, MODEL_CONFIGS } from '../model/model-config';
 import { OperationWriteFlushService } from './operation-write-flush.service';
+import {
+  mayHealRejectedSuperSyncFullState,
+  recordRejectedSuperSyncFullStateHeal,
+} from './super-sync-rejected-full-state-heal';
 
 const MEANINGFUL_ENTITY_STATE_KEYS = new Set(['task', 'project', 'tag', 'note']);
 
@@ -404,6 +408,17 @@ export class ServerMigrationService {
         OpLog.warn(
           `ServerMigrationService: Previous server-migration snapshot ${existing.op.id} ` +
             'was rejected by a file-based provider; seeding again from current state.',
+        );
+        return false;
+      }
+      // #11671: the rejection may be a misclassified upload error from a
+      // version before v20.1.0. Seed again once per device; a genuine
+      // rejection of the new snapshot then stops here as before.
+      if (mayHealRejectedSuperSyncFullState(existing.op.id)) {
+        recordRejectedSuperSyncFullStateHeal(existing.op.id);
+        OpLog.warn(
+          `ServerMigrationService: Previous server-migration snapshot ${existing.op.id} ` +
+            'was rejected, possibly by an older version; seeding again from current state.',
         );
         return false;
       }

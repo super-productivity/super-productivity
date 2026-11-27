@@ -1,0 +1,19 @@
+---
+# Generated from Harper's RapidFire rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Checks to ensure writers hyphenate `rapid-fire`.
+extends: existence
+message: "It is more idiomatic to hypenate `rapid-fire`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "rapid-fire"
+tokens:
+  - "rapid(?!\\s*\\n\\s*\\n)\\s+fire(?!['\\x{2019}]s\\b)"

@@ -1,0 +1,23 @@
+---
+# Hand-written from Harper's SomethingIs: these pronouns do not take a plural.
+#
+# The generated rule keyed on punctuation. Harper asks for the pronoun, then
+# optional adverbs, then a verb in its progressive form -- which is what marks
+# the `s` as a contracted `is` rather than a plural.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Prefer the contraction or full `is` rather than pluralizing this pronoun."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bsomethings\b(?=\s+(?:\w+ly\s+)*\w+ing\b)': "something's"
+  '\banythings\b(?=\s+(?:\w+ly\s+)*\w+ing\b)': "anything's"
+  '\beverythings\b(?=\s+(?:\w+ly\s+)*\w+ing\b)': "everything's"
+  '\bnothings\b(?=\s+(?:\w+ly\s+)*\w+ing\b)': "nothing's"

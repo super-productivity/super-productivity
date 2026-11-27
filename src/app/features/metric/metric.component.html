@@ -158,6 +158,12 @@
       <p class="no-data-msg">
         {{ T.F.METRIC.CMP.NO_ADDITIONAL_DATA_YET | translate }}
       </p>
+      <button
+        mat-stroked-button
+        (click)="openDailySummary()"
+      >
+        {{ dailySummaryBtnLabel() | translate }}
+      </button>
     }
   }
 </div>

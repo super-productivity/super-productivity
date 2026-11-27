@@ -3,6 +3,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { of } from 'rxjs';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { TaskService } from './task.service';
+import { TaskArchiveOrchestratorService } from './task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg/task-repeat-cfg.service';
 import { ProjectService } from '../project/project.service';
 import { DEFAULT_TASK, TaskWithSubTasks } from './task.model';
@@ -11,6 +12,7 @@ import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 describe('TaskMoveToProjectService', () => {
   let service: TaskMoveToProjectService;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let repeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let dialogResult: boolean;
 
@@ -29,11 +31,13 @@ describe('TaskMoveToProjectService', () => {
     taskService = jasmine.createSpyObj<TaskService>('TaskService', [
       'moveToProject',
       'getTasksWithSubTasksByRepeatCfgId$',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
       'getArchiveTasksForRepeatCfgId',
       'updateArchiveTasks',
     ]);
-    taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
-    taskService.updateArchiveTasks.and.resolveTo();
+    taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([]);
+    taskArchiveOrchestrator.updateArchiveTasks.and.resolveTo();
     repeatCfgService = jasmine.createSpyObj<TaskRepeatCfgService>(
       'TaskRepeatCfgService',
       ['getTaskRepeatCfgByIdAllowUndefined$', 'updateTaskRepeatCfg'],
@@ -43,6 +47,7 @@ describe('TaskMoveToProjectService', () => {
       providers: [
         TaskMoveToProjectService,
         { provide: TaskService, useValue: taskService },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskRepeatCfgService, useValue: repeatCfgService },
         {
           provide: ProjectService,
@@ -102,13 +107,13 @@ describe('TaskMoveToProjectService', () => {
       of({ id: 'cfg' } as TaskRepeatCfg),
     );
     taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([t1, t2]));
-    taskService.getArchiveTasksForRepeatCfgId.and.resolveTo([
+    taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.resolveTo([
       { ...DEFAULT_TASK, id: 'arch', subTaskIds: ['arch-sub'] } as never,
     ]);
 
     expect(await service.moveToProject(t1, 'p2')).toBeTrue();
     expect(taskService.moveToProject).toHaveBeenCalledTimes(2);
-    expect(taskService.updateArchiveTasks).toHaveBeenCalledWith([
+    expect(taskArchiveOrchestrator.updateArchiveTasks).toHaveBeenCalledWith([
       { id: 'arch', changes: { projectId: 'p2' } },
       { id: 'arch-sub', changes: { projectId: 'p2' } },
     ]);

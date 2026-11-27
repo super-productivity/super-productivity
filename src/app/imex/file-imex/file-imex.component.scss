@@ -6,12 +6,26 @@
   margin-bottom: var(--s);
 }
 
-a,
-button {
-  margin-bottom: var(--s);
-  margin-right: var(--s);
+.group + .group {
+  margin-top: var(--s3);
 }
 
-section {
+// child combinator outweighs the global `:where(h3):not(…)` heading size;
+// label typed one level below the buttons it frames, like the styling guide's section-heading chrome
+.group > .group-title {
+  margin: 0 0 var(--s);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--text-color-muted);
+}
+
+.group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s);
+}
+
+.rare-tools {
   margin-top: var(--s2);
 }

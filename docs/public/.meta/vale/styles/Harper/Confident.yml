@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's Confident: `confidant` is a person you confide
+# in; the adjective is `confident`.
+#
+# The generated rule keyed on punctuation and missed "a confidant stride".
+#
+# Harper asks for a verb or a determiner before it, or the word `very`. A
+# determiner or possessive is what puts the word in an adjective slot; the
+# `very` branch is left out, since nothing in the corpus needs it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use the adjective."
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "confident"
+tokens:
+  - tag: 'VB[DGNPZ]?|DT|PRP\$'
+  - pattern: 'confidant'
+    target: true
