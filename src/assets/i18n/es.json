@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: No se puede sincronizar porque estás desconectado",
-        "SYNC_ERROR": "Dropbox: Error al sincronizar",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: No se puede generar el desafío PKCE."
       }
     },
@@ -1750,7 +1749,6 @@
         "RESTORE_SUCCESS": "Datos restaurados exitosamente",
         "SERVER_MIGRATION_VALIDATION_FAILED": "No se pudieron migrar datos al servidor - validación local fallida. Intenta importar una copia de seguridad.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Esta carpeta de sincronización se actualizó al formato de archivos divididos. Activa Sincronización por archivos divididos en los ajustes de Sincronización para continuar.",
-        "STORAGE_QUOTA_EXCEEDED": "Almacenamiento del servidor lleno. ¡Tus cambios NO se están sincronizando! Archiva tareas antiguas o mejora tu plan.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Poco almacenamiento disponible. Datos antiguos limpiados con éxito.",
         "SUCCESS_DOWNLOAD": "Datos sincronizados desde remoto",
         "SUCCESS_VIA_BUTTON": "Datos sincronizados exitosamente",

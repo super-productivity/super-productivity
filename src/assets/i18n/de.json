@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Synchronisierung nicht möglich, da offline",
-        "SYNC_ERROR": "Dropbox: Fehler beim Synchronisieren",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: PKCE-Challenge konnte nicht generiert werden."
       }
     },
@@ -1750,7 +1749,6 @@
         "RESTORE_SUCCESS": "Daten erfolgreich wiederhergestellt",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Daten konnten nicht auf den Server migriert werden – lokale Datenvalidierung fehlgeschlagen. Bitte versuche, ein Backup zu importieren.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Dieser Synchronisierungsordner wurde auf das aufgeteilte Dateiformat aktualisiert. Aktiviere die gezielte Synchronisierung in den Synchronisierungseinstellungen, um fortzufahren.",
-        "STORAGE_QUOTA_EXCEEDED": "Synchronisierungsserver-Speicher ist voll. Deine Änderungen werden NICHT synchronisiert! Bitte archiviere alte Aufgaben oder erweitere deinen Plan.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Der Speicher war knapp. Alte Daten wurden erfolgreich bereinigt.",
         "SUCCESS_DOWNLOAD": "Synchronisierte Daten von Remote",
         "SUCCESS_VIA_BUTTON": "Daten erfolgreich synchronisiert",

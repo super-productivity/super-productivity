@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: impossible de synchroniser, car hors ligne",
-        "SYNC_ERROR": "Dropbox: erreur lors de la synchronisation",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox : Impossible de générer le défi PKCE."
       }
     },
@@ -1750,7 +1749,6 @@
         "RESTORE_SUCCESS": "Données restaurées avec succès",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Impossible de migrer les données vers le serveur — la validation des données locales a échoué. Veuillez essayer d'importer une sauvegarde.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Ce dossier de synchronisation a été converti au format de fichiers séparés. Activez la synchronisation segmentée dans les paramètres de synchronisation pour continuer.",
-        "STORAGE_QUOTA_EXCEEDED": "Le stockage du serveur de synchronisation est plein. Vos modifications ne sont PAS synchronisées ! Veuillez archiver les anciennes tâches ou améliorer votre forfait.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Le stockage était presque plein. Les anciennes données ont été nettoyées avec succès.",
         "SUCCESS_DOWNLOAD": "Données synchronisées depuis le distant",
         "SUCCESS_VIA_BUTTON": "Données synchronisées avec succès",

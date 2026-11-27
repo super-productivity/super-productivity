@@ -367,7 +367,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Unable to sync because offline",
-        "SYNC_ERROR": "Sync before closing failed. Your changes are saved on this device, and sync will try again the next time you open the app.",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sync requires a secure connection (HTTPS). Please ensure you're using the app over HTTPS or try the stable release."
       }
     },
@@ -1203,7 +1202,8 @@
     },
     "SYNC": {
       "A": {
-        "REMOTE_MODEL_VERSION_NEWER": "The remote model version is newer than the local one. Please update your local app to the newest version!"
+        "REMOTE_MODEL_VERSION_NEWER": "The remote model version is newer than the local one. Please update your local app to the newest version!",
+        "SERVER_STORAGE_FULL": "Sync storage is full! Your changes are saved on this device but are NOT syncing. Your account has reached its storage limit on the sync server. If you host the server yourself, raise this account's storage quota in its database. Otherwise, write to contact@super-productivity.com."
       },
       "B": {
         "CONTENT_CONFLICT_RESOLVED": "Conflicting edits to {{taskList}} were auto-resolved by keeping the most recent version. Older edits may have been discarded — please double-check.",
@@ -1700,6 +1700,7 @@
         "DEFERRED_ACTION_FAILED": "Some changes made during sync could not be saved yet. The next sync will retry; keep the app open.",
         "DEFERRED_ACTION_PERMANENT_FAILED": "A change could not be saved and sync is paused. Reload to restore the last saved state.",
         "DEFERRED_ACTIONS_STUCK": "Sync seems stuck. Your recent changes are waiting and have not been saved yet. Reloading the app recovers sync but discards them.",
+        "DEVICE_STORAGE_FULL": "This device has run out of storage space for the app, so your latest change was not saved. Free up disk space or browser storage, then reload.",
         "DISABLE_ENCRYPTION_FAILED": "Failed to disable encryption: {{message}}",
         "ENABLE_ENCRYPTION_FAILED": "Failed to enable encryption: {{message}}",
         "ENCRYPTION_PASSWORD_REQUIRED": "Encrypted data received but no encryption password is configured. Please set your encryption password in sync settings.",
@@ -1756,10 +1757,10 @@
         "RESTORE_SUCCESS": "Data restored successfully",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Could not migrate data to server - local data validation failed. Please try importing a backup.",
         "SPLIT_FORMAT_ENABLE_SETTING": "This sync folder was upgraded to the split-file format. Turn on Surgical sync in Sync settings to continue.",
-        "STORAGE_QUOTA_EXCEEDED": "This device has run out of storage space for the app, so your latest change was not saved. Free up disk space or browser storage, then reload.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Storage was running low. Old data cleaned up successfully.",
         "SUCCESS_DOWNLOAD": "Synced data from remote",
         "SUCCESS_VIA_BUTTON": "Data successfully synced",
+        "SYNC_BEFORE_CLOSE_FAILED": "Sync before closing failed. Your changes are saved on this device, and sync will try again the next time you open the app.",
         "SYNC_DATA_RECOVERED_FROM_BACKUP": "Recovered sync data from backup after the main file could not be read.",
         "SYNC_VALIDATION_FAILED": "State validation failed after sync. Some data may be inconsistent.",
         "TIMEOUT_ERROR": "Sync operation timed out. {{suggestion}}",

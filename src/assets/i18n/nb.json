@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Kan ikke synkroniseres, fordi offline",
-        "SYNC_ERROR": "Dropbox: Feil under synkronisering",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Kunne ikke generere PKCE-utfordring."
       }
     },
@@ -1750,7 +1749,6 @@
         "RESTORE_SUCCESS": "Data gjenopprettet",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Kunne ikke migrere data til serveren – lokal datavalidering mislyktes. Prøv å importere en sikkerhetskopi.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Denne synkroniseringsmappen ble oppgradert til formatet med delte filer. Slå på Surgical sync i synkroniseringsinnstillingene for å fortsette.",
-        "STORAGE_QUOTA_EXCEEDED": "Synkroniseringsserverens lagring er full. Endringene dine synkroniseres IKKE! Arkiver gamle oppgaver eller oppgrader planen din.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Lagringsplassen ble lav. Gamle data ryddet opp.",
         "SUCCESS_DOWNLOAD": "Synkroniserte data fra fjernkontrollen",
         "SUCCESS_VIA_BUTTON": "Data vellykket synkronisert",

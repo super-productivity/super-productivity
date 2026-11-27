@@ -156,7 +156,7 @@ export class SyncEffects {
           } catch (e: unknown) {
             SyncLog.err(e);
             this._snackService.open({
-              msg: T.F.DROPBOX.S.SYNC_ERROR,
+              msg: T.F.SYNC.S.SYNC_BEFORE_CLOSE_FAILED,
               type: 'ERROR',
             });
             // Quit from the tray can leave the window hidden; the alert

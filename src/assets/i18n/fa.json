@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: همگام سازی امکان پذیر نیست ، زیرا آفلاین است",
-        "SYNC_ERROR": "Dropbox: خطا هنگام همگام سازی",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: قادر به ایجاد چالش PKCE نیست."
       }
     },
@@ -1750,7 +1749,6 @@
         "RESTORE_SUCCESS": "بازیابی با موفقیت انجام شد",
         "SERVER_MIGRATION_VALIDATION_FAILED": "اعتبارسنجی مهاجرت سرور ناموفق بود",
         "SPLIT_FORMAT_ENABLE_SETTING": "این پوشهٔ همگام‌سازی به قالب چندفایلی ارتقا یافت. برای ادامه، Surgical sync را در تنظیمات همگام‌سازی روشن کنید.",
-        "STORAGE_QUOTA_EXCEEDED": "سهمیه ذخیره‌سازی تمام شده است",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "فضای ذخیره‌سازی پس از فشرده‌سازی بازیابی شد",
         "SUCCESS_DOWNLOAD": "داده های همگام سازی شده از راه دور",
         "SUCCESS_VIA_BUTTON": "همگام سازی داده ها با موفقیت انجام شد",

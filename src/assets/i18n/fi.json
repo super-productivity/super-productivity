@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Synkronointi ei onnistu, koska offline-tilassa",
-        "SYNC_ERROR": "Dropbox: Virhe synkronoinnissa",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: PKCE-haasteen luominen epäonnistui."
       }
     },
@@ -1750,7 +1749,6 @@
         "RESTORE_SUCCESS": "Tiedot palautettu onnistuneesti",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Tietojen siirto palvelimelle epäonnistui – paikallisten tietojen validointi epäonnistui. Yritä tuoda varmuuskopio.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Tämä synkronointikansio päivitettiin jaettujen tiedostojen muotoon. Jatka ottamalla Surgical sync käyttöön synkronointiasetuksissa.",
-        "STORAGE_QUOTA_EXCEEDED": "Synkronointipalvelimen tallennustila on täynnä. Muutoksesi EIVÄT synkronoidu! Arkistoi vanhoja tehtäviä tai päivitä suunnitelmasi.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Tallennustila oli vähissä. Vanhat tiedot siivottu onnistuneesti.",
         "SUCCESS_DOWNLOAD": "Synkronoitiin tiedot etäpalvelimelta",
         "SUCCESS_VIA_BUTTON": "Tiedot synkronoitu onnistuneesti",

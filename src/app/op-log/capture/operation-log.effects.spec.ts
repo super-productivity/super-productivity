@@ -1378,7 +1378,7 @@ describe('OperationLogEffects', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: 'ERROR',
-          msg: T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+          msg: T.F.SYNC.S.DEVICE_STORAGE_FULL,
         }),
       );
     });
@@ -1406,17 +1406,17 @@ describe('OperationLogEffects', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: 'ERROR',
-          msg: T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+          msg: T.F.SYNC.S.DEVICE_STORAGE_FULL,
         }),
       );
       // 2. Dedupe: even though the retry loop calls handleQuotaExceeded 3
-      //    times, STORAGE_QUOTA_EXCEEDED snack must fire ONLY ONCE.
+      //    times, DEVICE_STORAGE_FULL snack must fire ONLY ONCE.
       //    Without the dedupe (lastStorageQuotaSnackAt window) the user
       //    would see 3 identical sticky snacks per quota event.
       const storageQuotaSnackCalls = mockSnackService.open.calls
         .allArgs()
         .filter(
-          ([arg]) => (arg as { msg?: string })?.msg === T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+          ([arg]) => (arg as { msg?: string })?.msg === T.F.SYNC.S.DEVICE_STORAGE_FULL,
         );
       expect(storageQuotaSnackCalls.length).toBe(1);
       // 3. The retry loop saw the throw and actually retried — appendWith*

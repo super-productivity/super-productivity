@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Nie je možné synchronizovať, pretože ste offline",
-        "SYNC_ERROR": "Dropbox: Chyba počas synchronizácie",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Nie je možné vygenerovať výzvu PKCE."
       }
     },
@@ -1751,7 +1750,6 @@
         "RESTORE_SUCCESS": "Dáta boli úspešne obnovené",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Nie je možné migrovať dáta na server - overenie lokálnych dát zlyhalo. Skúste importovať zálohu.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Tento synchronizačný priečinok bol inovovaný na formát rozdelených súborov. Ak chcete pokračovať, zapnite Surgical sync v nastaveniach synchronizácie.",
-        "STORAGE_QUOTA_EXCEEDED": "Úložisko synchronizačného servera je plné. Vaše zmeny sa NESYNCHRONIZUJÚ! Archivujte staré úlohy alebo inovujte plán.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Úložisko bolo takmer plné. Staré dáta boli úspešne vyčistené.",
         "SUCCESS_DOWNLOAD": "Synchronizované dáta zo vzdialeného",
         "SUCCESS_VIA_BUTTON": "Údaje boli úspešne synchronizované",

@@ -289,6 +289,10 @@ describe('SyncEffects routing (Task 3)', () => {
       await settle();
       await settle();
 
+      expect(TestBed.inject(SnackService).open).toHaveBeenCalledOnceWith({
+        msg: 'F.SYNC.S.SYNC_BEFORE_CLOSE_FAILED',
+        type: 'ERROR',
+      });
       expect(alertSpy).toHaveBeenCalled();
       expect(focusApp).toHaveBeenCalled();
       expect(setDone).toHaveBeenCalledOnceWith(SYNC_BEFORE_CLOSE_ID);

@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Sinkronizacija nije moguća jer si offline",
-        "SYNC_ERROR": "Dropbox: Greška tijekom sinkronizacije",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sinkronizacija treba sigurnu vezu (HTTPS). Provjeri da koristiš aplikaciju preko HTTPS-a ili probaj stabilnu verziju."
       }
     },
@@ -1750,7 +1749,6 @@
         "RESTORE_SUCCESS": "Podaci su uspješno obnovljeni",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Migracija podataka na server nije uspjela – validacija lokalnih podataka nije prošla. Pokušaj uvesti sigurnosnu kopiju.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Ova je mapa za sinkronizaciju nadograđena na format podijeljenih datoteka. Za nastavak uključi Surgical sync u postavkama sinkronizacije.",
-        "STORAGE_QUOTA_EXCEEDED": "Memorija na sinkronizacijskom serveru je puna. Tvoje promjene se NE sinkroniziraju! Arhiviraj stare zadatke ili nadogradi tarifu.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Količina memorije je bila pri kraju. Stari podaci su uspješno očišćeni.",
         "SUCCESS_DOWNLOAD": "Podaci su sinkronizirani s udaljenog izvora",
         "SUCCESS_VIA_BUTTON": "Podaci su uspješno sinkronizirani",

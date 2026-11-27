@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Nu se poate sincroniza pentru că e offline",
-        "SYNC_ERROR": "Dropbox: Eroare la sincronizare",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Sincronizarea cu Dropbox necesită o conexiune sigură (HTTPS). Asigură-te că folosești aplicația prin HTTPS sau încearcă versiunea stabilă."
       }
     },
@@ -1751,7 +1750,6 @@
         "RESTORE_SUCCESS": "Date restaurate cu succes",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Nu s-au putut migra datele către server - validarea datelor locale a eșuat. Te rog să încerci să importi un backup.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Acest dosar de sincronizare a fost actualizat la formatul cu fișiere separate. Activează Sincronizarea chirurgicală în setările de sincronizare pentru a continua.",
-        "STORAGE_QUOTA_EXCEEDED": "Spațiul de stocare de pe serverul de sincronizare este plin. Modificările tale nu sunt sincronizate! Te rog să arhivezi sarcini vechi sau să actualizezi planul.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Spațiul de stocare era pe terminate. Datele vechi au fost curățate cu succes.",
         "SUCCESS_DOWNLOAD": "S-au sincronizat datele de la distanță",
         "SUCCESS_VIA_BUTTON": "Datele au fost sincronizate cu succes",

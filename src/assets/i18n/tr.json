@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Senkronize edilemiyor, çünkü çevrimdışı",
-        "SYNC_ERROR": "Dropbox: Senkronizasyon sırasında hata",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: PKCE meydan okuması oluşturulamıyor."
       }
     },
@@ -1750,7 +1749,6 @@
         "RESTORE_SUCCESS": "Veri başarıyla geri yüklendi",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Veri sunucuya taşınamadı - yerel veri doğrulaması başarısız. Lütfen bir yedek içe aktarmayı deneyin.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Bu senkronizasyon klasörü bölünmüş dosya biçimine yükseltildi. Devam etmek için Senkronizasyon ayarlarında Cerrahi senkronizasyonu açın.",
-        "STORAGE_QUOTA_EXCEEDED": "Senkronizasyon sunucu depolama alanı dolu. Değişiklikleriniz SENKRONİZE EDİLMİYOR. Lütfen eski görevleri arşivleyin veya planınızı yükseltin.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Depolama alanı azalmıştı. Eski veri başarıyla temizlendi.",
         "SUCCESS_DOWNLOAD": "Uzaktan kumandadan senkronize edilen veriler",
         "SUCCESS_VIA_BUTTON": "Veriler başarıyla senkronize edildi",
