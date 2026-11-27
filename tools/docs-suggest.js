@@ -47,8 +47,6 @@ const SYNONYMS = {
   recur: 'repeat',
   unarchive: 'archive',
   pomodoro: 'timer',
-  planer: 'planner',
-  bord: 'board',
   backups: 'backup',
 };
 
