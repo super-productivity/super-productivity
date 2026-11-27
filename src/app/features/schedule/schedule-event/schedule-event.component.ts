@@ -33,6 +33,8 @@ import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-e
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
+import { DateService } from '../../../core/date/date.service';
+import { isRepeatPreviewSeparable } from '../../task-repeat-cfg/is-repeat-preview-separable.util';
 import { TaskCopy } from '../../tasks/task.model';
 import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -46,6 +48,14 @@ import { isTouchActive } from '../../../util/input-intent';
 import { isLinkTarget } from '../../../util/dom-element';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
+
+const REPEAT_PROJECTION_TYPES: ReadonlySet<SVEType> = new Set([
+  SVEType.RepeatProjection,
+  SVEType.RepeatProjectionSplit,
+  SVEType.ScheduledRepeatProjection,
+  SVEType.RepeatProjectionSplitContinued,
+  SVEType.RepeatProjectionSplitContinuedLast,
+]);
 
 @Component({
   selector: 'schedule-event',
@@ -93,6 +103,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   private _matDialog = inject(MatDialog);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translateService = inject(TranslateService);
+  private _dateService = inject(DateService);
   private _taskService = inject(TaskService);
   private _calEventActions = inject(CalendarEventActionsService);
   private _ngZone = inject(NgZone);
@@ -168,6 +179,10 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     T.F.SCHEDULE.EXCESS_TASK_TOOLTIP,
   );
 
+  readonly repeatPreviewHint = this._translateService.instant(
+    T.F.TASK_REPEAT.PREVIEW_HINT,
+  );
+
   readonly hoverTitle = computed(() => {
     const evt = this.se();
     const is12Hour = !this._dateTimeFormatService.is24HourFormat();
@@ -192,6 +207,17 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     }
     if (evt.isBeyondBudget) {
       result += `  ${this.beyondBudgetTooltip}`;
+    }
+    // A preview can't be dragged, so point to the way out where there is one.
+    if (
+      REPEAT_PROJECTION_TYPES.has(evt.type) &&
+      isRepeatPreviewSeparable(
+        evt.data as TaskRepeatCfg,
+        evt.sourceOccurrenceDate ?? evt.plannedForDay,
+        this._dateService.todayStr(),
+      )
+    ) {
+      result += `  ${this.repeatPreviewHint}`;
     }
     return result;
   });
@@ -390,13 +416,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     if (t) {
       // Use bottom panel on mobile, sidebar on desktop
       this._taskService.setSelectedId(t.id);
-    } else if (
-      evt.type === SVEType.RepeatProjection ||
-      evt.type === SVEType.RepeatProjectionSplit ||
-      evt.type === SVEType.ScheduledRepeatProjection ||
-      evt.type === SVEType.RepeatProjectionSplitContinued ||
-      evt.type === SVEType.RepeatProjectionSplitContinuedLast
-    ) {
+    } else if (REPEAT_PROJECTION_TYPES.has(evt.type)) {
       const repeatCfg: TaskRepeatCfg = evt.data as TaskRepeatCfg;
       this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
         data: {

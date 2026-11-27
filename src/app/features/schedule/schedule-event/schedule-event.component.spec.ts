@@ -14,6 +14,8 @@ import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors'
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { isTouchActive } from '../../../util/input-intent';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { T } from '../../../t.const';
+import { DateService } from '../../../core/date/date.service';
 
 const makeCalendarScheduleEvent = (isReferenceCalendar: boolean): ScheduleEvent => ({
   id: 'cal-1',
@@ -74,6 +76,7 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
           // is24HourFormat is a signal (a function); the component must call it.
           useValue: { is24HourFormat: () => true },
         },
+        { provide: DateService, useValue: { todayStr: () => '2026-07-15' } },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -198,6 +201,50 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
         );
         matDialog.open.calls.reset();
       }
+    });
+
+    const setProjection = (
+      repeatCfg: Partial<TaskRepeatCfg>,
+      plannedForDay = '2026-07-30',
+    ): void => {
+      fixture.componentRef.setInput('event', {
+        id: 'rc1_2026-07-30',
+        type: SVEType.RepeatProjection,
+        style: '',
+        startHours: 10,
+        timeLeftInHours: 1,
+        plannedForDay,
+        data: { id: 'rc1', title: 'Water plants', ...repeatCfg } as TaskRepeatCfg,
+      } as ScheduleEvent);
+      fixture.detectChanges();
+    };
+
+    // No translations are loaded, so instant() returns the key.
+    it('says on hover that a preview cannot be moved and how to move one day', () => {
+      setProjection({});
+
+      expect(fixture.nativeElement.title).toBe(
+        `10:00 - 11:00  Water plants  ${T.F.TASK_REPEAT.PREVIEW_HINT}`,
+      );
+    });
+
+    it('leaves the hint out for a series repeating from its completion date', () => {
+      setProjection({ repeatFromCompletionDate: true });
+
+      expect(fixture.nativeElement.title).toBe('10:00 - 11:00  Water plants');
+    });
+
+    it('leaves the hint out for today, which cannot become a separate task', () => {
+      setProjection({}, '2026-07-15');
+
+      expect(fixture.nativeElement.title).toBe('10:00 - 11:00  Water plants');
+    });
+
+    it('leaves the hint out for a real task', () => {
+      fixture.componentRef.setInput('event', makeTaskScheduleEvent());
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.title).not.toContain(T.F.TASK_REPEAT.PREVIEW_HINT);
     });
 
     // The spec above calls clickHandler() directly, so it cannot see the host

@@ -2393,6 +2393,7 @@
         "WEEKDAY": "Weekday",
         "WEEKDAY_REQUIRED": "Select at least one weekday"
       },
+      "PREVIEW_HINT": "Preview of a recurring task: it can't be moved. To move only this day, click it and select \"Separate task\".",
       "SNACK_REPEAT_DIALOG_FAIL": "Could not open the recurring task dialog. To set it up, open the task's schedule and select Repeat."
     },
     "TASK_VIEW": {

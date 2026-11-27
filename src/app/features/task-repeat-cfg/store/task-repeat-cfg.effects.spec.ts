@@ -1553,7 +1553,10 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
         actions$ = hot('-a', { a: action });
 
-        taskService.getByIdOnce$.and.returnValue(of(mockTask));
+        // By id, so the parent can only come from the payload's parentId.
+        taskService.getByIdOnce$.and.callFake((id: string) =>
+          id === 'parent-task-id' ? of(mockTask) : of(undefined as unknown as Task),
+        );
         taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
           of({
             ...mockRepeatCfg,
