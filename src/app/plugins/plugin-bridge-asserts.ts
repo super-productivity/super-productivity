@@ -8,7 +8,14 @@ import {
   PluginHeaderBtnCfg,
   PluginNodeScriptRequest,
 } from './plugin-api.model';
-import { BatchUpdateRequest, SnackCfg } from '@super-productivity/plugin-api';
+import {
+  BatchUpdateRequest,
+  SnackCfg,
+  PluginSectionContext,
+  PluginCreateSection,
+  PluginSectionUpdate,
+  PluginSectionTaskMove,
+} from '@super-productivity/plugin-api';
 import { TaskCopy } from '../features/tasks/task.model';
 import { ProjectCopy } from '../features/project/project.model';
 import { TagCopy } from '../features/tag/tag.model';
@@ -20,6 +27,11 @@ import { TagCopy } from '../features/tag/tag.model';
  */
 export const pluginAssert = {
   string: typia.createAssert<string>(),
+  nullableString: typia.createAssert<string | null>(),
+  sectionContext: typia.createAssert<PluginSectionContext>(),
+  createSection: typia.createAssert<PluginCreateSection>(),
+  sectionUpdate: typia.createAssert<PluginSectionUpdate>(),
+  sectionTaskMove: typia.createAssert<PluginSectionTaskMove>(),
   number: typia.createAssert<number>(),
   stringArray: typia.createAssert<string[]>(),
   contextType: typia.createAssert<'project' | 'task'>(),

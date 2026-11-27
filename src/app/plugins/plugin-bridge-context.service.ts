@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
@@ -14,6 +14,10 @@ import { DateService } from '../core/date/date.service';
 import { T } from '../t.const';
 import { toActiveWorkContext } from './util/active-work-context.util';
 import { pluginAssert } from './plugin-bridge-asserts';
+import {
+  PluginBridgeSectionsService,
+  PluginSectionBoundMethods,
+} from './plugin-bridge-sections.service';
 
 // A type literal, not an interface: the iframe bridge indexes bound methods
 // as Record<string, unknown>, which interfaces are not assignable to.
@@ -22,7 +26,7 @@ export type PluginContextBoundMethods = {
   getDayContext: () => Promise<PluginDayContext>;
   startTracking: (taskId: string) => Promise<void>;
   stopTracking: () => Promise<void>;
-};
+} & PluginSectionBoundMethods;
 
 /**
  * Plugin API methods about "where and when the user is": the open work
@@ -36,6 +40,7 @@ export class PluginBridgeContextService {
   private _taskService = inject(TaskService);
   private _dateService = inject(DateService);
   private _translateService = inject(TranslateService);
+  private _injector = inject(Injector);
 
   createBoundMethods(): PluginContextBoundMethods {
     return {
@@ -43,6 +48,7 @@ export class PluginBridgeContextService {
       getDayContext: () => this.getDayContext(),
       startTracking: (taskId: string) => this.startTracking(taskId),
       stopTracking: () => this.stopTracking(),
+      ...PluginBridgeSectionsService.createBoundMethods(this._injector),
     };
   }
 

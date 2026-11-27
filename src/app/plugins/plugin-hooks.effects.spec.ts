@@ -16,6 +16,7 @@ import {
   selectTaskFeatureState,
 } from '../features/tasks/store/task.selectors';
 import { selectProjectFeatureState } from '../features/project/store/project.selectors';
+import { selectSectionFeatureState } from '../features/section/store/section.selectors';
 import { selectTagFeatureState } from '../features/tag/store/tag.reducer';
 import { GlobalTrackingIntervalService } from '../core/global-tracking-interval/global-tracking-interval.service';
 import { TaskState } from '../features/tasks/task.model';
@@ -725,6 +726,7 @@ describe('PluginHooksEffects', () => {
     };
 
     beforeEach(() => {
+      store.overrideSelector(selectSectionFeatureState, { ids: [], entities: {} });
       store.overrideSelector(selectProjectFeatureState, {
         ids: [],
         entities: {},
@@ -762,6 +764,19 @@ describe('PluginHooksEffects', () => {
       setTaskIds(['c']);
       tick(1000);
       expect(hookCalls()).toBe(2);
+      sub.unsubscribe();
+    }));
+
+    it('notifies after a section-only change, including changes applied by sync', fakeAsync(() => {
+      const sub = effects.dataChanged$.subscribe();
+      gateSubject.next(true);
+      store.overrideSelector(selectSectionFeatureState, {
+        ids: ['section'],
+        entities: {},
+      });
+      store.refreshState();
+      tick(1000);
+      expect(hookCalls()).toBe(1);
       sub.unsubscribe();
     }));
 

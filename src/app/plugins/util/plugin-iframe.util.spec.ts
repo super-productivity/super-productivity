@@ -14,6 +14,57 @@ import {
 } from './plugin-iframe.util';
 
 describe('handlePluginMessage()', () => {
+  for (const [method, args, result] of [
+    ['getSectionContext', [{ type: 'TODAY' }], { sections: [], taskIds: [] }],
+    ['addSection', [{ context: { type: 'TODAY' }, title: 'Morning' }], 'section'],
+    ['updateSection', ['section', { title: 'Afternoon' }], undefined],
+    ['deleteSection', ['section'], undefined],
+    ['moveSection', ['section', null], undefined],
+    [
+      'moveTaskToSection',
+      [
+        {
+          context: { type: 'TODAY' },
+          taskId: 'task',
+          sectionId: 'section',
+          afterTaskId: null,
+        },
+      ],
+      undefined,
+    ],
+  ] as const) {
+    it(`routes ${method} through the iframe bridge`, async () => {
+      const fn = jasmine.createSpy(method).and.resolveTo(result);
+      const source = { postMessage: jasmine.createSpy('postMessage') };
+      const bridge = {
+        createBoundMethods: () => ({ [method]: fn }),
+      } as unknown as PluginBridgeService;
+      await handlePluginMessage(
+        {
+          source,
+          data: {
+            type: PluginIframeMessageType.API_CALL,
+            bridgeToken: 'test-bridge-token',
+            bridgeGeneration: 4,
+            method,
+            callId: 46,
+            args,
+          },
+        } as unknown as MessageEvent,
+        createConfig(bridge),
+      );
+      expect(fn).toHaveBeenCalledOnceWith(...args);
+      expect(source.postMessage).toHaveBeenCalledWith(
+        {
+          type: PluginIframeMessageType.API_RESPONSE,
+          callId: 46,
+          result,
+        },
+        '*',
+      );
+    });
+  }
+
   it('routes iframe key listing to the owning plugin API', async () => {
     const listSyncedDataKeys = jasmine
       .createSpy('listSyncedDataKeys')
