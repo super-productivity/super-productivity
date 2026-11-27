@@ -19,6 +19,7 @@ const PLUGIN_API_MEMBERS: Record<keyof PluginAPIInterface, true> = {
   getDayContext: true,
   startTracking: true,
   stopTracking: true,
+  openProject: true,
   showInWorkContext: true,
   closeWorkContextView: true,
   onReady: true,

@@ -3558,6 +3558,7 @@
     "PLUGIN_INSTALLED": "Plugin \"{{name}}\" installed",
     "PLUGIN_JS_NOT_FOUND": "Plugin JavaScript file (plugin.js) not found in ZIP file",
     "PROJECT_DOES_NOT_EXIST": "Project does not exist",
+    "PROJECT_NAVIGATION_BLOCKED": "Could not open the project right now",
     "PROJECT_NOT_FOUND": "Project \"{{contextId}}\" not found",
     "RECOMMENDATION": "Only install plugins from trusted sources and review their code if possible. Always backup your data before installing new plugins!",
     "REMOVE": "Remove",
