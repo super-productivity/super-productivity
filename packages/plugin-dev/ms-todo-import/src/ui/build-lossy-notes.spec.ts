@@ -55,4 +55,20 @@ describe('buildLossyNotes', () => {
       { key: 'LOSS.ALWAYS' },
     ]);
   });
+
+  it('reports selected completed tasks as omitted unless opted in', () => {
+    const completedModel = {
+      ...model,
+      tasks: [...model.tasks, task({ extId: 'done', isDone: true })],
+    };
+    expect(buildLossyNotes(completedModel, new Set(['p1']))).toContainEqual({
+      key: 'LOSS.COMPLETED_TASKS',
+      params: { count: 1 },
+    });
+    expect(
+      buildLossyNotes(completedModel, new Set(['p1']), true).some(
+        (note) => note.key === 'LOSS.COMPLETED_TASKS',
+      ),
+    ).toBe(false);
+  });
 });

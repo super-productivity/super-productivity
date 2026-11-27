@@ -1,6 +1,6 @@
 # Microsoft To Do import plugin
 
-This bundled, one-time importer adds open Microsoft To Do data to Super
+This bundled, one-time importer adds Microsoft To Do data to Super
 Productivity. It is additive: it never replaces existing app data and is not a
 live Microsoft To Do integration.
 
@@ -10,7 +10,7 @@ live Microsoft To Do integration.
   `PluginAPI.startOAuthFlow`, public client, no secret) and grants only the
   delegated `Tasks.Read` scope. No `offline_access`: there is no refresh token.
 - The plugin reads `https://graph.microsoft.com/v1.0/me/todo/lists` and each
-  list's open tasks with `$expand=checklistItems`, following `@odata.nextLink`
+  list's tasks with `$expand=checklistItems`, following `@odata.nextLink`
   only while it stays on `graph.microsoft.com`.
 - The token is cleared right after loading. The manifest therefore declares
   `http` and exactly `allowedHosts: ["graph.microsoft.com"]`; the token
@@ -37,7 +37,8 @@ live Microsoft To Do integration.
 
 Each list becomes a project (the default list is renamed
 "`<name>` (Microsoft To Do)", duplicate names get a ` (2)` suffix). Open tasks
-become tasks; steps become sub-tasks, checked steps done. Notes (HTML reduced
+become tasks by default; completed tasks are opt-in.
+Steps become sub-tasks, checked steps done. Notes (HTML reduced
 to text), due days, categories (as tags) and, on opt-in, an `important` tag for
 starred tasks carry over. The flagged-email list is unselected by default.
 
@@ -48,7 +49,7 @@ the month, and an end date. Anything else — a monthly day other than the due
 day, "last weekday", a fixed number of occurrences, or a repeat the app rejects
 — keeps the next due date and the rule text in the notes.
 
-Reminders, file attachments, completed tasks, My Day and linked emails/files
+Reminders, file attachments, folder groups, My Day and linked emails/files
 are not imported; the preview lists the counts. Collision detection sees
 active projects only, so an archived prior import may not be recognized.
 

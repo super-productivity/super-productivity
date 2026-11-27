@@ -18,7 +18,7 @@ const fakeApi = (pages: Record<string, unknown>) => {
 
 const LISTS = 'https://graph.microsoft.com/v1.0/me/todo/lists';
 // the form Microsoft documents: literal $ options, %20 for spaces
-const TASKS_QUERY = "$filter=status%20ne%20'completed'&$expand=checklistItems";
+const TASKS_QUERY = '$expand=checklistItems';
 
 describe('loadGraphData', () => {
   it('reads every list page and every task page with the bearer token', async () => {

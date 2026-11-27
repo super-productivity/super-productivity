@@ -141,11 +141,16 @@ const renderPreviewStep = (
   // the exact titles the import will create (default-list rename, `(2)`
   // suffixes) — preview and collision check must match
   const titleByExtId = buildProjectTitles(model);
-  const tasksByProject = groupTasksByProject(model);
+  const includeCompletedTasksBox = el('input', {
+    type: 'checkbox',
+    checked: false,
+  });
   const checkboxByExtId = new Map<string, HTMLInputElement>();
+  const countsByExtId = new Map<string, HTMLElement>();
   const lossyList = el('ul');
   // calm default: no tag unless the user asks for one
   const tagImportantBox = el('input', { type: 'checkbox', checked: false });
+  const tagMicrosoftTodoBox = el('input', { type: 'checkbox', checked: false });
   const selectedIds = (): Set<string> => {
     const ids = new Set<string>();
     checkboxByExtId.forEach((box, extId) => {
@@ -158,18 +163,34 @@ const renderPreviewStep = (
 
   const refreshLossyList = (): void => {
     lossyList.replaceChildren(
-      ...buildLossyNotes(model, selectedIds()).map((note) =>
-        el('li', { text: t(note.key, note.params) }),
+      ...buildLossyNotes(model, selectedIds(), includeCompletedTasksBox.checked).map(
+        (note) => el('li', { text: t(note.key, note.params) }),
       ),
     );
   };
 
+  const refreshProjectCounts = (): void => {
+    const tasksByProject = groupTasksByProject(model, includeCompletedTasksBox.checked);
+    model.projects.forEach((project) => {
+      const tasks = tasksByProject.get(project.extId) || [];
+      const rootCount = tasks.filter((task) => !task.parentExtId).length;
+      const subCount = tasks.length - rootCount;
+      const title = titleByExtId.get(project.extId) as string;
+      countsByExtId.get(project.extId)?.replaceChildren(
+        t('PREVIEW.PROJECT_COUNTS', {
+          title,
+          taskCount: rootCount,
+          subTaskCount: subCount,
+        }),
+      );
+    });
+  };
+
   const projectRows = model.projects.map((project) => {
-    const tasks = tasksByProject.get(project.extId) || [];
-    const rootCount = tasks.filter((t) => !t.parentExtId).length;
-    const subCount = tasks.length - rootCount;
     const title = titleByExtId.get(project.extId) as string;
     const collides = existingTitles.has(title.toLowerCase());
+    const counts = el('span');
+    countsByExtId.set(project.extId, counts);
     // flagged emails are mail follow-ups, not tasks the user wrote — opt in
     const checkbox = el('input', {
       type: 'checkbox',
@@ -179,11 +200,8 @@ const renderPreviewStep = (
     checkboxByExtId.set(project.extId, checkbox);
     return el('label', {}, [
       checkbox,
-      ` ${t('PREVIEW.PROJECT_COUNTS', {
-        title,
-        taskCount: rootCount,
-        subTaskCount: subCount,
-      })}`,
+      ' ',
+      counts,
       ...(collides
         ? [
             el('span', {
@@ -193,6 +211,10 @@ const renderPreviewStep = (
           ]
         : []),
     ]);
+  });
+  includeCompletedTasksBox.addEventListener('change', () => {
+    refreshProjectCounts();
+    refreshLossyList();
   });
 
   const importBtn = el('button', { text: t('BUTTON.IMPORT') });
@@ -206,17 +228,28 @@ const renderPreviewStep = (
     }
     const plan = planImport(model, {
       isTagImportant: tagImportantBox.checked,
+      isTagMicrosoftTodo: tagMicrosoftTodoBox.checked,
+      includeCompletedTasks: includeCompletedTasksBox.checked,
       selectedProjectExtIds: selected,
     });
-    void executeImport(plan, buildLossyNotes(model, selected));
+    void executeImport(
+      plan,
+      buildLossyNotes(model, selected, includeCompletedTasksBox.checked),
+    );
   });
 
+  refreshProjectCounts();
   refreshLossyList();
   render(
     el('h1', { text: t('TITLE.PREVIEW') }),
     el('p', { text: t('PREVIEW.CHOOSE_PROJECTS') }),
     el('div', {}, projectRows),
+    el('label', {}, [
+      includeCompletedTasksBox,
+      ` ${t('PREVIEW.INCLUDE_COMPLETED_TASKS')}`,
+    ]),
     el('label', {}, [tagImportantBox, ` ${t('PREVIEW.TAG_IMPORTANT')}`]),
+    el('label', {}, [tagMicrosoftTodoBox, ` ${t('PREVIEW.TAG_MICROSOFT_TODO')}`]),
     el('h2', { text: t('PREVIEW.LOSS_HEADING') }),
     lossyList,
     el('div', { className: 'actions' }, [importBtn, backBtn]),

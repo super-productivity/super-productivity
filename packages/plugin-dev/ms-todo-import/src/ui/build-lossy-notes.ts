@@ -1,4 +1,4 @@
-import { MsTodoImportModel } from '../parse/normalized-model';
+import { getTasksToImport, MsTodoImportModel } from '../parse/normalized-model';
 
 export interface LossNote {
   key: string;
@@ -8,9 +8,17 @@ export interface LossNote {
 export const buildLossyNotes = (
   model: MsTodoImportModel,
   selected: ReadonlySet<string>,
+  includeCompletedTasks = false,
 ): LossNote[] => {
   const projects = model.projects.filter((project) => selected.has(project.extId));
-  const tasks = model.tasks.filter((task) => selected.has(task.projectExtId));
+  const tasks = getTasksToImport(model.tasks, includeCompletedTasks).filter((task) =>
+    selected.has(task.projectExtId),
+  );
+  const completedTaskCount = includeCompletedTasks
+    ? 0
+    : model.tasks.filter(
+        (task) => !task.parentExtId && task.isDone && selected.has(task.projectExtId),
+      ).length;
   const notes: LossNote[] = [];
   const addCount = (key: string, count: number): void => {
     if (count) {
@@ -24,6 +32,7 @@ export const buildLossyNotes = (
   );
   addCount('LOSS.REMINDERS', tasks.filter((task) => task.hasReminder).length);
   addCount('LOSS.ATTACHMENTS', tasks.filter((task) => task.hasAttachments).length);
+  addCount('LOSS.COMPLETED_TASKS', completedTaskCount);
   addCount(
     'LOSS.TRUNCATED_FIELDS',
     [...projects, ...tasks].reduce(

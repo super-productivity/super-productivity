@@ -20,6 +20,7 @@ export interface MsTodoList {
 export interface MsTodoTask {
   extId: string;
   projectExtId: string;
+  created?: number;
   /** null = task; set = a step (checklist item) imported as sub-task */
   parentExtId: string | null;
   title: string;
@@ -52,3 +53,20 @@ export interface MsTodoImportModel {
    */
   tasks: MsTodoTask[];
 }
+
+export const getTasksToImport = (
+  tasks: MsTodoTask[],
+  includeCompletedTasks: boolean,
+): MsTodoTask[] => {
+  if (includeCompletedTasks) {
+    return tasks;
+  }
+  const completedTaskIds = new Set(
+    tasks.filter((task) => !task.parentExtId && task.isDone).map((task) => task.extId),
+  );
+  return tasks.filter(
+    (task) =>
+      !completedTaskIds.has(task.extId) &&
+      !(task.parentExtId && completedTaskIds.has(task.parentExtId)),
+  );
+};

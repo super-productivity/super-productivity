@@ -12,6 +12,8 @@ interface RawChecklistItem {
   id?: string;
   displayName?: string;
   isChecked?: boolean;
+  createdDateTime?: string; // in UTC
+  checkedDateTime?: string | null; // in UTC
 }
 
 /** Microsoft Graph `todoTask` (fields used). */
@@ -21,6 +23,8 @@ export interface RawTask {
   status?: string;
   importance?: string;
   body?: { content?: string; contentType?: string } | null;
+  createdDateTime?: String; // in UTC
+  lastModifiedDateTime?: String; // in UTC
   dueDateTime?: { dateTime?: string; timeZone?: string } | null;
   recurrence?: RawRecurrence | null;
   categories?: string[];
@@ -40,6 +44,7 @@ export interface RawGraphData {
 const MAX_TITLE_LEN = 1000;
 const MAX_CATEGORY_LEN = 200;
 const MAX_NOTES_LEN = 50_000;
+// const MAX_CREATED_MS = 32_503_680_000_000;
 
 export interface ParseStrings {
   untitledList: string;
@@ -144,6 +149,8 @@ const parseRepeat = (
 
 const parseTask = (raw: RawTask, listId: string, strings: ParseStrings): MsTodoTask => {
   const title = clamp(asStr(raw.title).trim() || strings.untitledTask, MAX_TITLE_LEN);
+  // const createdValue = asStr(raw.createdDateTime).trim();
+  // const created = createdValue ? Date.parse(createdValue) : NaN;
   const dueDay = parseDueDay(raw.dueDateTime);
   const description = bodyToText(raw.body);
   const { repeat, ruleNote } = parseRepeat(raw, dueDay, description, strings);
@@ -157,13 +164,19 @@ const parseTask = (raw: RawTask, listId: string, strings: ParseStrings): MsTodoT
     .map((c) => clamp(c, MAX_CATEGORY_LEN));
   const truncated =
     title.truncated + notes.truncated + categories.reduce((n, c) => n + c.truncated, 0);
+  // const validCreated =
+  //   Number.isFinite(created) && created >= 0 && created <= MAX_CREATED_MS
+  //     ? created
+  //     : undefined;
+
   return {
     extId: asStr(raw.id),
     projectExtId: listId,
+    // created: validCreated,
     parentExtId: null,
     title: title.value,
     notes: notes.value,
-    isDone: false,
+    isDone: raw.status === 'completed',
     categories: categories.map((c) => c.value),
     isImportant: raw.importance === 'high',
     dueDay,
@@ -184,9 +197,21 @@ const parseStep = (
     asStr(raw.displayName).trim() || strings.untitledTask,
     MAX_TITLE_LEN,
   );
+  // const createdValue = asStr(raw.createdDateTime).trim();
+  // const created = createdValue ? Date.parse(createdValue) : NaN;
+  // const checkedValue = asStr(raw.checkedDateTime).trim();
+  // const checked = checkedValue ? Date.parse(checkedValue) : NaN;
+  // const isCheckedByTimestamp =
+  //   Number.isFinite(checked) && checked >= 0 && checked <= MAX_CREATED_MS;
+  // const resolvedCreated =
+  //   Number.isFinite(created) && created >= 0 && created <= MAX_CREATED_MS
+  //     ? created
+  //     : parent.created;
+
   return {
     extId: `${parent.extId}-step-${asStr(raw.id)}`,
     projectExtId: parent.projectExtId,
+    // created: resolvedCreated,
     parentExtId: parent.extId,
     title: title.value,
     notes: '',
@@ -205,7 +230,7 @@ const parseStep = (
 /**
  * Graph payload → normalized model. Pure; safe to unit-test with fixtures.
  *
- * - completed tasks are skipped (the request filters them too),
+ * - completed tasks are marked done; the import plan can omit them by default,
  * - steps become sub-tasks right after their task; checked steps stay done,
  * - lists without open tasks are kept, so the preview can show them as empty.
  */
@@ -217,7 +242,7 @@ export const parseGraphData = (
   const tasks: MsTodoTask[] = [];
   for (const project of projects) {
     for (const rawTask of raw.tasksByListId[project.extId] ?? []) {
-      if (!asStr(rawTask.id) || rawTask.status === 'completed') {
+      if (!asStr(rawTask.id)) {
         continue;
       }
       const task = parseTask(rawTask, project.extId, strings);

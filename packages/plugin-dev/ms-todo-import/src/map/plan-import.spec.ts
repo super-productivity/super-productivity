@@ -1,6 +1,11 @@
 import { BatchTaskCreate } from '@super-productivity/plugin-api';
 import { MsTodoImportModel, MsTodoList, MsTodoTask } from '../parse/normalized-model';
-import { BATCH_CHUNK_SIZE, buildProjectTitles, planImport } from './plan-import';
+import {
+  BATCH_CHUNK_SIZE,
+  buildProjectTitles,
+  MICROSOFT_TODO_TAG_TITLE,
+  planImport,
+} from './plan-import';
 
 const task = (overrides: Partial<MsTodoTask>): MsTodoTask => ({
   extId: 't1',
@@ -55,6 +60,31 @@ describe('planImport', () => {
     ]);
   });
 
+  it('omits completed tasks and their steps unless explicitly included', () => {
+    const tasks = [
+      task({ extId: 'done', isDone: true }),
+      task({ extId: 'done-step', parentExtId: 'done', isDone: true }),
+      task({ extId: 'open' }),
+      task({ extId: 'open-step', parentExtId: 'open', isDone: true }),
+    ];
+    const defaultPlan = planImport(model({ tasks }), NO_TAG);
+    expect(
+      (defaultPlan.projects[0].batchChunks.flat() as BatchTaskCreate[]).map(
+        (operation) => operation.tempId,
+      ),
+    ).toEqual(['temp-open', 'temp-open-step']);
+
+    const includedPlan = planImport(model({ tasks }), {
+      ...NO_TAG,
+      includeCompletedTasks: true,
+    });
+    expect(
+      (includedPlan.projects[0].batchChunks.flat() as BatchTaskCreate[]).map(
+        (operation) => operation.tempId,
+      ),
+    ).toEqual(['temp-done', 'temp-done-step', 'temp-open', 'temp-open-step']);
+  });
+
   it('chunks operations at the batch limit, keeping parents before children', () => {
     const tasks: MsTodoTask[] = [];
     for (let i = 0; i < 60; i++) {
@@ -76,7 +106,7 @@ describe('planImport', () => {
     }
   });
 
-  it('emits follow-ups only for tasks with a due day, tags or a repeat', () => {
+  it('emits follow-ups for tasks with a due day, tags or a repeat', () => {
     const repeat = {
       schedule: { quickSetting: 'DAILY' as const },
       notesWithRule: 'Repeats: every day',
@@ -111,6 +141,25 @@ describe('planImport', () => {
       { tempId: 'temp-a', tagTitles: ['Red category', 'Errand'] },
     ]);
     expect(plan.tagTitles).toEqual(['Red category', 'Errand']);
+  });
+
+  it('optionally tags imported tasks with microsoft-todo', () => {
+    const plan = planImport(
+      model({
+        tasks: [
+          task({ extId: 'a', categories: ['Errand'] }),
+          task({ extId: 'b', parentExtId: 'a' }),
+        ],
+      }),
+      { isTagImportant: false, isTagMicrosoftTodo: true },
+    );
+    expect(plan.projects[0].followUps).toEqual([
+      {
+        tempId: 'temp-a',
+        tagTitles: [MICROSOFT_TODO_TAG_TITLE, 'Errand'],
+      },
+    ]);
+    expect(plan.tagTitles).toEqual([MICROSOFT_TODO_TAG_TITLE, 'Errand']);
   });
 
   describe('important (starred) tasks', () => {
