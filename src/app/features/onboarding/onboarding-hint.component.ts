@@ -123,6 +123,12 @@ export class OnboardingHintComponent {
       ? (HINT_STEP_CONFIGS.get(step)?.actions ?? null)
       : null;
   });
+  readonly isImportOffered = computed(() => {
+    const step = this.activeStep();
+    return (
+      !!step && step !== 'want-more' && !!HINT_STEP_CONFIGS.get(step)?.isImportOffered
+    );
+  });
   readonly timerNote = computed(() => {
     if (!this.quickTourService.isTimerNoteShown()) {
       return null;
@@ -444,7 +450,9 @@ export class OnboardingHintComponent {
     const rect = targetEl.getBoundingClientRect();
     // Prefer the rendered height: an estimate that is too small makes a hint
     // placed above its target (e.g. the mobile + button) cover it.
-    const estimatedHintHeight = isTouchActive() ? 76 : 48;
+    // The import link adds a line.
+    const estimatedHintHeight =
+      (isTouchActive() ? 76 : 48) + (config?.isImportOffered ? 18 : 0);
     const hintHeight = this._measureHintHeight() ?? estimatedHintHeight;
     // Clear the target's pulse glow (8px box-shadow ring) and the hint's arrow.
     const gap = config?.isPulse ? HINT_GAP_PX + PULSE_GLOW_PX : HINT_GAP_PX;

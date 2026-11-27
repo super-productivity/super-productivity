@@ -142,6 +142,34 @@
   }
 }
 
+// Quiet on purpose: adding a task stays the tip's one call to action.
+.import-link {
+  display: block;
+  margin-inline-start: var(--s-half);
+  // 24px tap height (WCAG 2.5.8) without visibly moving the line
+  padding: 5px 0;
+  margin-block: -5px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+  text-align: start;
+  text-decoration: underline;
+  text-decoration-color: rgba(var(--ink-on-channel), 0.35);
+  text-underline-offset: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-color);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
 .close-btn {
   position: relative;
   flex-shrink: 0;

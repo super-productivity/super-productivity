@@ -48,6 +48,7 @@ describe('OnboardingHintService', () => {
   let savedLs: Record<string, string | null>;
   let startQuickTour: jasmine.Spy;
   let isQuickTourActive: WritableSignal<boolean>;
+  let routerNavigate: jasmine.Spy;
 
   const setTasks = (tasks: Task[]): void => {
     store.overrideSelector(
@@ -129,6 +130,7 @@ describe('OnboardingHintService', () => {
     activeWorkContextId$ = new BehaviorSubject<string | null>('TODAY');
     startQuickTour = jasmine.createSpy('start');
     isQuickTourActive = signal(false);
+    routerNavigate = jasmine.createSpy('navigate').and.resolveTo(true);
 
     TestBed.configureTestingModule({
       providers: [
@@ -157,7 +159,10 @@ describe('OnboardingHintService', () => {
         },
         { provide: TaskService, useValue: { selectedTaskId } },
         { provide: TaskFocusService, useValue: { isTaskContextMenuOpen } },
-        { provide: Router, useValue: { events: routerEvents$ } },
+        {
+          provide: Router,
+          useValue: { events: routerEvents$, navigate: routerNavigate },
+        },
         { provide: WorkContextService, useValue: { activeWorkContextId$ } },
         { provide: LOCAL_ACTIONS, useValue: localActions$ },
         {
@@ -280,6 +285,17 @@ describe('OnboardingHintService', () => {
       setTasks([EXAMPLE_TASK]);
       const service = createService();
       expect(service.currentStep()).toBe('create-task');
+    });
+
+    it('import link ends guidance and opens Settings → Import/Export', () => {
+      const service = createService();
+      service.openImport();
+
+      expect(service.currentStep()).toBeNull();
+      expect(OnboardingHintService.isOnboardingInProgress()).toBeFalse();
+      expect(routerNavigate).toHaveBeenCalledWith(['/config'], {
+        queryParams: { tab: 5, section: 'IMEX_YEAH' },
+      });
     });
 
     it('reports onboarding as finished once a tip is closed', () => {
