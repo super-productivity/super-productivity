@@ -229,18 +229,17 @@ const summarizeViolations = (violations: string[]): Record<string, unknown> => {
   };
 };
 
-// A joiner is asked for the password once the first encrypted page arrives.
-// Returns the submit time, the moment a real user's sync wait starts.
-const enterJoinerPassword = async (page: Page, password: string): Promise<number> => {
+// setupSuperSync enters the joiner's password itself; this only notes when the
+// dialog closes, the moment a real user's sync wait starts. null = never shown.
+const watchPasswordSubmit = (page: Page): Promise<number | null> => {
   const dialog = page
     .locator('dialog-enter-encryption-password, dialog-handle-decrypt-error')
     .first();
-  await dialog.waitFor({ state: 'visible', timeout: 120000 });
-  await dialog.locator('input[type="password"]').first().fill(password);
-  const submittedAt = Date.now();
-  await dialog.locator('button[mat-flat-button][color="primary"]').click();
-  await dialog.waitFor({ state: 'hidden', timeout: 30000 });
-  return submittedAt;
+  return dialog
+    .waitFor({ state: 'visible', timeout: 180000 })
+    .then(() => dialog.waitFor({ state: 'hidden', timeout: 180000 }))
+    .then(() => Date.now())
+    .catch(() => null);
 };
 
 // Real app activity: encryption setup leaves a SYNC_IMPORT on the server, and
@@ -342,9 +341,11 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
       });
       const cdp = await startProfiling(fresh.page, violations);
 
+      const passwordSubmitted = watchPasswordSubmit(fresh.page);
       const setupStart = Date.now();
       await fresh.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
-      const t0 = await enterJoinerPassword(fresh.page, password);
+      const passwordAt = await passwordSubmitted;
+      const t0 = passwordAt ?? setupStart;
       const freshPage = fresh.page;
       await expect
         .poll(() => getCursor(freshPage), { timeout: 35 * 60 * 1000, intervals: [2000] })
@@ -370,6 +371,7 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
         latestSeq,
         templateTypes: templates.map((op) => `${op.entityType}:${op.actionType}`),
         seedMs,
+        passwordDialogSeen: passwordAt !== null,
         setupToPasswordMs: t0 - setupStart,
         beforePassword: buildPageStats(pages.filter((record) => record.startedAt < t0)),
         wallMs,
