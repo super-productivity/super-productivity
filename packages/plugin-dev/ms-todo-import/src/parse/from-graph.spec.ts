@@ -19,6 +19,17 @@ describe('parseGraphData', () => {
     ]);
   });
 
+  // it('imports the Microsoft Graph created timestamp', () => {
+  //   const [task] = parseTasks([
+  //     {
+  //       id: 'T1',
+  //       title: 'Created task',
+  //       createdDateTime: '2026-09-01T10:30:00Z',
+  //     },
+  //   ]);
+  //   expect(task.created).toBe(Date.parse('2026-09-01T10:30:00Z'));
+  // });
+
   it('maps an open task with notes, categories, star, reminder and attachments', () => {
     const [t] = parseTasks([
       {
@@ -69,8 +80,19 @@ describe('parseGraphData', () => {
         id: 'T1',
         title: 'Trip',
         checklistItems: [
-          { id: 's1', displayName: 'Book flight', isChecked: true },
-          { id: 's2', displayName: 'Pack' },
+          {
+            id: 's1',
+            displayName: 'Book flight',
+            isChecked: true,
+            createdDateTime: '2026-09-01T10:30:00Z',
+            checkedDateTime: '2026-09-02T10:30:00Z',
+          },
+          {
+            id: 's2',
+            displayName: 'Pack',
+            createdDateTime: '2026-09-01T11:30:00Z',
+            checkedDateTime: null,
+          },
         ],
       },
       { id: 'T2', title: 'Next' },
@@ -82,6 +104,8 @@ describe('parseGraphData', () => {
       ['Next', null, false],
     ]);
     expect(tasks[1].extId).toBe('T1-step-s1');
+    // expect(tasks[1].created).toBe(Date.parse('2026-09-01T10:30:00Z'));
+    // expect(tasks[2].created).toBe(Date.parse('2026-09-01T11:30:00Z'));
   });
 
   it('turns a mappable recurrence into a repeat and keeps the rule for a fallback', () => {

@@ -29,7 +29,9 @@
     "CHOOSE_PROJECTS": "Choose the lists to import — each becomes a project:",
     "PROJECT_COUNTS": "{{title}} — tasks: {{taskCount}}, steps: {{subTaskCount}}",
     "ALREADY_EXISTS": "already exists — possibly imported before",
+    "INCLUDE_COMPLETED_TASKS": "Import completed tasks",
     "TAG_IMPORTANT": "Tag important (starred) tasks with “important”",
+    "TAG_MICROSOFT_TODO": "Tag imported tasks with “microsoft-todo”",
     "LOSS_HEADING": "What will not survive the move",
     "SELECT_PROJECT": "Select at least one list to import."
   },
@@ -37,8 +39,9 @@
     "RECURRING": "Repeats that Super Productivity cannot express (the rule is noted in task notes): {{count}}.",
     "REMINDERS": "Reminders not imported: {{count}}.",
     "ATTACHMENTS": "Tasks with file attachments, imported without the files: {{count}}.",
+    "COMPLETED_TASKS": "Completed tasks not imported: {{count}}.",
     "TRUNCATED_FIELDS": "Unusually long values shortened to safe import limits: {{count}}.",
-    "ALWAYS": "Completed tasks, My Day and linked emails or files are not imported."
+    "ALWAYS": "Folder groups, My Day, and linked emails or files are not imported."
   },
   "IMPORT": {
     "STARTING": "Starting…",

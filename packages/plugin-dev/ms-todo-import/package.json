@@ -1,7 +1,7 @@
 {
   "name": "ms-todo-import",
   "version": "1.0.0",
-  "description": "One-time import of open Microsoft To Do lists, tasks, steps and due dates into Super Productivity",
+  "description": "One-time import of Microsoft To Do lists, tasks, steps and due dates into Super Productivity",
   "private": true,
   "scripts": {
     "build": "node ../scripts/build-with-esbuild.js --ui src/ui/main.ts",
