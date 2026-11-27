@@ -121,6 +121,21 @@ body.isNativeMobile .mat-mdc-menu-panel {
   align-items: center;
 }
 
+// Title with the help toggle beside it, not inside it: screen readers then
+// announce the heading as the title alone.
+.dialog-title-row {
+  display: flex;
+  align-items: center;
+
+  > .mat-mdc-dialog-title {
+    flex: 1;
+  }
+
+  > help-toggle-btn {
+    margin: 8px var(--s2) 0;
+  }
+}
+
 .cdk-overlay-pane.mat-mdc-dialog-panel {
   @include media-queries.mq(xs, max) {
     max-width: 96vw !important;

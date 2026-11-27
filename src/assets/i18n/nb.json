@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Alternativ vert for Jira-lenker (f.eks. offentlig URL når API-verten er en annen; baneprefiks er tillatt)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Avansert konfigurasjon",
-        "HELP_ARR": {
-          "H1": "Grunnleggende konfigurasjon",
-          "H2": "Innstillinger for arbeidslogg",
-          "H3": "Standard overganger",
-          "P1_1": "Oppgi et påloggingsnavn (finner du på profilsiden din) og et <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API-token</a> eller passord hvis du av en eller annen grunn ikke kan generere et. Vær ikke oppmerksom på at nyere versjoner av Jira noen ganger bare fungerer med tokenet.",
-          "P1_2": "Du må også spesifisere et JQL-spørsmål som brukes til forslagene for å legge til oppgaver fra Jira. Hvis du trenger hjelp, kan du sjekke ut denne lenken <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a> .",
-          "P1_3": "Du kan også konfigurere, hvis du vil automatisk (f.eks. hver gang du besøker planleggingsvisningen), for å legge til alle nye oppgaver som er spesifisert av et tilpasset JQL-spørsmål i backloggen.",
-          "P1_4": "Et annet alternativ er \"Sjekk om gjeldende billett er tildelt nåværende bruker\". Hvis aktivert og du starter, vil det bli gjort en sjekk om du for øyeblikket er tildelt den billetten på Jira, hvis ikke en dialogboks vises der du kan velge å tildele billetten til deg selv.",
-          "P2_1": "Det er flere alternativer for å bestemme når og hvordan du vil sende inn en arbeidslogg. Aktivering av <em>&#39;Åpne dialogbok for arbeidslogg for å legge til en arbeidslogg til Jira når oppgaven er fullført&#39;</em> åpner en dialogboks for å legge til en arbeidslogg hver gang du merker en Jira-oppgave som ferdig. Så husk at arbeidslogger vil bli lagt til på toppen av alt som er sporet så langt. Så hvis du merker en oppgave som ferdig for andre gang, vil du kanskje ikke sende inn den totale arbeidstiden for oppgaven igjen.",
-          "P2_2": "<em>&#39;Åpne arbeidslogg-dialogboksen når underoppgaven er ferdig og ikke for oppgaver med underoppgavene selv&#39;</em> åpner en arbeidslogg-dialog hver gang du merker en underoppgave for et Jira-problem som ferdig. Fordi du allerede sporer tiden din via underoppgavene, åpnes ingen dialog når du merker selve Jira-oppgaven.",
-          "P2_3": "<em>&#39;Send oppdateringer til arbeidsloggen automatisk uten dialog&#39;</em> gjør hva det står. Fordi det å merke en oppgave som utført flere ganger fører til at hele arbeidet spores to ganger, anbefales ikke dette.",
-          "P3_1": "Her kan du konfigurere standardovergangene dine på nytt. Jira muliggjør en bred konfigurasjon av overganger som vanligvis kommer til handling som forskjellige kolonner på Jira agile-tavle. Vi kan ikke gjøre antakelser om hvor og når du skal overføre oppgavene dine, og du må angi det manuelt."
-        }
+        "ADV_CFG": "Avansert konfigurasjon"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Oppdragsgiver",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Juster denne verdien for å gjøre bakgrunnsbildet uskarpt. Standardverdien er 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Juster denne verdien for å gjøre bakgrunnen mer eller mindre gjennomsiktig. Standard er 20 %.",
-        "HELP": "Temainnstillinger for prosjektet ditt.",
         "L_BACKGROUND_IMAGE_BLUR": "Gjør bakgrunnsbildet uskarpt",
         "L_BACKGROUND_IMAGE_DARK": "URL for bakgrunnsbilde (mørkt tema)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL for bakgrunnsbilde (Light Theme)",

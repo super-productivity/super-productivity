@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Alternative host for Jira links (e.g. public URL when API host differs; path prefix allowed)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Erweiterte Konfiguration",
-        "HELP_ARR": {
-          "H1": "Grundlegende Einstellung",
-          "H2": "Worklog-Einstellungen",
-          "H3": "Standardübergänge",
-          "P1_1": "Bitte gib einen Anmeldenamen (auf deiner Profilseite) und ein <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API-Token</a> oder Passwort an, falls du aus irgendeinem Grund keinen generieren kannst. Bitte beachte, dass neuere Versionen von Jira manchmal nur mit dem Token funktionieren.",
-          "P1_2": "Du musst auch eine JQL-Abfrage angeben, die für die Vorschläge zum Hinzufügen von Aufgaben aus Jira verwendet wird. Wenn du Hilfe benötigst, besuche diesen Link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Du kannst auch konfigurieren, ob automatisch (z. B. jedes Mal, wenn du die Planungsansicht aufrufst) alle neuen Aufgaben, die durch eine benutzerdefinierte JQL-Abfrage angegeben wurden, zum Backlog hinzugefügt werden sollen.",
-          "P1_4": "Eine weitere Option ist \"Überprüfen, ob das aktuelle Ticket dem aktuellen Benutzer zugewiesen ist\". Wenn aktiviert und du startest, wird geprüft, ob dir dieses Ticket in Jira zugewiesen ist. Wenn dies nicht der Fall ist, wird ein Dialogfeld angezeigt, in dem du das Ticket dir selbst zuweisen kannst.",
-          "P2_1": "Es gibt verschiedene Möglichkeiten, um festzulegen, wann und wie du ein Worklog senden möchtest. Durch Aktivieren von <em>'Dialogfeld \"Worklog öffnen\" zum Hinzufügen eines Worklogs zu Jira nach Abschluss der Aufgabe'</em> wird ein Dialogfeld zum Hinzufügen eines Worklogs jedes Mal geöffnet, wenn du eine Jira-Aufgabe als erledigt markierst. Denke also daran, dass Worklogs zu allen bisher erfassten Daten hinzugefügt werden. Wenn du also eine Aufgabe zum zweiten Mal als erledigt markierst, möchtest du möglicherweise nicht die gesamte Arbeitszeit für die Aufgabe erneut senden.",
-          "P2_2": "<em>'Worklogdialog öffnen, wenn eine Unteraufgabe erledigt ist und nicht für Aufgaben mit Unteraufgaben selbst'</em> öffnet jedes Mal ein Worklogdialogfeld, wenn du eine Unteraufgabe eines Jira-Issues als erledigt markierst. Da du deine Zeit bereits über die Unteraufgaben nachverfolgst, wird kein Dialogfeld geöffnet, sobald du die Jira-Aufgabe selbst als erledigt markierst.",
-          "P2_3": "<em>'Aktualisierungen automatisch ohne Dialog an das Worklog senden'</em> macht, was es sagt. Da das mehrmalige Markieren einer Aufgabe dazu führt, dass die gesamte Arbeitszeit zweimal erfasst wird, wird dies nicht empfohlen.",
-          "P3_1": "Hier kannst du deine Standardübergänge neu konfigurieren. Jira ermöglicht eine umfassende Konfiguration von Übergängen, die normalerweise als unterschiedliche Spalten auf deinem Jira Agile Board wirksam werden. Super Productivity kann hierzu keine Annahme treffen. Daher musst du die Übergänge manuell einstellen."
-        }
+        "ADV_CFG": "Erweiterte Konfiguration"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Bearbeiter",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Adjust this value to blur the background image. The default is 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Passe diesen Wert an, um den Hintergrund mehr oder weniger transparent zu machen. Standard ist 20%.",
-        "HELP": "Themen-Einstellungen für dein Projekt.",
         "L_BACKGROUND_IMAGE_BLUR": "Blur background image",
         "L_BACKGROUND_IMAGE_DARK": "Hintergrundbild-URL (dunkles Thema)",
         "L_BACKGROUND_IMAGE_LIGHT": "Hintergrundbild-URL (helles Thema)",

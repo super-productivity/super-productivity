@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Alternatieve host voor Jira-links (bijv. openbare URL als de API-host afwijkt; padvoorvoegsel toegestaan)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Geavanceerde configuratie",
-        "HELP_ARR": {
-          "H1": "Basisconfiguratie",
-          "H2": "Worklog-instellingen",
-          "H3": "Standaardovergangen",
-          "P1_1": "Geef een inlognaam op (te vinden op je profielpagina) en een <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API-token</a> of wachtwoord als je er om de een of andere reden geen kunt genereren. Houd er rekening mee dat nieuwere versies van Jira soms alleen met het token werken.",
-          "P1_2": "Je moet ook een JQL-query opgeven die wordt gebruikt voor de suggesties om taken uit Jira toe te voegen. Als je hulp nodig hebt, bekijk dan deze link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Je kunt ook instellen dat automatisch (bijvoorbeeld elke keer dat je de planningsweergave bezoekt) alle nieuwe issues die door een aangepaste JQL-query worden opgegeven, worden geïmporteerd.",
-          "P1_4": "Een andere optie is \"Controleer of het huidige ticket is toegewezen aan de huidige gebruiker\". Is die ingeschakeld en start je een taak, dan wordt gecontroleerd of je op Jira aan dat ticket bent toegewezen. Zo niet, dan verschijnt een dialoogvenster waarin je het ticket aan jezelf kunt toewijzen.",
-          "P2_1": "Er zijn verschillende opties om te bepalen wanneer en hoe je een werklog wilt indienen. Als je <em>\"Open werklog-dialoogvenster voor het toevoegen van een werklog aan Jira wanneer de taak is voltooid\"</em> inschakelt, wordt een dialoogvenster geopend om een werklog toe te voegen telkens wanneer je een Jira-taak als voltooid markeert. Houd er dus rekening mee dat werklogs worden toegevoegd bovenop alles wat tot nu toe is bijgehouden. Dus als je een taak voor een tweede keer als voltooid markeert, wil je misschien niet de volledige gewerkte tijd voor de taak opnieuw indienen.",
-          "P2_2": "<em>\"Open werklog-dialoogvenster wanneer subtaak is voltooid en niet voor taken met subtaken zelf\"</em> opent een werklog-dialoogvenster telkens wanneer je een subtaak van een Jira-issue als voltooid markeert. Omdat je je tijd al bijhoudt via de subtaken, wordt er geen dialoogvenster geopend zodra je de Jira-taak zelf als voltooid markeert.",
-          "P2_3": "<em>\"Stuur updates automatisch naar worklog zonder dialoogvenster\"</em> doet wat het zegt. Omdat de hele gewerkte tijd twee keer wordt geregistreerd als je een taak meerdere keren als voltooid markeert, wordt dit niet aanbevolen.",
-          "P3_1": "Hier kun je je standaardovergangen opnieuw configureren. Jira maakt een brede configuratie mogelijk van overgangen die gewoonlijk in actie komen als verschillende kolommen op je Jira agile board. We kunnen geen aannames maken over waar en wanneer je een overgang voor je taken moet maken, dus moet je deze handmatig instellen."
-        }
+        "ADV_CFG": "Geavanceerde configuratie"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Toegewezen aan",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Pas deze waarde aan om de achtergrondafbeelding te vervagen. De standaardwaarde is 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Pas deze waarde aan om de achtergrond meer of minder transparant te maken. De standaardwaarde is 20%.",
-        "HELP": "Thema-instellingen voor je project.",
         "L_BACKGROUND_IMAGE_BLUR": "Achtergrondafbeelding vervagen",
         "L_BACKGROUND_IMAGE_DARK": "Achtergrondafbeelding-URL (donker thema)",
         "L_BACKGROUND_IMAGE_LIGHT": "Achtergrondafbeelding-URL (licht thema)",

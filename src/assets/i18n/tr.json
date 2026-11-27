@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Jira bağlantıları için alternatif ana bilgisayar (örn. API ana bilgisayarı farklı olduğunda genel URL; yol ön ekine izin verilir)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Gelişmiş Yapılandırma",
-        "HELP_ARR": {
-          "H1": "Temel yapılandırma",
-          "H2": "İş Günlüğü ayarları",
-          "H3": "Varsayılan geçişler",
-          "P1_1": "Herhangi bir nedenden bir tane oluşturamazsanız lütfen bir giriş adı (profil sayfanızda bulunabilir) ve bir <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API belirteci</a> veya şifre belirtin. Lütfen jira'nın yeni sürümlerinin bazen yalnızca belirteçle çalıştığını unutmayın.",
-          "P1_2": "Ayrıca, Jira'dan görev eklemek için önerilerde kullanılacak bir JQL sorgusu belirtmeniz gerekir. Yardıma ihtiyacınız varsa bu bağlantıyı <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">kontrol edin https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>",
-          "P1_3": "Ayrıca, otomatik olarak (örneğin planlama görünümünü her ziyaret ettiğinizde), özel bir JQL sorgusu tarafından belirtilen tüm yeni görevleri biriktirmek için eklemek üzere yapılandırabilirsiniz.",
-          "P1_4": "Diğer bir seçenek ise \"Geçerli biletin mevcut kullanıcıya atanmış olup olmadığını kontrol et\" dir. Etkinleştirilirse ve başlıyorsanız, şu anda Jira'daki o bilete atanıp atanmadığınızı, kendinize bileti atamayı seçebileceğiniz bir İletişim Kutusu görünmüyorsa bir kontrol yapılır.",
-          "P2_1": "Bir çalışma günlüğünü ne zaman ve nasıl göndermek istediğinizi belirlemek için çeşitli seçenekler vardır. <em>'Görev tamamlandığında Jira'ya bir çalışma grubu eklemek için çalışma iletişim kutusunu aç' seçeneğinin etkinleştirilmesi '</em> , bir Jira Görevini her şekilde yaptığınızda bir çalışma grubu eklemek için bir iletişim kutusu açar. Bu nedenle, bugüne kadar izlenen her şeyin üstüne çalışma günlükleri ekleneceğini unutmayın. Bu nedenle, bir görevi ikinci kez yapılan şekilde işaretlerseniz, görev için çalışılan tam zamanı tekrar göndermek istemeyebilirsiniz.",
-          "P2_2": "<em>'Alt görev indiğinde iş günlüğü iletişim kutusunu açın ve alt görevlerin kendileri olan görevler için değil'</em> bir Jira sorununun alt görevini olduğu gibi işaretlediğinizde her seferinde bir iş günlüğü iletişim kutusu açar. Alt görevler aracılığıyla zamanınızı zaten izlediğiniz için, Jira görevinin kendisini bitmiş olarak işaretledikten sonra hiçbir iletişim kutusu açılmaz.",
-          "P2_3": "<em>'Güncellemeleri iletişim kutusuna otomatik olarak çalışma günlüğüne gönder'</em> ne diyorsa onu yapar. Birkaç kez yapılan bir görevi işaretlemek, tüm çalışma süresinin iki kez izlenmesine yol açtığından, bu önerilmez.",
-          "P3_1": "Burada varsayılan geçişlerinizi yeniden yapılandırabilirsiniz. Jira, genellikle Jira çevik panonuzdaki farklı sütunlar olarak harekete geçen geniş bir geçiş konfigürasyonuna olanak tanır; görevlerinizi nerede ve ne zaman geçireceğinizi ve bunu manuel olarak ayarlamanız gerektiğine dair varsayımlarda bulunmayız."
-        }
+        "ADV_CFG": "Gelişmiş Yapılandırma"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Atanan",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Arka plan resmini bulanıklaştırmak için bu değeri ayarlayın. Varsayılan 0px'dir.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Arka planı daha fazla veya daha az saydam yapmak için bu değeri ayarlayın. Varsayılan %20'dir.",
-        "HELP": "Projeniz için tema ayarları.",
         "L_BACKGROUND_IMAGE_BLUR": "Arka plan resmini bulanıklaştır",
         "L_BACKGROUND_IMAGE_DARK": "Arka Plan Resmi URL'si (Koyu Tema)",
         "L_BACKGROUND_IMAGE_LIGHT": "Arka Plan Resmi URL'si (Açık Tema)",

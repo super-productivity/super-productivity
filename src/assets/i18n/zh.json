@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Jira 链接的备用主机地址（例如 API 主机与公开 URL 不同时使用；允许带路径前缀）"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "高级配置",
-        "HELP_ARR": {
-          "H1": "基本配置",
-          "H2": "工作日志设置",
-          "H3": "默认转换",
-          "P1_1": "请提供登录名（可以在您的个人资料页面上找到）和 <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html \" target=\"_blank\">API 令牌</a> 或密码，如果您出于某种原因无法生成一个。请注意，较新版本的 Jira 有时仅使用令牌。",
-          "P1_2": "您还需要指定一个 JQL 查询，用于从 Jira 添加任务的建议。如果您需要帮助，请查看此链接 <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html \" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html </a>。",
-          "P1_3": "您还可以配置是否想要自动（例如，每次访问规划视图时）通过自定义 JQL 查询指定导入所有新问题。",
-          "P1_4": "另一个选项是 \"检查当前票证是否分配给当前用户\"。如果启用并且您正在启动，将检查您是否当前在 Jira 上分配给该票证，如果不是，则会出现一个对话框，您可以选择将票证分配给自己。",
-          "P2_1": "有几种选项可以确定何时以及如何提交工作日志。启用 <em>'在任务完成时打开工作日志对话框以向 Jira 添加工作日志'</em> 会在您每次将 Jira 任务标记为完成时打开一个对话框以添加工作日志。因此，请记住，工作日志将添加到迄今为止跟踪的所有内容之上。因此，如果您第二次将任务标记为完成，您可能不想再次提交任务的完整工作时间。",
-          "P2_2": "<em>'在子任务完成时打开工作日志对话框，而不是对具有子任务的任务本身打开工作日志对话框'</em> 会在您将 Jira 问题的子任务标记为完成时每次都打开一个工作日志对话框。因为您已经通过子任务跟踪了您的时间，所以在您将 Jira 任务本身标记为完成时不会打开任何对话框。",
-          "P2_3": "<em>'在没有对话框的情况下自动将更新发送到工作日志'</em> 会执行它所说的操作。因为多次将任务标记为完成会导致整个工作时间被跟踪两次，所以不推荐这样做。",
-          "P3_1": "在这里，您可以重新配置默认转换。Jira 支持转换的广泛配置，通常作为 Jira 敏捷板上的不同列生效，我们无法假设在哪里以及何时转换您的任务，您需要手动设置它。"
-        }
+        "ADV_CFG": "高级配置"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "负责人",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "调整此值可模糊背景图片。默认值为 0px。",
         "D_BACKGROUND_OVERLAY_OPACITY": "调整此值使背景更透明或更不透明。默认为 20%。",
-        "HELP": "项目的主题设置。",
         "L_BACKGROUND_IMAGE_BLUR": "模糊背景图片",
         "L_BACKGROUND_IMAGE_DARK": "背景图片网址（暗主题）",
         "L_BACKGROUND_IMAGE_LIGHT": "背景图片网址（亮主题）",

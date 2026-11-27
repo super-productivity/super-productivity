@@ -1,3 +1,4 @@
+import { DOCS_URL } from '../../../app.constants';
 import { ConfigFormSection, FocusModeConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 
@@ -5,6 +6,7 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
   title: T.GCF.FOCUS_MODE.TITLE,
   key: 'focusMode',
   help: T.GCF.FOCUS_MODE.HELP,
+  docsUrl: `${DOCS_URL}explanation/timers-and-focus-mode/`,
   items: [
     {
       key: 'autoStartFocusOnPlay',

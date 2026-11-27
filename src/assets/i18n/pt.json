@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Host alternativo para links do Jira (por exemplo, URL público quando o host da API é diferente; é permitido um prefixo de caminho)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Configurações avançadas",
-        "HELP_ARR": {
-          "H1": "Configurações Básicas",
-          "H2": "Configurações do log de trabalho",
-          "H3": "Transições padrão",
-          "P1_1": "Forneça um nome de login (pode ser encontrado na sua página de perfil) e um <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> ou senha, se você não puder gerar uma por algum motivo. Às vezes, as versões mais recentes do Jira funcionam apenas com o token. ",
-          "P1_2": "Você também precisa especificar uma consulta JQL que é usada para as sugestões para adicionar tarefas do Jira. Se precisar de ajuda, confira este link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Você também pode configurar, se desejar automaticamente (por exemplo, sempre que visitar a exibição de planejamento), adicionar todas as novas tarefas especificadas por uma consulta JQL customizada ao backlog.",
-          "P1_4": "Outra opção é \"Verifique se o ticket atual está atribuído ao usuário atual\". Se ativado e você estiver começando, será feita uma verificação se você estiver atualmente atribuído a esse ticket no Jira, se não aparecer uma caixa de diálogo na qual você pode optar por atribuir o ticket a si mesmo.",
-          "P2_1": "Existem várias opções para determinar quando e como você deseja enviar um log de trabalho. Ativar <em>'Abrir caixa de diálogo do log de trabalho para adicionar um log de trabalho ao Jira quando a tarefa estiver concluída'</em> abre uma caixa de diálogo para adicionar um log de trabalho toda vez que você marcar uma tarefa do Jira como concluída. Portanto, lembre-se de que os logs de trabalho serão adicionados além de tudo rastreado até o momento. Portanto, se você marcar uma tarefa como concluída pela segunda vez, talvez não queira enviar o tempo de trabalho completo para a tarefa novamente.",
-          "P2_2": "<em>'Abre a caixa de diálogo do log de trabalho quando a subtarefa é concluída e não para tarefas com as próprias subtarefas'</em> abre uma caixa de diálogo do log de trabalho toda vez que você marca uma subtarefa de um problema do Jira como concluída. Você já acompanha seu tempo através das subtarefas, nenhuma caixa de diálogo é aberta depois que você marca a tarefa Jira como concluída.",
-          "P2_3": "<em>'Enviar atualizações para o log de trabalho automaticamente sem caixa de diálogo'</em> faz o que diz. Como marcar uma tarefa como executada várias vezes faz com que todo o tempo de trabalho seja rastreado duas vezes, isso não é recomendado.",
-          "P3_1": "Aqui você pode reconfigurar suas transições padrão. O Jira permite uma ampla configuração de transições que geralmente entram em ação como colunas diferentes no seu painel ágil Jira. Não podemos fazer suposições sobre onde e quando fazer a transição de suas tarefas e você precisa defina-o manualmente"
-        }
+        "ADV_CFG": "Configurações avançadas"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Resposável",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Ajuste este valor para desfocar a imagem de fundo. O valor predefinido é 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Ajuste este valor para tornar o fundo mais ou menos transparente. O valor predefinido é 20%.",
-        "HELP": "Configurações do tema para o seu projeto.",
         "L_BACKGROUND_IMAGE_BLUR": "Desfocar imagem de fundo",
         "L_BACKGROUND_IMAGE_DARK": "URL da imagem de fundo (tema escuro)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL da imagem de fundo (tema claro)",

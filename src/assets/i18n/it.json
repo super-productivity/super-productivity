@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Host alternativo per i link Jira (ad es. URL pubblico quando l'host API è diverso; è consentito un prefisso di percorso)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Configurazione avanzata",
-        "HELP_ARR": {
-          "H1": "Configurazione base",
-          "H2": "Impostazioni del registro di lavoro",
-          "H3": "Transizioni predefinite",
-          "P1_1": "Per favore indica un nome per il login (lo trovi nella tua pagina profilo) e un <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> o una password se per qualche motivo non ne puoi generare uno. Per favore nota che le nuove versioni di jira potrebbero funzionare solo con il token. ",
-          "P1_2": "Devi anche specificare una query JQL che è usata dai suggerimenti per aggiungere attività a Jira. Se hai bisogno di aiuto vai a questo indirizzo <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Puoi anche configurare se vuoi aggiungere automaticamente negli arretrati (es. ogni volta che visiti la vista di pianificazione) nuove attività specificate in una query JQL personalizzata.",
-          "P1_4": "Un'altra opzione è di \"Controllare se il ticket corrente è assegnato ad un altro utente\". Se abilitato e stai iniziando, un controllo satà fatto per controllare se sei assegnato a quel ticket su Jira, se non lo sei appparirà una finestra nella quale puoi scegliere di assegnarti quel ticket.",
-          "P2_1": "Ci sono diverse opzioni per determinare quando e come vuoi sottomettere un registro di lavoro. Abilitare <em>'Apri una finestra per aggiungere un registro di lavoro a Jira quando l'attività è completata'</em> apre una finestra per aggiungere il registro di lavoro ogni volta che segni un'attività Jira come completata. Quindi ricorda che i registri di lavoro saranno aggiunti in cima a tutto ciò che è stato tracciato fino a quel momento. Quindi se vuoi segnare un'attività come completata per la seconda volta, potresti non voler sottomettere il tempo lavorato complessivamente per l'attività un'altra volta.",
-          "P2_2": "<em>'Apri una finestra del registro di lavoro quando una sotto-attività è completata e non per attività con sotto-attività'</em> apre una finestra del registro di lavoro ogni volta che segni una sotto-attività di un issue Jira come completato. Dal momento che tracci già il tempo tramite le sotto-attività, nessuna finestra viene aperta quando segni l'attività Jira stesso come completata.",
-          "P2_3": "<em>'Invia automaticamente gli aggiornamenti al registro di lavoro senza aprire finestre'</em> fa ciò che dice. Dato che segnare un'attività come completata spesso porta il tempo totale di lavoro a venir conteggiato due volte, non è consigliato.",
-          "P3_1": "Qui puoi riconfigurare le tue transizioni di default. Jira rende disponibili molte transizioni, spesso attivate come diverse colonne sulla tua board agile di Jira, non possiamo assumere dove e quando trasportare tue attività, quindi devi farlo manualmente."
-        }
+        "ADV_CFG": "Configurazione avanzata"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assegnatario",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Regola questo valore per sfocare l'immagine di sfondo. Il valore predefinito è 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Regola questo valore per rendere lo sfondo più o meno trasparente. Il valore predefinito è 20%.",
-        "HELP": "Impostazioni sul tema del tuo progetto.",
         "L_BACKGROUND_IMAGE_BLUR": "Sfocatura dell'immagine di sfondo",
         "L_BACKGROUND_IMAGE_DARK": "URL immagine di sfondo (tema scuro)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL immagine di sfondo (tema chiaro)",

@@ -1,49 +1,36 @@
-<h1 mat-dialog-title>
-  @if (issueProviderKey | issueIcon; as icon) {
-    <mat-icon
-      class="dialog-header-icon"
-      [svgIcon]="icon"
-    ></mat-icon>
-  } @else {
-    <mat-icon class="dialog-header-icon">extension</mat-icon>
+<div class="dialog-title-row">
+  <h1 mat-dialog-title>
+    @if (issueProviderKey | issueIcon; as icon) {
+      <mat-icon
+        class="dialog-header-icon"
+        [svgIcon]="icon"
+      ></mat-icon>
+    } @else {
+      <mat-icon class="dialog-header-icon">extension</mat-icon>
+    }
+    {{
+      (isEdit ? T.F.ISSUE.DIALOG.EDIT_TITLE : T.F.ISSUE.DIALOG.SETUP_TITLE)
+        | translate: { title: title }
+    }}
+  </h1>
+  @if (configFormSection?.help) {
+    <help-toggle-btn [(isOpen)]="isShowHelp" />
   }
-  {{
-    (isEdit ? T.F.ISSUE.DIALOG.EDIT_TITLE : T.F.ISSUE.DIALOG.SETUP_TITLE)
-      | translate: { title: title }
-  }}
-</h1>
+</div>
 
 <form
   [formGroup]="form"
   (ngSubmit)="submit()"
 >
   <mat-dialog-content>
-    @if (configFormSection?.help || configFormSection?.helpArr) {
-      <help-section>
-        @if (configFormSection?.help) {
-          <div
-            [innerHtml]="$safeNavigationMigration(configFormSection?.help) | translate"
-          ></div>
-        }
-        @if (configFormSection?.helpArr) {
-          @for (helpSection of configFormSection?.helpArr; track helpSection) {
-            @if (helpSection.h) {
-              <div class="mat-caption">{{ helpSection.h | translate }}</div>
-            }
-            @if (helpSection.p) {
-              <p [innerHTML]="helpSection.p | translate"></p>
-            }
-            @if (helpSection.p2) {
-              <p [innerHTML]="helpSection.p2 | translate"></p>
-            }
-            @if (helpSection.p3) {
-              <p [innerHTML]="helpSection.p3 | translate"></p>
-            }
-            @if (helpSection.p4) {
-              <p [innerHTML]="helpSection.p4 | translate"></p>
-            }
-          }
-        }
+    @if (configFormSection?.help) {
+      <help-section
+        [isShowHelp]="isShowHelp()"
+        [docsUrl]="configFormSection?.docsUrl"
+      >
+        <div
+          [innerHtml]="$safeNavigationMigration(configFormSection?.help) | translate"
+        ></div>
       </help-section>
     }
     @if (isEdit) {
