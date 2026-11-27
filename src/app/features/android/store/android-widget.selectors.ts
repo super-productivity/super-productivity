@@ -19,6 +19,7 @@ import {
 import {
   AndroidWidgetCurrentTask,
   AndroidWidgetData,
+  AndroidWidgetDay,
   AndroidWidgetProject,
   AndroidWidgetTask,
 } from '../android-widget.model';
@@ -37,6 +38,8 @@ import {
   PRESENCE_STALE_AFTER_MS,
   RemoteSessionView,
 } from '../../tracking-presence/tracking-presence.model';
+import { getRepeatableTaskId } from '../../task-repeat-cfg/get-repeatable-task-id.util';
+import { selectAndroidWidgetNextDayPlans } from './android-widget-next-days.selectors';
 
 /**
  * The instant the logical day `dayStr` stops being "today": local midnight after it,
@@ -182,7 +185,7 @@ const orderTodayTasksLikeTodayScreen = (
   ];
 };
 
-/** Rows a project widget can show; matches the native list's MAX_TASKS. */
+/** Rows a widget can show for a project or a next day; the native list's MAX_TASKS. */
 const MAX_WIDGET_PROJECT_TASKS = 20;
 
 /**
@@ -215,6 +218,7 @@ export const selectAndroidWidgetData = createSelector(
   selectCurrentTaskId,
   selectLaterTodayStructure,
   selectSectionsByContextIdMap,
+  selectAndroidWidgetNextDayPlans,
   (
     todayTaskIds,
     taskEntities,
@@ -225,24 +229,28 @@ export const selectAndroidWidgetData = createSelector(
     currentTaskId,
     laterTodayStructure,
     sectionsByContextId,
+    nextDayPlans,
   ): AndroidWidgetData => {
     const tasks: AndroidWidgetTask[] = [];
     const projectColors: { [projectId: string]: string } = {};
-    const toWidgetTask = (task: Task): AndroidWidgetTask => {
-      const widgetTask: AndroidWidgetTask = {
-        id: task.id,
-        title: task.title,
-        isDone: task.isDone,
-      };
-      if (task.projectId) {
-        widgetTask.projectId = task.projectId;
-        const color = projectState.entities[task.projectId]?.theme?.primary;
+    const withProject = (
+      widgetTask: AndroidWidgetTask,
+      projectId?: string | null,
+    ): AndroidWidgetTask => {
+      if (projectId) {
+        widgetTask.projectId = projectId;
+        const color = projectState.entities[projectId]?.theme?.primary;
         if (color) {
-          projectColors[task.projectId] = color;
+          projectColors[projectId] = color;
         }
       }
       return widgetTask;
     };
+    const toWidgetTask = (task: Task): AndroidWidgetTask =>
+      withProject(
+        { id: task.id, title: task.title, isDone: task.isDone },
+        task.projectId,
+      );
 
     for (const task of orderTodayTasksLikeTodayScreen(todayTaskIds, taskEntities, {
       laterTodayStructure,
@@ -289,6 +297,37 @@ export const selectAndroidWidgetData = createSelector(
       };
     });
 
+    const nextDays: AndroidWidgetDay[] = nextDayPlans.map((plan) => {
+      const dayTasks = plan.taskIds.flatMap((id) => {
+        const task = taskEntities[id];
+        return task ? [task] : [];
+      });
+      // The planner's rule (#8220): a config whose task is already due that day is
+      // not listed again; its lastTaskCreationDay can lag behind the task (#7923).
+      const coveredRepeatCfgIds = new Set(dayTasks.map((task) => task.repeatCfgId));
+      return {
+        dayStr: plan.dayStr,
+        validUntil: getWidgetValidUntil(plan.dayStr, startOfNextDayDiffMs),
+        tasks: [
+          ...dayTasks.map(toWidgetTask),
+          ...plan.repeatCfgs
+            .filter((cfg) => !coveredRepeatCfgIds.has(cfg.id))
+            .map((cfg) =>
+              withProject(
+                {
+                  id: getRepeatableTaskId(cfg.id, plan.dayStr),
+                  title: cfg.title as string,
+                  isDone: false,
+                  isPending: true,
+                },
+                cfg.projectId,
+              ),
+            ),
+          // The native list shows no more rows; the rest would only grow every push.
+        ].slice(0, MAX_WIDGET_PROJECT_TASKS),
+      };
+    });
+
     return {
       v: 1,
       dayStr,
@@ -297,6 +336,7 @@ export const selectAndroidWidgetData = createSelector(
       projectColors,
       currentTask: buildLocalCurrentTask(currentTaskId, taskEntities),
       projects,
+      nextDays,
     };
   },
 );

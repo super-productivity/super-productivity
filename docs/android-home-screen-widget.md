@@ -2,7 +2,7 @@
 
 > **Status:** Maintained
 >
-> **Last verified:** 2026-11-23
+> **Last verified:** 2026-11-27
 
 The widget displays up to 20 tasks from the app's last snapshot of Today,
 Inbox, or one selected active project and lets the user toggle completion.
@@ -88,11 +88,32 @@ Angular supplies `dayStr` and `validUntil`. Native code judges staleness only as
 `now >= validUntil`; it must not reproduce logical-day offsets, recurring-task
 materialization, overdue carry-over, or virtual `TODAY_TAG` membership.
 
+So that a Today widget survives a day change without the app (#11944), Angular
+also supplies `nextDays`: the Today list of each of the next seven days as far as
+the device knows it at push time, each with its own `dayStr` and `validUntil`
+(`selectAndroidWidgetNextDayPlans`). A day holds the tasks already due then
+(Today's own membership rule, in the planner's order, timed tasks after them by
+start time) and one row per recurring task due that day whose task is not among
+them (the planner's rule for its projections). Such a row carries
+`isPending` and the id the task will get; it does not exist yet, so its checkbox
+opens the app, which creates it. Once the snapshot's `validUntil` has passed,
+`WidgetData.activeDay` picks the first entry that has not ended, and header and
+rows come from it; the header says "Today". Native still only compares `now`
+with boundaries Angular wrote. Past the last entry the widget shows the
+snapshot's own list again, labelled outdated. Project and Inbox widgets do not
+depend on the day and ignore `nextDays`.
+
+The next days are a forecast of each day's first run, not a replay of it:
+recurring tasks set to wait for completion are left out, a recurring task missed
+on a day the app did not run is not carried to the next, and the order can
+differ from what the app settles on. The app's next push replaces it.
+
 The widget reflects the last state produced while the app was able to run. When
 the process is dead it cannot create a new day's recurring tasks or receive
 cross-client changes. Its 30-minute platform refresh is inexact and may be
-deferred by Doze. A pre-`validUntil` snapshot cannot be classified as stale
-until the app writes a current snapshot.
+deferred by Doze, so the move to a new day can lag its boundary by that much. A
+pre-`validUntil` snapshot cannot be classified as stale until the widget
+re-renders.
 
 ## Deliberate limitations
 
@@ -103,6 +124,10 @@ until the app writes a current snapshot.
 - Archived projects and projects hidden from the menu are not selectable.
 - Native widget chrome is English-only and uses fixed styling.
 - At most 20 tasks are rendered.
+- After more than seven days without the app running, a Today widget shows the
+  last snapshot's list labelled outdated.
+- A reminder notification's "Done" (`ReminderDoneQueue`) is not shown on the
+  widget until the app has applied it.
 - Cross-client freshness while the app is dead requires a separate background
   sync design. The reminder worker's cursor is not an authoritative app-state
   cursor; see
