@@ -1892,6 +1892,7 @@
         "CHECKLIST_ACTIONS": "Checklist actions",
         "CHECK_ALL": "Check all",
         "CLEAR_COMPLETED": "Clear completed",
+        "CONVERT_TO_SUB_TASKS": "Convert to sub-tasks",
         "NOTES_OR_CHECKLIST": "Notes / Checklist",
         "UNCHECK_ALL": "Uncheck all",
         "PASTE_IMAGE_HINT": "Ctrl+V to paste image",

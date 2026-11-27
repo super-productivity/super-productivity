@@ -1,6 +1,7 @@
 import {
   isChecklistItemLine,
   isCheckedItemLine,
+  removeAllChecklistItems,
   removeCheckedChecklistItems,
   setAllChecklistItemsChecked,
   toggleChecklistItemAtIndex,
@@ -64,6 +65,23 @@ describe('checklist-operations', () => {
     it('should keep prose lines', () => {
       const notes = 'Title\n- [x] done\n- [ ] todo';
       expect(removeCheckedChecklistItems(notes)).toBe('Title\n- [ ] todo');
+    });
+  });
+
+  describe('removeAllChecklistItems', () => {
+    it('should drop all checklist items and return empty string if only checklist items existed', () => {
+      const notes = '- [ ] a\n- [x] b\n- [ ] c\n- [X] d';
+      expect(removeAllChecklistItems(notes)).toBe('');
+    });
+
+    it('should keep prose lines and clean up excessive blank lines', () => {
+      const notes = 'Title\n\n- [x] done\n- [ ] todo\n\nFooter note';
+      expect(removeAllChecklistItems(notes)).toBe('Title\n\nFooter note');
+    });
+
+    it('should handle indented checklist items', () => {
+      const notes = 'Header\n  - [ ] indented\n    - [x] deep';
+      expect(removeAllChecklistItems(notes)).toBe('Header');
     });
   });
 

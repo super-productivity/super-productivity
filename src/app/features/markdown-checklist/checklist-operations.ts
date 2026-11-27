@@ -48,6 +48,18 @@ export const removeCheckedChecklistItems = (notes: string): string =>
     .join('\n');
 
 /**
+ * Removes all checklist items, keeping any non-item lines.
+ */
+export const removeAllChecklistItems = (notes: string): string => {
+  const remaining = notes
+    .split('\n')
+    .filter((line) => !isChecklistItemLine(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n');
+  return remaining.trim() === '' ? '' : remaining;
+};
+
+/**
  * Toggles the checked state of the Nth checklist item (0-based, in document
  * order — matching the rendered checkbox order). Non-item lines are skipped and
  * preserved. Out-of-range/invalid indices return the input unchanged. Only the
