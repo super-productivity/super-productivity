@@ -190,6 +190,7 @@
         "MISSING_TAGS": "{{nr}} missing tags",
         "MOVE_DOWN": "Move down",
         "MOVE_UP": "Move up",
+        "NO_RULES_HINT": "Without rules, this lists every task from all projects.",
         "OTHER_KEPT": "Other (kept)",
         "PLANNED_HAS_DATE": "Has a date",
         "PLANNED_NO_DATE": "No date",
@@ -232,6 +233,7 @@
       "V": {
         "ADD_NEW_BOARD": "Create view",
         "ADD_TASK_TO": "Add task to {{title}}",
+        "ALL_TASKS_TITLE": "All tasks",
         "CONFIRM_DELETE": "Are you sure you want to delete this view?",
         "CREATE_NEW_TAG_BTN": "Create Tag",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
@@ -1135,6 +1137,7 @@
       "PLAN_START_DAY": "Start of {{date}}",
       "SCHEDULE_TASK_PLACEHOLDER": "Schedule task...",
       "SHIFT_KEY_INFO": "Hold Shift to toggle day planning mode",
+      "SHOW_ALL_TASKS": "Show all tasks",
       "START": "Work Start",
       "TOGGLE_DAY_PLANNING_HINT": "Ctrl+1 to toggle day planning",
       "TOGGLE_TIME_SCHEDULING_HINT": "Ctrl+1 to toggle time scheduling",

@@ -55,6 +55,12 @@ schedule-day-overdue {
   font-weight: 500;
 }
 
+// the anchor lets the pointer through to the timeline behind it
+.empty-state-btn {
+  pointer-events: auto;
+  margin-bottom: var(--s);
+}
+
 //.drag-time-preview {
 //  position: fixed;
 //  transform: translate(-50%, -100%);

@@ -237,7 +237,15 @@ export class RightPanelContentComponent implements OnDestroy {
       if (prev) {
         // Only close panel when navigating FROM work-view TO non-work-view
         // Never close when navigating between work-views or to a work-view
-        const shouldClose = prev.isWorkView && !isCurrentWorkView;
+        // The Schedule panel stays beside a view: its tasks are dragged onto
+        // a day too. Panel contents replace each other, so it is the only one.
+        // On a phone it is a sheet over the page, so it closes as before.
+        const isScheduleBesideView =
+          !this.layoutService.isXs() &&
+          currentRoute.includes('/boards/') &&
+          !!this._layoutFeatureState()?.isShowScheduleDayPanel;
+        const shouldClose =
+          prev.isWorkView && !isCurrentWorkView && !isScheduleBesideView;
 
         // Debug logging
         if (shouldClose) {

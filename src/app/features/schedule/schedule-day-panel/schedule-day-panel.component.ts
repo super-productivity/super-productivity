@@ -36,6 +36,7 @@ import { ScheduleExternalDragService } from '../schedule-week/schedule-external-
 import { ScheduleService } from '../schedule.service';
 import { ScheduleEvent } from '../schedule.model';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { BoardsService } from '../../boards/boards.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import {
   millisecondsDiffToRemindOption,
@@ -44,7 +45,7 @@ import {
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { MatBottomSheetRef } from '@angular/material/bottom-sheet';
-import { MatIconButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import {
@@ -85,6 +86,7 @@ interface DropTimeCalculation {
     ScheduleDayOverdueComponent,
     TranslatePipe,
     MatIconButton,
+    MatButton,
     MatIcon,
     MatTooltip,
     SwipePagerComponent,
@@ -128,6 +130,7 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   private _ngZone = inject(NgZone);
   private _scheduleService = inject(ScheduleService);
   private _globalConfigService = inject(GlobalConfigService);
+  readonly boardsService = inject(BoardsService);
   // Only the mobile bottom sheet pages by swiping: in the right panel a right
   // swipe already closes the panel (see RightPanelComponent).
   readonly isInBottomSheet = !!inject(MatBottomSheetRef, { optional: true });
