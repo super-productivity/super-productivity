@@ -1,5 +1,6 @@
 import { expect, test } from '../../fixtures/test.fixture';
 import { openRecurDialog, saveRecurDialog } from '../../utils/recurring-task-helpers';
+import { startTaskDrag, dropTaskDrag } from '../../utils/task-multi-drag';
 import type { Locator, Page } from '@playwright/test';
 import type { WorkViewPage } from '../../pages/work-view.page';
 
@@ -167,6 +168,47 @@ test.describe('Recurring task inherited subtasks (#9728)', () => {
     await expect(day16).toBeVisible({ timeout: 60000 });
     return day16;
   };
+
+  test('inherits a subtask dragged from another parent on the next copy', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    const routine = testPrefix + '-Routine';
+    const source = testPrefix + '-Source';
+    const moved = testPrefix + '-Moved';
+    const existing = testPrefix + '-Existing';
+    await page.clock.setSystemTime(new Date('2026-06-15T23:55:00'));
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask(source);
+    await addSubtask(page, source, moved);
+    await workViewPage.addTask(routine);
+    await addSubtask(page, routine, existing);
+    await openTaskDetail(page, routine);
+    await openRecurDialog(page);
+    await saveRecurDialog(page);
+    await page.keyboard.press('Escape');
+
+    const children = (name: string): Locator =>
+      workViewPage.taskList
+        .locator('task')
+        .filter({ hasText: name })
+        .first()
+        .locator('.sub-tasks task');
+    await startTaskDrag(
+      page,
+      children(source).filter({ hasText: moved }).locator('done-toggle'),
+    );
+    await dropTaskDrag(page, children(routine).filter({ hasText: existing }));
+    await expect(children(routine).filter({ hasText: moved })).toBeVisible();
+
+    const next = await completeAndGetNextDayInstance(page, routine);
+    await expect(next.locator('.sub-tasks task').filter({ hasText: moved })).toHaveCount(
+      1,
+    );
+    await expect(next.locator('.sub-tasks task')).toHaveCount(2);
+  });
 
   test('does not recreate a subtask deleted from the newest instance', async ({
     page,

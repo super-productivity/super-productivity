@@ -23,7 +23,7 @@ import {
   TASK_REPEAT_WEEKDAY_MAP,
   TaskRepeatCfgCopy,
 } from '../task-repeat-cfg.model';
-import { addSubTask } from '../../tasks/store/task.actions';
+import { addSubTask, moveSubTask } from '../../tasks/store/task.actions';
 import { TestScheduler } from 'rxjs/testing';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -1314,6 +1314,110 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
   });
 
   describe('autoSyncSubtaskTemplatesFromNewest$', () => {
+    const movedTemplate = { title: 'SubTask 2', notes: 'Notes 2', timeEstimate: 7200000 };
+
+    const mockNewestCopy = (
+      parent: Task,
+      children: Task[],
+      previousTemplates: TaskRepeatCfgCopy['subTaskTemplates'],
+    ): void => {
+      const cfg = {
+        ...mockRepeatCfg,
+        id: parent.repeatCfgId!,
+        subTaskTemplates: previousTemplates,
+      };
+      taskService.getByIdOnce$.withArgs(parent.id).and.returnValue(of(parent));
+      taskService.getTasksByRepeatCfgId$.withArgs(cfg.id).and.returnValue(of([parent]));
+      taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$
+        .withArgs(cfg.id)
+        .and.returnValue(of(cfg));
+      taskService.getByIdsLive$.withArgs(parent.subTaskIds).and.returnValue(of(children));
+    };
+
+    const expectSeriesUpdates = (
+      expected: { id: string; templates: (typeof movedTemplate)[] }[],
+    ): void => {
+      const updates: ReturnType<typeof updateTaskRepeatCfg>[] = [];
+      effects.autoSyncSubtaskTemplatesFromNewest$.subscribe((update) =>
+        updates.push(update),
+      );
+      expect(updates).toEqual(
+        expected.map(({ id, templates }) =>
+          updateTaskRepeatCfg({
+            taskRepeatCfg: { id, changes: { subTaskTemplates: templates } },
+            isAskToUpdateAllTaskInstances: false,
+          }),
+        ),
+      );
+    };
+
+    it('updates both series when moving a subtask between their newest copies', () => {
+      const source = {
+        ...mockTask,
+        id: 'source',
+        repeatCfgId: 'source-cfg',
+        subTaskIds: [],
+      };
+      const target = { ...mockTask, subTaskIds: [mockSubTask2.id] };
+      actions$ = of(
+        moveSubTask({
+          taskId: mockSubTask2.id,
+          srcTaskId: source.id,
+          targetTaskId: target.id,
+          afterTaskId: null,
+        }),
+      );
+      mockNewestCopy(source, [], [movedTemplate]);
+      mockNewestCopy(target, [mockSubTask2], []);
+
+      expectSeriesUpdates([
+        { id: source.repeatCfgId, templates: [] },
+        { id: mockRepeatCfg.id, templates: [movedTemplate] },
+      ]);
+    });
+
+    it('includes a main task dropped into the newest copy', () => {
+      const target = { ...mockTask, subTaskIds: [mockSubTask2.id] };
+      actions$ = of(
+        TaskSharedActions.convertToSubTask({
+          taskId: mockSubTask2.id,
+          targetParentId: target.id,
+          afterTaskId: null,
+        }),
+      );
+      mockNewestCopy(target, [mockSubTask2], []);
+
+      expectSeriesUpdates([{ id: mockRepeatCfg.id, templates: [movedTemplate] }]);
+    });
+
+    it('drops a linked subtask removed by the issue provider while its parent survives', () => {
+      const parent = { ...mockTask, subTaskIds: [] };
+      const child: Task = {
+        ...mockSubTask2,
+        issueId: '42',
+        issueType: 'GITHUB',
+        issueProviderId: 'github',
+      };
+      actions$ = of(
+        TaskSharedActions.deleteTasks({ taskIds: [child.id], tasks: [child] }),
+      );
+      mockNewestCopy(parent, [], [movedTemplate]);
+
+      expectSeriesUpdates([{ id: mockRepeatCfg.id, templates: [] }]);
+    });
+
+    it('skips a recurring parent deleted together with its subtasks', () => {
+      actions$ = of(
+        TaskSharedActions.deleteTasks({
+          taskIds: [mockTask.id],
+          tasks: [mockTask, mockSubTask1, mockSubTask2],
+        }),
+      );
+
+      expectSeriesUpdates([]);
+      expect(taskService.getByIdOnce$).not.toHaveBeenCalled();
+    });
+
     it('should sync templates when subtask is added to repeatable task', () => {
       testScheduler.run(({ hot, expectObservable }) => {
         const action = addSubTask({
