@@ -1,6 +1,9 @@
 blank_issues_enabled: false
 
 contact_links:
+  - name: Read the docs
+    url: https://super-productivity.com/docs/
+    about: Guides and reference for setup, sync, integrations and shortcuts. Most how-to questions are answered here.
   - name: Ask a question
     url: https://github.com/super-productivity/super-productivity/discussions/categories/q-a
     about: Please ask and answer questions here.
