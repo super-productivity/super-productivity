@@ -3,9 +3,11 @@
  * super-productivity/super-productivity, with the docs pages a human judged correct.
  *
  * - `ok`: pages that would be a correct link (path under /docs/). Anything else is a wrong link.
- * - `expect`: 'hit' = a page clearly answers it (counts toward the recall floor);
+ * - `expect`: 'hit' = a page clearly answers it;
  *   'silent' = no page answers it, nothing may be posted;
  *   'either' = a correct link or silence are both fine.
+ *
+ * The shortlist recall floor in docs-suggest.test.js counts every fixture with a non-empty `ok`.
  *
  * Judged by reading the docs, not by running the matcher. Do not edit `ok`/`expect` to make
  * the matcher pass.
@@ -282,7 +284,8 @@ const FIXTURES = [
     title:
       'Two-way sync: are edits that arrive via sync from another device meant to be pushed to the provider?',
     body: "I'm using SP 20.1.0 on macOS and iOS, synced via WebDAV. I built a Todoist issue provider plugin myself, which implements updateIssue",
-    ok: ['how-to/develop-a-plugin', 'reference/api'],
+    // the plugin guide is a contributing page, which suggestions never link
+    ok: ['reference/api'],
     expect: 'either',
   },
   {

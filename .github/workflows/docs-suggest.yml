@@ -27,7 +27,8 @@ jobs:
       github.event.discussion.category.slug == 'q-a' &&
       !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.discussion.author_association)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # room for the CLI install plus the 3-minute model step, as in issue-triage.yml
+    timeout-minutes: 10
     permissions:
       contents: read
       discussions: write
