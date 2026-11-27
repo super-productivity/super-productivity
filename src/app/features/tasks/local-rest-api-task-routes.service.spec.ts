@@ -2121,6 +2121,38 @@ describe('LocalRestApiTaskRoutesService', () => {
         expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', { priority: null });
       });
 
+      it('should drop an echoed priority at the same level', async () => {
+        const mockTask = createMockTask('task-1', { priority: 'high' });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { title: 'Renamed', priority: 'high' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+          title: 'Renamed',
+        });
+      });
+
+      it('should not dispatch when the only change is an echoed priority', async () => {
+        const mockTask = createMockTask('task-1', { priority: 3 });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', { body: { priority: 'high' } }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
       it('should reject an invalid priority without dispatching', async () => {
         const mockTask = createMockTask('task-1');
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {

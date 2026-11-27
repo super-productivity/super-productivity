@@ -839,6 +839,12 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
         if (writableFields.isDone === true && task.isDone) {
           delete writableFields.isDone;
         }
+        if (
+          hasOwn(writableFields, 'priority') &&
+          writableFields.priority === getTaskPriority(task.priority)
+        ) {
+          delete writableFields.priority;
+        }
 
         const deadlineFields = Object.fromEntries(
           DEADLINE_FIELDS.filter((field) => hasOwn(writableFields, field)).map(
