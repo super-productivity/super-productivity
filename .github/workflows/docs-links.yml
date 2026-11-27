@@ -31,6 +31,8 @@ jobs:
       - name: Check documentation links
         run: |
           node --test tools/check-doc-links.test.js
+          # Its fixtures pin real docs pages, and docs-only PRs skip lint (ci.yml).
+          node --test tools/docs-suggest.test.js
           # The voice corpus is verbatim exemplar text with site-relative
           # links; it is reference material, not repository documentation.
           git ls-files -z -- '*.md' '*.markdown' \

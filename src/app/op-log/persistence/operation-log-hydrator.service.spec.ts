@@ -2543,6 +2543,36 @@ describe('OperationLogHydratorService', () => {
       expect(reloadSpy).not.toHaveBeenCalled();
     });
 
+    // #11994: iOS Lockdown Mode removes the `indexedDB` global. Guards the
+    // hydrator's availability probe, which the builder spec injects by hand.
+    it('should explain Lockdown Mode when the indexedDB global is missing', async () => {
+      // Test setup may install `indexedDB` as a data property, so spyOnProperty
+      // ('get') is not usable; swap the descriptor and restore it.
+      const original = Object.getOwnPropertyDescriptor(window, 'indexedDB');
+      Object.defineProperty(window, 'indexedDB', {
+        value: undefined,
+        configurable: true,
+      });
+      mockRecoveryService.recoverPendingRemoteOps.and.rejectWith(
+        new IndexedDBOpenError(new ReferenceError("Can't find variable: indexedDB")),
+      );
+
+      try {
+        await expectAsync(service.hydrateStore()).toBeRejected();
+      } finally {
+        if (original) {
+          Object.defineProperty(window, 'indexedDB', original);
+        } else {
+          // Not an own property before: drop ours so the inherited one shows again.
+          Reflect.deleteProperty(window, 'indexedDB');
+        }
+      }
+
+      const msg = (window.alert as jasmine.Spy).calls.mostRecent().args[0] as string;
+      expect(msg).toContain('Lockdown Mode');
+      expect(msg).not.toContain('may need to be cleared');
+    });
+
     // #9187: DB_VERSION 8-10 and later schema upgrades form downgrade barriers, so a
     // VersionError means an old build is looking at an intact database. The
     // generic dialog's "your browser storage may need to be cleared" would

@@ -104,16 +104,39 @@ const LINKS_ONLY = [
 ].join('\n');
 
 /** Writes the stub wiki into `outDir`; returns `{ file: url }` for each page. */
-const buildStubs = (wikiDir, outDir) => {
+const buildStubs = (wikiPath, outputPath) => {
+  const wikiDir = fs.realpathSync(path.resolve(wikiPath));
+  const outDir = path.resolve(outputPath);
+  const pages = fs.readdirSync(wikiDir).filter((entry) => /\.md$/i.test(entry));
   const sidebarPath = path.join(wikiDir, '_Sidebar.md');
   const contributing = fs.existsSync(sidebarPath)
     ? contributingPages(fs.readFileSync(sidebarPath, 'utf8'))
     : new Set();
+  // outDir is wiped first: it must not be, contain or sit inside the wiki.
+  // Check ancestors too: deleting one can remove the symlink through which
+  // the other directory is reached. New output directories have no realpath yet.
+  const passesThrough = (entry, tree) => {
+    for (let dir = entry; ; dir = path.dirname(dir)) {
+      if (fs.existsSync(dir)) {
+        const rel = path.relative(tree, fs.realpathSync(dir));
+        if (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel))
+          return true;
+      }
+      if (dir === path.dirname(dir)) return false;
+    }
+  };
+  if (
+    passesThrough(outDir, wikiDir) ||
+    (fs.existsSync(outDir) &&
+      passesThrough(path.resolve(wikiPath), fs.realpathSync(outDir)))
+  ) {
+    throw new Error(`output dir ${outDir} must not overlap the wiki dir ${wikiDir}`);
+  }
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
 
   const urls = {};
-  for (const file of fs.readdirSync(wikiDir).filter((entry) => /\.md$/i.test(entry))) {
+  for (const file of pages) {
     const name = file.replace(/\.md$/i, '');
     const out = path.join(outDir, file);
     if (name === '_Sidebar' || name === '_Footer') {
@@ -155,7 +178,7 @@ if (require.main === module) {
     console.error('usage: node tools/wiki-stubs.js <docs/wiki dir> <output dir>');
     process.exit(1);
   }
-  const urls = buildStubs(path.resolve(wikiDir), path.resolve(outDir));
+  const urls = buildStubs(wikiDir, outDir);
   for (const [file, url] of Object.entries(urls)) {
     console.log(`${file} -> ${url ?? '(source on GitHub)'}`);
   }

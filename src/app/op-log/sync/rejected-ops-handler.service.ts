@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { Operation, OpType, RepairSummary, VectorClock } from '../core/operation.types';
 import { OpLog } from '../../core/log';
@@ -71,6 +71,7 @@ type ConcurrentResolutionResult =
 })
 export class RejectedOpsHandlerService {
   private opLogStore = inject(OperationLogStoreService);
+  private injector = inject(Injector);
   private snackService = inject(SnackService);
   private supersededOperationResolver = inject(SupersededOperationResolverService);
   private repairOperationService = inject(RepairOperationService);
@@ -145,7 +146,7 @@ export class RejectedOpsHandlerService {
         OpLog.error(
           `RejectedOpsHandlerService: Storage quota exceeded - sync is broken!`,
         );
-        handleStorageQuotaError(rejected.errorCode);
+        handleStorageQuotaError(rejected.errorCode, this.injector);
         // Don't mark as rejected - user needs to take action to fix storage
         continue;
       }

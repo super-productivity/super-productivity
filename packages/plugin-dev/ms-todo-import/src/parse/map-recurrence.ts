@@ -11,6 +11,7 @@ export interface RawRecurrence {
     dayOfMonth?: number;
     month?: number;
     index?: string;
+    firstDayOfWeek?: string;
   };
   range?: {
     type?: string;
@@ -44,8 +45,34 @@ const isWeekday = (day: string): day is (typeof WEEKDAY_KEYS)[number] =>
 const sameSet = (a: string[], b: string[]): boolean =>
   a.length === b.length && b.every((d) => a.includes(d));
 
-const mapWeekly = (days: string[], every: number, start: Date): Schedule | null => {
+/**
+ * To Do counts "every N weeks" in weeks that begin on `firstDayOfWeek`; Super
+ * Productivity counts 7-day blocks from the start date. They agree only when
+ * no repeat day falls before the start's weekday within To Do's week.
+ */
+const keepsWeekBoundaries = (days: string[], start: Date, firstDay: string): boolean => {
+  const first = WEEKDAY_KEYS.indexOf(isWeekday(firstDay) ? firstDay : 'sunday');
+  const offset = (day: number): number => (day - first + 7) % 7;
+  const startOffset = offset(start.getUTCDay());
+  return days.every(
+    (d) =>
+      offset(WEEKDAY_KEYS.indexOf(d as (typeof WEEKDAY_KEYS)[number])) >= startOffset,
+  );
+};
+
+const mapWeekly = (
+  pattern: NonNullable<RawRecurrence['pattern']>,
+  every: number,
+  start: Date,
+): Schedule | null => {
+  const days = pattern.daysOfWeek ?? [];
   if (!days.length || !days.every(isWeekday)) {
+    return null;
+  }
+  if (
+    every > 1 &&
+    !keepsWeekBoundaries(days, start, pattern.firstDayOfWeek ?? 'sunday')
+  ) {
     return null;
   }
   if (every === 1 && sameSet(days, WORK_WEEK)) {
@@ -125,7 +152,7 @@ export const mapRecurrence = (raw: RawRecurrence, startDay: string): Schedule | 
         ? { quickSetting: 'DAILY' }
         : { quickSetting: 'CUSTOM', repeatCycle: 'DAILY', repeatEvery: every };
   } else if (pattern.type === 'weekly') {
-    schedule = mapWeekly(pattern.daysOfWeek ?? [], every, start);
+    schedule = mapWeekly(pattern, every, start);
   } else {
     schedule = mapAnchored(pattern.type, pattern, every, start);
   }

@@ -93,6 +93,11 @@ test.describe('Recurring task: turn one future occurrence into a normal task (#1
     await expect(detachedProjection).toHaveCount(1, { timeout: 15000 });
     await expect(followingProjection).toHaveCount(1, { timeout: 15000 });
     await expect(detachedTask).toHaveCount(0);
+    // A preview can't be dragged; its hover text points to the way out.
+    await expect(detachedProjection.locator('> div')).toHaveAttribute(
+      'title',
+      /can't be moved.*Separate task/,
+    );
 
     // 1. Detach: one click, no confirmation.
     await detachedProjection.click();

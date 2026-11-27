@@ -310,7 +310,17 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
 6. **Opaque ops:** stay on whole-entity LWW, with the narrow time-preserving
    exception below. Narrowed by #11184: when an opaque op wins remotely
    (also one planning several tasks), the losing device re-emits the local fields that survived it
-   (see "A later round").
+   (see "A later round"). Narrowed by #11883 (2026-11-27): a single-task
+   `planTasksForToday` and `updateTask` edits of fields it never writes
+   (anything but `dueDay`, `remindAt`, `dueWithTime`) commute: conflict
+   detection applies both as they are, in either order
+   (`isPlanForTodayBesideDisjointUpdates`). Not yet on the tracking device,
+   whose pending side holds the auto-plan beside its time delta: SuperSync's
+   delta rebase cannot re-send that past this pair. Other devices check the
+   tracker's remote ops one at a time, so its auto-plan commutes there. On SuperSync
+   the server still rejects the later upload once; its re-send follows. Before, a done that synced first
+   was undone by the auto-plan's winning snapshot, or the losing auto-plan
+   stayed on its own device.
 7. **Time on a remote win:** ~~local-win direction only, for now.~~ Replaced
    on 2026-10-01 ([#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5936659621)):
    a pending time delta survives a remote win whose winner writes no time
@@ -480,8 +490,9 @@ holds the rules; `ConflictLocalWinOpsService._tryCreateFieldPatch` builds the op
   patch rows (a re-send whose upload failed or was killed) are read by key,
   like its edits; a replace row, a reminder clear or a remote delete keep the
   whole-entity path.
-- **Content banner:** a patch reports a content field only where both sides
-  wrote it (`findPatchContentConflicts`).
+- **Content banner:** identical final writes to a task's title, notes, or
+  ordered subtask IDs do not trigger a warning. A patch only reports
+  differences in fields both sides wrote (`findPatchContentConflicts`).
 
 **Residuals:**
 

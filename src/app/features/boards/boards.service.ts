@@ -1,5 +1,7 @@
-import { inject, Injectable, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { computed, inject, Injectable, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router } from '@angular/router';
+import { filter, map } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService } from '@ngx-translate/core';
@@ -9,6 +11,7 @@ import { BoardsActions } from './store/boards.actions';
 import { BoardCfg } from './boards.model';
 import { DEFAULT_BOARD_CFG } from './boards.const';
 import { getLayoutChanges, translateViewTitle, ViewLayout } from './boards.util';
+import { createAllTasksList, isAllTasksList } from './all-tasks-view.util';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { T } from '../../t.const';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -29,6 +32,21 @@ export class BoardsService {
   private _snackService = inject(SnackService);
 
   readonly boards = this._store.selectSignal(selectAllBoards);
+
+  private readonly _url = toSignal(
+    this._router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+    ),
+    { initialValue: this._router.url },
+  );
+  /** Whether the page shown is a list of every open task. */
+  readonly isAllTasksListOpen = computed(() => {
+    const path = this._url().split(/[?#]/, 1)[0];
+    return this.boards().some(
+      (board) => path === `/boards/${board.id}` && isAllTasksList(board),
+    );
+  });
 
   /**
    * A view just created here (Create, Save as view, Duplicate) that the view
@@ -62,13 +80,7 @@ export class BoardsService {
         if (boardId) {
           // "Save as view" is offered while Views are off: saving one turns
           // them on, so the new view has its place in the menu.
-          if (!this._globalConfigService.appFeatures()?.isBoardsEnabled) {
-            this._globalConfigService.updateSection(
-              'appFeatures',
-              { isBoardsEnabled: true } as Partial<AppFeaturesConfig>,
-              true,
-            );
-          }
+          this._enableViews();
           this._openCreated(boardId);
         }
       });
@@ -121,6 +133,36 @@ export class BoardsService {
       }),
     );
     this._openCreated(id);
+  }
+
+  /**
+   * Opens the list of every open task, adding it the first time. Added on the
+   * user's click like a view saved in the editor, so it syncs as one; a
+   * built-in default would exist only on the devices that ship it.
+   */
+  openAllTasksList(): void {
+    // the views page is behind the feature switch
+    this._enableViews();
+    const existing = this.boards().find(isAllTasksList);
+    if (existing) {
+      this._router.navigate(['/boards', existing.id]);
+      return;
+    }
+    const board = createAllTasksList(
+      this._translateService.instant(T.F.BOARDS.V.ALL_TASKS_TITLE),
+    );
+    this._store.dispatch(BoardsActions.addBoard({ board }));
+    this._openCreated(board.id);
+  }
+
+  private _enableViews(): void {
+    if (!this._globalConfigService.appFeatures()?.isBoardsEnabled) {
+      this._globalConfigService.updateSection(
+        'appFeatures',
+        { isBoardsEnabled: true } as Partial<AppFeaturesConfig>,
+        true,
+      );
+    }
   }
 
   /**

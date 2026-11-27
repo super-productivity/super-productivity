@@ -45,12 +45,14 @@ internal data class RepeatSlotPlan(
 /**
  * Diffs derived repeat alarms against the ones this worker armed last time.
  * A null [previous] cancels nothing: alarms the app set for occurrences this
- * worker has never judged are not its to remove.
+ * worker has never judged are not its to remove. [armedTitles] are the titles
+ * the pending alarms will show; a renamed config re-arms them in place.
  */
 internal fun planRepeatReminderSlots(
     previous: Map<String, Long>?,
     derived: List<ReminderToSchedule>,
     now: Long,
+    armedTitles: Map<String, String>,
 ): RepeatSlotPlan {
     val slots = LinkedHashMap<String, Long>(derived.size)
     for (reminder in derived) slots[reminder.taskId] = reminder.remindAt
@@ -62,7 +64,10 @@ internal fun planRepeatReminderSlots(
     val toCancel = previous.filter { (id, at) ->
         slots[id] != at && (at > now || id in slots)
     }.keys
-    val toSchedule = derived.filter { it.remindAt > now && previous[it.taskId] != it.remindAt }
+    val toSchedule = derived.filter {
+        it.remindAt > now &&
+            (previous[it.taskId] != it.remindAt || armedTitles[it.taskId].let { t -> t != null && t != it.title })
+    }
     return RepeatSlotPlan(toCancel, toSchedule, slots)
 }
 
@@ -81,7 +86,8 @@ internal fun upcomingRepeatReminders(
     }
     val rows = mutableListOf<RankedReminder>()
     val countByCfgId = HashMap<String, Int>()
-    val baseDay = JsDate(now, zone)
+    // Logical day, not calendar day: see getUpcomingRepeatReminders.
+    val baseDay = JsDate(now - startOfNextDayDiffMs, zone)
     baseDay.setHours(12, 0, 0, 0)
 
     for (dayOffset in 0..lookaheadDays) {

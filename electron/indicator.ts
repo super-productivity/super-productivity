@@ -101,12 +101,16 @@ export const initIndicator = ({
   // On macOS we always load the black (`-l`) icons and mark them as template
   // images in getTrayImage(); the system auto-inverts them for the current
   // menu bar appearance, so the static dark/light choice doesn't apply.
+  // On Windows the taskbar follows the "Windows mode", which can differ from the
+  // "app mode" behind shouldUseDarkColors (Custom mode, accent-colored taskbar).
   shouldUseDarkColors =
     !IS_MAC &&
     (forceDarkTray ||
       IS_LINUX ||
       (IS_WINDOWS && !isWindows11()) ||
-      nativeTheme.shouldUseDarkColors);
+      (IS_WINDOWS
+        ? nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
+        : nativeTheme.shouldUseDarkColors));
 
   _showApp = showApp;
   _quitApp = quitApp;

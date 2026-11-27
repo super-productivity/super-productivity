@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Sinkronizacija nije moguća jer si offline",
-        "SYNC_ERROR": "Dropbox: Greška tijekom sinkronizacije",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sinkronizacija treba sigurnu vezu (HTTPS). Provjeri da koristiš aplikaciju preko HTTPS-a ili probaj stabilnu verziju."
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Alternativni host za Jira poveznice (npr. javni URL kada se API host razlikuje; prefiks putanje je dopušten)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Napredne postavke",
-        "HELP_ARR": {
-          "H1": "Osnovna konfiguracija",
-          "H2": "Postavke dnevnika rada",
-          "H3": "Zadani prijelazi",
-          "P1_1": "Unesi korisničko ime za prijavu (može se pronaći na stranici tvog profila) i <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> ili lozinku ako iz nekog razloga ne možeš generirati token. Imaj na umu da novije verzije Jire ponekad rade samo s tokenom.",
-          "P1_2": "Također moraš definirati JQL upit koji se koristi za prijedloge dodavanja zadataka iz Jire. Ako trebaš pomoć, klikni ovaj poveznicu <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Također možeš konfigurirati je li želiš automatski (npr. svaki put kada otvoriš prikaz planiranja) uvesti sve nove zadatke koji su definirani prilagođenim JQL upitom.",
-          "P1_4": "Druga opcija je \"Provjeri je li trenutačni zadatak dodijeljen trenutačnom korisniku\". Ako je isključeno i započneš s radom, provjerit će se jesi li dodijeljen/a tom zadatku u Jiri. Ako nisi, pojavit će se dijalog u kojem možeš odabrati da sebi dodijeliš zadatak.",
-          "P2_1": "Postoji nekoliko opcija za određivanje kada i kako želi poslati dnevnik rada. Uključivanjem opcije <em>'Otvori dijalog za dodavanje dnevnika rada u Jiru kada je zadatak završen'</em> otvara se dijalog za dodavanje dnevnika rada svaki put kada označiš Jira zadatak kao završen. Imaj na umu da će se dnevnici rada dodavati na već evidentirano vrijeme. Ako zadatak označiš završenim drugi put, možda ne želi ponovo slati ukupno radno vrijeme za taj zadatak.",
-          "P2_2": "<em>'Otvori dijalog za dnevnik rada kada je podzadatak završen, ali ne i za zadatke koji imaju podzadatke'</em> otvara dijalog svaki put kada označiš podzadatak Jira zadatka kao završen. Budući da već pratiš vrijeme putem podzadataka, dijalog se neće otvoriti kada označiš glavni zadatak kao završen.",
-          "P2_3": "<em>'Automatski šalji aktualiziranja dnevnika rada bez dijaloga'</em> radi upravo to. Budući da višestruko označavanje zadatka kao završenog može dovesti do dvostrukog bilježenja vremena, ova se opcija ne preporučuje.",
-          "P3_1": "Ovdje možeš ponovo konfigurirati zadane prijelaze. Jira omogućuje široku konfiguraciju prijelaza koji se obično prikazuju kao različiti stupci na tvojoj agilnoj Jira ploči. Ne možemo pretpostaviti kada i gdje želiš promijeniti status zadataka, stoga to moraš postaviti ručno."
-        }
+        "ADV_CFG": "Napredne postavke"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Dodijeljeno",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Prilagodi ovu vrijednost kako bi zamutio pozadinsku sliku. Zadana je vrijednost 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Podesi ovu vrijednost kako bi pozadina bila više ili manje prozirna. Zadano je 20 %.",
-        "HELP": "Postavke teme za tvoj projekt.",
         "L_BACKGROUND_IMAGE_BLUR": "Zamuti pozadinsku sliku",
         "L_BACKGROUND_IMAGE_DARK": "URL pozadinske slike (tamna tema)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL pozadinske slike (svijetla tema)",
@@ -1764,7 +1749,6 @@
         "RESTORE_SUCCESS": "Podaci su uspješno obnovljeni",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Migracija podataka na server nije uspjela – validacija lokalnih podataka nije prošla. Pokušaj uvesti sigurnosnu kopiju.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Ova je mapa za sinkronizaciju nadograđena na format podijeljenih datoteka. Za nastavak uključi Surgical sync u postavkama sinkronizacije.",
-        "STORAGE_QUOTA_EXCEEDED": "Memorija na sinkronizacijskom serveru je puna. Tvoje promjene se NE sinkroniziraju! Arhiviraj stare zadatke ili nadogradi tarifu.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Količina memorije je bila pri kraju. Stari podaci su uspješno očišćeni.",
         "SUCCESS_DOWNLOAD": "Podaci su sinkronizirani s udaljenog izvora",
         "SUCCESS_VIA_BUTTON": "Podaci su uspješno sinkronizirani",

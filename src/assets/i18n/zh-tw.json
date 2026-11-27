@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox：已離線，無法同步",
-        "SYNC_ERROR": "Dropbox：同步時發生錯誤",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox 同步需要安全連線（HTTPS）。請確保您透過 HTTPS 使用應用程式，或嘗試使用穩定版本。"
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Jira 連結的替代主機（例如 API 主機與公用 URL 不同時使用；可包含路徑前綴）"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "進階設定",
-        "HELP_ARR": {
-          "H1": "基本設定",
-          "H2": "工作記錄設定",
-          "H3": "預設轉換",
-          "P1_1": "請提供登入名稱（可在您的個人資料頁面找到）和 <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API 權杖</a>，或者如果您因某些原因無法產生權杖，可以使用密碼。請注意，較新版本的 Jira 有時只能使用權杖。",
-          "P1_2": "您還需要指定一個 JQL 查詢，用於從 Jira 新增工作的建議。如果需要協助，請查看此連結 <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>。",
-          "P1_3": "您也可以設定是否要自動（例如每次造訪規劃檢視時）匯入由自訂 JQL 查詢指定的所有新議題。",
-          "P1_4": "另一個選項是「檢查目前工作是否指派給目前使用者」。如果啟用此選項且您正在開始工作，系統會檢查該工作在 Jira 上是否指派給您，如果沒有，會出現一個對話方塊，您可以選擇將工作指派給自己。",
-          "P2_1": "有多個選項可決定何時以及如何提交工作記錄。啟用 <em>「工作完成時開啟對話方塊以向 Jira 新增工作記錄」</em> 會在您每次將 Jira 工作標記為完成時開啟一個對話方塊來新增工作記錄。因此請記住，工作記錄會加到目前為止已追蹤的所有內容上。所以如果您第二次將工作標記為完成，您可能不想再次提交工作的完整工作時間。",
-          "P2_2": "<em>「子工作完成時開啟工作記錄對話方塊，而非工作本身」</em> 會在您每次將 Jira 議題的子工作標記為完成時開啟工作記錄對話方塊。因為您已經透過子工作追蹤時間，所以當您將 Jira 工作本身標記為完成時，不會開啟對話方塊。",
-          "P2_3": "<em>「自動傳送工作記錄更新而不顯示對話方塊」</em> 會如其字面意思運作。因為多次將工作標記為完成會導致整個工作時間被追蹤兩次，所以不建議使用此選項。",
-          "P3_1": "在此您可以重新設定預設轉換。Jira 提供廣泛的轉換設定，通常在您的 Jira 敏捷看板上以不同欄位的形式出現，我們無法假設在何處以及何時轉換您的工作，您需要手動設定。"
-        }
+        "ADV_CFG": "進階設定"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "指派人",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "調整此值可模糊背景圖片。預設值為 0px。",
         "D_BACKGROUND_OVERLAY_OPACITY": "調整此值使背景更加透明或不透明。預設為 20%。",
-        "HELP": "專案主題設定。",
         "L_BACKGROUND_IMAGE_BLUR": "模糊背景圖片",
         "L_BACKGROUND_IMAGE_DARK": "背景圖片網址（深色主題）",
         "L_BACKGROUND_IMAGE_LIGHT": "背景圖片網址（淺色主題）",
@@ -1764,7 +1749,6 @@
         "RESTORE_SUCCESS": "資料還原成功",
         "SERVER_MIGRATION_VALIDATION_FAILED": "無法將資料遷移到伺服器——本地資料驗證失敗。請嘗試匯入備份。",
         "SPLIT_FORMAT_ENABLE_SETTING": "此同步資料夾已升級為分割檔案格式。請在同步設定中啟用 Surgical sync 以繼續。",
-        "STORAGE_QUOTA_EXCEEDED": "同步伺服器儲存空間已滿。您的變更未在同步！請封存舊任務或升級您的方案。",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "儲存空間即將不足。舊資料已成功清理。",
         "SUCCESS_DOWNLOAD": "已從遠端同步資料",
         "SUCCESS_VIA_BUTTON": "資料同步成功",
@@ -2317,6 +2301,8 @@
         "C_YEAR": "年",
         "C_YEARS": "年",
         "DEFAULT_ESTIMATE": "預設預估用時",
+        "DEADLINE_OFFSET_DAYS": "截止日（每次重複後的天數）",
+        "DEADLINE_OFFSET_DAYS_DESCRIPTION": "留空表示無截止日。0 = 當天到期。",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "停用自動更新子工作",
         "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "當最新實例變更時不自動更新繼承的子工作",
         "FALL_BEHIND": "如果進度落後",
@@ -2605,6 +2591,7 @@
     "EXPORT_DATA": "匯出資料",
     "IMPORT_FROM_FILE": "從檔案匯入",
     "IMPORT_FROM_TICKTICK": "從 TickTick 匯入",
+    "IMPORT_FROM_MS_TODO": "從 Microsoft To Do 匯入",
     "IMPORT_FROM_TODOIST": "從 Todoist 匯入",
     "IMPORT_FROM_URL": "從網址匯入",
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "請輸入要匯入的 Super Productivity 備份 JSON 檔案的完整網址。",
@@ -2619,6 +2606,7 @@
     "S_ERR_INVALID_URL": "匯入失敗：提供的網址無效",
     "S_ERR_NETWORK": "匯入失敗：從網址取得資料時發生網路錯誤",
     "S_ERR_TICKTICK_IMPORT_OPEN": "無法開啟 TickTick 匯入工具",
+    "S_ERR_MS_TODO_IMPORT_OPEN": "無法開啟 Microsoft To Do 匯入工具",
     "S_ERR_TODOIST_IMPORT_OPEN": "無法開啟 Todoist 匯入工具",
     "S_IMPORT_FROM_URL_ERR_DECODE": "錯誤：無法解碼匯入的網址參數。請確認格式正確。",
     "URL_PLACEHOLDER": "輸入要匯入的網址"
@@ -2807,6 +2795,7 @@
     },
     "FOCUS_MODE_LOCAL": {
       "HELP": "這些設定僅適用於此裝置，不會同步。",
+      "L_IS_FOCUS_WINDOW_ON_SESSION_END": "專注時段或休息結束時，將應用程式視窗移到最前面",
       "L_IS_LOOP_BREAK_END_ALARM": "循環播放休息結束提示音，直到我關閉休息（僅限此裝置）",
       "L_IS_NOTIFY_ON_SESSION_END": "番茄鐘時段或休息結束時顯示瀏覽器通知",
       "S_NOTIFICATION_PERMISSION_DENIED": "此網站不允許顯示通知。請在瀏覽器中允許通知以使用此選項。",
@@ -2971,6 +2960,7 @@
       "IS_DARK_MODE": "深色模式",
       "IS_DISABLE_ANIMATIONS": "停用所有動畫",
       "IS_DISABLE_CELEBRATION": "在每日總結中停用慶祝",
+      "IS_HIDE_NAV_TASK_COUNT": "隱藏側邊欄的任務數量徽章",
       "IS_LOCAL_REST_API_ENABLED": "啟用本機 REST API（僅桌面版）",
       "IS_LOCAL_REST_API_ENABLED_HINT": "允許本機指令碼透過 http://127.0.0.1:3876 控制執行中的應用程式。此電腦上執行的任何應用程式都能讀取和修改你的任務。",
       "LOCAL_REST_API_TOKEN": "存取權杖",

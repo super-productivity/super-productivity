@@ -7,6 +7,7 @@ import {
   ElementRef,
   inject,
   OnInit,
+  signal,
   viewChild,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -75,7 +76,6 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { NgTemplateOutlet } from '@angular/common';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
-import { DialogBackupsListComponent } from '../../imex/local-backup/dialog-backups-list/dialog-backups-list.component';
 import { FormsModule } from '@angular/forms';
 import { MatFormField, MatPrefix, MatSuffix } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
@@ -98,6 +98,9 @@ const OPEN_BY_DEFAULT_SECTION_KEY = 'appFeatures';
 
 /** Kept in sync with `animationDuration` on the settings `mat-tab-group`. */
 const TAB_ANIMATION_DURATION_MS = 200;
+
+/** Two beats of the 2s `onboarding-pulse`, then it fades. */
+const LINKED_SECTION_HIGHLIGHT_MS = 4000;
 
 @Component({
   selector: 'config-page',
@@ -154,6 +157,8 @@ export class ConfigPageComponent implements OnInit {
 
   selectedTabIndex = 0;
   expandedSection: string | null = null;
+  /** A section opened by link (`?section=`) glows briefly so it is found. */
+  readonly highlightedSection = signal<string | null>(null);
   private _isDefaultSectionCollapsed = false;
 
   searchQuery = '';
@@ -237,27 +242,7 @@ export class ConfigPageComponent implements OnInit {
     );
     this.timeTrackingFormCfg = GLOBAL_TIME_TRACKING_FORM_CONFIG.slice();
     this.pluginsShortcutsFormCfg = GLOBAL_PLUGINS_FORM_CONFIG.slice();
-    // "Browse backups" lives on the Import/Export section so every platform
-    // (incl. web, which has no automatic backups) can reach the recovery ring.
-    this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.map((section) =>
-      section.customSection === 'FILE_IMPORT_EXPORT'
-        ? {
-            ...section,
-            actions: [
-              ...(section.actions ?? []),
-              {
-                label: T.GCF.AUTO_BACKUPS.BROWSE,
-                icon: 'history',
-                onClick: () => {
-                  this._matDialog.open(DialogBackupsListComponent, {
-                    restoreFocus: true,
-                  });
-                },
-              },
-            ],
-          }
-        : section,
-    );
+    this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.slice();
     this.globalProductivityConfigFormCfg = GLOBAL_PRODUCTIVITY_FORM_CONFIG.slice();
     this.globalTasksFormCfg = GLOBAL_TASKS_FORM_CONFIG.slice();
 
@@ -339,6 +324,7 @@ export class ConfigPageComponent implements OnInit {
         if (params['section'] !== undefined) {
           this.expandedSection = params['section'];
           this._cd.detectChanges();
+          this._revealLinkedSection(params['section']);
         }
       });
   }
@@ -506,13 +492,24 @@ export class ConfigPageComponent implements OnInit {
     this.selectedTabIndex = target.tabIndex;
     this.expandedSection = target.sectionKey ?? null;
     this._cd.detectChanges();
+    this._scrollToAfterTabSwitch(target.scrollSelector);
+  }
+
+  private _revealLinkedSection(sectionKey: string): void {
+    this._scrollToAfterTabSwitch(`.section-${sectionKey}`);
+    this.highlightedSection.set(sectionKey);
+    // shortcut: an untracked timer, harmless after destroy (it only resets a signal)
+    setTimeout(() => this.highlightedSection.set(null), LINKED_SECTION_HIGHLIGHT_MS);
+  }
+
+  private _scrollToAfterTabSwitch(selector: string): void {
     // The tab body swaps in over `animationDuration`, so the element doesn't
     // exist yet; wait it out before scrolling.
     // shortcut: a fixed delay, not an animation-done hook. Switch to
     // `MatTabGroup.animationDone` if the duration ever stops being a constant.
     setTimeout(() => {
       this._elRef.nativeElement
-        .querySelector(target.scrollSelector)
+        .querySelector(selector)
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, TAB_ANIMATION_DURATION_MS);
   }

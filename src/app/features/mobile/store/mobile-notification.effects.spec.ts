@@ -241,7 +241,7 @@ describe('MobileNotificationEffects', () => {
     const buildCfg = (overrides: Partial<ReminderConfig> = {}): TestCfg => ({
       reminder: {
         disableReminders: false,
-        notifyOnDueDate: false,
+        isNotifyOnPlannedDay: false,
         dueDateNotificationHour: 9,
         ...overrides,
       },
@@ -433,7 +433,7 @@ describe('MobileNotificationEffects', () => {
       cfg$ = new BehaviorSubject<TestCfg>({
         reminder: {
           disableReminders: false,
-          notifyOnDueDate: true,
+          isNotifyOnPlannedDay: true,
           dueDateNotificationHour: 9,
         },
       });
@@ -477,7 +477,7 @@ describe('MobileNotificationEffects', () => {
       cfg$.next({
         reminder: {
           disableReminders: true,
-          notifyOnDueDate: true,
+          isNotifyOnPlannedDay: true,
           dueDateNotificationHour: 9,
         },
       });
@@ -492,7 +492,7 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
     }));
 
-    it('does not schedule due-date notifications when notifyOnDueDate was never set (opt-in)', fakeAsync(() => {
+    it('does not schedule due-date notifications when isNotifyOnPlannedDay was never set (opt-in)', fakeAsync(() => {
       cfg$.next({ reminder: { disableReminders: false } });
 
       effects = TestBed.inject(MobileNotificationEffects);
@@ -505,8 +505,32 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
     }));
 
+    // Installs from v17.3–v19.x stored the old default `notifyOnDueDate: true`
+    // without anyone choosing it; that stored value must no longer ring.
+    it('ignores a stored legacy notifyOnDueDate: true', fakeAsync(() => {
+      cfg$.next({
+        reminder: {
+          disableReminders: false,
+          notifyOnDueDate: true,
+          dueDateNotificationHour: 9,
+        },
+      });
+
+      effects = TestBed.inject(MobileNotificationEffects);
+      (
+        effects.scheduleDueDateNotifications$ as unknown as Observable<unknown>
+      ).subscribe();
+
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
+        generateNotificationId('x_dueday'),
+      );
+    }));
+
     it('cancels due-date alarms a previous app run left armed when disabled at startup', fakeAsync(() => {
-      cfg$.next({ reminder: { disableReminders: false, notifyOnDueDate: false } });
+      cfg$.next({ reminder: { disableReminders: false, isNotifyOnPlannedDay: false } });
 
       effects = TestBed.inject(MobileNotificationEffects);
       (
@@ -609,7 +633,7 @@ describe('MobileNotificationEffects', () => {
     const buildCfg = (overrides: Partial<ReminderConfig> = {}): TestCfg => ({
       reminder: {
         disableReminders: false,
-        notifyOnDueDate: true,
+        isNotifyOnPlannedDay: true,
         dueDateNotificationHour: 9,
         ...overrides,
       },

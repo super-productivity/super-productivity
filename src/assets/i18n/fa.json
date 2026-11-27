@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: همگام سازی امکان پذیر نیست ، زیرا آفلاین است",
-        "SYNC_ERROR": "Dropbox: خطا هنگام همگام سازی",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: قادر به ایجاد چالش PKCE نیست."
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "میزبان جایگزین برای پیوندهای Jira (مثلاً نشانی عمومی وقتی میزبان API متفاوت است؛ پیشوند مسیر مجاز است)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "تنظیمات پیشرفته",
-        "HELP_ARR": {
-          "H1": "تنظیمات اولیه",
-          "H2": "تنظیمات کار (Worklog)",
-          "H3": "انتقال پیش فرض",
-          "P1_1": "Please provide a login name (can be found on your profile page) and an <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> or password if you can't generate one for some reason. Please not that newer versions of jira sometimes only work with the token. ",
-          "P1_2": "You also need to specify a JQL query which is used for the suggestions to add tasks from Jira. If you need help check out this link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "You can also configure, if you want to automatically (e.g. every time you visit the planning view), to add all new tasks specified by a custom JQL query to the backlog.",
-          "P1_4": "Another option is \"Check if current ticket is assigned to current user\". If enabled and you're starting, a check will be made if you're currently assigned to that ticket on Jira, if not an Dialog appears in which you can chose to assign the ticket to yourself.",
-          "P2_1": "There are several options to determine when and how you want to submit a worklog. Enabling <em>'Open worklog dialog for adding a worklog to Jira when task is done'</em> opens a dialog to add an worklog every time you mark a Jira Task as done. So keep in mind that worklogs will be added on top of everything tracked so far. So if you mark a task as done for a second time, you might not want to submit the complete worked time for the task again.",
-          "P2_2": "<em>'Open worklog dialog when sub task is done and not for tasks with sub tasks themselves'</em> opens a worklog dialog every time when you mark a sub task of a Jira issue as done. Because you already track your time via the sub tasks, no dialog is opened once you mark the Jira task itself as done.",
-          "P2_3": "<em>'Send updates to worklog automatically without dialog'</em> does what it says. Because marking a task as done several times leads to the whole worked time being tracked twice, this is not recommended.",
-          "P3_1": "Here you can reconfigure your default transitions. Jira enables a wide configuration of transitions usually coming into action as different columns on your Jira agile board we can't make assumptions about where and when to transition your tasks and you need to set it manually."
-        }
+        "ADV_CFG": "تنظیمات پیشرفته"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "مسئول",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "با این مقدار تصویر پس‌زمینه را محو کنید. مقدار پیش‌فرض 0px است.",
         "D_BACKGROUND_OVERLAY_OPACITY": "شفافیت پوشش پس‌زمینه",
-        "HELP": "Theme settings for your project.",
         "L_BACKGROUND_IMAGE_BLUR": "محو کردن تصویر پس‌زمینه",
         "L_BACKGROUND_IMAGE_DARK": "URL تصویر پس زمینه (تم تاریک)",
         "L_BACKGROUND_IMAGE_LIGHT": "آدرس تصویر پس زمینه (تم سبک)",
@@ -1764,7 +1749,6 @@
         "RESTORE_SUCCESS": "بازیابی با موفقیت انجام شد",
         "SERVER_MIGRATION_VALIDATION_FAILED": "اعتبارسنجی مهاجرت سرور ناموفق بود",
         "SPLIT_FORMAT_ENABLE_SETTING": "این پوشهٔ همگام‌سازی به قالب چندفایلی ارتقا یافت. برای ادامه، Surgical sync را در تنظیمات همگام‌سازی روشن کنید.",
-        "STORAGE_QUOTA_EXCEEDED": "سهمیه ذخیره‌سازی تمام شده است",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "فضای ذخیره‌سازی پس از فشرده‌سازی بازیابی شد",
         "SUCCESS_DOWNLOAD": "داده های همگام سازی شده از راه دور",
         "SUCCESS_VIA_BUTTON": "همگام سازی داده ها با موفقیت انجام شد",

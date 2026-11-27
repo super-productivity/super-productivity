@@ -5,13 +5,14 @@ import android.util.Log
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import java.util.TimeZone
 
 /**
  * Schedule fields and the repeat-alarm slots this worker last armed.
  *
  * Plain prefs, like the reminder settings: titles are already stored for
  * other alarms, and this holds no notes. Cleared when no background-sync
- * credentials remain, when the SuperSync access token changes, and when the
+ * credentials remain, when the SuperSync login (token or server) changes, and when the
  * WebDAV file URL changes. A file snapshot is kept when switching onto
  * SuperSync with no previous token, so the next op page can update it
  * instead of starting from nothing.
@@ -51,9 +52,23 @@ internal object RepeatReminderCache {
      * fold result is dropped and the caller continues from the snapshot.
      */
     @Synchronized
-    fun saveStateIfUnchanged(context: Context, state: RepeatCfgSyncState, generation: Long): Boolean {
+    fun saveStateIfUnchanged(context: Context, page: ReminderChangeResult, generation: Long): Boolean {
         if (getGeneration(context) != generation) return false
-        saveState(context, state)
+        val editor = prefs(context).edit().putString(KEY_STATE, encodeState(page.nextRepeatState).toString())
+        val zone = TimeZone.getDefault()
+        // Transfer ownership of created instances to the task before advancing the
+        // cursor. Future slots stay in the baseline for cancellation, even on retry.
+        // An empty seed stays unknown, as in armRepeatReminders, so a later run can still seed.
+        val slots = if (page.detachedSeries.cfgs.isEmpty()) null else getSlots(context) ?: seedRepeatSlots(
+            ReminderAlarmStore.getAll(context).map { it.reminderId to it.triggerAtMs },
+            RepeatCfgSyncState(page.nextRepeatState.cfgs + page.detachedSeries.cfgs),
+            zone,
+        ).ifEmpty { null }
+        if (slots != null) {
+            val remaining = slots.filterKeys { !isLiveRepeatInstance(it, page.detachedSeries, zone) }
+            editor.putBoolean(KEY_SLOTS_KNOWN, true).putString(KEY_SLOTS, JSONObject(remaining).toString())
+        }
+        editor.commit()
         return true
     }
 
@@ -85,18 +100,21 @@ internal object RepeatReminderCache {
      * untouched, so it may re-fold ops the app already applied; config ops
      * end in the same state.
      */
-    @Synchronized
     fun replaceFromApp(context: Context, json: String) {
-        if (!BackgroundSyncCredentialStore.hasAnyCredentials(context)) return
-        val state = parseAppSnapshot(json)
-        if (state == null) {
-            Log.w(TAG, "Repeat config snapshot unreadable, keeping cache")
-            return
+        synchronized(BackgroundSyncCredentialStore) {
+            if (!BackgroundSyncCredentialStore.hasAnyCredentials(context)) return
+            val state = parseAppSnapshot(json)
+            if (state == null) {
+                Log.w(TAG, "Repeat config snapshot unreadable, keeping cache")
+                return
+            }
+            synchronized(this) {
+                prefs(context).edit()
+                    .putString(KEY_STATE, encodeState(state).toString())
+                    .putLong(KEY_GENERATION, getGeneration(context) + 1)
+                    .commit()
+            }
         }
-        prefs(context).edit()
-            .putString(KEY_STATE, encodeState(state).toString())
-            .putLong(KEY_GENERATION, getGeneration(context) + 1)
-            .commit()
     }
 
     /** Null on malformed input, so a bad bridge call never wipes the cache. */

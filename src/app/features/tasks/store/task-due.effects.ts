@@ -279,7 +279,6 @@ export class TaskDueEffects {
                         taskIds: missingDueTaskIds,
                         today: todayStr,
                         startOfNextDayDiffMs,
-                        isSkipRemoveReminder: true,
                       }),
                     );
                   }

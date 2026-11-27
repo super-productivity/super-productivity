@@ -16,6 +16,7 @@ import { TaskService } from '../../features/tasks/task.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { ScheduleExternalDragService } from '../../features/schedule/schedule-week/schedule-external-drag.service';
 import { NavActionItem, NavConfig, NavPluginItem } from './magic-side-nav.model';
+import { HISTORY_STATE } from '../../app.constants';
 
 describe('MagicSideNavComponent', () => {
   let fixture: ComponentFixture<MagicSideNavComponent>;
@@ -31,6 +32,7 @@ describe('MagicSideNavComponent', () => {
     isTagsExpanded: ReturnType<typeof signal<boolean>>;
     onNavItemClick: jasmine.Spy;
   };
+  let routerMock: { events: typeof EMPTY; currentNavigation: jasmine.Spy };
 
   const navConfig: NavConfig = {
     items: [],
@@ -45,6 +47,10 @@ describe('MagicSideNavComponent', () => {
   };
 
   beforeEach(async () => {
+    routerMock = {
+      events: EMPTY,
+      currentNavigation: jasmine.createSpy('currentNavigation').and.returnValue(null),
+    };
     isXs = signal(false);
     isMobileSideNavOpen = signal(false);
     focusSideNavTrigger = signal(0);
@@ -103,7 +109,7 @@ describe('MagicSideNavComponent', () => {
           provide: DataInitStateService,
           useValue: { isAllDataLoadedInitially$: of(false) },
         },
-        { provide: Router, useValue: { events: EMPTY } },
+        { provide: Router, useValue: routerMock },
         { provide: DragDropRegistry, useValue: { pointerUp: EMPTY } },
         {
           provide: ScheduleExternalDragService,
@@ -458,6 +464,38 @@ describe('MagicSideNavComponent', () => {
     );
 
     expect(fixture.componentInstance.showMobileMenuOverlay()).toBe(false);
+  });
+
+  describe('mobile drawer history entry', () => {
+    let backSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      isXs.set(true);
+      backSpy = spyOn(window.history, 'back');
+      window.history.replaceState({ [HISTORY_STATE.MOBILE_NAVIGATION]: true }, '');
+    });
+
+    afterEach(() => {
+      window.history.replaceState(null, '');
+    });
+
+    it('pops the drawer entry when the drawer closes without navigating', () => {
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+
+      fixture.componentInstance.syncMobileNavHistory(false);
+
+      expect(backSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the drawer entry while a nav tap is navigating', () => {
+      // The popstate from back() would cancel the in-flight navigation.
+      routerMock.currentNavigation.and.returnValue({ id: 1 });
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+
+      fixture.componentInstance.syncMobileNavHistory(false);
+
+      expect(backSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('layout shortcut triggers', () => {

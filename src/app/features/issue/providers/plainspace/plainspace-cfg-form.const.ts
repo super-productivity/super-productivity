@@ -1,3 +1,4 @@
+import { DOCS_URL } from '../../../../app.constants';
 import { T } from '../../../../t.const';
 import {
   ConfigFormSection,
@@ -66,4 +67,5 @@ export const PLAINSPACE_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderPlai
     key: 'PLAINSPACE',
     items: PLAINSPACE_CONFIG_FORM,
     help: T.PLAINSPACE.FORM_SECTION.HELP,
+    docsUrl: `${DOCS_URL}how-to/manage-task-integrations/`,
   };

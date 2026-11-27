@@ -143,6 +143,7 @@ And much more!
 </ul>
 <p><strong>Starting Point in the Docs:</strong><br>
   <a href="https://super-productivity.com/docs/tutorials/first-steps/">First steps</a> •
+  <a href="https://super-productivity.com/docs/explanation/your-first-week/">Your first week</a> •
   <a href="https://super-productivity.com/docs/reference/">Reference</a> •
   <a href="https://super-productivity.com/docs/how-to/">How-To</a>
 </p>
@@ -210,6 +211,10 @@ A big thank you to all our sponsors!
 - **[Blacksmith](https://www.blacksmith.sh)**: covers all our CI runner minutes for GitHub Actions.
 
   <a href="https://www.blacksmith.sh"><img alt="CI powered by Blacksmith" src="docs/screens/blacksmith-powered-wob.png" height="60"/></a>
+
+- **[IP-Projects](https://ip-projects.de?sp)**: hosts our servers.
+
+  <a href="https://ip-projects.de?sp"><img alt="Hosting by IP-Projects" src="docs/screens/ip-projects-logo.png" height="60"/></a>
 
 _(If you are, intend to or have been a sponsor and want to be shown here, [please let me know](mailto:contact@super-productivity.com)!)_
 

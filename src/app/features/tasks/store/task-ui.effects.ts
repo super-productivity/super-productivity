@@ -47,6 +47,8 @@ import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { DateService } from '../../../core/date/date.service';
 import { isBlankTask } from '../util/is-blank-task';
+import { isTimeEstimateNotifiedNatively } from '../../android/native-time-estimate.util';
+import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
 import { TaskMultiSelectService } from '../task-multi-select.service';
 import { TASK_DELETE_UNDO_WINDOW_MS } from '../../../app.constants';
 import {
@@ -69,6 +71,7 @@ export class TaskUiEffects {
   private _layoutService = inject(LayoutService);
   private _dateService = inject(DateService);
   private _taskMultiSelectService = inject(TaskMultiSelectService);
+  private _focusTimer = this._store$.selectSignal(selectTimer);
 
   taskCreatedSnack$ = createEffect(
     () =>
@@ -294,11 +297,15 @@ export class TaskUiEffects {
   private _notifyAboutTimeEstimateExceeded(currentTask: Task): void {
     const title = truncate(currentTask.title);
 
-    this._notifyService.notify({
-      title: T.F.TASK.N.ESTIMATE_EXCEEDED,
-      body: T.F.TASK.N.ESTIMATE_EXCEEDED_BODY,
-      translateParams: { title },
-    });
+    // On Android the tracking service notifies natively, also while the
+    // WebView is paused (#11896); posting here too would double it.
+    if (!isTimeEstimateNotifiedNatively(this._focusTimer().purpose !== null)) {
+      this._notifyService.notify({
+        title: T.F.TASK.N.ESTIMATE_EXCEEDED,
+        body: T.F.TASK.N.ESTIMATE_EXCEEDED_BODY,
+        translateParams: { title },
+      });
+    }
 
     this._bannerService.open({
       msg: T.F.TASK.B.ESTIMATE_EXCEEDED,

@@ -466,6 +466,48 @@ describe('createRows', () => {
       expect(rows[2].dates).toEqual([dateKey2]);
     });
 
+    it('should export a zero estimate share when all tracked time was discarded', () => {
+      const task = createTask({
+        id: 'discarded',
+        timeSpentOnDay: { [dateKey1]: 0 },
+        timeEstimate: twoHours,
+      });
+      const rows = createRows(
+        createWorklogData({ tasks: [task] }),
+        WorklogGrouping.WORKLOG,
+      );
+
+      expect(
+        formatRows(rows, {
+          roundWorkTimeTo: null,
+          roundStartTimeTo: null,
+          roundEndTimeTo: null,
+          separateTasksBy: ' | ',
+          cols: ['ESTIMATE_MS', 'ESTIMATE_STR', 'ESTIMATE_CLOCK'],
+          groupBy: WorklogGrouping.WORKLOG,
+        }),
+      ).toEqual([[0, msToString(0), msToClockString(0)]]);
+    });
+
+    it('should prorate estimates across days with tracked time', () => {
+      const task = { ...task2, timeEstimate: twoHours };
+      const rows = createRows(
+        createWorklogData({ tasks: [task] }),
+        WorklogGrouping.WORKLOG,
+      );
+
+      expect(
+        formatRows(rows, {
+          roundWorkTimeTo: null,
+          roundStartTimeTo: null,
+          roundEndTimeTo: null,
+          separateTasksBy: ' | ',
+          cols: ['ESTIMATE_MS'],
+          groupBy: WorklogGrouping.WORKLOG,
+        }),
+      ).toEqual([[oneHour], [oneHour]]);
+    });
+
     it('should only show day-level start and end times on the first task row for a day', () => {
       const rows = createRows(
         createWorklogData({

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
 import { OperationLogUploadService } from './operation-log-upload.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
@@ -109,6 +110,10 @@ describe('OperationLogUploadService', () => {
           // Narrow stub: without a fenceEpoch the #9074 assert is a no-op.
           provide: SyncProviderManager,
           useValue: { assertSyncEpochUnchanged: () => undefined },
+        },
+        {
+          provide: TranslateService,
+          useValue: { instant: (key: string) => `translated:${key}` },
         },
       ],
     });
@@ -2441,6 +2446,9 @@ describe('OperationLogUploadService', () => {
                 code: 'STORAGE_QUOTA_EXCEEDED',
               }),
             );
+            // window.alert is already a spy in the global test setup.
+            const alertSpy = window.alert as jasmine.Spy;
+            alertSpy.calls.reset();
 
             const result = await service.uploadPendingOps(mockApiProvider);
 
@@ -2450,6 +2458,9 @@ describe('OperationLogUploadService', () => {
                 errorCode: 'STORAGE_QUOTA_EXCEEDED',
               }),
             ]);
+            expect(alertSpy).toHaveBeenCalledOnceWith(
+              'translated:F.SYNC.A.SERVER_STORAGE_FULL',
+            );
           });
         });
 

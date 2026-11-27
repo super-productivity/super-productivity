@@ -391,9 +391,22 @@ const cases = [
     soonestFirst: false,
     archivedProjectIds: [],
     cfgs: [base({ id: 'early', startTime: '02:00', lastTaskCreationDay: '2026-06-14' })],
-    expectCount: 15,
+    // The window starts on logical 06-14, which is already created.
+    expectCount: 14,
     firstId: 'rpt_early_2026-06-15',
     firstTrigger: '2026-06-16T02:00:00.000Z',
+  },
+  {
+    name: 'after midnight but before start of day keeps the logical day occurrence',
+    timeZone: 'UTC',
+    now: '2026-06-15T00:15:00.000Z',
+    startOfNextDayDiffMs: 4 * 60 * 60 * 1000,
+    soonestFirst: false,
+    archivedProjectIds: [],
+    cfgs: [base({ id: 'night', startTime: '01:00', lastTaskCreationDay: '2026-06-13' })],
+    expectCount: 15,
+    firstId: 'rpt_night_2026-06-14',
+    firstTrigger: '2026-06-15T01:00:00.000Z',
   },
   {
     name: 'cap keeps 32 nearest ranks when many dailies compete',

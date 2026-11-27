@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Không thể đồng bộ vì ngoại tuyến",
-        "SYNC_ERROR": "Dropbox: Lỗi khi đồng bộ",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Đồng bộ Dropbox yêu cầu kết nối bảo mật (HTTPS). Hãy đảm bảo bạn đang sử dụng ứng dụng qua HTTPS hoặc thử phiên bản ổn định."
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Máy chủ thay thế cho liên kết Jira (ví dụ: URL công khai khi máy chủ API khác; cho phép tiền tố đường dẫn)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Cấu hình nâng cao",
-        "HELP_ARR": {
-          "H1": "Cấu hình cơ bản",
-          "H2": "Cài đặt nhật ký làm việc",
-          "H3": "Chuyển trạng thái mặc định",
-          "P1_1": "Vui lòng cung cấp tên đăng nhập (có thể tìm thấy trên trang hồ sơ của bạn) và <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> hoặc mật khẩu nếu bạn không thể tạo được vì lý do nào đó. Lưu ý rằng các phiên bản mới hơn của Jira đôi khi chỉ hoạt động với token.",
-          "P1_2": "Bạn cũng cần chỉ định truy vấn JQL được dùng để gợi ý thêm công việc từ Jira. Nếu cần trợ giúp hãy xem liên kết này <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Bạn cũng có thể cấu hình nếu muốn tự động nhập tất cả sự cố mới theo truy vấn JQL tùy chỉnh.",
-          "P1_4": "Một tùy chọn khác là \"Kiểm tra xem ticket hiện tại có được giao cho người dùng hiện tại không\". Nếu bật và bạn đang bắt đầu, sẽ kiểm tra để đảm bảo bạn đang được giao ticket đó trên Jira. Nếu không, một hộp thoại sẽ xuất hiện để bạn chọn tự giao ticket cho mình.",
-          "P2_1": "Có một số tùy chọn để xác định khi nào và cách bạn muốn gửi nhật ký làm việc.",
-          "P2_2": "'Mở hộp thoại nhật ký làm việc khi công việc con hoàn thành và không mở cho công việc có công việc con' mở hộp thoại mỗi khi bạn đánh dấu công việc con của sự cố Jira là hoàn thành.",
-          "P2_3": "'Tự động gửi cập nhật nhật ký làm việc mà không cần hộp thoại' làm đúng như tên gọi. Không được khuyến nghị vì đánh dấu hoàn thành nhiều lần có thể ghi gấp đôi.",
-          "P3_1": "Tại đây bạn có thể cấu hình lại các chuyển trạng thái mặc định của mình."
-        }
+        "ADV_CFG": "Cấu hình nâng cao"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Người được giao",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Làm mờ ảnh nền. Mặc định 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Điều chỉnh độ trong suốt nền. Mặc định 20%.",
-        "HELP": "Cài đặt giao diện cho dự án.",
         "L_BACKGROUND_IMAGE_BLUR": "Làm mờ ảnh nền",
         "L_BACKGROUND_IMAGE_DARK": "URL ảnh nền (Tối)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL ảnh nền (Sáng)",
@@ -1764,7 +1749,6 @@
         "RESTORE_SUCCESS": "Khôi phục thành công",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Không thể di chuyển dữ liệu lên máy chủ - xác thực dữ liệu cục bộ thất bại. Vui lòng thử nhập một bản sao lưu.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Thư mục đồng bộ này đã được nâng cấp sang định dạng tệp phân tách. Hãy bật Đồng bộ phân tách trong cài đặt Đồng bộ để tiếp tục.",
-        "STORAGE_QUOTA_EXCEEDED": "Đầy bộ nhớ đồng bộ!",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Đã dọn dẹp bộ nhớ.",
         "SUCCESS_DOWNLOAD": "Đã đồng bộ từ xa",
         "SUCCESS_VIA_BUTTON": "Đã đồng bộ thành công",

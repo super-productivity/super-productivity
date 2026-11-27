@@ -1,3 +1,4 @@
+import { DOCS_URL } from '../../../app.constants';
 import { ConfigFormSection, TakeABreakConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 /* eslint-disable @typescript-eslint/naming-convention */
@@ -6,6 +7,7 @@ export const TAKE_A_BREAK_FORM_CFG: ConfigFormSection<TakeABreakConfig> = {
   title: T.GCF.TAKE_A_BREAK.TITLE,
   key: 'takeABreak',
   help: T.GCF.TAKE_A_BREAK.HELP,
+  docsUrl: `${DOCS_URL}explanation/break-reminders/`,
   items: [
     {
       key: 'isTakeABreakEnabled',

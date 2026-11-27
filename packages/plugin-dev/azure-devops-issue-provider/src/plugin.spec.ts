@@ -119,6 +119,48 @@ describe('Azure DevOps Plugin - work item fetch (#9473)', () => {
   });
 });
 
+describe('Azure DevOps Plugin - acceptance criteria and system info (#8569)', () => {
+  const getById = (fields: Record<string, unknown>) =>
+    definition.getById('5', { project: 'P' }, {
+      get: vi.fn(async () => ({ id: 5, fields })),
+    } as unknown as PluginHttp);
+
+  it('maps a Scrum bug’s acceptance criteria and system info', async () => {
+    const issue = await getById({
+      'System.Title': 'Crash on save',
+      'System.WorkItemType': 'Bug',
+      'Microsoft.VSTS.Common.AcceptanceCriteria': '<div>Saving works</div>',
+      'Microsoft.VSTS.TCM.SystemInfo': '<div>Windows 11, build 42</div>',
+    });
+    expect(issue['acceptanceCriteria']).toBe('<div>Saving works</div>');
+    expect(issue['systemInfo']).toBe('<div>Windows 11, build 42</div>');
+  });
+
+  it('maps a Scrum backlog item’s acceptance criteria and leaves system info unset', async () => {
+    const issue = await getById({
+      'System.Title': 'Export as CSV',
+      'System.WorkItemType': 'Product Backlog Item',
+      'Microsoft.VSTS.Common.AcceptanceCriteria': '<ul><li>CSV downloads</li></ul>',
+    });
+    expect(issue['acceptanceCriteria']).toBe('<ul><li>CSV downloads</li></ul>');
+    expect(issue['systemInfo']).toBeUndefined();
+  });
+
+  it('shows both in the issue panel, hidden when the work item lacks them', () => {
+    const shown = definition.issueDisplay.filter((f) =>
+      ['acceptanceCriteria', 'systemInfo'].includes(f.field),
+    );
+    expect(shown).toEqual([
+      expect.objectContaining({
+        field: 'acceptanceCriteria',
+        type: 'markdown',
+        hideEmpty: true,
+      }),
+      expect.objectContaining({ field: 'systemInfo', type: 'markdown', hideEmpty: true }),
+    ]);
+  });
+});
+
 describe('Azure DevOps Plugin - done states (#9774)', () => {
   const isDoneMapping = () =>
     definition.fieldMappings!.find((m) => m.taskField === 'isDone')!;

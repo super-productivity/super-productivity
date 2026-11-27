@@ -125,6 +125,16 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
+  @if (restorableTask()) {
+    <button
+      (click)="restore()"
+      class="e2e-restore-archived-task"
+      mat-button
+    >
+      <mat-icon>settings_backup_restore</mat-icon>
+      {{ T.F.WORKLOG.CMP.RESTORE_TASK_FROM_ARCHIVE | translate }}
+    </button>
+  }
   <button
     mat-button
     mat-dialog-close

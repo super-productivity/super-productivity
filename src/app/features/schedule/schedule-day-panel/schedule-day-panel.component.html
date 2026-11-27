@@ -22,6 +22,16 @@
               <div class="empty-state-text">
                 {{ T.F.SCHEDULE.DROP_TASKS_HERE_TO_SCHEDULE | translate }}
               </div>
+              @if (isCurrent && !boardsService.isAllTasksListOpen()) {
+                <button
+                  class="empty-state-btn"
+                  mat-button
+                  color="primary"
+                  (click)="boardsService.openAllTasksList()"
+                >
+                  {{ T.F.SCHEDULE.SHOW_ALL_TASKS | translate }}
+                </button>
+              }
             </div>
           </div>
         }

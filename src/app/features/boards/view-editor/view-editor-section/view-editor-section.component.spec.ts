@@ -439,6 +439,21 @@ describe('ViewEditorSectionComponent', () => {
     });
   });
 
+  it('says a section without rules lists every task, until a rule is added', async () => {
+    const el = await render();
+    expect(text(el)).toContain(T.F.BOARDS.EDITOR.NO_RULES_HINT);
+
+    fixture.componentRef.setInput('panel', {
+      ...DEFAULT_PANEL_CFG,
+      id: 'p',
+      title: 'Next',
+      taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+    });
+    fixture.detectChanges();
+    expect(text(el)).not.toContain(T.F.BOARDS.EDITOR.NO_RULES_HINT);
+    expect(emitted).toEqual([]);
+  });
+
   it('shows the completion help only for a Done section with tag rules', async () => {
     const el = await render();
     const translate = TestBed.inject(TranslateService);

@@ -78,6 +78,11 @@ const pickAllowedFields = (
       result[key] = body[key];
     }
   }
+  // An empty dueDay is no date, so it removes the planned day like null
+  // instead of being stored.
+  if (result.dueDay === '') {
+    result.dueDay = null;
+  }
   return result as Partial<WritableTaskFields>;
 };
 
@@ -143,9 +148,12 @@ type DeadlineChange =
 const hasOwn = (value: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
 
-const validateDeadlineFields = (
-  fields: Partial<WritableTaskFields>,
-): string | undefined => {
+const validateDateFields = (fields: Partial<WritableTaskFields>): string | undefined => {
+  // A stored dueDay that is no date shows as "planned for -/-" (#6908) and
+  // data repair has to clear it.
+  if (typeof fields.dueDay === 'string' && !isValidDBDateStr(fields.dueDay)) {
+    return 'dueDay must be a valid YYYY-MM-DD date';
+  }
   if (fields.deadlineDay != null && fields.deadlineWithTime != null) {
     return 'deadlineDay and deadlineWithTime cannot both be set';
   }
@@ -625,14 +633,9 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       );
     }
 
-    const deadlineValidationError = validateDeadlineFields(writableFields);
-    if (deadlineValidationError) {
-      return createErrorResponse(
-        requestId,
-        400,
-        'INVALID_INPUT',
-        deadlineValidationError,
-      );
+    const dateValidationError = validateDateFields(writableFields);
+    if (dateValidationError) {
+      return createErrorResponse(requestId, 400, 'INVALID_INPUT', dateValidationError);
     }
 
     const deadlineFields = Object.fromEntries(
@@ -797,13 +800,13 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
           );
         }
 
-        const deadlineValidationError = validateDeadlineFields(writableFields);
-        if (deadlineValidationError) {
+        const dateValidationError = validateDateFields(writableFields);
+        if (dateValidationError) {
           return createErrorResponse(
             requestId,
             400,
             'INVALID_INPUT',
-            deadlineValidationError,
+            dateValidationError,
           );
         }
 

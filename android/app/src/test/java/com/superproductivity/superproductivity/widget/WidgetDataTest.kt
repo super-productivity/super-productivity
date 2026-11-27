@@ -1,6 +1,7 @@
 package com.superproductivity.superproductivity.widget
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -30,7 +31,23 @@ class WidgetDataTest {
             {"id": "t2", "title": "Task two", "isDone": true},
             {"id": "t3", "title": "Task three", "isDone": false, "projectId": null}
           ],
-          "projectColors": {"p1": "#ff0000"}
+          "projectColors": {"p1": "#ff0000"},
+          "projects": [
+            {
+              "id": "p1",
+              "title": "Work",
+              "tasks": [
+                {"id": "t1", "title": "Task one", "isDone": false, "projectId": "p1"}
+              ]
+            },
+            {
+              "id": "p2",
+              "title": "Personal",
+              "tasks": [
+                {"id": "t3", "title": "Task three", "isDone": false}
+              ]
+            }
+          ]
         }
         """.trimIndent()
 
@@ -62,6 +79,184 @@ class WidgetDataTest {
         // t2 is done in the blob but has a pending "mark undone" tap
         val tasks = WidgetData.parse(blob, pendingDoneTargets = mapOf("t2" to false))
         assertEquals(false, tasks[1].isDone)
+    }
+
+    @Test
+    fun selectsTasksForEachProjectIndependently() {
+        assertEquals(
+            listOf(WidgetTask("t1", "Task one", false, "#ff0000")),
+            WidgetData.parse(blob, selectedProjectId = "p1")
+        )
+        assertEquals(
+            listOf(WidgetTask("t3", "Task three", false, null)),
+            WidgetData.parse(blob, selectedProjectId = "p2")
+        )
+    }
+
+    /** Project "p" as Angular pushes it once it has applied a widget tap on t1. */
+    private val projectBlobAfterTapApplied =
+        """{"v":1,"tasks":[],"projects":[{"id":"p","title":"Project","tasks":[{"id":"t1","title":"Tapped","isDone":true},{"id":"t2","title":"Open","isDone":false}]}]}"""
+
+    @Test
+    fun checkedProjectRowStaysForFiveSecondsAfterTheTap() {
+        val tappedAt = 1_000L
+        val pending = mapOf("t1" to true)
+        val tapTimes = mapOf("t1" to tappedAt)
+        val checked = listOf(WidgetTask("t1", "Task one", true, "#ff0000"))
+
+        assertEquals(
+            checked,
+            WidgetData.parse(blob, pending, "p1", tapTimes, nowMs = tappedAt + 1)
+        )
+        assertEquals(
+            checked,
+            WidgetData.parse(blob, pending, "p1", tapTimes, nowMs = tappedAt + 4_999)
+        )
+        assertTrue(
+            WidgetData.parse(blob, pending, "p1", tapTimes, nowMs = tappedAt + 5_000).isEmpty()
+        )
+    }
+
+    @Test
+    fun checkedProjectRowKeepsItsGraceAfterTheAppAppliesTheTap() {
+        // The drain clears the pending target but not the tap time, so the first
+        // push after the tap does not cut the five seconds short.
+        val tapTimes = mapOf("t1" to 1_000L)
+
+        assertEquals(
+            listOf(WidgetTask("t1", "Tapped", true, null), WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(projectBlobAfterTapApplied, emptyMap(), "p", tapTimes, nowMs = 2_000L)
+        )
+        assertEquals(
+            listOf(WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(projectBlobAfterTapApplied, emptyMap(), "p", tapTimes, nowMs = 6_000L)
+        )
+    }
+
+    @Test
+    fun projectTaskCompletedOutsideTheWidgetIsHidden() {
+        // Done in the app or on another device: no local tap time, so no grace.
+        // A synced doneOn is deliberately not used; it is another device's clock.
+        assertEquals(
+            listOf(WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(projectBlobAfterTapApplied, selectedProjectId = "p", nowMs = 2_000L)
+        )
+    }
+
+    @Test
+    fun pendingProjectCompletionWithoutTapTimeIsHidden() {
+        // Only a queue written before tap times existed lacks one. Treating it as
+        // "just now" would never expire.
+        assertTrue(
+            WidgetData.parse(
+                blob,
+                pendingDoneTargets = mapOf("t1" to true),
+                selectedProjectId = "p1",
+                nowMs = 2_000L
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun undoingACheckedProjectRowKeepsItListed() {
+        assertEquals(
+            listOf(WidgetTask("t1", "Tapped", false, null), WidgetTask("t2", "Open", false, null)),
+            WidgetData.parse(
+                projectBlobAfterTapApplied,
+                pendingDoneTargets = mapOf("t1" to false),
+                selectedProjectId = "p",
+                nowMs = 2_000L
+            )
+        )
+    }
+
+    @Test
+    fun todayKeepsCompletedTasksWithoutAGracePeriod() {
+        val today = WidgetData.parse(blob, nowMs = Long.MAX_VALUE)
+        assertEquals(listOf("t1", "t2", "t3"), today.map { it.id })
+        assertTrue(today[1].isDone)
+    }
+
+    @Test
+    fun hiddenCompletedTasksDoNotTakeProjectRows() {
+        val done = (1..20).joinToString(",") { """{"id":"done-$it","title":"Done","isDone":true}""" }
+        val open = (1..20).joinToString(",") { """{"id":"open-$it","title":"Open","isDone":false}""" }
+        val json = """{"v":1,"tasks":[],"projects":[{"id":"p","title":"P","tasks":[$done,$open]}]}"""
+
+        val rows = WidgetData.parse(json, selectedProjectId = "p", nowMs = 2_000L).take(20)
+        assertEquals((1..20).map { "open-$it" }, rows.map { it.id })
+    }
+
+    @Test
+    fun doneGraceCoversFiveSecondsFromTheTap() {
+        assertTrue(WidgetData.isInDoneGrace(1_000L, 1_000L))
+        assertTrue(WidgetData.isInDoneGrace(1_000L, 5_999L))
+        assertFalse(WidgetData.isInDoneGrace(1_000L, 6_000L))
+        // A missing or zeroed tap time grants nothing.
+        assertFalse(WidgetData.isInDoneGrace(0L, 1L))
+    }
+
+    @Test
+    fun missingSelectedProjectFallsBackToToday() {
+        assertEquals(
+            WidgetData.parse(blob),
+            WidgetData.parse(blob, selectedProjectId = "deleted-project")
+        )
+        assertNull(WidgetData.projectTitle(blob, "deleted-project"))
+    }
+
+    @Test
+    fun snapshotWithoutProjectsFallsBackToToday() {
+        // A v:1 blob written before `projects` existed (app updated, not opened yet).
+        val legacy = """{"v":1,"tasks":[{"id":"t1","title":"Today","isDone":false}]}"""
+        assertEquals(WidgetData.parse(legacy), WidgetData.parse(legacy, selectedProjectId = "p1"))
+        assertNull(WidgetData.projectTitle(legacy, "p1"))
+        assertTrue(WidgetData.parseProjects(legacy).isEmpty())
+    }
+
+    @Test
+    fun unusableProjectFallsBackToTodayForHeaderAndTasks() {
+        val json =
+            """{"v":1,"tasks":[{"id":"t1","title":"Today","isDone":false}],"projects":[{"id":"no-tasks","title":"No tasks"},{"id":"untitled","title":"","tasks":[{"id":"p1","title":"Project task","isDone":false}]}]}"""
+
+        assertEquals(WidgetData.parse(json), WidgetData.parse(json, selectedProjectId = "no-tasks"))
+        assertNull(WidgetData.projectTitle(json, "no-tasks"))
+        assertEquals(WidgetData.parse(json), WidgetData.parse(json, selectedProjectId = "untitled"))
+        assertNull(WidgetData.projectTitle(json, "untitled"))
+    }
+
+    @Test
+    fun projectTitleNamesTheSelectedProject() {
+        assertEquals("Work", WidgetData.projectTitle(blob, "p1"))
+        assertEquals("Personal", WidgetData.projectTitle(blob, "p2"))
+        assertNull(WidgetData.projectTitle("""{"v":2,"projects":[]}""", "p1"))
+    }
+
+    @Test
+    fun exposesOnlyUsableSnapshotProjectsToThePicker() {
+        assertEquals(
+            listOf(WidgetProject("p1", "Work"), WidgetProject("p2", "Personal")),
+            WidgetData.parseProjects(blob)
+        )
+        val unusableProjects =
+            """{"v":1,"projects":[{"id":"empty","title":"","tasks":[]},{"id":"missing","title":"Missing tasks"},{"title":"No id","tasks":[]},{"id":"ok","title":"Okay","tasks":[]}] }"""
+        assertEquals(
+            listOf(WidgetProject("ok", "Okay")),
+            WidgetData.parseProjects(unusableProjects)
+        )
+    }
+
+    @Test
+    fun projectOpenRequestIsFreshOnlyWithinItsTtl() {
+        val queuedAt = 1_000_000L
+        val ttl = WidgetData.PROJECT_OPEN_REQUEST_TTL_MS
+        assertTrue(WidgetData.isProjectOpenRequestFresh(queuedAt, queuedAt))
+        assertTrue(WidgetData.isProjectOpenRequestFresh(queuedAt, queuedAt + ttl - 1))
+        // A launch Android blocked silently must not open the project on a later start.
+        assertFalse(WidgetData.isProjectOpenRequestFresh(queuedAt, queuedAt + ttl))
+        // No stamp (an entry from before the stamp existed) or a clock set back.
+        assertFalse(WidgetData.isProjectOpenRequestFresh(0L, queuedAt))
+        assertFalse(WidgetData.isProjectOpenRequestFresh(queuedAt, queuedAt - 1))
     }
 
     @Test
@@ -132,7 +327,7 @@ class WidgetDataTest {
 
     @Test
     fun parsesStalenessStamp() {
-        val meta = WidgetData.parseMeta(blob)
+        val meta = WidgetData.parseMeta(blob, NOW)
         assertEquals("2026-07-17", meta.dayStr)
         assertEquals(1784325600000L, meta.validUntil)
     }
@@ -211,13 +406,134 @@ class WidgetDataTest {
         )
     }
 
+    // --- #11944: the widget moves on to the next day without the app running ---
+
+    // The 17th's snapshot plus what the device already knew about the 18th and 19th.
+    // Each validUntil is local midnight in Europe/Berlin, 24h apart (no DST change).
+    private val blobWithNextDays =
+        """
+        {
+          "v": 1,
+          "dayStr": "2026-07-17",
+          "validUntil": 1784325600000,
+          "tasks": [{"id": "t1", "title": "Task one", "isDone": false, "projectId": "p1"}],
+          "projectColors": {"p1": "#ff0000"},
+          "projects": [
+            {
+              "id": "p1",
+              "title": "Work",
+              "tasks": [{"id": "t1", "title": "Task one", "isDone": false, "projectId": "p1"}]
+            }
+          ],
+          "nextDays": [
+            {
+              "dayStr": "2026-07-18",
+              "validUntil": 1784412000000,
+              "tasks": [
+                {"id": "t4", "title": "Planned for the 18th", "isDone": false, "projectId": "p1"},
+                {"id": "rpt_r1_2026-07-18", "title": "Daily review", "isDone": false, "isPending": true}
+              ]
+            },
+            {
+              "dayStr": "2026-07-19",
+              "validUntil": 1784498400000,
+              "tasks": [{"id": "t5", "title": "Planned for the 19th", "isDone": false}]
+            }
+          ]
+        }
+        """.trimIndent()
+
+    private fun todayIdsAt(nowMs: Long): List<String> =
+        WidgetData.parse(blobWithNextDays, nowMs = nowMs).map { it.id }
+
+    @Test
+    fun todayWidgetKeepsTheSnapshotDayUntilItsBoundary() {
+        assertEquals(listOf("t1"), todayIdsAt(1784325599999L))
+    }
+
+    @Test
+    fun todayWidgetListsTheNewDayOnceTheSnapshotDayIsOver() {
+        // The stale widget of #11944: before the fix these were still the 17th's rows.
+        assertEquals(listOf("t4", "rpt_r1_2026-07-18"), todayIdsAt(1784325600000L))
+        assertEquals(listOf("t4", "rpt_r1_2026-07-18"), todayIdsAt(1784411999999L))
+    }
+
+    @Test
+    fun todayWidgetMovesOnDayByDay() {
+        assertEquals(listOf("t5"), todayIdsAt(1784412000000L))
+    }
+
+    @Test
+    fun todayWidgetFallsBackToTheSnapshotDayPastTheLastKnownDay() {
+        assertEquals(listOf("t1"), todayIdsAt(1784498400000L))
+    }
+
+    @Test
+    fun newDayRowsKeepTheirProjectColor() {
+        val rows = WidgetData.parse(blobWithNextDays, nowMs = 1784325600000L)
+        assertEquals("#ff0000", rows[0].projectColor)
+    }
+
+    @Test
+    fun aRecurringTaskNotCreatedYetOpensTheApp() {
+        val rows = WidgetData.parse(blobWithNextDays, nowMs = 1784325600000L)
+        assertEquals(WidgetCheckboxAction.MARK_DONE, WidgetData.checkboxActionFor(rows[0]))
+        assertEquals(WidgetCheckboxAction.OPEN_APP, WidgetData.checkboxActionFor(rows[1]))
+    }
+
+    @Test
+    fun pendingDoneTapsOverlayTheNewDayRows() {
+        val rows = WidgetData.parse(
+            blobWithNextDays,
+            pendingDoneTargets = mapOf("t4" to true),
+            nowMs = 1784325600000L
+        )
+        assertTrue(rows[0].isDone)
+    }
+
+    @Test
+    fun headerSaysTodayForTheNewDay() {
+        val now = 1784325600000L
+        assertEquals(
+            WidgetHeader.Today,
+            WidgetData.headerFor(WidgetData.parseMeta(blobWithNextDays, now), now)
+        )
+    }
+
+    @Test
+    fun headerIsOutdatedWithTheSnapshotDayPastTheLastKnownDay() {
+        val now = 1784498400000L
+        val meta = WidgetData.parseMeta(blobWithNextDays, now)
+        assertEquals("2026-07-17", meta.dayStr)
+        assertTrue(WidgetData.isSnapshotStale(meta, now))
+    }
+
+    @Test
+    fun aNextDayWithoutABoundaryIsSkipped() {
+        // Same rule as the snapshot's own stamp: a missing boundary is unknown,
+        // never "valid forever".
+        val json = """{"v":1,"dayStr":"2026-07-17","validUntil":1000,"tasks":[],
+            "nextDays":[{"dayStr":"2026-07-18","tasks":[{"id":"x","title":"X","isDone":false}]}]}"""
+        assertEquals(emptyList<WidgetTask>(), WidgetData.parse(json, nowMs = 1000L))
+    }
+
+    @Test
+    fun projectWidgetIsNotAffectedByTheDayChange() {
+        val rows = WidgetData.parse(
+            blobWithNextDays,
+            selectedProjectId = "p1",
+            nowMs = 1784325600000L
+        )
+        assertEquals(listOf("t1"), rows.map { it.id })
+    }
+
     // --- parseMeta degrades to null, never to a plausible default ---
 
     @Test
     fun blobWithoutStampHasNullFields() {
         // Written before the stamp existed: an install that upgraded but has not
         // re-pushed yet.
-        val meta = WidgetData.parseMeta("""{"v":1,"tasks":[]}""")
+        val meta = WidgetData.parseMeta("""{"v":1,"tasks":[]}""", NOW)
         assertNull(meta.dayStr)
         assertNull(meta.validUntil)
     }
@@ -225,7 +541,7 @@ class WidgetDataTest {
     @Test
     fun keyValStoreDefaultBlobHasNullFields() {
         // "{}" is KeyValStore.get's default when no blob was ever written.
-        val meta = WidgetData.parseMeta("{}")
+        val meta = WidgetData.parseMeta("{}", NOW)
         assertNull(meta.dayStr)
         assertNull(meta.validUntil)
     }
@@ -234,14 +550,14 @@ class WidgetDataTest {
     fun unparseableBlobDegradesInsteadOfThrowing() {
         // parseMeta runs while building the header RemoteViews — a throw there would
         // take down the whole widget render.
-        assertNull(WidgetData.parseMeta("not json").validUntil)
+        assertNull(WidgetData.parseMeta("not json", NOW).validUntil)
     }
 
     @Test
     fun unsupportedVersionYieldsNoStamp() {
         // Assert dayStr too: a v:2 fixture carries no validUntil anyway, so asserting
         // only that would pass with the version guard deleted.
-        val meta = WidgetData.parseMeta("""{"v":2,"dayStr":"2026-07-17","validUntil":1784325600000}""")
+        val meta = WidgetData.parseMeta("""{"v":2,"dayStr":"2026-07-17","validUntil":1784325600000}""", NOW)
         assertNull(meta.dayStr)
         assertNull(meta.validUntil)
     }
@@ -256,7 +572,7 @@ class WidgetDataTest {
         // JSON null; Android's returns the literal string "null". Deleting that guard
         // leaves this green. It stays because Android needs it — not because a test
         // proves it.
-        val meta = WidgetData.parseMeta("""{"v":1,"dayStr":null,"validUntil":null,"tasks":[]}""")
+        val meta = WidgetData.parseMeta("""{"v":1,"dayStr":null,"validUntil":null,"tasks":[]}""", NOW)
         assertNull(meta.dayStr)
         assertNull(meta.validUntil)
         assertEquals(false, WidgetData.isSnapshotStale(meta, Long.MAX_VALUE))
@@ -265,7 +581,7 @@ class WidgetDataTest {
     @Test
     fun nonPositiveValidUntilIsRejected() {
         // 0L is both optLong's default and a real instant; treat it as absent.
-        assertNull(WidgetData.parseMeta("""{"v":1,"validUntil":0,"tasks":[]}""").validUntil)
+        assertNull(WidgetData.parseMeta("""{"v":1,"validUntil":0,"tasks":[]}""", NOW).validUntil)
     }
 
     // --- dayStrToMs feeds the LABEL only, and is strict ---
@@ -343,5 +659,54 @@ class WidgetDataTest {
     fun noQuickAddsLeavesTheSnapshotAsIs() {
         val tasks = WidgetData.parse(blob)
         assertEquals(tasks, WidgetData.withPendingCaptures(tasks, "[]"))
+    }
+
+    @Test
+    fun eachWidgetListsOnlyTheQuickAddsHeadedForIt() {
+        val captures = """[{"id":"today","title":"Today"},{"id":"p1-add","title":"P1","projectId":"p1"},{"id":"p2-add","title":"P2","projectId":"p2"},{"id":"null-add","title":"Null","projectId":null}]"""
+
+        assertEquals(
+            listOf("null-add", "today"),
+            WidgetData.withPendingCaptures(emptyList(), captures).map { it.id }
+        )
+        assertEquals(
+            listOf("p1-add"),
+            WidgetData.withPendingCaptures(emptyList(), captures, "p1").map { it.id }
+        )
+        assertTrue(WidgetData.withPendingCaptures(emptyList(), captures, "p3").isEmpty())
+    }
+
+    @Test
+    fun checkboxOfAnOpenTaskMarksItDone() {
+        assertEquals(
+            WidgetCheckboxAction.MARK_DONE,
+            WidgetData.checkboxActionFor(WidgetTask("t1", "Task one", false, null))
+        )
+    }
+
+    @Test
+    fun checkboxOfADoneTaskMarksItNotDone() {
+        assertEquals(
+            WidgetCheckboxAction.MARK_UNDONE,
+            WidgetData.checkboxActionFor(WidgetTask("t2", "Task two", true, null))
+        )
+    }
+
+    @Test
+    fun checkboxFollowsAPendingDoneTapNotTheSnapshot() {
+        // The label must describe what the next tap does: t1 is open in the blob
+        // but checked on the widget, so the next tap un-checks it.
+        val tapped = WidgetData.parse(blob, pendingDoneTargets = mapOf("t1" to true))
+            .first { it.id == "t1" }
+        assertEquals(WidgetCheckboxAction.MARK_UNDONE, WidgetData.checkboxActionFor(tapped))
+    }
+
+    @Test
+    fun checkboxOfAPendingQuickAddOpensTheApp() {
+        val pending = WidgetData.withPendingCaptures(
+            emptyList(),
+            """[{"id": "c1", "title": "Buy milk"}]"""
+        ).single()
+        assertEquals(WidgetCheckboxAction.OPEN_APP, WidgetData.checkboxActionFor(pending))
     }
 }

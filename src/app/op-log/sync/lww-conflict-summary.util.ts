@@ -1,5 +1,14 @@
-import { extractUpdateChanges, OpType, type LwwResolvedConflict } from '@sp/sync-core';
+import {
+  deepEqual,
+  extractUpdateChanges,
+  OpType,
+  type LwwResolvedConflict,
+} from '@sp/sync-core';
+import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import type { EntityConflict, Operation } from '../core/operation.types';
+import { aggregateEntityConflict } from './conflict-field-patch.util';
+
+type ResolvedConflict = LwwResolvedConflict<Operation, EntityConflict>;
 
 /**
  * Task fields a user authors by hand. If an LWW resolution discards an UPDATE
@@ -20,6 +29,22 @@ import type { EntityConflict, Operation } from '../core/operation.types';
  * would silently never match.
  */
 const TASK_CONTENT_FIELDS: readonly string[] = ['title', 'notes', 'subTaskIds'];
+
+const collectContentUpdates = (
+  ops: Operation[],
+  payloadKey: string,
+): Map<string, unknown> => {
+  const values = new Map<string, unknown>();
+  for (const op of ops) {
+    if (op.opType !== OpType.Update) continue;
+    for (const [field, value] of Object.entries(
+      extractUpdateChanges(op.payload, payloadKey),
+    )) {
+      if (TASK_CONTENT_FIELDS.includes(field)) values.set(field, value);
+    }
+  }
+  return values;
+};
 
 export interface LwwContentConflict {
   entityId: string;
@@ -50,8 +75,42 @@ export interface LwwContentConflict {
  * per task, since one task can produce several concurrent conflicts in a batch.
  */
 export const findLwwContentConflicts = (
-  resolutions: LwwResolvedConflict<Operation, EntityConflict>[],
+  resolutions: ResolvedConflict[],
   payloadKeyFor: (entityType: string) => string,
+): LwwContentConflict[] => {
+  // Detection emits one conflict per incoming op. A CREATE sibling can share
+  // the same losing update as the retained UPDATE that carried its value.
+  const groups = new Map<
+    string,
+    { winner: ResolvedConflict['winner']; conflicts: EntityConflict[] }
+  >();
+  for (const { winner, conflict } of resolutions) {
+    if (conflict.entityType !== 'TASK') continue;
+    const key = `${winner}:${conflict.entityId}`;
+    const group = groups.get(key) ?? { winner, conflicts: [] };
+    group.conflicts.push(conflict);
+    groups.set(key, group);
+  }
+  const grouped = [...groups.values()].map(({ winner, conflicts }) => ({
+    winner,
+    conflict: aggregateEntityConflict(conflicts),
+  }));
+  return findContentConflicts(grouped, payloadKeyFor, false);
+};
+
+/**
+ * A field patch keeps fields only one side wrote, so only overlapping writes
+ * can discard content.
+ */
+export const findPatchContentConflicts = (
+  patches: ResolvedConflict[],
+  payloadKeyFor: (entityType: string) => string,
+): LwwContentConflict[] => findContentConflicts(patches, payloadKeyFor, true);
+
+const findContentConflicts = (
+  resolutions: ResolvedConflict[],
+  payloadKeyFor: (entityType: string) => string,
+  isPatch: boolean,
 ): LwwContentConflict[] => {
   const byTask = new Map<string, { fields: Set<string>; discardedTitle?: string }>();
 
@@ -59,35 +118,32 @@ export const findLwwContentConflicts = (
     if (conflict.entityType !== 'TASK') {
       continue;
     }
-    // The losing side is the one whose ops are rejected — its changes are the
-    // ones that got discarded.
     const discardedOps = winner === 'remote' ? conflict.localOps : conflict.remoteOps;
+    const retainedOps = winner === 'remote' ? conflict.remoteOps : conflict.localOps;
     const payloadKey = payloadKeyFor(conflict.entityType);
+    const discarded = collectContentUpdates(discardedOps, payloadKey);
+    if (discarded.size === 0) continue;
+    const retained = collectContentUpdates(retainedOps, payloadKey);
+    // A delete or synthetic LWW row can replace the readable update's value.
+    const retainedValueMayBeReplaced = retainedOps.some(
+      (op) => op.opType === OpType.Delete || isLwwUpdateActionType(op.actionType),
+    );
 
-    for (const op of discardedOps) {
-      if (op.opType !== OpType.Update) {
+    for (const [field, value] of discarded) {
+      const retainedWroteField = retained.has(field);
+      if (isPatch && !retainedWroteField) continue;
+      if (
+        retainedWroteField &&
+        !retainedValueMayBeReplaced &&
+        deepEqual(value, retained.get(field))
+      )
         continue;
+      const acc = byTask.get(conflict.entityId) ?? { fields: new Set<string>() };
+      acc.fields.add(field);
+      if (field === 'title' && typeof value === 'string' && value.trim().length) {
+        acc.discardedTitle = value;
       }
-      const changes = extractUpdateChanges(op.payload, payloadKey);
-      for (const field of Object.keys(changes)) {
-        if (!TASK_CONTENT_FIELDS.includes(field)) {
-          continue;
-        }
-        const acc = byTask.get(conflict.entityId) ?? { fields: new Set<string>() };
-        acc.fields.add(field);
-        // Keep the LAST non-empty discarded title so the banner names the user's
-        // final rename, not a stale intermediate one (offline A→B→C, all
-        // discarded → show C). Ops are processed in append order, so a later
-        // non-empty value overwrites an earlier one. See
-        // LwwContentConflict.discardedTitle.
-        if (field === 'title') {
-          const value = (changes as { title?: unknown }).title;
-          if (typeof value === 'string' && value.trim().length) {
-            acc.discardedTitle = value;
-          }
-        }
-        byTask.set(conflict.entityId, acc);
-      }
+      byTask.set(conflict.entityId, acc);
     }
   }
 
@@ -99,42 +155,3 @@ export const findLwwContentConflicts = (
     ...(discardedTitle !== undefined ? { discardedTitle } : {}),
   }));
 };
-
-/**
- * `findLwwContentConflicts` for field patches: a patch keeps every field only
- * one side wrote, so the loser's content edit is discarded only where the
- * winner wrote the same field (e.g. both renamed the task).
- */
-export const findPatchContentConflicts = (
-  patches: LwwResolvedConflict<Operation, EntityConflict>[],
-  payloadKeyFor: (entityType: string) => string,
-): LwwContentConflict[] =>
-  findLwwContentConflicts(patches, payloadKeyFor).flatMap((found) => {
-    const patch = patches.find(
-      ({ conflict }) =>
-        conflict.entityType === 'TASK' && conflict.entityId === found.entityId,
-    );
-    if (!patch) return [];
-    const { winner, conflict } = patch;
-    const winnerOps = winner === 'remote' ? conflict.remoteOps : conflict.localOps;
-    const written = new Set(
-      winnerOps
-        .filter((op) => op.opType === OpType.Update)
-        .flatMap((op) =>
-          Object.keys(
-            extractUpdateChanges(op.payload, payloadKeyFor(conflict.entityType)),
-          ),
-        ),
-    );
-    const discardedFields = found.discardedFields.filter((field) => written.has(field));
-    if (discardedFields.length === 0) return [];
-    return [
-      {
-        entityId: found.entityId,
-        discardedFields,
-        ...(written.has('title') && found.discardedTitle !== undefined
-          ? { discardedTitle: found.discardedTitle }
-          : {}),
-      },
-    ];
-  });

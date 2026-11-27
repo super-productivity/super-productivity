@@ -35,6 +35,15 @@ export class ConnectUnsupportedError extends Error {
   override name = 'ConnectUnsupportedError';
 }
 
+/** The server answered the sign-in request, but refused it (e.g. 400, 403, 429). */
+export class ConnectHttpError extends Error {
+  override name = 'ConnectHttpError';
+
+  constructor(readonly status: number) {
+    super(`Sign-in request failed: HTTP ${status}`);
+  }
+}
+
 // The server's pattern; the id goes into a URL.
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const DEFAULT_POLL_INTERVAL_MS = 3000;
@@ -149,7 +158,7 @@ export const createConnectRequest = async (
     throw new ConnectUnsupportedError(`HTTP ${res.status}`);
   }
   if (!isOk(res.status)) {
-    throw new Error(`Sign-in request failed: HTTP ${res.status}`);
+    throw new ConnectHttpError(res.status);
   }
   // A proxy or another app at that address may answer with HTML.
   return parseConnectRequest(res.body);

@@ -3,7 +3,7 @@ import { T } from '../../../../t.const';
 import { IssueProviderCalendar } from '../../issue.model';
 import { CalendarProviderCfg } from './calendar.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
-import { IS_ELECTRON } from '../../../../app.constants';
+import { IS_ELECTRON, DOCS_URL } from '../../../../app.constants';
 import { IssueLog } from '../../../../core/log';
 import {
   CALENDAR_REGEX_FILTER_MAX_LENGTH,
@@ -49,6 +49,7 @@ export const DEFAULT_CALENDAR_CFG: CalendarProviderCfg = {
 export const CALENDAR_FORM_CFG_NEW: ConfigFormSection<IssueProviderCalendar> = {
   title: 'CALENDAR',
   help: T.GCF.CALENDARS.HELP,
+  docsUrl: `${DOCS_URL}how-to/manage-task-integrations/`,
   key: 'ICAL',
   items: [
     ...(!IS_ELECTRON

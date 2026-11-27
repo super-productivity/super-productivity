@@ -38,6 +38,7 @@ internal object RepeatCfgSync {
         op: JSONObject,
         payload: Lazy<JSONObject?>,
         removed: MutableSet<String>,
+        detached: MutableMap<String, RepeatCfg>,
     ): RepeatCfgSyncState {
         val entityType = op.optString("entityType", "")
         val actionType = op.optString("actionType", "")
@@ -54,6 +55,7 @@ internal object RepeatCfgSync {
         if (opType == "DEL" || actionType == ACTION_DELETE || actionType == ACTION_DELETE_MANY) {
             var next = state
             for (id in entityIds(op, payload.value)) {
+                next.byId(id)?.let { detached[id] = it }
                 next = next.remove(id)
                 removed.add(id)
             }

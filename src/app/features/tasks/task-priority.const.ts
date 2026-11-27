@@ -25,7 +25,8 @@ export const TASK_PRIORITY_ICONS: Record<
     2: 'keyboard_arrow_up',
     3: 'keyboard_double_arrow_up',
   },
-  numbers: { 1: 'counter_1', 2: 'counter_2', 3: 'counter_3' },
+  // 1 = High, matching short syntax `p1` (#10793); display only, stored levels unchanged.
+  numbers: { 1: 'counter_3', 2: 'counter_2', 3: 'counter_1' },
 };
 
 /* eslint-enable @typescript-eslint/naming-convention */

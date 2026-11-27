@@ -64,10 +64,10 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                 nowMs = SystemClock::elapsedRealtime,
             )
 
-        // Not tied to one alarm: a derivation that misses the deadline keeps
-        // running (best effort: Android may kill the idle process) and caches the
-        // key for the next alarm and SyncReminderWorker.
-        private val derivingScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        // Not tied to one alarm: work that misses the deadline keeps running
+        // (best effort: Android may kill the idle process). A late derivation
+        // still caches the key for the next alarm and SyncReminderWorker.
+        private val detachedScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
         // Whole stale check, both fetches included, must end inside the ~10s
         // goAsync() window. A cold derivation measured 1.4s on an x86 emulator
@@ -115,7 +115,15 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
-                val isStale = isTaskStale(context, relatedId, triggerAtMs, reminderType)
+                // Hard cap on top of the fetch timeouts: system DNS ignores
+                // OkHttp's callTimeout, and a lookup stuck past the goAsync()
+                // window was an ACTION_SHOW_REMINDER ANR in Play vitals.
+                val isStale = awaitWithin(CHECK_BUDGET_MS, detachedScope) {
+                    isTaskStale(context, relatedId, triggerAtMs, reminderType)
+                } ?: run {
+                    Log.d(TAG, "Stale check over budget, failing open: id=$notificationId")
+                    false
+                }
                 if (isStale) {
                     Log.d(TAG, "Suppressed stale notification: id=$notificationId, task=$relatedId")
                     ReminderNotificationHelper.cancelReminder(context, notificationId)
@@ -156,7 +164,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             context, credentials.baseUrl
         )
 
-        // Token in the key: a re-login on the same server keeps lastSeq, and one
+        // Token in the key: every login on a server restarts at lastSeq 0, and one
         // account's result must never answer for another's alarms.
         val cacheKey = Triple(credentials.baseUrl, credentials.accessToken, lastSeq)
         val result = staleCheckFetches.get(cacheKey) {
@@ -194,7 +202,8 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val (baseUrl, accessToken, lastSeq) = cacheKey
         // No stored password: deriving is impossible, so a second GET would only repeat the first.
         val decryptor = buildPayloadDecryptor(context, TAG) ?: return null
-        val derived = derivingScope.async {
+        val waitMs = (deadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+        val result = awaitWithin(waitMs, detachedScope) {
             derivingFetches.get(cacheKey) {
                 SuperSyncBackgroundProvider(decryptor).fetchQuick(
                     baseUrl, accessToken, lastSeq,
@@ -202,11 +211,24 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                 )
             }
         }
-        val waitMs = deadlineMs - SystemClock.elapsedRealtime()
-        val result = withTimeoutOrNull(waitMs.coerceAtLeast(0L)) { derived.await() }
         if (result == null) Log.d(TAG, "No derived-key result by the alarm deadline, failing open")
         return result
     }
+}
+
+/**
+ * Waits at most [budgetMs] for [block], which runs in [scope] so blocking work
+ * that ignores cancellation (system DNS) cannot hold the caller past budget.
+ * Returns null on timeout; the work keeps running in [scope]. Failures from
+ * [block] are rethrown.
+ */
+internal suspend fun <T> awaitWithin(
+    budgetMs: Long,
+    scope: CoroutineScope,
+    block: suspend () -> T,
+): T? {
+    val work = scope.async { block() }
+    return withTimeoutOrNull(budgetMs) { work.await() }
 }
 
 /**

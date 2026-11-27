@@ -10,7 +10,14 @@ import { toObservable } from '@angular/core/rxjs-interop';
 import { T } from '../../t.const';
 import { ReactiveFormsModule, UntypedFormControl } from '@angular/forms';
 import { BehaviorSubject, combineLatest, from, Observable } from 'rxjs';
-import { debounceTime, filter, map, startWith, switchMap } from 'rxjs/operators';
+import {
+  debounceTime,
+  filter,
+  map,
+  shareReplay,
+  startWith,
+  switchMap,
+} from 'rxjs/operators';
 import { TaskService } from '../../features/tasks/task.service';
 import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { DEFAULT_TAG, TODAY_TAG } from '../../features/tag/tag.const';
@@ -92,6 +99,13 @@ export class SearchPageComponent implements OnInit {
   searchForm: UntypedFormControl = new UntypedFormControl('');
   includeCompletedForm: UntypedFormControl = new UntypedFormControl(false);
   filteredResults$: Observable<SearchItem[]> = new Observable();
+  /**
+   * Whether done or archived tasks match the term but are left out by the
+   * default search. Turns "nothing found" into a pointer to the include
+   * option, so a search for a finished task is not a dead end (2026-11 user
+   * survey).
+   */
+  hasHiddenCompleted$: Observable<boolean> = new Observable();
 
   private _reloadDeleted$ = new BehaviorSubject<void>(undefined);
 
@@ -411,15 +425,24 @@ export class SearchPageComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.filteredResults$ = combineLatest([
+    const searchInput$ = combineLatest([
       this._searchableItems$,
       this.searchForm.valueChanges.pipe(startWith('')),
       this.includeCompletedForm.valueChanges.pipe(startWith(false)),
     ]).pipe(
       debounceTime(150),
       filter(([, searchTerm]) => typeof searchTerm === 'string'),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
+    this.filteredResults$ = searchInput$.pipe(
       map(([searchableItems, searchTerm, includeCompleted]) =>
         this._filter(searchableItems, searchTerm, !!includeCompleted),
+      ),
+    );
+    this.hasHiddenCompleted$ = searchInput$.pipe(
+      map(
+        ([searchableItems, searchTerm, includeCompleted]) =>
+          !includeCompleted && this._hasHiddenCompleted(searchableItems, searchTerm),
       ),
     );
 
@@ -454,6 +477,21 @@ export class SearchPageComponent implements OnInit {
       MAX_RESULTS - Math.min(deleted.length, MIN_DELETED_RESULTS),
     );
     return [...head, ...deleted.slice(0, MAX_RESULTS - head.length)];
+  }
+
+  // No count on purpose: the result cap can show fewer than actually match.
+  private _hasHiddenCompleted(
+    searchableItems: SearchItem[],
+    searchTerm: string,
+  ): boolean {
+    if (!searchTerm.trim()) {
+      return false;
+    }
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    return searchableItems.some(
+      (item) =>
+        (item.isDone || item.isArchiveTask) && item.searchText.includes(lowerSearchTerm),
+    );
   }
 
   navigateToItem(item: SearchItem): void {

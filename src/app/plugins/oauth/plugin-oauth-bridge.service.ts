@@ -187,8 +187,11 @@ export class PluginOAuthBridgeService {
     } else if (IS_NATIVE_PLATFORM) {
       // On mobile, Google blocks OAuth in embedded WebViews (Error 400: invalid_request).
       // Use Capacitor Browser to open the system browser instead.
+      // Explicitly fullscreen, not 'popover': Capacitor centers the popover with
+      // no preferred size on iPad, where the sign-in page was reported not to
+      // load; iPhone adapts popovers to fullscreen, so it is unaffected.
       import('@capacitor/browser').then(({ Browser }) =>
-        Browser.open({ url, presentationStyle: 'popover' }),
+        Browser.open({ url, presentationStyle: 'fullscreen' }),
       );
     } else {
       const popup = window.open(url, '_blank', 'width=600,height=700');

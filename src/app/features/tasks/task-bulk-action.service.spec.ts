@@ -5,6 +5,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { defer, Observable, of } from 'rxjs';
 import { TaskBulkActionService } from './task-bulk-action.service';
 import { TaskService } from './task.service';
+import { TaskSchedulingService } from './task-scheduling.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { ProjectService } from '../project/project.service';
@@ -24,6 +25,7 @@ import { PlannerActions } from '../planner/store/planner.actions';
 describe('TaskBulkActionService', () => {
   let service: TaskBulkActionService;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskSchedulingService: jasmine.SpyObj<TaskSchedulingService>;
   let currentTaskId: ReturnType<typeof signal<string | null>>;
   let store: { dispatch: jasmine.Spy; selectSignal: jasmine.Spy; select: jasmine.Spy };
   let matDialog: { open: jasmine.Spy };
@@ -49,6 +51,7 @@ describe('TaskBulkActionService', () => {
   };
   let dialogResult: unknown;
   let isConfirmBeforeDelete: boolean;
+  let startOfNextDayDiffMs: number;
   let isEnableBacklog: boolean;
 
   const t = (id: string, overrides: Partial<Task> = {}): Task => ({
@@ -75,6 +78,7 @@ describe('TaskBulkActionService', () => {
     selectedIds = signal<ReadonlySet<string>>(new Set());
     dialogResult = true;
     isConfirmBeforeDelete = true;
+    startOfNextDayDiffMs = 0;
     isEnableBacklog = true;
 
     taskService = jasmine.createSpyObj<TaskService>('TaskService', [
@@ -84,6 +88,8 @@ describe('TaskBulkActionService', () => {
       'removeMultipleTasks',
       'updateTags',
       'update',
+    ]);
+    taskSchedulingService = jasmine.createSpyObj('TaskSchedulingService', [
       'scheduleTask',
     ]);
     currentTaskId = signal<string | null>(null);
@@ -136,6 +142,7 @@ describe('TaskBulkActionService', () => {
         TaskBulkActionService,
         { provide: Store, useValue: store },
         { provide: TaskService, useValue: taskService },
+        { provide: TaskSchedulingService, useValue: taskSchedulingService },
         { provide: TaskMultiSelectService, useValue: multiSelect },
         { provide: TaskMoveToProjectService, useValue: moveToProjectService },
         {
@@ -148,7 +155,7 @@ describe('TaskBulkActionService', () => {
           provide: DateService,
           useValue: {
             todayStr: () => '2026-09-05',
-            getStartOfNextDayDiffMs: () => 0,
+            getStartOfNextDayDiffMs: () => startOfNextDayDiffMs,
             isToday: () => false,
           },
         },
@@ -778,7 +785,7 @@ describe('TaskBulkActionService', () => {
       expect(plan[0].task.id).toBe('a');
       expect(plan[0].isShowSnack).toBeFalse();
       // timed task keeps its time on the new day
-      expect(taskService.scheduleTask).toHaveBeenCalledWith(
+      expect(taskSchedulingService.scheduleTask).toHaveBeenCalledWith(
         jasmine.objectContaining({ id: 'b' }),
         jasmine.any(Number),
         TaskReminderOptionId.DoNotRemind,
@@ -827,7 +834,24 @@ describe('TaskBulkActionService', () => {
         time: '09:30',
         remindOption: null,
       });
-      expect(taskService.scheduleTask).toHaveBeenCalledTimes(2);
+      expect(taskSchedulingService.scheduleTask).toHaveBeenCalledTimes(2);
+    });
+
+    // #12012: with the day starting at 04:00, 02:00 of Sep 10 is the night after it
+    it('puts a time before a custom day start at the end of the picked day', async () => {
+      startOfNextDayDiffMs = 4 * 60 * 60 * 1000;
+      select([t('a')]);
+      await service.scheduleFor({
+        date: new Date(2026, 8, 10),
+        time: '02:00',
+        remindOption: null,
+      });
+      expect(taskSchedulingService.scheduleTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'a' }),
+        new Date(2026, 8, 11, 2, 0).getTime(),
+        TaskReminderOptionId.DoNotRemind,
+        false,
+      );
     });
 
     // #11816: a repeat config holds at most a 1h lead and would overwrite a
@@ -839,13 +863,13 @@ describe('TaskBulkActionService', () => {
         time: '09:30',
         remindOption: TaskReminderOptionId.w1,
       });
-      expect(taskService.scheduleTask).toHaveBeenCalledWith(
+      expect(taskSchedulingService.scheduleTask).toHaveBeenCalledWith(
         jasmine.objectContaining({ id: 'plain' }),
         jasmine.any(Number),
         TaskReminderOptionId.w1,
         false,
       );
-      expect(taskService.scheduleTask).toHaveBeenCalledWith(
+      expect(taskSchedulingService.scheduleTask).toHaveBeenCalledWith(
         jasmine.objectContaining({ id: 'repeating' }),
         jasmine.any(Number),
         TaskReminderOptionId.h1,
