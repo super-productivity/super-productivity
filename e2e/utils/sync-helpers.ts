@@ -4,6 +4,7 @@ import {
   type Locator,
   type Page,
   type APIRequestContext,
+  type APIResponse,
 } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { waitForAppReady } from './waits';
@@ -101,8 +102,8 @@ export const createSyncFolder = async (
 ): Promise<void> => {
   const mkcolUrl = `${baseUrl}${folderName}`;
   console.log(`Creating WebDAV folder: ${mkcolUrl}`);
-  try {
-    const response = await request.fetch(mkcolUrl, {
+  const sendMkcol = (): Promise<APIResponse> =>
+    request.fetch(mkcolUrl, {
       method: 'MKCOL',
       headers: {
         Authorization:
@@ -112,15 +113,26 @@ export const createSyncFolder = async (
           ).toString('base64'),
       },
     });
-    if (!response.ok() && response.status() !== 405) {
+  let response: APIResponse;
+  try {
+    response = await sendMkcol();
+  } catch (firstError) {
+    console.warn(`MKCOL transport error, retrying once: ${String(firstError)}`);
+    // Retry once on a transport error: a pooled keep-alive socket the server
+    // already closed fails with "socket hang up" (scheduled run 46035451588).
+    // Safe to repeat because an existing folder (405) counts as success.
+    try {
+      response = await sendMkcol();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
       throw new Error(
-        `Failed to create WebDAV folder "${folderName}": ${response.status()} ${response.statusText()}`,
+        `Error creating WebDAV folder "${folderName}" at ${mkcolUrl}: ${message}`,
       );
     }
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
+  }
+  if (!response.ok() && response.status() !== 405) {
     throw new Error(
-      `Error creating WebDAV folder "${folderName}" at ${mkcolUrl}: ${message}`,
+      `Failed to create WebDAV folder "${folderName}": ${response.status()} ${response.statusText()}`,
     );
   }
 };
