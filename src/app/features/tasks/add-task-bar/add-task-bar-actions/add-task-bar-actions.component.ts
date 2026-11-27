@@ -273,7 +273,6 @@ export class AddTaskBarActionsComponent {
           targetDay: state.date || undefined,
           targetTime: state.time || undefined,
           isSelectDueOnly: true,
-          isCalendarDay: true,
           // a repeat config holds at most a 1h lead (#11816)
           ...(state.repeat
             ? { reminderOptions: TASK_REMINDER_OPTIONS_WITHOUT_LONG_LEAD }

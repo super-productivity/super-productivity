@@ -798,6 +798,24 @@ describe('AddTaskBarComponent', () => {
       expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2026-03-30');
     });
 
+    // With the day starting at 04:00, logical day 2026-03-30 runs until 04:00 on
+    // the 31st, so 02:00 picked on it is the night of the 30th (#12012)
+    it('should put a time before a custom day start at the end of the picked day', async () => {
+      mockDateService.getStartOfNextDayDiffMs.and.returnValue(4 * 60 * 60 * 1000);
+      mockTaskService.add.and.returnValue('task-1');
+      mockTaskService.getByIdOnce$.and.returnValue(of({ id: 'task-1' } as TaskCopy));
+
+      component.stateService.updateInputTxt('Night shift');
+      component.stateService.updateCleanText('Night shift');
+      component.stateService.updateDate('2026-03-30', '02:00');
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.dueWithTime).toBe(new Date(2026, 2, 31, 2, 0).getTime());
+    });
+
     // The schedule pick offers day/week lead times; a repeat config persists the
     // option id, which released clients before v19.2.0 cannot convert.
     it('should not persist a long lead time into a picked repeat config', async () => {

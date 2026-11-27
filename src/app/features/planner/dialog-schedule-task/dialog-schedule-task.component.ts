@@ -39,7 +39,10 @@ import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
 import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { ReminderService } from '../../reminder/reminder.service';
-import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
+import {
+  getLogicalDayOfTimestamp,
+  getRepeatDueWithTime,
+} from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -91,12 +94,6 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     targetDay?: string;
     targetTime?: string;
     isSelectDueOnly?: boolean;
-    /**
-     * The caller combines the returned date with the time as a calendar date,
-     * not a logical day (#12012). shortcut: only the add-task bar and calendar
-     * events — drop once they are logical-day aware.
-     */
-    isCalendarDay?: boolean;
     showQuickAccess?: boolean;
     minDate?: Date | null;
     isSubmitOnQuickAccess?: boolean;
@@ -131,7 +128,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   T: typeof T = T;
   readonly DO_NOT_REMIND = TaskReminderOptionId.DoNotRemind;
   // Logical today, so the day that is still running after midnight stays pickable
-  minDate = this.data.minDate === undefined ? this._todayForPick() : this.data.minDate;
+  minDate =
+    this.data.minDate === undefined
+      ? this._dateService.getLogicalTodayDate()
+      : this.data.minDate;
 
   // A repeating task takes its reminder from the repeat config, which holds at
   // most a 1h lead; offering longer leads would silently drop back (#11816).
@@ -297,8 +297,11 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         // Do NOT add timezone offset here as it would double-apply the conversion (fixes #5515)
         // Show the logical day, or saving unchanged would push an early-morning
         // time (before a custom day start) one day later (#12012)
-        this.selectedDate = new Date(
-          this.data.task.dueWithTime - this._dateService.getStartOfNextDayDiffMs(),
+        this.selectedDate = dateStrToUtcDate(
+          getLogicalDayOfTimestamp(
+            this.data.task.dueWithTime,
+            this._dateService.getStartOfNextDayDiffMs(),
+          ),
         );
         this.selectedTime = new Date(this.data.task.dueWithTime).toLocaleTimeString(
           'en-GB',
@@ -576,13 +579,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     );
   }
 
-  private _todayForPick(): Date {
-    return this.data.isCalendarDay ? new Date() : this._dateService.getLogicalTodayDate();
-  }
-
   onQuickAccessClick(option: 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'): void {
-    // The picked date is combined with the time as a logical day (#12012)
-    const tDate = this._todayForPick();
+    // Every caller combines the time on a logical day (#12012), so start from
+    // logical today
+    const tDate = this._dateService.getLogicalTodayDate();
     tDate.setMinutes(0, 0, 0);
 
     switch (option) {

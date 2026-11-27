@@ -761,7 +761,6 @@ describe('AddTaskBarActionsComponent', () => {
       expect(mockMatDialog.open).toHaveBeenCalledWith(DialogScheduleTaskComponent, {
         data: {
           isSelectDueOnly: true,
-          isCalendarDay: true,
           targetDay: testDateStr,
           targetTime: '10:30',
         },
@@ -797,7 +796,6 @@ describe('AddTaskBarActionsComponent', () => {
       expect(mockMatDialog.open).toHaveBeenCalledWith(DialogScheduleTaskComponent, {
         data: {
           isSelectDueOnly: true,
-          isCalendarDay: true,
           targetDay: undefined,
           targetTime: undefined,
         },
@@ -884,7 +882,6 @@ describe('AddTaskBarActionsComponent', () => {
       expect(mockMatDialog.open).toHaveBeenCalledWith(DialogScheduleTaskComponent, {
         data: {
           isSelectDueOnly: true,
-          isCalendarDay: true,
           targetDay: undefined,
           targetTime: '09:00',
         },
@@ -1384,7 +1381,6 @@ describe('AddTaskBarActionsComponent', () => {
         {
           data: {
             isSelectDueOnly: true,
-            isCalendarDay: true,
             targetDay: existingDate, // Should remain as string
             targetTime: existingTime,
           },

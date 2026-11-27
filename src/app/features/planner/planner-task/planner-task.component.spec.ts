@@ -14,6 +14,8 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { DateService } from '../../../core/date/date.service';
+import { findSpringForwardSunday } from '../../tasks/dst.test-helper';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { DateAdapter } from '@angular/material/core';
 import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
@@ -258,6 +260,33 @@ describe('PlannerTaskComponent', () => {
         );
       });
     }
+
+    // On the spring-forward Sunday a time just after the day start is less
+    // than the offset past midnight, yet it belongs to that Sunday
+    it('moves a time just after the day start from its own day on a spring-forward day', () => {
+      const gap = findSpringForwardSunday(2026);
+      if (!gap) {
+        // Timezone without a spring-forward transition (UTC, Tokyo).
+        return;
+      }
+      const dayStartHour = gap.missingHour + 2;
+      startOfNextDayDiffMs = dayStartHour * 60 * 60 * 1000;
+      const due = new Date(gap.sunday);
+      due.setHours(dayStartHour, 30, 0, 0);
+      const expected = new Date(due);
+      expected.setDate(expected.getDate() + 1);
+      const task = makeTask({ dueWithTime: due.getTime(), remindAt: undefined });
+      const { component } = create(task, true, getDbDateStr(gap.sunday));
+
+      component.onKeydown(moveDayEvent(component, 'ArrowRight'));
+
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
+        task,
+        expected.getTime(),
+        TaskReminderOptionId.DoNotRemind,
+        false,
+      );
+    });
 
     it('leaves the move-day shortcut untouched in an input and for opt-out cards', () => {
       const optedIn = create(makeTask(), true, '2026-01-01').component;
