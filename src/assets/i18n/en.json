@@ -1747,6 +1747,7 @@
         "OVERWRITE_SERVER_FAILED": "Failed to overwrite server data: {{message}}",
         "PARTIAL_APPLY_FAILURE": "Some downloaded changes could not be applied. Sync is paused to protect your data. Restart the app to retry.",
         "PERSIST_FAILED": "Failed to save changes. State may be inconsistent - please reload.",
+        "PERSIST_STORAGE_OFF": "Changes can't be saved while your device has storage turned off. Anything you enter now will be lost when the app closes.",
         "REMOTE_DATA_TOO_OLD": "Remote data is too old to be processed. Please update your remote app.",
         "REMOTE_NOT_ENCRYPTED": "The synced data is not encrypted, but encryption is enabled on this device, so it was rejected. If you turned off encryption on another device, disable it here too in Sync settings to continue.",
         "REPLAY_LOCAL_OPS_FAILED": "Failed to replay local operations after import. Some recent changes may be lost. Data has been validated.",

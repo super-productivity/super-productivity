@@ -61,6 +61,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   private compactionFailures = 0;
   /** Circuit breaker: prevents recursive quota exceeded handling */
   private isHandlingQuotaExceeded = false;
+  /** #11994: the storage-off warning is shown once per session, not per write. */
+  private hasWarnedStorageOff = false;
   /** Counter for total operations written. Used for high-volume sync debugging. */
   private writeCount = 0;
   /**
@@ -539,9 +541,27 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    * Shows a persistent error notification when persistence fails.
    * Uses duration: 0 to make the snackbar sticky until user acts.
    * This is critical because the user needs to reload - their state
-   * has diverged from what's persisted to disk.
+   * has diverged from what's persisted to disk. Exception: with IndexedDB
+   * switched off (#11994) a reload cannot help, so a one-time warning is shown.
    */
   private notifyUserAndTriggerRollback(): void {
+    // #11994: without the `indexedDB` global (iOS Lockdown Mode) every write
+    // fails and a reload cannot help. Warn once that edits are not kept, for
+    // users who skimmed the startup dialog, instead of a reload prompt per edit.
+    // Sticky + action (a plain OK) so SnackService keeps it from being replaced
+    // by other feedback before the user has seen it; it is never shown again.
+    if (typeof indexedDB === 'undefined') {
+      if (!this.hasWarnedStorageOff) {
+        this.hasWarnedStorageOff = true;
+        this.snackService.open({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.PERSIST_STORAGE_OFF,
+          actionStr: T.G.OK,
+          config: { duration: 0 },
+        });
+      }
+      return;
+    }
     this.snackService.open({
       type: 'ERROR',
       msg: T.F.SYNC.S.PERSIST_FAILED,

@@ -293,6 +293,8 @@ const SHARED_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> 
     lastStorageQuotaSnackAt:
       'set only on a storage-quota error, which the fuzz never hits',
     STORAGE_QUOTA_SNACK_DEDUPE_MS: CONSTANT,
+    hasWarnedStorageOff:
+      'set only when the indexedDB global is missing (#11994), which the fuzz never hits',
     _deferredProcessingChain: 'settled at every step boundary: _settle drains it',
   },
   ArchiveOperationHandler: {

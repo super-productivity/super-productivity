@@ -10,6 +10,12 @@ export interface IdbOpenErrorContext {
   channel: DistChannel;
   /** Version of the build showing the dialog (`getAppVersionStr()`). */
   appVersion: string;
+  /**
+   * False when the platform removed the `indexedDB` global entirely (iOS
+   * Lockdown Mode, #11994). Probed by the caller, not parsed from the error
+   * text, because the ReferenceError wording differs per engine.
+   */
+  isIdbAvailable: boolean;
 }
 
 const originalMessageOf = (error: IndexedDBOpenError): string =>
@@ -150,6 +156,25 @@ const buildGenericErrorMessage = (
 };
 
 /**
+ * The platform switched IndexedDB off, so no retry, reload or cleanup can
+ * help: the generic text's disk-space/corruption causes and "clear storage"
+ * advice are wrong here. iOS Lockdown Mode is the known trigger (#11994);
+ * excluding the app from its web restrictions restores storage. The browser
+ * sentence self-qualifies, so the text stays true on every channel.
+ */
+const buildUnavailableErrorMessage = (error: IndexedDBOpenError): string =>
+  'Storage Turned Off - Cannot Save Data\n\n' +
+  'Super Productivity cannot load or save anything because your device has ' +
+  'turned off the storage it needs (IndexedDB). Super Productivity did not ' +
+  'change or delete anything, and clearing storage would not help.\n\n' +
+  'On iPhone or iPad this is usually caused by Lockdown Mode. To keep Lockdown Mode on ' +
+  'and still use the app, go to Settings > Privacy & Security > Lockdown Mode > ' +
+  'Configure Web Browsing and exclude Super Productivity, then restart the app.\n\n' +
+  'If you run it in a browser, allow this site to store data and do not use a ' +
+  'mode that blocks site storage.\n\n' +
+  `Technical details: ${originalMessageOf(error)}`;
+
+/**
  * Builds the user-facing recovery text for a failed IndexedDB open.
  *
  * Extracted from `OperationLogHydratorService` so the wording is pure logic and
@@ -158,7 +183,11 @@ const buildGenericErrorMessage = (
 export const buildIdbOpenErrorMessage = (
   error: IndexedDBOpenError,
   ctx: IdbOpenErrorContext,
-): string =>
-  error.isVersionError
+): string => {
+  if (!ctx.isIdbAvailable) {
+    return buildUnavailableErrorMessage(error);
+  }
+  return error.isVersionError
     ? buildVersionErrorMessage(error, ctx)
     : buildGenericErrorMessage(error, ctx);
+};
