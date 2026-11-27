@@ -38,6 +38,19 @@ describe('DialogSyncSetupComponent', () => {
   let isCancelled: () => boolean;
 
   const text = (): string => fixture.nativeElement.textContent;
+  const expectStartWarning = (
+    stage: string,
+    status: number | null,
+    reason?: string,
+  ): void => {
+    expect(SyncLog.warn).toHaveBeenCalledOnceWith(
+      `SuperSync sign-in failed during ${stage}`,
+      {
+        status,
+        reason,
+      },
+    );
+  };
   const settle = async (): Promise<void> => {
     await fixture.whenStable();
     fixture.detectChanges();
@@ -185,17 +198,48 @@ describe('DialogSyncSetupComponent', () => {
     expect(dialogRef.close).toHaveBeenCalledWith(true);
   });
 
-  it('shows a connection error and keeps platform error details out of the log', async () => {
-    connect.start.and.rejectWith(
-      new TypeError('Request URL contains credentials: https://user:pass@sync.example/'),
-    );
+  it('logs why Chromium rejected the request without copying its URL', async () => {
+    component.editServer();
+    component.serverInput = 'https://user:pass@sync.example/private?token=secret';
+    connect.start.and.callFake(async (baseUrl) => {
+      // Constructing a Request with credentials throws before anything is sent.
+      new Request(baseUrl);
+      throw new Error('Expected a credential-bearing URL to be rejected');
+    });
     await component.signIn();
     expect(component.step()).toBe('choose');
     expect(component.errorKey()).toBe(T.F.SYNC.D_SIGN_IN.START_FAILED);
     expect(connect.waitForApproval).not.toHaveBeenCalled();
-    expect(SyncLog.warn).toHaveBeenCalledOnceWith('SuperSync sign-in could not start', {
-      status: null,
-    });
+    expectStartWarning('request', null, 'URL contains credentials');
+  });
+
+  it('keeps the native diagnostic code without logging its message', async () => {
+    connect.start.and.rejectWith(
+      Object.assign(new Error('Unable to resolve host "private.example"'), {
+        code: 'UnknownHostException',
+      }),
+    );
+    await component.signIn();
+    expectStartWarning('request', null, 'UnknownHostException');
+  });
+
+  it('identifies a certificate setup failure without exporting arbitrary error details', async () => {
+    certTrust.setPendingConfig.and.rejectWith(
+      Object.assign(new Error('private certificate path'), {
+        code: 'private-code',
+        name: 'private-name',
+      }),
+    );
+    await component.signIn();
+    certTrust.setPendingConfig.and.resolveTo();
+    expect(connect.start).not.toHaveBeenCalled();
+    expectStartWarning('certificate setup', null);
+  });
+
+  it('keeps the generic fetch diagnostic a browser can report', async () => {
+    connect.start.and.rejectWith(new TypeError('Failed to fetch'));
+    await component.signIn();
+    expectStartWarning('request', null, 'Failed to fetch');
   });
 
   it('says the server answered, with the HTTP status, when it refuses the request', async () => {
@@ -211,9 +255,7 @@ describe('DialogSyncSetupComponent', () => {
     expect(component.errorKey()).toBe(T.F.SYNC.D_SIGN_IN.START_FAILED_HTTP);
     expect(text()).toContain('sync.example.com answered HTTP 403');
     expect(connect.waitForApproval).not.toHaveBeenCalled();
-    expect(SyncLog.warn).toHaveBeenCalledOnceWith('SuperSync sign-in could not start', {
-      status: 403,
-    });
+    expectStartWarning('request', 403);
   });
 
   it('signs in to a changed server, and refuses an invalid address', async () => {

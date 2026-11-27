@@ -41,6 +41,32 @@ import { CertTrustService } from '../../../features/issue/cert-trust.service';
 /** choose = 1a, waiting = 1b, timed-out = 3c, manual = 3b (mockups v3). */
 type Step = 'choose' | 'waiting' | 'timed-out' | 'manual';
 
+type StartStage = 'certificate setup' | 'request' | 'open browser';
+
+// Only these platform codes and messages can be exported verbatim.
+const SAFE_START_DIAGNOSTICS = new Set([
+  'UnknownHostException',
+  'SocketTimeoutException',
+  'ConnectException',
+  'SSLHandshakeException',
+  'NSURLErrorDomain',
+  'NETWORK_ERROR',
+  'TIMEOUT_ERROR',
+  'Failed to fetch',
+  'Load failed',
+  'NetworkError when attempting to fetch resource.',
+]);
+
+const startErrorReason = (error: unknown): string | undefined => {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code === 'string' && SAFE_START_DIAGNOSTICS.has(code)) return code;
+  if (!(error instanceof Error)) return undefined;
+  if (error.message.includes('URL that includes credentials')) {
+    return 'URL contains credentials';
+  }
+  return SAFE_START_DIAGNOSTICS.has(error.message) ? error.message : undefined;
+};
+
 const hostOf = (baseUrl: string): string => {
   try {
     return new URL(baseUrl).host;
@@ -197,9 +223,11 @@ export class DialogSyncSetupComponent {
   ): Promise<ConnectRequest | null> {
     this.errorKey.set(null);
     this.isBusy.set(true);
+    let stage: StartStage = 'certificate setup';
     try {
       // A self-hosted server with a self-signed cert must work before it is saved (#11097)
       await this._certTrustService.setPendingConfig(this, { baseUrl });
+      stage = 'request';
       const request = await this._connect.start(baseUrl);
       if (attempt !== this._attempt) {
         tab?.close();
@@ -207,11 +235,12 @@ export class DialogSyncSetupComponent {
       }
       this._link = connectLink(baseUrl, request.requestId);
       this.matchCode.set(request.matchCode);
+      stage = 'open browser';
       this._connect.openInBrowser(this._link, tab);
       return request;
     } catch (e) {
       tab?.close();
-      if (attempt === this._attempt) this._showStartError(e);
+      if (attempt === this._attempt) this._showStartError(e, stage);
       return null;
     } finally {
       this.isBusy.set(false);
@@ -229,16 +258,19 @@ export class DialogSyncSetupComponent {
     this._dialogRef.close(true);
   }
 
-  private _showStartError(e: unknown): void {
+  private _showStartError(e: unknown, stage: StartStage): void {
     if (e instanceof ConnectUnsupportedError) {
       this.step.set('manual');
       return;
     }
     const status = e instanceof ConnectHttpError ? e.status : null;
-    // Platform errors can include credentials from a custom server URL.
-    SyncLog.warn('SuperSync sign-in could not start', { status });
+    SyncLog.warn(`SuperSync sign-in failed during ${stage}`, {
+      status,
+      reason: startErrorReason(e),
+    });
     this.step.set('choose');
     this.errorStatus.set(status);
+    // Without an HTTP response, a dropped connection, CORS and TLS can look identical to the browser.
     this.errorKey.set(
       status === null
         ? T.F.SYNC.D_SIGN_IN.START_FAILED
