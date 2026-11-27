@@ -106,6 +106,7 @@ describe('DialogScheduleTaskComponent — repeat field', () => {
             isToday: () => false,
             todayStr: () => '2026-05-26',
             getStartOfNextDayDiffMs: () => 0,
+            getLogicalTodayDate: () => new Date(),
           },
         },
         {

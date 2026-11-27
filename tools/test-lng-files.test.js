@@ -379,7 +379,7 @@ test('hasBlockingDefects is false for a clean report with an empty baseline', ()
 // direction of the change shows in the diff; it should only ever go down. The
 // baseline records translations that already dropped a placeholder when the
 // check was introduced (#10006) and may only shrink.
-const BASELINE_PLACEHOLDER_COUNT = 103;
+const BASELINE_PLACEHOLDER_COUNT = 99;
 
 test('no shipped locale drops an English placeholder outside the baseline, and the baseline only shrinks', () => {
   const baseline = readBaselineFile(join(__dirname, 'test-lng-files.baseline.json'));

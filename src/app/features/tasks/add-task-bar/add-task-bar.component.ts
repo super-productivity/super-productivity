@@ -76,6 +76,7 @@ import { MarkdownPasteService } from '../markdown-paste.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
 import { unique } from '../../../util/unique';
 import { MentionConfigService } from '../mention-config.service';
@@ -649,16 +650,14 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       );
 
       if (state.date) {
-        // Parse date components to create date in local timezone
-        // This avoids timezone issues when parsing date strings like "2024-01-15"
-        const [year, month, day] = startDay.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-
-        if (state.time) {
-          // TODO we need to add unit tests to confirm this works
-          const [hours, minutes] = state.time.split(':').map(Number);
-          date.setHours(hours, minutes, 0, 0);
-          taskData.dueWithTime = date.getTime();
+        if (state.time && isValidSplitTime(state.time)) {
+          // state.date is a logical day: a time before a custom day start is
+          // that day's late night, on the next calendar date (#12012)
+          taskData.dueWithTime = getRepeatDueWithTime(
+            state.time,
+            dateStrToUtcDate(startDay),
+            this._dateService.getStartOfNextDayDiffMs(),
+          );
           taskData.hasPlannedTime = true;
         } else {
           taskData.dueDay = startDay;

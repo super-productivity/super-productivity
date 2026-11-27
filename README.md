@@ -143,6 +143,7 @@ And much more!
 </ul>
 <p><strong>Starting Point in the Docs:</strong><br>
   <a href="https://super-productivity.com/docs/tutorials/first-steps/">First steps</a> •
+  <a href="https://super-productivity.com/docs/explanation/your-first-week/">Your first week</a> •
   <a href="https://super-productivity.com/docs/reference/">Reference</a> •
   <a href="https://super-productivity.com/docs/how-to/">How-To</a>
 </p>
