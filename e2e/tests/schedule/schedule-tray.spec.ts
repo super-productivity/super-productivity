@@ -123,6 +123,10 @@ test.describe('Schedule tray mode', () => {
       await expect(gridPreview).toBeHidden();
       await expect(detachedPreview).toHaveCSS('opacity', '1');
       await page.mouse.move(target.x, 500, { steps: 15 });
+      // As in drag(): the throttled update for the last step lands up to 30 ms
+      // later. Read before it, the badge shows an earlier step's time, higher up
+      // the grid than where the drop lands (CI: 5:30 shown, dropped at 5:40).
+      await page.waitForTimeout(DRAG_SETTLE_MS);
       await expect(gridPreview).toBeVisible();
       await expect(detachedPreview).toHaveCSS('opacity', '0');
       const previewTime = (await schedule
