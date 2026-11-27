@@ -256,7 +256,7 @@ class ImeInsetShimInstrumentedTest {
         val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(timeoutSeconds)
         do {
             if (check()) return true
-            // Coarser than POLL_MS: isActive() can hit system_server synchronously,
+            // Coarser than POLL_MS: the checks (isActive()) can hit system_server synchronously,
             // and this wait exists for the case where that server is already the
             // slow part. Detection latency does not matter at this granularity.
             SystemClock.sleep(SERVED_POLL_MS)
@@ -276,13 +276,16 @@ class ImeInsetShimInstrumentedTest {
     private fun logWindowState() {
         val uiAutomation = InstrumentationRegistry.getInstrumentation().uiAutomation
         for (command in listOf("dumpsys window displays", "dumpsys activity activities")) {
-            ParcelFileDescriptor.AutoCloseInputStream(uiAutomation.executeShellCommand(command))
-                .bufferedReader()
-                .useLines { lines ->
-                    lines.filter { WINDOW_STATE_LINE.containsMatchIn(it) }
-                        .take(WINDOW_STATE_MAX_LINES)
-                        .forEach { Log.i(TAG, "focus-miss [$command] ${it.trim()}") }
-                }
+            // Diagnostics only: a failing dump must not replace the geometry failure.
+            runCatching {
+                ParcelFileDescriptor.AutoCloseInputStream(uiAutomation.executeShellCommand(command))
+                    .bufferedReader()
+                    .useLines { lines ->
+                        lines.filter { WINDOW_STATE_LINE.containsMatchIn(it) }
+                            .take(WINDOW_STATE_MAX_LINES)
+                            .forEach { Log.i(TAG, "focus-miss [$command] ${it.trim()}") }
+                    }
+            }.onFailure { Log.i(TAG, "focus-miss [$command] dump failed: $it") }
         }
     }
 
@@ -308,9 +311,9 @@ class ImeInsetShimInstrumentedTest {
         }
         if (first != null) return first
         // Re-enter the whole sequence rather than re-issuing show() alone: what
-        // the retry is really for is the second wait for an input connection,
-        // since the likeliest reason the first request did nothing is that there
-        // was none yet. (The JS focus it repeats is a no-op while the field still
+        // the retry is really for is the second wait for window focus and an
+        // input connection, since the likeliest reason the first request did
+        // nothing is that there was none yet. (The JS focus it repeats is a no-op while the field still
         // holds focus — the focusing steps return early and the renderer re-reports
         // nothing — so the wait, not the focus, is what makes this retry worth a try.)
         Log.i(TAG, "IME not open after show(ime()); retrying the request and the wait")
