@@ -2,21 +2,22 @@
   "CFG": {
     "HOST": "Värd (t.ex. https://try.gitea.io)",
     "TOKEN": "Åtkomsttoken",
-    "REPO_FULL_NAME": "Användarnamn eller organisationsnamn/projekt",
+    "REPO_FULL_NAME": "Användar- eller organisationsnamn/arkivnamn",
     "SCOPE": "Omfattning",
     "SCOPE_ALL": "Alla",
     "SCOPE_CREATED": "Skapade av mig",
-    "SCOPE_ASSIGNED": "Ålagda mig",
-    "FILTER_LABELS": "Filter by labels (optional)",
-    "EXCLUDE_LABELS": "Exclude labels (optional)",
-    "HOW_TO_GET_TOKEN": "Hur får man en token?"
+    "SCOPE_ASSIGNED": "Tilldelade mig",
+    "FILTER_LABELS": "Filtrera efter etiketter (valfritt)",
+    "EXCLUDE_LABELS": "Uteslut etiketter (valfritt)",
+    "INCLUDE_PULL_REQUESTS": "Ta med pull requests tillsammans med ärenden i sökresultaten och backloggen",
+    "HOW_TO_GET_TOKEN": "Så skaffar du en åtkomsttoken"
   },
   "DISPLAY": {
     "SUMMARY": "Sammanfattning",
     "STATE": "Status",
-    "ASSIGNEE": "Mottagare",
+    "ASSIGNEE": "Ansvarig",
     "LABELS": "Etiketter",
     "DESCRIPTION": "Beskrivning"
   },
-  "FORM_HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna Gitea-ärenden för ett specifikt arkiv listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt lägga till och importera alla öppna ärenden. </p><p>För att komma förbi användningsbegränsningar och få åtkomst kan du ange en åtkomsttoken."
+  "FORM_HELP": "<p>I dagsplaneringen kan du få förslag på öppna Gitea-ärenden från ett visst arkiv när du skapar en uppgift. Varje förslag visar mer information och en länk till ärendet.</p><p>Du kan också importera alla öppna ärenden automatiskt.</p><p>Ange en åtkomsttoken för att få åtkomst och en högre gräns för antalet anrop."
 }

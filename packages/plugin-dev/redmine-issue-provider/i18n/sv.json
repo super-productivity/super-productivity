@@ -1,33 +1,33 @@
 {
   "CFG": {
-    "HOST": "Värd (t.ex.: https://redmine.org)",
+    "HOST": "Värd (t.ex. https://redmine.org)",
     "API_KEY": "API-åtkomstnyckel",
-    "PROJECT_ID": "Projektidentifierare",
-    "PROJECT_ID_DESC": "Finns som en del av webbadressen när du visar projektet i webbläsaren.",
+    "PROJECT_ID": "Projektidentifierare (valfritt)",
+    "PROJECT_ID_DESC": "Identifieraren ingår i webbadressen när du visar projektet i en webbläsare. Lämna tomt för att söka på hela Redmine-servern.",
     "SCOPE": "Omfattning",
     "SCOPE_ALL": "Alla",
-    "SCOPE_CREATED": "Skapad av mig",
-    "SCOPE_ASSIGNED": "Tilldelad mig",
-    "IS_SHOW_TIME_TRACKING_DIALOG": "Visa tidsregistreringsdialog för rapportering till Redmine",
+    "SCOPE_CREATED": "Skapade av mig",
+    "SCOPE_ASSIGNED": "Tilldelade mig",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Visa dialogrutan för att rapportera tid till Redmine",
     "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Kräver att tidsregistreringsmodulen är aktiverad för Redmine-projektet",
-    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Visa tidsregistreringsdialog när deluppgifter slutförs",
-    "DEFAULT_TIME": "Standardtidsvärde för dialogrutan",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Visa dialogrutan för tidrapportering när deluppgifter slutförs",
+    "DEFAULT_TIME": "Förifylld tid i dialogrutan",
     "DEFAULT_TIME_ALL_TIME": "Fyll i all tid som har lagts på uppgiften",
-    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Fyll i all tid som har använts minus den tid som har loggats.",
-    "DEFAULT_TIME_TODAY": "Fyll bara i tid använd idag",
-    "DEFAULT_TIME_YESTERDAY": "Fyll bara i tiden du använde igår"
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Fyll i all nedlagd tid utom den som redan har rapporterats",
+    "DEFAULT_TIME_TODAY": "Fyll bara i dagens nedlagda tid",
+    "DEFAULT_TIME_YESTERDAY": "Fyll bara i gårdagens nedlagda tid"
   },
   "DISPLAY": {
     "SUMMARY": "Sammanfattning",
     "STATUS": "Status",
     "PRIORITY": "Prioritet",
     "AUTHOR": "Författare",
-    "ASSIGNEE": "Mottagare",
+    "ASSIGNEE": "Ansvarig",
     "CATEGORY": "Kategori",
     "VERSION": "Version",
-    "DUE_DATE": "Två datum",
-    "TIME_SPENT": "Tid som spenderats",
+    "DUE_DATE": "Förfallodatum",
+    "TIME_SPENT": "Nedlagd tid",
     "DESCRIPTION": "Beskrivning"
   },
-  "FORM_HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna Redmine-ärenden (antingen onlineversionen eller en egenhostad instans) för ett specifikt projekt listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det.</p><p>Dessutom kan du automatiskt importera alla öppna ärenden.</p>"
+  "FORM_HELP": "<p>I dagsplaneringen kan du få förslag på öppna Redmine-ärenden från ett visst projekt på en extern eller egen Redmine-server när du skapar en uppgift. Varje förslag visar mer information och en länk till ärendet.</p><p>Du kan också importera alla öppna ärenden automatiskt.</p>"
 }

@@ -104,10 +104,6 @@
     "F.SCHEDULE.PLAN_START_DAY": ["date"],
     "F.TASK.S.REMINDER_ADDED": ["date"]
   },
-  "sv.json": {
-    "F.SCHEDULE.PLAN_END_DAY": ["date"],
-    "F.SCHEDULE.PLAN_START_DAY": ["date"]
-  },
   "tr.json": {
     "F.TASK.S.REMINDER_ADDED": ["date"]
   },

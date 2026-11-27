@@ -1,0 +1,6 @@
+{
+  "SUGGEST": "Vill du ta tid på ”{{title}}”?",
+  "TRACK": "Starta tidtagningen",
+  "PROBE_ERROR": "App Auto Track kan inte läsa det aktiva fönstret. På macOS behöver du ge Super Productivity åtkomst under Integritet och säkerhet för både Automatisering och Hjälpmedel.",
+  "UNSUPPORTED": "App Auto Track fungerar bara på macOS och Windows."
+}

@@ -20,7 +20,7 @@
   ],
   "hooks": [],
   "i18n": {
-    "languages": ["en"]
+    "languages": ["en", "sv"]
   },
   "issueProvider": {
     "pollIntervalMs": 300000,

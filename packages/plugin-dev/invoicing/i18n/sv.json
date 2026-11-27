@@ -6,7 +6,7 @@
     "PRINT": "Skriv ut / PDF",
     "CSV": "CSV",
     "DELETE": "Radera",
-    "CONFIRM_DELETE": "Radera faktura {{number}}? Dess timmar räknas som ofakturerade igen."
+    "CONFIRM_DELETE": "Vill du radera faktura {{number}}? Timmarna kan då faktureras på nytt."
   },
   "NEW": {
     "TITLE": "Ny faktura",
@@ -24,7 +24,7 @@
     "ISSUE_DATE": "Fakturadatum",
     "ISSUE": "Skapa och skriv ut",
     "BLOCK": {
-      "PERIOD": "Välj datum för Från och Till; Från måste vara först.",
+      "PERIOD": "Välj start- och slutdatum. Startdatumet måste komma först.",
       "LINES": "Markera minst en rad med timmar.",
       "RATE": "Ange ett timpris.",
       "NUMBER": "Ange ett fakturanummer.",
@@ -38,7 +38,7 @@
     "PAYMENT_NOTE": "Betalningsuppgifter",
     "PAYMENT_NOTE_HINT": "Bankuppgifter eller betalningsvillkor, skrivs ut längst ned.",
     "CURRENCY": "Valutakod",
-    "TAX": "Skatt / moms %",
+    "TAX": "Skatt eller moms (%)",
     "PAYMENT_DAYS": "Dagar till förfallodatum",
     "ROUNDING": "Avrunda varje rad uppåt till",
     "ROUNDING_NONE": "Ingen avrundning",
