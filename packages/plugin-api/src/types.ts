@@ -1080,6 +1080,7 @@ export interface BatchTaskCreate {
     isDone?: boolean;
     parentId?: string | null; // Can reference tempId or existing task ID
     timeEstimate?: number;
+    created?: number;
   };
 }
 
@@ -1093,6 +1094,7 @@ export interface BatchTaskUpdate {
     parentId?: string | null;
     timeEstimate?: number;
     subTaskIds?: string[];
+    created?: number;
   };
 }
 

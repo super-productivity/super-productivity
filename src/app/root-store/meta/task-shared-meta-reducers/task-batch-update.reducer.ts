@@ -145,7 +145,7 @@ export const taskBatchUpdateMetaReducer = <T extends Partial<RootState> = RootSt
               timeEstimate: createOp.data.timeEstimate || 0,
               // New actions capture this before dispatch so replay is deterministic.
               // The fallback keeps legacy operations and direct test callers valid.
-              created: createdTaskTimestamp ?? Date.now(),
+              created: createOp.data.created ?? createdTaskTimestamp ?? Date.now(),
             };
 
             tasksToAdd.push(newTask);
@@ -187,7 +187,7 @@ export const taskBatchUpdateMetaReducer = <T extends Partial<RootState> = RootSt
             const updates: Partial<TaskCopy> = {};
 
             // Copy all defined updates
-            ['title', 'notes', 'isDone', 'timeEstimate', 'subTaskIds'].forEach(
+            ['title', 'notes', 'isDone', 'timeEstimate', 'subTaskIds', 'created'].forEach(
               (field) => {
                 if (updateOp.updates[field] !== undefined) {
                   updates[field] = updateOp.updates[field];

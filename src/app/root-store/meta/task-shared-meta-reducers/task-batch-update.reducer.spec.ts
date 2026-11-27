@@ -262,6 +262,30 @@ describe('taskBatchUpdateMetaReducer', () => {
       expect(task.notes).toBe('Updated notes');
     });
 
+    it('should preserve provided created timestamp', () => {
+      const stateWithTask = createStateWithExistingTasks(['task-1']);
+      const operations: BatchOperation[] = [
+        {
+          type: 'update',
+          taskId: 'task-1',
+          updates: {
+            created: 1_700_000_000_000,
+          },
+        } as BatchTaskUpdate,
+      ];
+
+      const action = TaskSharedActions.batchUpdateForProject({
+        projectId: 'project1',
+        operations,
+        createdTaskIds: {},
+      });
+
+      const result = metaReducer(stateWithTask, action);
+      const task = result[TASK_FEATURE_NAME].entities['task-1'] as Task;
+
+      expect(task.created).toBe(1_700_000_000_000);
+    });
+
     it('should skip update for non-existent task', () => {
       const operations: BatchOperation[] = [
         {
