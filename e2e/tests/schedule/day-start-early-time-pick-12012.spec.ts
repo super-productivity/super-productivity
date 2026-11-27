@@ -109,3 +109,25 @@ test('keeps a 02:00 pick on the chosen day with a 04:00 day start', async ({
   await submit(reopened);
   await expect.poll(() => readDueWithTime(page, TITLE)).toBe(expected);
 });
+
+test('defaults to the coming 04:00 when the clock has just sprung forward', async ({
+  page,
+  workViewPage,
+  taskPage,
+}) => {
+  await page.goto('about:blank');
+  await page.clock.setFixedTime(new Date('2026-03-29T03:10:00+02:00'));
+  await page.goto('/#/project/INBOX_PROJECT/tasks');
+  await workViewPage.waitForTaskList();
+  await setDayStart(page, '04:00');
+  await workViewPage.addTask(TITLE);
+  const dialog = await openScheduleDialog(page, taskPage.getTaskByText(TITLE).first());
+  await dialog.locator('input[type="time"]').focus();
+  await expect
+    .soft(dialog.locator('input[type="time"]'))
+    .toHaveValue('04:00', { timeout: 2000 });
+  await submit(dialog);
+  expect(await readDueWithTime(page, TITLE)).toBe(
+    Date.parse('2026-03-29T04:00:00+02:00'),
+  );
+});

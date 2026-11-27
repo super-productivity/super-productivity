@@ -5,7 +5,11 @@ const INBOX_URL = '/#/project/INBOX_PROJECT/tasks';
 test.describe('Schedule day panel: "Show all tasks"', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test('opens one list of all tasks beside the panel', async ({ page, workViewPage }) => {
+  test('opens one list of all tasks beside the panel', async ({
+    page,
+    workViewPage,
+    settingsPage,
+  }) => {
     await page.goto(INBOX_URL);
     await workViewPage.waitForTaskList();
     await workViewPage.addTask('Plan me from the all tasks list');
@@ -38,5 +42,8 @@ test.describe('Schedule day panel: "Show all tasks"', () => {
     await expect(
       page.locator('nav-view-group nav-item').filter({ hasText: 'All tasks' }),
     ).toHaveCount(1);
+
+    await settingsPage.navigateToSettings();
+    await expect(panel).toBeHidden();
   });
 });

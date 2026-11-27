@@ -88,22 +88,23 @@ export class DialogViewArchivedTaskComponent {
   }
 
   constructor() {
-    this._restoreArchivedTaskService
-      .findRestorableTask(this.task)
-      .then((restorableTask) => this.restorableTask.set(restorableTask))
-      .catch((e) => Log.warn('Failed to check if task can be restored', e));
-
-    if (this.task.subTaskIds?.length) {
+    if (
+      this.task.subTaskIds?.length ||
+      !this._restoreArchivedTaskService.isActive(this.task)
+    ) {
       this._taskArchiveService
         .load()
-        .then((archiveState) => {
+        .then((archive) => {
+          this.restorableTask.set(
+            this._restoreArchivedTaskService.findRestorableTask(this.task, archive),
+          );
           this.subTasks.set(
-            this.task.subTaskIds
-              .map((id) => archiveState.entities[id])
-              .filter((v): v is Task => !!v),
+            (this.task.subTaskIds ?? [])
+              .map((id) => archive.entities[id])
+              .filter((sub): sub is Task => !!sub),
           );
         })
-        .catch((e) => Log.warn('Failed to load subtasks from archive', e));
+        .catch((e) => Log.warn('Failed to load archived task details', e));
     }
 
     if (this.task.issueId && this.task.issueType && this.task.issueProviderId) {

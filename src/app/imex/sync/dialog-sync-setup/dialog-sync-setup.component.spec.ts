@@ -186,14 +186,15 @@ describe('DialogSyncSetupComponent', () => {
   });
 
   it('stays on the first step with an error when the server is unreachable', async () => {
-    connect.start.and.rejectWith(new TypeError('Failed to fetch'));
+    connect.start.and.rejectWith(
+      new TypeError('Failed to fetch https://sync.example.com/private-account/'),
+    );
     await component.signIn();
     expect(component.step()).toBe('choose');
     expect(component.errorKey()).toBe(T.F.SYNC.D_SIGN_IN.START_FAILED);
     expect(connect.waitForApproval).not.toHaveBeenCalled();
     expect(SyncLog.warn).toHaveBeenCalledWith(jasmine.any(String), {
-      name: 'TypeError',
-      message: 'Failed to fetch',
+      status: null,
     });
   });
 
@@ -211,8 +212,7 @@ describe('DialogSyncSetupComponent', () => {
     expect(text()).toContain('sync.example.com answered HTTP 403');
     expect(connect.waitForApproval).not.toHaveBeenCalled();
     expect(SyncLog.warn).toHaveBeenCalledWith(jasmine.any(String), {
-      name: 'ConnectHttpError',
-      message: 'Sign-in request failed: HTTP 403',
+      status: 403,
     });
   });
 

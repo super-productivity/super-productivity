@@ -23,6 +23,13 @@ test('index holds published content pages only, with website URLs', () => {
   const urls = new Set(index.map((page) => page.url));
   assert.ok(urls.has(`${DOCS}how-to/restore-data-from-backup/`));
   assert.ok(urls.has(`${DOCS}explanation/idle-time/`));
+  assert.equal(urls.size, index.length);
+  const question = { title: 'How do I separate work and private tasks?' };
+  assert.ok(
+    candidates(index, question).some(
+      (page) => page.url === `${DOCS}how-to/separate-work-and-private-tasks/`,
+    ),
+  );
   // section pages, the docs home and unpublished pages are not useful answers
   assert.ok(!urls.has(`${DOCS}how-to/`));
   assert.ok(!urls.has(DOCS));
