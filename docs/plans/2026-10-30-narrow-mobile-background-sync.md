@@ -2,7 +2,7 @@
 
 > **Status: Step 0 shipped in v20.0.0** (#11330, § 5); step 1 does not work
 > on a frozen app as designed (emulator, § 17), so only its ack-after-persist
-> part is proposed; step 2 and § 14 stay parked (§ 16)
+> part is built, for the widget queue; step 2 and § 14 stay parked (§ 16)
 >
 > **Owner / tracking:** Unassigned; #11365.
 > Each implementation step is a sync PR (AGENTS.md sync rules 15–16).
@@ -318,8 +318,8 @@ ops pending
   window opens only at launch or resume. A drain while backgrounded (step 1)
   moves it to exactly the moment the OS likes to kill processes. That is why
   ack-after-persist is part of step 1, not separate hardening. For the
-  widget queue the window is open today and the loss is reproduced on an
-  emulator (§ 17); the reminder queues have no observed instance.
+  widget queue the loss was reproduced on an emulator and is closed by
+  ack-after-persist (§ 17); the reminder queues have no observed instance.
 - **R2 (iOS, unverified): the retained action event lives only in the
   plugin's memory.** If iOS evicts the process before JS registers its
   listener, the tap is lost. Reproduce it on a device before building
@@ -522,7 +522,8 @@ the `[ol] incrementVectorClock` and `Processed action` log lines.
 | App state at the tap                                                | Drain and reducer | Op written                               |
 | ------------------------------------------------------------------- | ----------------- | ---------------------------------------- |
 | Background 4 s and 60 s, still the "previous app" (never frozen)    | Within 0.1 s      | Within 0.3 s                             |
-| Frozen for 1 min (two runs)                                         | Within 0.1 s      | Not until the Activity resumed           |
+| Frozen for about 20 s (two taps, 2026-11-27 re-check)               | Within 0.1 s      | Within 0.2 s                             |
+| Frozen for 1 min (four runs)                                        | Within 0.1 s      | Not until the Activity resumed           |
 | Frozen for 10 min, screen off, on battery (main process kept awake) | Within 0.1 s      | Not until the Activity resumed           |
 | The first of those, then `am kill` before a resume                  | Within 0.1 s      | Never: the task is unchanged on relaunch |
 
@@ -535,7 +536,9 @@ the `[ol] incrementVectorClock` and `Processed action` log lines.
   push either. A second wake-up 20 s later does not complete them, nor does
   `am unfreeze --sticky` on the app process before the tap. They complete
   within 0.3 s of the Activity resuming. The cause is not identified (the
-  stall follows the renderer process having been frozen).
+  stall follows the renderer process having been frozen). It needs more than
+  about 20 s of freezing: two taps that soon after the freeze were written
+  and pushed to the widget snapshot at once.
 - So R1 is real for the widget queue on a path released since v18.14.0: the
   queue is cleared, the change exists only in memory, and a process killed
   before the next resume loses the tap. The widget's overlay and its
@@ -549,11 +552,27 @@ push would wait behind the same stalled write, and a `goAsync()` hold does
 not help. It would only cover taps in the first seconds after leaving the
 app. Step 1 stays undecided until the stall is understood.
 
-**Proposed for a decision instead: ack-after-persist alone, for the widget
-queue.** The tap stays in the native queue (and the widget overlay) until JS
-reports the op written; a drain that finds it again applies it once (the
-drain already skips tasks in the target state). No drain signal for the
-reminder queues, no push, no `goAsync()`.
+**Done instead: ack-after-persist alone, for the widget queue.** The tap
+stays in the native queue (and the widget overlay) until JS reports the op
+written (`peekWidgetDoneQueue` / `ackWidgetDoneQueue`); a drain that finds it
+again applies it once (the drain already skips tasks in the target state). No
+drain signal for the reminder queues, no push, no `goAsync()`.
+
+- Reproduction: `e2e/tests/mobile/android-widget-done-tap-killed.spec.ts`
+  holds a write transaction over the op-log database (the stall as JS sees
+  it), sends the tap and reloads. A browser cannot freeze a real WebView, so
+  the native side is the fake bridge the Android timer specs use.
+- Emulator, same setup with the fix: frozen 1 min, tap, `am kill`, relaunch.
+  The queue kept the tap through the kill, the relaunch applied and wrote it
+  and then emptied the queue. Frozen 1 min, tap, resume: written and
+  acknowledged within 0.4 s of the resume.
+- Not covered: a legacy online-mode shell older than this change keeps
+  get-and-clear, and the reminder queues are unchanged.
+- Accepted: a tap stays queued while its write is stuck or failed, or when it
+  landed while remote ops were being applied (the ack is then left to the
+  next drain). If the user sets the same task the other way in the app before
+  that drain, the drain applies the widget's target again. The emulator runs
+  predate the buffered-action condition and had no sync provider.
 
 Still not safe: a drain signal for the reminder queues without
 ack-after-persist.

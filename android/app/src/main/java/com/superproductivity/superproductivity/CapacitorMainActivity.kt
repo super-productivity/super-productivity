@@ -93,7 +93,7 @@ class CapacitorMainActivity : BridgeActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == TaskListWidgetProvider.ACTION_WIDGET_DONE_DRAIN) {
                 // Contentless drain signal: Angular pulls the queued IDs itself via
-                // getWidgetDoneQueue(), so there is a single delivery path and no
+                // peekWidgetDoneQueue(), so there is a single delivery path and no
                 // task data crosses the string-interpolated JS bridge.
                 callJSInterfaceFunctionIfExists("next", "onWidgetDoneDrainRequest$")
             }

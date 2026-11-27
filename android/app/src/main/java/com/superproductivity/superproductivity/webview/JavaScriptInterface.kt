@@ -586,11 +586,27 @@ class JavaScriptInterface(
     /**
      * Get pending done-state changes from the home screen widget and clear the
      * queue. Returns a JSON object string `{taskId: targetIsDone}` or null if empty.
+     * Only for legacy online-mode installs whose remote web app predates
+     * peekWidgetDoneQueue()/ackWidgetDoneQueue().
      */
     @Suppress("unused")
     @JavascriptInterface
     fun getWidgetDoneQueue(): String? {
         return WidgetDoneQueue.getAndClear(activity)
+    }
+
+    /** Like getWidgetDoneQueue(), but the entries stay until ackWidgetDoneQueue(). */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun peekWidgetDoneQueue(): String? {
+        return WidgetDoneQueue.peekJson(activity)
+    }
+
+    /** Remove the entries of a peekWidgetDoneQueue() read once their ops are written. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun ackWidgetDoneQueue(ackedJson: String) {
+        WidgetDoneQueue.acknowledge(activity, ackedJson)
     }
 
     /** Get the project selected by the most recent widget row tap and clear it. */
