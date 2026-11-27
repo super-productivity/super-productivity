@@ -309,11 +309,9 @@ describe('AddTasksForTomorrowService', () => {
       expect(dispatchSpy).toHaveBeenCalled();
       const actualCall = dispatchSpy.calls.first().args[0] as unknown as {
         type: string;
-        isSkipRemoveReminder: boolean;
         taskIds: string[];
       };
       expect(actualCall.type).toBe('[Task Shared] planTasksForToday');
-      expect(actualCall.isSkipRemoveReminder).toBe(true);
       expect(actualCall.taskIds.length).toBe(2);
       expect(actualCall.taskIds).toContain('task1');
       expect(actualCall.taskIds).toContain('task2');
@@ -355,7 +353,6 @@ describe('AddTasksForTomorrowService', () => {
           taskIds: ['task2'], // Only task2
           today: todayStr,
           startOfNextDayDiffMs: 0,
-          isSkipRemoveReminder: true,
         }),
       );
       expect(result).toBe('ADDED');
@@ -445,11 +442,9 @@ describe('AddTasksForTomorrowService', () => {
       expect(dispatchSpy).toHaveBeenCalled();
       const actualCall = dispatchSpy.calls.first().args[0] as unknown as {
         type: string;
-        isSkipRemoveReminder: boolean;
         taskIds: string[];
       };
       expect(actualCall.type).toBe('[Task Shared] planTasksForToday');
-      expect(actualCall.isSkipRemoveReminder).toBe(true);
       expect(actualCall.taskIds.length).toBe(2);
       expect(actualCall.taskIds).toContain('task3');
       expect(actualCall.taskIds).toContain('task4');
@@ -682,11 +677,9 @@ describe('AddTasksForTomorrowService', () => {
       expect(dispatchSpy).toHaveBeenCalled();
       const actualCall = dispatchSpy.calls.first().args[0] as unknown as {
         type: string;
-        isSkipRemoveReminder: boolean;
         taskIds: string[];
       };
       expect(actualCall.type).toBe('[Task Shared] planTasksForToday');
-      expect(actualCall.isSkipRemoveReminder).toBe(true);
       expect(actualCall.taskIds.length).toBe(2);
       expect(actualCall.taskIds).toContain('task1');
       expect(actualCall.taskIds).toContain('task2');
