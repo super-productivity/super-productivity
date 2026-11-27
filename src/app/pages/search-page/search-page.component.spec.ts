@@ -438,6 +438,48 @@ describe('SearchPageComponent', () => {
     expect(latestResults[0].isArchiveTask).toBe(true);
   }));
 
+  describe('Completed and archived matches hidden by default', () => {
+    let hasHidden: boolean | undefined;
+
+    const initWithArchive = (archive: Task[]): void => {
+      taskArchiveOrchestrator.getArchivedTasks.and.returnValue(Promise.resolve(archive));
+      fixture = TestBed.createComponent(SearchPageComponent);
+      component = fixture.componentInstance;
+      initAndFlush();
+      hasHidden = undefined;
+      component.hasHiddenCompleted$.subscribe((v) => (hasHidden = v));
+    };
+
+    it('are flagged when only an archived task matches, so "no results" is not a dead end', fakeAsync(() => {
+      initWithArchive([createTask({ id: 'archived', title: 'Dentist x-rays' })]);
+      typeAndFlush('dentist');
+      expect(latestResults).toEqual([]);
+      expect(hasHidden).toBe(true);
+    }));
+
+    it('are shown and no longer flagged once the option is ticked', fakeAsync(() => {
+      allTasks$.next([createTask({ id: 'done', title: 'Dentist bill', isDone: true })]);
+      initWithArchive([createTask({ id: 'archived', title: 'Dentist x-rays' })]);
+      typeAndFlush('dentist');
+      component.includeCompletedForm.setValue(true);
+      tick(150);
+      expect(latestResults.map((item) => item.id)).toEqual(['done', 'archived']);
+      expect(hasHidden).toBe(false);
+    }));
+
+    it('are not flagged without a search term or when only other done tasks exist', fakeAsync(() => {
+      allTasks$.next([
+        createTask({ id: 'open', title: 'Dentist call', isDone: false }),
+        createTask({ id: 'done', title: 'Unrelated', isDone: true }),
+      ]);
+      initWithArchive([]);
+      typeAndFlush('  ');
+      expect(hasHidden).toBe(false);
+      typeAndFlush('dentist');
+      expect(hasHidden).toBe(false);
+    }));
+  });
+
   describe('Recently deleted tasks (#2778)', () => {
     const deletedEntry = (
       task: Partial<Task>,
@@ -453,6 +495,16 @@ describe('SearchPageComponent', () => {
       typeAndFlush('lost');
       expect(latestResults.map((r) => r.id)).toEqual(['gone']);
       expect(latestResults[0].deletedEntry).toBeTruthy();
+    }));
+
+    it('are not offered as hidden completed matches', fakeAsync(() => {
+      deletedEntries = [deletedEntry({ id: 'gone', title: 'Lost Report', isDone: true })];
+      initAndFlush();
+      let hasHidden: boolean | undefined;
+      component.hasHiddenCompleted$.subscribe((v) => (hasHidden = v));
+      typeAndFlush('lost');
+      expect(latestResults.map((r) => r.id)).toEqual(['gone']);
+      expect(hasHidden).toBe(false);
     }));
 
     it('are found by a subtask title', fakeAsync(() => {

@@ -1163,6 +1163,7 @@
       "INCLUDE_COMPLETED": "Include completed and archived tasks",
       "INFO": "Start typing to search for tasks, notes, projects or tags",
       "NO_RESULTS": "No tasks, notes, projects or tags found matching your search",
+      "NO_RESULTS_COMPLETED_HIDDEN": "Only completed or archived tasks match your search. Tick the option above to include them.",
       "PLACEHOLDER": "Search for tasks, notes, projects or tags"
     },
     "SIMPLE_COUNTER": {
