@@ -945,7 +945,9 @@
             "monthlyLastDay": false,
             "repeatFromCompletionDate": false,
             "waitForCompletion": false,
-            "deletedInstanceDates": ["2026-06-16"]
+            "deletedInstanceDates": [
+              "2026-06-16"
+            ]
           }
         ],
         "archivedProjectIds": []
@@ -1208,7 +1210,9 @@
             "deletedInstanceDates": []
           }
         ],
-        "archivedProjectIds": ["p-arch"]
+        "archivedProjectIds": [
+          "p-arch"
+        ]
       },
       "expect": [
         {

@@ -511,14 +511,10 @@ async function bundle() {
 
 function runWorker(bundlePath, timeZone, group) {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      [fileURLToPath(import.meta.url), '--worker', bundlePath],
-      {
-        env: { ...process.env, TZ: timeZone },
-        stdio: ['pipe', 'pipe', 'inherit'],
-      },
-    );
+    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '--worker', bundlePath], {
+      env: { ...process.env, TZ: timeZone },
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
     let out = '';
     child.stdout.on('data', (chunk) => {
       out += chunk;
@@ -568,9 +564,7 @@ async function workerMain(bundlePath) {
       new Set(entry.archivedProjectIds),
     );
     if (got.length !== entry.expectCount) {
-      throw new Error(
-        `${entry.name}: expected ${entry.expectCount} reminders, got ${got.length}`,
-      );
+      throw new Error(`${entry.name}: expected ${entry.expectCount} reminders, got ${got.length}`);
     }
     if (entry.firstId && got[0]?.taskId !== entry.firstId) {
       throw new Error(`${entry.name}: first id ${got[0]?.taskId} !== ${entry.firstId}`);
@@ -655,9 +649,7 @@ if (workerFlag !== -1) {
   if (process.argv.includes('--check')) {
     const current = fs.readFileSync(fixturePath, 'utf8');
     if (current !== text) {
-      console.error(
-        'repeat-reminder-fixtures.json does not match the app functions; regenerate it',
-      );
+      console.error('repeat-reminder-fixtures.json does not match the app functions; regenerate it');
       process.exit(1);
     }
     console.log(`repeat reminder fixtures match (${fixture.cases.length} cases)`);
