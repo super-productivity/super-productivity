@@ -36,7 +36,7 @@
         >
           <mat-icon aria-hidden="true">error</mat-icon>
           <div>
-            <p>{{ key | translate: { host: host() } }}</p>
+            <p>{{ key | translate: { host: host(), status: errorStatus() } }}</p>
           </div>
         </div>
       }

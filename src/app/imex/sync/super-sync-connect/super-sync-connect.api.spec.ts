@@ -3,6 +3,7 @@ import { SyncLog } from '../../../core/log';
 import {
   ConnectPollAnswer,
   ConnectRequest,
+  ConnectHttpError,
   ConnectUnsupportedError,
   connectNativeHttp,
   createConnectRequest,
@@ -81,6 +82,15 @@ describe('SuperSync browser sign-in API', () => {
       expect(error).toEqual(jasmine.any(Error));
       expect(error).not.toEqual(jasmine.any(ConnectUnsupportedError));
     });
+
+    for (const status of [400, 403, 429]) {
+      it(`reports HTTP ${status} as an answer from the server, with its status`, async () => {
+        fetchSpy.and.resolveTo(jsonResponse(status, {}));
+        const error = await createConnectRequest(BASE, DEVICE).catch((e) => e);
+        expect(error).toEqual(jasmine.any(ConnectHttpError));
+        expect(error.status).toBe(status);
+      });
+    }
 
     it('keeps the poll interval within 1 s and 60 s', async () => {
       fetchSpy.and.resolveTo(jsonResponse(200, { ...created, pollIntervalMs: 5 }));
