@@ -127,7 +127,11 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
   T: typeof T = T;
   readonly DO_NOT_REMIND = TaskReminderOptionId.DoNotRemind;
-  minDate = this.data.minDate === undefined ? new Date() : this.data.minDate;
+  // Logical today, so the day that is still running after midnight stays pickable
+  minDate =
+    this.data.minDate === undefined
+      ? this._dateService.getLogicalTodayDate()
+      : this.data.minDate;
 
   // A repeating task takes its reminder from the repeat config, which holds at
   // most a 1h lead; offering longer leads would silently drop back (#11816).

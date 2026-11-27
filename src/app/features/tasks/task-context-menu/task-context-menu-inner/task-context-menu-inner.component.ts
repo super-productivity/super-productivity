@@ -168,7 +168,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   // the dates quickAccessBtnClick schedules: tomorrow and the week's first day.
   private readonly _weekdayNames = this._dateAdapter.getDayOfWeekNames('short');
   protected readonly tomorrowLabel =
-    this._weekdayNames[(this._dateAdapter.getDayOfWeek(new Date()) + 1) % 7];
+    this._weekdayNames[
+      (this._dateAdapter.getDayOfWeek(this._dateService.getLogicalTodayDate()) + 1) % 7
+    ];
   protected readonly nextWeekLabel =
     this._weekdayNames[this._dateAdapter.getFirstDayOfWeek()];
   protected readonly PRIORITY_LEVELS = TASK_PRIORITY_LEVELS;

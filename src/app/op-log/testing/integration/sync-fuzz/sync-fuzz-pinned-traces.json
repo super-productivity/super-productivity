@@ -1999,7 +1999,7 @@
   },
   {
     "class": "whole-entity-lww-drops-fields",
-    "ref": "#10379: a pending time-only local side wins with a whole-task snapshot and reverts the rename and move another device re-sent after losing to the #11184 re-send of a done (move:20725012; passes on the base of #11184, the snapshot loss is older)",
+    "ref": "#11892 (accepted residual, #10379 class): a pending time-only local side wins with a whole-task snapshot and reverts the rename and move another device re-sent after losing to the #11184 re-send of a done (move:20725012; passes on the base of #11184, the snapshot loss is older)",
     "name": "a tracked task's snapshot reverts a re-sent rename and move",
     "steps": [
       {

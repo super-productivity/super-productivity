@@ -68,6 +68,17 @@ describe('TaskPriorityIndicatorComponent', () => {
     });
   }
 
+  // Matches short syntax, where `p1` is High (#10793).
+  for (const [priority, expected] of [
+    [3, 'counter_1'],
+    [2, 'counter_2'],
+    [1, 'counter_3'],
+  ] as const) {
+    it(`numbers preset shows ${expected} for priority ${priority}`, () => {
+      expect(icon(create(priority, 'numbers'))!.getAttribute('fontIcon')).toBe(expected);
+    });
+  }
+
   it('uses chevrons when no preset is configured', () => {
     expect(icon(create(3))!.getAttribute('fontIcon')).toBe(
       TASK_PRIORITY_ICONS.chevrons[3],

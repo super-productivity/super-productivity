@@ -17,6 +17,8 @@ const KEY_TO_REPLACE = [
   'host',
   'gitlabBaseUrl',
   'nextcloudBaseUrl',
+  'apiBaseUrl',
+  'serverUrl',
   'icalUrl',
   'organization',
   'syncFilePath',

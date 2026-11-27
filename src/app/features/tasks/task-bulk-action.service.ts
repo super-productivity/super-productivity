@@ -395,12 +395,11 @@ export class TaskBulkActionService {
     await this._runSuppressed(() => {
       tasks.forEach((task) => {
         if (timedDue !== null) {
-          const due = timedDue;
           const remindOption = pick.remindOption ?? TaskReminderOptionId.DoNotRemind;
           // repeating tasks stay on the leads their series can hold (#11816)
           this._taskSchedulingService.scheduleTask(
             task,
-            due,
+            timedDue,
             task.repeatCfgId ? toPersistableRemindOption(remindOption) : remindOption,
             false,
           );
