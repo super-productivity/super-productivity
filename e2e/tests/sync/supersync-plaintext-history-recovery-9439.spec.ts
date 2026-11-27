@@ -407,10 +407,9 @@ test.describe('@supersync @encryption #9439 plaintext history recovery', () => {
   });
 });
 
-// The reporter's case: the only install with the data is gone, so no trusted
-// current client exists. Skips without the released bundle; the scheduled
-// workflow's released-client job supplies it.
-test.describe('@supersync @encryption #9439 recovery without a trusted client', () => {
+// The fixture supplies the expected state and the origin of its plaintext row.
+// A real account with no trusted copy lacks those independent checks.
+test.describe('@supersync @encryption #9439 mixed-history fixture', () => {
   test.skip(
     !preGuardAssets,
     'Set COMPAT_PRE_GUARD_ASSETS to the unmodified v18.14.0 assets',
@@ -426,7 +425,7 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
   });
   test.afterAll(async () => assets?.close());
 
-  test('v18.14.0 downloads the mixed history and its backup restores the account', async ({
+  test('v18.14.0 exports the seeded data and a current client restores it', async ({
     browser,
     baseURL,
     testRunId,

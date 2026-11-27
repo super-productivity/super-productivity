@@ -432,17 +432,15 @@ jobs:
           npx playwright test --config e2e/playwright.compatibility.config.ts --reporter=line,junit
           grep -Eq '^<testsuites [^>]* tests="[1-9][0-9]*" [^>]*skipped="0" ' "$PLAYWRIGHT_JUNIT_OUTPUT_FILE" || { echo "::error::Released-client tests were skipped or none ran"; exit 1; }
 
-      # v18.14.0 (the last release without the plaintext download guard) beside
-      # the current build: recovering an account that no current client can
-      # download and that has no trusted client left (#9439).
-      - name: Run Pre-Guard Recovery E2E Test (v18.14.0)
+      # Check the legacy export against the known mixed-history fixture (#9439).
+      - name: Run Mixed-History Fixture E2E Test (v18.14.0)
         if: ${{ !cancelled() && steps.released-e2e.conclusion != 'skipped' }}
         env:
           E2E_REQUIRE_SUPERSYNC: 'true'
           COMPAT_PRE_GUARD_ASSETS: ${{ github.workspace }}/.tmp/released-clients/v18.14.0
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: .tmp/e2e-test-results/pre-guard-recovery.xml
         run: |
-          npx playwright test --config e2e/playwright.config.ts --reporter=line,junit --grep "#9439 recovery without a trusted client"
+          npx playwright test --config e2e/playwright.config.ts --reporter=line,junit --grep "#9439 mixed-history fixture"
           grep -Eq '^<testsuites [^>]* tests="[1-9][0-9]*" [^>]*skipped="0" ' "$PLAYWRIGHT_JUNIT_OUTPUT_FILE" || { echo "::error::Released-client tests were skipped or none ran"; exit 1; }
 
       - name: Print Docker Logs on Failure
