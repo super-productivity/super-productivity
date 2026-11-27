@@ -40,6 +40,19 @@
           <mat-list-item (click)="navigateToItem(item)">
             <div class="search-result-content">
               <div class="task-info">
+                @if (item.isLiveTask && !item.isDone) {
+                  <button
+                    type="button"
+                    mat-icon-button
+                    (click)="completeTask(item.id, $event)"
+                    [attr.aria-label]="
+                      (T.F.TASK.CMP.MARK_DONE | translate) + ' ' + item.title
+                    "
+                    [title]="T.F.TASK.CMP.MARK_DONE | translate"
+                  >
+                    <mat-icon>check</mat-icon>
+                  </button>
+                }
                 @if (item.parentId && item.parentTitle) {
                   <mat-icon class="subtask-icon">subdirectory_arrow_right</mat-icon>
                   <span class="subtask-breadcrumb">{{ item.parentTitle }}</span>

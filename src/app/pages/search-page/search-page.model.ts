@@ -18,6 +18,7 @@ export interface SearchItem {
   created: number;
   tagId: string;
   // NOTE: probably faster this way round
+  isLiveTask?: boolean;
   isArchiveTask: boolean;
   isDone: boolean;
 
