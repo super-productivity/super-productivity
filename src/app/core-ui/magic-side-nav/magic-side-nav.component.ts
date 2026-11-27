@@ -31,6 +31,7 @@ import { getPointerPosition } from '../../util/get-pointer-position';
 import { MatMenuModule } from '@angular/material/menu';
 import { NavMatMenuComponent } from './nav-mat-menu/nav-mat-menu.component';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskMoveToProjectService } from '../../features/tasks/task-move-to-project.service';
 import { LayoutService } from '../layout/layout.service';
 import { magicSideNavAnimations } from './magic-side-nav.animations';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -104,6 +105,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _sideNavConfigService = inject(MagicNavConfigService);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
   private readonly _layoutService = inject(LayoutService);
   private readonly _dataInitStateService = inject(DataInitStateService);
   private readonly _router = inject(Router);
@@ -780,8 +782,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
     }
     const draggedTask = this._externalDragService.activeTask();
 
-    // exclude recurring tasks
-    if (!draggedTask || draggedTask.repeatCfgId) {
+    if (!draggedTask) {
       return;
     }
 
@@ -817,9 +818,12 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       // if the dom element is removed before the return animation has finished
       const dragref = this._externalDragService.activeDragRef();
       dragref?.ended.pipe(take(1)).subscribe(() => {
-        this._taskService.moveToProject(draggedTask, projectId!);
+        void this._taskMoveToProjectService.moveToProject(draggedTask, projectId!);
       });
     } else if (navItemElement.hasAttribute('data-tag-id')) {
+      if (draggedTask.repeatCfgId) {
+        return;
+      }
       // Task is dropped on a tag
       const tagId = navItemElement.getAttribute('data-tag-id');
       Log.debug('Task dropped on Tag', { taskId: draggedTask.id, tagId });
