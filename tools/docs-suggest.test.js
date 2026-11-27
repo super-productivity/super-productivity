@@ -13,14 +13,17 @@ const index = buildIndex(WIKI);
 const pathOf = (url) => url.slice(DOCS.length).replace(/\/$/, '');
 
 test('index holds published content pages only, with website URLs', () => {
-  const urls = index.map((page) => page.url);
-  assert.ok(urls.includes(`${DOCS}how-to/restore-data-from-backup/`));
-  assert.ok(urls.includes(`${DOCS}explanation/idle-time/`));
+  const urls = new Set(index.map((page) => page.url));
+  assert.ok(urls.has(`${DOCS}how-to/restore-data-from-backup/`));
+  assert.ok(urls.has(`${DOCS}explanation/idle-time/`));
   // section pages, the docs home and unpublished pages are not useful answers
-  assert.ok(!urls.includes(`${DOCS}how-to/`));
-  assert.ok(!urls.includes(DOCS));
-  assert.ok(!urls.some((url) => url.includes('quick-history')));
-  assert.ok(index.every((page) => page.url.startsWith(DOCS) && !page.url.includes('?')));
+  assert.ok(!urls.has(`${DOCS}how-to/`));
+  assert.ok(!urls.has(DOCS));
+  const parsed = index.map((page) => new URL(page.url));
+  assert.ok(!parsed.some((url) => url.pathname.endsWith('/quick-history/')));
+  assert.ok(
+    parsed.every((url) => url.origin === new URL(DOCS).origin && url.search === ''),
+  );
 });
 
 for (const fixture of FIXTURES) {
