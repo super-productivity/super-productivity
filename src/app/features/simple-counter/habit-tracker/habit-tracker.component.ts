@@ -11,6 +11,7 @@ import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { SimpleCounter, SimpleCounterType } from '../simple-counter.model';
 import { SimpleCounterService } from '../simple-counter.service';
 import { DateService } from '../../../core/date/date.service';
+import { getAvoidDayCleanCheck } from '../get-simple-counter-streak-duration';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { T } from '../../../t.const';
 import { TranslateModule } from '@ngx-translate/core';
@@ -73,6 +74,15 @@ export class HabitTrackerComponent {
   dragDelayForTouch = dragDelayForTouch;
 
   dayOffset = signal(0);
+
+  private _avoidDayCleanChecks = computed(() => {
+    const todayStr = this._globalTrackingIntervalService.todayDateStr();
+    return new Map(
+      this.simpleCounters()
+        .filter((counter) => counter.streakDirection === 'avoid')
+        .map((counter) => [counter.id, getAvoidDayCleanCheck(counter, todayStr)]),
+    );
+  });
 
   days = computed(() => {
     const days: HabitDay[] = [];
@@ -237,8 +247,18 @@ export class HabitTrackerComponent {
     return (
       counter.type === SimpleCounterType.ClickCounter &&
       !!counter.isTrackStreaks &&
+      // in avoid mode a click is a slip, not a completion
+      counter.streakDirection !== 'avoid' &&
       (!counter.streakMinValue || counter.streakMinValue === 1)
     );
+  }
+
+  isDone(counter: SimpleCounter, day: string): boolean {
+    const isAvoidDayClean = this._avoidDayCleanChecks().get(counter.id);
+    if (isAvoidDayClean) {
+      return isAvoidDayClean(day);
+    }
+    return this.getVal(counter, day) >= (counter.streakMinValue || 1);
   }
 
   getVal(counter: SimpleCounter, day: string): number {

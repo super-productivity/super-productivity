@@ -55,7 +55,12 @@ export class SimpleCounterEffects {
           this._store$.pipe(select(selectSimpleCounterById, { id: a.id })),
         ),
         tap((sc) => {
-          if (sc && !this.successFullCountersMap[sc.id] && sc.isTrackStreaks) {
+          if (
+            sc &&
+            !this.successFullCountersMap[sc.id] &&
+            sc.isTrackStreaks &&
+            sc.streakDirection !== 'avoid'
+          ) {
             const todayCount = sc.countOnDay?.[this._dateService.todayStr()] ?? 0;
             if (todayCount >= (sc.streakMinValue || 0)) {
               const streakDuration = getSimpleCounterStreakDuration(

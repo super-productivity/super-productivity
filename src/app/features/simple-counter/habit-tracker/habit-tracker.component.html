@@ -92,7 +92,7 @@
           >
             <div
               class="check-circle"
-              [class.is-done]="getVal(counter, day.str) >= (counter.streakMinValue || 1)"
+              [class.is-done]="isDone(counter, day.str)"
             >
               @if (
                 getProgress(counter, day.str) > 0 &&

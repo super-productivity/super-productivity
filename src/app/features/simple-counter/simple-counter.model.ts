@@ -21,6 +21,8 @@ export interface SimpleCounterCfgFields {
   streakMode?: 'specific-days' | 'weekly-frequency';
   streakWeekDays?: { [key: number]: boolean };
   streakWeeklyFrequency?: number;
+  // 'avoid': a day is met when its value stays below streakMinValue (undefined = 'build')
+  streakDirection?: 'build' | 'avoid';
 
   // adv cfg
   // repeated countdown reminder

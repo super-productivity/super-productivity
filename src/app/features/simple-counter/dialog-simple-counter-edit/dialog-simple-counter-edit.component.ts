@@ -31,7 +31,10 @@ import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { ChartConfiguration } from 'chart.js';
 import { LineChartData } from '../../metric/metric.model';
-import { getSimpleCounterStreakDuration } from '../get-simple-counter-streak-duration';
+import {
+  getSimpleCounterStreakDuration,
+  getAvoidDayCleanCheck,
+} from '../get-simple-counter-streak-duration';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { LazyChartComponent } from '../../metric/lazy-chart/lazy-chart.component';
 import { MatDialog } from '@angular/material/dialog';
@@ -129,7 +132,13 @@ export class DialogSimpleCounterEditComponent {
         : rawValue;
     });
 
-    const labels = dates.map((date) => this._formatChartLabel(date, counter));
+    const isAvoidDayClean =
+      counter.streakDirection === 'avoid'
+        ? getAvoidDayCleanCheck(counter, this.todayStr)
+        : undefined;
+    const labels = dates.map((date) =>
+      this._formatChartLabel(date, counter, isAvoidDayClean),
+    );
     const goalValueRaw = counter.streakMinValue;
     const goalValue =
       goalValueRaw == null
@@ -291,7 +300,11 @@ export class DialogSimpleCounterEditComponent {
     return dates.slice(-CHART_DAYS);
   }
 
-  private _formatChartLabel(dateStr: string, counter: SimpleCounterCopy): string {
+  private _formatChartLabel(
+    dateStr: string,
+    counter: SimpleCounterCopy,
+    isAvoidDayClean?: (dateStr: string) => boolean,
+  ): string {
     const date = dateStrToUtcDate(dateStr);
     const dayOfWeek = date.getDay();
 
@@ -308,7 +321,9 @@ export class DialogSimpleCounterEditComponent {
     }
 
     const value = counter.countOnDay?.[dateStr] || 0;
-    const streakMet = value >= (counter.streakMinValue || 0);
+    const streakMet = isAvoidDayClean
+      ? isAvoidDayClean(dateStr)
+      : value >= (counter.streakMinValue || 0);
     return `${baseLabel}${streakMet ? '🔥' : '❌'}`;
   }
 

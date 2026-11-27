@@ -24,6 +24,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { EMPTY_SIMPLE_COUNTER } from '../simple-counter.const';
 import { SimpleCounterService } from '../simple-counter.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
+import { DateService } from '../../../core/date/date.service';
 
 @Component({
   selector: 'dialog-simple-counter-edit-settings',
@@ -47,6 +48,7 @@ export class DialogSimpleCounterEditSettingsComponent {
   );
   private readonly _simpleCounterService = inject(SimpleCounterService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _dateService = inject(DateService);
   readonly dialogData = inject<{ simpleCounter: SimpleCounterCopy }>(MAT_DIALOG_DATA);
 
   readonly T = T;
@@ -72,15 +74,26 @@ export class DialogSimpleCounterEditSettingsComponent {
       return;
     }
     const normalized = this._normalizeSettings(this.model);
+    // An avoid streak starts at the earliest countOnDay entry. Someone who never
+    // slips never logs anything, so mark the start with today's 0.
+    const isStartMarkerNeeded =
+      normalized.streakDirection === 'avoid' &&
+      !Object.keys(this.dialogData.simpleCounter.countOnDay || {}).length;
     if (this.dialogData.simpleCounter.id) {
       this._simpleCounterService.updateSimpleCounter(
         this.dialogData.simpleCounter.id,
         normalized,
       );
+      if (isStartMarkerNeeded) {
+        this._simpleCounterService.setCounterToday(this.dialogData.simpleCounter.id, 0);
+      }
     } else {
       this._simpleCounterService.addSimpleCounter({
         ...this.dialogData.simpleCounter,
         ...normalized,
+        ...(isStartMarkerNeeded
+          ? { countOnDay: { [this._dateService.todayStr()]: 0 } }
+          : {}),
       } as SimpleCounter);
     }
     this._dialogRef.close(normalized);
@@ -134,6 +147,7 @@ export class DialogSimpleCounterEditSettingsComponent {
           ? { ...EMPTY_SIMPLE_COUNTER.streakWeekDays }
           : undefined,
       streakWeeklyFrequency: counter.streakWeeklyFrequency ?? 3,
+      streakDirection: counter.streakDirection ?? 'build',
       countdownDuration: counter.countdownDuration,
     };
   }
@@ -156,6 +170,8 @@ export class DialogSimpleCounterEditSettingsComponent {
           ? { ...EMPTY_SIMPLE_COUNTER.streakWeekDays }
           : undefined,
       streakWeeklyFrequency: settings.streakWeeklyFrequency,
+      // 'build' is the default and stays unset
+      streakDirection: settings.streakDirection === 'avoid' ? 'avoid' : undefined,
       countdownDuration: settings.countdownDuration ?? undefined,
     };
 
@@ -164,6 +180,7 @@ export class DialogSimpleCounterEditSettingsComponent {
       normalized.streakMinValue = undefined;
       normalized.streakMode = undefined;
       normalized.streakWeeklyFrequency = undefined;
+      normalized.streakDirection = undefined;
     }
 
     if (
