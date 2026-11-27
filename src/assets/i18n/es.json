@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Host alternativo para los enlaces de Jira (p. ej., una URL pública cuando el host de la API es distinto; se permite un prefijo de ruta)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Configuración Avanzada",
-        "HELP_ARR": {
-          "H1": "Configuración básica",
-          "H2": "Ajustes de registro de trabajo",
-          "H3": "Transiciones predeterminadas",
-          "P1_1": "Por favor proporciona un nombre de inicio de sesión (se puede encontrar en tu página de perfil) y un <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">token API</a> o contraseña si no puedes generar uno por alguna razón. Ten en cuenta que las versiones más nuevas de Jira a veces solo funcionan con el token. ",
-          "P1_2": "También necesitas especificar una consulta JQL que se usa para las sugerencias para añadir tareas desde Jira. Si necesitas ayuda revisa este enlace <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "También puedes configurar si quieres importar automáticamente (p. ej. cada vez que visites la vista de planificación) todas las incidencias nuevas especificadas por una consulta JQL personalizada.",
-          "P1_4": "Otra opción es \"Comprobar si el ticket actual está asignado al usuario actual\". Si se habilita y estás comenzando, se hará una comprobación si estás asignado actualmente a ese ticket en Jira, si no, aparece un Diálogo en el que puedes elegir asignarte el ticket a ti mismo.",
-          "P2_1": "Hay varias opciones para determinar cuándo y cómo quieres enviar un registro de trabajo. Habilitar <em>'Abrir diálogo de registro de trabajo para añadir un registro a Jira cuando se complete la tarea'</em> abre un diálogo para añadir un registro cada vez que marcas una Tarea de Jira como hecha. Así que ten en cuenta que los registros se añadirán encima de todo lo rastreado hasta ahora. Por tanto, si marcas una tarea como hecha por segunda vez, es posible que no quieras enviar el tiempo trabajado completo para la tarea de nuevo.",
-          "P2_2": "<em>'Abrir diálogo de registro de trabajo cuando se complete una subtarea y no para tareas con subtareas ellas mismas'</em> abre un diálogo de registro de trabajo cada vez que marcas una subtarea de una incidencia de Jira como hecha. Debido a que ya rastreas tu tiempo a través de las subtareas, no se abre ningún diálogo una vez que marcas la tarea de Jira en sí como hecha.",
-          "P2_3": "<em>'Enviar actualizaciones al registro de trabajo automáticamente sin diálogo'</em> hace lo que dice. Debido a que marcar una tarea como hecha varias veces lleva a que todo el tiempo trabajado se rastree dos veces, esto no se recomienda.",
-          "P3_1": "Aquí puedes reconfigurar tus transiciones predeterminadas. Jira habilita una amplia configuración de transiciones que generalmente entran en acción como diferentes columnas en tu tablero ágil de Jira; no podemos hacer suposiciones sobre dónde y cuándo transicionar tus tareas y necesitas configurarlo manualmente."
-        }
+        "ADV_CFG": "Configuración Avanzada"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Asignado",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Ajusta este valor para desenfocar la imagen de fondo. El valor predeterminado es 0 px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Ajuste este valor para hacer el fondo más o menos transparente. El valor predeterminado es 20%.",
-        "HELP": "Ajustes de tema para tu proyecto.",
         "L_BACKGROUND_IMAGE_BLUR": "Desenfocar imagen de fondo",
         "L_BACKGROUND_IMAGE_DARK": "URL de la imagen de fondo (tema oscuro)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL de la imagen de fondo (tema claro)",

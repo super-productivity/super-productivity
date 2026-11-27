@@ -1,3 +1,4 @@
+import { DOCS_URL } from '../../../../app.constants';
 import { T } from '../../../../t.const';
 import {
   ConfigFormSection,
@@ -117,4 +118,5 @@ export const OPEN_PROJECT_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderOp
     customSection: 'OPENPROJECT_CFG',
     items: OPEN_PROJECT_CONFIG_FORM,
     help: T.F.OPEN_PROJECT.FORM_SECTION.HELP,
+    docsUrl: `${DOCS_URL}how-to/manage-task-integrations/`,
   };

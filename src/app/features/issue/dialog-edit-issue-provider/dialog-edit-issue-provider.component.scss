@@ -15,20 +15,6 @@
     display: block;
     width: 600px;
   }
-
-  help-section {
-    margin: auto;
-  }
-
-  ::ng-deep {
-    //.help-btn {
-    //  position: relative !important;
-    //  left: 0 !important;
-    //  top: 0 !important;
-    //  display: block;
-    //  margin: 0 auto 16px !important;
-    //}
-  }
 }
 
 :host::ng-deep {

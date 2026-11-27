@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Host alternatif untuk tautan Jira (misalnya URL publik saat host API berbeda; awalan jalur diperbolehkan)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Konfigurasi Lanjutan",
-        "HELP_ARR": {
-          "H1": "Konfigurasi dasar",
-          "H2": "Pengaturan worklog",
-          "H3": "Transisi default",
-          "P1_1": "Harap berikan nama login (dapat ditemukan di halaman profil Anda) dan sebuah <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">token API</a> atau kata sandi jika Anda tidak dapat membuatnya karena alasan tertentu. Harap diperhatikan bahwa versi Jira yang lebih baru terkadang hanya berfungsi dengan token. ",
-          "P1_2": "Anda juga perlu menentukan kueri JQL yang digunakan untuk saran untuk menambahkan tugas dari Jira. Jika Anda memerlukan bantuan, lihat tautan berikut <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Anda juga dapat mengonfigurasi, jika Anda ingin secara otomatis (contoh. setiap kali Anda mengunjungi tampilan perencanaan), untuk menambahkan semua tugas baru yang ditentukan oleh kueri JQL kustom ke backlog.",
-          "P1_4": "Pilihan lain adalah \"Periksa apakah tiket saat ini ditetapkan untuk pengguna saat ini\". Jika diaktifkan dan Anda memulai, pemeriksaan akan dilakukan jika Anda saat ini ditetapkan ke tiket itu di Jira, jika tidak muncul Dialog di mana Anda dapat memilih untuk menetapkan tiket itu kepada diri Anda sendiri.",
-          "P2_1": "Ada beberapa opsi untuk menentukan kapan dan bagaimana Anda ingin mengirimkan worklog. Mengaktifkan <em>'Buka dialog worklog untuk menambahkan worklog ke Jira saat tugas selesai'</em> membuka dialog untuk menambahkan worklog setiap kali Anda menandai Tugas Jira sebagai selesai. Jadi perlu diingat bahwa log kerja akan ditambahkan di atas semua yang dilacak sejauh ini. Jadi, jika Anda menandai tugas sebagai selesai untuk kedua kalinya, Anda mungkin tidak ingin mengirimkan lagi waktu kerja lengkap untuk tugas tersebut.",
-          "P2_2": "<em>'Buka dialog worklog saat sub tugas selesai dan bukan untuk tugas dengan sub tugas itu sendiri'</em> membuka dialog worklog setiap kali Anda menandai subtugas dari masalah Jira sebagai selesai. Karena Anda sudah melacak waktu Anda melalui sub tugas, tidak ada dialog yang dibuka setelah Anda menandai tugas Jira itu sendiri sebagai selesai.",
-          "P2_3": "<em>'Kirim pembaruan ke worklog secara otomatis tanpa dialog'</em> melakukan apa yang dikatakannya. Karena menandai tugas sebagai selesai beberapa kali menyebabkan seluruh waktu kerja dilacak dua kali, ini tidak disarankan.",
-          "P3_1": "Di sini Anda dapat mengkonfigurasi ulang transisi default Anda. Jira memungkinkan konfigurasi transisi yang luas yang biasanya mulai beraksi sebagai kolom yang berbeda di papan gesit Jira Anda, kami tidak dapat membuat asumsi tentang di mana dan kapan harus mentransisikan tugas Anda dan Anda perlu mengaturnya secara manual."
-        }
+        "ADV_CFG": "Konfigurasi Lanjutan"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Penerima tugas",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Sesuaikan nilai ini untuk memburamkan gambar latar belakang. Nilai defaultnya 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Sesuaikan nilai ini untuk membuat latar belakang lebih atau kurang transparan. Standarnya 20%.",
-        "HELP": "Pengaturan tema untuk proyek Anda.",
         "L_BACKGROUND_IMAGE_BLUR": "Buramkan gambar latar belakang",
         "L_BACKGROUND_IMAGE_DARK": "URL Gambar Latar Belakang (Tema Terang)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL Gambar Latar Belakang (Tema Gelap)",

@@ -5,6 +5,7 @@ import {
   Component,
   ElementRef,
   inject,
+  signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
@@ -31,6 +32,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { T } from '../../../t.const';
 import { FormsModule } from '@angular/forms';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
+import { HelpToggleBtnComponent } from '../../../ui/help-section/help-toggle-btn.component';
 import { InputDurationSliderComponent } from '../../../ui/duration/input-duration-slider/input-duration-slider.component';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -52,6 +54,7 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
     FormsModule,
     MatDialogContent,
     HelpSectionComponent,
+    HelpToggleBtnComponent,
     InputDurationSliderComponent,
     MatButton,
     MatIcon,
@@ -73,6 +76,7 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
   private _cd = inject(ChangeDetectorRef);
+  readonly isShowHelp = signal(false);
   private _el = inject(ElementRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _dateService = inject(DateService);

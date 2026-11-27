@@ -482,7 +482,8 @@ export interface ConfigFormSection<FormModel> {
   title: string;
   key: GlobalConfigFormSectionKey | ProjectCfgFormKey;
   help?: string;
-  helpArr?: { h?: string; p: string; p2?: string; p3?: string; p4?: string }[];
+  /** super-productivity.com/docs page linked under `help`; keep its route stable, released apps link it. */
+  docsUrl?: string;
   customSection?: CustomCfgSection;
   items?: LimitedFormlyFieldConfig<FormModel>[];
   actions?: ConfigSectionAction[];

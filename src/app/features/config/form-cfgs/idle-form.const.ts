@@ -1,6 +1,6 @@
 import { ConfigFormSection, IdleConfig } from '../global-config.model';
 import { T } from '../../../t.const';
-import { HelperClasses } from '../../../app.constants';
+import { HelperClasses, DOCS_URL } from '../../../app.constants';
 import {
   IDLE_MIN_IDLE_TIME_MS,
   IDLE_PING_INTERVAL_MS,
@@ -11,6 +11,7 @@ export const IDLE_FORM_CFG: ConfigFormSection<IdleConfig> = {
   title: T.GCF.IDLE.TITLE,
   key: 'idle',
   help: T.GCF.IDLE.HELP,
+  docsUrl: `${DOCS_URL}explanation/idle-time/`,
   isHideForAndroidApp: true,
   items: [
     {

@@ -701,20 +701,7 @@
         "ALT_PUBLIC_LINK_HOST": "Jira-linkkien vaihtoehtoinen palvelin (esim. julkinen URL, kun API-palvelin on eri; polun etuliite sallitaan)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Lisäasetukset",
-        "HELP_ARR": {
-          "H1": "Perusasetukset",
-          "H2": "Työlokin asetukset",
-          "H3": "Oletussiirrot",
-          "P1_1": "Anna kirjautumisnimi (löytyy profiilisivultasi) ja <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API-tunnus</a> tai salasana, jos et jostain syystä pysty luomaan sellaista. Huomaa, että uudemmat Jiran versiot toimivat joskus vain tunnuksen kanssa. ",
-          "P1_2": "Sinun on myös määritettävä JQL-kysely, jota käytetään Jirasta tehtävien lisäämiseen tulevissa ehdotuksissa. Jos tarvitset apua, tarkista tämä linkki <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Voit myös määrittää, haluatko automaattisesti (esim. aina kun vierailet suunnittelinäkymässä) tuoda kaikki uudet ongelmat, jotka määritetään mukautetulla JQL-kyselyllä.",
-          "P1_4": "Toinen vaihtoehto on \"Tarkista onko nykyinen tiketti osoitettu nykyiselle käyttäjälle\". Jos käytössä ja aloitat, tarkistetaan onko tiketti tällä hetkellä osoitettu sinulle Jirassa, jos ei, ilmestyy ikkuna, jossa voit valita osoittaa tiketin itsellesi.",
-          "P2_1": "On useita vaihtoehtoja määrittää, milloin ja miten haluat lähettää työlokin. Ota käyttöön <em>'Avaa työlokin ikkuna Jiraan työlokin lisäämiseksi, kun tehtävä on valmis'</em> avaa ikkunan työlokin lisäämiseksi aina, kun merkitset Jira-tehtävän valmiiksi. Muista siis, että työlokit lisätään kaiken tähän mennessä seuratun päälle. Joten jos merkitset tehtävän valmiiksi toisen kerran, et ehkä halua lähettää koko tehtävään käytettyä aikaa uudelleen.",
-          "P2_2": "<em>'Avaa työlokin ikkuna, kun alitehtävä on valmis eikä tehtäville, joilla on itse alitehtäviä'</em> avaa työlokin ikkunan aina, kun merkitset Jira-ongelman alitehtävän valmiiksi. Koska seuraat aikaasi jo alitehtävien kautta, ikkunaa ei avata, kun merkitset Jira-tehtävän itsensä valmiiksi.",
-          "P2_3": "<em>'Lähetä päivitykset työlokiin automaattisesti ilman ikkunaa'</em> tekee mitä sanotaan. Koska tehtävän merkitseminen valmiiksi useita kertojohtaa koko käytetyn ajan seurantaan kahdesti, tätä ei suositella.",
-          "P3_1": "Tässä voit määrittää oletussiirrot uudelleen. Jira mahdollistaa laajan siirtojen määrittelyn, jotka yleensä tulevat voimaan eri sarakkeina Jira-agile-taulullasi, emme voi olettaa minne ja milloin siirtää tehtäviäsi ja sinun täytyy asettaa se manuaalisesti."
-        }
+        "ADV_CFG": "Lisäasetukset"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Vastuuhenkilö",
@@ -1032,7 +1019,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Säädä tätä arvoa taustakuvan sumentamiseksi. Oletusarvo on 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Säädä tätä arvoa tehdäksesi taustasta enemmän tai vähemmän läpinäkyvä. Oletusarvo on 20 %.",
-        "HELP": "Teema-asetukset projektillesi.",
         "L_BACKGROUND_IMAGE_BLUR": "Sumenna taustakuvaa",
         "L_BACKGROUND_IMAGE_DARK": "Taustakuvan URL (tumma teema)",
         "L_BACKGROUND_IMAGE_LIGHT": "Taustakuvan URL (vaalea teema)",
