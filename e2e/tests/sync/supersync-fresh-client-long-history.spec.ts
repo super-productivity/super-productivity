@@ -345,12 +345,11 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
       const setupStart = Date.now();
       await fresh.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
       const passwordAt = await passwordSubmitted;
-      const t0 = passwordAt ?? setupStart;
       const freshPage = fresh.page;
       await expect
         .poll(() => getCursor(freshPage), { timeout: 35 * 60 * 1000, intervals: [2000] })
         .toBeGreaterThanOrEqual(latestSeq);
-      const wallMs = Date.now() - t0;
+      const syncedAt = Date.now();
       await waitForTask(freshPage, taskName);
       await expect(fresh.sync.syncErrorIcon).not.toBeVisible();
 
@@ -358,11 +357,15 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
       const pages = (await Promise.all(pagePromises)).filter(
         (record): record is PageRecord => record !== null,
       );
+      // The sync starts over from seq 0 once the password is in; that request
+      // can start before the dialog's close is observed, so it marks t0.
+      const firstPage = pages.filter((record) => record.sinceSeq === 0).at(-1);
+      const t0 = firstPage?.startedAt ?? passwordAt ?? setupStart;
+      const wallMs = syncedAt - t0;
       const afterPassword = pages.filter((record) => record.startedAt >= t0);
-      const firstPage = afterPassword.find((record) => record.sinceSeq === 0);
       const download = buildPageStats(afterPassword);
       const passes = phases.filter(
-        ({ t, text }) => t >= t0 && text.includes('Starting download'),
+        ({ t, text }) => t >= t0 && text.includes('Applied and marked'),
       ).length;
 
       const report = {
@@ -381,7 +384,7 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
         firstPage,
         violations: summarizeViolations(violations),
         phases: phases
-          .filter(({ t }) => t >= t0)
+          .filter(({ t }) => t >= t0 - 1000)
           .map(({ t, text }) => `+${((t - t0) / 1000).toFixed(1)}s ${text}`),
         cpu: summarizeProfile(profile),
       };
