@@ -99,12 +99,6 @@
     "F.SCHEDULE.PLAN_START_DAY": ["date"],
     "F.TASK.S.REMINDER_ADDED": ["date"]
   },
-  "nl.json": {
-    "F.SCHEDULE.PLAN_END_DAY": ["date"],
-    "F.SCHEDULE.PLAN_START_DAY": ["date"],
-    "F.SYNC.S.UNKNOWN_ERROR": ["err"],
-    "F.TASK.S.REMINDER_ADDED": ["date"]
-  },
   "sk.json": {
     "F.SCHEDULE.PLAN_END_DAY": ["date"],
     "F.SCHEDULE.PLAN_START_DAY": ["date"],
