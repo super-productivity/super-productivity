@@ -20,7 +20,11 @@ import { Log } from '../../core/log';
 import { IS_ELECTRON } from '../../app.constants';
 import { DialogScheduleTaskComponent } from '../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
-import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
+import {
+  getLogicalDayOfTimestamp,
+  getRepeatDueWithTime,
+} from '../task-repeat-cfg/store/get-repeat-due-with-time.util';
+import { DateService } from '../../core/date/date.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
 
 interface CalendarEventPushOptions {
@@ -41,6 +45,7 @@ export class CalendarEventActionsService {
   private _calendarIntegrationService = inject(CalendarIntegrationService);
   private _hiddenEventsService = inject(HiddenCalendarEventsService);
   private _snackService = inject(SnackService);
+  private _dateService = inject(DateService);
 
   isPluginEvent(calEv: ScheduleFromCalendarEvent): boolean {
     return isPluginIssueProvider(calEv.issueProviderKey as IssueProviderKey);
@@ -141,10 +146,15 @@ export class CalendarEventActionsService {
       return;
     }
     const eventDate = new Date(calEv.start);
-    const targetDay = getDbDateStr(eventDate);
+    const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
     const targetTime = calEv.isAllDay
       ? undefined
       : `${String(eventDate.getHours()).padStart(2, '0')}:${String(eventDate.getMinutes()).padStart(2, '0')}`;
+    // The dialog picks logical days: a timed event before a custom day start
+    // belongs to the previous one (#12012). All-day events keep their date.
+    const targetDay = calEv.isAllDay
+      ? getDbDateStr(eventDate)
+      : getLogicalDayOfTimestamp(calEv.start, startOfNextDayDiffMs);
 
     const dialogRef = this._matDialog.open(DialogScheduleTaskComponent, {
       restoreFocus: true,
@@ -159,7 +169,11 @@ export class CalendarEventActionsService {
     // Build changes based on whether it's a timed or all-day reschedule
     let changes: Record<string, unknown>;
     if (result.time) {
-      const newStartMs = getDateTimeFromClockString(result.time, result.date);
+      const newStartMs = getRepeatDueWithTime(
+        result.time,
+        result.date,
+        startOfNextDayDiffMs,
+      );
       // For all-day events being rescheduled to a specific time, use a 1-hour default
       // instead of the 24-hour all-day duration
       const durationMs =

@@ -25,6 +25,7 @@ import { TaskService } from '../../tasks/task.service';
 import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../core/date/date.service';
+import { combineDateAndTime } from '../../../util/combine-date-and-time';
 import { DialogScheduleTaskComponent } from '../dialog-schedule-task/dialog-schedule-task.component';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { MatIcon } from '@angular/material/icon';
@@ -264,15 +265,18 @@ export class PlannerDayComponent {
   }
 
   private _rescheduleTask(task: TaskCopy, newDate: Date): void {
-    const taskPlannedAtDate = new Date(task.dueWithTime as number);
-    newDate.setHours(taskPlannedAtDate.getHours(), taskPlannedAtDate.getMinutes(), 0, 0);
+    const dueWithTime = combineDateAndTime(
+      newDate,
+      new Date(task.dueWithTime as number),
+      this._dateService.getStartOfNextDayDiffMs(),
+    ).getTime();
     const selectedReminderCfgId = millisecondsDiffToRemindOption(
       task.dueWithTime as number,
       task.remindAt,
     );
     this._taskSchedulingService.scheduleTask(
       task,
-      newDate.getTime(),
+      dueWithTime,
       selectedReminderCfgId,
       false,
     );

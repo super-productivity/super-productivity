@@ -767,7 +767,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const day = getDbDateStr(dayDate);
     const task = this.task();
     if (task.dueWithTime) {
-      const newDate = combineDateAndTime(dayDate, new Date(task.dueWithTime));
+      const newDate = combineDateAndTime(
+        dayDate,
+        new Date(task.dueWithTime),
+        this._dateService.getStartOfNextDayDiffMs(),
+      );
       const remindCfg = task.reminderId
         ? millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt)
         : (this._configService.cfg()?.reminder.defaultTaskRemindOption ??

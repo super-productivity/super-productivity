@@ -23,9 +23,3 @@
   flex-wrap: wrap;
   gap: var(--s-half);
 }
-
-// The list ignores pointer events so clicks reach the row; only the project
-// chip takes them, to open its project.
-.project-tag {
-  pointer-events: auto;
-}

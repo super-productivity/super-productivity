@@ -51,6 +51,7 @@ describe('TaskBulkActionService', () => {
   };
   let dialogResult: unknown;
   let isConfirmBeforeDelete: boolean;
+  let startOfNextDayDiffMs: number;
   let isEnableBacklog: boolean;
 
   const t = (id: string, overrides: Partial<Task> = {}): Task => ({
@@ -77,6 +78,7 @@ describe('TaskBulkActionService', () => {
     selectedIds = signal<ReadonlySet<string>>(new Set());
     dialogResult = true;
     isConfirmBeforeDelete = true;
+    startOfNextDayDiffMs = 0;
     isEnableBacklog = true;
 
     taskService = jasmine.createSpyObj<TaskService>('TaskService', [
@@ -153,7 +155,7 @@ describe('TaskBulkActionService', () => {
           provide: DateService,
           useValue: {
             todayStr: () => '2026-09-05',
-            getStartOfNextDayDiffMs: () => 0,
+            getStartOfNextDayDiffMs: () => startOfNextDayDiffMs,
             isToday: () => false,
           },
         },
@@ -833,6 +835,23 @@ describe('TaskBulkActionService', () => {
         remindOption: null,
       });
       expect(taskSchedulingService.scheduleTask).toHaveBeenCalledTimes(2);
+    });
+
+    // #12012: with the day starting at 04:00, 02:00 of Sep 10 is the night after it
+    it('puts a time before a custom day start at the end of the picked day', async () => {
+      startOfNextDayDiffMs = 4 * 60 * 60 * 1000;
+      select([t('a')]);
+      await service.scheduleFor({
+        date: new Date(2026, 8, 10),
+        time: '02:00',
+        remindOption: null,
+      });
+      expect(taskSchedulingService.scheduleTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'a' }),
+        new Date(2026, 8, 11, 2, 0).getTime(),
+        TaskReminderOptionId.DoNotRemind,
+        false,
+      );
     });
 
     // #11816: a repeat config holds at most a 1h lead and would overwrite a

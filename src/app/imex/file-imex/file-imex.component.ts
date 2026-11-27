@@ -42,6 +42,7 @@ import {
 } from '../dialog-confirm-url-import/dialog-confirm-url-import.component';
 import { Log } from '../../core/log';
 import { DialogArchiveCompressionComponent } from '../../features/archive/dialog-archive-compression/dialog-archive-compression.component';
+import { DialogBackupsListComponent } from '../local-backup/dialog-backups-list/dialog-backups-list.component';
 import {
   BackupRepairFailedError,
   DataValidationFailedError,
@@ -319,6 +320,11 @@ export class FileImexComponent implements OnInit {
       width: '500px',
       maxWidth: '90vw',
     });
+  }
+
+  /** Lives here so every platform (incl. web, which has no automatic backups) can reach the recovery ring. */
+  openBackupsList(): void {
+    this._matDialog.open(DialogBackupsListComponent, { restoreFocus: true });
   }
 
   openTodoistImport(): Promise<void> {

@@ -7,6 +7,7 @@ import {
   inject,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Store } from '@ngrx/store';
 import { filter } from 'rxjs/operators';
 import {
   MAT_DIALOG_DATA,
@@ -19,6 +20,7 @@ import {
 } from '@angular/material/dialog';
 import { Task, TaskCopy, TimeSpentOnDayCopy } from '../task.model';
 import { TaskService } from '../task.service';
+import { selectTaskEntities } from '../store/task.selectors';
 import { DateService } from '../../../core/date/date.service';
 import { createTaskCopy } from '../util/create-task-copy';
 import {
@@ -74,6 +76,7 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
   private _el = inject(ElementRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _dateService = inject(DateService);
+  private _taskEntities = inject(Store).selectSignal(selectTaskEntities);
   data = inject(MAT_DIALOG_DATA);
 
   // Exposed so the template can pass the reactive locale to the now-pure
@@ -119,15 +122,26 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
   }
 
   submit(): void {
-    // Tracking keeps adding to the store while the dialog is open, so unedited
-    // days must not be written back from the opening snapshot.
+    // Tracking keeps adding to the store while the dialog is open, so only the
+    // edited days are written over the task's current time spent.
+    const editedDays = this._getEditedDays();
+    const timeSpentOnDay: TimeSpentOnDayCopy = {
+      ...(this._taskEntities()[this.task.id] ?? this.task).timeSpentOnDay,
+    };
+    editedDays.forEach((day) => {
+      if (day in this.timeSpentOnDayCopy) {
+        timeSpentOnDay[day] = this.timeSpentOnDayCopy[day];
+      } else {
+        delete timeSpentOnDay[day];
+      }
+    });
     this._taskService.update(this.taskCopy.id, {
       timeEstimate: this.taskCopy.timeEstimate,
-      ...(this._isTimeSpentChanged() && { timeSpentOnDay: this.timeSpentOnDayCopy }),
+      ...(editedDays.length > 0 && { timeSpentOnDay }),
     });
     this._matDialogRef.close({
       timeEstimate: this.taskCopy.timeEstimate,
-      timeSpentOnDay: this.timeSpentOnDayCopy,
+      timeSpentOnDay,
     });
   }
 
@@ -160,14 +174,14 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
     if ((this.taskCopy.timeEstimate || 0) !== (this.task.timeEstimate || 0)) {
       return true;
     }
-    return this._isTimeSpentChanged();
+    return this._getEditedDays().length > 0;
   }
 
-  private _isTimeSpentChanged(): boolean {
+  private _getEditedDays(): string[] {
     const before = this.task.timeSpentOnDay || {};
     const after = this.timeSpentOnDayCopy;
     const days = new Set([...Object.keys(before), ...Object.keys(after)]);
-    return [...days].some((day) => (before[day] || 0) !== (after[day] || 0));
+    return [...days].filter((day) => (before[day] || 0) !== (after[day] || 0));
   }
 
   trackByIndex(i: number, p: any): number {

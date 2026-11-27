@@ -59,6 +59,7 @@ import { first } from 'rxjs/operators';
 import { isInputElement, isLinkTarget } from '../../../util/dom-element';
 import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
+import { getLogicalDayOfTimestamp } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import {
   moveTaskDownInTodayList,
   moveTaskToBottomInTodayList,
@@ -554,8 +555,14 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     const task = this.task();
     const displayedDay = this.day();
+    // the logical day of the time, as _scheduleForDay expects (#12012)
     const baseDate = task.dueWithTime
-      ? new Date(task.dueWithTime)
+      ? parseDbDateStr(
+          getLogicalDayOfTimestamp(
+            task.dueWithTime,
+            this._dateService.getStartOfNextDayDiffMs(),
+          ),
+        )
       : displayedDay
         ? parseDbDateStr(displayedDay)
         : task.dueDay
@@ -571,7 +578,11 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _scheduleForDay(date: Date): void {
     const task = this.task();
     if (task.dueWithTime) {
-      const timestamp = combineDateAndTime(date, new Date(task.dueWithTime)).getTime();
+      const timestamp = combineDateAndTime(
+        date,
+        new Date(task.dueWithTime),
+        this._dateService.getStartOfNextDayDiffMs(),
+      ).getTime();
       const remindCfg = millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt);
       this._taskSchedulingService.scheduleTask(task, timestamp, remindCfg, false);
       return;

@@ -181,6 +181,8 @@ class TaskListWidgetProvider : AppWidgetProvider() {
          * effects have run, and overdue tasks are carried over there too — so a
          * process that stayed dead across midnight leaves yesterday's blob in place.
          * Name the day actually on screen rather than mislabelling it "Today" (#9098).
+         * The blob's `nextDays` cover the following days, so that case starts only
+         * once they have run out ([WidgetData.parseMeta], #11944).
          *
          * Reads the blob itself: the header lives in the provider's RemoteViews while
          * the rows are built in a separate RemoteViewsFactory, with no shared lifetime
@@ -194,8 +196,8 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 // Unknown stamp: keep the pre-#9098 behaviour rather than cry stale.
                 return Snapshot(null, context.getString(R.string.widget_header_title), null)
             }
-            val meta = WidgetData.parseMeta(json)
             val nowMs = System.currentTimeMillis()
+            val meta = WidgetData.parseMeta(json, nowMs)
             // The verdict lives in WidgetData.headerFor (pure, tested); this only renders it.
             val header = when (val h = WidgetData.headerFor(meta, nowMs)) {
                 is WidgetHeader.Today -> context.getString(R.string.widget_header_title)

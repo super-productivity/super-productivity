@@ -57,6 +57,8 @@ export interface HintStepConfig {
    * reminder and task snacks.
    */
   isEndedWhenMissing?: boolean;
+  /** Quiet "or import from another app" link below the message */
+  isImportOffered?: boolean;
   /** Footer buttons: the tour offer, or the tour's Next */
   actions?: 'offer' | 'next';
 }
@@ -110,6 +112,7 @@ export const HINT_STEP_CONFIGS = new Map<HintStep, HintStepConfig>([
         isTouch ? T.ONBOARDING.HINTS.CREATE_TASK_TOUCH : T.ONBOARDING.HINTS.CREATE_TASK,
       shortcut: 'addNewTask',
       isPulse: true,
+      isImportOffered: true,
     },
   ],
   // Phones only. Anchored to the task row; task.component itself is untouched.

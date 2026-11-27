@@ -28,6 +28,8 @@ import { ReminderService } from '../../reminder/reminder.service';
 import { PlannerActions } from '../store/planner.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { findSpringForwardSunday } from '../../tasks/dst.test-helper';
+import { DateService } from '../../../core/date/date.service';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { ScheduleConfig } from '../../config/global-config.model';
 import { selectTaskRepeatCfgByIdAllowUndefined } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
@@ -491,6 +493,138 @@ describe('DialogScheduleTaskComponent', () => {
             TaskSharedActions.updateTask.type,
         );
       expect(updateTaskCalls).toEqual([]);
+    });
+  });
+
+  describe('time before a custom day start (#12012)', () => {
+    let dateService: DateService;
+
+    beforeEach(() => {
+      dateService = TestBed.inject(DateService);
+      dateService.setStartOfNextDayDiff('04:00');
+    });
+
+    afterEach(() => {
+      dateService.setStartOfNextDayDiff(0);
+    });
+
+    it('schedules 02:00 of a picked day at the end of that day, not before it', async () => {
+      component.selectedDate = new Date(2026, 10, 28);
+      component.selectedTime = '02:00';
+      component.selectedReminderCfgId = TaskReminderOptionId.AtStart;
+      await component.submit();
+
+      expect(taskSchedulingServiceSpy.scheduleTask).toHaveBeenCalledWith(
+        jasmine.anything(),
+        new Date(2026, 10, 29, 2, 0, 0, 0).getTime(),
+        TaskReminderOptionId.AtStart,
+        false,
+      );
+    });
+
+    it('schedules Today plus an early time for tonight when picked after midnight', async () => {
+      jasmine.clock().install();
+      try {
+        // 01:00 on Nov 29 still belongs to Nov 28
+        jasmine.clock().mockDate(new Date(2026, 10, 29, 1, 0));
+        component.selectedTime = '02:00';
+        component.selectedReminderCfgId = TaskReminderOptionId.AtStart;
+        component.onQuickAccessClick('today');
+        await Promise.resolve();
+      } finally {
+        jasmine.clock().uninstall();
+      }
+
+      expect(taskSchedulingServiceSpy.scheduleTask).toHaveBeenCalledWith(
+        jasmine.anything(),
+        new Date(2026, 10, 29, 2, 0, 0, 0).getTime(),
+        TaskReminderOptionId.AtStart,
+        false,
+      );
+    });
+
+    // Bulk scheduling, board drops and repeat configs combine the picked date
+    // as a logical day, like the dialog itself.
+    it('picks logical today for a select-due-only caller after midnight', () => {
+      component.data = { isSelectDueOnly: true };
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date(2026, 10, 29, 1, 0));
+        component.onQuickAccessClick('today');
+      } finally {
+        jasmine.clock().uninstall();
+      }
+
+      const picked = dialogRefSpy.close.calls.mostRecent().args[0] as { date: Date };
+      expect(getDbDateStr(picked.date)).toBe('2026-11-28');
+    });
+
+    it('lets the logical day be picked after midnight', () => {
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date(2026, 10, 29, 1, 0));
+        const fresh = TestBed.createComponent(DialogScheduleTaskComponent);
+        expect(getDbDateStr(fresh.componentInstance.minDate as Date)).toBe('2026-11-28');
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
+
+    it('shows the day the task belongs to and keeps it when saved unchanged', async () => {
+      const dueWithTime = new Date(2026, 10, 29, 2, 0, 0, 0).getTime();
+      const mockTask = {
+        ...component.data.task,
+        id: 'earlyMorningTask',
+        dueWithTime,
+        reminderId: null,
+      } as unknown as TaskCopy;
+      component.data = { task: mockTask };
+      component.task = mockTask;
+
+      await component.ngAfterViewInit();
+      expect(getDbDateStr(component.selectedDate as Date)).toBe('2026-11-28');
+      expect(component.selectedTime).toBe('02:00');
+
+      await component.submit();
+      expect(taskSchedulingServiceSpy.scheduleTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'earlyMorningTask' }),
+        dueWithTime,
+        jasmine.anything(),
+        false,
+      );
+    });
+
+    // On the spring-forward Sunday a time just after the day start is less
+    // than the offset past midnight, yet it belongs to that Sunday
+    it('opens a time just after the day start on its own day on a spring-forward day', async () => {
+      const gap = findSpringForwardSunday(2026);
+      if (!gap) {
+        // Timezone without a spring-forward transition (UTC, Tokyo).
+        return;
+      }
+      const dayStartHour = gap.missingHour + 2;
+      dateService.setStartOfNextDayDiff(dayStartHour);
+      const due = new Date(gap.sunday);
+      due.setHours(dayStartHour, 30, 0, 0);
+      const mockTask = {
+        ...component.data.task,
+        id: 'dstTask',
+        dueWithTime: due.getTime(),
+        reminderId: null,
+      } as unknown as TaskCopy;
+      component.data = { task: mockTask };
+      component.task = mockTask;
+
+      await component.ngAfterViewInit();
+      expect(getDbDateStr(component.selectedDate as Date)).toBe(getDbDateStr(gap.sunday));
+
+      await component.submit();
+      expect(taskSchedulingServiceSpy.scheduleTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'dstTask' }),
+        due.getTime(),
+        jasmine.anything(),
+        false,
+      );
     });
   });
 

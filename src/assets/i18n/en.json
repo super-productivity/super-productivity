@@ -2607,6 +2607,8 @@
       "WARNING_TITLE": "Warning"
     },
     "EXPORT_DATA": "Export Data",
+    "GROUP_BACKUP_RESTORE": "Backup & restore",
+    "GROUP_FROM_OTHER_APP": "Coming from another app",
     "IMPORT_FROM_FILE": "Import from File",
     "IMPORT_FROM_TICKTICK": "Import from TickTick",
     "IMPORT_FROM_MS_TODO": "Import from Microsoft To Do",
@@ -3305,6 +3307,7 @@
       "NO_THANKS": "No thanks",
       "SHOW_ME_MORE": "Show me more ›",
       "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
+      "OR_IMPORT": "or import from another app",
       "OR_PRESS": "or press",
       "SKIP_ARIA": "Close tip"
     },

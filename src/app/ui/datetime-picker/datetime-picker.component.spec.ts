@@ -1,3 +1,4 @@
+import { getDbDateStr } from '../../util/get-db-date-str';
 import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { DateTimePickerComponent } from './datetime-picker.component';
 import { DateService } from '../../core/date/date.service';
@@ -23,7 +24,11 @@ describe('DateTimePickerComponent', () => {
   let globalConfigServiceMock: any;
 
   beforeEach(async () => {
-    dateServiceSpy = jasmine.createSpyObj('DateService', ['isToday', 'todayStr']);
+    dateServiceSpy = jasmine.createSpyObj('DateService', [
+      'isToday',
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+    ]);
     globalConfigServiceMock = {
       localization: signal({}),
       cfg: signal({}),
@@ -316,6 +321,42 @@ describe('DateTimePickerComponent', () => {
     fixture.detectChanges();
 
     expect(calendar.activeDate).toEqual(browsedDate);
+  });
+
+  // #12012: with a 04:00 day start the host combines the date as a logical day
+  describe('time focus default for a logical-day host', () => {
+    const focusAt = (now: Date): { date?: Date; time?: string } => {
+      const emitted: { date?: Date; time?: string } = {};
+      component.dateSelected.subscribe((d) => (emitted.date = d));
+      component.timeChanged.subscribe((tm) => (emitted.time = tm ?? undefined));
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(now);
+        component.onTimeFocus();
+      } finally {
+        jasmine.clock().uninstall();
+      }
+      return emitted;
+    };
+
+    beforeEach(() => {
+      dateServiceSpy.getStartOfNextDayDiffMs.and.returnValue(4 * 60 * 60 * 1000);
+      fixture.componentRef.setInput('selectedDate', null);
+      fixture.componentRef.setInput('selectedTime', null);
+      fixture.componentRef.setInput('isLogicalDay', true);
+    });
+
+    it('defaults to the running logical day after midnight', () => {
+      const { date, time } = focusAt(new Date(2026, 10, 28, 1, 30));
+      expect(getDbDateStr(date!)).toBe('2026-11-27');
+      expect(time).toBe('2:00');
+    });
+
+    it('defaults to the new day when the hour ahead reaches the day start', () => {
+      const { date, time } = focusAt(new Date(2026, 10, 28, 3, 30));
+      expect(getDbDateStr(date!)).toBe('2026-11-28');
+      expect(time).toBe('4:00');
+    });
   });
 
   it('should not update activeDate when calendar is focused', () => {
