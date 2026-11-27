@@ -41,6 +41,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             docs/wiki
+            docs/public
             tools
             .github/prompts
 

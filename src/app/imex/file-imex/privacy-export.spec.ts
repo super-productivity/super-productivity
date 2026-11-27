@@ -154,18 +154,45 @@ describe('privacyExport', () => {
       expect(privacyExport(input)).not.toContain('github.example.com');
     });
 
-    it('should mask the CalDAV server URL of a plugin provider', () => {
+    it('should mask the CalDAV server, selected calendars and linked event IDs', () => {
+      const calendar = 'https://dav.example.com/calendars/private-account/work/';
+      const path = '/calendars/private-account/personal/';
       const input = {
         issueProvider: {
           entities: {
             cal1: {
               issueProviderKey: 'plugin:caldav-calendar-provider',
-              pluginConfig: { serverUrl: 'https://dav.example.com/remote.php/dav' },
+              pluginConfig: {
+                serverUrl: 'https://dav.example.com/remote.php/dav',
+                calendarId: path,
+                readCalendarIds: [calendar, path],
+                writeCalendarId: calendar,
+                timeBlockCalendarId: path,
+                workSessionCalendarId: path,
+              },
             },
           },
         },
+        task: {
+          entities: {
+            t1: {
+              issueType: 'plugin:caldav-calendar-provider',
+              issueId: `${calendar}::${path}event.ics#occ=12345`,
+            },
+            t2: { issueType: 'GITHUB', issueId: '42' },
+          },
+        },
       };
-      expect(privacyExport(input)).not.toContain('dav.example.com');
+      const exported = privacyExport(input);
+      expect(exported).not.toContain('dav.example.com');
+      expect(exported).not.toContain('private-account');
+      expect(exported).not.toContain('event.ics');
+      const data = JSON.parse(exported);
+      expect(data.issueProvider.entities.cal1.pluginConfig.readCalendarIds).toEqual([
+        jasmine.stringMatching(/^readCalendarIds__\d+$/),
+        jasmine.stringMatching(/^readCalendarIds__\d+$/),
+      ]);
+      expect(data.task.entities.t2.issueId).toBe('42');
     });
   });
 

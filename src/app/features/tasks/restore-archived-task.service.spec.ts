@@ -7,7 +7,7 @@ import { TaskArchiveService } from '../archive/task-archive.service';
 import { DateService } from '../../core/date/date.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { selectTaskEntities } from './store/task.selectors';
-import { DEFAULT_TASK, Task } from './task.model';
+import { DEFAULT_TASK, Task, TaskArchive } from './task.model';
 import { T } from '../../t.const';
 
 const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
@@ -24,12 +24,10 @@ describe('RestoreArchivedTaskService', () => {
   let matDialog: jasmine.SpyObj<MatDialog>;
   let taskArchiveService: jasmine.SpyObj<TaskArchiveService>;
 
-  const setArchive = (tasks: Task[]): void => {
-    taskArchiveService.load.and.resolveTo({
-      ids: tasks.map((t) => t.id),
-      entities: Object.fromEntries(tasks.map((t) => [t.id, t])),
-    });
-  };
+  const makeArchive = (tasks: Task[]): TaskArchive => ({
+    ids: tasks.map((t) => t.id),
+    entities: Object.fromEntries(tasks.map((t) => [t.id, t])),
+  });
   const setConfirmResult = (result: boolean | undefined): void => {
     matDialog.open.and.returnValue({
       afterClosed: () => of(result),
@@ -62,41 +60,41 @@ describe('RestoreArchivedTaskService', () => {
   });
 
   describe('findRestorableTask', () => {
-    it('returns the archived task itself for a top-level task', async () => {
+    it('returns the archived task itself for a top-level task', () => {
       const archived = createTask('a');
-      setArchive([archived]);
+      const archive = makeArchive([archived]);
 
-      expect(await service.findRestorableTask(createTask('a'))).toBe(archived);
+      expect(service.findRestorableTask(createTask('a'), archive)).toBe(archived);
     });
 
-    it('returns the archived parent for a sub task', async () => {
+    it('returns the archived parent for a sub task', () => {
       const parent = createTask('parent', { subTaskIds: ['sub'] });
       const sub = createTask('sub', { parentId: 'parent' });
-      setArchive([parent, sub]);
+      const archive = makeArchive([parent, sub]);
 
-      expect(await service.findRestorableTask(sub)).toBe(parent);
+      expect(service.findRestorableTask(sub, archive)).toBe(parent);
     });
 
-    it('returns null for a task that is not in the archive', async () => {
-      setArchive([]);
+    it('returns null for a task that is not in the archive', () => {
+      const archive = makeArchive([]);
 
-      expect(await service.findRestorableTask(createTask('a'))).toBeNull();
+      expect(service.findRestorableTask(createTask('a'), archive)).toBeNull();
     });
 
-    it('returns null for a sub task whose parent is not in the archive', async () => {
+    it('returns null for a sub task whose parent is not in the archive', () => {
       const sub = createTask('sub', { parentId: 'parent' });
-      setArchive([sub]);
+      const archive = makeArchive([sub]);
 
-      expect(await service.findRestorableTask(sub)).toBeNull();
+      expect(service.findRestorableTask(sub, archive)).toBeNull();
     });
 
-    it('returns null when the task is already active', async () => {
+    it('returns null when the task is already active', () => {
       const task = createTask('a');
-      setArchive([task]);
+      const archive = makeArchive([task]);
       store.overrideSelector(selectTaskEntities, { a: task });
       store.refreshState();
 
-      expect(await service.findRestorableTask(task)).toBeNull();
+      expect(service.findRestorableTask(task, archive)).toBeNull();
     });
   });
 
@@ -127,16 +125,15 @@ describe('RestoreArchivedTaskService', () => {
       expect(store.dispatch).not.toHaveBeenCalled();
     });
 
-    it('dispatches one restoreTask with the current archived parent and sub tasks', async () => {
+    it('dispatches one restoreTask for today with the archived sub tasks', async () => {
       const sub1 = createTask('sub1', { parentId: 'parent' });
       const sub2 = createTask('sub2', { parentId: 'parent' });
       // 'gone' is listed on the parent but missing from the archive
       const parent = createTask('parent', { subTaskIds: ['sub1', 'gone', 'sub2'] });
-      setArchive([parent, sub1, sub2]);
+      taskArchiveService.load.and.resolveTo(makeArchive([parent, sub1, sub2]));
       setConfirmResult(true);
 
-      const displayedParent = createTask('parent', { title: 'Old title' });
-      expect(await service.confirmAndRestore(displayedParent)).toBe(true);
+      expect(await service.confirmAndRestore(parent)).toBe(true);
 
       expect(store.dispatch).toHaveBeenCalledOnceWith(
         TaskSharedActions.restoreTask({
@@ -147,22 +144,53 @@ describe('RestoreArchivedTaskService', () => {
       );
     });
 
-    it('does not restore a task removed from the archive', async () => {
-      setArchive([]);
+    it('uses the current archived task when its details changed during confirmation', async () => {
+      const displayed = createTask('a');
+      const task = { ...displayed, notes: 'Updated since opening details' };
+      taskArchiveService.load.and.resolveTo(makeArchive([task]));
       setConfirmResult(true);
 
-      expect(await service.confirmAndRestore(createTask('a'))).toBe(false);
-      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(await service.confirmAndRestore(displayed)).toBe(true);
+      expect(store.dispatch).toHaveBeenCalledOnceWith(
+        TaskSharedActions.restoreTask({
+          task,
+          subTasks: [],
+          restoreToToday: { today: '2026-01-05', startOfNextDayDiffMs: 0 },
+        }),
+      );
     });
 
-    it('does not restore an archived copy of an already active task', async () => {
+    it('opens an already restored task without dispatching another restore', async () => {
       const task = createTask('a');
-      setArchive([task]);
+      taskArchiveService.load.and.resolveTo(makeArchive([task]));
       store.overrideSelector(selectTaskEntities, { a: task });
       store.refreshState();
       setConfirmResult(true);
 
-      expect(await service.confirmAndRestore(task)).toBe(false);
+      expect(await service.confirmAndRestore(task)).toBe(true);
+      expect(taskArchiveService.load).not.toHaveBeenCalled();
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('rechecks the active task after the archive read', async () => {
+      const task = createTask('a');
+      taskArchiveService.load.and.callFake(async () => {
+        store.overrideSelector(selectTaskEntities, { a: task });
+        store.refreshState();
+        return makeArchive([task]);
+      });
+      setConfirmResult(true);
+
+      expect(await service.confirmAndRestore(task)).toBe(true);
+      expect(taskArchiveService.load).toHaveBeenCalledTimes(1);
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when the confirmed task has left the archive', async () => {
+      taskArchiveService.load.and.resolveTo(makeArchive([]));
+      setConfirmResult(true);
+
+      expect(await service.confirmAndRestore(createTask('gone'))).toBe(false);
       expect(store.dispatch).not.toHaveBeenCalled();
     });
   });

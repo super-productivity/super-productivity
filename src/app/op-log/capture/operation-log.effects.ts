@@ -80,6 +80,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   private _deferredProcessingChain: Promise<void> = Promise.resolve();
   /** Emits after every deferred drain, succeeded or not. */
   private _deferredDrainSettled$ = new Subject<void>();
+  readonly deferredDrainSettled$ = this._deferredDrainSettled$.asObservable();
+
   /**
    * Dedupe timestamp for the storage-quota snackbar. #7700: when quota fires
    * inside the deferred-action retry loop, the retry loop calls handleQuotaExceeded

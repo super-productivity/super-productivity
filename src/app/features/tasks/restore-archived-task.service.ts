@@ -26,17 +26,22 @@ export class RestoreArchivedTaskService {
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _dateService = inject(DateService);
 
+  isActive(task: Task): boolean {
+    return !!this._activeTasks()[task.parentId || task.id];
+  }
+
   /**
    * The archived task a restore of `task` brings back: the task itself, or its
    * parent for a sub task, which cannot be active without its parent (History
    * offers no restore on sub task rows for the same reason). `null` when there
    * is nothing to restore: not in the archive, or already active.
    */
-  async findRestorableTask(task: Task): Promise<Task | null> {
-    return this._getRestorableTask(task, await this._taskArchiveService.load());
+  findRestorableTask(task: Task, archive: TaskArchive): Task | null {
+    const rootId = task.parentId || task.id;
+    return this.isActive(task) ? null : (archive.entities[rootId] ?? null);
   }
 
-  /** Resolves `true` once dispatched, `false` if declined or no longer restorable. */
+  /** Resolves true when the confirmed task is active and can be opened. */
   async confirmAndRestore(displayedTask: Task): Promise<boolean> {
     const isConfirm = await firstValueFrom(
       this._matDialog
@@ -55,15 +60,22 @@ export class RestoreArchivedTaskService {
       return false;
     }
 
-    // History or sync can update the archive while confirmation is open.
+    // Sync can restore or edit this task while the confirmation is open.
+    // Check the live store after the archive read, immediately before dispatch.
+    if (this.isActive(displayedTask)) {
+      return true;
+    }
     const archive = await this._taskArchiveService.load();
-    const task = this._getRestorableTask(displayedTask, archive);
+    if (this.isActive(displayedTask)) {
+      return true;
+    }
+    const task = archive.entities[displayedTask.id];
     if (!task) {
       return false;
     }
     const subTasks = (task.subTaskIds ?? [])
       .map((id) => archive.entities[id])
-      .filter((t): t is Task => !!t);
+      .filter((sub): sub is Task => !!sub);
     // Read after the archive load so a restore confirmed across midnight still
     // lands on the logical today.
     const restoreToToday = {
@@ -76,10 +88,5 @@ export class RestoreArchivedTaskService {
       TaskSharedActions.restoreTask({ task, subTasks, restoreToToday }),
     );
     return true;
-  }
-
-  private _getRestorableTask(task: Task, archive: TaskArchive): Task | null {
-    const rootId = task.parentId || task.id;
-    return this._activeTasks()[rootId] ? null : (archive.entities[rootId] ?? null);
   }
 }

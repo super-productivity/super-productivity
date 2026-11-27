@@ -2,7 +2,7 @@ import { inject, Injectable, Injector } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { merge } from 'rxjs';
+import { defer, merge } from 'rxjs';
 import {
   concatMap,
   debounceTime,
@@ -34,6 +34,21 @@ import { Router } from '@angular/router';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 import { OperationCaptureService } from '../../../op-log/capture/operation-capture.service';
 import { getDeferredActions } from '../../../op-log/capture/operation-capture.meta-reducer';
+import { OperationLogEffects } from '../../../op-log/capture/operation-log.effects';
+
+const parseDoneTargets = (queueJson: string): Record<string, unknown> => {
+  let targets: unknown;
+  try {
+    targets = JSON.parse(queueJson);
+  } catch (e) {
+    DroidLog.err('Failed to parse widget done queue', e);
+    return {};
+  }
+  if (typeof targets !== 'object' || targets === null || Array.isArray(targets)) {
+    return {};
+  }
+  return targets as Record<string, unknown>;
+};
 
 /**
  * Decides which queued widget checkbox taps become setDone()/setUnDone() calls.
@@ -45,21 +60,19 @@ import { getDeferredActions } from '../../../op-log/capture/operation-capture.me
 export const getTaskDoneChangesToApply = (
   queueJson: string,
   taskEntities: Dictionary<Task>,
+  previousQueue?: string,
 ): { id: string; isDone: boolean }[] => {
-  let targets: unknown;
-  try {
-    targets = JSON.parse(queueJson);
-  } catch (e) {
-    DroidLog.err('Failed to parse widget done queue', e);
-    return [];
-  }
-  if (typeof targets !== 'object' || targets === null || Array.isArray(targets)) {
-    return [];
-  }
-  return Object.entries(targets as Record<string, unknown>)
+  const targets = parseDoneTargets(queueJson);
+  const previous = previousQueue ? parseDoneTargets(previousQueue) : undefined;
+  return Object.entries(targets)
     .filter(([id, isDone]) => {
       const task = taskEntities[id];
-      return typeof isDone === 'boolean' && !!task && task.isDone !== isDone;
+      return (
+        typeof isDone === 'boolean' &&
+        !!task &&
+        task.isDone !== isDone &&
+        previous?.[id] !== isDone
+      );
     })
     .map(([id, isDone]) => ({ id, isDone: isDone as boolean }));
 };
@@ -67,7 +80,7 @@ export const getTaskDoneChangesToApply = (
 export type WidgetDoneAckDeps = {
   flushPendingWrites: () => Promise<void>;
   hasUnrecoveredPersistFailure: () => boolean;
-  hasDeferredActions: () => boolean;
+  hasDeferredWrites: () => boolean;
   ack: (queueJson: string) => void;
 };
 
@@ -84,6 +97,7 @@ export const ackWidgetDoneQueueOnceWritten = async (
   deps: WidgetDoneAckDeps,
 ): Promise<void> => {
   try {
+    if (deps.hasDeferredWrites()) return;
     await deps.flushPendingWrites();
   } catch (e) {
     DroidLog.err('Widget done queue kept: op writes did not finish', e);
@@ -93,12 +107,6 @@ export const ackWidgetDoneQueueOnceWritten = async (
   // memory and is gone after the reload the user is asked for.
   if (deps.hasUnrecoveredPersistFailure()) {
     DroidLog.err('Widget done queue kept: an op write failed');
-    return;
-  }
-  // A tap applied while remote ops were being applied is buffered, not counted
-  // by the flush, and stays buffered until its op is written.
-  if (deps.hasDeferredActions()) {
-    DroidLog.log('Widget done queue kept: a change is still buffered');
     return;
   }
   deps.ack(queueJson);
@@ -122,6 +130,8 @@ export class AndroidWidgetEffects {
   private _router = inject(Router);
   private _opWriteFlush = inject(OperationWriteFlushService);
   private _opCapture = inject(OperationCaptureService);
+  // Targets already delivered to this running app, until the native queue is acknowledged.
+  private _unacknowledgedQueue?: { json: string; ack: (json: string) => void };
 
   // The selector emission is only a change trigger; pushCurrent() re-reads the
   // store at push time (fresher than debounce-stale data) and dedupes itself.
@@ -182,8 +192,8 @@ export class AndroidWidgetEffects {
   // Single delivery path for widget done-taps: cold start by startWith (the
   // native onResume call runs before this bundle defines onResume$ and is
   // dropped), background→foreground by onResume$, taps while the app is alive
-  // by the contentless native drain signal. The queue read does not clear, so
-  // overlapping triggers read the same taps; only the first finds a task to change.
+  // by the contentless native drain signal. A deferred drain retries the ack
+  // for taps already applied in memory.
   drainWidgetDoneQueue$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
@@ -191,6 +201,9 @@ export class AndroidWidgetEffects {
         merge(
           androidInterface.onResume$,
           androidInterface.onWidgetDoneDrainRequest$,
+          defer(() => this._injector.get(OperationLogEffects).deferredDrainSettled$).pipe(
+            filter(() => !!this._unacknowledgedQueue),
+          ),
         ).pipe(
           startWith(undefined),
           concatMap(() =>
@@ -199,7 +212,9 @@ export class AndroidWidgetEffects {
               switchMap(() => this._store.select(selectTaskEntities).pipe(first())),
             ),
           ),
-          tap((taskEntities) => this._drainDoneQueue(taskEntities)),
+          tap((taskEntities) => this._applyDoneQueue(taskEntities)),
+          // A stalled write may delay acknowledgement, but later taps can still apply.
+          concatMap(() => this._ackDoneQueue()),
         ),
       { dispatch: false },
     );
@@ -241,7 +256,7 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
-  private _drainDoneQueue(taskEntities: Dictionary<Task>): void {
+  private _applyDoneQueue(taskEntities: Dictionary<Task>): void {
     const ack = androidInterface.ackWidgetDoneQueue?.bind(androidInterface);
     // A native shell without ack (legacy online-mode APK) only has get-and-clear.
     const queueJson = ack
@@ -250,7 +265,12 @@ export class AndroidWidgetEffects {
     if (!queueJson) {
       return;
     }
-    const changes = getTaskDoneChangesToApply(queueJson, taskEntities);
+    const changes = getTaskDoneChangesToApply(
+      queueJson,
+      taskEntities,
+      this._unacknowledgedQueue?.json,
+    );
+    if (ack) this._unacknowledgedQueue = { json: queueJson, ack };
     for (const change of changes) {
       if (change.isDone) {
         this._taskService.setDone(change.id);
@@ -267,15 +287,21 @@ export class AndroidWidgetEffects {
         translateParams: { count: changes.length },
       });
     }
+  }
 
-    if (ack) {
-      void ackWidgetDoneQueueOnceWritten(queueJson, {
-        flushPendingWrites: () => this._opWriteFlush.flushPendingWrites(),
-        hasUnrecoveredPersistFailure: () =>
-          this._opCapture.hasUnrecoveredPersistFailure(),
-        hasDeferredActions: () => getDeferredActions().length > 0,
-        ack,
-      });
-    }
+  private async _ackDoneQueue(): Promise<void> {
+    const read = this._unacknowledgedQueue;
+    if (!read) return;
+    await ackWidgetDoneQueueOnceWritten(read.json, {
+      flushPendingWrites: () => this._opWriteFlush.flushPendingWrites(),
+      hasUnrecoveredPersistFailure: () => this._opCapture.hasUnrecoveredPersistFailure(),
+      hasDeferredWrites: () => getDeferredActions().length > 0,
+      ack: (json) => {
+        // A tap can change the target and change it back during the same flush.
+        if (this._unacknowledgedQueue !== read) return;
+        read.ack(json);
+        this._unacknowledgedQueue = undefined;
+      },
+    });
   }
 }

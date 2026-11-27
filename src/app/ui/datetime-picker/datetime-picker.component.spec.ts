@@ -349,13 +349,13 @@ describe('DateTimePickerComponent', () => {
     it('defaults to the running logical day after midnight', () => {
       const { date, time } = focusAt(new Date(2026, 10, 28, 1, 30));
       expect(getDbDateStr(date!)).toBe('2026-11-27');
-      expect(time).toBe('2:00');
+      expect(time).toBe('02:00');
     });
 
     it('defaults to the new day when the hour ahead reaches the day start', () => {
       const { date, time } = focusAt(new Date(2026, 10, 28, 3, 30));
       expect(getDbDateStr(date!)).toBe('2026-11-28');
-      expect(time).toBe('4:00');
+      expect(time).toBe('04:00');
     });
   });
 

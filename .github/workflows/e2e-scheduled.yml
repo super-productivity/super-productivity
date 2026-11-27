@@ -166,20 +166,22 @@ jobs:
 
   # Job 2: WebDAV E2E tests, once per file format. Scheduled and push runs
   # cover both v2 (the current empty-folder default) and v3 (the long-term
-  # format, #10339); a manual run uses the chosen `webdav_format`.
+  # format, #10339); a manual run uses the chosen `webdav_format`. Each format
+  # is split into 3 shards: one job ran into its 40-minute limit (run 46035451588).
   e2e-webdav:
-    name: E2E Tests (WebDAV ${{ matrix.format }})
+    name: E2E Tests (WebDAV ${{ matrix.format }} ${{ matrix.shard }}/3)
     needs: [build]
-    # Skip the job outright rather than handing it a no-match grep: Playwright
-    # exits 1 on "No tests found", which reds the whole run. The dispatch inputs
+    # Skip the job outright rather than handing it a no-match grep: sharded
+    # runs pass with zero tests, so it would only waste runners. The dispatch inputs
     # are unset for schedule/push, so gate on the event first.
     if: ${{ !inputs.supersync_only && (github.event_name != 'workflow_dispatch' || inputs.run_webdav) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         format: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.webdav_format == 'both') && '["v2","v3"]' || format('["{0}"]', inputs.webdav_format)) }}
+        shard: [1, 2, 3]
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
@@ -221,7 +223,7 @@ jobs:
           E2E_WEBDAV_FORMAT: ${{ matrix.format }}
           # via env, not interpolated into the script, so a quote in the filter can't break the shell
           E2E_GREP: ${{ inputs.webdav_grep || '@webdav' }}
-        run: npm run e2e:all -- --grep "$E2E_GREP"
+        run: npm run e2e:all -- --grep "$E2E_GREP" --shard=${{ matrix.shard }}/3
 
       - name: Print Docker Logs on Failure
         if: ${{ failure() }}
@@ -238,7 +240,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-results-webdav-${{ matrix.format }}-${{ github.run_id }}
+          name: e2e-results-webdav-${{ matrix.format }}-${{ matrix.shard }}-${{ github.run_id }}
           path: .tmp/e2e-test-results/**/*.*
           retention-days: 30
 
@@ -430,6 +432,17 @@ jobs:
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: .tmp/e2e-test-results/released-client-upgrade.xml
         run: |
           npx playwright test --config e2e/playwright.compatibility.config.ts --reporter=line,junit
+          grep -Eq '^<testsuites [^>]* tests="[1-9][0-9]*" [^>]*skipped="0" ' "$PLAYWRIGHT_JUNIT_OUTPUT_FILE" || { echo "::error::Released-client tests were skipped or none ran"; exit 1; }
+
+      # Check the legacy export against the known mixed-history fixture (#9439).
+      - name: Run Mixed-History Fixture E2E Test (v18.14.0)
+        if: ${{ !cancelled() && steps.released-e2e.conclusion != 'skipped' }}
+        env:
+          E2E_REQUIRE_SUPERSYNC: 'true'
+          COMPAT_PRE_GUARD_ASSETS: ${{ github.workspace }}/.tmp/released-clients/v18.14.0
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: .tmp/e2e-test-results/pre-guard-recovery.xml
+        run: |
+          npx playwright test --config e2e/playwright.config.ts --reporter=line,junit --grep "#9439 mixed-history fixture"
           grep -Eq '^<testsuites [^>]* tests="[1-9][0-9]*" [^>]*skipped="0" ' "$PLAYWRIGHT_JUNIT_OUTPUT_FILE" || { echo "::error::Released-client tests were skipped or none ran"; exit 1; }
 
       - name: Print Docker Logs on Failure

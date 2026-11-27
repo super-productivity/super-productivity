@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectTaskEntities } from '../store/task.selectors';
 import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
@@ -15,7 +17,7 @@ const RESTORE_BTN = '.e2e-restore-archived-task';
 
 describe('DialogViewArchivedTaskComponent', () => {
   let fixture: ComponentFixture<DialogViewArchivedTaskComponent>;
-  let restoreService: jasmine.SpyObj<RestoreArchivedTaskService>;
+  let confirmAndRestore: jasmine.Spy<RestoreArchivedTaskService['confirmAndRestore']>;
   let navigateToTaskService: jasmine.SpyObj<NavigateToTaskService>;
   let dialogRef: jasmine.SpyObj<MatDialogRef<DialogViewArchivedTaskComponent>>;
 
@@ -30,11 +32,19 @@ describe('DialogViewArchivedTaskComponent', () => {
     ...DEFAULT_TASK,
     id: 'parent',
     title: 'Parent',
+    subTaskIds: [task.id],
     projectId: 'project',
   };
 
-  const createDialog = async (restorableTask: Task | null): Promise<void> => {
-    restoreService.findRestorableTask.and.resolveTo(restorableTask);
+  const archive = { ids: ['sub', 'parent'], entities: { sub: task, parent } };
+  let loadArchive: jasmine.Spy<TaskArchiveService['load']>;
+
+  const createDialog = async (displayedTask = task): Promise<void> => {
+    TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: { task: displayedTask } });
+    confirmAndRestore = spyOn(
+      TestBed.inject(RestoreArchivedTaskService),
+      'confirmAndRestore',
+    );
     fixture = TestBed.createComponent(DialogViewArchivedTaskComponent);
     await fixture.whenStable();
     fixture.detectChanges();
@@ -43,10 +53,7 @@ describe('DialogViewArchivedTaskComponent', () => {
     fixture.debugElement.query(By.css(RESTORE_BTN))?.nativeElement;
 
   beforeEach(async () => {
-    restoreService = jasmine.createSpyObj<RestoreArchivedTaskService>(
-      'RestoreArchivedTaskService',
-      ['findRestorableTask', 'confirmAndRestore'],
-    );
+    loadArchive = jasmine.createSpy('load').and.resolveTo(archive);
     navigateToTaskService = jasmine.createSpyObj<NavigateToTaskService>(
       'NavigateToTaskService',
       ['navigate'],
@@ -63,9 +70,9 @@ describe('DialogViewArchivedTaskComponent', () => {
         { provide: MAT_DIALOG_DATA, useValue: { task } },
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MatDialog, useValue: {} },
-        { provide: RestoreArchivedTaskService, useValue: restoreService },
+        provideMockStore({ selectors: [{ selector: selectTaskEntities, value: {} }] }),
         { provide: NavigateToTaskService, useValue: navigateToTaskService },
-        { provide: TaskArchiveService, useValue: {} },
+        { provide: TaskArchiveService, useValue: { load: loadArchive } },
         { provide: TaskRepeatCfgService, useValue: {} },
         { provide: IssueService, useValue: {} },
         {
@@ -77,34 +84,57 @@ describe('DialogViewArchivedTaskComponent', () => {
   });
 
   it('offers no restore for a task that cannot be restored', async () => {
-    await createDialog(null);
+    loadArchive.and.resolveTo({ ids: [], entities: {} });
+    await createDialog();
 
-    expect(restoreService.findRestorableTask).toHaveBeenCalledOnceWith(task);
     expect(restoreBtn()).toBeUndefined();
   });
 
-  it('offers restore as a regular, focusable button', async () => {
+  it('opens the details of an active leaf without reading the archive', async () => {
+    const leaf = { ...parent, subTaskIds: [] };
+    TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: { task: leaf } });
+    const store = TestBed.inject(MockStore);
+    store.overrideSelector(selectTaskEntities, { [leaf.id]: leaf });
+    store.refreshState();
+
+    fixture = TestBed.createComponent(DialogViewArchivedTaskComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(loadArchive).not.toHaveBeenCalled();
+    expect(restoreBtn()).toBeUndefined();
+  });
+
+  it('loads the archive once to show both the restore target and the subtasks', async () => {
     await createDialog(parent);
+
+    expect(loadArchive).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.subTasks()).toEqual([task]);
+    expect(restoreBtn()).toBeDefined();
+  });
+
+  it('offers restore as a regular, focusable button', async () => {
+    await createDialog();
 
     expect(restoreBtn()?.tagName).toBe('BUTTON');
     expect(restoreBtn()?.disabled).toBe(false);
   });
 
   it('restores the restorable task, closes and goes to it', async () => {
-    await createDialog(parent);
-    restoreService.confirmAndRestore.and.resolveTo(true);
+    await createDialog();
+    confirmAndRestore.and.resolveTo(true);
 
     restoreBtn()?.click();
     await fixture.whenStable();
 
-    expect(restoreService.confirmAndRestore).toHaveBeenCalledOnceWith(parent);
+    expect(confirmAndRestore).toHaveBeenCalledOnceWith(parent);
     expect(dialogRef.close).toHaveBeenCalledTimes(1);
     expect(navigateToTaskService.navigate).toHaveBeenCalledOnceWith('parent');
   });
 
   it('stays open when the confirmation is declined', async () => {
-    await createDialog(parent);
-    restoreService.confirmAndRestore.and.resolveTo(false);
+    await createDialog();
+    confirmAndRestore.and.resolveTo(false);
 
     restoreBtn()?.click();
     await fixture.whenStable();

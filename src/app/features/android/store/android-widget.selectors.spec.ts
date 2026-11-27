@@ -265,8 +265,8 @@ describe('selectAndroidWidgetData', () => {
         '{"id":"t2","title":"Task two","isDone":true}],' +
         '"projectColors":{"p1":"#ff0000"},"currentTask":null,"projects":[],' +
         `"nextDays":[{"dayStr":"2026-07-18","validUntil":${new Date(2026, 6, 19).getTime()},` +
-        '"tasks":[{"id":"t2","title":"Task two","isDone":true},' +
-        '{"id":"rpt_r1_2026-07-18","title":"Daily review","isDone":false,"isPending":true}]}]}',
+        '"tasks":[{"id":"rpt_r1_2026-07-18","title":"Daily review","isDone":false,"isPending":true},' +
+        '{"id":"t2","title":"Task two","isDone":true}]}]}',
     );
   });
 
@@ -360,6 +360,38 @@ describe('selectAndroidWidgetData', () => {
     );
     expect(result.nextDays[0].tasks.length).toBe(20);
     expect(result.nextDays[0].tasks[19].id).toBe('t19');
+  });
+
+  it('should keep open and recurring tasks ahead of completed tasks when a next day is full', () => {
+    const doneIds = Array.from({ length: 20 }, (_, i) => `done${i}`);
+    const result = selectAndroidWidgetData.projector(
+      [],
+      {
+        ...Object.fromEntries(
+          doneIds.map((id, i) => [id, task(id, { isDone: true, doneOn: i })]),
+        ),
+        open: task('open'),
+      },
+      projectState([]),
+      [],
+      DAY,
+      0,
+      null,
+      [],
+      new Map(),
+      [
+        {
+          dayStr: '2026-07-18',
+          taskIds: [...doneIds, 'open'],
+          repeatCfgs: [repeatCfg('r1', {})],
+        },
+      ],
+    );
+    expect(result.nextDays[0].tasks.map((t) => t.id)).toEqual([
+      'open',
+      'rpt_r1_2026-07-18',
+      ...doneIds.reverse().slice(0, 18),
+    ]);
   });
 
   // #9518: a widget instance can show one project instead of Today.

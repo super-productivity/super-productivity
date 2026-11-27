@@ -9,12 +9,12 @@
  *     Writes comment.md when the model picked a page from the list; prints the links.
  *
  * Retrieval is plain term matching against page titles, descriptions, headings and text in
- * `docs/wiki/`. It only shortlists; the model decides which page, if any, answers the
+ * the published wiki and public docs. It only shortlists; the model decides which page, if any, answers the
  * question, because term matching alone linked the wrong page on about half of its posts.
  */
 const fs = require('node:fs');
 const path = require('node:path');
-const { docsUrl, contributingPages } = require('./wiki-stubs');
+const { docsUrl, slug, contributingPages } = require('./wiki-stubs');
 
 const MAX_LINKS = 3;
 const MAX_CANDIDATES = 8;
@@ -82,7 +82,11 @@ const readPage = (file, source) => {
     .replace(/^\d+\.\d+[a-z]?[-\s]+/, '')
     .replace(/`/g, '')
     .trim();
-  const description = source.match(/<!--\s*description:\s*([\s\S]*?)-->/)?.[1] ?? '';
+  const summary = source.match(/^> \*\*[^*]+\*\*:\s*(.+(?:\n> .+)*)/m)?.[1];
+  const description =
+    source.match(/<!--\s*description:\s*([\s\S]*?)-->/)?.[1] ??
+    summary?.replace(/\n> /g, ' ') ??
+    '';
   const headings = lines
     .filter((line) => /^#{2,3}\s/.test(line))
     .map((line) => line.replace(/^#+\s+/, ''))
@@ -96,7 +100,7 @@ const buildIndex = (wikiDir) => {
   const contributing = fs.existsSync(sidebar)
     ? contributingPages(fs.readFileSync(sidebar, 'utf8'))
     : new Set();
-  const pages = [];
+  const filesByUrl = new Map();
   for (const file of fs.readdirSync(wikiDir).sort()) {
     const name = file.replace(/\.md$/i, '');
     const url = file.endsWith('.md') ? docsUrl(name, contributing) : undefined;
@@ -109,9 +113,22 @@ const buildIndex = (wikiDir) => {
     ) {
       continue;
     }
-    const page = readPage(name, fs.readFileSync(path.join(wikiDir, file), 'utf8'));
+    filesByUrl.set(url, path.join(wikiDir, file));
+  }
+  // The website publishes a public page in preference to a wiki page at the same URL.
+  const publicDir = path.resolve(wikiDir, '../public');
+  const publicPages = fs.globSync('{tutorials,how-to,reference,explanation}/**/*.md', {
+    cwd: publicDir,
+  });
+  for (const file of publicPages.sort()) {
+    if (/^(readme|index)\.md$/i.test(path.basename(file))) continue;
+    const route = file.slice(0, -3).split(path.sep).map(slug).join('/');
+    filesByUrl.set(`${docsUrl('Home')}${route}/`, path.join(publicDir, file));
+  }
+  return Array.from(filesByUrl, ([url, file]) => {
+    const page = readPage(path.basename(file, '.md'), fs.readFileSync(file, 'utf8'));
     const slugWords = url.split('/').at(-2).replace(/-/g, ' ');
-    pages.push({
+    return {
       url,
       title: page.title,
       description: page.description.replace(/\s+/g, ' ').trim(),
@@ -121,9 +138,8 @@ const buildIndex = (wikiDir) => {
         headings: new Set(terms(page.headings)),
       },
       all: new Set(terms(page.body)),
-    });
-  }
-  return pages;
+    };
+  });
 };
 
 const idf = (index) => {
