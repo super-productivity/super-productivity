@@ -8,6 +8,8 @@ Check out [[1.01-First-Steps]] where we will teach you:
 - how to install the desktop or mobile app.
 - how to find other resources once you are done with the basics.
 
+Then read [Your first week](https://super-productivity.com/docs/explanation/your-first-week/) to see how projects, Today, and dates fit together, with example setups.
+
 Common tasks:
 
 - [[2.00-How_To]] — How-to guides
