@@ -14,9 +14,9 @@
 >
 > **Strategy in one paragraph:** Enforce encrypted-only uploads, notify and
 > wait at least 45 days, then delete the accounts that still hold plaintext
-> and have gone dormant (the operator accepts that returning users
-> re-register), clean-slate the few still-active holdouts, and let old
-> backups expire under normal rotation. Everything after the gate is one
+> and have gone dormant, clean-slate the still-active holdouts, and let old
+> backups expire under normal rotation. Both cleanup lists exclude accounts
+> without a verified recovery source (Step 3). Everything after the gate is one
 > existing script, one small script, and waiting. An optional deferred
 > volume migration removes disk-level remnants; without it the claim covers
 > database contents, not disk forensics.
@@ -92,24 +92,18 @@ holds its data, a path already proven by the accounts-only restore E2E and
 the #9444 Force Overwrite work. That, plus two operator decisions, removes
 every heavyweight mechanism earlier revisions carried:
 
-- **Dormant users may re-register.** So dormant plaintext accounts need no
-  preservation: delete them with the existing `delete-user` tooling (row
-  cascade removes their operations and state). No account-only backup, no
-  `lastSeq` bookkeeping for the bulk of the list, and their email PII goes
-  too, which is data minimization, not collateral.
+- **Dormant users may re-register.** Re-registration restores access to a new
+  account. Restoring the user's tasks still requires a complete copy. Step 3
+  preserves the history of accounts whose recovery source is unverified.
 - **There is time to spare.** So old backups need no destruction sweep; they
   expire under normal rotation on recordable dates. And a long notice period
   shrinks the deletion list for free: after the gate deploys, any still
   active old-client user is loudly forced to update, and updated clients
   convert through the documented Force Overwrite flow.
 
-What remains active at the deadline is the small set of accounts with modern
-clients and lingering plaintext deep in history (they sync fine and ignore
-notices). Those cannot be deleted (they are live users) and get a per-account
-clean-slate instead; their clients detect the reset and re-upload encrypted
-state. Clean-slating dormant accounts instead of deleting them would be an
-equal-effort alternative if keeping their logins ever mattered; the operator
-has said it does not.
+An active account with a verified complete client can recover from a clean-slate
+when that client detects the reset and re-uploads encrypted state. A user who
+recently lost their only device can still appear active.
 
 Containment is valuable on its own: the Step 1 gate closes the server side of
 the class whose client side was closed in v18.13.0 (#8670,
@@ -201,11 +195,10 @@ and PostgreSQL integration suites pass.
 
 ### Step 2: Notify and wait at least 45 days
 
-Deploy Step 1, then email the accounts on the current plaintext list: the
-deadline, the exact criteria (plaintext data plus 45 days of inactivity means
-account deletion; active accounts get a data reset), and the conversion
-instructions (update, set an encryption password, reconnect each device, use
-the documented Force Overwrite where mixed history wedges the client).
+After deploying Step 1, email affected users the deadline, the cleanup criteria
+in Step 3, and the [conversion instructions](../../../docs/wiki/2.02-Restore-Data-From-Backup.md#supersync-security-integrity-error).
+Users with a verified complete device can follow those instructions. Users who
+lost their only copy should contact support and preserve the server history.
 Publish the same guidance in release notes and the wiki. Every conversion
 removes an account from the list. Track one aggregate number weekly. Time is
 the cheapest risk reducer here; a longer wait means a shorter deletion list.
@@ -215,14 +208,23 @@ counts.
 
 ### Step 3: Deadline cleanup
 
+> **Recovery hold (#9439).** Before deleting an account or resetting its sync
+> data, verify that a trusted working-client backup or verified encrypted
+> baseline can restore its complete data, including later edits. Preserve the
+> operations and snapshots of every account missing that evidence, regardless
+> of recent sync activity. The v18.14.0 test reproduces known fixture data.
+> A legacy export cannot establish the origin of plaintext operations and may
+> retain fields the user cleared on a newer client.
+
 Rebuild the list from both detectors, then:
 
 1. **Dry run:** produce the deletion sublist (plaintext and dormant for at
    least 45 days) and the clean-slate sublist (plaintext and active), review
-   aggregate counts and spot-check dormancy timestamps.
-2. **Delete** the dormant sublist with the existing `delete-user` tooling.
-3. **Clean-slate** the active sublist with `lastSeq`-preserving semantics.
-4. **Null** every remaining non-null `snapshot_data`.
+   aggregate counts and spot-check dormancy timestamps. Exclude held accounts
+   from both execution lists.
+2. **Delete** the eligible dormant sublist with the existing `delete-user` tooling.
+3. **Clean-slate** the eligible active sublist with `lastSeq`-preserving semantics.
+4. Once every hold is resolved, **null** every remaining non-null `snapshot_data`.
 5. **Add and validate the database backstops**, now safe because the rows
    they would trip on are gone: a CHECK on `operations`
    (`is_payload_encrypted IS TRUE` and `jsonb_typeof(payload) = 'string'`)
@@ -303,7 +305,7 @@ paths; the gate plus validated constraints are the continuous controls.
 1. **A (gate shipped):** Step 1 live against the production database. No data
    deleted; valuable even if nothing else is approved.
 2. **B (deadline passed):** notice period over, remaining counts accepted,
-   clean-slate E2E green, dry-run lists reviewed.
+   clean-slate E2E green, dry-run lists reviewed, recovery holds recorded.
 3. **C (database clean):** deletions and clean-slates done, constraints
    validated, verification script green live and on a restored backup.
 4. **D (claim closed):** last recorded legacy artifact expired or destroyed;
@@ -335,9 +337,8 @@ paths; the gate plus validated constraints are the continuous controls.
 ## Required human decisions before execution
 
 - Approve the deadline, the notice wording, and the 45-day dormancy cutoff.
-- Accept account deletion for dormant plaintext holders (re-registration is
-  the recovery path) and the divergent-edit risk for clean-slated active
-  accounts.
+- Approve deletion or reset only for accounts that meet the Step 3 recovery
+  requirement. Review the divergent-edit risk for clean-slated active accounts.
 - Approve the final dry-run counts before the destructive run.
 - Decide whether and when to run the optional Step 5 migration, accepting
   the disk-forensics limit if it is skipped.
