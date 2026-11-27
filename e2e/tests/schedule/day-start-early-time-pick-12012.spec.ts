@@ -52,11 +52,16 @@ const readDueWithTime = (page: Page, title: string): Promise<number | null> =>
   }, title);
 
 const openScheduleDialog = async (page: Page, task: Locator): Promise<Locator> => {
-  await task.focus();
-  await expect(task).toBeFocused();
-  await page.keyboard.press('s');
   const dialog = page.locator(cssSelectors.DIALOG_SCHEDULE_TASK);
-  await expect(dialog).toBeVisible();
+  // Right after navigation the task can hold DOM focus before the app has
+  // registered it as the focused task, which makes the shortcut a no-op.
+  await expect(async () => {
+    await task.blur();
+    await task.focus();
+    await expect(task).toBeFocused();
+    await page.keyboard.press('s');
+    await expect(dialog).toBeVisible({ timeout: 2000 });
+  }).toPass();
   return dialog;
 };
 
