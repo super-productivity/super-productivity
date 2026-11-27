@@ -49,6 +49,7 @@ export type BoardState = {
   title: string;
   cols: number;
   boardCols?: number;
+  listStyle?: string;
   panels: unknown[];
 };
 
@@ -108,7 +109,7 @@ export interface ViewSectionSpec {
 export interface ViewSpec {
   title?: string;
   /** Default: list. */
-  layout?: 'list' | 'board';
+  layout?: 'list' | 'table' | 'board';
   columns?: number;
   /** Sections (List) or columns (Board), in order. */
   sections?: ViewSectionSpec[];
@@ -257,7 +258,10 @@ const setViewLayout = async (
   const toggle = dialog.locator('view-editor .layout-toggle');
   if (layout) {
     await toggle
-      .getByRole('radio', { name: layout === 'board' ? 'Board' : 'List', exact: true })
+      .getByRole('radio', {
+        name: { list: 'List', table: 'Table', board: 'Board' }[layout],
+        exact: true,
+      })
       .click();
   }
   if (columns !== undefined) {

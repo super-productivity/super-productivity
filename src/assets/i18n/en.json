@@ -186,6 +186,7 @@
         "LAYOUT": "Layout",
         "LAYOUT_BOARD": "Board",
         "LAYOUT_LIST": "List",
+        "LAYOUT_TABLE": "Table",
         "MISSING_TAG": "1 missing tag",
         "MISSING_TAGS": "{{nr}} missing tags",
         "MOVE_DOWN": "Move down",
@@ -229,6 +230,19 @@
         "TASK_DONE_STATE_DONE": "Completed",
         "TASK_DONE_STATE_UNDONE": "Not Completed"
       },
+      "TABLE": {
+        "CHOOSE_COLUMNS": "Choose columns",
+        "COL_DEADLINE": "Deadline",
+        "COL_DUE": "Planned",
+        "COL_ESTIMATE": "Estimate",
+        "COL_PRIORITY": "Priority",
+        "COL_PROJECT": "Project",
+        "COL_TAGS": "Tags",
+        "COL_TIME_SPENT": "Time spent",
+        "COL_TITLE": "Title",
+        "RESIZE": "Resize {{title}} column",
+        "SORT_BY": "Sort by {{title}} (again: reverse, then manual)"
+      },
       "V": {
         "ADD_NEW_BOARD": "Create view",
         "ADD_TASK_TO": "Add task to {{title}}",
@@ -253,6 +267,7 @@
         "SHOW_ALL": "Show all ({{count}})",
         "SHOW_AS_BOARD": "Show as board",
         "SHOW_AS_LIST": "Show as list",
+        "SHOW_AS_TABLE": "Show as table",
         "S_CANT_MOVE_HERE": "No change makes this task fit the column's rules, so it can't be moved here",
         "VIEW_CREATED": "View \"{{title}}\" created"
       }

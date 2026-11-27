@@ -142,6 +142,10 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   isListLayout = input<boolean>(false);
   // List layout with several panels: this panel is one section of the list.
   isSection = input<boolean>(false);
+  // The list shown as a table (not on phones): rows get columns and a header.
+  isTableLayout = input<boolean>(false);
+  /** This panel changed from its table header (columns, widths, sort). */
+  panelChange = output<BoardPanelCfg>();
   editBoard = output<void>();
   /** A column's title: edit the view with this column open. */
   editColumn = output<void>();
@@ -433,7 +437,7 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
         ? {
             cmp: buildTaskComparator(sortKey, {
               collator: this._collator,
-              tagRankById: sortKey === 'tag' ? this._tagRankById() : undefined,
+              tagRankById: sortKey === 'tag' ? this._shownTagRankById() : undefined,
             }),
             dir: panelCfg.sortDir === 'desc' ? -1 : 1,
           }
@@ -659,6 +663,17 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
           .map((tag, index) => [tag.id, index]),
       ),
   );
+
+  // Sorting by tag ranks only the tags the rows show: every task here has the
+  // tags the panel requires (hidden on the rows), so ranking those would tie
+  // every row on the first of them. Renumbered: the comparator ranks a task
+  // without a ranked tag at `ranks.size`, which must come after every shown tag.
+  private readonly _shownTagRankById = computed(() => {
+    const hidden = this.tagsToHide();
+    if (!hidden.length) return this._tagRankById();
+    const shown = [...this._tagRankById().keys()].filter((id) => !hidden.includes(id));
+    return new Map(shown.map((id, rank) => [id, rank]));
+  });
 
   // === WHAT THE PANEL SHOWS (both renderers) ===
 

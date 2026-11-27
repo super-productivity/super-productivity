@@ -49,7 +49,9 @@ export interface BoardSrcCfg {
   // STORED VOCABULARY, locked: released clients validate and read these types
   // and words, so they may only be extended (a new word reads as "any"),
   // never changed or reused with another meaning. Types: the rule strings,
-  // `sortKey` string, `isUntagged` boolean, `BoardCfg.boardCols` number.
+  // `sortKey` string, `isUntagged` boolean, `BoardCfg.boardCols` number,
+  // `BoardCfg.listStyle` string ('list' | 'table'), the panel's `tableCols`
+  // array of `BoardTableCol` (`TABLE_COLS` ids, width in px).
   // Words: `TaskDateRule` strings; 'none'; estimate/time minimums as decimal
   // ms strings; priority '1'..'3'; `sortBy` wins over `sortKey`. Details:
   // docs/plans/2026-10-30-saved-views.md § Stored vocabulary.
@@ -66,6 +68,10 @@ export interface BoardSrcCfg {
   // Sort keys `sortBy` can't hold ('deadline', 'timeSpent', 'priority',
   // 'tag'); `sortBy` wins when both are set. See `getPanelSortKey`.
   sortKey?: string;
+  // Optional since newly added: this section's columns in the table layout,
+  // in order. Absent = `DEFAULT_TABLE_COLS`. Read through `getTableCols`:
+  // unknown ids are skipped, so a newer client can add columns.
+  tableCols?: BoardTableCol[];
 }
 
 export interface BoarFieldsToRemove {
@@ -90,4 +96,15 @@ export interface BoardCfg {
   // integer >= 2 (see `getLayoutChanges`); stale and unread while a board,
   // and never removed. Locked like the panel rules' stored vocabulary.
   boardCols?: number;
+  // Optional since newly added: 'table' shows a list (`cols <= 1`) as a
+  // table; anything else (or absent) is a plain list. Read only while a list;
+  // written on every switch to list or table, stale while a board. Released
+  // clients ignore it and show the list. Locked like `boardCols`.
+  listStyle?: string;
+}
+
+/** One table column: an id from `TABLE_COL_IDS`, its width in px (the title column always fills the rest and ignores it). */
+export interface BoardTableCol {
+  id: string;
+  width?: number;
 }

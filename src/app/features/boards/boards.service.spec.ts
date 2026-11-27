@@ -205,6 +205,14 @@ describe('BoardsService', () => {
     });
   });
 
+  it('stores one section changed from its table header in one updateBoard', () => {
+    const changed = { ...board.panels[0], tableCols: [{ id: 'title' }] };
+    service.updatePanel(board, changed);
+    expect(dispatch).toHaveBeenCalledOnceWith(
+      BoardsActions.updateBoard({ id: 'b1', updates: { panels: [changed] } }),
+    );
+  });
+
   it('deletes only after confirming', () => {
     dialogResult = false;
     service.removeBoard(board);

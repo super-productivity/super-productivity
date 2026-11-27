@@ -29,6 +29,7 @@ import {
   normalizeBoardForSave,
   panelToCriteria,
   translateViewTitle,
+  getViewLayout,
   ViewLayout,
 } from '../boards.util';
 import { T } from '../../../t.const';
@@ -172,9 +173,7 @@ export class ViewEditorComponent {
     });
   }
 
-  readonly layout = computed<ViewLayout>(() =>
-    this.model().cols > 1 ? 'board' : 'list',
-  );
+  readonly layout = computed<ViewLayout>(() => getViewLayout(this.model()));
   readonly isBoard = computed(() => this.layout() === 'board');
   readonly isSectionTitleShown = computed(() => isSectionTitleShown(this.model()));
   /** The board widths to pick from, widest (one row) first; always the current. */
@@ -231,9 +230,9 @@ export class ViewEditorComponent {
     this.model.update((model) => ({ ...model, title }));
   }
 
-  /** Same change as the title bar's List/Board button (`setViewLayout`). */
+  /** Same change as the title bar's layout button (`setViewLayout`). */
   setLayout(layout: string | number): void {
-    if (layout !== 'list' && layout !== 'board') {
+    if (layout !== 'list' && layout !== 'table' && layout !== 'board') {
       return;
     }
     this.model.update((model) => ({ ...model, ...getLayoutChanges(model, layout) }));

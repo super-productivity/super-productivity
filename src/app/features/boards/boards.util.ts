@@ -20,6 +20,7 @@ import {
 } from '../tasks/task-criteria/task-criteria';
 import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from './boards.const';
 import { T } from '../../t.const';
+import { TableColId, TaskTableCfg } from '../tasks/task-table.token';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'dueDate',
@@ -313,11 +314,13 @@ export const panelToCriteria = (panel: BoardPanelCfg): TaskCriteria => {
   return criteria;
 };
 
-export type ViewLayout = 'list' | 'board';
+export type ViewLayout = 'list' | 'table' | 'board';
 
-/** A view's mode: a list for one column (or less), a board for several. */
-export const getViewLayout = (board: Pick<BoardCfg, 'cols'>): ViewLayout =>
-  board.cols > 1 ? 'board' : 'list';
+/** A view's mode: a board for several columns, else a list or a table. */
+export const getViewLayout = (
+  board: Pick<BoardCfg, 'cols'> & Partial<Pick<BoardCfg, 'listStyle'>>,
+): ViewLayout =>
+  board.cols > 1 ? 'board' : board.listStyle === 'table' ? 'table' : 'list';
 
 const isBoardColCount = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 2;
@@ -331,20 +334,30 @@ const isBoardColCount = (value: unknown): value is number =>
  * already has that mode.
  */
 export const getLayoutChanges = (
-  board: Pick<BoardCfg, 'cols' | 'panels' | 'boardCols'>,
+  board: Pick<BoardCfg, 'cols' | 'panels' | 'boardCols' | 'listStyle'>,
   layout: ViewLayout,
 ): Partial<BoardCfg> => {
-  if (getViewLayout(board) === layout) {
+  const current = getViewLayout(board);
+  if (current === layout) {
     return {};
   }
-  if (layout === 'list') {
-    return isBoardColCount(board.cols) ? { cols: 1, boardCols: board.cols } : { cols: 1 };
+  if (layout === 'board') {
+    return {
+      cols: isBoardColCount(board.boardCols)
+        ? board.boardCols
+        : Math.max(2, board.panels.length),
+    };
   }
-  return {
-    cols: isBoardColCount(board.boardCols)
-      ? board.boardCols
-      : Math.max(2, board.panels.length),
-  };
+  // A list or a table: `listStyle` is written only when it would read wrong
+  // (absent reads as a list), so a plain list switch stays what it was.
+  const style: Partial<BoardCfg> =
+    (layout === 'table') === (board.listStyle === 'table') ? {} : { listStyle: layout };
+  if (current !== 'board') {
+    return style;
+  }
+  return isBoardColCount(board.cols)
+    ? { cols: 1, boardCols: board.cols, ...style }
+    : { cols: 1, ...style };
 };
 
 /**
@@ -361,11 +374,24 @@ export const translateViewTitle = (
   return typeof text === 'string' ? text : title;
 };
 
-/** A view's icon: a list for one column, a board for several (its layout). */
-export const getViewIcon = (board: Pick<BoardCfg, 'cols'>): string =>
-  board.cols > 1 ? 'view_kanban' : 'view_list';
+const VIEW_LAYOUT_ICONS: Record<ViewLayout, string> = {
+  list: 'view_list',
+  table: 'table_rows',
+  board: 'view_kanban',
+};
 
-/** The List/Board switch of a view: the mode it goes to, with its icon and label. */
+/** A view's icon: its layout's. */
+export const getViewIcon = (
+  board: Pick<BoardCfg, 'cols'> & Partial<Pick<BoardCfg, 'listStyle'>>,
+): string => VIEW_LAYOUT_ICONS[getViewLayout(board)];
+
+const SHOW_AS_LABELS: Record<ViewLayout, string> = {
+  list: T.F.BOARDS.V.SHOW_AS_LIST,
+  table: T.F.BOARDS.V.SHOW_AS_TABLE,
+  board: T.F.BOARDS.V.SHOW_AS_BOARD,
+};
+
+/** The title bar's layout switch of a view: the mode it goes to, with its icon and label. */
 export interface ViewLayoutSwitch {
   layout: ViewLayout;
   icon: string;
@@ -373,13 +399,122 @@ export interface ViewLayoutSwitch {
 }
 
 /**
- * What the List/Board switch offers on a view (the title bar's button, or the
- * item in the view's menu on phones): the other mode.
+ * What the layout switch offers on a view (the title bar's button, or the
+ * item in the view's menu on phones): a list or table offers the board, a
+ * board the list style it had (`listStyle` stays while a board).
  */
-export const getViewLayoutSwitch = (board: Pick<BoardCfg, 'cols'>): ViewLayoutSwitch =>
-  getViewLayout(board) === 'list'
-    ? { layout: 'board', icon: 'view_kanban', label: T.F.BOARDS.V.SHOW_AS_BOARD }
-    : { layout: 'list', icon: 'view_list', label: T.F.BOARDS.V.SHOW_AS_LIST };
+export const getViewLayoutSwitch = (
+  board: Pick<BoardCfg, 'cols'> & Partial<Pick<BoardCfg, 'listStyle'>>,
+): ViewLayoutSwitch => {
+  const layout: ViewLayout =
+    getViewLayout(board) !== 'board'
+      ? 'board'
+      : board.listStyle === 'table'
+        ? 'table'
+        : 'list';
+  return { layout, icon: VIEW_LAYOUT_ICONS[layout], label: SHOW_AS_LABELS[layout] };
+};
+
+/**
+ * Every table column, in the column picker's order: its label, default
+ * width, and the panel sort its header sets (none for the project).
+ */
+export const TABLE_COLS: readonly {
+  id: TableColId;
+  label: string;
+  width: number;
+  sortKey?: TaskSortKey;
+}[] = [
+  { id: 'title', label: T.F.BOARDS.TABLE.COL_TITLE, width: 0, sortKey: 'title' },
+  { id: 'project', label: T.F.BOARDS.TABLE.COL_PROJECT, width: 160 },
+  { id: 'tags', label: T.F.BOARDS.TABLE.COL_TAGS, width: 200, sortKey: 'tag' },
+  {
+    id: 'estimate',
+    label: T.F.BOARDS.TABLE.COL_ESTIMATE,
+    width: 90,
+    sortKey: 'estimate',
+  },
+  {
+    id: 'timeSpent',
+    label: T.F.BOARDS.TABLE.COL_TIME_SPENT,
+    width: 90,
+    sortKey: 'timeSpent',
+  },
+  { id: 'due', label: T.F.BOARDS.TABLE.COL_DUE, width: 110, sortKey: 'plannedDate' },
+  {
+    id: 'deadline',
+    label: T.F.BOARDS.TABLE.COL_DEADLINE,
+    width: 110,
+    sortKey: 'deadline',
+  },
+  {
+    id: 'priority',
+    label: T.F.BOARDS.TABLE.COL_PRIORITY,
+    width: 70,
+    sortKey: 'priority',
+  },
+];
+
+export const TABLE_COL_BY_ID = new Map(TABLE_COLS.map((col) => [col.id, col]));
+export const MIN_TABLE_COL_WIDTH = 48;
+export const MAX_TABLE_COL_WIDTH = 600;
+
+/** A table column as shown: a known id and a usable width. */
+export interface TableCol {
+  id: TableColId;
+  width: number;
+}
+
+export const DEFAULT_TABLE_COLS: readonly TableCol[] = (
+  ['title', 'project', 'tags'] as const
+).map((id) => ({ id, width: TABLE_COL_BY_ID.get(id)!.width }));
+
+export const clampTableColWidth = (width: number): number =>
+  Math.round(Math.min(MAX_TABLE_COL_WIDTH, Math.max(MIN_TABLE_COL_WIDTH, width)));
+
+/**
+ * A table's shown columns, in order: the title first and always, then known
+ * ids only (a newer client's are skipped), each once, widths in range (the
+ * column's default when unset).
+ */
+export const getTableCols = (panel: Pick<BoardPanelCfg, 'tableCols'>): TableCol[] => {
+  const stored = Array.isArray(panel.tableCols) ? panel.tableCols : DEFAULT_TABLE_COLS;
+  const cols: TableCol[] = [];
+  for (const col of stored) {
+    const known = col && TABLE_COL_BY_ID.get(col.id as TableColId);
+    if (!known || known.id === 'title' || cols.some((c) => c.id === known.id)) continue;
+    const width =
+      typeof col.width === 'number' && Number.isFinite(col.width)
+        ? clampTableColWidth(col.width)
+        : known.width;
+    cols.push({ id: known.id, width });
+  }
+  return [{ id: 'title', width: 0 }, ...cols];
+};
+
+/** The table rows' view of the columns (`TASK_TABLE`). */
+export const toTaskTableCfg = (cols: readonly TableCol[]): TaskTableCfg => {
+  const colIds = cols.filter((c) => c.id !== 'title').map((c) => c.id);
+  return {
+    colIds,
+    has: Object.fromEntries(colIds.map((id) => [id, true])),
+  };
+};
+
+/**
+ * The CSS grid columns of a table row, shared by the header and every row:
+ * the handle, the title filling the rest, the row's own buttons, then the
+ * picked columns at fixed widths. Fixed columns sit at the row's end, after
+ * everything whose width varies per row, so they line up across rows (each
+ * row is its own grid).
+ */
+export const getTableGridTemplate = (cols: readonly TableCol[]): string =>
+  [
+    'var(--table-handle-width)',
+    'minmax(0, 1fr)',
+    'auto',
+    ...cols.filter((c) => c.id !== 'title').map((c) => `${c.width}px`),
+  ].join(' ');
 
 /** The tasks a panel's rules match, in the order given (no sort). */
 export const matchPanelTasks = (
@@ -520,6 +655,43 @@ export const withPanelSortKey = (
     out.sortKey = key;
   }
   return out;
+};
+
+/** A table header's sort: the panel's sort key and direction. */
+export interface TableSort {
+  key: TaskSortKey;
+  dir: 'asc' | 'desc';
+}
+
+/** The panel's sort as its table header shows it (none = manual order). */
+export const getTableSort = (
+  panel: Pick<BoardPanelCfg, 'sortBy' | 'sortKey' | 'sortDir'>,
+): TableSort | null => {
+  const key = getPanelSortKey(panel);
+  return key ? { key, dir: panel.sortDir === 'desc' ? 'desc' : 'asc' } : null;
+};
+
+/**
+ * A click on a column's header: sorts the panel by it ascending, then
+ * descending, then back to manual order. Columns without a sort change
+ * nothing (`null`).
+ */
+export const getTableSortClickChanges = (
+  panel: BoardPanelCfg,
+  col: TableColId,
+): BoardPanelCfg | null => {
+  const key = TABLE_COL_BY_ID.get(col)?.sortKey;
+  if (!key) return null;
+  const current = getTableSort(panel);
+  if (current?.key !== key) {
+    return { ...withPanelSortKey(panel, key), sortDir: 'asc' };
+  }
+  if (current.dir === 'asc') {
+    return { ...panel, sortDir: 'desc' };
+  }
+  const manual = withPanelSortKey(panel, null);
+  delete manual.sortDir;
+  return manual;
 };
 
 /**

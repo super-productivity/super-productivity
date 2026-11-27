@@ -67,6 +67,9 @@ export class TagListComponent {
   // From the host: importing TaskMultiSelectService or isMultiSelectModifierEvent
   // here splits each into its own lazy chunk (Lighthouse script budget).
   isTouchSelectionMode = input(false);
+  // A table row splits the chips over two cells: the project chip alone, or
+  // the tags (with the issue/repeat chips) alone.
+  part = input<'all' | 'project' | 'tags'>('all');
 
   // Replaced in specs: headless Chrome is mouse-only, so isTouchActive stays false.
   private _isTouchActive: () => boolean = isTouchActive;
@@ -85,6 +88,7 @@ export class TagListComponent {
   tagIds = computed<string[]>(() => this.task().tagIds || []);
 
   tags = computed<Tag[]>(() => {
+    const part = this.part();
     const tagsToHide = this.tagsToHide();
     const tagIdsFiltered: string[] = !!tagsToHide
       ? tagsToHide.length > 0
@@ -93,7 +97,7 @@ export class TagListComponent {
       : this.tagIds().filter((id) => id !== this.workContext()?.activeId);
 
     // sort alphabetically by title
-    const tagsI = tagIdsFiltered
+    const tagsI = (part === 'project' ? [] : tagIdsFiltered)
       .map((id) => this.tagState()?.entities[id])
       .filter((tag): tag is Tag => !!tag)
       .sort((a, b) => a.title.localeCompare(b.title));
@@ -116,9 +120,11 @@ export class TagListComponent {
   });
 
   projectId = computed<string | undefined>(() => {
-    if (this.isShowProjectTagNever()) {
+    const part = this.part();
+    if (this.isShowProjectTagNever() || part === 'tags') {
       return undefined;
     } else if (
+      part === 'project' ||
       this.isShowProjectTagAlways() ||
       this.workContext()?.activeType === WorkContextType.TAG
     ) {
@@ -132,6 +138,9 @@ export class TagListComponent {
     this._pluginRegistry.registrationVersion();
     const t = this.task();
     const chips: TagComponentTag[] = [];
+    if (this.part() === 'project') {
+      return chips;
+    }
 
     if (t.issueId && t.issueType) {
       const builtInIcon = ISSUE_PROVIDER_ICON_MAP[t.issueType as BuiltInIssueProviderKey];

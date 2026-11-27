@@ -114,6 +114,14 @@ OmniFocus 4, Vikunja), not hands-on.
   rules; `'none'`; estimate and time-spent minimums as decimal ms strings
   (`'1800000'`); priority `'1'`..`'3'`; `sortBy` wins over `sortKey`;
   `cols <= 1` means a list; `boardCols` is an integer ≥ 2 and is never removed.
+  Added 2026-11-21 (table layout): `listStyle` a string, read only while a
+  list, `'table'` = a table and anything else (or absent) a plain list; it
+  stays, stale, while a board. `tableCols` (on each panel) an array of
+  `{ id: string, width?: number }`: ids `'title'`, `'project'`, `'tags'`, `'estimate'`,
+  `'timeSpent'`, `'due'`, `'deadline'`, `'priority'` (unknown ids skipped),
+  width in px (ignored for the title, which fills the rest). A released
+  client that switches a table to a board and back to a list writes only
+  `cols`, so the stale `listStyle: 'table'` shows it as a table again here.
   Follow-ups (#11384, #11385, #11386) must respect this: a new rule is a new
   word or a new optional field, not a new meaning for an old one.
 - **Released edits that contradict a new rule:** the released board form edits

@@ -43,6 +43,7 @@ import { SubmitTrigger } from 'src/app/features/tasks/task.model';
     ['[class.is-focused]']: 'isFocused()',
     ['[class.is-editing]']: 'isEditing()',
     ['[class.is-readonly]']: 'readonly()',
+    ['[class.is-single-line]']: 'singleLine()',
   },
 })
 export class TaskTitleComponent implements OnDestroy {
@@ -54,6 +55,8 @@ export class TaskTitleComponent implements OnDestroy {
 
   private readonly _isMentionListShown = signal(false);
   readonly readonly = input<boolean>(false); // When true, disables editing and only displays the value
+  // One line, clipped with an ellipsis (e.g. a table row); editing shows it all.
+  readonly singleLine = input<boolean>(false);
 
   // Reset value only if user is not currently editing (prevents overwriting edits during sync)
   @Input() set resetToLastExternalValueTrigger(value: unknown) {

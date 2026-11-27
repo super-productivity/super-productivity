@@ -250,6 +250,7 @@ const BOARD_FIELDS: Required<BoardCfg> = {
   cols: 4,
   panels: [{ ...DEFAULT_PANEL_CFG, id: 'panel-new', title: 'new' }],
   boardCols: 3,
+  listStyle: 'table',
 };
 // The shared and plugin fields, plus every key of each built-in provider.
 const PROVIDER_BASE_FIELDS: Required<IssueProviderPluginType> = {

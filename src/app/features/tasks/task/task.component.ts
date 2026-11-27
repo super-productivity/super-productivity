@@ -103,6 +103,7 @@ import { TaskTitleComponent } from '../../../ui/task-title/task-title.component'
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { TaskHoverControlsComponent } from './task-hover-controls/task-hover-controls.component';
+import { TASK_TABLE, TableColId, TaskTableCfg } from '../task-table.token';
 import { TaskPriorityIndicatorComponent } from '../task-priority-indicator/task-priority-indicator.component';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
 import { TaskListComponent } from '../task-list/task-list.component';
@@ -143,6 +144,7 @@ import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state
 
 // Outside a view: tag-list hides the open context's tag, as before.
 const NO_VIEW_TAGS_TO_HIDE = signal<string[] | undefined>(undefined).asReadonly();
+const NO_TABLE = signal<TaskTableCfg | null>(null).asReadonly();
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -167,6 +169,7 @@ const isInteractiveTarget = (target: EventTarget | null): boolean =>
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
     '[class.isDragReady]': 'isDragReady()',
     '[class.isOverdue]': 'isOverdue()',
+    '[class.isTableRow]': '!!tableCfg()',
     '(contextmenu)': 'onHostContextMenu($event)',
     '(mousedown)': 'onHostMouseDown($event)',
     '(click)': 'onHostClick($event)',
@@ -285,6 +288,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   // The host's signal itself: no extra computed per row (hot path).
   readonly viewTagsToHide: Signal<string[] | undefined> =
     this._viewTaskList?.tagsToHide ?? NO_VIEW_TAGS_TO_HIDE;
+  // A view's table layout: the columns after the title, shared by every row.
+  readonly tableCfg: Signal<TaskTableCfg | null> =
+    inject(TASK_TABLE, { optional: true }) ?? NO_TABLE;
   isTodayListActive = computed(
     () => !this._viewTaskList && this.workContextService.isTodayListSignal(),
   );
@@ -1316,6 +1322,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   isTagMenuVisible = signal(false);
+  // Where a table cell opens the project or tag menu: under the cell, in px
+  // from the row's top left. Null: the menus' usual place.
+  readonly menuAnchor = signal<{ x: number; y: number } | null>(null);
 
   async editTags(): Promise<void> {
     this.isTagMenuVisible.set(true);
@@ -1491,6 +1500,48 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private _cancelDragReady(): void {
     window.clearTimeout(this._dragReadyTimeout);
     this.isDragReady.set(false);
+  }
+
+  /**
+   * A table cell clicked: edits its field like the row's button for it (the
+   * row's shortcuts do the same from the keyboard). Multi-select clicks and
+   * taps stay with the row; a click on the project chip moves the task, it
+   * doesn't open the project.
+   */
+  onTableCellClick(ev: MouseEvent, col: TableColId): void {
+    if (
+      isMultiSelectModifierEvent(ev) ||
+      this.isTouchSelectionMode() ||
+      (ev.target !== ev.currentTarget && isInteractiveTarget(ev.target))
+    ) {
+      return;
+    }
+    if (col === 'project' || col === 'tags') {
+      const cell = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+      const row = this._elementRef.nativeElement.getBoundingClientRect();
+      this.menuAnchor.set({ x: cell.left - row.left, y: cell.bottom - row.top });
+    }
+    switch (col) {
+      case 'project':
+        this.openProjectMenu();
+        break;
+      case 'tags':
+        void this.editTags();
+        break;
+      case 'estimate':
+      case 'timeSpent':
+        if (!this.task().subTasks?.length) this.estimateTime();
+        break;
+      case 'due':
+        this.scheduleTask();
+        break;
+      case 'deadline':
+        this.openDeadlineDialog();
+        break;
+      case 'priority':
+        this.openContextMenu(ev);
+        break;
+    }
   }
 
   onHostContextMenu(event: MouseEvent): void {
