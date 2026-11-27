@@ -14,6 +14,7 @@ import { serveReleasedClientAssets } from '../../utils/released-client-assets';
 import {
   archiveTask,
   closeClient,
+  createProjectReliably,
   createSimulatedClient,
   createTestUser,
   getSuperSyncConfig,
@@ -220,23 +221,27 @@ const uploadEncryptedOps = async (
   }
 };
 
-/** Exports a backup through the settings page and returns its archived task titles. */
-const exportBackup = async (
-  page: Page,
-  filePath: string,
-): Promise<{ archivedTitles: string[] }> => {
+interface BackupTitles {
+  archivedTasks: string[];
+  projects: string[];
+}
+
+/** Exports a backup through the settings page and returns the titles it holds. */
+const exportBackup = async (page: Page, filePath: string): Promise<BackupTitles> => {
   const imex = new ImportPage(page);
   await imex.navigateToImportPage();
   const download = page.waitForEvent('download');
   await imex.exportBackupBtn.click();
   await (await download).saveAs(filePath);
-  const backup = JSON.parse(readFileSync(filePath, 'utf8')) as {
-    data?: { archiveYoung?: { task?: { entities?: Record<string, { title: string }> } } };
+  type Titled = { entities?: Record<string, { title: string }> };
+  const { data } = JSON.parse(readFileSync(filePath, 'utf8')) as {
+    data?: { archiveYoung?: { task?: Titled }; project?: Titled };
   };
+  const titles = (state?: Titled): string[] =>
+    Object.values(state?.entities ?? {}).map(({ title }) => title);
   return {
-    archivedTitles: Object.values(backup.data?.archiveYoung?.task?.entities ?? {}).map(
-      ({ title }) => title,
-    ),
+    archivedTasks: titles(data?.archiveYoung?.task),
+    projects: titles(data?.project),
   };
 };
 
@@ -269,9 +274,7 @@ const expectHistoryReplacedWithoutPlaintext = async (
     .toBe(true);
 };
 
-const forceOverwriteFromTrustedClient = async (
-  client: SimulatedE2EClient,
-): Promise<void> => {
+const forceOverwriteServer = async (client: SimulatedE2EClient): Promise<void> => {
   await client.sync.syncBtn.click({ button: 'right', noWaitAfter: true });
   await client.sync.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
@@ -384,7 +387,7 @@ test.describe('@supersync @encryption #9439 plaintext history recovery', () => {
       await expect(integritySnack).toContainText('export a backup');
       await expect(integritySnack).toContainText('Force Overwrite');
 
-      await forceOverwriteFromTrustedClient(trustedClient);
+      await forceOverwriteServer(trustedClient);
       await expectHistoryReplacedWithoutPlaintext(user, plaintextOp);
 
       const recoveredHistory = await downloadServerHistory(user.token);
@@ -444,7 +447,13 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
       const betaTask = `Beta-${testRunId}`;
       const betaEdited = `Beta-edited-${testRunId}`;
       const archivedTask = `Gamma-archived-${testRunId}`;
-      const isArchivedTask = (title: string): boolean => title.includes(archivedTask);
+      const project = `Delta-project-${testRunId}`;
+      const expectRecovered = (backup: BackupTitles): void => {
+        expect(backup.archivedTasks.some((title) => title.includes(archivedTask))).toBe(
+          true,
+        );
+        expect(backup.projects.some((title) => title.includes(project))).toBe(true);
+      };
       // Each exists in exactly one operation: the plaintext row, and the last
       // row of the history, which lies beyond the first download page.
       const plaintextOnlyTitle = `Alpha-plaintext-only-${testRunId}`;
@@ -459,6 +468,8 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
       );
       clients.push(lostClient);
       await lostClient.sync.setupSuperSync(syncConfig);
+      await createProjectReliably(lostClient.page, project);
+      await navigateToWorkView(lostClient);
       await lostClient.workView.addTask(archivedTask);
       await archiveTask(lostClient, archivedTask);
       await navigateToWorkView(lostClient);
@@ -513,7 +524,8 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
         waitForInitialSync: false,
       });
       await expect(stuckClient.sync.syncErrorIcon).toBeVisible({ timeout: 60000 });
-      await expect(stuckClient.page.locator(`task:has-text("${alphaTask}")`)).toHaveCount(
+      // Every seeded title carries the run id: none of the account arrived.
+      await expect(stuckClient.page.locator('task', { hasText: testRunId })).toHaveCount(
         0,
       );
       // Asserted after an explicit retry: the snack from the setup sync can
@@ -540,14 +552,13 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
       await waitForTask(preGuardClient.page, beyondFirstPageTitle);
       await expect(preGuardClient.sync.syncErrorIcon).not.toBeVisible();
       const backupPath = testInfo.outputPath('pre-guard-backup.json');
-      const preGuardBackup = await exportBackup(preGuardClient.page, backupPath);
-      expect(preGuardBackup.archivedTitles.some(isArchivedTask)).toBe(true);
+      expectRecovered(await exportBackup(preGuardClient.page, backupPath));
 
       // The current version imports that backup and replaces the server copy.
       const importPage = new ImportPage(stuckClient.page);
       await importPage.navigateToImportPage();
       await importPage.importBackupFile(backupPath);
-      await forceOverwriteFromTrustedClient(stuckClient);
+      await forceOverwriteServer(stuckClient);
       await expectHistoryReplacedWithoutPlaintext(user, plaintextOp);
       await stuckClient.page.keyboard.press('Escape');
       await navigateToWorkView(stuckClient);
@@ -567,11 +578,9 @@ test.describe('@supersync @encryption #9439 recovery without a trusted client', 
       await waitForTask(freshClient.page, plaintextOnlyTitle);
       await waitForTask(freshClient.page, beyondFirstPageTitle);
       await expect(freshClient.sync.syncErrorIcon).not.toBeVisible();
-      const freshBackup = await exportBackup(
-        freshClient.page,
-        testInfo.outputPath('fresh-backup.json'),
+      expectRecovered(
+        await exportBackup(freshClient.page, testInfo.outputPath('fresh-backup.json')),
       );
-      expect(freshBackup.archivedTitles.some(isArchivedTask)).toBe(true);
     } finally {
       for (const client of clients) await closeClient(client);
     }
