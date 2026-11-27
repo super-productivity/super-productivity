@@ -100,10 +100,9 @@ test.describe('Global Search: completed and archived tasks', () => {
 
     await doneTask.hover();
     await doneTask.locator('done-toggle').click();
-    // the reopen animation briefly renders the old and the new row
-    const rows = page.locator('task').filter({ hasText: taskName });
-    await expect(rows).toHaveCount(1);
-    await expect(rows).not.toHaveClass(/isDone/);
+    // The reopen animation briefly shows both rows. Wait for each list to settle.
+    await expect(taskPage.getUndoneTasks().filter({ hasText: taskName })).toHaveCount(1);
+    await expect(taskPage.getDoneTasks().filter({ hasText: taskName })).toHaveCount(0);
   });
 
   test('finds an archived task and shows its notes', async ({
