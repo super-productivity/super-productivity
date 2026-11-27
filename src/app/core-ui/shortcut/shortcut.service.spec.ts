@@ -59,6 +59,7 @@ describe('ShortcutService', () => {
     mockLayoutService = {
       isNavOpen: signal(false),
       showAddTaskBar: jasmine.createSpy('showAddTaskBar'),
+      focusSideNavProjects: jasmine.createSpy('focusSideNavProjects'),
     };
     mockConfigService = {
       cfg: signal({
@@ -356,6 +357,40 @@ describe('ShortcutService', () => {
       ]);
 
       expect(mockMatDialog.open).toHaveBeenCalledTimes(1);
+    });
+
+    it('should focus the side nav projects section on its bound combo', async () => {
+      mockConfigService.cfg.set({
+        keyboard: { focusSideNavProjects: 'Alt+Shift+P' },
+      });
+      const ev = new KeyboardEvent('keydown', {
+        code: 'KeyP',
+        altKey: true,
+        shiftKey: true,
+        cancelable: true,
+      });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      await service.handleKeyDown(ev);
+
+      expect(mockLayoutService.focusSideNavProjects).toHaveBeenCalled();
+      expect(ev.defaultPrevented).toBe(true);
+    });
+
+    it('should NOT focus the side nav projects section while it is unbound', async () => {
+      mockConfigService.cfg.set({
+        keyboard: { focusSideNavProjects: null },
+      });
+      const ev = new KeyboardEvent('keydown', {
+        code: 'KeyP',
+        altKey: true,
+        shiftKey: true,
+      });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      await service.handleKeyDown(ev);
+
+      expect(mockLayoutService.focusSideNavProjects).not.toHaveBeenCalled();
     });
   });
 

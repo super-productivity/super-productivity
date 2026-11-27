@@ -70,6 +70,35 @@ test.describe('Keyboard Shortcuts', () => {
     await expect(addTaskInput).toBeFocused();
   });
 
+  test('should focus the first project with the focus-projects shortcut', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await projectPage.createProject('Shortcut Project');
+
+    // Unbound by default, so bind it first.
+    await page.goto('/#/config?section=keyboard');
+    const shortcutInput = page.getByRole('textbox', {
+      name: 'Focus projects in sidenav',
+      exact: true,
+    });
+    await expect(shortcutInput).toHaveValue('');
+    await shortcutInput.focus();
+    await page.keyboard.press('Alt+Shift+P');
+    await expect(shortcutInput).toHaveValue('Alt+Shift+P');
+    await waitForStatePersistence(page);
+
+    await page.goto('/#/tag/TODAY/tasks');
+    await workViewPage.waitForTaskList();
+
+    await page.keyboard.press('Alt+Shift+P');
+    await expect(
+      page.locator('magic-side-nav #group-projects .nav-link').first(),
+    ).toBeFocused();
+  });
+
   test('should move task focus with J and K', async ({
     page,
     workViewPage,
