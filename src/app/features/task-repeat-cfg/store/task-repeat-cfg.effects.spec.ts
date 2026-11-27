@@ -1406,6 +1406,18 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
       expectSeriesUpdates([{ id: mockRepeatCfg.id, templates: [] }]);
     });
 
+    it('skips a recurring parent deleted together with its subtasks', () => {
+      actions$ = of(
+        TaskSharedActions.deleteTasks({
+          taskIds: [mockTask.id],
+          tasks: [mockTask, mockSubTask1, mockSubTask2],
+        }),
+      );
+
+      expectSeriesUpdates([]);
+      expect(taskService.getByIdOnce$).not.toHaveBeenCalled();
+    });
+
     it('should sync templates when subtask is added to repeatable task', () => {
       testScheduler.run(({ hot, expectObservable }) => {
         const action = addSubTask({
