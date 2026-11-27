@@ -84,7 +84,12 @@ describe('ReminderModule dialog opening', () => {
         { provide: TaskService, useValue: taskServiceSpy },
         {
           provide: SyncTriggerService,
-          useValue: { afterInitialSyncDoneAndDataLoadedInitially$: syncDone$ },
+          useValue: {
+            // SuperSync opens the lenient gate right after load; the dialog must
+            // wait for the strict one so it doesn't show reminders done elsewhere
+            afterInitialSyncDoneAndDataLoadedInitially$: of(true),
+            afterInitialSyncDoneStrict$: syncDone$,
+          },
         },
         {
           provide: SyncWrapperService,
@@ -160,6 +165,20 @@ describe('ReminderModule dialog opening', () => {
 
     expect(uiHelperSpy.focusAppAfterNotification).not.toHaveBeenCalled();
     expect(uiHelperSpy.focusApp).not.toHaveBeenCalled();
+  }));
+
+  it('waits for the strict initial sync before opening the dialog', fakeAsync(() => {
+    TestBed.inject(ReminderModule);
+    tick(5000);
+    remindersActive$.next([reminder]);
+
+    expect(matDialogSpy.open).not.toHaveBeenCalled();
+
+    syncDone$.next();
+    tick(1000);
+    remindersActive$.next([reminder]);
+
+    expect(matDialogSpy.open).toHaveBeenCalledTimes(1);
   }));
 
   it('opens task reminder dialog as dismissable (no disableClose)', fakeAsync(() => {
@@ -310,7 +329,10 @@ describe('ReminderModule iOS notification actions', () => {
         { provide: TaskService, useValue: taskServiceSpy },
         {
           provide: SyncTriggerService,
-          useValue: { afterInitialSyncDoneAndDataLoadedInitially$: NEVER },
+          useValue: {
+            afterInitialSyncDoneAndDataLoadedInitially$: NEVER,
+            afterInitialSyncDoneStrict$: NEVER,
+          },
         },
         { provide: SyncWrapperService, useValue: syncWrapperSpy },
         { provide: Store, useValue: storeSpy },
@@ -655,7 +677,10 @@ describe('ReminderModule _handleAfterDataLoaded gate (#8551)', () => {
         },
         {
           provide: SyncTriggerService,
-          useValue: { afterInitialSyncDoneAndDataLoadedInitially$: gate$ },
+          useValue: {
+            afterInitialSyncDoneAndDataLoadedInitially$: gate$,
+            afterInitialSyncDoneStrict$: NEVER,
+          },
         },
         {
           provide: SyncWrapperService,
