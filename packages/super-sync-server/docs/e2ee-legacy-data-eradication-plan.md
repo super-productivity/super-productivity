@@ -215,6 +215,13 @@ counts.
 
 ### Step 3: Deadline cleanup
 
+> **On hold (#9439):** a user whose only install is gone cannot download an
+> account that holds a plaintext operation with any release from v18.15.0 on,
+> so they stop syncing and look dormant while the server holds their only
+> copy. Do not delete the dormant sublist until such users have a supported
+> way to recover; today that is only v18.14.0 on a clean profile
+> (`e2e/tests/sync/supersync-plaintext-history-recovery-9439.spec.ts`).
+
 Rebuild the list from both detectors, then:
 
 1. **Dry run:** produce the deletion sublist (plaintext and dormant for at
@@ -338,6 +345,8 @@ paths; the gate plus validated constraints are the continuous controls.
 - Accept account deletion for dormant plaintext holders (re-registration is
   the recovery path) and the divergent-edit risk for clean-slated active
   accounts.
+- Lift the Step 3 hold for #9439: confirm stuck users can recover before any
+  dormant account is deleted.
 - Approve the final dry-run counts before the destructive run.
 - Decide whether and when to run the optional Step 5 migration, accepting
   the disk-forensics limit if it is skipped.
