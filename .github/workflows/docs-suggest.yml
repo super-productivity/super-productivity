@@ -1,0 +1,84 @@
+---
+name: Docs Suggestions
+
+# Suggests up to three docs pages on new Q&A discussions (tools/docs-suggest.js). Issues are
+# left out: issue-triage.yml already replies to every new issue, and questions go to Q&A.
+#
+# Dry run by default: the suggestion only goes to the job summary. Live posting needs the
+# repository variable DOCS_SUGGEST_LIVE set to 'true' (Settings -> Secrets and variables ->
+# Actions -> Variables); delete it to go back to dry run.
+
+'on':
+  discussion:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: docs-suggest-${{ github.event.discussion.number }}
+
+jobs:
+  suggest:
+    # Questions from outside the team only: maintainers know the docs.
+    if: >-
+      github.event.discussion.category.slug == 'q-a' &&
+      !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.discussion.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      discussions: write
+    steps:
+      - name: Checkout docs and matcher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            docs/wiki
+            tools
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      # Title and body are read from the event file, never interpolated into the script:
+      # they are attacker-controlled text.
+      - name: Match docs pages
+        run: |
+          node tools/docs-suggest.js docs/wiki "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/comment.md" \
+            > "$RUNNER_TEMP/links.json"
+          cat "$RUNNER_TEMP/links.json"
+
+      - name: Post or report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIVE: ${{ vars.DOCS_SUGGEST_LIVE == 'true' }}
+          DISCUSSION_ID: ${{ github.event.discussion.node_id }}
+          DISCUSSION_URL: ${{ github.event.discussion.html_url }}
+        run: |
+          comment="$RUNNER_TEMP/comment.md"
+          {
+            echo "### Docs suggestion for $DISCUSSION_URL"
+            if [ ! -s "$comment" ]; then
+              echo 'No confident match: nothing posted.'
+            elif [ "$LIVE" = 'true' ] && [ "$GITHUB_RUN_ATTEMPT" != '1' ]; then
+              echo 'Re-run: not posted again. First run posted:'
+            elif [ "$LIVE" = 'true' ]; then
+              echo 'Posted:'
+            else
+              echo 'Dry run (set DOCS_SUGGEST_LIVE to post). Would post:'
+            fi
+            if [ -s "$comment" ]; then
+              echo
+              sed 's/^/> /' "$comment"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          # A manual re-run must not post a second comment on the same thread.
+          if [ -s "$comment" ] && [ "$LIVE" = 'true' ] && [ "$GITHUB_RUN_ATTEMPT" = '1' ]; then
+            gh api graphql \
+              -f query='mutation($id: ID!, $body: String!) {
+                addDiscussionComment(input: {discussionId: $id, body: $body}) { comment { url } }
+              }' \
+              -f id="$DISCUSSION_ID" -f body="$(cat "$comment")"
+          fi
