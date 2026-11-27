@@ -9,7 +9,13 @@ import { ActionType, Operation, OpType } from '../../op-log/core/operation.types
 import { syncTimeSpent } from '../time-tracking/store/time-tracking.actions';
 import { AppStateSnapshot } from '../../op-log/core/types/backup.types';
 import { initialTaskState, taskReducer } from './store/task.reducer';
-import { addSubTask, setCurrentTask, unsetCurrentTask } from './store/task.actions';
+import {
+  addSubTask,
+  moveSubTask,
+  setCurrentTask,
+  unsetCurrentTask,
+} from './store/task.actions';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { DEFAULT_TASK, Task, TaskState } from './task.model';
 import { TaskTimeSyncService } from './task-time-sync.service';
 
@@ -92,7 +98,11 @@ describe('TaskTimeSyncService', () => {
     // flushed delta on a receiver that has the creation but not the pending time.
     const addFirstSubTask = (
       scenario: 'local' | 'bulk' | 'explicit',
-    ): { flushed: { taskId: string }; after: TaskState; receiver: TaskState } => {
+    ): {
+      flushed: { taskId: string } | undefined;
+      after: TaskState;
+      receiver: TaskState;
+    } => {
       const child = createTask('child', {
         parentId: parent.id,
         ...(scenario === 'explicit'
@@ -132,8 +142,8 @@ describe('TaskTimeSyncService', () => {
       commit(after, creation);
 
       expect(changes).toBe(1);
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      const flushed = dispatchSpy.calls.mostRecent().args[0];
+      expect(dispatchSpy.calls.count()).toBe(scenario === 'explicit' ? 0 : 1);
+      const flushed = dispatchSpy.calls.mostRecent()?.args[0];
       const receiverBefore = bulkOperationsMetaReducer(taskReducer)(
         {
           ...before,
@@ -142,17 +152,19 @@ describe('TaskTimeSyncService', () => {
         },
         creation,
       );
-      const receiver = taskReducer(receiverBefore, {
-        ...flushed,
-        meta: { ...flushed.meta, isRemote: true },
-      });
+      const receiver = flushed
+        ? taskReducer(receiverBefore, {
+            ...flushed,
+            meta: { ...flushed.meta, isRemote: true },
+          })
+        : receiverBefore;
       return { flushed, after, receiver };
     };
 
     it('sends pending parent time for a first subtask that inherits it', () => {
       const { flushed, receiver } = addFirstSubTask('local');
 
-      expect(flushed.taskId).toBe('child');
+      expect(flushed!.taskId).toBe('child');
       expect(receiver.entities['child']!.timeSpent).toBe(5000);
       expect(receiver.entities['parent']!.timeSpent).toBe(5000);
     });
@@ -160,17 +172,118 @@ describe('TaskTimeSyncService', () => {
     it('sends pending parent time for a first subtask from a remote bulk', () => {
       const { flushed, after, receiver } = addFirstSubTask('bulk');
 
-      expect(flushed.taskId).toBe('child');
+      expect(flushed!.taskId).toBe('child');
       expect(after.entities['child']!.timeSpent).toBe(8000);
       expect(receiver.entities['child']!.timeSpent).toBe(8000);
       expect(receiver.entities['parent']!.timeSpent).toBe(8000);
     });
 
-    it('keeps pending time on the parent when the subtask has its own time', () => {
-      const { flushed, receiver } = addFirstSubTask('explicit');
+    it('drops pending parent time when the first subtask has its own time', () => {
+      const { flushed, after, receiver } = addFirstSubTask('explicit');
 
-      expect(flushed.taskId).toBe('parent');
+      expect(flushed).toBeUndefined();
       expect(receiver.entities['child']!.timeSpent).toBe(600000);
+      expect(after.entities['parent']!.timeSpent).toBe(600000);
+      expect(receiver.entities['parent']!.timeSpent).toBe(600000);
+    });
+
+    it('judges inheritance at the op position inside a remote bulk', () => {
+      const existing = createTask('existing', {
+        timeSpent: 1000,
+        timeSpentOnDay: { [day]: 1000 },
+      });
+      const child = createTask('child', { parentId: parent.id });
+      const operations: Operation[] = [
+        {
+          id: 'convert',
+          clientId: 'B',
+          actionType: TaskSharedActions.convertToSubTask.type as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: existing.id,
+          payload: TaskSharedActions.convertToSubTask({
+            taskId: existing.id,
+            targetParentId: parent.id,
+            afterTaskId: null,
+          }),
+          vectorClock: { B: 1 },
+          timestamp: 1,
+          schemaVersion: 1,
+        },
+        {
+          id: 'add',
+          clientId: 'B',
+          actionType: addSubTask.type as ActionType,
+          opType: OpType.Create,
+          entityType: 'TASK',
+          entityId: child.id,
+          payload: addSubTask({ task: child, parentId: parent.id }),
+          vectorClock: { B: 2 },
+          timestamp: 2,
+          schemaVersion: 1,
+        },
+      ];
+      // The reducer lets the new subtask inherit nothing: the parent already
+      // has a child when its addSubTask applies.
+      commit(
+        {
+          ...before,
+          ids: [parent.id, existing.id, child.id],
+          entities: {
+            parent: {
+              ...parent,
+              subTaskIds: [existing.id, child.id],
+              timeSpent: 1000,
+              timeSpentOnDay: { [day]: 1000 },
+            },
+            existing: { ...existing, parentId: parent.id },
+            child,
+          },
+          currentTaskId: child.id,
+        },
+        bulkApplyOperations({ operations }),
+      );
+
+      expect(changes).toBe(1);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('drops pending time when an existing task moves under the tracked task', () => {
+      const existing = createTask('existing', {
+        timeSpent: 2000,
+        timeSpentOnDay: { [day]: 2000 },
+      });
+      const otherParent = createTask('other-parent', {
+        subTaskIds: [existing.id],
+        timeSpent: 2000,
+        timeSpentOnDay: { [day]: 2000 },
+      });
+      const withOther: TaskState = {
+        ...before,
+        ids: [parent.id, otherParent.id, existing.id],
+        entities: {
+          parent,
+          [otherParent.id]: otherParent,
+          existing: { ...existing, parentId: otherParent.id },
+        },
+      };
+      commit(withOther, { type: 'seed-other' });
+      const move = moveSubTask({
+        taskId: existing.id,
+        srcTaskId: otherParent.id,
+        targetTaskId: parent.id,
+        afterTaskId: null,
+      });
+      const after = taskReducer(withOther, move);
+      expect(after.currentTaskId).toBe(parent.id);
+      expect(after.entities['parent']!.subTaskIds).toEqual([existing.id]);
+      commit(after, move);
+      service.flush();
+
+      // The current task didn't change, so nothing flushed on the move, and
+      // the parent's dropped batch isn't sent afterwards either.
+      expect(changes).toBe(0);
+      expect(dispatchSpy).not.toHaveBeenCalled();
     });
 
     it('flushes pending time for the previous task on a plain switch or stop', () => {
