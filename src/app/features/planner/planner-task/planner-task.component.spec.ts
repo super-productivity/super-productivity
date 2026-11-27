@@ -45,6 +45,7 @@ describe('PlannerTaskComponent', () => {
   let matDialogMock: jasmine.SpyObj<MatDialog>;
   let config: typeof DEFAULT_GLOBAL_CONFIG;
   let logicalToday: Date;
+  let startOfNextDayDiffMs: number;
   let firstDayOfWeek: number;
   let multiSelectMock: {
     selectedIds: WritableSignal<Set<string>>;
@@ -93,6 +94,7 @@ describe('PlannerTaskComponent', () => {
     taskSchedulingMock = jasmine.createSpyObj('TaskSchedulingService', ['scheduleTask']);
     config = DEFAULT_GLOBAL_CONFIG;
     logicalToday = new Date(2026, 8, 12);
+    startOfNextDayDiffMs = 0;
     firstDayOfWeek = 1;
     storeMock = jasmine.createSpyObj('Store', ['dispatch']);
     matDialogMock = jasmine.createSpyObj('MatDialog', ['open']);
@@ -129,6 +131,7 @@ describe('PlannerTaskComponent', () => {
           useValue: {
             getLogicalTodayDate: () => new Date(logicalToday),
             todayStr: () => '2026-09-12',
+            getStartOfNextDayDiffMs: () => startOfNextDayDiffMs,
           },
         },
         {
@@ -239,6 +242,8 @@ describe('PlannerTaskComponent', () => {
       ['ArrowRight', new Date(2026, 8, 15, 1, 0).getTime()],
     ] as const) {
       it(`moves a timed task from its scheduled date with ${key} when its displayed logical day differs`, () => {
+        // 01:00 on Sep 14 is the late night of Sep 13 with a 04:00 day start (#12012)
+        startOfNextDayDiffMs = 4 * 60 * 60 * 1000;
         const dueWithTime = new Date(2026, 8, 14, 1, 0).getTime();
         const task = makeTask({ dueWithTime, remindAt: undefined });
         const { component } = create(task, true, '2026-09-13');
