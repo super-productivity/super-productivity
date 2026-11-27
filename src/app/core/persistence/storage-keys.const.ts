@@ -67,6 +67,10 @@ export enum LS {
   // a permanent dismiss — an unencrypted E2EE-intended account is re-nudged calmly
   // rather than nagged every sync or forgotten forever. Device-local, no telemetry.
   SUPER_SYNC_ENCRYPTION_MIGRATION_SNOOZE_UNTIL = 'SUP_SUPER_SYNC_ENCRYPTION_MIGRATION_SNOOZE_UNTIL',
+  // #11671: id of the one rejected SuperSync full-state op this device healed
+  // past. Bounds the heal of pre-v20.1.0 misclassified rejections to one per
+  // device, so a genuine rejection cannot loop. Device-local.
+  SUPER_SYNC_HEALED_REJECTED_FULL_STATE_OP_ID = 'SUP_SUPER_SYNC_HEALED_REJECTED_FULL_STATE_OP_ID',
 
   SELECTED_TIME_VIEW = 'SELECTED_TIME_VIEW',
   SCHEDULE_WEEK_ROW_HEIGHT = 'SUP_SCHEDULE_WEEK_ROW_HEIGHT',
