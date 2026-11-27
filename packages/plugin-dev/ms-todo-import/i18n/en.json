@@ -1,0 +1,65 @@
+{
+  "TITLE": {
+    "IMPORT": "Import from Microsoft To Do",
+    "PREVIEW": "Preview",
+    "IMPORTING": "Importing…",
+    "FINISHED": "Import finished",
+    "INCOMPLETE": "Import incomplete"
+  },
+  "SIGN_IN": {
+    "INTRO": "Brings your open Microsoft To Do lists, tasks, steps, notes, due dates and repeats into Super Productivity. The import only adds data — nothing in Super Productivity is changed or removed.",
+    "HELP": "You sign in with Microsoft in a browser window. The import asks only to read your tasks; the access is used for this import and then forgotten.",
+    "LOADING": "Loading your Microsoft To Do data…",
+    "NO_LISTS": "No lists found for this Microsoft account.",
+    "NOT_CONFIGURED": "This build has no Microsoft sign-in configured.",
+    "LEGAL": "Microsoft keeps your permission until you revoke it in your Microsoft account. Not affiliated with or endorsed by Microsoft; Microsoft provides no warranty and accepts no liability for this import.",
+    "PRIVACY_LINK": "Privacy details"
+  },
+  "ERROR": {
+    "LOAD_FAILED": "Could not load data from Microsoft To Do: {{error}} — try signing in again and check your connection.",
+    "IMPORT_FAILED": "Import failed: {{error}}",
+    "IMPORT_STOPPED": "Import stopped at “{{project}}”: {{error}}. That project was created only partially — delete “{{project}}” before re-running, then select it and the remaining lists again."
+  },
+  "BUTTON": {
+    "SIGN_IN": "Sign in with Microsoft",
+    "IMPORT": "Import",
+    "BACK": "Back"
+  },
+  "PREVIEW": {
+    "CHOOSE_PROJECTS": "Choose the lists to import — each becomes a project:",
+    "PROJECT_COUNTS": "{{title}} — tasks: {{taskCount}}, steps: {{subTaskCount}}",
+    "ALREADY_EXISTS": "already exists — possibly imported before",
+    "TAG_IMPORTANT": "Tag important (starred) tasks with “important”",
+    "LOSS_HEADING": "What will not survive the move",
+    "SELECT_PROJECT": "Select at least one list to import."
+  },
+  "LOSS": {
+    "RECURRING": "Repeats that Super Productivity cannot express (the rule is noted in task notes): {{count}}.",
+    "REMINDERS": "Reminders not imported: {{count}}.",
+    "ATTACHMENTS": "Tasks with file attachments, imported without the files: {{count}}.",
+    "TRUNCATED_FIELDS": "Unusually long values shortened to safe import limits: {{count}}.",
+    "ALWAYS": "Completed tasks, My Day and linked emails or files are not imported."
+  },
+  "IMPORT": {
+    "STARTING": "Starting…",
+    "PHASE_PROJECT": "creating project",
+    "PHASE_TASKS": "creating tasks",
+    "PHASE_DETAILS": "applying dates, tags and repeats {{current}}/{{total}}",
+    "PROGRESS": "List {{current}} of {{total}}: {{title}} — {{detail}}"
+  },
+  "SUMMARY": {
+    "PROJECT_RESULT": "{{title}}: {{landedTasks}} of {{plannedTasks}} tasks, {{landedSubTasks}} of {{plannedSubTasks}} steps",
+    "SHORTFALL": "some items did not land; please review",
+    "UNVERIFIED": "Could not verify the imported counts — the numbers above may show 0 even for tasks that landed.",
+    "REPEATS_FAILED": "Recurring tasks that could not be set to repeat (the rule is noted in task notes): {{count}}.",
+    "CREATED_TAGS": "Created tags: {{tags}}",
+    "NOT_CARRIED_OVER": "Not carried over",
+    "SNACK_FINISHED": "Microsoft To Do import finished",
+    "UNDO": "The import is additive — to undo it, delete the created projects."
+  },
+  "PARSE": {
+    "UNTITLED_LIST": "Untitled list",
+    "UNTITLED_TASK": "Untitled task",
+    "REPEATS": "Repeats: {{rule}}"
+  }
+}

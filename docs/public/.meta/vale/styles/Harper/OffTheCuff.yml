@@ -1,0 +1,19 @@
+---
+# Generated from Harper's OffTheCuff rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures `off-the-cuff` is correctly hyphenated.
+extends: existence
+message: "Use the hyphenated form for `off-the-cuff`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "off-the-cuff"
+tokens:
+  - "off(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+cuff(?!['\\x{2019}]s\\b)"

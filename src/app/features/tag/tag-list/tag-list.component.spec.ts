@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TagListComponent } from './tag-list.component';
@@ -374,6 +375,7 @@ describe('TagListComponent', () => {
   describe('project tag click', () => {
     // The tag-list host stands in for the task row listening for clicks.
     let rowClick: jasmine.Spy;
+    const isTouchActive = signal(false);
 
     const click = (init: MouseEventInit = {}): MouseEvent =>
       new MouseEvent('click', { bubbles: true, ...init });
@@ -392,6 +394,8 @@ describe('TagListComponent', () => {
         entities: { 'tag-1': createMockTag('tag-1', 'Alpha') },
       });
       workContext$.next({ activeId: 'TODAY', activeType: WorkContextType.TAG });
+      isTouchActive.set(false);
+      component['_isTouchActive'] = isTouchActive;
       fixture.componentRef.setInput(
         'task',
         createMockTask({ projectId: 'proj-1', tagIds: ['tag-1'] }),
@@ -437,6 +441,20 @@ describe('TagListComponent', () => {
 
       expect(routerMock.navigate).not.toHaveBeenCalled();
       expect(rowClick).toHaveBeenCalledTimes(2);
+      expect(getComputedStyle(projectChip).pointerEvents).toBe('none');
+    });
+
+    it('should leave the project chip to the row while touch is the input', () => {
+      isTouchActive.set(true);
+      fixture.detectChanges();
+      const projectChip = getChips()[0];
+      const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      projectChip.dispatchEvent(mouseDown);
+      projectChip.dispatchEvent(click());
+
+      expect(routerMock.navigate).not.toHaveBeenCalled();
+      expect(rowClick).toHaveBeenCalledTimes(1);
+      expect(mouseDown.defaultPrevented).toBe(false);
       expect(getComputedStyle(projectChip).pointerEvents).toBe('none');
     });
 

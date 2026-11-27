@@ -73,6 +73,36 @@ E2E_BASE_URL=http://localhost:4242 npm run e2e:file -- e2e/tests/task-basic/task
 when source files change. Add `--grep "test name"` to run only the scenario you
 are working on. Provider tests still need their provider-specific commands.
 
+### Production PWA tests
+
+The update and worker-migration tests use [controlled-reload.ts](pwa/controlled-reload.ts)
+to start a controlled document. Legacy-worker setup uses the `ngsw-bypass` header
+for scripts as well as the navigation, so a broken cached script stream cannot
+prevent the initial update check from running. Current-worker setup keeps cached
+asset loading. The helper waits for the worker's completion message, clears any
+bypass header and fetches the cached manifest to assign the document's version
+before the update, data-preservation and offline-reload checks. The controlled-reload
+regression injects broken cached script streams and verifies both bypass and cleanup.
+
+### Electron main-process tests
+
+[electron/idle-resume.spec.ts](electron/idle-resume.spec.ts) launches the built app
+through Playwright's `_electron`, so it can emit real `powerMonitor` suspend and
+resume events; the CDP smoke tests in
+[electron-smoke.yml](../.github/workflows/electron-smoke.yml) cannot. It needs a
+production renderer, the compiled main process and the Electron runtime, which
+`npm i` no longer downloads (since Electron 42):
+
+```bash
+npm run buildFrontend:prod:es6 && npm run electron:build
+node node_modules/electron/install.js
+npm run e2e:electron   # on Linux, inside xvfb-run
+```
+
+`electron-smoke.yml` runs it on code pull requests, `master` pushes and `v*` tags
+(that workflow's `paths` filter skips docs-only, translation-only and mobile-only
+changes).
+
 ### WebDAV Sync Tests
 
 ```bash

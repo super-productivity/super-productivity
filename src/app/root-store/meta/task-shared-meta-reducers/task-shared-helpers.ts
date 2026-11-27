@@ -1,5 +1,5 @@
 import { Update } from '@ngrx/entity';
-import { Action } from '@ngrx/store';
+import { Action, MetaReducer } from '@ngrx/store';
 import { RootState } from '../../root-state';
 import { Tag } from '../../../features/tag/tag.model';
 import { Project } from '../../../features/project/project.model';
@@ -35,6 +35,24 @@ export type TaskEntity = {
 export type TaskWithTags = Task & { tagIds: string[] };
 export type ActionHandler = (state: RootState) => RootState;
 export type ActionHandlerMap = Record<string, ActionHandler>;
+
+// =============================================================================
+// META-REDUCER FACTORY
+// =============================================================================
+
+/** Runs the handler `createActionHandlers` maps to the action's type, then the inner reducer. */
+export const createActionHandlerMetaReducer =
+  (
+    createActionHandlers: (state: RootState, action: Action) => ActionHandlerMap,
+  ): MetaReducer =>
+  (reducer) =>
+  (state, action) => {
+    if (!state) return reducer(state, action);
+
+    const rootState = state as RootState;
+    const handler = createActionHandlers(rootState, action)[action.type];
+    return reducer(handler ? handler(rootState) : rootState, action);
+  };
 
 // =============================================================================
 // STATE UPDATE HELPERS

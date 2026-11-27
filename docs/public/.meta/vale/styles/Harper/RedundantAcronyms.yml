@@ -1,0 +1,71 @@
+---
+# Hand-written from Harper's RedundantAcronyms: the last letter of the acronym
+# already stands for the word after it -- an ATM machine is an automated teller
+# machine machine.
+#
+# The generated rule was a handful of swaps lifted from its tests, several of
+# them needing trailing punctuation (`gui interface.`, `lcd display,`) and one
+# expanding `gop party`. It covered none of the acronyms the corpus actually
+#
+# `matchcase` is what lets one entry serve `VIN number` and `VIN NUMBER`, both
+# of which appear.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "The acronym's last letter already stands for the last word. Use just the acronym or the full phrase."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bATM\s+machines\b': "ATMs|automated teller machine"
+  '\bATM\s+machine\b': "ATM|automated teller machine"
+  '\bVIN\s+numbers\b': "VINs|vehicle identification number"
+  '\bVIN\s+number\b': "VIN|vehicle identification number"
+  '\bLCD\s+displays\b': "LCDs|liquid crystal display"
+  '\bLCD\s+display\b': "LCD|liquid crystal display"
+  '\bLED\s+diodes\b': "LEDs|light emitting diode"
+  '\bLED\s+diode\b': "LED|light emitting diode"
+  '\bGUI\s+interfaces\b': "GUIs|graphical user interface"
+  '\bGUI\s+interface\b': "GUI|graphical user interface"
+  '\bTUI\s+interfaces\b': "TUIs|text-based user interface"
+  '\bTUI\s+interface\b': "TUI|text-based user interface"
+  '\bUI\s+interfaces\b': "UIs|user interface"
+  '\bUI\s+interface\b': "UI|user interface"
+  '\bAPI\s+interfaces\b': "APIs|application programming interface"
+  '\bAPI\s+interface\b': "API|application programming interface"
+  '\bLLM\s+models\b': "LLMs|large language model"
+  '\bLLM\s+model\b': "LLM|large language model"
+  '\bUSD\s+dollars\b': "USDs|US dollars"
+  '\bHIV\s+virus\b': "HIVs|human immunodeficiency virus"
+  '\bRAM\s+memorys\b': "RAMs|random access memory"
+  '\bRAM\s+memory\b': "RAM|random access memory"
+  '\bROM\s+memorys\b': "ROMs|read only memory"
+  '\bROM\s+memory\b': "ROM|read only memory"
+  '\bISBN\s+numbers\b': "ISBNs|international standard book number"
+  '\bISBN\s+number\b': "ISBN|international standard book number"
+  '\bUPC\s+codes\b': "UPCs|universal product code"
+  '\bUPC\s+code\b': "UPC|universal product code"
+  '\bSSN\s+numbers\b': "SSNs|social security number"
+  '\bSSN\s+number\b': "SSN|social security number"
+  '\bNIC\s+cards\b': "NICs|network interface card"
+  '\bNIC\s+card\b': "NIC|network interface card"
+  '\bSIM\s+cards\b': "SIMs|subscriber identity module"
+  '\bSIM\s+card\b': "SIM|subscriber identity module"
+  '\bGPS\s+systems\b': "GPSs|global positioning system"
+  '\bGPS\s+system\b': "GPS|global positioning system"
+  '\bLAN\s+networks\b': "LANs|local area network"
+  '\bLAN\s+network\b': "LAN|local area network"
+  '\bWAN\s+networks\b': "WANs|wide area network"
+  '\bWAN\s+network\b': "WAN|wide area network"
+  '\bDNS\s+systems\b': "DNSs|domain name system"
+  '\bDNS\s+system\b': "DNS|domain name system"
+  '\bPDF\s+formats\b': "PDFs|portable document format"
+  '\bPDF\s+format\b': "PDF|portable document format"
+  '\bCSS\s+sheets\b': "CSSs|cascading style sheets"
+  '\bSAT\s+tests\b': "SATs|scholastic aptitude test"
+  '\bSAT\s+test\b': "SAT|scholastic aptitude test"

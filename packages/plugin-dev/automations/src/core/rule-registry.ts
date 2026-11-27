@@ -70,7 +70,10 @@ const toAutomationTrigger = (value: unknown): AutomationRule['trigger'] | null =
   }
 
   if (value.type === 'timeBased') {
-    return typeof value.value === 'string' ? { type: value.type, value: value.value } : null;
+    // Imported rules may say "9:00"; the runtime compares against zero-padded "HH:MM".
+    return typeof value.value === 'string'
+      ? { type: value.type, value: value.value.replace(/^\d:\d\d$/, '0$&') }
+      : null;
   }
 
   if (value.value === undefined) {

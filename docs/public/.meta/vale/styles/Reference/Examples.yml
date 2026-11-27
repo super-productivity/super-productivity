@@ -1,0 +1,31 @@
+# Reference provides examples: a flag, a command, or a value shown in use.
+# A page with no code at all is describing without showing.
+# https://diataxis.fr/reference/#provide-examples
+extends: occurrence
+message: "Reference provides examples. There is no code block on this page."
+link: https://diataxis.fr/reference/#provide-examples
+level: suggestion
+scope: raw
+token: '(?m)^(?:```|~~~|    \S)'
+min: 1
+
+tests:
+  - name: fires
+    input: |
+      # Flags
+
+      --port sets the port. The default is 8080.
+
+    want: |
+      1:1:Reference.Examples:Reference provides examples. There is no code block on this page.
+  - name: clean
+    input: |
+      # Flags
+
+      --port sets the port.
+
+      ```console
+      $ app --port 9000
+      ```
+
+    want: ""

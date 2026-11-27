@@ -1,0 +1,19 @@
+---
+# Generated from Harper's SneakingSuspicion rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Changes `sneaky suspicion` to `sneaking suspicion`.
+extends: existence
+message: "Did you mean `sneaking suspicion`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "sneaking suspicion"
+tokens:
+  - "sneaky(?!\\s*\\n\\s*\\n)\\s+suspicion(?!['\\x{2019}]s\\b)"

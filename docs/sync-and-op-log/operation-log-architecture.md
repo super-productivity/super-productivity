@@ -1605,7 +1605,7 @@ being reduced to whole-entry LWW.
 
 ## E.7 Archive Payload Boundary
 
-[`TaskService.moveToArchive()`](../../src/app/features/tasks/task.service.ts)
+[`TaskArchiveOrchestratorService.moveToArchive()`](../../src/app/features/tasks/task-archive-orchestrator.service.ts)
 persists the selected parent-task batch, then dispatches one
 `moveToArchive({ tasks })` action. Capture records that persistent action as one
 operation carrying the selected batch's full task payload. The receiver needs

@@ -1,0 +1,24 @@
+---
+# Generated from Harper's SomewhatSomething linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags the phrase `somewhat of a` in favor of `something of a`, which can
+# be considered more traditional.
+extends: sequence
+message: "Consider using `something of a` in more formal writing."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "something"
+tokens:
+  - pattern: 'somewhat'
+    target: true
+  - pattern: 'of'
+  - pattern: 'a'

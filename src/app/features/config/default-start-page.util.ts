@@ -1,5 +1,5 @@
 import { AppFeaturesConfig } from './global-config.model';
-import { DefaultStartPage } from './default-start-page.const';
+import { DefaultStartPage, getStartPageViewId } from './default-start-page.const';
 import { Project } from '../project/project.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { INBOX_PROJECT } from '../project/project.const';
@@ -14,6 +14,8 @@ import { INBOX_PROJECT } from '../project/project.const';
  *   already looked up by the caller (or `undefined` for built-in start pages).
  *   A missing, archived, or hidden-from-menu project falls back to Today —
  *   the same cases where the start-page dropdown omits it.
+ *   A view start page needs no lookup: `BoardRouteGuard` sends an unknown
+ *   view id on to the last opened view.
  */
 export const getStartPageUrlPath = (
   defaultStartPage: number | string | undefined,
@@ -21,6 +23,13 @@ export const getStartPageUrlPath = (
   startProject: Project | undefined,
 ): string => {
   const todayUrl = `/tag/${TODAY_TAG.id}/tasks`;
+
+  const viewId = getStartPageViewId(defaultStartPage);
+  if (viewId) {
+    return appFeatures.isBoardsEnabled
+      ? `/boards/${encodeURIComponent(viewId)}`
+      : todayUrl;
+  }
 
   if (typeof defaultStartPage === 'string' && defaultStartPage.length > 0) {
     // Build the path from the validated project's own id (not the raw config

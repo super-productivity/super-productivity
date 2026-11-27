@@ -2,7 +2,7 @@
 import { TestBed, fakeAsync, tick, flush } from '@angular/core/testing';
 import { provideMockStore } from '@ngrx/store/testing';
 import { AllTasksMetricsService } from './all-tasks-metrics.service';
-import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { WorklogService } from '../worklog/worklog.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
@@ -15,7 +15,7 @@ import { TODAY_TAG } from '../tag/tag.const';
 
 describe('AllTasksMetricsService', () => {
   let service: AllTasksMetricsService;
-  let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let activeWorkContext$: BehaviorSubject<WorkContext | null>;
   let worklog$: BehaviorSubject<Worklog>;
   let totalTimeSpent$: BehaviorSubject<number>;
@@ -84,7 +84,10 @@ describe('AllTasksMetricsService', () => {
       createTimeTrackingState(),
     );
 
-    const taskServiceSpy = jasmine.createSpyObj('TaskService', ['getAllTasksEverywhere']);
+    const taskArchiveOrchestratorSpy = jasmine.createSpyObj(
+      'TaskArchiveOrchestratorService',
+      ['getAllTasksEverywhere'],
+    );
     const worklogServiceSpy = jasmine.createSpyObj('WorklogService', [], {
       worklog$: worklog$.asObservable(),
       totalTimeSpent$: totalTimeSpent$.asObservable(),
@@ -97,7 +100,7 @@ describe('AllTasksMetricsService', () => {
     });
 
     // Default return values
-    taskServiceSpy.getAllTasksEverywhere.and.returnValue(
+    taskArchiveOrchestratorSpy.getAllTasksEverywhere.and.returnValue(
       Promise.resolve([createTask({ id: '1' })]),
     );
 
@@ -105,7 +108,7 @@ describe('AllTasksMetricsService', () => {
       providers: [
         AllTasksMetricsService,
         provideMockStore(),
-        { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestratorSpy },
         { provide: WorklogService, useValue: worklogServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         { provide: TimeTrackingService, useValue: timeTrackingServiceSpy },
@@ -113,7 +116,9 @@ describe('AllTasksMetricsService', () => {
     });
 
     service = TestBed.inject(AllTasksMetricsService);
-    taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+    taskArchiveOrchestrator = TestBed.inject(
+      TaskArchiveOrchestratorService,
+    ) as jasmine.SpyObj<TaskArchiveOrchestratorService>;
   });
 
   describe('Signal creation', () => {
@@ -328,7 +333,9 @@ describe('AllTasksMetricsService', () => {
         createTask({ id: '3', tagIds: ['tag-1'] }),
       ];
 
-      taskService.getAllTasksEverywhere.and.returnValue(Promise.resolve(allTasks));
+      taskArchiveOrchestrator.getAllTasksEverywhere.and.returnValue(
+        Promise.resolve(allTasks),
+      );
       activeWorkContext$.next(
         createMockWorkContext(TODAY_TAG.id, WorkContextType.TAG, 'Today'),
       );
@@ -336,13 +343,13 @@ describe('AllTasksMetricsService', () => {
       tick(200);
       flush();
 
-      expect(taskService.getAllTasksEverywhere).toHaveBeenCalled();
+      expect(taskArchiveOrchestrator.getAllTasksEverywhere).toHaveBeenCalled();
       const metrics = service.simpleMetrics();
       expect(metrics?.nrOfAllTasks).toBe(3);
     }));
 
     it('should handle empty task list', fakeAsync(() => {
-      taskService.getAllTasksEverywhere.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getAllTasksEverywhere.and.returnValue(Promise.resolve([]));
       activeWorkContext$.next(
         createMockWorkContext(TODAY_TAG.id, WorkContextType.TAG, 'Today'),
       );

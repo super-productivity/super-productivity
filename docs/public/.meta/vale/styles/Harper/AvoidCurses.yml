@@ -1,0 +1,21 @@
+---
+# Hand-written from Harper's AvoidCurses.
+#
+# Harper does not carry a word list for this: the linter is `then_swear()`, a
+# test against a flag in the dictionary, so no generator reading the linter's
+# source could produce one. The words are the eight the dictionary marks with
+# the `x` flag, which `annotations.json` documents as the swear property.
+#
+# The suffixes are Harper's `propagate: true` on that flag, which passes it to
+# the derived forms. They are listed rather than left open so that `ass` does
+# not reach into `assess` and `tit` does not reach into `title`.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Try to avoid offensive language."
+level: suggestion
+ignorecase: true
+tokens:
+  - '\b(?:ass|bullshit|dick|fuck|nigger|shit|tit|whore)(?:s|es|ed|ing|er|ers|y|ish)?\b'

@@ -77,6 +77,7 @@ export class NavItemComponent {
   readonly T = T;
   private readonly _globalThemeService = inject(GlobalThemeService);
   private readonly _navConfigService = inject(MagicNavConfigService);
+  readonly isHideNavTaskCount = this._navConfigService.isHideNavTaskCount;
   private readonly _translateService = inject(TranslateService);
   private readonly _iconRegistrationEffect = effect(() => {
     const svgUrl = this.svgIcon();

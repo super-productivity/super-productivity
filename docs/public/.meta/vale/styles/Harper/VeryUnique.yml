@@ -1,0 +1,17 @@
+---
+# Generated from Harper's VeryUnique linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reports the problem without a fix: Harper builds this correction in
+# code, from the text it matched, which the rule itself does not record.
+extends: sequence
+message: "`Unique` is absolute, so consider using `unique` alone or a more precise adjective such as `special`, `rare`, or `unusual`."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'somewhat|fairly|pretty|rather|quite|very'
+  - pattern: 'unique'

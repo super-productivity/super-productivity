@@ -1,5 +1,5 @@
 import { Task } from '../task.model';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStrWithOffset } from '../../../util/get-db-date-str';
 
 type DueTask = Pick<Task, 'isDone' | 'dueDay' | 'dueWithTime'> & {
   parentId?: string | null;
@@ -14,7 +14,7 @@ export const countDueTasks = (
   tasks.reduce((count, task) => {
     if (task.isDone || task.parentId) return count;
     const dueDay = task.dueWithTime
-      ? getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs))
+      ? getDbDateStrWithOffset(task.dueWithTime, startOfNextDayDiffMs)
       : task.dueDay;
     return count + Number(!!dueDay && dueDay <= today);
   }, 0);

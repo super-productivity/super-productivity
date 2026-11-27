@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AsFollows rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the phrase `as follow`, which is sometimes produced by overcorrection. While it appeared briefly in 19th-century English, it is now considered archaic; modern standard usage requires `as follows` regardless of number.
+extends: existence
+message: "Use `as follows`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "as follows"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+follow(?!['\\x{2019}]s\\b)"

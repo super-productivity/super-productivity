@@ -11,7 +11,11 @@ import { CaldavCfg } from './caldav.model';
 import { truncate } from '../../../../util/truncate';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isCaldavEnabled } from './is-caldav-enabled.util';
-import { CALDAV_POLL_INTERVAL } from './caldav.const';
+import {
+  CALDAV_POLL_INTERVAL,
+  CALDAV_POLL_INTERVAL_MINUTES_MAX,
+  CALDAV_POLL_INTERVAL_MINUTES_MIN,
+} from './caldav.const';
 import { computeFieldPullChanges } from '../../two-way-sync/compute-field-pull';
 import { Store } from '@ngrx/store';
 import { GlobalConfigService } from '../../../config/global-config.service';
@@ -47,9 +51,26 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
   readonly providerKey = 'CALDAV' as const;
 
   get pollInterval(): number {
-    return this._cachedCfg?.pollIntervalMinutes
-      ? this._cachedCfg.pollIntervalMinutes * 60 * 1000
+    return this._cachedCfg
+      ? this.getPollIntervalForCfg(this._cachedCfg)
       : CALDAV_POLL_INTERVAL;
+  }
+
+  // The poll effects pass the provider they build the timer for, so its own
+  // interval applies from the first timer after start, before any request has
+  // filled `_cachedCfg`, and each CalDAV provider keeps its own interval.
+  getPollIntervalForCfg(cfg: CaldavCfg): number {
+    const minutes = cfg.pollIntervalMinutes;
+    if (!minutes) {
+      return CALDAV_POLL_INTERVAL;
+    }
+    // Clamp here too: synced/persisted cfgs bypass the form's min/max, and delays
+    // above 2^31-1 ms overflow setInterval, which then fires in a tight loop.
+    const clamped = Math.min(
+      Math.max(minutes, CALDAV_POLL_INTERVAL_MINUTES_MIN),
+      CALDAV_POLL_INTERVAL_MINUTES_MAX,
+    );
+    return clamped * 60 * 1000;
   }
 
   isEnabled(cfg: CaldavCfg): boolean {

@@ -902,6 +902,15 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect('repeatUntilDay' in normalized).toBe(true);
       expect(normalized.repeatUntilDay).toBeUndefined();
     });
+
+    it('rounds a fractional deadlineOffsetDays so copies still get a deadline', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'DAILY',
+        deadlineOffsetDays: 1.5,
+      });
+      expect(normalized.deadlineOffsetDays).toBe(2);
+    });
   });
 
   describe('startDate min floor (#7768 Bug 4 refined)', () => {

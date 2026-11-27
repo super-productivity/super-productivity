@@ -1,0 +1,19 @@
+---
+# Generated from Harper's FetalPosition rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures the correct use of `fetal position`, avoiding confusion with `feeble position`, which is not a standard phrase.
+extends: existence
+message: "Use the correct term for a curled-up posture."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "the fetal position"
+tokens:
+  - "the(?!\\s*\\n\\s*\\n)\\s+feeble(?!\\s*\\n\\s*\\n)\\s+position(?!['\\x{2019}]s\\b)"

@@ -62,7 +62,7 @@ test.describe('Subtask move to top/bottom', () => {
   });
 
   for (const isDone of [false, true]) {
-    test(`moves ${isDone ? 'completed' : 'unfinished'} detail-panel subtask to top of siblings via keyboard`, async ({
+    test(`moves ${isDone ? 'completed' : 'unfinished'} detail-panel subtask to top and bottom of siblings via keyboard`, async ({
       page,
       workViewPage,
       taskPage,
@@ -113,6 +113,12 @@ test.describe('Subtask move to top/bottom', () => {
         /Sub B/,
       ]);
       await expect(subC).toBeFocused();
+      await page.keyboard.press('Control+Alt+ArrowDown');
+      await expect(panelSubTasks.locator('task-title')).toHaveText([
+        /Sub A/,
+        /Sub B/,
+        /Sub C/,
+      ]);
     });
   }
 

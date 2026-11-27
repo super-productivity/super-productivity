@@ -1,0 +1,19 @@
+---
+# Generated from Harper's LikeTheresNoTomorrow rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `like no tomorrow` to `like there's no tomorrow`.
+extends: existence
+message: "The correct phrase is `like there's no tomorrow`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "like there's no tomorrow"
+tokens:
+  - "like(?!\\s*\\n\\s*\\n)\\s+no(?!\\s*\\n\\s*\\n)\\s+tomorrow(?!['\\x{2019}]s\\b)"

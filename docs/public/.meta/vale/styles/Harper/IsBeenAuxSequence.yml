@@ -1,0 +1,19 @@
+---
+# Generated from Harper's IsBeenAuxSequence rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Rewrites `is been` to a standard perfect-passive form.
+extends: existence
+message: "This helper sequence is nonstandard in edited English."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "has been"
+tokens:
+  - "is(?!\\s*\\n\\s*\\n)\\s+been(?!['\\x{2019}]s\\b)"

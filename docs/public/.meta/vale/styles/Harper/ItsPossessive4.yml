@@ -1,0 +1,34 @@
+---
+# Hand-written companion to the ItsPossessive family: `it's` in a list.
+#
+# The other three all want a verb or preposition before `it's`, or a noun and
+# verb after it. None reaches the second and third items of a list --
+# "Understand it's code, it's values, and it's purpose" -- where what precedes
+# is a comma or a conjunction.
+#
+# The noun exclusions are ItsPossessive.yml's, plus two this position needs.
+# A bare `no` gets tagged as a noun in "it's no longer affordable", and a
+# number after a comma is almost never the possessive -- "Currently, it's
+# 14560/14550 for default mavlink" is the contraction. So `CD` is not accepted
+# here, where the other rules in the family do accept it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use the possessive `its` here."
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "its"
+tokens:
+  - pattern: ',|and|or'
+  - pattern: 'it'
+    target: true
+  - pattern: "'s"
+    target: true
+  - pattern: '^(?!(?:(?:some|any|every|no)(?:body|one|thing)|no|not|what|which|who|whom|whose)$).+$'
+    tag: 'NNP?S?'

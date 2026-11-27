@@ -81,7 +81,9 @@ when it begins, so contact sheets include that scene too.
   before interacting there.
 - **A static layout zoom and the camera are different tools.** `app-root { zoom: 1.4 }`
   re-lays-out the app for a small canvas and must stay fixed; animating it would reflow
-  every frame. Use the camera for motion.
+  every frame. Use the camera for motion. Playwright cannot click inside an iframe under
+  an ancestor's CSS zoom, so a video that drives an iframe enlarges its layout with
+  `deviceScaleFactor` instead.
 - **Page clock.** A paused Playwright clock (`page.clock.install`) freezes page timers and
   `requestAnimationFrame`, but CSS transitions keep running. So the kit waits in Node and
   removes layers on `transitionend`; it works with the clock paused. One exception:
@@ -94,6 +96,8 @@ when it begins, so contact sheets include that scene too.
   (same origin: the flag lives in sessionStorage). A bare `loopBoundary('out')` does not.
   If setup fails, the cover is cleared and the original error is rethrown.
 - **No OS cursor in recordings.** Without `installCursor`, clicks have no visible cause.
+  Iframes forward their pointer events to the top page, so its one cursor also follows
+  the mouse, and marks clicks, over an embedded page, camera zoom included.
   `typeText` hides it while typing; `setCursorVisible` does it by hand.
 - **Timing.** Captions and cards wait for their own fade unless `noWait` is set. Hold
   durations are editorial pacing; readiness belongs in `expect()` assertions.

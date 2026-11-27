@@ -1,0 +1,25 @@
+---
+# Generated from Harper's ColdModalTypo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Rewrites `cold` to `could` when it appears in common subject-plus-verb modal contexts.
+extends: sequence
+message: "This looks like a modal typo."
+level: error
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "could"
+tokens:
+  - pattern: 'they|she|you|he|it|we|i'
+  - pattern: 'cold'
+    target: true
+  - upos: ADV
+  - pattern: 'not'
+  - pattern: 'leave|start|think|feel|find|have|help|know|make|need|stop|take|want|work|get|say|see|use|be|do|go'

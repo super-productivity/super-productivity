@@ -1,0 +1,26 @@
+---
+# Hand-written from Harper's NoHarmNoFoul: the idiom is `no harm, no foul`.
+#
+# The generated rule was a pile of fragments built by diffing its tests --
+# `"fowl,"` -> `"foul,"`, `"nor harm nor"` -> `"no harm no"` -- each needing the
+# exact punctuation of the sentence it came from. 10 missed findings.
+#
+# Two things go wrong independently: `fowl` for `foul`, and `nor` for `no` in
+# either half. Any combination of those is wrong, and only `no harm, no foul`
+# is right.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Did you mean %s?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bn(?:o|or)\s+harm,?\s+n(?:o|or)\s+fowl\b': "no harm, no foul"
+  '\bnor\s+harm,?\s+n(?:o|or)\s+foul\b': "no harm, no foul"
+  '\bno\s+harm,?\s+nor\s+foul\b': "no harm, no foul"

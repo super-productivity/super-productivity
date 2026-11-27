@@ -1,0 +1,22 @@
+---
+# Hand-written from Harper's RedundantAcronyms -- the acronyms it only matches
+# in capitals.
+#
+# `PIN` carries Harper's AllCapsOnly flag: "Pin Number Match Project" is a
+# title, not the redundancy, and Harper says nothing about it. The rest of the
+# acronyms have no such flag and stay in RedundantAcronyms.yml with
+# `ignorecase`, which is why this is a second file rather than a setting.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "The acronym's last letter already stands for the last word. Use just the acronym or the full phrase."
+level: warning
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bPIN\s+numbers\b': "PINs|personal identification number"
+  '\bPIN\s+number\b': "PIN|personal identification number"

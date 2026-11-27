@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's OldestInTheBook: the idiom is `in the book`.
+#
+# The generated rule swapped `books,` for `book,` and `books?` for `book?`,
+# the two punctuation marks that happened to follow the word in the linter's
+# tests. Every other sentence went unreported -- 8 of them in the corpus.
+#
+# Harper requires `oldest`, then a noun phrase, then `in the books`. The noun
+# phrase runs from one word ("oldest trick in the books") to three ("oldest
+# chromatic alterations in the books"), so a `sequence` cannot express it and
+# a lookbehind does. Same shape as BestOfAllTime.yml, and the same 40
+# characters of room: the longest in the corpus is 21.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Did you mean `in the book`?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+  params:
+    - "book"
+tokens:
+  - '(?<=\boldest\b.{0,40}\bin\sthe\s)books\b'

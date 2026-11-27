@@ -1,0 +1,19 @@
+---
+# Generated from Harper's SufficeItToSay rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `suffice to say` to `suffice it to say`.
+extends: existence
+message: "`Suffice it to say` is the more standard and more common variant."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "suffice it to say"
+tokens:
+  - "suffice(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+say(?!['\\x{2019}]s\\b)"

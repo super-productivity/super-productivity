@@ -27,6 +27,7 @@ import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-re
 import { TranslateService } from '@ngx-translate/core';
 import { TagListStateService } from './tag-list-state.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { isTouchActive } from '../../../util/input-intent';
 
 /**
  * Structural contract of what tag-list actually reads from its input. Both
@@ -66,6 +67,14 @@ export class TagListComponent {
   // From the host: importing TaskMultiSelectService or isMultiSelectModifierEvent
   // here splits each into its own lazy chunk (Lighthouse script budget).
   isTouchSelectionMode = input(false);
+
+  // Replaced in specs: headless Chrome is mouse-only, so isTouchActive stays false.
+  private _isTouchActive: () => boolean = isTouchActive;
+  // On touch the chip fills much of a narrow row, so taps meant for the row kept
+  // navigating away. There the chip stays a label and the tap goes to the row.
+  isProjectTagNavigable = computed(
+    () => this.isProjectTagClickable() && !this._isTouchActive(),
+  );
 
   workContext = toSignal(this._workContextService.activeWorkContextTypeAndId$);
 

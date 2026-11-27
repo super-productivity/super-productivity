@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ScantilyClad rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes `scandally clad` to `scantily clad`, ensuring clarity in describing minimal attire.
+extends: existence
+message: "Use the correct phrase for minimal attire."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "scantily clad"
+tokens:
+  - "scandally(?!\\s*\\n\\s*\\n)\\s+clad(?!['\\x{2019}]s\\b)"

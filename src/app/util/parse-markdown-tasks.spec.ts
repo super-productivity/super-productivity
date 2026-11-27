@@ -79,6 +79,28 @@ describe('parseMarkdownTasks', () => {
     ]);
   });
 
+  it('should parse checkboxes checked with an uppercase X', () => {
+    const input = `- [X] something
+- [ ] something else`;
+    const result = parseMarkdownTasks(input);
+    expect(result).toEqual([
+      { title: 'something', isCompleted: true },
+      { title: 'something else', isCompleted: false },
+    ]);
+  });
+
+  it('should parse checkboxes with an asterisk bullet', () => {
+    const input = `* [ ] something
+* [x] something else
+* [X] something what`;
+    const result = parseMarkdownTasks(input);
+    expect(result).toEqual([
+      { title: 'something', isCompleted: false },
+      { title: 'something else', isCompleted: true },
+      { title: 'something what', isCompleted: true },
+    ]);
+  });
+
   it('should handle checkbox format without spaces in brackets', () => {
     const input = `-[x] something
 -[x] something else

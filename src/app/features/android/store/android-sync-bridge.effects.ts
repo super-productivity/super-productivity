@@ -1,7 +1,16 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { combineLatest, from, Observable, of } from 'rxjs';
-import { distinctUntilChanged, filter, map, switchMap, tap } from 'rxjs/operators';
+import {
+  debounceTime,
+  distinctUntilChanged,
+  filter,
+  map,
+  switchMap,
+  take,
+  tap,
+} from 'rxjs/operators';
+import { Store } from '@ngrx/store';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
@@ -17,8 +26,21 @@ import type { WebdavPrivateCfg } from '@sp/sync-providers/webdav';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../../op-log/sync-providers/file-based/file-based-sync.types';
 import { isShallowEqual } from '../../../util/is-shallow-equal';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { CaptureKeyConfig, ReminderConfig } from '../../config/global-config.model';
+import {
+  CaptureKeyConfig,
+  GlobalConfigState,
+  ReminderConfig,
+} from '../../config/global-config.model';
+import { getStartOfNextDayDiffMs } from '../../../util/start-of-next-day.util';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
+import { selectAllTaskRepeatCfgs } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { selectArchivedProjectIds } from '../../project/store/project.selectors';
+import { getRepeatCfgSnapshotForNative } from './get-repeat-cfg-snapshot-for-native';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
+
+// Coalesces bursts (a sync applying many ops) into one bridge call.
+const REPEAT_CFG_SNAPSHOT_DEBOUNCE_MS = 2000;
 
 const isNonNull = <T>(value: T | null): value is T => value !== null;
 
@@ -125,6 +147,17 @@ export const getBackgroundReminderSettings = (
   useAlarmStyle: !!cfg?.useAlarmStyleReminders,
 });
 
+/** Settings plus the start-of-next-day offset the repeat-reminder port needs. */
+export const getBackgroundReminderBridgeSettings = (
+  cfg: Pick<GlobalConfigState, 'reminder' | 'misc'> | undefined,
+): BackgroundReminderSettings & { startOfNextDayDiffMs: number } => ({
+  ...getBackgroundReminderSettings(cfg?.reminder),
+  startOfNextDayDiffMs: getStartOfNextDayDiffMs(
+    cfg?.misc?.startOfNextDayTime,
+    cfg?.misc?.startOfNextDay,
+  ),
+});
+
 /**
  * The capture public key native code seals Android shares to, or '' when
  * shares must stay on the device: no SuperSync login, capture off, or a key
@@ -146,6 +179,8 @@ export class AndroidSyncBridgeEffects {
   private _providerManager = inject(SyncProviderManager);
   private _globalConfigService = inject(GlobalConfigService);
   private _dataInitStateService = inject(DataInitStateService);
+  private _store = inject(Store);
+  private _hydrationState = inject(HydrationStateService);
 
   // Created here, in the injection context: the operator injects on creation
   private readonly _skipWhileApplyingRemoteOps =
@@ -261,14 +296,57 @@ export class AndroidSyncBridgeEffects {
     createEffect(
       () =>
         this._globalConfigService.cfg$.pipe(
-          map((cfg) => getBackgroundReminderSettings(cfg?.reminder)),
+          map((cfg) => getBackgroundReminderBridgeSettings(cfg)),
           distinctUntilChanged(
             (a, b) =>
-              a.isDisabled === b.isDisabled && a.useAlarmStyle === b.useAlarmStyle,
+              a.isDisabled === b.isDisabled &&
+              a.useAlarmStyle === b.useAlarmStyle &&
+              a.startOfNextDayDiffMs === b.startOfNextDayDiffMs,
           ),
-          tap(({ isDisabled, useAlarmStyle }) => {
-            // Optional chaining: old APKs don't have this method yet.
+          tap(({ isDisabled, useAlarmStyle, startOfNextDayDiffMs }) => {
+            // Optional chaining: old APKs don't have these methods yet.
             androidInterface.setBackgroundReminderSettings?.(isDisabled, useAlarmStyle);
+            androidInterface.setStartOfNextDayDiffMs?.(startOfNextDayDiffMs);
+          }),
+        ),
+      { dispatch: false },
+    );
+
+  /**
+   * Mirrors every repeat config to the background worker, which otherwise only
+   * knows configs from ops it downloaded: one created before background sync
+   * was on would never alarm, and one removed by an op it cannot fold would
+   * keep alarming. Native drops it while no background-sync login is stored
+   * and clears its cache on a login change, so a login change re-sends it.
+   *
+   * Starts after this session's first successful sync: before it (opened
+   * offline, or closed mid-sync) the app's configs can be older than the
+   * worker's, and replacing them would undo remote edits in the background.
+   *
+   * SYNC-SAFE: dispatch:false and an idempotent native call. Waits out the
+   * sync window rather than dropping, so the settled state is what gets sent.
+   */
+  syncRepeatCfgsToNative$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        this._providerManager.syncStatus$.pipe(
+          filter((status) => status === 'IN_SYNC'),
+          take(1),
+          switchMap(() =>
+            combineLatest([
+              this._store.select(selectAllTaskRepeatCfgs),
+              this._store.select(selectArchivedProjectIds),
+              this._bridgeCommand$,
+            ]),
+          ),
+          // Also lets the credentials effect reach native first on a login.
+          debounceTime(REPEAT_CFG_SNAPSHOT_DEBOUNCE_MS),
+          waitForSyncWindow(this._hydrationState, 'AndroidRepeatCfgSnapshot'),
+          map(([cfgs, archivedIds]) => getRepeatCfgSnapshotForNative(cfgs, archivedIds)),
+          tap((json) => {
+            // Optional chaining: old APKs don't have this method yet.
+            androidInterface.setRepeatCfgSnapshot?.(json);
           }),
         ),
       { dispatch: false },

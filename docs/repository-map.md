@@ -45,6 +45,8 @@ Provider-switch scenarios need both servers and both required flags; follow the
 ## Read the constraints that match the change
 
 - **User-visible behavior:** [documentation guide](documentation-guide.md).
+  **Public docs work:** [public docs](public/README.md) and the
+  [diataxis skill](../.agents/skills/diataxis/SKILL.md).
   **Styles and shared components:** [styling guide](styling-guide.md) and
   [theme contract](theming-contract.md).
 - **Synced state, effects, reducers, replay:** [contributor sync model](sync-and-op-log/contributor-sync-model.md).

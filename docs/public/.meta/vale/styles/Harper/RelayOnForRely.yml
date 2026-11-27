@@ -1,0 +1,19 @@
+---
+# Generated from Harper's RelayOnForRely rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the frequent typo where `relay` is used in place of `rely` in the phrase `relay on`.
+extends: existence
+message: "Use `rely on` when you mean depend on something."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "rely on"
+tokens:
+  - "relay(?!\\s*\\n\\s*\\n)\\s+on(?!['\\x{2019}]s\\b)"

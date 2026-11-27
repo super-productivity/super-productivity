@@ -25,7 +25,9 @@
     // --transition-standard already embeds `all`; do not prefix a property
     transition: var(--transition-standard);
 
-    :host.isExpanded & {
+    // Direct children only: a collapsible nested in the panel must not
+    // inherit its parent's expanded state.
+    :host.isExpanded > .collapsible-header > & {
       transform: rotate(180deg);
     }
   }

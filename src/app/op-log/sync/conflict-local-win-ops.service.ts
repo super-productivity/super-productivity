@@ -33,6 +33,7 @@ import { type MultiEntityRemoteOpWinners } from './lww-compensation-selection.ut
 import { selectPlannerState } from '../../features/planner/store/planner.selectors';
 import { ConflictEntityStateService } from './conflict-entity-state.service';
 import { createLWWUpdateOp, mergeAndIncrementClocks } from './lww-update-op.util';
+import { staleLocalWinRowPatches } from './stale-local-win-row.util';
 import {
   LWWResolution,
   MergedResolution,
@@ -202,6 +203,39 @@ export class ConflictLocalWinOpsService {
           latestProjectMoveEntityIds(entityId, localOps),
           true,
         ),
+    });
+  }
+
+  /**
+   * Follow-up patches for local-win rows that same-batch ops left stale
+   * (`staleLocalWinRowPatches`), built from post-apply state (no apply).
+   */
+  async _reemitStaleLocalWinRows(
+    rows: Operation[],
+    appliedOps: Operation[],
+  ): Promise<Operation[]> {
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) return [];
+    const stale = await staleLocalWinRowPatches(rows, appliedOps, (type, id) =>
+      this.entityState.getCurrentEntityState(type, id),
+    );
+    return stale.map(({ row, touchingOps, fields }) => {
+      return createLWWUpdateOp(
+        row.entityType,
+        row.entityId!,
+        fields,
+        clientId,
+        mergeAndIncrementClocks(
+          [row, ...touchingOps].map((op) => op.vectorClock),
+          clientId,
+        ),
+        row.timestamp,
+        'patch',
+        latestProjectMoveEntityIds(row.entityId!, touchingOps),
+        // Clears are safe from live state here: only fields that differ from
+        // the row are present, so an undefined key is a real remote clear.
+        true,
+      );
     });
   }
 

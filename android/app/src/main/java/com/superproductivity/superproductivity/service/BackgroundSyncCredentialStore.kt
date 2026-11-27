@@ -127,11 +127,17 @@ object BackgroundSyncCredentialStore {
             .putString(KEY_BASE_URL, baseUrl)
             .putString(KEY_ACCESS_TOKEN, accessToken)
         FILE_KEYS.forEach { editor.remove(it) }
-        // Reset seq when access token changes (account switch on same server)
-        if (previousToken != null && previousToken != accessToken) {
+        // After logout a saved URL cursor has no owner. Start fresh on any new login.
+        val loginChanged = previousToken != accessToken || prefs.getString(KEY_BASE_URL, null) != baseUrl
+        if (loginChanged) {
             editor.putLong(seqKey(baseUrl), 0L)
         }
         editor.commit()
+        // Account switch: the cached repeat schedule belongs to the old token.
+        // A first SuperSync save (no previous token) keeps a file snapshot so
+        // the next op page can update it. Clear after the commit so a failed
+        // write does not drop the cache while the old token is still current.
+        if (previousToken != null && loginChanged) RepeatReminderCache.clear(context)
     }
 
     @Synchronized
@@ -151,6 +157,7 @@ object BackgroundSyncCredentialStore {
             .remove(KEY_ENCRYPTION_PASSWORD)
             .remove(KEY_DERIVED_KEY_CACHE)
             .commit()
+        if (!hasAnyCredentials(context)) RepeatReminderCache.clear(context)
     }
 
     /**
@@ -169,10 +176,12 @@ object BackgroundSyncCredentialStore {
             .putString(KEY_FILE_URL, credentials.fileUrl)
             .putString(KEY_FILE_AUTH, credentials.authorization)
             .putBoolean(KEY_FILE_ENCRYPTION_EXPECTED, credentials.isEncryptionExpected)
-        if (prefs.getString(KEY_FILE_URL, null) != credentials.fileUrl) {
+        val urlChanged = prefs.getString(KEY_FILE_URL, null) != credentials.fileUrl
+        if (urlChanged) {
             editor.remove(KEY_FILE_REMINDER_SLOTS)
         }
         editor.commit()
+        if (urlChanged) RepeatReminderCache.clear(context)
     }
 
     @Synchronized
@@ -190,6 +199,7 @@ object BackgroundSyncCredentialStore {
         val editor = getPrefs(context).edit()
         FILE_KEYS.forEach { editor.remove(it) }
         editor.commit()
+        if (!hasAnyCredentials(context)) RepeatReminderCache.clear(context)
     }
 
     /** True when either provider kind is configured, i.e. the worker has work to do. */

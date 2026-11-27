@@ -1,4 +1,4 @@
-import fetch, { RequestInit, Response } from 'node-fetch';
+import { HttpRequestInit, HttpResponse, nodeHttpRequest } from './node-http-request';
 import { createProxyAwareAgent } from './proxy-agent';
 import {
   JiraElectronRequest,
@@ -15,7 +15,7 @@ const MAX_ERROR_MESSAGE_LENGTH = 2_000;
 const MAX_REDIRECTS = 5;
 const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
 
-type FetchImplementation = (url: string, init: RequestInit) => Promise<Response>;
+type FetchImplementation = (url: string, init: HttpRequestInit) => Promise<HttpResponse>;
 type AgentFactory = typeof createProxyAwareAgent;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -115,7 +115,7 @@ const errorMessage = (error: unknown): string => {
   return message.slice(0, MAX_ERROR_MESSAGE_LENGTH) || 'Jira request failed';
 };
 
-const discardResponseBody = (response: Response): void => {
+const discardResponseBody = (response: HttpResponse): void => {
   const body = response.body as unknown;
   if (isRecord(body) && typeof body.destroy === 'function') {
     body.destroy.call(body);
@@ -124,7 +124,7 @@ const discardResponseBody = (response: Response): void => {
 
 export const executeJiraRequest = async (
   rawRequest: unknown,
-  fetchImplementation: FetchImplementation = fetch,
+  fetchImplementation: FetchImplementation = nodeHttpRequest,
   agentFactory: AgentFactory = createProxyAwareAgent,
 ): Promise<JiraElectronResponse> => {
   const requestId = getRequestId(rawRequest);
@@ -182,7 +182,7 @@ const fetchWithSafeRedirects = async (
   request: JiraElectronRequest,
   fetchImplementation: FetchImplementation,
   agentFactory: AgentFactory,
-): Promise<Response> => {
+): Promise<HttpResponse> => {
   let currentUrl = request.url;
   let method = request.requestInit.method;
   let body = request.requestInit.body;

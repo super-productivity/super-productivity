@@ -5,7 +5,14 @@ import {
   TestBed,
   tick,
 } from '@angular/core/testing';
-import { Component, ElementRef, inject, NO_ERRORS_SCHEMA, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  NO_ERRORS_SCHEMA,
+  signal,
+  WritableSignal,
+} from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -16,6 +23,7 @@ import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { WorkViewComponent } from './work-view.component';
 import type { TaskAddEvent } from '../tasks/add-task-bar/add-task-bar.component';
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
@@ -98,6 +106,7 @@ const activeContext = { id: 'ctx' };
 const configureWorkViewTestBed = (
   overrides: {
     taskService?: ServiceStub;
+    taskArchiveOrchestrator?: ServiceStub;
     customizerService?: ServiceStub;
     sectionService?: ServiceStub;
     projectService?: ServiceStub;
@@ -149,8 +158,14 @@ const configureWorkViewTestBed = (
         useValue: {
           selectedTaskId: signal<string | null>(null),
           setSelectedId: () => {},
-          moveToArchive: () => Promise.resolve(),
           ...overrides.taskService,
+        },
+      },
+      {
+        provide: TaskArchiveOrchestratorService,
+        useValue: {
+          moveToArchive: () => Promise.resolve(),
+          ...overrides.taskArchiveOrchestrator,
         },
       },
       { provide: TakeABreakService, useValue: { resetTimer: () => {} } },
@@ -420,7 +435,7 @@ describe('WorkViewComponent', () => {
       const earlier = buildTask('done-earlier');
       configureWorkViewTestBed({
         isTodayList: true,
-        taskService: { moveToArchive },
+        taskArchiveOrchestrator: { moveToArchive },
         doneTasksToArchive: [listed, earlier],
       });
       store = TestBed.inject(MockStore);
@@ -441,7 +456,7 @@ describe('WorkViewComponent', () => {
     it('offers History, where the archived tasks can be found again', async () => {
       const done = buildTask('done');
       configureWorkViewTestBed({
-        taskService: { moveToArchive: () => Promise.resolve() },
+        taskArchiveOrchestrator: { moveToArchive: () => Promise.resolve() },
         doneTasksToArchive: [done],
       });
       store = TestBed.inject(MockStore);
@@ -758,6 +773,7 @@ describe('WorkViewComponent', () => {
       doneTasks?: TaskWithSubTasks[];
       overdueTasks?: TaskWithSubTasks[];
       laterTodayTasks?: TaskWithSubTasks[];
+      panelGroups?: { key: string; tasks: TaskWithSubTasks[] }[] | null;
       undone?: TaskWithSubTasks[];
       grouped?: Record<string, TaskWithSubTasks[]>;
       /** Source for the customized list, for specs where it arrives late. */
@@ -768,6 +784,7 @@ describe('WorkViewComponent', () => {
       sections$?: Observable<readonly Section[]>;
       /** Defaults to "grouping is the only customization", as in the app. */
       isCustomized?: boolean;
+      toggleUpdatesCollapsedGroupIds?: boolean;
       isTodayList?: boolean;
       embedPluginId?: string | null;
       /** An active customizer filter, e.g. `'priority'`. */
@@ -775,13 +792,20 @@ describe('WorkViewComponent', () => {
     }): {
       cmp: WorkViewComponent;
       toggleGroupExpansion: jasmine.Spy;
+      collapsedGroupIds: WritableSignal<string[]>;
       updateSection: jasmine.Spy;
       setFilter: jasmine.Spy;
     } => {
       const toggleGroupExpansion = jasmine.createSpy('toggleGroupExpansion');
+      const collapsedGroupIds = signal(opts.collapsedGroupIds ?? []);
       const setFilter = jasmine.createSpy('setFilter');
       const updateSection = jasmine.createSpy('updateSection');
       const undone = opts.undone ?? [];
+      if (opts.toggleUpdatesCollapsedGroupIds) {
+        toggleGroupExpansion.and.callFake((key: string) => {
+          collapsedGroupIds.set(collapsedGroupIds().filter((id) => id !== key));
+        });
+      }
 
       configureWorkViewTestBed({
         customizerService: {
@@ -795,7 +819,8 @@ describe('WorkViewComponent', () => {
                 Object.entries(opts.grouped).map(([key, tasks]) => ({ key, tasks })),
             }),
           isCustomized: signal(opts.isCustomized ?? !!(opts.grouped || opts.customized$)),
-          collapsedGroupIds: signal(opts.collapsedGroupIds ?? []),
+          collapsedGroupIds,
+          groupTasksBySelectedGroup: () => opts.panelGroups ?? null,
           selectedFilter: signal({ type: opts.filterType ?? null }),
           toggleGroupExpansion,
           setFilter,
@@ -842,6 +867,7 @@ describe('WorkViewComponent', () => {
       return {
         cmp: fixture.componentInstance,
         toggleGroupExpansion,
+        collapsedGroupIds,
         updateSection,
         setFilter,
       };
@@ -861,6 +887,27 @@ describe('WorkViewComponent', () => {
       });
 
       expect(toggleGroupExpansion).toHaveBeenCalledOnceWith('groupB');
+    });
+
+    it('does not toggle a shared group twice for duplicate expansion events', () => {
+      const { cmp, toggleGroupExpansion, collapsedGroupIds } = setup({
+        collapsedGroupIds: [],
+      });
+      toggleGroupExpansion.and.callFake((key: string) => {
+        const current = collapsedGroupIds();
+        collapsedGroupIds.set(
+          current.includes(key) ? current.filter((id) => id !== key) : [...current, key],
+        );
+      });
+
+      cmp.onGroupExpandedChange('Project A', false);
+      cmp.onGroupExpandedChange('Project A', false);
+      expect(collapsedGroupIds()).toEqual(['Project A']);
+      expect(toggleGroupExpansion).toHaveBeenCalledOnceWith('Project A');
+
+      cmp.onGroupExpandedChange('Project A', true);
+      expect(collapsedGroupIds()).toEqual([]);
+      expect(toggleGroupExpansion).toHaveBeenCalledTimes(2);
     });
 
     it('expands the collapsed group when the focused task is a subtask inside it', () => {
@@ -969,6 +1016,23 @@ describe('WorkViewComponent', () => {
       expect(cmp.isOverdueHidden()).toBe(false);
     });
 
+    it('expands the collapsed Overdue group holding the focused task', () => {
+      const { cmp, toggleGroupExpansion } = setup({
+        focusItem: 'overdue-1',
+        overdueTasks: [buildTask('overdue-1')],
+        panelGroups: [{ key: 'Project A', tasks: [buildTask('overdue-1')] }],
+        collapsedGroupIds: ['Project A'],
+        toggleUpdatesCollapsedGroupIds: true,
+        isTodayList: true,
+      });
+      cmp.isOverdueHidden.set(true);
+
+      retriggerFocusAttempt(cmp);
+
+      expect(cmp.isOverdueHidden()).toBe(false);
+      expect(toggleGroupExpansion).toHaveBeenCalledOnceWith('Project A');
+    });
+
     it('expands the collapsed Later Today panel for a later-today task', () => {
       const { cmp } = setup({
         focusItem: 'later-1',
@@ -980,6 +1044,23 @@ describe('WorkViewComponent', () => {
       retriggerFocusAttempt(cmp);
 
       expect(cmp.isLaterTodayHidden()).toBe(false);
+    });
+
+    it('expands the collapsed Later Today group holding the focused task', () => {
+      const { cmp, toggleGroupExpansion } = setup({
+        focusItem: 'later-1',
+        laterTodayTasks: [buildTask('later-1')],
+        panelGroups: [{ key: 'Project A', tasks: [buildTask('later-1')] }],
+        collapsedGroupIds: ['Project A'],
+        toggleUpdatesCollapsedGroupIds: true,
+        isTodayList: true,
+      });
+      cmp.isLaterTodayHidden.set(true);
+
+      retriggerFocusAttempt(cmp);
+
+      expect(cmp.isLaterTodayHidden()).toBe(false);
+      expect(toggleGroupExpansion).toHaveBeenCalledOnceWith('Project A');
     });
 
     it('leaves the Today-only panels alone outside the Today list', () => {

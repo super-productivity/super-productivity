@@ -1,0 +1,268 @@
+import { BatchOperation, PluginAPI, Task } from '@super-productivity/plugin-api';
+import {
+  IMPORTANT_TAG_TITLE,
+  ImportPlan,
+  ProjectImportPlan,
+  TaskFollowUp,
+} from './plan-import';
+
+/** SP's virtual Today tag — must never land in task.tagIds (sync rule #5). */
+const TODAY_TAG_ID = 'TODAY';
+
+/** SP's built-in Eisenhower "important" tag (host `IMPORTANT_TAG.id`). */
+const IMPORTANT_TAG_ID = 'EM_IMPORTANT';
+
+/** Report follow-up progress in steps of this many tasks. */
+const DETAIL_PROGRESS_STEP = 25;
+
+export interface ImportProgress {
+  projectTitle: string;
+  projectIndex: number;
+  totalProjects: number;
+  phase: 'project' | 'tasks' | 'details';
+  /** follow-up progress within the 'details' phase */
+  detailIndex?: number;
+  detailTotal?: number;
+}
+
+export interface ImportedProjectResult {
+  title: string;
+  projectId: string;
+  /** planned counts, for an honest landed-vs-planned comparison */
+  plannedTaskCount: number;
+  plannedSubTaskCount: number;
+  /** counted from re-read state — the batch API is fire-and-forget */
+  landedTaskCount: number;
+  landedSubTaskCount: number;
+}
+
+export interface ImportResult {
+  imported: ImportedProjectResult[];
+  createdTagTitles: string[];
+  /** set when the import aborted mid-way; that project exists PARTIALLY —
+   * the user should delete it before re-running */
+  failedProjectTitle: string | null;
+  errorMessage: string | null;
+  /** the post-import recount failed; landed counts are unknown, not zero */
+  isCountUnverified: boolean;
+  /** repeats that could not be set up; their rule went into the notes */
+  failedRepeatCount: number;
+}
+
+type ImportApi = Pick<
+  PluginAPI,
+  | 'getAllTags'
+  | 'addTag'
+  | 'addProject'
+  | 'batchUpdateForProject'
+  | 'updateTask'
+  | 'getTasks'
+  | 'addTaskRepeatCfg'
+>;
+
+const ensureTags = async (
+  api: ImportApi,
+  tagTitles: string[],
+  createdTagTitles: string[],
+): Promise<Map<string, string>> => {
+  const tagIdByTitle = new Map<string, string>();
+  const existing = await api.getAllTags();
+  for (const tag of existing) {
+    // never map a label onto the virtual Today tag — a To Do category named
+    // "Today" gets a real tag of its own instead
+    if (tag.id === TODAY_TAG_ID) {
+      continue;
+    }
+    tagIdByTitle.set(tag.title.toLowerCase(), tag.id);
+  }
+  // the built-in tag by id first: a renamed one is still the Eisenhower
+  // quadrant; only without it does the title match above apply
+  if (existing.some((tag) => tag.id === IMPORTANT_TAG_ID)) {
+    tagIdByTitle.set(IMPORTANT_TAG_TITLE, IMPORTANT_TAG_ID);
+  }
+  for (const title of tagTitles) {
+    const key = title.toLowerCase();
+    if (!tagIdByTitle.has(key)) {
+      tagIdByTitle.set(key, await api.addTag({ title }));
+      createdTagTitles.push(title);
+    }
+  }
+  return tagIdByTitle;
+};
+
+/**
+ * The bridge builds its temp-ID map PER CALL — a chunk sent in a later call
+ * cannot resolve a `temp-` parent created by an earlier call (the reducer
+ * would store the dangling ref and the consistency pass would orphan-DELETE
+ * the child). Real task IDs are supported in `parentId`, so rewrite every
+ * already-known temp parent to its real ID before sending.
+ */
+const resolveKnownParents = (
+  chunk: BatchOperation[],
+  idByTempId: Record<string, string>,
+): BatchOperation[] =>
+  chunk.map((op) =>
+    op.type === 'create' && op.data.parentId && idByTempId[op.data.parentId]
+      ? { ...op, data: { ...op.data, parentId: idByTempId[op.data.parentId] } }
+      : op,
+  );
+
+/** Sets up the repeat, or puts the rule back into the notes when it cannot. */
+const setUpRepeat = async (
+  api: ImportApi,
+  taskId: string,
+  repeat: NonNullable<TaskFollowUp['repeat']>,
+): Promise<boolean> => {
+  try {
+    await api.addTaskRepeatCfg(taskId, repeat.schedule);
+    return true;
+  } catch (e) {
+    // the message names the reason, never task content
+    console.warn('ms-todo-import: repeat not set up', e instanceof Error ? e.message : e);
+  }
+  await api.updateTask(taskId, { notes: repeat.notesWithRule });
+  return false;
+};
+
+const importProject = async (
+  api: ImportApi,
+  projectPlan: ProjectImportPlan,
+  tagIdByTitle: Map<string, string>,
+  onProgress: (
+    detail: Partial<ImportProgress> & { phase: ImportProgress['phase'] },
+  ) => void,
+): Promise<{ projectId: string; failedRepeatCount: number }> => {
+  onProgress({ phase: 'project' });
+  const projectId = await api.addProject({ title: projectPlan.title });
+
+  onProgress({ phase: 'tasks' });
+  const idByTempId: Record<string, string> = {};
+  for (const chunk of projectPlan.batchChunks) {
+    // sequential awaits: one dispatched action per tick (sync rule #6)
+    const result = await api.batchUpdateForProject({
+      projectId,
+      operations: resolveKnownParents(chunk, idByTempId),
+    });
+    Object.assign(idByTempId, result.createdTaskIds);
+  }
+
+  const followUps = projectPlan.followUps;
+  let failedRepeatCount = 0;
+  for (let i = 0; i < followUps.length; i++) {
+    if (i % DETAIL_PROGRESS_STEP === 0) {
+      onProgress({ phase: 'details', detailIndex: i, detailTotal: followUps.length });
+    }
+    const followUp = followUps[i];
+    const taskId = idByTempId[followUp.tempId];
+    if (!taskId) {
+      continue;
+    }
+    const updates: Partial<Task> = {};
+    if (followUp.dueDay) {
+      updates.dueDay = followUp.dueDay;
+    }
+    if (followUp.tagTitles?.length) {
+      const tagIds = followUp.tagTitles
+        .map((t) => tagIdByTitle.get(t.toLowerCase()))
+        .filter((id): id is string => !!id);
+      if (tagIds.length) {
+        updates.tagIds = tagIds;
+      }
+    }
+    if (Object.keys(updates).length) {
+      await api.updateTask(taskId, updates);
+    }
+    // sequentially: two concurrent calls for one task could both create one
+    if (followUp.repeat && !(await setUpRepeat(api, taskId, followUp.repeat))) {
+      failedRepeatCount++;
+    }
+  }
+  return { projectId, failedRepeatCount };
+};
+
+const countLanded = async (api: ImportApi, result: ImportResult): Promise<void> => {
+  const allTasks = await api.getTasks();
+  const rootsByProject = new Map<string, number>();
+  const subsByProject = new Map<string, number>();
+  for (const task of allTasks) {
+    if (!task.projectId) {
+      continue;
+    }
+    const target = task.parentId ? subsByProject : rootsByProject;
+    target.set(task.projectId, (target.get(task.projectId) || 0) + 1);
+  }
+  for (const imported of result.imported) {
+    imported.landedTaskCount = rootsByProject.get(imported.projectId) || 0;
+    imported.landedSubTaskCount = subsByProject.get(imported.projectId) || 0;
+  }
+};
+
+/**
+ * Executes the plan project-by-project so an abort leaves at most one partial
+ * project (named in the result), and counts what actually landed by re-reading
+ * state (`batchUpdateForProject` always reports success and silently skips
+ * invalid operations).
+ */
+export const runImport = async (
+  api: ImportApi,
+  plan: ImportPlan,
+  onProgress: (progress: ImportProgress) => void,
+): Promise<ImportResult> => {
+  const result: ImportResult = {
+    imported: [],
+    createdTagTitles: [],
+    failedProjectTitle: null,
+    errorMessage: null,
+    isCountUnverified: false,
+    failedRepeatCount: 0,
+  };
+
+  try {
+    const tagIdByTitle = await ensureTags(api, plan.tagTitles, result.createdTagTitles);
+
+    for (let i = 0; i < plan.projects.length; i++) {
+      const projectPlan = plan.projects[i];
+      const report: Parameters<typeof importProject>[3] = (detail) =>
+        onProgress({
+          projectTitle: projectPlan.title,
+          projectIndex: i,
+          totalProjects: plan.projects.length,
+          ...detail,
+        });
+      try {
+        const { projectId, failedRepeatCount } = await importProject(
+          api,
+          projectPlan,
+          tagIdByTitle,
+          report,
+        );
+        result.failedRepeatCount += failedRepeatCount;
+        result.imported.push({
+          title: projectPlan.title,
+          projectId,
+          plannedTaskCount: projectPlan.taskCount,
+          plannedSubTaskCount: projectPlan.subTaskCount,
+          landedTaskCount: 0,
+          landedSubTaskCount: 0,
+        });
+      } catch (e) {
+        result.failedProjectTitle = projectPlan.title;
+        result.errorMessage = e instanceof Error ? e.message : String(e);
+        break;
+      }
+    }
+  } catch (e) {
+    result.errorMessage = e instanceof Error ? e.message : String(e);
+  }
+
+  if (result.imported.length) {
+    // a failed recount must not mask a successful import (or the real error)
+    try {
+      await countLanded(api, result);
+    } catch {
+      result.isCountUnverified = true;
+    }
+  }
+
+  return result;
+};

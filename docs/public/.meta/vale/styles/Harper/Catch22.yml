@@ -1,0 +1,18 @@
+---
+# Generated from Harper's Catch22 linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+extends: substitution
+message: "This idiom uses 'catch' instead of 'cache' or 'cash'."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "cache-22": "catch-22"

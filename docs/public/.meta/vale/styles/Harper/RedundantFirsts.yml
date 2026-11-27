@@ -1,0 +1,25 @@
+---
+# Hand-written from Harper's RedundantFirsts: verbs that already mean "first".
+#
+# The generated rule keyed its swaps on the punctuation around the examples, so
+# it caught those and nothing else.
+#
+# Harper has two branches. This is the first: `first` before one of six verbs
+# that already carry the sense -- "first originated", "first discovered". The
+# The second is the same verbs followed by "for the first time", with an
+# optional noun between -- "I've just discovered Harper for the first time".
+#
+# Reported without a fix. Harper's own correction removes a word, and a Vale
+# `existence` rule replaces its match rather than deleting it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "This verb already means the action happened first."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - '\bfirst\b(?=\s+(?:coined|discovered|introduced|invented|originated|released)\b)'
+  - '(?<=\b(?:coined|discovered|introduced|invented|originated|released)\b(?:\s+\w+)?\s)for\s+the\s+first\s+time\b'

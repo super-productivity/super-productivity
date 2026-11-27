@@ -114,6 +114,13 @@ const detachOccurrence = async (
  * day shows it ran (a skipped day leaves the cursor of its own series alone).
  * setSystemTime (not setFixedTime) keeps Date.now() advancing for the
  * debounced day-change chain (#6230).
+ *
+ * Both series are Daily, so skipOverdue is on and the reaper
+ * (TaskRepeatCleanupEffects, 3s debounce after the day change) deletes the
+ * control series' empty overdue instance. Wait for that too: its deleteTasks op
+ * would otherwise land just after the next syncAndWait() uploaded, and the
+ * pending op keeps the sync icon from confirming. One reaper pass covers every
+ * series, so the control series stands in for the detached one.
  */
 const crossDay = async (
   client: SimulatedE2EClient,
@@ -129,6 +136,19 @@ const crossDay = async (
       { timeout: 60000 },
     )
     .toBe(isoTime.slice(0, 10));
+  await expect
+    .poll(
+      async () =>
+        (await getRepeatSeriesView(client.page, controlTitle)).tasks.filter(
+          (task) =>
+            !!task.repeatCfgId &&
+            !task.isDone &&
+            !!task.dueDay &&
+            task.dueDay < isoTime.slice(0, 10),
+        ).length,
+      { timeout: 30000, message: `overdue control instance reaped on ${isoTime}` },
+    )
+    .toBe(0);
 };
 
 const runScenario = async (

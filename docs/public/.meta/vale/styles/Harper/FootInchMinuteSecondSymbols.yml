@@ -1,0 +1,33 @@
+---
+# Hand-written from Harper's FootInchMinuteSecondSymbols: feet, inches, arc
+# minutes and arc seconds take the prime and double prime, not the typewriter
+# quote or a curly one.
+#
+# The generated rule was whole coordinates copied out of its tests --
+# `27°10′30"n & 78° 02’ 32”` as a literal swap key, and half a dozen more
+# like it. None of them appear anywhere else, so the rule matched nothing. 13
+# missed findings.
+#
+# The false-positive risk here is the reason for the narrow contexts. An
+# apostrophe is one of the most common characters in prose -- possessives,
+# contractions, quoted speech, `the 90's` -- so a bare quote-after-digit rule
+# would fire constantly. Each pattern below therefore requires the surrounding
+# text to already look like a measurement: a degree sign, a prime that is
+# already correct, or a digit on both sides.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Did you mean %s?"
+level: warning
+ignorecase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=°\s{0,2}\d{1,3})[''’‘]': "′"
+  '(?<=′\d{1,3})[\"”“]': "″"
+  '(?<=\d)[\"”“](?=\s*[NSEW]\b)': "″"
+  '(?<=\b\d{1,2})[''’‘](?=\s?\d{1,2}\s?[\"”“])': "′"
+  '(?<=\b\d{1,2}[''’‘′]\s{0,2}\d{1,2})[\"”“]': "″"

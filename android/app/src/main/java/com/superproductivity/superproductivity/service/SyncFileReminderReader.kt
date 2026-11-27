@@ -3,6 +3,8 @@ package com.superproductivity.superproductivity.service
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonToken
 import com.superproductivity.superproductivity.crypto.OpPayloadDecryptor
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.Reader
 import java.io.StringReader
@@ -24,6 +26,14 @@ sealed interface SyncFileReadResult {
          * depends on app config, so the worker only ever cancels it.
          */
         val dueDayTaskIds: Set<String> = emptySet(),
+        /** Projects with isArchived, so repeat configs in them are not armed. */
+        val archivedProjectIds: Set<String> = emptySet(),
+        /**
+         * Repeat configs in the file, or null when the file has no
+         * `taskRepeatCfg` key. Null leaves the worker's repeat alarms alone;
+         * an empty list means the user has none.
+         */
+        val repeatCfgs: List<RepeatCfg>? = null,
     ) : SyncFileReadResult
 
     /** The file could not be trusted or understood. [reason] never holds user content. */
@@ -60,6 +70,7 @@ object SyncFileReminderReader {
         var version: Int? = null,
         var tasks: List<TaskFields>? = null,
         val archivedProjectIds: MutableSet<String> = mutableSetOf(),
+        var repeatCfgs: List<RepeatCfg>? = null,
     )
 
     fun read(
@@ -94,6 +105,8 @@ object SyncFileReminderReader {
         return SyncFileReadResult.Reminders(
             toReminders(openTasks),
             openTasks.filter { it.hasDueDay && it.remindAt == null }.mapTo(HashSet()) { it.id },
+            state.archivedProjectIds.toSet(),
+            state.repeatCfgs,
         )
     }
 
@@ -143,6 +156,9 @@ object SyncFileReminderReader {
                 "project" -> readEntities(reader, ::parseArchivedProjectId)
                     ?.filterNotNull()
                     ?.let { out.archivedProjectIds.addAll(it) }
+                "taskRepeatCfg" -> {
+                    out.repeatCfgs = readEntities(reader, ::parseRepeatCfg)?.filterNotNull() ?: emptyList()
+                }
                 else -> reader.skipValue()
             }
         }
@@ -199,6 +215,48 @@ object SyncFileReminderReader {
         reader.endObject()
         if (id.isEmpty()) return null
         return TaskFields(id, title, remindAt, deadlineRemindAt, isDone, projectId, hasDueDay)
+    }
+
+    private val repeatCfgKeys = setOf(
+        "id", "title", "projectId", "tagIds", "lastTaskCreation", "lastTaskCreationDay",
+        "startTime", "remindAt", "isPaused", "repeatCycle", "startDate", "repeatUntilDay",
+        "repeatEvery", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday",
+        "saturday", "monthlyWeekOfMonth", "monthlyWeekday", "monthlyLastDay",
+        "repeatFromCompletionDate", "waitForCompletion", "deletedInstanceDates",
+    )
+
+    /** Schedule fields only. Notes and subtask templates are skipped. */
+    private fun parseRepeatCfg(reader: JsonReader): RepeatCfg? {
+        val obj = JSONObject()
+        reader.beginObject()
+        while (reader.hasNext()) {
+            val name = reader.nextName()
+            if (name !in repeatCfgKeys) {
+                reader.skipValue()
+                continue
+            }
+            when (reader.peek()) {
+                JsonToken.STRING -> obj.put(name, reader.nextString())
+                JsonToken.BOOLEAN -> obj.put(name, reader.nextBoolean())
+                JsonToken.NUMBER -> obj.put(name, reader.nextDouble())
+                JsonToken.NULL -> {
+                    reader.nextNull()
+                    obj.put(name, JSONObject.NULL)
+                }
+                JsonToken.BEGIN_ARRAY -> {
+                    val arr = JSONArray()
+                    reader.beginArray()
+                    while (reader.hasNext()) {
+                        if (reader.peek() == JsonToken.STRING) arr.put(reader.nextString()) else reader.skipValue()
+                    }
+                    reader.endArray()
+                    obj.put(name, arr)
+                }
+                else -> reader.skipValue()
+            }
+        }
+        reader.endObject()
+        return RepeatCfg.fromJson(obj, complete = true)
     }
 
     private fun parseArchivedProjectId(reader: JsonReader): String? {

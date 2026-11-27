@@ -1,0 +1,22 @@
+---
+# Generated from Harper's ApartFrom linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags the misspelling `apart form` and suggests `apart from`.
+extends: sequence
+message: "Use `from` to spell `apart from`."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "from"
+tokens:
+  - pattern: 'apart'
+  - pattern: 'form'
+    target: true

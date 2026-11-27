@@ -34,6 +34,7 @@ import {
   findUnknownArg,
   optionalString,
   optionalId,
+  optionalIdList,
   optionalBoolean,
   isRecord,
   toTaskSummary,
@@ -304,6 +305,8 @@ const CAPTURE_MESSAGES: Record<
     'Super Productivity could not save recent changes. Nothing was added; ask the user to check the app.',
   OUTCOME_UNKNOWN:
     'The task may or may not have been saved. Ask the user to check the Inbox before retrying.',
+  TAG_NOT_FOUND:
+    'A tag in tagIds does not exist. Nothing was added; call list_tags for the current ids.',
 };
 
 const createTask: ToolSpec = {
@@ -318,8 +321,9 @@ const createTask: ToolSpec = {
     }),
     description:
       "Adds a new task to the user's Inbox with the given title and optional notes, exactly as written. " +
-      'It gets the same defaults as a task the user adds to the Inbox by hand; no project or tag ' +
-      'comes from the request, and #tags, +projects and dates in the title or notes are not parsed. ' +
+      'It gets the same defaults as a task the user adds to the Inbox by hand; no project comes from ' +
+      'the request, and #tags, +projects and dates in the title or notes are not parsed. ' +
+      'Pass tagIds (ids from list_tags) to add existing tags. ' +
       'Pass dueDate (and optionally dueTime) to schedule the task, and repeat to make it recurring. ' +
       'Pass deadlineDate (and optionally deadlineTime) when the work is due, and estimateMinutes ' +
       'for how long it takes. Retrying after an error can create a duplicate.',
@@ -328,6 +332,14 @@ const createTask: ToolSpec = {
       properties: {
         title: { type: 'string', minLength: 1, maxLength: MAX_TITLE_CHARS },
         notes: { type: 'string', maxLength: MAX_NOTES_CHARS },
+        tagIds: {
+          type: 'array',
+          description:
+            'Optional ids of existing tags, from list_tags. NEVER use the TODAY tag',
+          items: { type: 'string' },
+          maxItems: MAX_NAMED_ENTITIES,
+          uniqueItems: true,
+        },
         dueDate: {
           type: 'string',
           description:
@@ -400,6 +412,7 @@ const createTask: ToolSpec = {
     const unknownArg = findUnknownArg(args, [
       'title',
       'notes',
+      'tagIds',
       'dueDate',
       'dueTime',
       'repeat',
@@ -420,6 +433,16 @@ const createTask: ToolSpec = {
     if (notes instanceof Error) {
       return invalid(notes.message);
     }
+    const tagIds = optionalIdList(args, 'tagIds', MAX_NAMED_ENTITIES);
+    if (tagIds instanceof Error) {
+      return invalid(tagIds.message);
+    }
+    // TODAY is virtual: membership comes from the due day, never from tagIds.
+    if (tagIds?.includes('TODAY')) {
+      return invalid(
+        'tagIds cannot contain TODAY; pass dueDate to plan the task for a day',
+      );
+    }
     const schedule = validateCaptureSchedule(args);
     if (typeof schedule === 'string') {
       return invalid(schedule);
@@ -430,7 +453,12 @@ const createTask: ToolSpec = {
       reply = await forward({
         method: 'POST',
         path: ASSISTANT_CAPTURE_PATH,
-        body: { title, ...(notes ? { notes } : {}), ...schedule },
+        body: {
+          title,
+          ...(notes ? { notes } : {}),
+          ...(tagIds?.length ? { tagIds } : {}),
+          ...schedule,
+        },
         source: 'mcp',
         timeoutMs: ASSISTANT_CAPTURE_TIMEOUT_MS,
       });

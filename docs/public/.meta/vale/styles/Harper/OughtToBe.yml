@@ -1,0 +1,35 @@
+---
+# Hand-written from Harper's OughtToBe: `out to be` for `ought to be`.
+#
+# The word before the pronoun must not be a verb. That guard is the whole rule:
+# without it, every phrasal verb that takes `out` as its particle is flagged --
+# "they make it out to be", "I figured it out to be a memory issue", "try it
+# out to be sure". A first draft listed the verbs to exclude and found seven
+# more in the corpus that it had not thought of; the list is open-ended and the
+# tag is not.
+#
+# Harper's other branch puts the pronoun at the start of a sentence. It is not
+# ported: a Vale `sequence` has no anchor, and this one needs a real token in
+# front of the pronoun to do its work. That costs "you out to be able to see."
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean `ought to be`?"
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "ought"
+tokens:
+  - upos: VERB
+    negate: true
+  - pattern: 'i|you|we|they|he|she|it|that|this'
+  - pattern: 'out'
+    target: true
+  - pattern: 'to'
+  - pattern: 'be'

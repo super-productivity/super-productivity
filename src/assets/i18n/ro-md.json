@@ -1130,6 +1130,7 @@
       "MONTH": "Lună",
       "MORE_EVENTS": {
         "ONE": "încă {{count}} eveniment",
+        "FEW": "încă {{count}} evenimente",
         "OTHER": "încă {{count}} de evenimente"
       },
       "NEXT_DAY": "Ziua următoare",

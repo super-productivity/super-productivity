@@ -16,6 +16,7 @@ import { selectLaterTodayStructure } from '../../tasks/store/task.selectors';
 import { Section } from '../../section/section.model';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { WorkContextType } from '../../work-context/work-context.model';
+import { INBOX_PROJECT } from '../../project/project.const';
 
 describe('getWidgetValidUntil', () => {
   const HOUR = 60 * 60 * 1000;
@@ -79,11 +80,18 @@ describe('selectAndroidWidgetData', () => {
       ...partial,
     }) as Task;
 
-  const project = (id: string, primary?: string): Project =>
+  const project = (
+    id: string,
+    primary?: string,
+    taskIds: string[] = [],
+    backlogTaskIds: string[] = [],
+  ): Project =>
     ({
       id,
       title: `Project ${id}`,
       theme: primary ? { primary } : {},
+      taskIds,
+      backlogTaskIds,
     }) as Project;
 
   const projectState = (projects: Project[]): any => ({
@@ -99,6 +107,7 @@ describe('selectAndroidWidgetData', () => {
         t2: task('t2', { title: 'Task two', isDone: true }),
       },
       projectState([project('p1', '#ff0000')]),
+      [],
       DAY,
       0,
       null,
@@ -115,6 +124,7 @@ describe('selectAndroidWidgetData', () => {
       ],
       projectColors: { p1: '#ff0000' },
       currentTask: null,
+      projects: [],
     });
   });
 
@@ -123,6 +133,7 @@ describe('selectAndroidWidgetData', () => {
       ['missing', 't1'],
       { t1: task('t1') },
       projectState([]),
+      [],
       DAY,
       0,
       null,
@@ -138,6 +149,7 @@ describe('selectAndroidWidgetData', () => {
       ['t1'],
       { t1: task('t1', { projectId: undefined }) },
       projectState([]),
+      [],
       DAY,
       0,
       null,
@@ -152,6 +164,7 @@ describe('selectAndroidWidgetData', () => {
       ['t1'],
       { t1: task('t1', { projectId: 'p1' }) },
       projectState([project('p1')]),
+      [],
       DAY,
       0,
       null,
@@ -170,6 +183,7 @@ describe('selectAndroidWidgetData', () => {
       ['t1'],
       { t1: task('t1') },
       projectState([]),
+      [],
       '2026-07-16',
       fourAmOffset,
       null,
@@ -185,6 +199,7 @@ describe('selectAndroidWidgetData', () => {
       ['t1'],
       { t1: task('t1', { title: 'Task one', projectId: 'p1' }) },
       projectState([project('p1', '#ff0000')]),
+      [],
       DAY,
       0,
       't1',
@@ -208,6 +223,7 @@ describe('selectAndroidWidgetData', () => {
         t2: task('t2', { title: 'Task two', isDone: true }),
       },
       projectState([project('p1', '#ff0000')]),
+      [],
       DAY,
       0,
       null,
@@ -218,8 +234,147 @@ describe('selectAndroidWidgetData', () => {
       `{"v":1,"dayStr":"${DAY}","validUntil":${VALID_UNTIL},"tasks":[` +
         '{"id":"t1","title":"Task one","isDone":false,"projectId":"p1"},' +
         '{"id":"t2","title":"Task two","isDone":true}],' +
-        '"projectColors":{"p1":"#ff0000"},"currentTask":null}',
+        '"projectColors":{"p1":"#ff0000"},"currentTask":null,"projects":[]}',
     );
+  });
+
+  // #9518: a widget instance can show one project instead of Today.
+  describe('projects (#9518)', () => {
+    const projectsFor = (
+      projects: Project[],
+      tasks: Task[],
+    ): ReturnType<typeof selectAndroidWidgetData.projector>['projects'] =>
+      selectAndroidWidgetData.projector(
+        [],
+        Object.fromEntries(tasks.map((t) => [t.id, t])),
+        projectState(projects),
+        projects,
+        DAY,
+        0,
+        null,
+        [],
+        new Map(),
+      ).projects;
+
+    it('exports Inbox independently of Today and before ordinary projects', () => {
+      const inbox = { ...INBOX_PROJECT, taskIds: ['inboxTask'] };
+      const work = project('work', undefined, ['todayTask']);
+      const result = selectAndroidWidgetData.projector(
+        ['todayTask'],
+        {
+          inboxTask: task('inboxTask', { projectId: inbox.id }),
+          todayTask: task('todayTask', { projectId: work.id }),
+        },
+        projectState([inbox, work]),
+        [work],
+        DAY,
+        0,
+        null,
+        [],
+        new Map(),
+      );
+
+      expect(result.tasks.map((entry) => entry.id)).toEqual(['todayTask']);
+      expect(result.projects.map((entry) => entry.id)).toEqual([inbox.id, work.id]);
+      expect(result.projects[0].tasks.map((entry) => entry.id)).toEqual(['inboxTask']);
+    });
+
+    it('should list each selectable project with its open tasks in stored order', () => {
+      const work = project('work', '#ff0000', ['t2', 'missing', 't1']);
+      expect(
+        projectsFor(
+          [work],
+          [
+            task('t1', { title: 'First', projectId: 'work' }),
+            task('t2', { title: 'Second', projectId: 'work' }),
+          ],
+        ),
+      ).toEqual([
+        {
+          id: 'work',
+          title: 'Project work',
+          tasks: [
+            { id: 't2', title: 'Second', isDone: false, projectId: 'work' },
+            { id: 't1', title: 'First', isDone: false, projectId: 'work' },
+          ],
+        },
+      ]);
+    });
+
+    // Native lists a done project task only for five seconds after a checkbox tap
+    // on the widget (WidgetData.PROJECT_DONE_TASK_GRACE_MS). A task just tapped is
+    // among the most recently done, so a few of those keep its row through the
+    // push that applies the tap; the rest would only be filtered out natively.
+    it('should keep the 5 most recently done tasks in their stored place', () => {
+      const doneOn: { [id: string]: number | undefined } = {
+        d1: undefined,
+        d2: 70,
+        d3: 30,
+        d4: 40,
+        d5: 50,
+        d6: 60,
+        d7: 20,
+      };
+      const ids = ['d1', 'o1', 'd2', 'd3', 'd4', 'd5', 'd6', 'o2', 'd7'];
+      const work = project('work', undefined, ids);
+      const result = projectsFor(
+        [work],
+        ids.map((id) =>
+          task(id, { projectId: 'work', isDone: id.startsWith('d'), doneOn: doneOn[id] }),
+        ),
+      );
+      // d1 (no doneOn, ranked oldest) and d7 (20) are the two oldest.
+      expect(result[0].tasks.map((t) => [t.id, t.isDone])).toEqual([
+        ['o1', false],
+        ['d2', true],
+        ['d3', true],
+        ['d4', true],
+        ['d5', true],
+        ['d6', true],
+        ['o2', false],
+      ]);
+    });
+
+    // Done tasks stay in project.taskIds until archived, so a rarely visited
+    // project can lead with many of them; they must not use up the open rows.
+    it('should keep 20 open tasks past 20 leading done ones', () => {
+      const taskIds = Array.from({ length: 45 }, (_, i) => `t${i + 1}`);
+      const large = project('large', undefined, taskIds);
+      const result = projectsFor(
+        [large],
+        taskIds.map((id, i) => task(id, { projectId: 'large', isDone: i < 20 })),
+      );
+      const listed = result[0].tasks;
+      expect(listed.filter((t) => !t.isDone).map((t) => t.id)).toEqual(
+        Array.from({ length: 20 }, (_, i) => `t${i + 21}`),
+      );
+      expect(listed.filter((t) => t.isDone).length).toBe(5);
+    });
+
+    it('should append backlog tasks after regular project tasks', () => {
+      const work = project('work', undefined, ['t1'], ['t2']);
+      const result = projectsFor(
+        [work],
+        [task('t1', { projectId: 'work' }), task('t2', { projectId: 'work' })],
+      );
+      expect(result[0].tasks.map((t) => t.id)).toEqual(['t1', 't2']);
+    });
+
+    it('should add the colors of project tasks to projectColors', () => {
+      const work = project('work', '#00ff00', ['t1']);
+      const result = selectAndroidWidgetData.projector(
+        [],
+        { t1: task('t1', { projectId: 'work' }) },
+        projectState([work]),
+        [work],
+        DAY,
+        0,
+        null,
+        [],
+        new Map(),
+      );
+      expect(result.projectColors).toEqual({ work: '#00ff00' });
+    });
   });
 
   // #11109: the widget must list today's tasks in the order the Today screen shows
@@ -267,6 +422,7 @@ describe('selectAndroidWidgetData', () => {
           storedOrder,
           Object.fromEntries(tasks.map((t) => [t.id, t])),
           projectState([]),
+          [],
           DAY,
           0,
           currentTaskId,
@@ -374,6 +530,7 @@ describe('selectAndroidWidgetData', () => {
         ['B', 'C'],
         Object.fromEntries(tasks.map((t) => [t.id, t])),
         projectState([]),
+        [],
         DAY,
         0,
         null,

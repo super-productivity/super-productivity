@@ -263,7 +263,11 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    mem_limit: 256m
+    # Caddy's memory scales with open connections (TLS + proxy buffers per
+    # client). Measured 2026-11-27: ~235 MiB steady for ~1,450 live-sync
+    # WebSockets (~3,700 sockets). At 256m a reconnect burst pinned it at the
+    # cap; it then thrashed re-reading its binary from disk and stopped serving.
+    mem_limit: 512m
     depends_on:
       - supersync
     logging: *default-logging

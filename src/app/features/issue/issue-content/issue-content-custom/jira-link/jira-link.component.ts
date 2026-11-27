@@ -11,7 +11,7 @@ import { JiraCommonInterfacesService } from '../../../providers/jira/jira-common
 import { TaskCopy } from '../../../../tasks/task.model';
 import { IssueData } from '../../../issue.model';
 import { IssueFieldConfig } from '../../issue-content.model';
-import { getByPath } from '../../get-by-path.util';
+import { getIssueFieldValue } from '../../get-by-path.util';
 
 @Component({
   selector: 'jira-link',
@@ -55,14 +55,5 @@ export class JiraLinkComponent {
     });
   }
 
-  fieldValue = computed(() => {
-    const field = this.field();
-    const issue = this.issue();
-
-    if (typeof field.value === 'function') {
-      return field.value(issue);
-    }
-
-    return getByPath(issue, field.value);
-  });
+  fieldValue = computed(() => getIssueFieldValue(this.issue(), this.field().value));
 }

@@ -1,0 +1,33 @@
+---
+# Hand-written from Harper's Everyday, the `every day` half:
+#   a determiner, then "every day"
+#
+# A determiner opens a noun phrase, so what follows it modifies a noun rather
+# than telling you how often -- "an every day occurrence" wants the adjective.
+# Harper excludes pronouns, which its tagger counts among the determiners;
+# Penn tags them separately, so `DT` alone says it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "You probably mean the adjective `everyday` here."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "everyday"
+tokens:
+  # `this` and `that` are determiners to Penn and pronouns to Harper, which
+  # excludes pronouns here -- "we use this every day" is the adverb, correctly
+  # spelled. A token's pattern and tag are both required, so naming them
+  # excludes them.
+  - pattern: '^(?!(?:this|that)$).+$'
+    tag: 'DT|PDT'
+  - pattern: 'every'
+    target: true
+  - pattern: 'day'
+    target: true

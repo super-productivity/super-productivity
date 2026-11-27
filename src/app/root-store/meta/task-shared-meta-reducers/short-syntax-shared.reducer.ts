@@ -1,4 +1,4 @@
-import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
+import { Action, MetaReducer } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-state';
 import { TaskSharedActions } from '../task-shared.actions';
@@ -15,6 +15,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import {
   ActionHandlerMap,
+  createActionHandlerMetaReducer,
   addTaskToPlannerDay,
   filterOutTodayTag,
   getProject,
@@ -363,17 +364,5 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   },
 });
 
-export const shortSyntaxSharedMetaReducer: MetaReducer = (
-  reducer: ActionReducer<RootState, Action>,
-) => {
-  return (state: unknown, action: Action) => {
-    if (!state) return reducer(state as RootState | undefined, action);
-
-    const rootState = state as RootState;
-    const actionHandlers = createActionHandlers(rootState, action);
-    const handler = actionHandlers[action.type];
-    const updatedState = handler ? handler(rootState) : rootState;
-
-    return reducer(updatedState, action);
-  };
-};
+export const shortSyntaxSharedMetaReducer: MetaReducer =
+  createActionHandlerMetaReducer(createActionHandlers);

@@ -17,6 +17,8 @@ import { MatDialog } from '@angular/material/dialog';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskService } from '../tasks/task.service';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { addSubTask } from '../tasks/store/task.actions';
 import { Task, TaskState } from '../tasks/task.model';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -124,6 +126,7 @@ export class ProjectService {
   private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _timeTrackingService = inject(TimeTrackingService);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private readonly _taskTimeSync = inject(TaskTimeSyncService);
   private readonly _translate = inject(TranslateService);
   private readonly _matDialog = inject(MatDialog);
@@ -322,7 +325,8 @@ export class ProjectService {
   ): Promise<Pick<ProjectCompletionInfo, 'topLevelTasks' | 'allTasks'>> {
     const ids = [...(project.taskIds ?? []), ...(project.backlogTaskIds ?? [])];
     const idSet = new Set(ids);
-    const projectTasks = await this._taskService.getAllTasksForProject(projectId);
+    const projectTasks =
+      await this._taskArchiveOrchestrator.getAllTasksForProject(projectId);
     const projectTaskById = new Map(projectTasks.map((task) => [task.id, task]));
     const topLevelTasks = [
       ...ids,

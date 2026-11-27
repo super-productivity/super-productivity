@@ -24,6 +24,19 @@ workflow's manual dispatch where supported.
 
 ## Prepare a version
 
+Before a final release, find the docs notes for unreleased features
+(see [the documentation guide](documentation-guide.md#features-not-in-a-release-yet)):
+
+```bash
+grep -rni "not released yet" docs/wiki docs/public
+```
+
+Remove each note whose feature is in this release. For a feature that stays out (behind a flag, or
+reverted), bump `vX.Y.Z` in its note to the version being released; for a
+reverted feature, remove its documentation too. Commit this on `master` before
+`npm version` and push it together with the version commit, so the daily docs deploy does not present a
+feature as shipped long before the release is published.
+
 Start from a clean, current release commit and choose the appropriate semantic
 version:
 

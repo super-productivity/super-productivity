@@ -15,7 +15,7 @@ describe('issueProviderSharedMetaReducer', () => {
   });
 
   for (const bulk of [false, true]) {
-    it(`should derive ${bulk ? 'bulk' : 'single'} delete unlinks from replay state and clear sync baselines`, () => {
+    it(`should unlink and clear sync baselines only for tasks still on a provider in a ${bulk ? 'bulk' : 'single'} delete`, () => {
       const state = createStateWithExistingTasks(['task1', 'task2', 'task3'], [], []);
       for (const [id, providerId] of [
         ['task1', 'provider-1'],
@@ -34,11 +34,11 @@ describe('issueProviderSharedMetaReducer', () => {
       const action = bulk
         ? TaskSharedActions.deleteIssueProviders({
             ids: ['provider-1', 'provider-2'],
-            taskIdsToUnlink: ['missing-task', 'task1'],
+            taskIdsToUnlink: ['missing-task', 'task1', 'task3'],
           })
         : TaskSharedActions.deleteIssueProvider({
             issueProviderId: 'provider-1',
-            taskIdsToUnlink: ['missing-task'],
+            taskIdsToUnlink: ['missing-task', 'task3'],
           });
 
       const result = metaReducer(state, action) as RootState;
