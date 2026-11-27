@@ -2061,6 +2061,40 @@ describe('OperationLogUploadService', () => {
             ).toBeRejectedWithError('reseed failed');
             expect(localStorage.getItem(HEALED_KEY)).toBeNull();
           });
+
+          it('heals the same rejected op again when an earlier attempt did not finish', async () => {
+            // The server-migration path records the heal before its dialog;
+            // that must not block the upload path for the same op.
+            localStorage.setItem(HEALED_KEY, 'rejected-repair');
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).toHaveBeenCalledTimes(1);
+            expect(result.blockedByRejectedFullState).toBeUndefined();
+          });
+
+          it('writes no REPAIR and keeps the heal when the sync target changed meanwhile', async () => {
+            spyOn(
+              TestBed.inject(SyncProviderManager),
+              'assertSyncEpochUnchanged',
+            ).and.callFake((_epoch: number | undefined, context: string) => {
+              if (context === 'rejected full-state reseed') {
+                throw new Error('sync target changed');
+              }
+            });
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            await expectAsync(
+              service.uploadPendingOps(mockApiProvider),
+            ).toBeRejectedWithError('sync target changed');
+            expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+            expect(localStorage.getItem(HEALED_KEY)).toBeNull();
+          });
         });
       });
 
