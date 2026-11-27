@@ -102,8 +102,8 @@ test.describe('Global Search: completed and archived tasks', () => {
     await doneTask.locator('done-toggle').click();
     // the reopen animation briefly renders the old and the new row
     const rows = page.locator('task').filter({ hasText: taskName });
+    await expect(rows.and(page.locator('.isDone'))).toHaveCount(0);
     await expect(rows).toHaveCount(1);
-    await expect(rows).not.toHaveClass(/isDone/);
   });
 
   test('finds an archived task and shows its notes', async ({

@@ -44,7 +44,6 @@ import { TimepickerClockStrDirective } from '../timepicker-clock-str/timepicker-
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
-import { formatTimeHHmm } from '../../util/format-time-hhmm';
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 
@@ -228,7 +227,7 @@ export class DateTimePickerComponent implements AfterViewInit {
       const targetTime =
         selDate && !this._dateService.isToday(selDate)
           ? DEFAULT_TIME
-          : formatTimeHHmm(inAnHour);
+          : inAnHour.toTimeString().slice(0, 5);
 
       if (!selDate) {
         let targetDate = now;
