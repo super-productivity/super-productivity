@@ -33,6 +33,7 @@ export const isTaskOutsideWorkHours = (
   const dayDate = dateStrToUtcDate(getDbDateStr(task.dueWithTime));
   const workStart = getDateTimeFromClockString(scheduleConfig.workStart, dayDate);
   const workEnd = getDateTimeFromClockString(scheduleConfig.workEnd, dayDate);
+  // The guard narrows the timestamp property, so carry that type into the interval input.
   const { start, end } = getScheduledTaskInterval(
     { ...task, dueWithTime: task.dueWithTime },
     currentTaskId,

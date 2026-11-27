@@ -59,6 +59,26 @@ describe('getTimeConflictTaskIds', () => {
     ]);
   });
 
+  it('flags the extra overlap when a previously worked task starts its slot', () => {
+    const start = new Date(2026, 3, 15, 14).getTime();
+    const tasks = [
+      createTask({
+        id: 'running',
+        dueWithTime: start,
+        timeEstimate: h(1),
+        timeSpent: m(20),
+        timeSpentOnDay: { ['2026-04-14']: m(20) },
+      }),
+      createTask({ id: 'next', dueWithTime: start + m(40), timeEstimate: m(20) }),
+    ];
+
+    expect(getTimeConflictTaskIds(tasks, null, start).size).toBe(0);
+    expect([...getTimeConflictTaskIds(tasks, 'running', start)].sort()).toEqual([
+      'next',
+      'running',
+    ]);
+  });
+
   it('should handle empty and single-task schedules', () => {
     expect(conflictIds([])).toEqual([]);
     expect(conflictIds([createTask({ id: 'only', dueWithTime: h(9) })])).toEqual([]);

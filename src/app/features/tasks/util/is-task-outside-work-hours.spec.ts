@@ -55,6 +55,19 @@ describe('isTaskOutsideWorkHours', () => {
     ).toBe(true);
   });
 
+  it('warns when the full estimate extends a previously worked task past work hours', () => {
+    const start = new Date(2026, 3, 15, 16, 20).getTime();
+    const task = createTask({
+      dueWithTime: start,
+      timeEstimate: h(1),
+      timeSpent: h(1 / 3),
+      timeSpentOnDay: { ['2026-04-14']: h(1 / 3) },
+    });
+
+    expect(isTaskOutsideWorkHours(task, scheduleConfig(), null, start)).toBe(false);
+    expect(isTaskOutsideWorkHours(task, scheduleConfig(), task.id, start)).toBe(true);
+  });
+
   it('should return false when work hours are disabled', () => {
     const task = createTask({
       dueWithTime: new Date(2026, 3, 15, 7, 0).getTime(),
