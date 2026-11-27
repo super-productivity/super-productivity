@@ -359,7 +359,6 @@ describe('TaskDueEffects', () => {
           taskIds: ['due-today-1'],
           today: todayStr,
           startOfNextDayDiffMs,
-          isSkipRemoveReminder: true,
         }),
       );
       subscription.unsubscribe();
@@ -435,7 +434,6 @@ describe('TaskDueEffects', () => {
           taskIds: ['subtask-1'],
           today: todayStr,
           startOfNextDayDiffMs,
-          isSkipRemoveReminder: true,
         }),
       );
       subscription.unsubscribe();
