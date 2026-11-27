@@ -668,6 +668,16 @@ describe('TaskContextMenuInnerComponent', () => {
       jasmine.clock().uninstall();
     });
 
+    it('labels the tomorrow pick with the day after the logical today', () => {
+      const fresh = TestBed.createComponent(TaskContextMenuInnerComponent);
+      fresh.componentInstance.task = component.task;
+      const label = (fresh.componentInstance as unknown as { tomorrowLabel: string })
+        .tomorrowLabel;
+      fresh.destroy();
+      // Mon 02:00 is still Sunday's logical day, so tomorrow is Monday
+      expect(label).toBe('Mon');
+    });
+
     [
       { item: 1, time: [1, 30], expected: new Date(2030, 5, 17, 1, 30) },
       { item: 2, time: [1, 30], expected: new Date(2030, 5, 18, 1, 30) },
