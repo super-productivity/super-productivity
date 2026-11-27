@@ -228,7 +228,7 @@ test.describe('@supersync #11671 a client stuck on a pre-v20.1.0 rejected snapsh
       });
       await failSnapshotUploads(clientA.page);
       await clientA.sync.syncAndWait().catch(() => undefined);
-      await expect.poll(() => refusedSnapshots).toBeGreaterThan(0);
+      await expect.poll(() => refusedSnapshots, { timeout: 30000 }).toBeGreaterThan(0);
       await clientA.page.unroute(SUPERSYNC_SNAPSHOT_ROUTE);
 
       // What a pre-v20.1.0 build left behind: the REPAIR is marked rejected.

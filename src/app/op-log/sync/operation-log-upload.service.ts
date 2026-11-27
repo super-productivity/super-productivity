@@ -171,11 +171,7 @@ export class OperationLogUploadService {
         await options.preUploadCallback();
       }
 
-      this.providerManager.assertSyncEpochUnchanged(
-        options?.fenceEpoch,
-        'rejected full-state reseed',
-      );
-      await this._reseedRejectedFullState(syncProvider);
+      await this._reseedRejectedFullState(syncProvider, options?.fenceEpoch);
 
       // Fix the pending-op set and the file snapshot under the same operation-log
       // boundary. A task-time action applied by reducers while waiting for this
@@ -1027,17 +1023,21 @@ export class OperationLogUploadService {
    */
   private async _reseedRejectedFullState(
     syncProvider: OperationSyncCapable,
+    fenceEpoch: number | undefined,
   ): Promise<void> {
     const { rejectedFullState, isBlocking } = await this._getRejectedFullStateBarrier();
     if (!rejectedFullState || !isBlocking) {
       return;
     }
     const isSuperSync = syncProvider.providerMode === 'superSyncOps';
-    if (
-      isSuperSync &&
-      (syncProvider.supportsCausalRepairSnapshots?.() !== true ||
-        !mayHealRejectedSuperSyncFullState(rejectedFullState.op.id))
-    ) {
+    if (isSuperSync && syncProvider.supportsCausalRepairSnapshots?.() !== true) {
+      OpLog.warn(
+        'OperationLogUploadService: Not healing the rejected full-state op; ' +
+          'the server has not confirmed causal REPAIR support in this sync.',
+      );
+      return;
+    }
+    if (isSuperSync && !mayHealRejectedSuperSyncFullState(rejectedFullState.op.id)) {
       return;
     }
     const lastServerSeq = await syncProvider.getLastServerSeq();
@@ -1049,6 +1049,10 @@ export class OperationLogUploadService {
     ) {
       return;
     }
+    this.providerManager.assertSyncEpochUnchanged(
+      fenceEpoch,
+      'rejected full-state reseed',
+    );
     OpLog.warn(
       `OperationLogUploadService: Rejected ${rejectedFullState.op.opType} ` +
         `${rejectedFullState.op.id} blocks uploads; replacing it with a ` +
