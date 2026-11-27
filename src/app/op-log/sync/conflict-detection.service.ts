@@ -20,6 +20,7 @@ import { devError } from '../../util/dev-error';
 import { SYNC_LOGGER } from '../core/sync-logger.adapter';
 import {
   isCommutingTimeDeltaCrossing,
+  isPlanForTodayBesideDisjointUpdates,
   isDisjointMergeEligible,
   isNoiseOnlySide,
 } from './conflict-disjoint-merge.util';
@@ -219,7 +220,11 @@ export class ConflictDetectionService {
       // so entity-level LWW would discard one side's time or edit (#10214).
       const payloadKey = this.entityState._resolvePayloadKey(remoteOp.entityType);
       const sides = { localOps, remoteOps: [remoteOp] };
-      if (isCommutingTimeDeltaCrossing({ ...sides, payloadKey, entityId })) {
+      // An auto-plan beside edits of other fields commutes too (#11883).
+      if (
+        isCommutingTimeDeltaCrossing({ ...sides, payloadKey, entityId }) ||
+        isPlanForTodayBesideDisjointUpdates({ ...sides, payloadKey, entityId })
+      ) {
         return { isSupersededOrDuplicate: false, conflict: null };
       }
 
@@ -325,7 +330,11 @@ export class ConflictDetectionService {
     // that tracking an unscheduled task emits: a local win here would emit a
     // snapshot whose clock claims the remote delta without its time.
     const sides = { localOps, remoteOps: [remoteOp], payloadKey, entityId };
-    if (isDisjointMergeEligible(sides) || isCommutingTimeDeltaCrossing(sides)) {
+    if (
+      isDisjointMergeEligible(sides) ||
+      isCommutingTimeDeltaCrossing(sides) ||
+      isPlanForTodayBesideDisjointUpdates(sides)
+    ) {
       return null;
     }
 

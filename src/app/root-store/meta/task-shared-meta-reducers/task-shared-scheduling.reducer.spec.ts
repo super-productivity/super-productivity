@@ -293,6 +293,48 @@ describe('taskSharedSchedulingMetaReducer', () => {
       }
     });
 
+    // conflict-disjoint-merge.util.ts lets an updateTask of any other field
+    // commute with this op (PLAN_FOR_TODAY_TASK_FIELDS, #11883).
+    it('writes no task field but dueDay, remindAt and dueWithTime', () => {
+      const today = getDbDateStr();
+      const testState = createStateWithExistingTasks([], [], [], ['in-today']);
+      const tasks = [
+        createMockTask({ id: 'unscheduled', isDone: true, doneOn: 1, title: 'A' }),
+        createMockTask({ id: 'other-day', dueDay: '2024-06-20', remindAt: 1 }),
+        createMockTask({ id: 'timed', dueWithTime: Date.now() + 86400000, remindAt: 1 }),
+        createMockTask({ id: 'in-today', dueDay: today, remindAt: 1 }),
+      ];
+      for (const task of tasks) {
+        testState[TASK_FEATURE_NAME].entities[task.id] = task;
+        if (!(testState[TASK_FEATURE_NAME].ids as string[]).includes(task.id)) {
+          (testState[TASK_FEATURE_NAME].ids as string[]).push(task.id);
+        }
+      }
+      for (const isClearScheduledTime of [false, true]) {
+        metaReducer(
+          testState,
+          TaskSharedActions.planTasksForToday({
+            taskIds: tasks.map((task) => task.id),
+            parentTaskMap: {},
+            isClearScheduledTime,
+          }),
+        );
+        const next = mockReducer.calls.mostRecent().args[0] as RootState;
+        for (const task of tasks) {
+          const planned = next[TASK_FEATURE_NAME].entities[task.id] as Task;
+          const keys = new Set([...Object.keys(task), ...Object.keys(planned)]);
+          const changed = [...keys].filter(
+            (key) => planned[key as keyof Task] !== task[key as keyof Task],
+          );
+          expect(
+            changed.filter((key) => !['dueDay', 'remindAt', 'dueWithTime'].includes(key)),
+          )
+            .withContext(task.id)
+            .toEqual([]);
+        }
+      }
+    });
+
     it('should add new tasks to the top of Today tag', () => {
       const testState = createStateWithExistingTasks([], [], [], ['existing-task']);
       // Add task entities that will be planned for today
