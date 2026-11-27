@@ -12,6 +12,7 @@ import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { Store } from '@ngrx/store';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
+import { INBOX_PROJECT } from '../../features/project/project.const';
 import { DialogAddNoteComponent } from '../../features/note/dialog-add-note/dialog-add-note.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogFullscreenMarkdownComponent } from '../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
@@ -186,6 +187,30 @@ describe('ShortcutService', () => {
       mockConfigService.appFeatures.set({ isPlannerEnabled: false });
 
       const ev = new KeyboardEvent('keydown', { code: 'KeyL', shiftKey: true });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      service.handleKeyDown(ev);
+
+      expect(mockRouter.navigate).not.toHaveBeenCalled();
+    });
+
+    it('should navigate to the inbox when Shift+I is pressed', () => {
+      mockConfigService.cfg.set({ keyboard: { goToInbox: 'Shift+I' } });
+
+      const ev = new KeyboardEvent('keydown', { code: 'KeyI', shiftKey: true });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      service.handleKeyDown(ev);
+
+      expect(mockRouter.navigate).toHaveBeenCalledWith([
+        '/project/' + INBOX_PROJECT.id + '/tasks',
+      ]);
+    });
+
+    it('should NOT navigate to the inbox when the shortcut is unset', () => {
+      mockConfigService.cfg.set({ keyboard: { goToInbox: null } });
+
+      const ev = new KeyboardEvent('keydown', { code: 'KeyI', shiftKey: true });
       Object.defineProperty(ev, 'target', { value: document.body });
 
       service.handleKeyDown(ev);
