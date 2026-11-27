@@ -12,7 +12,6 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Router } from '@angular/router';
 import { TagComponent, TagComponentTag } from '../tag/tag.component';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
 import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
@@ -27,7 +26,6 @@ import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-re
 import { TranslateService } from '@ngx-translate/core';
 import { TagListStateService } from './tag-list-state.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
-import { isTouchActive } from '../../../util/input-intent';
 
 /**
  * Structural contract of what tag-list actually reads from its input. Both
@@ -53,7 +51,6 @@ export class TagListComponent {
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
   private readonly _translateService = inject(TranslateService);
   private readonly _dateTimeFormatService = inject(DateTimeFormatService);
-  private readonly _router = inject(Router);
 
   task = input.required<TagListTask>();
 
@@ -62,19 +59,6 @@ export class TagListComponent {
   isShowCurrentContextTag = input(false);
   isShowProjectTagAlways = input(false);
   isShowProjectTagNever = input(false);
-  // Off in modal dialogs, where navigating would change the page behind them.
-  isProjectTagClickable = input(true);
-  // From the host: importing TaskMultiSelectService or isMultiSelectModifierEvent
-  // here splits each into its own lazy chunk (Lighthouse script budget).
-  isTouchSelectionMode = input(false);
-
-  // Replaced in specs: headless Chrome is mouse-only, so isTouchActive stays false.
-  private _isTouchActive: () => boolean = isTouchActive;
-  // On touch the chip fills much of a narrow row, so taps meant for the row kept
-  // navigating away. There the chip stays a label and the tap goes to the row.
-  isProjectTagNavigable = computed(
-    () => this.isProjectTagClickable() && !this._isTouchActive(),
-  );
 
   workContext = toSignal(this._workContextService.activeWorkContextTypeAndId$);
 
@@ -175,17 +159,4 @@ export class TagListComponent {
 
     return chips;
   });
-
-  openProject(ev: MouseEvent, projectId: string): void {
-    // Modifier clicks and touch-selection taps stay with the row's multi-select.
-    if (ev.shiftKey || ev.ctrlKey || ev.metaKey || this.isTouchSelectionMode()) {
-      return;
-    }
-    // Keep the row's click handlers (select, detail panel) out of it (#9060).
-    ev.stopPropagation();
-    // The chip's mousedown kept focus where it was, so blur now: an open title
-    // or estimate edit only saves on blur, which would arrive after teardown.
-    (document.activeElement as HTMLElement | null)?.blur();
-    void this._router.navigate([`/project/${projectId}/tasks`]);
-  }
 }
