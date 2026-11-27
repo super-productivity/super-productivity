@@ -228,6 +228,7 @@ const renderPreviewStep = (
     }
     const plan = planImport(model, {
       isTagImportant: tagImportantBox.checked,
+      isTagMicrosoftTodo: tagMicrosoftTodoBox.checked,
       includeCompletedTasks: includeCompletedTasksBox.checked,
       selectedProjectExtIds: selected,
     });

@@ -69,8 +69,19 @@ describe('parseGraphData', () => {
         id: 'T1',
         title: 'Trip',
         checklistItems: [
-          { id: 's1', displayName: 'Book flight', isChecked: true },
-          { id: 's2', displayName: 'Pack' },
+          {
+            id: 's1',
+            displayName: 'Book flight',
+            isChecked: true,
+            createdDateTime: '2026-09-01T10:30:00Z',
+            checkedDateTime: '2026-09-02T10:30:00Z',
+          },
+          {
+            id: 's2',
+            displayName: 'Pack',
+            createdDateTime: '2026-09-01T11:30:00Z',
+            checkedDateTime: null,
+          },
         ],
       },
       { id: 'T2', title: 'Next' },

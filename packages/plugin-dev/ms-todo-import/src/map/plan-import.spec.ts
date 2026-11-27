@@ -1,6 +1,11 @@
 import { BatchTaskCreate } from '@super-productivity/plugin-api';
 import { MsTodoImportModel, MsTodoList, MsTodoTask } from '../parse/normalized-model';
-import { BATCH_CHUNK_SIZE, buildProjectTitles, planImport } from './plan-import';
+import {
+  BATCH_CHUNK_SIZE,
+  buildProjectTitles,
+  MICROSOFT_TODO_TAG_TITLE,
+  planImport,
+} from './plan-import';
 
 const task = (overrides: Partial<MsTodoTask>): MsTodoTask => ({
   extId: 't1',
@@ -136,6 +141,25 @@ describe('planImport', () => {
       { tempId: 'temp-a', tagTitles: ['Red category', 'Errand'] },
     ]);
     expect(plan.tagTitles).toEqual(['Red category', 'Errand']);
+  });
+
+  it('optionally tags imported tasks with microsoft-todo', () => {
+    const plan = planImport(
+      model({
+        tasks: [
+          task({ extId: 'a', categories: ['Errand'] }),
+          task({ extId: 'b', parentExtId: 'a' }),
+        ],
+      }),
+      { isTagImportant: false, isTagMicrosoftTodo: true },
+    );
+    expect(plan.projects[0].followUps).toEqual([
+      {
+        tempId: 'temp-a',
+        tagTitles: [MICROSOFT_TODO_TAG_TITLE, 'Errand'],
+      },
+    ]);
+    expect(plan.tagTitles).toEqual([MICROSOFT_TODO_TAG_TITLE, 'Errand']);
   });
 
   describe('important (starred) tasks', () => {

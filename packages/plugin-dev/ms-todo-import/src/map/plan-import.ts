@@ -20,6 +20,7 @@ const tempId = (extId: string): string => `temp-${extId}`;
 /** Title of SP's built-in Eisenhower tag. `ensureTags` reuses that tag by its
  * id (it may have been renamed), so starred tasks land in the existing quadrant. */
 export const IMPORTANT_TAG_TITLE = 'important';
+export const MICROSOFT_TODO_TAG_TITLE = 'microsoft-todo';
 
 export interface TaskFollowUp {
   tempId: string;
@@ -48,6 +49,8 @@ export interface ImportPlan {
 export interface PlanImportOptions {
   /** tag starred (importance `high`) tasks with SP's `important` tag */
   isTagImportant: boolean;
+  /** tag every imported root task with the Microsoft To Do source tag */
+  isTagMicrosoftTodo?: boolean;
   /** include completed Microsoft To Do tasks; omitted by default */
   includeCompletedTasks?: boolean;
   /** omit to import everything */
@@ -67,12 +70,18 @@ export const groupTasksByProject = (
   return byProject;
 };
 
-const taskTagTitles = (task: MsTodoTask, isTagImportant: boolean): string[] => {
+const taskTagTitles = (
+  task: MsTodoTask,
+  isTagImportant: boolean,
+  isTagMicrosoftTodo: boolean,
+): string[] => {
   // SP sub-tasks cannot hold tags (host model) — the plugin must enforce this
   if (task.parentExtId) {
     return [];
   }
-  const titles = [...task.categories];
+  const titles = isTagMicrosoftTodo
+    ? [MICROSOFT_TODO_TAG_TITLE, ...task.categories]
+    : [...task.categories];
   if (isTagImportant && task.isImportant) {
     titles.push(IMPORTANT_TAG_TITLE);
   }
@@ -167,7 +176,11 @@ export const planImport = (
       if (t.dueDay) {
         followUp.dueDay = t.dueDay;
       }
-      const titlesForTask = taskTagTitles(t, options.isTagImportant);
+      const titlesForTask = taskTagTitles(
+        t,
+        options.isTagImportant,
+        options.isTagMicrosoftTodo ?? false,
+      );
       if (titlesForTask.length) {
         followUp.tagTitles = titlesForTask;
         titlesForTask.forEach((title) => tagTitles.add(title));
