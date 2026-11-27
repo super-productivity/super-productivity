@@ -119,6 +119,22 @@ test.describe('Worklog', () => {
     expect(csvRow?.replace(/^\d{4}-\d{2}-\d{2}/, 'DATE')).toBe(
       `DATE; - ; - ;0:20;"${taskName}"`,
     );
+
+    await page.keyboard.press('Escape');
+    await durationEditor.click();
+    await durationInput.fill('30m');
+    // Moving focus to Restore saves the edit on blur. Open its confirmation
+    // in the same turn, while History still displays the old archive row.
+    await worklogRow
+      .locator('td.actions button')
+      .evaluate((button: HTMLButtonElement) => {
+        button.focus();
+        button.click();
+      });
+    await expect(worklogRow.locator('td.worked .value-wrapper')).toHaveText('0:30');
+    await page.locator('dialog-confirm [e2e="confirmBtn"]').click();
+    await expect(taskPage.getUndoneTasks().filter({ hasText: taskName })).toBeVisible();
+    await expect(task.locator('.time-val').first()).toHaveText('30m');
   });
 
   test('should navigate to worklog from side menu', async ({ page, workViewPage }) => {

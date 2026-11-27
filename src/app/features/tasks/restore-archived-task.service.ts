@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
-import { Task } from './task.model';
+import { Task, TaskArchive } from './task.model';
 import { T } from '../../t.const';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { TaskArchiveService } from '../archive/task-archive.service';
@@ -22,6 +22,7 @@ import { Log } from '../../core/log';
 export class RestoreArchivedTaskService {
   private readonly _matDialog = inject(MatDialog);
   private readonly _store = inject(Store);
+  private readonly _activeTasks = this._store.selectSignal(selectTaskEntities);
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _dateService = inject(DateService);
 
@@ -32,18 +33,11 @@ export class RestoreArchivedTaskService {
    * is nothing to restore: not in the archive, or already active.
    */
   async findRestorableTask(task: Task): Promise<Task | null> {
-    const rootId = task.parentId || task.id;
-    const [archive, activeTasks] = await Promise.all([
-      this._taskArchiveService.load(),
-      firstValueFrom(this._store.select(selectTaskEntities)),
-    ]);
-    // Active wins, as in History (`isNoRestore`): the reducer ignores a restore
-    // of an active task, so offering one would write an op that changes nothing.
-    return activeTasks[rootId] ? null : (archive.entities[rootId] ?? null);
+    return this._getRestorableTask(task, await this._taskArchiveService.load());
   }
 
-  /** Resolves `true` once the restore was dispatched, `false` if declined. */
-  async confirmAndRestore(task: Task): Promise<boolean> {
+  /** Resolves `true` once dispatched, `false` if declined or no longer restorable. */
+  async confirmAndRestore(displayedTask: Task): Promise<boolean> {
     const isConfirm = await firstValueFrom(
       this._matDialog
         .open(DialogConfirmComponent, {
@@ -51,7 +45,7 @@ export class RestoreArchivedTaskService {
           data: {
             okTxt: T.G.DO_IT,
             message: T.F.WORKLOG.D_CONFIRM_RESTORE,
-            translateParams: { title: task.title },
+            translateParams: { title: displayedTask.title },
           },
         })
         .afterClosed(),
@@ -61,13 +55,15 @@ export class RestoreArchivedTaskService {
       return false;
     }
 
-    let subTasks: Task[] = [];
-    if (task.subTaskIds?.length) {
-      const archiveState = await this._taskArchiveService.load();
-      subTasks = task.subTaskIds
-        .map((id) => archiveState.entities[id])
-        .filter((t): t is Task => !!t);
+    // History or sync can update the archive while confirmation is open.
+    const archive = await this._taskArchiveService.load();
+    const task = this._getRestorableTask(displayedTask, archive);
+    if (!task) {
+      return false;
     }
+    const subTasks = (task.subTaskIds ?? [])
+      .map((id) => archive.entities[id])
+      .filter((t): t is Task => !!t);
     // Read after the archive load so a restore confirmed across midnight still
     // lands on the logical today.
     const restoreToToday = {
@@ -80,5 +76,10 @@ export class RestoreArchivedTaskService {
       TaskSharedActions.restoreTask({ task, subTasks, restoreToToday }),
     );
     return true;
+  }
+
+  private _getRestorableTask(task: Task, archive: TaskArchive): Task | null {
+    const rootId = task.parentId || task.id;
+    return this._activeTasks()[rootId] ? null : (archive.entities[rootId] ?? null);
   }
 }

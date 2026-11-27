@@ -127,7 +127,7 @@ describe('RestoreArchivedTaskService', () => {
       expect(store.dispatch).not.toHaveBeenCalled();
     });
 
-    it('dispatches one restoreTask for today with the archived sub tasks', async () => {
+    it('dispatches one restoreTask with the current archived parent and sub tasks', async () => {
       const sub1 = createTask('sub1', { parentId: 'parent' });
       const sub2 = createTask('sub2', { parentId: 'parent' });
       // 'gone' is listed on the parent but missing from the archive
@@ -135,7 +135,8 @@ describe('RestoreArchivedTaskService', () => {
       setArchive([parent, sub1, sub2]);
       setConfirmResult(true);
 
-      expect(await service.confirmAndRestore(parent)).toBe(true);
+      const displayedParent = createTask('parent', { title: 'Old title' });
+      expect(await service.confirmAndRestore(displayedParent)).toBe(true);
 
       expect(store.dispatch).toHaveBeenCalledOnceWith(
         TaskSharedActions.restoreTask({
@@ -146,20 +147,23 @@ describe('RestoreArchivedTaskService', () => {
       );
     });
 
-    it('restores a task without sub tasks without reading the archive', async () => {
-      const task = createTask('a');
+    it('does not restore a task removed from the archive', async () => {
+      setArchive([]);
       setConfirmResult(true);
 
-      expect(await service.confirmAndRestore(task)).toBe(true);
+      expect(await service.confirmAndRestore(createTask('a'))).toBe(false);
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
 
-      expect(taskArchiveService.load).not.toHaveBeenCalled();
-      expect(store.dispatch).toHaveBeenCalledOnceWith(
-        TaskSharedActions.restoreTask({
-          task,
-          subTasks: [],
-          restoreToToday: { today: '2026-01-05', startOfNextDayDiffMs: 0 },
-        }),
-      );
+    it('does not restore an archived copy of an already active task', async () => {
+      const task = createTask('a');
+      setArchive([task]);
+      store.overrideSelector(selectTaskEntities, { a: task });
+      store.refreshState();
+      setConfirmResult(true);
+
+      expect(await service.confirmAndRestore(task)).toBe(false);
+      expect(store.dispatch).not.toHaveBeenCalled();
     });
   });
 });
