@@ -34,6 +34,7 @@
 
   <div class="search-results">
     @let results = filteredResults$ | async;
+    @let hasHiddenCompleted = hasHiddenCompleted$ | async;
     @if (results && results.length > 0) {
       <mat-list>
         @for (item of results; track trackByFn($index, item)) {
@@ -117,7 +118,13 @@
     } @else if (searchForm.value && searchForm.value.trim()) {
       <div class="no-results">
         <mat-icon>search_off</mat-icon>
-        <p>{{ T.F.SEARCH_BAR.NO_RESULTS | translate }}</p>
+        @if (hasHiddenCompleted) {
+          <p class="e2e-completed-hidden">
+            {{ T.F.SEARCH_BAR.NO_RESULTS_COMPLETED_HIDDEN | translate }}
+          </p>
+        } @else {
+          <p>{{ T.F.SEARCH_BAR.NO_RESULTS | translate }}</p>
+        }
       </div>
     } @else {
       <div class="search-prompt">
