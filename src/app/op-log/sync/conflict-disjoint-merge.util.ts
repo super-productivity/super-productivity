@@ -576,6 +576,8 @@ const isUpdateBesidePlanForToday = (
 // (tracking) is rejected on SuperSync and the delta rebase
 // (`rebaseCommutingTimeDeltaRejections`) admits only time-commuting rows, so
 // it would drop the time; admit deltas once that rebase reads this pair.
+// Detection passes remote ops one at a time, so a tracker's remote auto-plan
+// still commutes here; only the tracker's own side stays on whole-entity LWW.
 const isPlanSideBesideUpdates = (
   planSide: Operation[],
   updateSide: Operation[],

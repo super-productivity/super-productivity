@@ -314,8 +314,10 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    `planTasksForToday` and `updateTask` edits of fields it never writes
    (anything but `dueDay`, `remindAt`, `dueWithTime`) commute: conflict
    detection applies both as they are, in either order
-   (`isPlanForTodayBesideDisjointUpdates`). Not yet beside the time delta
-   tracking emits: SuperSync's delta rebase cannot re-send it past this pair. On SuperSync
+   (`isPlanForTodayBesideDisjointUpdates`). Not yet on the tracking device,
+   whose pending side holds the auto-plan beside its time delta: SuperSync's
+   delta rebase cannot re-send that past this pair. Other devices check the
+   tracker's remote ops one at a time, so its auto-plan commutes there. On SuperSync
    the server still rejects the later upload once; its re-send follows. Before, a done that synced first
    was undone by the auto-plan's winning snapshot, or the losing auto-plan
    stayed on its own device.
