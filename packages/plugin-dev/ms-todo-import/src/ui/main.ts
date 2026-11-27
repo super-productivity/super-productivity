@@ -329,6 +329,7 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
   const openAction: HTMLElement[] = [];
   if (landing && api().openProject) {
     const openBtn = el('button', {
+      className: 'btn-primary',
       text: t('SUMMARY.OPEN_PROJECT', { title: landing.title }),
     });
     openBtn.addEventListener('click', () => {
@@ -341,7 +342,7 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
           }),
         );
     });
-    openAction.push(el('div', { className: 'actions' }, [openBtn]));
+    openAction.push(el('p', {}, [openBtn]));
   }
 
   if (!result.errorMessage) {
@@ -356,12 +357,13 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
     ...failedRepeats,
     ...tagLine,
     ...failure,
-    ...openAction,
     ...lossy,
     el('p', {
       className: 'text-muted text-sm',
       text: t('SUMMARY.UNDO'),
     }),
+    // last, as the obvious next step after reading the summary
+    ...openAction,
   );
 };
 
