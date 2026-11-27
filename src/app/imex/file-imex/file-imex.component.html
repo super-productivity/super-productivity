@@ -1,91 +1,115 @@
-<button
-  (click)="downloadBackup()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>file_upload</mat-icon>
-  {{ T.FILE_IMEX.EXPORT_DATA | translate }}
-</button>
+<!-- Importers add tasks; "Import from File" replaces all data — separate groups keep them apart -->
+<section class="group">
+  <h3 class="group-title">{{ T.FILE_IMEX.GROUP_FROM_OTHER_APP | translate }}</h3>
+  <div class="group-actions">
+    <button
+      (click)="openTodoistImport()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>move_to_inbox</mat-icon>
+      {{ T.FILE_IMEX.IMPORT_FROM_TODOIST | translate }}
+    </button>
 
-<button
-  (click)="privacyAppDataDownload()"
-  color="primary"
-  mat-stroked-button
-  type="button"
-  [matTooltip]="T.FILE_IMEX.PRIVACY_EXPORT_DESCRIPTION | translate"
->
-  <mat-icon>code</mat-icon>
-  {{ T.FILE_IMEX.PRIVACY_EXPORT | translate }}
-</button>
+    <button
+      (click)="openTickTickImport()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>move_to_inbox</mat-icon>
+      {{ T.FILE_IMEX.IMPORT_FROM_TICKTICK | translate }}
+    </button>
 
-<button
-  (click)="fileInput.click()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>file_download</mat-icon>
-  {{ T.FILE_IMEX.IMPORT_FROM_FILE | translate }}
-</button>
+    <!-- Microsoft rejects sign-in token requests from the native WebViews (#9546) -->
+    @if (!IS_NATIVE_PLATFORM) {
+      <button
+        (click)="openMsTodoImport()"
+        color="primary"
+        mat-stroked-button
+        type="button"
+      >
+        <mat-icon>move_to_inbox</mat-icon>
+        {{ T.FILE_IMEX.IMPORT_FROM_MS_TODO | translate }}
+      </button>
+    }
+  </div>
+</section>
 
-<input
-  #fileInput
-  (change)="handleFileInput($event)"
-  hidden
-  id="file"
-  type="file"
-/>
+<section class="group">
+  <h3 class="group-title">{{ T.FILE_IMEX.GROUP_BACKUP_RESTORE | translate }}</h3>
+  <div class="group-actions">
+    <button
+      (click)="downloadBackup()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>file_upload</mat-icon>
+      {{ T.FILE_IMEX.EXPORT_DATA | translate }}
+    </button>
 
-<button
-  (click)="openUrlImportDialog()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>cloud_download</mat-icon>
-  {{ T.FILE_IMEX.OPEN_IMPORT_FROM_URL_DIALOG | translate }}
-</button>
+    <button
+      (click)="fileInput.click()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>file_download</mat-icon>
+      {{ T.FILE_IMEX.IMPORT_FROM_FILE | translate }}
+    </button>
 
-<button
-  (click)="openArchiveCompression()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>compress</mat-icon>
-  {{ T.FILE_IMEX.BTN_COMPRESS_ARCHIVE | translate }}
-</button>
+    <input
+      #fileInput
+      (change)="handleFileInput($event)"
+      hidden
+      id="file"
+      type="file"
+    />
 
-<button
-  (click)="openTodoistImport()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>move_to_inbox</mat-icon>
-  {{ T.FILE_IMEX.IMPORT_FROM_TODOIST | translate }}
-</button>
+    <button
+      (click)="openUrlImportDialog()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>cloud_download</mat-icon>
+      {{ T.FILE_IMEX.OPEN_IMPORT_FROM_URL_DIALOG | translate }}
+    </button>
 
-<button
-  (click)="openTickTickImport()"
-  color="primary"
-  mat-stroked-button
-  type="button"
->
-  <mat-icon>move_to_inbox</mat-icon>
-  {{ T.FILE_IMEX.IMPORT_FROM_TICKTICK | translate }}
-</button>
+    <button
+      (click)="openBackupsList()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon>history</mat-icon>
+      {{ T.GCF.AUTO_BACKUPS.BROWSE | translate }}
+    </button>
+  </div>
+</section>
 
-<!-- Microsoft rejects sign-in token requests from the native WebViews (#9546) -->
-@if (!IS_NATIVE_PLATFORM) {
+<!-- Rarely needed tools: text buttons so they recede behind the groups above -->
+<div class="group-actions rare-tools">
   <button
-    (click)="openMsTodoImport()"
+    (click)="openArchiveCompression()"
     color="primary"
-    mat-stroked-button
+    mat-button
     type="button"
   >
-    <mat-icon>move_to_inbox</mat-icon>
-    {{ T.FILE_IMEX.IMPORT_FROM_MS_TODO | translate }}
+    <mat-icon>compress</mat-icon>
+    {{ T.FILE_IMEX.BTN_COMPRESS_ARCHIVE | translate }}
   </button>
-}
+
+  <button
+    (click)="privacyAppDataDownload()"
+    color="primary"
+    mat-button
+    type="button"
+    [matTooltip]="T.FILE_IMEX.PRIVACY_EXPORT_DESCRIPTION | translate"
+  >
+    <mat-icon>code</mat-icon>
+    {{ T.FILE_IMEX.PRIVACY_EXPORT | translate }}
+  </button>
+</div>
