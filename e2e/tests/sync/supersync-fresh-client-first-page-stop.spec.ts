@@ -243,11 +243,6 @@ test.describe('@supersync @encryption fresh client on an account with more than 
           waitForInitialSync: false,
         });
         await expect(freshClient.sync.syncErrorIcon).toBeVisible({ timeout: 60000 });
-        await expect(
-          freshClient.page.locator('snack-custom', {
-            hasText: 'security integrity check',
-          }),
-        ).toBeVisible({ timeout: 30000 });
 
         // The reported symptom: one full page arrives, more is available, and
         // the client never asks for the second page.
@@ -266,6 +261,13 @@ test.describe('@supersync @encryption fresh client on an account with more than 
           .toBeGreaterThan(pagesBeforeRetry);
         expect(pages.every((page) => page.sinceSeq === 0)).toBe(true);
         expect(await getCursor(freshClient)).toBe(0);
+        // Asserted after the explicit retry: the snack from the setup sync can
+        // already be dismissed by the time setup returns.
+        await expect(
+          freshClient.page.locator('snack-custom', {
+            hasText: 'security integrity check',
+          }),
+        ).toBeVisible({ timeout: 30000 });
 
         // Nothing is lost: the server copy is untouched.
         expect((await getServerHistory(user.token)).latestSeq).toBe(serverSeqBefore);
