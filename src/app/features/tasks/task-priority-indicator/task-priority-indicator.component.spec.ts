@@ -53,7 +53,16 @@ describe('TaskPriorityIndicatorComponent', () => {
     });
   }
 
-  for (const preset of ['chevrons', 'numbers'] as const) {
+  // #10793: "1 = highest", matching the p1 short syntax; stored values stay 3 = high.
+  it('shows 1 for high and 3 for low with the numbersHighFirst preset', () => {
+    setConfiguredPreset('numbersHighFirst');
+
+    expect(icon(create(3))!.getAttribute('fontIcon')).toBe('counter_1');
+    expect(icon(create(2))!.getAttribute('fontIcon')).toBe('counter_2');
+    expect(icon(create(1))!.getAttribute('fontIcon')).toBe('counter_3');
+  });
+
+  for (const preset of ['chevrons', 'numbers', 'numbersHighFirst'] as const) {
     it(`renders the ${preset} icon for each level, without a text node`, () => {
       setConfiguredPreset(preset);
 

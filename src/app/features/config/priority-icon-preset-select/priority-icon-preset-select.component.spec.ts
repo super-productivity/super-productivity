@@ -73,10 +73,11 @@ describe('PriorityIconPresetSelectComponent', () => {
   });
 
   it('previews Low, Medium and High, in that order, for every preset option', () => {
-    const [chevrons, numbers] = openOptions(fixture);
+    const [chevrons, numbers, numbersHighFirst] = openOptions(fixture);
 
     expect(iconsOf(chevrons)).toEqual(levelIcons('chevrons'));
     expect(iconsOf(numbers)).toEqual(levelIcons('numbers'));
+    expect(iconsOf(numbersHighFirst)).toEqual(['counter_3', 'counter_2', 'counter_1']);
   });
 
   // MatSelect announces an option's textContent (viewValue) on arrow keys.
@@ -86,6 +87,7 @@ describe('PriorityIconPresetSelectComponent', () => {
     expect(options.map((o) => o.textContent?.trim())).toEqual([
       T.GCF.TASKS.PRIORITY_ICON_PRESET_CHEVRONS,
       T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS,
+      T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS_HIGH_FIRST,
     ]);
   });
 
