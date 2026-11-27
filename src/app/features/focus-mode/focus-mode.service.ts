@@ -12,6 +12,18 @@ import { FocusModeStrategyFactory } from './focus-mode-strategies';
 import { TaskCopy } from '../tasks/task.model';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 
+/**
+ * Remaining time for timers with a fixed duration (Pomodoro/Countdown work
+ * sessions and all breaks). Elapsed time for open-ended Flowtime work
+ * sessions (duration 0) and for Pomodoro overtime, where the remaining time
+ * would stay clamped at 0 while the overlay keeps counting.
+ */
+export const getDisplayedSessionTime = (
+  duration: number,
+  elapsed: number,
+  isInOvertime: boolean,
+): number => (duration > 0 && !isInOvertime ? Math.max(0, duration - elapsed) : elapsed);
+
 @Injectable({
   providedIn: 'root',
 })
@@ -68,17 +80,16 @@ export class FocusModeService {
   currentSessionTime$ = this._store.select(selectors.selectTimeElapsed);
   timeToGo$ = this._store.select(selectors.selectTimeRemaining);
   /**
-   * Time to show in the tray and the mini task widget: elapsed time for
-   * open-ended Flowtime sessions, remaining time for Pomodoro/Countdown
-   * so it matches the focus overlay.
+   * Time to show in the tray and the mini task widget, matching the focus
+   * overlay. See `getDisplayedSessionTime`.
    */
   displayedSessionTime$ = combineLatest([
-    this._store.select(selectors.selectMode),
+    this._store.select(selectors.selectTimeDuration),
     this.currentSessionTime$,
-    this.timeToGo$,
+    this._store.select(selectors.selectIsInOvertime),
   ]).pipe(
-    map(([mode, elapsed, remaining]) =>
-      mode === FocusModeMode.Flowtime ? elapsed : remaining,
+    map(([duration, elapsed, isInOvertime]) =>
+      getDisplayedSessionTime(duration, elapsed, !!isInOvertime),
     ),
   );
 
