@@ -35,12 +35,8 @@ echo "Using $ANDROID_SERIAL"
 # soft keyboard hidden, the IME never opens and the test cannot tell a working
 # shim from one that never ran.
 adb shell settings put secure show_ime_with_hard_keyboard 1
-# A freshly booted emulator can ANR the launcher; its "isn't responding" dialog
-# keeps window focus, so the app window never gains it and the IME never serves
-# the WebView ("Ignoring showSoftInput() ... is not served", run 39156328714).
-# Suppress such dialogs for the run and close one that is already up.
-adb shell settings put global hide_error_dialogs 1
-adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null || true
+# A launcher ANR dialog on a fresh boot would hold window focus; see that script.
+./close-anr-dialogs.sh
 # Which band this image is actually in — the test branches on it and logs the
 # same, but the dumpsys line is the reading to compare a reporter's device to.
 adb shell dumpsys webviewupdate | grep -i 'Current WebView package' || true

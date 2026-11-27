@@ -35,6 +35,8 @@ capture_diagnostics() {
 # The emulator reports a hardware keyboard, which keeps the soft keyboard
 # hidden; ImeInsetShimInstrumentedTest needs it to open. See that test.
 adb shell settings put secure show_ime_with_hard_keyboard 1 || true
+# A launcher ANR dialog on a fresh boot would hold window focus; see that script.
+./close-anr-dialogs.sh
 adb logcat -c || true
 
 # Bounded so a hung instrumentation fails with a report instead of consuming the

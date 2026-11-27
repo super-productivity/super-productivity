@@ -50,6 +50,7 @@ const drag = async (
   source: Locator,
   to: { x: number; y: number },
 ): Promise<void> => {
+  await expect(source).toBeVisible(); // see centerOf()
   const box = (await source.boundingBox())!;
   const halfWidth = box.width / 2;
   const halfHeight = box.height / 2;
@@ -63,6 +64,9 @@ const drag = async (
 };
 
 const centerOf = async (target: Locator): Promise<{ x: number; y: number }> => {
+  // boundingBox() is null while the element is hidden, e.g. an event re-rendering
+  // right after a drop; wait it out rather than read null.
+  await expect(target).toBeVisible();
   const box = (await target.boundingBox())!;
   const halfWidth = box.width / 2;
   const halfHeight = box.height / 2;
@@ -123,6 +127,10 @@ test.describe('Schedule tray mode', () => {
       await expect(gridPreview).toBeHidden();
       await expect(detachedPreview).toHaveCSS('opacity', '1');
       await page.mouse.move(target.x, 500, { steps: 15 });
+      // As in drag(): the throttled update for the last step lands up to 30 ms
+      // later. Read before it, the badge shows an earlier step's time, higher up
+      // the grid than where the drop lands (CI: 5:30 shown, dropped at 5:40).
+      await page.waitForTimeout(DRAG_SETTLE_MS);
       await expect(gridPreview).toBeVisible();
       await expect(detachedPreview).toHaveCSS('opacity', '0');
       const previewTime = (await schedule
