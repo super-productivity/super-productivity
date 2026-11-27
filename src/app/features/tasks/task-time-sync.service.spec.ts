@@ -189,21 +189,34 @@ describe('TaskTimeSyncService', () => {
 
     it('judges inheritance at the op position inside a remote bulk', () => {
       const existing = createTask('existing', {
+        parentId: 'other-parent',
         timeSpent: 1000,
         timeSpentOnDay: { [day]: 1000 },
       });
+      const otherParent = createTask('other-parent', {
+        subTaskIds: [existing.id],
+        timeSpent: 1000,
+        timeSpentOnDay: { [day]: 1000 },
+      });
+      const withOther: TaskState = {
+        ...before,
+        ids: [parent.id, otherParent.id, existing.id],
+        entities: { parent, [otherParent.id]: otherParent, existing },
+      };
+      commit(withOther, { type: 'seed-other' });
       const child = createTask('child', { parentId: parent.id });
       const operations: Operation[] = [
         {
-          id: 'convert',
+          id: 'move',
           clientId: 'B',
-          actionType: TaskSharedActions.convertToSubTask.type as ActionType,
+          actionType: moveSubTask.type as ActionType,
           opType: OpType.Update,
           entityType: 'TASK',
           entityId: existing.id,
-          payload: TaskSharedActions.convertToSubTask({
+          payload: moveSubTask({
             taskId: existing.id,
-            targetParentId: parent.id,
+            srcTaskId: otherParent.id,
+            targetTaskId: parent.id,
             afterTaskId: null,
           }),
           vectorClock: { B: 1 },
@@ -223,20 +236,109 @@ describe('TaskTimeSyncService', () => {
           schemaVersion: 1,
         },
       ];
-      // The reducer lets the new subtask inherit nothing: the parent already
-      // has a child when its addSubTask applies.
+      const bulk = bulkApplyOperations({ operations });
+      const after = bulkOperationsMetaReducer(taskReducer)(withOther, bulk);
+      // The parent already has a child when its addSubTask applies, so the new
+      // subtask inherits nothing and the parent is the subtask sum.
+      expect(after.entities['child']!.timeSpent).toBe(0);
+      expect(after.entities['parent']!.timeSpent).toBe(1000);
+      expect(after.currentTaskId).toBe(child.id);
+      commit(after, bulk);
+
+      expect(changes).toBe(1);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('drops pending time when a task is converted into a subtask of it', () => {
+      const existing = createTask('existing', {
+        timeSpent: 2000,
+        timeSpentOnDay: { [day]: 2000 },
+      });
+      commit(
+        { ...before, ids: [parent.id, existing.id], entities: { parent, existing } },
+        { type: 'seed-existing' },
+      );
+      // The state handleConvertToSubTask leaves: the parent is the subtask sum.
       commit(
         {
           ...before,
-          ids: [parent.id, existing.id, child.id],
+          ids: [parent.id, existing.id],
           entities: {
             parent: {
               ...parent,
-              subTaskIds: [existing.id, child.id],
-              timeSpent: 1000,
-              timeSpentOnDay: { [day]: 1000 },
+              subTaskIds: [existing.id],
+              timeSpent: 2000,
+              timeSpentOnDay: { [day]: 2000 },
             },
             existing: { ...existing, parentId: parent.id },
+          },
+        },
+        TaskSharedActions.convertToSubTask({
+          taskId: existing.id,
+          targetParentId: parent.id,
+          afterTaskId: null,
+        }),
+      );
+      service.flush();
+
+      expect(changes).toBe(0);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps pending time when a first child comes back without a recalculation', () => {
+      const restored = createTask('restored', { parentId: parent.id });
+      // Like undoing a delete: the child returns, the parent keeps its time.
+      commit(
+        {
+          ...before,
+          ids: [parent.id, restored.id],
+          entities: { parent: { ...parent, subTaskIds: [restored.id] }, restored },
+        },
+        { type: '[Task Shared] restoreDeletedTask' },
+      );
+      service.flush();
+
+      expect(dispatchSpy).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ taskId: parent.id, duration: 5000 }),
+      );
+    });
+
+    it('moves nothing when an unchecked op may have attached a child first', () => {
+      const restored = createTask('restored', { parentId: parent.id });
+      const child = createTask('child', { parentId: parent.id });
+      const operations: Operation[] = [
+        {
+          id: 'restore',
+          clientId: 'B',
+          actionType: '[Task Shared] restoreDeletedTask' as ActionType,
+          opType: OpType.Create,
+          entityType: 'TASK',
+          entityId: restored.id,
+          payload: { task: restored },
+          vectorClock: { B: 1 },
+          timestamp: 1,
+          schemaVersion: 1,
+        },
+        {
+          id: 'add',
+          clientId: 'B',
+          actionType: addSubTask.type as ActionType,
+          opType: OpType.Create,
+          entityType: 'TASK',
+          entityId: child.id,
+          payload: addSubTask({ task: child, parentId: parent.id }),
+          vectorClock: { B: 2 },
+          timestamp: 2,
+          schemaVersion: 1,
+        },
+      ];
+      commit(
+        {
+          ...before,
+          ids: [parent.id, restored.id, child.id],
+          entities: {
+            parent: { ...parent, subTaskIds: [restored.id, child.id], timeSpent: 0 },
+            restored,
             child,
           },
           currentTaskId: child.id,

@@ -187,3 +187,104 @@ test.describe('@supersync First subtask added while the parent is tracked', () =
     });
   }
 });
+
+// Converting an existing task into the tracked task's first subtask replaces the
+// parent's time with the subtask sum on the tracking device. Its unsynced batch
+// used to be sent for the parent anyway, so the other device added it on top.
+test.describe('@supersync Existing task converted under the tracked task', () => {
+  test('keeps the parent total equal on both devices', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(180000);
+    const parentName = `Parent-${testRunId}`;
+    const otherName = `Other-${testRunId}`;
+    const clients: SimulatedE2EClient[] = [];
+    const fixedNow = Date.now();
+    try {
+      const config = getSuperSyncConfig(await createTestUser(testRunId));
+      for (const name of ['A', 'B']) {
+        const client = await createSimulatedClient(browser, baseURL!, name, testRunId);
+        clients.push(client);
+        await client.sync.setupSuperSync(config);
+        await client.page.evaluate(blockBackgroundSync);
+        await client.page.addInitScript(blockBackgroundSync);
+        if (name === 'A') {
+          await client.workView.addTask(otherName);
+          await client.workView.addTask(parentName);
+        }
+        await client.sync.syncAndWait();
+        await waitForTask(client.page, parentName);
+        await waitForTask(client.page, otherName);
+      }
+      const [a] = clients;
+      const parentId = await getTaskElement(a, parentName)
+        .first()
+        .getAttribute('data-task-id');
+      const otherId = await getTaskElement(a, otherName)
+        .first()
+        .getAttribute('data-task-id');
+      expect(parentId).toBeTruthy();
+      expect(otherId).toBeTruthy();
+
+      await a.page.clock.setFixedTime(fixedNow);
+      // Let the real interval consume the baseline before tracking starts.
+      await a.page.waitForTimeout(1100);
+      await startTimeTracking(a, parentName);
+      await a.page.clock.setFixedTime(fixedNow + 5000);
+      await waitForTaskTimeSpent(a, parentName);
+      expect((await readTimeSpent(a.page, parentId!))!.timeSpent).toBe(5000);
+
+      // The action the task list dispatches when a task is dropped into a
+      // subtask list (task-list.component.ts), without the flaky drag gesture.
+      await a.page.evaluate(
+        ([taskId, targetParentId]) => {
+          (
+            window as unknown as {
+              __e2eTestHelpers: { store: { dispatch: (action: unknown) => void } };
+            }
+          ).__e2eTestHelpers.store.dispatch({
+            type: '[Task Shared] convertToSubTask',
+            taskId,
+            targetParentId,
+            afterTaskId: null,
+            meta: {
+              isPersistent: true,
+              entityType: 'TASK',
+              entityId: taskId,
+              opType: 'UPD',
+            },
+          });
+        },
+        [otherId!, parentId!],
+      );
+      await expect(getSubtaskElement(a, otherName).first()).toBeVisible();
+      const trackedParent = getTaskElement(a, parentName).first();
+      await expect(trackedParent).toHaveClass(/isCurrent/);
+      await trackedParent.focus();
+      await trackedParent.press('y');
+      await expect(trackedParent).not.toHaveClass(/isCurrent/);
+      await a.page.clock.setSystemTime(Date.now());
+      for (let round = 0; round < 2; round++) {
+        for (const client of clients) await client.sync.syncAndWait();
+      }
+
+      const parentTime = await readTimeSpent(a.page, parentId!);
+      // The tracking device recalculated the parent from its subtask.
+      expect(parentTime!.timeSpent).toBe(0);
+      for (const client of clients) {
+        for (const isReloaded of [false, true]) {
+          if (isReloaded) {
+            await client.page.reload();
+            await waitForAppReady(client.page);
+          }
+          expect(await readTimeSpent(client.page, parentId!)).toEqual(parentTime);
+          expect((await readTimeSpent(client.page, otherId!))!.timeSpent).toBe(0);
+        }
+      }
+    } finally {
+      for (const client of clients) await closeClient(client);
+    }
+  });
+});

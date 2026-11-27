@@ -324,6 +324,7 @@ const SHARED_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> 
     _accumulator:
       'filled only by TaskService ticks; the track intent dispatches the flush itself',
     _currentTask: STORE_SIGNAL,
+    _taskEntities: STORE_SIGNAL,
     // taskChange$ is cold: only TaskService subscribes, and this harness
     // does not instantiate it. Its pairwise history never spans device swaps.
   },

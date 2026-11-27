@@ -53,13 +53,23 @@ export class TaskTimeSyncService {
         if (before?.subTaskIds.length !== 0 || !after?.subTaskIds.length) {
           continue;
         }
-        // The task got its first subtask. The reducer replaced its time with the
-        // subtask sum, so its pending batch either moved into an inheriting
-        // subtask (send it for that one) or is gone here (drop it everywhere).
-        const heirId = this._getInheritingSubTaskId(current.action, id);
+        // The task got its first subtask. addSubTask, moveSubTask and
+        // convertToSubTask replace its time with the subtask sum, so its pending
+        // batch either moved into an inheriting subtask (send it for that one)
+        // or is gone here (drop it, so other devices don't add it back). Other
+        // paths (undoing a delete, a plugin batch, an LWW parentId) keep the
+        // parent's time, and with it the batch.
+        const outcome = this._getFirstSubTaskOutcome(
+          current.action,
+          id,
+          after.subTaskIds,
+        );
+        if (outcome === 'kept') {
+          continue;
+        }
         this._accumulator.clearOne(id);
-        if (heirId && current.entities[heirId]) {
-          this._accumulator.accumulate(heirId, duration, date);
+        if (outcome !== 'dropped' && current.entities[outcome.heirId]) {
+          this._accumulator.accumulate(outcome.heirId, duration, date);
         }
       }
     }),
@@ -67,13 +77,20 @@ export class TaskTimeSyncService {
   );
 
   /**
-   * Returns the subtask that inherited the parent's time in this action, judged
-   * like `addSubTask`'s reducer at the op's position: the first op that gives
-   * the parent a child must create it, without time of its own. Reads the
-   * creation payload, because later remote additive deltas replace that map.
-   * Explicit pasted time must never receive the parent's pending batch.
+   * What happened to a parent's time when this action gave it its first
+   * subtasks. The subtask inherited it only when the first op that attached a
+   * child, at its position in a remote bulk, created it without time of its
+   * own, like `addSubTask`'s reducer decides. The creation payload counts,
+   * because later remote additive deltas replace the inherited map, and
+   * explicit pasted time must never receive the parent's pending batch. A child
+   * attached by an op not checked here may have come first, so then nothing
+   * inherits.
    */
-  private _getInheritingSubTaskId(action: Action, parentId: string): string | null {
+  private _getFirstSubTaskOutcome(
+    action: Action,
+    parentId: string,
+    childIds: string[],
+  ): { heirId: string } | 'dropped' | 'kept' {
     const actions =
       action.type === bulkApplyOperations.type
         ? (action as ReturnType<typeof bulkApplyOperations>).operations.map((op) => ({
@@ -81,23 +98,41 @@ export class TaskTimeSyncService {
             ...(extractActionPayload(op.payload) as object),
           }))
         : [action];
+    const attached: { childId: string; inherits: boolean }[] = [];
     for (const candidate of actions) {
       if (candidate.type === addSubTask.type) {
         const { task, parentId: target } = candidate as ReturnType<typeof addSubTask>;
         if (target === parentId) {
-          return Object.keys(task.timeSpentOnDay || {}).length === 0 ? task.id : null;
+          attached.push({
+            childId: task.id,
+            inherits:
+              attached.length === 0 &&
+              Object.keys(task.timeSpentOnDay || {}).length === 0,
+          });
         }
-      } else if (
-        (candidate.type === TaskSharedActions.convertToSubTask.type &&
-          (candidate as ReturnType<typeof TaskSharedActions.convertToSubTask>)
-            .targetParentId === parentId) ||
-        (candidate.type === moveSubTask.type &&
-          (candidate as ReturnType<typeof moveSubTask>).targetTaskId === parentId)
-      ) {
-        return null;
+      } else if (candidate.type === TaskSharedActions.convertToSubTask.type) {
+        const { taskId, targetParentId } = candidate as ReturnType<
+          typeof TaskSharedActions.convertToSubTask
+        >;
+        if (targetParentId === parentId) {
+          attached.push({ childId: taskId, inherits: false });
+        }
+      } else if (candidate.type === moveSubTask.type) {
+        const { taskId, targetTaskId } = candidate as ReturnType<typeof moveSubTask>;
+        if (targetTaskId === parentId) {
+          attached.push({ childId: taskId, inherits: false });
+        }
       }
     }
-    return null;
+    if (attached.length === 0) {
+      return 'kept';
+    }
+    const isEveryChildChecked = childIds.every((childId) =>
+      attached.some((entry) => entry.childId === childId),
+    );
+    return attached[0].inherits && isEveryChildChecked
+      ? { heirId: attached[0].childId }
+      : 'dropped';
   }
 
   accumulate(taskId: string, duration: number, date: string): void {
