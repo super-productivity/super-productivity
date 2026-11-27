@@ -139,6 +139,34 @@ describe('privacyExport', () => {
       expect(jsonString).not.toContain('trello-key-secret');
       expect(jsonString).not.toContain('trello-token-secret');
     });
+
+    it('should mask the GitHub Enterprise API URL of a plugin provider', () => {
+      const input = {
+        issueProvider: {
+          entities: {
+            gh1: {
+              issueProviderKey: 'GITHUB',
+              pluginConfig: { apiBaseUrl: 'https://github.example.com/api/v3' },
+            },
+          },
+        },
+      };
+      expect(privacyExport(input)).not.toContain('github.example.com');
+    });
+
+    it('should mask the CalDAV server URL of a plugin provider', () => {
+      const input = {
+        issueProvider: {
+          entities: {
+            cal1: {
+              issueProviderKey: 'plugin:caldav-calendar-provider',
+              pluginConfig: { serverUrl: 'https://dav.example.com/remote.php/dav' },
+            },
+          },
+        },
+      };
+      expect(privacyExport(input)).not.toContain('dav.example.com');
+    });
   });
 
   describe('email exposure prevention', () => {
