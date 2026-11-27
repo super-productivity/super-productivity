@@ -24,6 +24,7 @@ import { DEFAULT_TASK, Task } from '../task.model';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TaskTimeSyncService } from '../task-time-sync.service';
 import { IssueSharedTitleService } from '../../issue/two-way-sync/issue-shared-title.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('ShortSyntaxEffects', () => {
   let effects: ShortSyntaxEffects;
@@ -387,6 +388,32 @@ describe('ShortSyntaxEffects', () => {
         title: 'Fix login bug',
       });
     }));
+
+    it('should keep a date-only deadline from a title edit all-day', async () => {
+      globalConfigServiceMock.cfg.and.returnValue({
+        ...DEFAULT_GLOBAL_CONFIG,
+        shortSyntax: { ...DEFAULT_GLOBAL_CONFIG.shortSyntax, isEnableDeadline: true },
+      });
+      const task = createTask('task-1', { title: 'Synthetic deadline !tomorrow' });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const emitted = firstValueFrom(effects.shortSyntax$);
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: task.title } },
+        }),
+      );
+
+      const action = (await emitted) as ReturnType<
+        typeof TaskSharedActions.applyShortSyntax
+      >;
+      expect(action.taskChanges.title).toBe('Synthetic deadline');
+      expect(action.taskChanges.deadlineDay).toBe(getDbDateStr(tomorrow));
+      expect(action.taskChanges.deadlineWithTime).toBeNull();
+      expect('hasDeadlineTime' in action.taskChanges).toBe(false);
+    });
 
     it('should add URL as attachment when updating task title with a URL', fakeAsync(() => {
       const task = createTask('task-1', {

@@ -110,6 +110,11 @@ export class DateTimePickerComponent implements AfterViewInit {
   timeLabel = input<string>('Time');
   reminderLabel = input<string>(T.F.TASK.D_SCHEDULE_TASK.REMIND_AT);
   showQuickAccess = input<boolean>(true);
+  /**
+   * The host combines the picked date and time as a logical day (#12012), so a
+   * defaulted date must be the logical day the defaulted time belongs to.
+   */
+  isLogicalDay = input<boolean>(false);
 
   // Outputs
   dateSelected = output<Date>();
@@ -228,8 +233,12 @@ export class DateTimePickerComponent implements AfterViewInit {
         }
       } else {
         // get current time +1h
-        targetTime = getClockStringFromHours((new Date().getHours() + 1) % 24);
-        targetDate = new Date();
+        const inAnHour = new Date();
+        inAnHour.setHours(inAnHour.getHours() + 1, 0, 0, 0);
+        targetTime = getClockStringFromHours(inAnHour.getHours());
+        targetDate = this.isLogicalDay()
+          ? new Date(inAnHour.getTime() - this._dateService.getStartOfNextDayDiffMs())
+          : new Date();
       }
 
       if (targetDate) {

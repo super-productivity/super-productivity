@@ -86,6 +86,7 @@ jobs:
 
       CODE_ROOT: code-root
       WIKI_SRC: code-root/docs/wiki
+      WIKI_STUBS: wiki-stubs
       WIKI_ROOT: wiki-root
 
     steps:
@@ -127,7 +128,13 @@ jobs:
           echo "::endgroup::"
           # --------------------------------------------------------------------
 
-      - name: Mirror docs/wiki to GitHub Wiki
+      # The docs are published at super-productivity.com/docs/ (built from docs/wiki by the
+      # landing page repo). The GitHub Wiki can't redirect, so it gets one stub per page linking
+      # to the page's new URL; docs/wiki stays the source of the website.
+      - name: Build GitHub Wiki stubs
+        run: node "${CODE_ROOT}/tools/wiki-stubs.js" "${WIKI_SRC}" "${WIKI_STUBS}"
+
+      - name: Mirror stubs to GitHub Wiki
         run: |
           # RSYNC Options: assume that the code is always the source of truth
           # RSYNC_DRY_RUN: "0"
@@ -154,15 +161,15 @@ jobs:
             RSYNC_OPTIONS+=(-vv)
           fi
 
-          # Mirror the code to the wiki.
-          rsync "${RSYNC_OPTIONS[@]}" "${WIKI_SRC}"/ "${WIKI_ROOT}"
+          # Mirror the stubs to the wiki.
+          rsync "${RSYNC_OPTIONS[@]}" "${WIKI_STUBS}"/ "${WIKI_ROOT}"
 
       - name: Switch, Commit, and Push
         working-directory: ${{ env.WIKI_ROOT }}
         run: |
           git add -A # preferred over `git add .` in order to include deletions
           if ! git diff-index --quiet HEAD; then
-            git commit -m "docs(wiki): auto-publish via wiki-sync.yml"
+            git commit -m "docs(wiki): publish stubs linking to super-productivity.com/docs"
             git push --force-with-lease # ensures edits in wiki don't block
           else
             # Expected if modifying only the YML and not the wiki content.

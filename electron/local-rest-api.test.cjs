@@ -82,6 +82,9 @@ const createContext = ({ port, userDataDir }) => {
     plantedSymlinkCount: 0,
     // Arguments of every warn() this copy made.
     warnings: [],
+    // Every debug() line this copy logged, in order. The request log is the
+    // only thing that logs at that level.
+    debugLines: [],
   };
 
   ctx.win = {
@@ -171,6 +174,9 @@ const installMocks = (ctx) => {
     if (request === 'electron-log/main') {
       return {
         log: () => {},
+        debug: (line) => {
+          ctx.debugLines.push(line);
+        },
         // Kept, not discarded: the Error this copy warned with is the only
         // place a test can read *why* a persist failed.
         warn: (...args) => {
@@ -1408,6 +1414,216 @@ test('disabling REST retries a failed bind when assistant access still needs it'
     if (blocker.listening) await new Promise((resolve) => blocker.close(resolve));
     fs.rmSync(profileDir, { recursive: true, force: true });
   }
+});
+
+/**
+ * Runs `run` against an isolated copy, so no other test's requests end up in
+ * its request log. A line is written when its response closes, which is after
+ * the client has read that response — so `logged` waits for the line instead
+ * of reading it straight away.
+ */
+const withRequestLog = async (run) => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-log-'));
+  const port = takeIsolatedPort();
+  const ctx = createContext({ port, userDataDir: profileDir });
+  const isolated = loadModule(ctx);
+
+  try {
+    isolated.initLocalRestApi();
+    isolated.applyLocalRestApiEnabled(true);
+    const token = ctx.handleHandlers.get('LOCAL_REST_API_GET_TOKEN')();
+    /** Sends a request and resolves to the one line it logged. */
+    const logged = async (options, body) => {
+      const lineCount = ctx.debugLines.length;
+      await makeRequest(options, body, port);
+      await waitFor(() => ctx.debugLines.length > lineCount, 'the request log line');
+      assert.equal(ctx.debugLines.length, lineCount + 1, 'one line per request');
+      return ctx.debugLines[lineCount];
+    };
+    await run({ ctx, port, token, logged });
+  } finally {
+    isolated.applyLocalRestApiEnabled(false);
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
+};
+
+/** Makes the renderer of `ctx` answer every request with `status` and `body`. */
+const answerRendererWith = (ctx, status, body) => {
+  ctx.win.webContents.send = (channel, payload) => {
+    ctx.onHandlers.get('LOCAL_REST_API_RESPONSE')(
+      {},
+      { requestId: payload.requestId, status, body },
+    );
+  };
+};
+
+// Requests answered `200 {"ok":true}` used to leave no trace at all, so a bug
+// triggered through the API could not be matched to the request that caused it.
+test('every request logs one line with its method, route, status and duration', async () => {
+  await withRequestLog(async ({ token, logged }) => {
+    const headers = { Authorization: `Bearer ${token}` };
+
+    assert.match(
+      await logged({ method: 'GET', path: '/health' }),
+      /^\[local-rest-api\] GET \/health 200 \d+ms$/,
+    );
+    assert.match(
+      await logged({ method: 'POST', path: '/tasks', headers }, { title: 'a task' }),
+      /^\[local-rest-api\] POST \/tasks 200 \d+ms$/,
+    );
+  });
+});
+
+// The app log can be exported, so a line says what was called, never on what.
+test('the request log leaves out ids, the query string, the body and the token', async () => {
+  await withRequestLog(async ({ ctx, token, logged }) => {
+    const headers = { Authorization: `Bearer ${token}` };
+
+    assert.match(
+      await logged({
+        method: 'GET',
+        path: '/tasks/SECRET_ID?query=SECRET_QUERY',
+        headers,
+      }),
+      /^\[local-rest-api\] GET \/tasks\/:id 200 \d+ms$/,
+    );
+    assert.match(
+      await logged(
+        { method: 'POST', path: '/tasks/SECRET_ID/time', headers },
+        { date: 'SECRET_BODY' },
+      ),
+      /^\[local-rest-api\] POST \/tasks\/:id\/time 200 \d+ms$/,
+    );
+    // The renderer serves a route with a trailing slash as well.
+    assert.match(
+      await logged({ method: 'DELETE', path: '/notes/SECRET_ID/', headers }),
+      /^\[local-rest-api\] DELETE \/notes\/:id 200 \d+ms$/,
+    );
+    // The other routes that carry an id.
+    for (const route of [
+      '/tasks/:id/start',
+      '/tasks/:id/archive',
+      '/tasks/:id/restore',
+      '/task-repeat-cfgs/:id',
+      '/simple-counters/:id',
+      '/simple-counters/:id/value',
+      '/simple-counters/:id/increment',
+    ]) {
+      const line = await logged({
+        method: 'POST',
+        path: route.replace(':id', 'SECRET_ID'),
+        headers,
+      });
+      assert.equal(line.split(' ')[2], route);
+    }
+
+    const log = ctx.debugLines.join('\n');
+    assert.doesNotMatch(log, /SECRET/);
+    assert.equal(log.includes(token), false);
+  });
+});
+
+// Unauthenticated requests are logged too, so anyone on this computer can send
+// a path. Only one that is a route may reach the log.
+test('a path that is not a route is logged as <unmatched>', async () => {
+  await withRequestLog(async ({ ctx, logged }) => {
+    for (const requestPath of [
+      '/',
+      '/SECRET',
+      '/projects/SECRET_ID',
+      '/tasks/SECRET_ID/SECRET',
+      '/tasks/SECRET_ID/archive/SECRET',
+    ]) {
+      assert.match(
+        await logged({ method: 'GET', path: requestPath }),
+        /^\[local-rest-api\] GET <unmatched> 401 UNAUTHORIZED \d+ms$/,
+        requestPath,
+      );
+    }
+    // Node accepts this request target, `new URL()` does not.
+    assert.match(
+      await logged({ method: 'GET', path: '//' }),
+      /^\[local-rest-api\] GET <unmatched> 400 INVALID_URL \d+ms$/,
+    );
+    assert.doesNotMatch(ctx.debugLines.join('\n'), /SECRET/);
+  });
+});
+
+test('the request log names the error code of a failed request', async () => {
+  await withRequestLog(async ({ ctx, token, logged }) => {
+    const headers = { Authorization: `Bearer ${token}` };
+
+    // Rejected before it reaches the renderer.
+    assert.match(
+      await logged({ method: 'GET', path: '/tasks' }),
+      /^\[local-rest-api\] GET \/tasks 401 UNAUTHORIZED \d+ms$/,
+    );
+
+    // Rejected by the renderer; the message can name the task and is left out.
+    answerRendererWith(ctx, 404, {
+      ok: false,
+      error: { code: 'TASK_NOT_FOUND', message: 'Task SECRET_ID not found' },
+    });
+    assert.match(
+      await logged({ method: 'PATCH', path: '/tasks/SECRET_ID', headers }, {}),
+      /^\[local-rest-api\] PATCH \/tasks\/:id 404 TASK_NOT_FOUND \d+ms$/,
+    );
+  });
+});
+
+test('a request whose client hung up is logged as aborted', async () => {
+  await withRequestLog(async ({ ctx, port, token }) => {
+    // A renderer that takes its time, so the client can leave first.
+    let answerRenderer;
+    const forwarded = new Promise((resolve) => {
+      ctx.win.webContents.send = (channel, payload) => {
+        answerRenderer = () =>
+          ctx.onHandlers.get('LOCAL_REST_API_RESPONSE')(
+            {},
+            { requestId: payload.requestId, status: 200, body: { ok: true, data: null } },
+          );
+        resolve();
+      };
+    });
+    const req = http.request({
+      host: '127.0.0.1',
+      port,
+      method: 'GET',
+      path: '/tasks/SECRET_ID',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    // The client is told about its own hang-up as an error.
+    req.on('error', () => {});
+    req.end();
+
+    try {
+      await forwarded;
+      req.destroy();
+      await waitFor(() => ctx.debugLines.length > 0, 'the request log line');
+      assert.deepEqual(
+        ctx.debugLines.map((line) => line.replace(/\d+ms$/, 'Nms')),
+        ['[local-rest-api] GET /tasks/:id aborted Nms'],
+      );
+    } finally {
+      // Otherwise the forwarded request keeps the process alive until it times out.
+      answerRenderer?.();
+    }
+    assert.equal(ctx.debugLines.length, 1, 'the late answer must not log a second line');
+  });
+});
+
+// The assistant endpoint shares the listener, but has its own switch and key.
+test('assistant (MCP) requests are not part of the REST request log', async () => {
+  await withRequestLog(async ({ ctx, port, logged }) => {
+    const mcp = await makeRequest({ method: 'POST', path: '/mcp' }, {}, port);
+    assert.equal(mcp.status, 503, 'assistant access is off in this copy');
+
+    await logged({ method: 'GET', path: '/health' });
+    assert.deepEqual(
+      ctx.debugLines.map((line) => line.replace(/\d+ms$/, 'Nms')),
+      ['[local-rest-api] GET /health 200 Nms'],
+    );
+  });
 });
 
 test.after(() => {

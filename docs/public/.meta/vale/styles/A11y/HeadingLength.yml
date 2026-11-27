@@ -1,0 +1,21 @@
+# WCAG 2.4.6: headings describe their section. Users who navigate by heading
+# hear each one in full; a sentence for a heading is slow to skim.
+# https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels
+extends: occurrence
+message: "%d words in a heading. Keep it short enough to skim."
+link: https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels
+level: suggestion
+scope: heading
+max: 12
+token: '\b\w+\b'
+
+tests:
+  - name: fires
+    input: |
+      ## How to set up the development environment on a new machine from scratch
+    want: |
+      1:4:A11y.HeadingLength:13 words in a heading. Keep it short enough to skim.
+  - name: clean
+    input: |
+      ## Set up the development environment
+    want: ""

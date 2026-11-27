@@ -76,3 +76,16 @@
   <mat-icon>move_to_inbox</mat-icon>
   {{ T.FILE_IMEX.IMPORT_FROM_TICKTICK | translate }}
 </button>
+
+<!-- Microsoft rejects sign-in token requests from the native WebViews (#9546) -->
+@if (!IS_NATIVE_PLATFORM) {
+  <button
+    (click)="openMsTodoImport()"
+    color="primary"
+    mat-stroked-button
+    type="button"
+  >
+    <mat-icon>move_to_inbox</mat-icon>
+    {{ T.FILE_IMEX.IMPORT_FROM_MS_TODO | translate }}
+  </button>
+}

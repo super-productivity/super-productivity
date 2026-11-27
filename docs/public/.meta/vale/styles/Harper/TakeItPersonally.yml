@@ -1,0 +1,19 @@
+---
+# Generated from Harper's TakeItPersonally rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `take it personal` to `take it personally`.
+extends: existence
+message: "The more standard, less colloquial form is `take it personally`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "take it personally"
+tokens:
+  - "take(?!\\s*\\n\\s*\\n)\\s+it(?!\\s*\\n\\s*\\n)\\s+personal(?!['\\x{2019}]s\\b)"

@@ -18,12 +18,15 @@ import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TODAY_TAG } from '../tag/tag.const';
 import { WorkContextType } from '../work-context/work-context.model';
+import { selectProjectFeatureState } from '../project/store/project.selectors';
 
 /** One entry of the native `CaptureInbox` (see CaptureInbox.kt). */
 export interface AndroidCapture {
   id: string;
   title: string;
   createdAt: number;
+  /** Set by the quick add of a project widget (QuickAddActivity.EXTRA_PROJECT_ID). */
+  projectId?: string | null;
 }
 
 /** The native bridge methods backed by CaptureInbox.kt. */
@@ -91,6 +94,7 @@ export class AndroidCaptureImportService {
   private _importer = inject(NativeCaptureImporter);
   private _store = inject(Store);
   private _globalConfig = inject(GlobalConfigService);
+  private _projectState = this._store.selectSignal(selectProjectFeatureState);
 
   /**
    * Must be called serially (startup and resume).
@@ -111,23 +115,28 @@ export class AndroidCaptureImportService {
         return parseCaptures(json);
       },
       isValid: () => true,
-      // As if typed into Today's add bar (short syntax on), only the id is
-      // fixed. Today, because the capture came from the Today widget, which
-      // shows it as pending until now (WidgetData.withPendingCaptures). Not
-      // the active work context: the import runs on whatever screen the app
-      // resumes on, which the user did not pick for the capture.
+      // As if typed into the add bar of the widget's context (short syntax
+      // on), only the id is fixed: the project of a project widget, else
+      // Today. That is where the widget showed it as pending until now
+      // (WidgetData.withPendingCaptures). Not the active work context: the
+      // import runs on whatever screen the app resumes on, which the user did
+      // not pick for the capture. A project deleted or archived since the
+      // capture falls back to Today, so the title is never lost.
       createTask: (capture) => {
+        const projectId = this._usableProjectId(capture.projectId);
+        const workContextType = projectId ? WorkContextType.PROJECT : WorkContextType.TAG;
+        const workContextId = projectId ?? TODAY_TAG.id;
         const task = this._taskService.createNewTaskWithDefaults({
           title: capture.title,
           id: capture.id,
-          workContextType: WorkContextType.TAG,
-          workContextId: TODAY_TAG.id,
+          workContextType,
+          workContextId,
         });
         this._store.dispatch(
           TaskSharedActions.addTask({
             task,
-            workContextId: TODAY_TAG.id,
-            workContextType: WorkContextType.TAG,
+            workContextId,
+            workContextType,
             isAddToBacklog: false,
             isAddToBottom: false,
           }),
@@ -180,5 +189,13 @@ export class AndroidCaptureImportService {
       },
     };
     return (await this._importer.importPending(source)).created;
+  }
+
+  private _usableProjectId(projectId: string | null | undefined): string | null {
+    if (!projectId) {
+      return null;
+    }
+    const project = this._projectState().entities[projectId];
+    return project && !project.isArchived ? project.id : null;
   }
 }

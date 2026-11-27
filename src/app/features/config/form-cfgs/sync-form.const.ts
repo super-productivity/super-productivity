@@ -487,6 +487,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             HAS_OFFICIAL_ONEDRIVE_CLIENT_ID && !m?.oneDrive?.useCustomApp,
           templateOptions: {
             tag: 'p',
+            // Links the website page built from docs/wiki/2.09-Configure-Sync-Backend.md
             text: T.F.SYNC.FORM.ONEDRIVE.INFO_TEXT,
           },
         },

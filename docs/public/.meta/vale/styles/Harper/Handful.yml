@@ -1,0 +1,21 @@
+---
+# Generated from Harper's Handful linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+#
+# Keeps the palm-sized quantity expressed by `handful` as one word.
+extends: substitution
+message: "Write this quantity as the single word `handful`."
+level: warning
+ignorecase: true
+action:
+  name: replace
+swap:
+  "hand(?!\\s*\\n\\s*\\n)\\s+-(?!\\s*\\n\\s*\\n)\\s+full": "handful"
+  "hand(?!\\s*\\n\\s*\\n)\\s+full": "Handful|handful"
+  "hand-full": "Handful|handful"

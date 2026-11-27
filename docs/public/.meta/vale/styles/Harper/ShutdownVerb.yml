@@ -1,0 +1,30 @@
+---
+# Hand-written from Harper's ShutdownVerb: an auxiliary pulls `shutdown` into
+# a predicate, where the verb is two words.
+#
+# Harper's weir rule allows a subject and a negation between the auxiliary and
+# the verb, in either order: `@helper shutdown`, `@helper @subject shutdown`,
+# `@helper not shutdown`, `@helper @subject not shutdown` and `@helper not
+# @subject shutdown`. A first draft here allowed only the bare form and missed
+# six -- "Would John shutdown the demo", "They have not shutdown the service",
+# "Has he shutdown the node yet" -- which is more than the generated rule it
+# replaced was already catching.
+#
+# The subject slot is pronouns and capitalised words rather than any word at
+# all: Harper asks for a pronoun, proper noun or noun there, and `(?:\w+\s)?`
+# would swallow the determiner in "we have a shutdown scheduled", where the
+# word is the noun and correct as it stands.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Use the verbal phrase `shut down` when an auxiliary pulls it into a predicate."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:will|would|should|could|can|may|might|must|has|have|had|is|are|was|were|am|be|been|do|does|did|to|won''t|wont|can''t|cant|don''t|dont|doesn''t|didn''t|shouldn''t|couldn''t|wouldn''t)\s(?:not\s)?(?:(?:he|she|it|they|we|i|you|[A-Z][a-z]+)\s)?(?:not\s)?)shutdown\b': "shut down"

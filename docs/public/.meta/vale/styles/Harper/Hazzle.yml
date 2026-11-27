@@ -1,0 +1,20 @@
+---
+# Generated from Harper's Hazzle rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `hazzle` to `hassle`.
+extends: substitution
+message: "Did you mean %[1]s?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "hazzle(?!['\\x{2019}]s\\b)": "hassle"
+  "hazzled(?!['\\x{2019}]s\\b)": "hassled"
+  "hazzles(?!['\\x{2019}]s\\b)": "hassles"
+  "hazzling(?!['\\x{2019}]s\\b)": "hassling"

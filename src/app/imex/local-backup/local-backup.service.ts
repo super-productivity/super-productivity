@@ -439,11 +439,11 @@ export class LocalBackupService {
       didWrite = true;
     }
 
-    // #7901: record when a good backup was actually written so Settings can show
-    // the user they're protected. Only on a real write: the per-platform A3
-    // near-empty guard (#7925) can skip the write to preserve an older, larger
-    // backup, and the timestamp must not advance then — it would falsely claim
-    // "just backed up" on exactly the post-eviction boot the guard protects.
+    // #7901: record a successful backup run so Settings can show the user they're
+    // protected: the current snapshot was written or confirmed on desktop.
+    // On mobile, the A3 near-empty guard (#7925) can skip the write to preserve
+    // an older, larger backup. The timestamp must not advance then — it would
+    // falsely claim "just backed up" on the post-eviction boot the guard protects.
     if (didWrite) {
       this._recordLastBackupTime();
     }
@@ -473,7 +473,7 @@ export class LocalBackupService {
     }
   }
 
-  /** Epoch ms of the last successful local backup write, or null if none yet. */
+  /** Epoch ms of the last successful backup run (written or confirmed on desktop), or null. */
   getLastBackupTime(): number | null {
     const raw = localStorage.getItem(LS.LAST_LOCAL_BACKUP);
     if (!raw) {

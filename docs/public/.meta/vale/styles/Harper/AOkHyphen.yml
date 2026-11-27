@@ -1,0 +1,20 @@
+---
+# Generated from Harper's AOkHyphen rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Replaces the loose article-plus-abbreviation pairing with the standard hyphenated form whenever a linking verb describes readiness or approval.
+extends: existence
+message: "Use `A-OK` when stating that something is acceptable or ready."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "A-OK"
+tokens:
+  - "a(?!\\s*\\n\\s*\\n)\\s+okay(?!['\\x{2019}]s\\b)"
+  - "a(?!\\s*\\n\\s*\\n)\\s+ok(?!['\\x{2019}]s\\b)"

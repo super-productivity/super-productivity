@@ -102,6 +102,7 @@ import {
 import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 import { isWontDoTask } from '../util/is-wont-do-task';
+import { hasModifierKey } from '@angular/cdk/keycodes';
 
 @Component({
   selector: 'task-detail-panel',
@@ -804,6 +805,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   onItemKeyPress(ev: KeyboardEvent): void {
+    // Modified arrows are task shortcuts (e.g. Ctrl+Alt+ArrowDown on a sub-task).
+    if (hasModifierKey(ev)) {
+      return;
+    }
     const itemEls = this.itemEls();
     if (!itemEls) {
       throw new Error();

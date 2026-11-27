@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AsItHappens rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `as it so happens` to `as it happens`.
+extends: existence
+message: "Did you mean `as it happens`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "as it happens"
+tokens:
+  - "as(?!\\s*\\n\\s*\\n)\\s+it(?!\\s*\\n\\s*\\n)\\s+so(?!\\s*\\n\\s*\\n)\\s+happens(?!['\\x{2019}]s\\b)"

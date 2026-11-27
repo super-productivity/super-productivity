@@ -1130,6 +1130,7 @@
       "MONTH": "Měsíc",
       "MORE_EVENTS": {
         "ONE": "{{count}} další událost",
+        "FEW": "{{count}} další události",
         "OTHER": "{{count}} dalších událostí"
       },
       "NEXT_DAY": "Další den",

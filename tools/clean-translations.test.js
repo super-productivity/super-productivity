@@ -65,6 +65,8 @@ test('isLocaleOnlyPluralForm only accepts CLDR categories under a live parent', 
   assert.equal(isLocaleOnlyPluralForm('F.GONE.FEW', validKeys), false);
   // top-level key with no parent path
   assert.equal(isLocaleOnlyPluralForm('FEW', validKeys), false);
+  // a live namespace that is not a plural (no OTHER form in the reference)
+  assert.equal(isLocaleOnlyPluralForm('F.OTHER_THING.FEW', validKeys), false);
 });
 
 test('requiring the module does not rewrite the i18n files', () => {

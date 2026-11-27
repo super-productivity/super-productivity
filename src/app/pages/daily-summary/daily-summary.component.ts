@@ -392,6 +392,10 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       if (isConfirm === undefined) {
         return;
       } else if (isConfirm === true) {
+        // shutdownNow quits without the before-close holds, so the running
+        // stopwatch time since the last batch is persisted here instead.
+        this._simpleCounterService.flushAccumulatedTime();
+        this._simpleCounterService.turnOffAll();
         await this._moveDoneToArchive();
         this._finishDayForGood(() => {
           window.ea.shutdownNow();

@@ -2,6 +2,9 @@ import { normalizeDurationString, stringToMs } from './string-to-ms.pipe';
 
 // A whole or decimal number: "2", "1.5", ".5"
 const NUM = String.raw`(?:\d+(?:\.\d+)?|\.\d+)`;
+// A later part, after the previous unit: a leading-dot number needs a space
+// before it, so "1h,30m" (normalized to "1h.30m") is not read as 1 h 0.3 min.
+const NEXT = String.raw`(?:\s*\d+(?:\.\d+)?|\s+\.\d+)`;
 
 export interface ProcessDurationInputResult {
   isValid: boolean;
@@ -20,7 +23,7 @@ export const processDurationInput = (
     const normalized = normalizeDurationString(strVal).trim();
     const AllowedPatterns = [
       // Allow any number with h, m units, or combinations like "2h 30m" or "1.5h 2.5m"
-      new RegExp(`(^${NUM}h(?:\\s*${NUM}m)?$)|(^${NUM}m$)`, 'i'),
+      new RegExp(`(^${NUM}h(?:${NEXT}m)?$)|(^${NUM}m$)`, 'i'),
 
       // Allow fractional hours with or without h specifier
       /^\d*[.,]\d+h?$/i,
@@ -36,7 +39,7 @@ export const processDurationInput = (
       AllowedPatterns.push(
         // Allow combinations like "2h 30m 45s"
         new RegExp(
-          `(^${NUM}h(?:\\s*${NUM}m)?(?:\\s*${NUM}s)?$)|(^${NUM}m(?:\\s*${NUM}s)?$)|(^${NUM}s$)`,
+          `(^${NUM}h(?:${NEXT}m)?(?:${NEXT}s)?$)|(^${NUM}m(?:${NEXT}s)?$)|(^${NUM}s$)`,
           'i',
         ),
       );

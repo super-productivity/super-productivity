@@ -1130,6 +1130,8 @@
       "MONTH": "Miesiąc",
       "MORE_EVENTS": {
         "ONE": "Jeszcze {{count}} wydarzenie",
+        "FEW": "Jeszcze {{count}} wydarzenia",
+        "MANY": "Jeszcze {{count}} wydarzeń",
         "OTHER": "Jeszcze {{count}} wydarzeń"
       },
       "NEXT_DAY": "Następny dzień",

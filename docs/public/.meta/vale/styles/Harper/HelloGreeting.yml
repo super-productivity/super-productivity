@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's HelloGreeting: `halo` is the optical effect;
+# the greeting is `hello`.
+#
+# The generated rule keyed its swaps on the punctuation around the word --
+# `"halo`, `halo!`, `halo,`, `halo?` -- and so missed `Halo world!` and
+# `Halo there friend.`, where an ordinary word follows.
+#
+# Harper anchors this to the start of the sentence, past any opening quote,
+# which is what keeps it off `halo` used as a noun mid-sentence. The
+# lookbehind does the same: at most a quote and surrounding space may stand
+# between the start and the word.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Prefer `hello` as a greeting; `halo` refers to the optical effect."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+  params:
+    - "Hello"
+tokens:
+  - '(?<=^[\s"''“‘]{0,3})halo\b'

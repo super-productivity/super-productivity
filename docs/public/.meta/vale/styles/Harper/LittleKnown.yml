@@ -1,0 +1,28 @@
+---
+# Hand-written from Harper's LittleKnown, the half that adds the article.
+#
+# The rule runs in both directions and it is easy to get backwards: before
+# `fact` the phrase is a noun phrase and wants its article -- "It's little
+# known fact that Legolas..." is the error Harper corrects to "It's a little
+# known fact". Before `that` it is a predicate and takes none, which is
+# LittleKnown2.yml.
+#
+# Reading it the other way round flags the correct sentences instead, which is
+# what the first draft of this rule did.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "The idiom is `a little known fact`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '\bit''s\s+little\s+known\s+fact\b': "it's a little known fact"
+  '\bit''s\s+little-known\s+fact\b': "it's a little-known fact"
+  '\bits\s+little\s+known\s+fact\b': "its a little known fact"
+  '\bits\s+little-known\s+fact\b': "its a little-known fact"

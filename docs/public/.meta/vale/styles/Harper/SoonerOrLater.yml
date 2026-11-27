@@ -1,0 +1,20 @@
+---
+# Generated from Harper's SoonerOrLater rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes the improper phrase `sooner than later` by suggesting standard alternatives.
+extends: existence
+message: "Did you mean `sooner rather than later` or `sooner or later`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "sooner rather than later"
+    - "sooner or later"
+tokens:
+  - "sooner(?!\\s*\\n\\s*\\n)\\s+than(?!\\s*\\n\\s*\\n)\\s+later(?!['\\x{2019}]s\\b)"

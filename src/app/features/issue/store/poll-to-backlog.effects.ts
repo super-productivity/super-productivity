@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { combineLatest, EMPTY, from, merge, Observable, timer } from 'rxjs';
+import { combineLatest, EMPTY, from, merge, Observable, of, timer } from 'rxjs';
 import {
   catchError,
   concatMap,
@@ -27,6 +27,7 @@ import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provi
 import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
 import { getRefreshOnLook$ } from './refresh-on-look';
 import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { isLocalProvider } from './is-local-provider';
 import { pollWhileOnline } from '../../../util/poll-while-online';
 
 @Injectable()
@@ -150,7 +151,7 @@ export class PollToBacklogEffects {
     stopOnContextSwitch = true,
   ): Observable<unknown> {
     const timer$ = pollWhileOnline(
-      this._isOnline$,
+      isLocalProvider(provider) ? of(true) : this._isOnline$,
       [
         timer(
           DELAY_BEFORE_ISSUE_POLLING,

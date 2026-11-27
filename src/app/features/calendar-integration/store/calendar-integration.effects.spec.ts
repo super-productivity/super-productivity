@@ -10,7 +10,6 @@ import { CalendarIntegrationService } from '../calendar-integration.service';
 import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigate-to-task.service';
 import { IssueService } from '../../issue/issue.service';
 import { DateService } from '../../../core/date/date.service';
-import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
@@ -121,14 +120,11 @@ describe('CalendarIntegrationEffects pollChanges$ startup guard', () => {
           useValue: jasmine.createSpyObj('BannerService', ['open', 'dismiss']),
         },
         {
-          provide: TaskService,
+          provide: TaskArchiveOrchestratorService,
           useValue: {
+            getAllIssueIdsForProviderEverywhere: getAllIssueIdsSpy,
             checkForTaskWithIssueEverywhere: checkForTaskWithIssueEverywhereSpy,
           },
-        },
-        {
-          provide: TaskArchiveOrchestratorService,
-          useValue: { getAllIssueIdsForProviderEverywhere: getAllIssueIdsSpy },
         },
         {
           provide: LocaleDatePipe,

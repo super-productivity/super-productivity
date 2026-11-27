@@ -1,0 +1,76 @@
+---
+# Generated from Harper's LookInto rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Merges the split preposition when a look-verb is followed by a clause that starts with a question word.
+extends: substitution
+message: "Keep `look into` together before question words so the verb stays idiomatic."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+how(?!['\\x{2019}]s\\b)": "look into how"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+what(?!['\\x{2019}]s\\b)": "look into what"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whatever(?!['\\x{2019}]s\\b)": "look into whatever"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+when(?!['\\x{2019}]s\\b)": "look into when"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whenever(?!['\\x{2019}]s\\b)": "look into whenever"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+where(?!['\\x{2019}]s\\b)": "look into where"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whether(?!['\\x{2019}]s\\b)": "look into whether"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+which(?!['\\x{2019}]s\\b)": "look into which"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whichever(?!['\\x{2019}]s\\b)": "look into whichever"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+who(?!['\\x{2019}]s\\b)": "look into who"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whoever(?!['\\x{2019}]s\\b)": "look into whoever"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whom(?!['\\x{2019}]s\\b)": "look into whom"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whomever(?!['\\x{2019}]s\\b)": "look into whomever"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whose(?!['\\x{2019}]s\\b)": "look into whose"
+  "look(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+why(?!['\\x{2019}]s\\b)": "look into why"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+how(?!['\\x{2019}]s\\b)": "looked into how"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+what(?!['\\x{2019}]s\\b)": "looked into what"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whatever(?!['\\x{2019}]s\\b)": "looked into whatever"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+when(?!['\\x{2019}]s\\b)": "looked into when"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whenever(?!['\\x{2019}]s\\b)": "looked into whenever"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+where(?!['\\x{2019}]s\\b)": "looked into where"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whether(?!['\\x{2019}]s\\b)": "looked into whether"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+which(?!['\\x{2019}]s\\b)": "looked into which"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whichever(?!['\\x{2019}]s\\b)": "looked into whichever"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+who(?!['\\x{2019}]s\\b)": "looked into who"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whoever(?!['\\x{2019}]s\\b)": "looked into whoever"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whom(?!['\\x{2019}]s\\b)": "looked into whom"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whomever(?!['\\x{2019}]s\\b)": "looked into whomever"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whose(?!['\\x{2019}]s\\b)": "looked into whose"
+  "looked(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+why(?!['\\x{2019}]s\\b)": "looked into why"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+how(?!['\\x{2019}]s\\b)": "looking into how"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+what(?!['\\x{2019}]s\\b)": "looking into what"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whatever(?!['\\x{2019}]s\\b)": "looking into whatever"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+when(?!['\\x{2019}]s\\b)": "looking into when"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whenever(?!['\\x{2019}]s\\b)": "looking into whenever"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+where(?!['\\x{2019}]s\\b)": "looking into where"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whether(?!['\\x{2019}]s\\b)": "looking into whether"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+which(?!['\\x{2019}]s\\b)": "looking into which"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whichever(?!['\\x{2019}]s\\b)": "looking into whichever"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+who(?!['\\x{2019}]s\\b)": "looking into who"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whoever(?!['\\x{2019}]s\\b)": "looking into whoever"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whom(?!['\\x{2019}]s\\b)": "looking into whom"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whomever(?!['\\x{2019}]s\\b)": "looking into whomever"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whose(?!['\\x{2019}]s\\b)": "looking into whose"
+  "looking(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+why(?!['\\x{2019}]s\\b)": "looking into why"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+how(?!['\\x{2019}]s\\b)": "looks into how"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+what(?!['\\x{2019}]s\\b)": "looks into what"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whatever(?!['\\x{2019}]s\\b)": "looks into whatever"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+when(?!['\\x{2019}]s\\b)": "looks into when"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whenever(?!['\\x{2019}]s\\b)": "looks into whenever"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+where(?!['\\x{2019}]s\\b)": "looks into where"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whether(?!['\\x{2019}]s\\b)": "looks into whether"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+which(?!['\\x{2019}]s\\b)": "looks into which"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whichever(?!['\\x{2019}]s\\b)": "looks into whichever"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+who(?!['\\x{2019}]s\\b)": "looks into who"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whoever(?!['\\x{2019}]s\\b)": "looks into whoever"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whom(?!['\\x{2019}]s\\b)": "looks into whom"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whomever(?!['\\x{2019}]s\\b)": "looks into whomever"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+whose(?!['\\x{2019}]s\\b)": "looks into whose"
+  "looks(?!\\s*\\n\\s*\\n)\\s+in(?!\\s*\\n\\s*\\n)\\s+to(?!\\s*\\n\\s*\\n)\\s+why(?!['\\x{2019}]s\\b)": "looks into why"

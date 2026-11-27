@@ -38,4 +38,12 @@
   <exclude
     domain="sharedpref"
     path="SuperProductivityLaunchUrl.xml" />
+  <!--
+    Per-widget project selections are keyed by appWidgetId, which a restore or
+    device transfer does not preserve, and the pending "open project" request
+    is for a tap on THIS device. Restored, both would point at the wrong thing.
+  -->
+  <exclude
+    domain="sharedpref"
+    path="task_list_widget.xml" />
 </full-backup-content>

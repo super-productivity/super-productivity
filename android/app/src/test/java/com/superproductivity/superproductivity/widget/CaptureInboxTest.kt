@@ -33,6 +33,17 @@ class CaptureInboxTest {
     }
 
     @Test
+    fun storesTheProjectOfAProjectWidgetQuickAddOnly() {
+        val inbox = inbox()
+        inbox.add("Today", "widget", createdAt = 1_000)
+        inbox.add("Project", "widget", createdAt = 2_000, projectId = "p1")
+
+        val pending = JSONArray(inbox.pendingJson())
+        assertFalse(pending.getJSONObject(0).has("projectId"))
+        assertEquals("p1", pending.getJSONObject(1).getString("projectId"))
+    }
+
+    @Test
     fun acknowledgeRemovesOnlyThatEntryAndIsIdempotent() {
         val inbox = inbox()
         val a = inbox.add("A", "overlay")

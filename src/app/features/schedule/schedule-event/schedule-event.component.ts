@@ -73,6 +73,10 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     '[style.height]': '_resizeHeight()',
     '(click)': 'clickHandler($event)',
     '(contextmenu)': 'onContextMenu($event)',
+    '(touchstart)': 'onTouchStart()',
+    '(touchend)': 'onTouchEnd($event)',
+    '(touchcancel)': 'onTouchCancel()',
+    '(cdkDragStarted)': 'onDragStarted()',
   },
   /* eslint-enable @typescript-eslint/naming-convention */
   hostDirectives: [
@@ -457,14 +461,50 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     this._calEventActions.hideForever(evt.data as ScheduleFromCalendarEvent);
   }
 
-  onContextMenu(ev: MouseEvent | TouchEvent): void {
-    const t = this.task();
-    if (t) {
-      this.openContextMenu(ev);
+  // A touch long-press fires contextmenu with the finger still down, before CDK knows
+  // whether the press becomes a drag. The menu waits for the release and is dropped
+  // once the press turns into a drag (#11977).
+  private _touchGesture: 'none' | 'held' | 'menuPending' | 'dragged' = 'none';
+
+  onTouchStart(): void {
+    this._touchGesture = 'held';
+  }
+
+  onDragStarted(): void {
+    if (this._touchGesture !== 'none') {
+      this._touchGesture = 'dragged';
     }
   }
 
-  openContextMenu(event: TouchEvent | MouseEvent): void {
+  onTouchEnd(ev: TouchEvent): void {
+    const isMenuPending = this._touchGesture === 'menuPending';
+    this._touchGesture = 'none';
+    if (isMenuPending) {
+      // a click from this release would land on the new menu's backdrop and close it
+      ev.preventDefault();
+      this.openContextMenu();
+    }
+  }
+
+  onTouchCancel(): void {
+    this._touchGesture = 'none';
+  }
+
+  onContextMenu(ev: MouseEvent | TouchEvent): void {
+    if (!this.task()) {
+      return;
+    }
+    if (this._touchGesture !== 'none') {
+      ev.preventDefault();
+      if (this._touchGesture === 'held') {
+        this._touchGesture = 'menuPending';
+      }
+      return;
+    }
+    this.openContextMenu(ev);
+  }
+
+  openContextMenu(event?: TouchEvent | MouseEvent): void {
     this.taskContextMenu()?.open(event);
   }
 

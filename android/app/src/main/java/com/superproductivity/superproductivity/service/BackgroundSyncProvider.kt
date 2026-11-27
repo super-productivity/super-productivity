@@ -2,6 +2,7 @@ package com.superproductivity.superproductivity.service
 
 import android.content.Context
 import android.util.Log
+import java.util.TimeZone
 
 private const val TAG = "ReminderSyncHelper"
 private const val DUE_DAY_SUFFIX = "_dueday"
@@ -116,6 +117,16 @@ data class ReminderChangeResult(
     val hasMore: Boolean,
     val unreadableTaskIds: Set<String> = emptySet(),
     val reminderIdsToCancel: Set<String> = emptySet(),
+    /**
+     * Repeat configs whose future occurrences this page disarmed (deleted,
+     * paused, reminder cleared). Occurrence ids are `rpt_<cfgId>_<day>`, so
+     * a fired alarm can be judged stale without a second download.
+     */
+    val repeatCfgIdsRemoved: Set<String> = emptySet(),
+    /** Repeat-config cache after folding this page's ops onto the cache passed in. */
+    val nextRepeatState: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
+    /** Configs explicitly deleted on this page, as they were when their tasks were detached. */
+    val detachedSeries: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
 ) {
     /**
      * Fire-time stale check for one alarm: was it cancelled (deleted/done, or
@@ -139,7 +150,18 @@ data class ReminderChangeResult(
             }
             if (current != null) return triggerAtMs > 0L && current.remindAt != triggerAtMs
         }
-        return taskId in taskIdsToCancel || reminderIdOfType(taskId, reminderType) in reminderIdsToCancel
+        if (taskId in taskIdsToCancel || reminderIdOfType(taskId, reminderType) in reminderIdsToCancel) {
+            return true
+        }
+        // Series-level removal only reaches alarms pre-scheduled from the config
+        // (always "TASK"). An instance the config already created keeps its own
+        // reminder and deadline under the same occurrence id.
+        if (reminderType != "TASK") return false
+        val repeatCfgId = parseRepeatOccurrenceId(taskId)?.cfgId ?: return false
+        if (repeatCfgId !in repeatCfgIdsRemoved) return false
+        // A deleted config detaches its instances; judge them by its last known state.
+        val state = if (nextRepeatState.byId(repeatCfgId) == null) detachedSeries else nextRepeatState
+        return !isLiveRepeatInstance(taskId, state, TimeZone.getDefault())
     }
 }
 
@@ -160,6 +182,7 @@ interface BackgroundSyncProvider {
         baseUrl: String,
         accessToken: String,
         lastSeq: Long,
-        limit: Int = 100
+        limit: Int = 100,
+        repeatState: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
     ): ReminderChangeResult?
 }

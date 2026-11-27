@@ -162,16 +162,23 @@ export class TaskMultiDragService {
     const undone = this._undoneIds();
     const overdue: ReadonlySet<string> =
       contextId === TODAY_TAG.id ? this._overdueIds() : new Set<string>();
+    const isSectionTarget = modelId !== 'UNDONE';
     if (
       !this.ids().length ||
       this.ids().some((id) => {
         const task = this._tasks()[id];
-        return !task || task.isDone || (!undone.has(id) && !overdue.has(id));
+        return (
+          !task ||
+          task.isDone ||
+          (!undone.has(id) && !overdue.has(id)) ||
+          // Sections hold parents only; a single subtask drag is refused too.
+          (isSectionTarget && !!task.parentId)
+        );
       })
     )
       return false;
     return (
-      modelId === 'UNDONE' ||
+      !isSectionTarget ||
       this._sections().some(
         (section) =>
           section.id === modelId &&
@@ -272,9 +279,12 @@ export class TaskMultiDragService {
    * out of the group, as before.
    */
   private _isListRow(task: Task): boolean {
+    if (!task.parentId) return true;
+    const rowIds = this._contextRowIds();
+    // Nested under its parent's row, even when Today's overdue list also shows it.
+    if (rowIds.has(task.parentId)) return false;
     return (
-      !task.parentId ||
-      this._contextRowIds().has(task.id) ||
+      rowIds.has(task.id) ||
       (this._context.activeWorkContextId === TODAY_TAG.id &&
         this._overdueIds().has(task.id))
     );

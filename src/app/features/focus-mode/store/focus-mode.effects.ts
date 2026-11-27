@@ -314,7 +314,10 @@ export class FocusModeEffects {
           mode !== FocusModeMode.Flowtime &&
           !_isOvertimeEnabled,
       ),
-
+      // Raise here, not in notifyOnSessionComplete$: completeFocusSession is
+      // also dispatched by user actions (manual complete, Flowtime end, idle
+      // dialog), where the window is already in front (#11094).
+      tap(() => this._raiseWindowIfEnabled()),
       map(() => actions.completeFocusSession({ isManual: false })),
     ),
   );
@@ -334,6 +337,7 @@ export class FocusModeEffects {
           // sound (breakEndAlarmSound$); skip the one-shot here so they don't
           // double up. The window flash still fires.
           this._notifyUser(false, this._isLoopBreakEndAlarmOn());
+          this._raiseWindowIfEnabled();
         }),
       ),
     { dispatch: false },
@@ -632,7 +636,11 @@ export class FocusModeEffects {
                 timer.elapsed >= timer.duration,
             ),
             take(1),
-            tap(() => this._notifyUser()),
+            tap(() => {
+              this._notifyUser();
+              // With overtime the session never auto-completes; this is its end.
+              this._raiseWindowIfEnabled();
+            }),
           ),
         ),
       ),
@@ -1022,6 +1030,24 @@ export class FocusModeEffects {
     );
   }
 
+  /**
+   * Opt-in raise for users who miss the flash (#11094). Called only where the
+   * timer itself ends a session or break, once per end: not on the startBreak
+   * that follows a session end, and not on user-dispatched completions, where
+   * the window is already in front and the delayed blur would kick the user
+   * out of the field they just started typing in. The delay keeps keystrokes
+   * typed in another app out of SP (#5762); isReminder gets past Windows'
+   * focus-stealing prevention (#10410).
+   */
+  private _raiseWindowIfEnabled(): void {
+    if (
+      this._isElectron &&
+      this.focusModeLocalSettingsService.settings().isFocusWindowOnSessionEnd
+    ) {
+      this._uiHelperService.focusAppAfterNotification({ isReminder: true });
+    }
+  }
+
   private _notifyUser(isHideBar = false, isSkipSound = false): void {
     const soundVolume = this.globalConfigService.sound()?.volume || 0;
 
@@ -1030,17 +1056,12 @@ export class FocusModeEffects {
       playSound(SESSION_DONE_SOUND, soundVolume);
     }
 
-    // Flash by default so a session or break end doesn't steal keyboard focus
-    // from whatever the user is working in (#10476). Users who miss the flash
-    // can opt into raising the window (#11094). The delayed raise keeps
-    // keystrokes typed in another app out of SP (#5762); isReminder gets past
-    // Windows' focus-stealing prevention (#10410).
-    // The flash stays on as a fallback where the OS refuses the raise.
+    // Flash instead of focusing the window so a session or break end doesn't
+    // steal keyboard focus from whatever the user is working in (#10476).
+    // The opt-in raise is _raiseWindowIfEnabled(); the flash stays on as a
+    // fallback where the OS refuses it.
     if (this._isElectron) {
       window.ea.flashFrame();
-      if (this.focusModeLocalSettingsService.settings().isFocusWindowOnSessionEnd) {
-        this._uiHelperService.focusAppAfterNotification({ isReminder: true });
-      }
       window.ea.setProgressBar({
         progress: 1,
         progressBarMode: isHideBar ? 'none' : 'normal',

@@ -38,7 +38,7 @@ import {
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { SnackService } from '../../core/snack/snack.service';
-import { IS_DONATION_UI_RESTRICTED } from '../../app.constants';
+import { DOCS_URL, IS_DONATION_UI_RESTRICTED } from '../../app.constants';
 import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 import { openBuildPluginDialog } from '../../plugins/ui/dialog-build-plugin/open-build-plugin-dialog';
 
@@ -283,7 +283,7 @@ export class MagicNavConfigService {
             id: 'help-online',
             label: T.MH.HM.GET_HELP_ONLINE,
             icon: 'help_center',
-            href: 'https://github.com/super-productivity/super-productivity/blob/master/README.md#question-how-to-use-it',
+            href: DOCS_URL,
           },
           {
             type: 'action',

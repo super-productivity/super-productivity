@@ -181,6 +181,14 @@ describe('processDurationInput', () => {
       expect(result.shouldUpdate).toBe(false);
     });
 
+    it('should not read a comma between units as a decimal of the next part', () => {
+      // "1h,30m" would otherwise become "1h.30m" = 1 h 0.3 min.
+      expect(processDurationInput('1h,30m').isValid).toBe(false);
+      expect(processDurationInput('1h.30m').isValid).toBe(false);
+      expect(processDurationInput('5m,30s', true).isValid).toBe(false);
+      expect(processDurationInput('1h 30m').milliseconds).toBe(90 * 60 * 1000);
+    });
+
     it('should not accept spelled-out seconds when seconds are not allowed', () => {
       expect(processDurationInput('30 seconds', false).isValid).toBe(false);
       expect(processDurationInput('30 seconds', true).milliseconds).toBe(30 * 1000);

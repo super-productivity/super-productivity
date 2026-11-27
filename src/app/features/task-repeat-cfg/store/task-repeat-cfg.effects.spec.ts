@@ -4,6 +4,7 @@ import { firstValueFrom, Observable, of, throwError } from 'rxjs';
 import { Action } from '@ngrx/store';
 import { TaskRepeatCfgEffects } from './task-repeat-cfg.effects';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { DateService } from '../../../core/date/date.service';
@@ -125,6 +126,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         TaskRepeatCfgEffects,
         provideMockActions(() => actions$),
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskSchedulingService, useValue: {} },
         { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
@@ -3627,6 +3629,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
   let actions$: Observable<Action>;
   let effects: TaskRepeatCfgEffects;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskSchedulingService: jasmine.SpyObj<TaskSchedulingService>;
   let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let taskRepeatCfgService: jasmine.SpyObj<TaskRepeatCfgService>;
   let testScheduler: TestScheduler;
@@ -3659,14 +3662,16 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
     jasmine.clock().install();
     jasmine.clock().mockDate(FIXED_WEDNESDAY);
 
+    const taskSchedulingServiceSpy = jasmine.createSpyObj('TaskSchedulingService', [
+      'scheduleTask',
+      'reScheduleTask',
+    ]);
     const taskServiceSpy = jasmine.createSpyObj('TaskService', [
       'getByIdWithSubTaskData$',
       'getByIdOnce$',
       'getTasksByRepeatCfgId$',
       'getByIdsLive$',
       'update',
-      'scheduleTask',
-      'reScheduleTask',
       'updateTags',
     ]);
     taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
@@ -3690,6 +3695,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
         TaskRepeatCfgEffects,
         provideMockActions(() => actions$),
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskSchedulingService, useValue: taskSchedulingServiceSpy },
         { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
@@ -3703,6 +3709,9 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
 
     effects = TestBed.inject(TaskRepeatCfgEffects);
     taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+    taskSchedulingService = TestBed.inject(
+      TaskSchedulingService,
+    ) as jasmine.SpyObj<TaskSchedulingService>;
     taskRepeatCfgService = TestBed.inject(
       TaskRepeatCfgService,
     ) as jasmine.SpyObj<TaskRepeatCfgService>;
@@ -4674,8 +4683,8 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
 
       expect(emitted).toBe(false); // isTimedTask filter blocks planTaskForDay
       // Critical: scheduleTask and reScheduleTask must NOT be called
-      expect(taskService.scheduleTask).not.toHaveBeenCalled();
-      expect(taskService.reScheduleTask).not.toHaveBeenCalled();
+      expect(taskSchedulingService.scheduleTask).not.toHaveBeenCalled();
+      expect(taskSchedulingService.reScheduleTask).not.toHaveBeenCalled();
     });
   });
 

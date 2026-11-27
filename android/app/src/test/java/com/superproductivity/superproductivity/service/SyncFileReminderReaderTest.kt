@@ -11,11 +11,18 @@ import kotlin.io.encoding.Base64
 
 class SyncFileReminderReaderTest {
 
-    private fun file(tasks: String, projects: String = "{}", version: Int = 2): String =
-        """{"version":$version,"syncVersion":3,"vectorClock":{"a":1},
-           "state":{"project":{"ids":[],"entities":$projects},"task":{"ids":[],"entities":$tasks}},
+    private fun file(
+        tasks: String,
+        projects: String = "{}",
+        version: Int = 2,
+        repeatCfgs: String? = null,
+    ): String {
+        val repeat = if (repeatCfgs == null) "" else ""","taskRepeatCfg":{"ids":[],"entities":$repeatCfgs}"""
+        return """{"version":$version,"syncVersion":3,"vectorClock":{"a":1},
+           "state":{"project":{"ids":[],"entities":$projects},"task":{"ids":[],"entities":$tasks}$repeat},
            "archiveYoung":{"task":{"entities":{"old":{"id":"old","remindAt":4102444500000}}}},
            "recentOps":[]}"""
+    }
 
     private fun read(body: String, isEncryptionExpected: Boolean = false) =
         SyncFileReminderReader.read(body, null, isEncryptionExpected)
@@ -82,7 +89,10 @@ class SyncFileReminderReaderTest {
             projects = """{"p1":{"id":"p1","isArchived":true},"p2":{"id":"p2","isArchived":false}}""",
         )
         assertEquals(
-            SyncFileReadResult.Reminders(listOf(ReminderToSchedule("live", "Task reminder", 5, false))),
+            SyncFileReadResult.Reminders(
+                listOf(ReminderToSchedule("live", "Task reminder", 5, false)),
+                archivedProjectIds = setOf("p1"),
+            ),
             read(body),
         )
     }
@@ -101,6 +111,24 @@ class SyncFileReminderReaderTest {
     fun `ignores null and zero reminder values`() {
         val body = "pf_2__" + file("""{"t1":{"id":"t1","remindAt":null,"deadlineRemindAt":0}}""")
         assertEquals(SyncFileReadResult.Reminders(emptyList()), read(body))
+    }
+
+    @Test
+    fun `reads repeat configs and leaves them out when the key is absent`() {
+        val cfg = """{"cfg1":{"id":"cfg1","title":"Standup","repeatCycle":"DAILY","startTime":"09:00","remindAt":"AtStart","repeatEvery":1,"monday":true,"notes":"secret","subTaskTemplates":[{"title":"x"}]}}"""
+        val withCfg = read("pf_2__" + file("{}", repeatCfgs = cfg)) as SyncFileReadResult.Reminders
+        val parsed = withCfg.repeatCfgs?.single()
+        assertEquals("cfg1", parsed?.id)
+        assertEquals("Standup", parsed?.title)
+        assertEquals("DAILY", parsed?.repeatCycle)
+        assertEquals("09:00", parsed?.startTime)
+        assertEquals("AtStart", parsed?.remindAt)
+        assertEquals(true, parsed?.isComplete)
+        assertEquals(true, parsed?.monday)
+        val without = read("pf_2__" + file("{}")) as SyncFileReadResult.Reminders
+        assertEquals(null, without.repeatCfgs)
+        val empty = read("pf_2__" + file("{}", repeatCfgs = "{}")) as SyncFileReadResult.Reminders
+        assertEquals(emptyList<RepeatCfg>(), empty.repeatCfgs)
     }
 
     @Test

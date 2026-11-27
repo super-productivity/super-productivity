@@ -1,0 +1,19 @@
+---
+# Generated from Harper's SimilarLike rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The adjective 'similar' pairs with the preposition 'to', so never follow it with 'like'.
+extends: existence
+message: "Prefer 'similar to' instead of 'similar like'."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "similar to"
+tokens:
+  - "similar(?!\\s*\\n\\s*\\n)\\s+like(?!['\\x{2019}]s\\b)"

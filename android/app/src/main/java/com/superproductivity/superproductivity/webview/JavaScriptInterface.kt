@@ -25,7 +25,9 @@ import com.superproductivity.superproductivity.service.FocusModeForegroundServic
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
+import com.superproductivity.superproductivity.service.RepeatReminderCache
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
+import com.superproductivity.superproductivity.service.TimeEstimate
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.share.CaptureKeyStore
 import com.superproductivity.superproductivity.share.ShareUploadWorker
@@ -268,6 +270,22 @@ class JavaScriptInterface(
             // (exempt from the background-start ban) or, after a restore in a new
             // process, this comes from the JS recovery at launch or onResume.
             activity.startService(intent)
+        }
+    }
+
+    /**
+     * The estimate of the tracked task, so native can notify when it is
+     * exceeded while the WebView is paused (#11896). [timeEstimateMs] <= 0
+     * clears it. Title and body come translated from the web app.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setTrackingTimeEstimate(taskId: String, timeEstimateMs: Long, title: String, body: String) {
+        safeCall("Failed to set tracking time estimate") {
+            TrackingForegroundService.setTimeEstimate(
+                activity,
+                if (timeEstimateMs > 0) TimeEstimate(taskId, timeEstimateMs, title, body) else null
+            )
         }
     }
 
@@ -575,6 +593,13 @@ class JavaScriptInterface(
         return WidgetDoneQueue.getAndClear(activity)
     }
 
+    /** Get the project selected by the most recent widget row tap and clear it. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getWidgetProjectToOpen(): String? {
+        return TaskListWidgetProvider.getAndClearProjectToOpen(activity)
+    }
+
     /**
      * Re-render the home screen widget from the current `widget_data` KeyValStore
      * snapshot. Called by Angular after each snapshot push.
@@ -687,6 +712,33 @@ class JavaScriptInterface(
     fun setBackgroundReminderSettings(isDisabled: Boolean, useAlarmStyle: Boolean) {
         safeCall("Failed to set background reminder settings") {
             BackgroundReminderSettingsStore.save(activity, isDisabled, useAlarmStyle)
+        }
+    }
+
+    /**
+     * Mirrors the start-of-next-day offset used when a repeat clock falls
+     * before that boundary (#3378). A separate method so an old WebView that
+     * only calls [setBackgroundReminderSettings] keeps working, and so that
+     * call does not reset an offset already stored.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setStartOfNextDayDiffMs(diffMs: Int) {
+        safeCall("Failed to set start-of-next-day offset") {
+            BackgroundReminderSettingsStore.saveStartOfNextDayDiffMs(activity, diffMs.toLong())
+        }
+    }
+
+    /**
+     * Mirrors the open app's repeat configs to the background repeat-reminder
+     * cache (RepeatReminderCache.replaceFromApp). Optional on the JS side so
+     * an old bundle paired with this APK keeps working.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setRepeatCfgSnapshot(json: String) {
+        safeCall("Failed to store repeat configs") {
+            RepeatReminderCache.replaceFromApp(activity, json)
         }
     }
 

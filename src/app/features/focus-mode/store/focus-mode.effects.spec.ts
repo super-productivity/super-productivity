@@ -3337,16 +3337,108 @@ describe('FocusModeEffects', () => {
         localStorage.removeItem('sp_focus_mode_local_settings');
       });
 
-      it('should raise the window and keep the flash as a fallback', () => {
-        const uiHelper = TestBed.inject(UiHelperService);
-        spyOn(uiHelper, 'focusAppAfterNotification');
+      let raiseSpy: jasmine.Spy;
 
-        (effects as any)._notifyUser();
+      beforeEach(() => {
+        raiseSpy = spyOn(TestBed.inject(UiHelperService), 'focusAppAfterNotification');
+      });
 
-        expect(uiHelper.focusAppAfterNotification).toHaveBeenCalledWith({
-          isReminder: true,
+      it('should raise the window once when the work timer ends the session', (done) => {
+        store.overrideSelector(
+          selectors.selectTimer,
+          createMockTimer({
+            isRunning: false,
+            purpose: 'work',
+            duration: 25 * 60 * 1000,
+            elapsed: 25 * 60 * 1000,
+          }),
+        );
+        store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+        store.overrideSelector(selectors.selectIsOvertimeEnabled, false);
+        store.refreshState();
+
+        effects.detectSessionCompletion$.pipe(take(1)).subscribe(() => {
+          expect(raiseSpy).toHaveBeenCalledOnceWith({ isReminder: true });
+          done();
         });
+      });
+
+      it('should raise the window when the break timer runs out, keeping the flash', (done) => {
+        const breakDuration = 5 * 60 * 1000;
+        store.overrideSelector(
+          selectors.selectTimer,
+          createMockTimer({
+            isRunning: false,
+            purpose: 'break',
+            startedAt: Date.now() - breakDuration,
+            duration: breakDuration,
+            elapsed: breakDuration,
+          }),
+        );
+        store.refreshState();
+
+        effects.detectBreakTimeUp$.pipe(take(1)).subscribe(() => {
+          expect(raiseSpy).toHaveBeenCalledOnceWith({ isReminder: true });
+          expect(eaMock.flashFrame).toHaveBeenCalled();
+          done();
+        });
+      });
+
+      // The session end already raised it; the startBreak that follows
+      // (notifyOnBreakStart$ -> _notifyUser(true)) must not raise again.
+      it('should not raise again from the plain notification (e.g. break start)', () => {
+        (effects as any)._notifyUser(true);
+
+        expect(raiseSpy).not.toHaveBeenCalled();
         expect(eaMock.flashFrame).toHaveBeenCalled();
+      });
+
+      // The user is in the app; a raise would blur the field they type in.
+      it('should not raise on a completion the user dispatched', (done) => {
+        actions$ = of(actions.completeFocusSession({ isManual: true }));
+
+        effects.notifyOnSessionComplete$.subscribe({
+          complete: () => {
+            expect(raiseSpy).not.toHaveBeenCalled();
+            expect(eaMock.flashFrame).toHaveBeenCalled();
+            done();
+          },
+        });
+      });
+
+      it('should not raise when the user ends the break', (done) => {
+        actions$ = of(actions.completeBreak({ pausedTaskId: null }));
+
+        effects.notifyOnBreakComplete$.subscribe({
+          complete: () => {
+            expect(raiseSpy).not.toHaveBeenCalled();
+            done();
+          },
+        });
+      });
+    });
+
+    it('should not raise the window on a timer-driven end while the option is off', (done) => {
+      const raiseSpy = spyOn(
+        TestBed.inject(UiHelperService),
+        'focusAppAfterNotification',
+      );
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'work',
+          duration: 25 * 60 * 1000,
+          elapsed: 25 * 60 * 1000,
+        }),
+      );
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectors.selectIsOvertimeEnabled, false);
+      store.refreshState();
+
+      effects.detectSessionCompletion$.pipe(take(1)).subscribe(() => {
+        expect(raiseSpy).not.toHaveBeenCalled();
+        done();
       });
     });
   });

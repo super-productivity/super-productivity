@@ -1,0 +1,17 @@
+---
+# Hand-written from Harper's MostNumber: `most` does not modify a count.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "`Most` is not standard before a count."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\bthe\s)most\s+number\b': "highest number"
+  '(?<=\bthe\s)most\s+amount\b': "largest amount"

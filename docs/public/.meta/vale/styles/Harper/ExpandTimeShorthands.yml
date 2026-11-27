@@ -1,0 +1,35 @@
+---
+# Hand-written from Harper's ExpandTimeShorthands: prose spells the unit out.
+#
+# The generated rule keyed on punctuation. As with the memory units, Harper
+# picks the singular after `1` and the plural after anything else.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "Prose usually spells out the unit."
+level: suggestion
+ignorecase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b1\s{0,2})msecs\b': "millisecond"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})msecs\b': "milliseconds"
+  '(?<=\b1\s{0,2})mins\b': "minute"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})mins\b': "minutes"
+  '(?<=\b1\s{0,2})secs\b': "second"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})secs\b': "seconds"
+  '(?<=\b1\s{0,2})msec\b': "millisecond"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})msec\b': "milliseconds"
+  '(?<=\b1\s{0,2})hrs\b': "hour"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})hrs\b': "hours"
+  '(?<=\b1\s{0,2})min\b': "minute"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})min\b': "minutes"
+  '(?<=\b1\s{0,2})sec\b': "second"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})sec\b': "seconds"
+  '(?<=\b1\s{0,2})hr\b': "hour"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})hr\b': "hours"
+  '(?<=\b1\s{0,2})ms\b': "millisecond"
+  '(?<=\b(?:[02-9]|\d\d+)\s{0,2})ms\b': "milliseconds"

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's EggYolk rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects the eggcorn `egg yoke`, replacing it with the standard culinary term `egg yolk`.
+extends: existence
+message: "Use `egg yolk` when you mean the yellow portion of an egg."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "egg yolk"
+tokens:
+  - "egg(?!\\s*\\n\\s*\\n)\\s+yoke(?!['\\x{2019}]s\\b)"

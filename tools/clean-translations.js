@@ -25,16 +25,17 @@ function getAllKeys(obj, prefix = '') {
 // fall back to OTHER.
 const CLDR_PLURAL_CATEGORIES = new Set(['ZERO', 'ONE', 'TWO', 'FEW', 'MANY', 'OTHER']);
 
-// True for e.g. `F.SCHEDULE.MORE_EVENTS.FEW` when en.json has any key under
-// `F.SCHEDULE.MORE_EVENTS`, i.e. the string itself is still in use and this is
-// one of its plural forms.
+// True for e.g. `F.SCHEDULE.MORE_EVENTS.FEW` when en.json has
+// `F.SCHEDULE.MORE_EVENTS.OTHER`, i.e. the string is still in use as a plural
+// and this is one of its forms. Requiring the parent's OTHER (every plural has
+// it) rather than any key under the parent drops plural-looking leftovers in
+// namespaces that hold no plural.
 function isLocaleOnlyPluralForm(fullKey, validKeys) {
   const lastDot = fullKey.lastIndexOf('.');
   if (lastDot === -1) return false;
   if (!CLDR_PLURAL_CATEGORIES.has(fullKey.slice(lastDot + 1))) return false;
 
-  const parentPath = fullKey.slice(0, lastDot) + '.';
-  return validKeys.some((k) => k.startsWith(parentPath));
+  return validKeys.includes(`${fullKey.slice(0, lastDot)}.OTHER`);
 }
 
 // Remove keys from object that are not in validKeys

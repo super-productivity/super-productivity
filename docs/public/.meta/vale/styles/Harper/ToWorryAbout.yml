@@ -1,0 +1,20 @@
+---
+# Generated from Harper's ToWorryAbout rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes incorrect use of `to worried about`.
+extends: existence
+message: "Did you mean the progressive form?"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "to worry about"
+    - "too worried about"
+tokens:
+  - "to(?!\\s*\\n\\s*\\n)\\s+worried(?!\\s*\\n\\s*\\n)\\s+about(?!['\\x{2019}]s\\b)"

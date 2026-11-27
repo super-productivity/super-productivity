@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { TaskService } from './task.service';
 import { TaskDuplicateService } from './task-duplicate.service';
+import { TaskSchedulingService } from './task-scheduling.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { ProjectService } from '../project/project.service';
@@ -32,6 +33,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../util/is-valid-split-time';
 import { combineDateAndTime } from '../../util/combine-date-and-time';
+import { getRepeatDueWithTime } from '../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { truncate } from '../../util/truncate';
 import { remindOptionToMilliseconds } from './util/remind-option-to-milliseconds';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
@@ -83,6 +85,7 @@ export class TaskBulkActionService {
   private readonly _store = inject(Store);
   private readonly _taskService = inject(TaskService);
   private readonly _taskDuplicateService = inject(TaskDuplicateService);
+  private readonly _taskSchedulingService = inject(TaskSchedulingService);
   private readonly _multiSelect = inject(TaskMultiSelectService);
   private readonly _moveToProjectService = inject(TaskMoveToProjectService);
   private readonly _projectService = inject(ProjectService);
@@ -400,7 +403,15 @@ export class TaskBulkActionService {
     }
     const day = getDbDateStr(pick.date);
     const todayStr = this._dateService.todayStr();
-    const hasTime = !!pick.time && isValidSplitTime(pick.time);
+    // a time before a custom day start lands at the end of the picked day (#12012)
+    const timedDue =
+      pick.time && isValidSplitTime(pick.time)
+        ? getRepeatDueWithTime(
+            pick.time,
+            pick.date,
+            this._dateService.getStartOfNextDayDiffMs(),
+          )
+        : null;
     const defaultRemindOption =
       this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
       DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!;
@@ -409,13 +420,12 @@ export class TaskBulkActionService {
     let applied = 0;
     await this._runSuppressed(() => {
       tasks.forEach((task) => {
-        if (hasTime) {
-          const due = getDateTimeFromClockString(pick.time as string, pick.date as Date);
+        if (timedDue !== null) {
           const remindOption = pick.remindOption ?? TaskReminderOptionId.DoNotRemind;
           // repeating tasks stay on the leads their series can hold (#11816)
-          this._taskService.scheduleTask(
+          this._taskSchedulingService.scheduleTask(
             task,
-            due,
+            timedDue,
             task.repeatCfgId ? toPersistableRemindOption(remindOption) : remindOption,
             false,
           );
@@ -426,8 +436,17 @@ export class TaskBulkActionService {
         ) {
           // Day-only pick for a timed task: keep its time on the new day, as
           // the context menu's quick-access buttons do.
-          const due = combineDateAndTime(pick.date as Date, new Date(task.dueWithTime));
-          this._taskService.scheduleTask(task, due.getTime(), defaultRemindOption, false);
+          const due = combineDateAndTime(
+            pick.date as Date,
+            new Date(task.dueWithTime),
+            this._dateService.getStartOfNextDayDiffMs(),
+          );
+          this._taskSchedulingService.scheduleTask(
+            task,
+            due.getTime(),
+            defaultRemindOption,
+            false,
+          );
           applied++;
         } else if (day === todayStr) {
           // Already due today with a time → plain "add to today" (clears the
@@ -459,12 +478,10 @@ export class TaskBulkActionService {
       this._restoreFocus(focusTargetId);
       return;
     }
-    const date = hasTime
-      ? this._datePipe.transform(
-          getDateTimeFromClockString(pick.time as string, pick.date as Date),
-          'short',
-        )
-      : this._datePipe.transform(pick.date, 'shortDate');
+    const date =
+      timedDue !== null
+        ? this._datePipe.transform(timedDue, 'short')
+        : this._datePipe.transform(pick.date, 'shortDate');
     this._snack('SCHEDULED', applied, { date: date || '' }, 'schedule');
     this._finish(focusTargetId);
   }

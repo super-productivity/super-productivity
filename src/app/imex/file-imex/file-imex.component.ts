@@ -52,6 +52,7 @@ import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 const TODOIST_IMPORT_PLUGIN_ID = 'todoist-import';
 const TICKTICK_IMPORT_PLUGIN_ID = 'ticktick-import';
+const MS_TODO_IMPORT_PLUGIN_ID = 'ms-todo-import';
 
 @Component({
   selector: 'file-imex',
@@ -73,6 +74,7 @@ export class FileImexComponent implements OnInit {
 
   readonly fileInputRef = viewChild<ElementRef>('fileInput');
   T: typeof T = T;
+  readonly IS_NATIVE_PLATFORM = IS_NATIVE_PLATFORM;
 
   ngOnInit(): void {
     this._activatedRoute.queryParams.pipe(first()).subscribe((params) => {
@@ -330,6 +332,13 @@ export class FileImexComponent implements OnInit {
     return this._openImportPlugin(
       TICKTICK_IMPORT_PLUGIN_ID,
       T.FILE_IMEX.S_ERR_TICKTICK_IMPORT_OPEN,
+    );
+  }
+
+  openMsTodoImport(): Promise<void> {
+    return this._openImportPlugin(
+      MS_TODO_IMPORT_PLUGIN_ID,
+      T.FILE_IMEX.S_ERR_MS_TODO_IMPORT_OPEN,
     );
   }
 

@@ -1,0 +1,25 @@
+---
+# Generated from Harper's NotBeAfterNot rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Removes the redundant linking verb that sneaks in between `not` and the predicate after a conjugated `be`.
+extends: sequence
+message: "When a negative clause already uses `be`, drop the extra `be` that follows `not`."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "not"
+tokens:
+  - pattern: 'they''re|you''re|being|she''s|we''re|been|he''s|it''s|were|I''m|are|was|am|be|is'
+  - pattern: 'not'
+    target: true
+  - pattern: 'be'
+    target: true
+  - upos: ADJ

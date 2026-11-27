@@ -71,6 +71,7 @@ export const toCaptureRepeatCfg = (
     title: string;
     notes?: string;
     projectId: string;
+    tagIds?: string[];
     /** `YYYY-MM-DD`: the capture's due day, else this device's today. */
     startDay: string;
     /** `HH:MM`, for a timed series. */
@@ -99,7 +100,7 @@ export const toCaptureRepeatCfg = (
     projectId: opts.projectId,
     title: opts.title,
     notes: opts.notes,
-    tagIds: [],
+    tagIds: opts.tagIds ?? [],
     defaultEstimate: opts.defaultEstimate,
     startTime: opts.startTime,
     remindAt: opts.startTime ? opts.remindOption : undefined,

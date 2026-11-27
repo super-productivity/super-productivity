@@ -21,7 +21,7 @@ import {
   moveSubTaskToTop,
   moveSubTaskToBottom,
 } from './store/task.actions';
-import { TaskDetailTargetPanel, TaskReminderOptionId } from './task.model';
+import { TaskDetailTargetPanel } from './task.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { INBOX_PROJECT } from '../project/project.const';
 import { signal } from '@angular/core';
@@ -588,41 +588,6 @@ describe('TaskService', () => {
 
       expect(() => service.moveToProject(subtask, 'new-project')).toThrowError(
         'Wrong task model',
-      );
-    });
-  });
-
-  describe('scheduleTask', () => {
-    it('should dispatch scheduleTaskWithTime', () => {
-      const task = createMockTask('task-1');
-      const due = Date.now() + 3600000;
-
-      service.scheduleTask(task, due, TaskReminderOptionId.AtStart);
-
-      expect(store.dispatch).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          type: TaskSharedActions.scheduleTaskWithTime.type,
-        }),
-      );
-    });
-  });
-
-  describe('reScheduleTask', () => {
-    it('should dispatch reScheduleTaskWithTime', () => {
-      const task = createMockTask('task-1');
-      const due = Date.now() + 3600000;
-
-      service.reScheduleTask({
-        task,
-        due,
-        remindCfg: TaskReminderOptionId.AtStart,
-        isMoveToBacklog: false,
-      });
-
-      expect(store.dispatch).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          type: TaskSharedActions.reScheduleTaskWithTime.type,
-        }),
       );
     });
   });

@@ -1,0 +1,19 @@
+---
+# Generated from Harper's AndSuch rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `and the such` to `and such`.
+extends: existence
+message: "Did you mean `and such`?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "and such"
+tokens:
+  - "and(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+such(?!['\\x{2019}]s\\b)"

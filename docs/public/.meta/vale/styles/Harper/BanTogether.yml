@@ -1,0 +1,19 @@
+---
+# Generated from Harper's BanTogether rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Detects and corrects the common error of using `ban together` instead of the idiom `band together`, which means to unite or join forces.
+extends: existence
+message: "Did you mean `band together`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "band together"
+tokens:
+  - "ban(?!\\s*\\n\\s*\\n)\\s+together(?!['\\x{2019}]s\\b)"

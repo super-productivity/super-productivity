@@ -22,8 +22,10 @@ import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-t
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../core/date/date.service';
+import { combineDateAndTime } from '../../../util/combine-date-and-time';
 import { DialogScheduleTaskComponent } from '../dialog-schedule-task/dialog-schedule-task.component';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { MatIcon } from '@angular/material/icon';
@@ -79,6 +81,7 @@ export class PlannerDayComponent {
   private _store = inject(Store);
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
   private _dateService = inject(DateService);
   private _layoutService = inject(LayoutService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
@@ -262,12 +265,20 @@ export class PlannerDayComponent {
   }
 
   private _rescheduleTask(task: TaskCopy, newDate: Date): void {
-    const taskPlannedAtDate = new Date(task.dueWithTime as number);
-    newDate.setHours(taskPlannedAtDate.getHours(), taskPlannedAtDate.getMinutes(), 0, 0);
+    const dueWithTime = combineDateAndTime(
+      newDate,
+      new Date(task.dueWithTime as number),
+      this._dateService.getStartOfNextDayDiffMs(),
+    ).getTime();
     const selectedReminderCfgId = millisecondsDiffToRemindOption(
       task.dueWithTime as number,
       task.remindAt,
     );
-    this._taskService.scheduleTask(task, newDate.getTime(), selectedReminderCfgId, false);
+    this._taskSchedulingService.scheduleTask(
+      task,
+      dueWithTime,
+      selectedReminderCfgId,
+      false,
+    );
   }
 }

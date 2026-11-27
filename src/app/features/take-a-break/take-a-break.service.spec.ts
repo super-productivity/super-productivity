@@ -27,7 +27,11 @@ describe('TakeABreakService', () => {
   let tick$: Subject<Tick>;
   let currentTaskId$: BehaviorSubject<string | null>;
 
-  const configure = (isTakeABreakEnabled = true, isElectron = false): void => {
+  const configure = (
+    isTakeABreakEnabled = true,
+    isElectron = false,
+    isRealTrackingInterval = false,
+  ): void => {
     actions$ = new Subject<Action>();
     tick$ = new Subject<Tick>();
     taskService = jasmine.createSpyObj<TaskService>('TaskService', [
@@ -56,7 +60,9 @@ describe('TakeABreakService', () => {
         { provide: BannerService, useValue: bannerService },
         { provide: LOCAL_ACTIONS, useValue: actions$ },
         { provide: IS_ELECTRON_TOKEN, useValue: isElectron },
-        { provide: GlobalTrackingIntervalService, useValue: { tick$: tick$ } },
+        isRealTrackingInterval
+          ? GlobalTrackingIntervalService
+          : { provide: GlobalTrackingIntervalService, useValue: { tick$: tick$ } },
         { provide: IdleService, useValue: { isIdle$: of(false) } },
         {
           provide: GlobalConfigService,
@@ -442,6 +448,34 @@ describe('TakeABreakService', () => {
       tick$.next({ duration: SLEEP_GAP, date: '2026-11-19', timestamp: 0 });
 
       expect(current()).toBe(WORK_BEFORE_SLEEP + SLEEP_GAP);
+    });
+
+    // When the resume IPC beats the first interval tick, idle.effects.ts credits
+    // the pending interval with triggerWakeUpTick() right before it enters idle,
+    // so the gap arrives as a wake-up tick while the task is still current.
+    // This drives the real tracking interval to check that path is a break too.
+    it('treats the wake-up tick credited at idle entry as a break', () => {
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date('2026-11-19T22:00:00'));
+        TestBed.resetTestingModule();
+        configure(true, true, true);
+        const trackingInterval = TestBed.inject(GlobalTrackingIntervalService);
+        taskService.currentTaskId.and.returnValue('task-1');
+        currentTaskId$.next('task-1');
+        emitted = [];
+        sub = service.timeWorkingWithoutABreak$.subscribe((v) => emitted.push(v));
+        service.otherNoBreakTIme$.next(WORK_BEFORE_SLEEP);
+
+        // No timer runs during sleep; only the wall clock moves on.
+        jasmine.clock().mockDate(new Date(Date.now() + SLEEP_GAP));
+        trackingInterval.triggerWakeUpTick();
+
+        expect(current()).toBe(0);
+        expect(bannerService.dismiss).toHaveBeenCalledWith(BannerId.TakeABreak);
+      } finally {
+        jasmine.clock().uninstall();
+      }
     });
   });
 

@@ -1,0 +1,12 @@
+extends: existence
+message: "ChatGPT citation artifact detected: '%s'"
+level: error
+link: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#G15_criteria
+nonword: true
+tokens:
+  - ':contentReference\[oaicite:\d+\]\{index=\d+\}'
+  - '\[oaicite:\d+\]'
+  - 'oai_citation:\d+'
+  - 'oai_citation'
+  - 'sandbox:/mnt/data/'
+  - 'https?://chat\.openai\.com/'

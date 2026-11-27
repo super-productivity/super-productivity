@@ -9,10 +9,15 @@ import { Pipe, PipeTransform } from '@angular/core';
 export const normalizeDurationString = (strValue: string): string =>
   strValue
     .replace(/,/g, '.')
-    .replace(/(\d)\s+(?=(?:[hms]|hours?|hrs?|minutes?|mins?|seconds?|secs?)\b)/gi, '$1')
-    .replace(/(\d)(?:hours?|hrs?)\b/gi, '$1h')
-    .replace(/(\d)(?:minutes?|mins?)\b/gi, '$1m')
-    .replace(/(\d)(?:seconds?|secs?)\b/gi, '$1s');
+    // (?![a-z]) rather than \b: a unit followed directly by the next number
+    // ("1hour30min") still ends there.
+    .replace(
+      /(\d)\s+(?=(?:[hms]|hours?|hrs?|minutes?|mins?|seconds?|secs?)(?![a-z]))/gi,
+      '$1',
+    )
+    .replace(/(\d)(?:hours?|hrs?)(?![a-z])/gi, '$1h')
+    .replace(/(\d)(?:minutes?|mins?)(?![a-z])/gi, '$1m')
+    .replace(/(\d)(?:seconds?|secs?)(?![a-z])/gi, '$1s');
 
 export const stringToMs = (strValue: string, args?: unknown): number => {
   if (!strValue) {

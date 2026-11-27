@@ -829,19 +829,128 @@ describe('conflict-field-patch.util', () => {
       ).toBeUndefined();
     });
 
-    it('leaves readable and opaque winners to their own paths', () => {
+    it('re-emits what survived a readable or opaque winner of this entity (#11184)', () => {
       const local = edit({ isDone: true }, { id: 'l' });
-      const state = { isDone: true };
+      const state = { isDone: true, doneOn: 5 };
+      const plan = op({
+        actionType: '[Task Shared] planTasksForToday' as ActionType,
+        entityIds: ['task-1'],
+        payload: { taskIds: ['task-1'], today: '2026-11-20' },
+      });
+      expect(survivingLocalFields(conflictOf([local], [plan]), state, 'task'))
+        .withContext('opaque plan for today')
+        .toEqual({ isDone: true, doneOn: 5 });
       expect(
         survivingLocalFields(conflictOf([local], [edit({ title: 'x' })]), state, 'task'),
+      )
+        .withContext('readable edit')
+        .toEqual({ isDone: true, doneOn: 5 });
+    });
+
+    it('leaves a delete winner to the whole-entity path', () => {
+      const local = edit({ isDone: true }, { id: 'l' });
+      const remove = op({ opType: OpType.Delete });
+      expect(
+        survivingLocalFields(conflictOf([local], [remove]), { isDone: true }, 'task'),
       ).toBeUndefined();
-      const count = op({
-        actionType: '[SimpleCounter] Set SimpleCounter Counter Today' as ActionType,
-        payload: { actionPayload: { id: 'task-1', newVal: 3 }, entityChanges: [] },
+    });
+
+    it('re-emits what survived a winner that also plans other tasks (#11184)', () => {
+      const local = edit({ isDone: true, doneOn: 5 }, { id: 'l' });
+      const bulkPlan = op({
+        actionType: '[Task Shared] planTasksForToday' as ActionType,
+        entityIds: ['task-1', 'task-2'],
+        payload: { taskIds: ['task-1', 'task-2'] },
       });
       expect(
-        survivingLocalFields(conflictOf([local], [count]), state, 'task'),
-      ).toBeUndefined();
+        survivingLocalFields(
+          conflictOf([local], [bulkPlan]),
+          { isDone: true, doneOn: 5, dueDay: '2026-11-20' },
+          'task',
+        ),
+      ).toEqual({ isDone: true, doneOn: 5 });
+    });
+
+    describe("this device's own pending patch rows (#11184)", () => {
+      const ownRow = (
+        actionPayload: Record<string, unknown>,
+        over: Partial<Operation> = {},
+      ): Operation =>
+        op({
+          id: 'own-row',
+          actionType: '[TASK] LWW Update' as ActionType,
+          payload: { actionPayload, entityChanges: [], lwwUpdateMode: 'patch' },
+          ...over,
+        });
+
+      it('reads a patch row by its keys, beside the edit it re-sent', () => {
+        const original = edit({ isDone: true, doneOn: 5 }, { id: 'l' });
+        const row = ownRow({ id: 'task-1', isDone: true, doneOn: 5 });
+        expect(
+          survivingLocalFields(
+            conflictOf([original, row], [lwwRow]),
+            { id: 'task-1', title: 'row', isDone: true, doneOn: 5 },
+            'task',
+          ),
+        ).toEqual({ isDone: true, doneOn: 5 });
+      });
+
+      it('re-sends only declared clears, not undefined keys of a row', () => {
+        // the re-send lists its undefined keys as clears: an accidental
+        // `parentId: undefined` would detach the task on every device
+        const row = ownRow(
+          { id: 'task-1', isDone: true, parentId: undefined, notes: undefined },
+          {
+            payload: {
+              actionPayload: { id: 'task-1', isDone: true, parentId: undefined },
+              entityChanges: [],
+              lwwUpdateMode: 'patch',
+              clearedFields: ['notes'],
+            },
+          },
+        );
+        const fields = survivingLocalFields(
+          conflictOf([row], [lwwRow]),
+          { id: 'task-1', title: 'row', isDone: true, doneOn: 5 },
+          'task',
+        );
+        expect(Object.keys(fields ?? {}).sort()).toEqual(['doneOn', 'isDone', 'notes']);
+      });
+
+      it('re-emits nothing for a field the winner overwrote', () => {
+        const row = ownRow({ id: 'task-1', title: 'mine' });
+        expect(
+          survivingLocalFields(conflictOf([row], [lwwRow]), { title: 'row' }, 'task'),
+        ).toBeUndefined();
+      });
+
+      it('keeps a replace row or a reminder clear on the whole-entity path', () => {
+        const state = { id: 'task-1', isDone: true };
+        const replace = op({
+          id: 'own-replace',
+          actionType: '[TASK] LWW Update' as ActionType,
+          payload: {
+            actionPayload: { id: 'task-1', isDone: true },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+          },
+        });
+        const reminderClear = op({
+          id: 'own-clear',
+          actionType: '[TASK] LWW Update' as ActionType,
+          payload: {
+            actionPayload: { id: 'task-1', isDone: true },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+            clearedFields: ['remindAt'],
+          },
+        });
+        for (const row of [replace, reminderClear]) {
+          expect(survivingLocalFields(conflictOf([row], [lwwRow]), state, 'task'))
+            .withContext(row.id)
+            .toBeUndefined();
+        }
+      });
     });
 
     it('builds one patch per entity, only for remote wins whose local ops are pending', async () => {
@@ -884,6 +993,36 @@ describe('conflict-field-patch.util', () => {
           deps,
         ),
       ).toEqual([]);
+    });
+
+    it('re-sends a done beside a time delta kept pending, without its time (#11184)', async () => {
+      const kept = delta({ id: 'kept' });
+      const done = edit({ isDone: true }, { id: 'l' });
+      const conflict = conflictOf([kept, done], [lwwRow]);
+      const createPatch = jasmine
+        .createSpy('createPatch')
+        .and.callFake((_c: EntityConflict, fields: Record<string, unknown>) =>
+          op({ id: 'patch', payload: fields }),
+        );
+      const deps = {
+        getState: async (): Promise<unknown> => ({
+          isDone: true,
+          doneOn: 5,
+          timeSpent: 1000,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          timeSpentOnDay: { '2026-01-01': 1000 },
+        }),
+        payloadKeyFor: (): string => 'task',
+        createPatch,
+      };
+      // The caller passes the rejected done and the kept delta as pending.
+      const patches = await buildSurvivingFieldPatches(
+        [{ conflict, winner: 'remote' }],
+        new Set(['l', 'kept']),
+        deps,
+      );
+      expect(patches.length).toBe(1);
+      expect(createPatch).toHaveBeenCalledWith(conflict, { isDone: true, doneOn: 5 });
     });
   });
 });

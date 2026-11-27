@@ -1,0 +1,21 @@
+---
+# Generated from Harper's AtTheExpenseOf rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The correct idiom is `at the expense of`, with singular `expense`. But retain `expanse` if this phrase refers to a wide area.
+extends: existence
+message: "In the context of tradeoffs, use `at the expense of`. `Expanse` means "
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "at the expense of"
+tokens:
+  - "at(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+expenses(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"
+  - "at(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+expance(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"
+  - "at(?!\\s*\\n\\s*\\n)\\s+the(?!\\s*\\n\\s*\\n)\\s+expanse(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"
