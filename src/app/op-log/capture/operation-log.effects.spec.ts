@@ -921,6 +921,63 @@ describe('OperationLogEffects', () => {
     });
   });
 
+  describe('persist-failed snack when IndexedDB is missing (#11994)', () => {
+    // iOS Lockdown Mode removes the `indexedDB` global. The startup dialog
+    // already explains that; a "please reload" snack on every edit cannot help.
+    const failAppend = (): void => {
+      mockOpLogStore.appendWithVectorClockOverwrite.and.rejectWith(
+        new ReferenceError("Can't find variable: indexedDB"),
+      );
+      actions$ = of(createPersistentAction(ActionType.TASK_SHARED_UPDATE));
+    };
+    const persistFailedSnackShown = (): boolean =>
+      mockSnackService.open.calls
+        .allArgs()
+        .some(([p]) => (p as { msg?: string }).msg === T.F.SYNC.S.PERSIST_FAILED);
+
+    it('should still show the reload snack when IndexedDB exists', (done) => {
+      failAppend();
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(persistFailedSnackShown()).toBe(true);
+          done();
+        },
+      });
+    });
+
+    it('should NOT show the reload snack when the indexedDB global is missing', (done) => {
+      // Swap the descriptor (spyOnProperty needs an accessor) and restore it.
+      const original = Object.getOwnPropertyDescriptor(window, 'indexedDB');
+      Object.defineProperty(window, 'indexedDB', {
+        value: undefined,
+        configurable: true,
+      });
+      const restore = (): void => {
+        if (original) {
+          Object.defineProperty(window, 'indexedDB', original);
+        } else {
+          Reflect.deleteProperty(window, 'indexedDB');
+        }
+      };
+      failAppend();
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          restore();
+          expect(persistFailedSnackShown()).toBe(false);
+          // The divergence is still recorded; only the useless prompt is dropped.
+          expect(
+            mockOperationCaptureService.markUnrecoveredPersistFailure,
+          ).toHaveBeenCalled();
+          done();
+        },
+        error: (e) => {
+          restore();
+          done.fail(e);
+        },
+      });
+    });
+  });
+
   describe('compaction failures', () => {
     it('should track compaction failures', (done) => {
       // Counter starts at threshold - 1, after increment it reaches threshold

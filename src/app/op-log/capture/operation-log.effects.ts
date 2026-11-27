@@ -542,6 +542,11 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    * has diverged from what's persisted to disk.
    */
   private notifyUserAndTriggerRollback(): void {
+    // #11994: without the `indexedDB` global (iOS Lockdown Mode) every write
+    // fails and a reload cannot help; the startup dialog already explained why.
+    if (typeof indexedDB === 'undefined') {
+      return;
+    }
     this.snackService.open({
       type: 'ERROR',
       msg: T.F.SYNC.S.PERSIST_FAILED,
