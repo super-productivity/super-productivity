@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { combineLatest, EMPTY, from, merge, Observable, of, timer } from 'rxjs';
+import { combineLatest, EMPTY, from, merge, Observable, timer } from 'rxjs';
 import { catchError, first, map, switchMap } from 'rxjs/operators';
 import { IssueService } from '../issue.service';
 import { Task, TaskWithSubTasks } from '../../tasks/task.model';
@@ -24,8 +24,6 @@ import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { IS_ONLINE$ } from '../../../util/is-online.token';
 import { pollWhileOnline } from '../../../util/poll-while-online';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
-import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
-import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 
 @Injectable()
 export class PollIssueUpdatesEffects {
@@ -36,8 +34,6 @@ export class PollIssueUpdatesEffects {
   private readonly _syncTriggerService = inject(SyncTriggerService);
   private readonly _isOnline$ = inject(IS_ONLINE$);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
-  private readonly _hydrationState = inject(HydrationStateService);
-  private readonly _skipDuringSyncWindow = skipDuringSyncWindow<unknown>();
 
   pollIssueTaskUpdatesActions$: Observable<unknown> = this._actions$.pipe(
     ofType(setActiveWorkContext, loadAllData),
@@ -137,23 +133,6 @@ export class PollIssueUpdatesEffects {
       // Same head start as at boot: the sync that reconnecting starts lands first.
       DELAY_BEFORE_ISSUE_POLLING,
     ).pipe(
-      // Subscribe immediately to keep the startup deadline and early look events.
-      // Preserve one pending startup/look refresh, cancelled with this provider's
-      // timer. Unlike waitForSyncWindow, this must not time out into active replay.
-      switchMap(() =>
-        this._syncTriggerService.afterInitialSyncDoneStrict$.pipe(
-          first(),
-          switchMap(() =>
-            this._hydrationState.isInSyncWindow()
-              ? this._hydrationState.isInSyncWindow$.pipe(
-                  // The observable can replay a stale value in the same event turn.
-                  first(() => !this._hydrationState.isInSyncWindow()),
-                )
-              : of(false),
-          ),
-        ),
-      ),
-      this._skipDuringSyncWindow,
       switchMap(() => this._getTasksForProvider(provider)),
       switchMap((issueTasks: Task[]) => {
         if (issueTasks.length === 0) {
