@@ -73,7 +73,9 @@ export const getUpcomingRepeatReminders = (
 
   // Anchor each day at noon to keep the per-day timestamp clear of DST /
   // midnight edges; getDbDateStr/getRepeatDueWithTime only use the date.
-  const baseDay = new Date(now);
+  // Start from the logical day: between midnight and the start of the next
+  // day, the previous day's late occurrence is still upcoming.
+  const baseDay = new Date(now - startOfNextDayDiffMs);
   baseDay.setHours(12, 0, 0, 0);
 
   for (let dayOffset = 0; dayOffset <= limits.lookaheadDays; dayOffset++) {

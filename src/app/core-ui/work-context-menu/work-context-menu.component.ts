@@ -47,7 +47,7 @@ import { TaskWithSubTasks } from '../../features/tasks/task.model';
 import { firstValueFrom, Observable, of } from 'rxjs';
 import { AsyncPipe } from '@angular/common';
 import { DateService } from '../../core/date/date.service';
-import { openWorkContextSettingsDialog } from '../../features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
+import { openWorkContextSettingsWithErrorHandling } from '../../features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { Log } from '../../core/log';
 import { PlainspaceShareService } from '../../features/issue/providers/plainspace/plainspace-share.service';
 import { selectIsProjectSharedOnPlainspace } from '../../features/issue/store/issue-provider.selectors';
@@ -544,27 +544,14 @@ export class WorkContextMenuComponent implements OnInit, OnChanges {
   }
 
   async openSettings(): Promise<void> {
-    try {
-      const entity = this.isForProject
-        ? await firstValueFrom(this._projectService.getByIdOnce$(this.contextId))
-        : await firstValueFrom(
-            this._tagService.getTagById$(this.contextId).pipe(first()),
-          );
-      if (!entity) {
-        throw new Error(`Unable to find work context ${this.contextId}`);
-      }
-
-      await openWorkContextSettingsDialog(this._matDialog, {
-        isProject: this.isForProject,
-        entity,
-      });
-    } catch (err) {
-      this._snackService.open({
-        msg: T.GLOBAL_SNACK.OPEN_SETTINGS_ERROR,
-        type: 'ERROR',
-      });
-      Log.err(err);
-    }
+    await openWorkContextSettingsWithErrorHandling(this._matDialog, this._snackService, {
+      contextId: this.contextId,
+      isProject: this.isForProject,
+      loadEntity: () =>
+        this.isForProject
+          ? firstValueFrom(this._projectService.getByIdOnce$(this.contextId))
+          : firstValueFrom(this._tagService.getTagById$(this.contextId).pipe(first())),
+    });
   }
 
   private _setShareSupport(support: ShareSupport): void {

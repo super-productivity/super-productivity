@@ -84,11 +84,17 @@ export class FocusModeTaskSelectorComponent implements AfterViewInit {
   }
 
   createAndSelectTaskFromInput(): void {
-    const taskTitle = this.currentTaskInputText().trim();
+    // SelectTaskComponent hands its text over in an effect, which can run
+    // after an Enter or click that follows the last keystroke too closely.
+    const value: unknown = this.selectTaskComponent
+      ? this.selectTaskComponent.taskSelectCtrl.value
+      : this.currentTaskInputText();
+    const taskTitle = typeof value === 'string' ? value.trim() : '';
     if (taskTitle) {
       const newTaskId = this._taskService.add(taskTitle, false, {});
-      this.taskSelected.emit(newTaskId);
+      this.selectTaskComponent?.taskSelectCtrl.setValue('');
       this.currentTaskInputText.set('');
+      this.taskSelected.emit(newTaskId);
     }
   }
 

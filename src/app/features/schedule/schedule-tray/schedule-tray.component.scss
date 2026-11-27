@@ -34,6 +34,9 @@
 .tray-cell {
   display: flex;
   flex-direction: column;
+  max-height: 30vh;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   gap: var(--s-quarter);
   min-width: 0;
   box-sizing: border-box;
@@ -42,6 +45,10 @@
 
   &.drag-over {
     background: mat-css-vars.mat-css-color-primary($opacity: 0.05);
+  }
+
+  > * {
+    flex-shrink: 0;
   }
 }
 

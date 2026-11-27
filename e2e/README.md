@@ -84,6 +84,25 @@ bypass header and fetches the cached manifest to assign the document's version
 before the update, data-preservation and offline-reload checks. The controlled-reload
 regression injects broken cached script streams and verifies both bypass and cleanup.
 
+### Electron main-process tests
+
+[electron/idle-resume.spec.ts](electron/idle-resume.spec.ts) launches the built app
+through Playwright's `_electron`, so it can emit real `powerMonitor` suspend and
+resume events; the CDP smoke tests in
+[electron-smoke.yml](../.github/workflows/electron-smoke.yml) cannot. It needs a
+production renderer, the compiled main process and the Electron runtime, which
+`npm i` no longer downloads (since Electron 42):
+
+```bash
+npm run buildFrontend:prod:es6 && npm run electron:build
+node node_modules/electron/install.js
+npm run e2e:electron   # on Linux, inside xvfb-run
+```
+
+`electron-smoke.yml` runs it on code pull requests, `master` pushes and `v*` tags
+(that workflow's `paths` filter skips docs-only, translation-only and mobile-only
+changes).
+
 ### WebDAV Sync Tests
 
 ```bash

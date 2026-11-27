@@ -505,6 +505,67 @@ test('create_task rejects invalid deadlines and estimates before forwarding', as
   }
 });
 
+test('create_task forwards tagIds', async () => {
+  const { forward, calls } = fakeForward({
+    '/assistant/capture': () => ({
+      status: 200,
+      body: { ok: true, data: { status: 'created', id: 'new1' } },
+    }),
+  });
+  const args = { title: 'Fix login', tagIds: ['tag1', 'tag2'] };
+  const result = await tools.runTool(
+    'create_task',
+    args,
+    () => ['tasks:capture'],
+    forward,
+  );
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(calls[0].body, args);
+});
+
+test('create_task rejects invalid tagIds before forwarding', async () => {
+  const shape = 'tagIds must be a list of up to 500 distinct ids';
+  const cases = [
+    [{ tagIds: 'tag1' }, shape],
+    [{ tagIds: ['a/b'] }, shape],
+    [{ tagIds: [1] }, shape],
+    [{ tagIds: ['tag1', 'tag1'] }, shape],
+    [{ tagIds: Array.from({ length: 501 }, (_, i) => `t${i}`) }, shape],
+    [
+      { tagIds: ['tag1', 'TODAY'] },
+      'tagIds cannot contain TODAY; pass dueDate to plan the task for a day',
+    ],
+  ];
+  for (const [extra, message] of cases) {
+    const { forward, calls } = fakeForward();
+    const result = await tools.runTool(
+      'create_task',
+      { title: 'x', ...extra },
+      () => ['tasks:capture'],
+      forward,
+    );
+    assert.equal(result.content[0].text, `INVALID_ARGUMENTS: ${message}`, message);
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('create_task reports a tag that does not exist', async () => {
+  const { forward } = fakeForward({
+    '/assistant/capture': () => ({
+      status: 200,
+      body: { ok: true, data: { status: 'TAG_NOT_FOUND' } },
+    }),
+  });
+  const result = await tools.runTool(
+    'create_task',
+    { title: 'x', tagIds: ['gone'] },
+    () => ['tasks:capture'],
+    forward,
+  );
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^TAG_NOT_FOUND: .*list_tags/);
+});
+
 test('create_task never claims nothing happened when the outcome is unknown', async () => {
   const timeout = async () => {
     throw new tools.RendererTimeoutError();
@@ -588,7 +649,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
     };
   }
   if (request === 'electron-log/main') {
-    return { log: () => {}, warn: () => {} };
+    return { log: () => {}, debug: () => {}, warn: () => {} };
   }
   if (request.endsWith('main-window') || request.endsWith('main-window.ts')) {
     return {

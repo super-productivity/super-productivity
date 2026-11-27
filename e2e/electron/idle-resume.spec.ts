@@ -1,5 +1,5 @@
 import { _electron, expect, test, ElectronApplication, Page } from '@playwright/test';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -51,6 +51,10 @@ test('resume before the next tracking tick preserves work recorded before sleep'
   const directory = await mkdtemp(path.join(tmpdir(), 'sp-electron-resume-'));
   const profile = path.join(directory, 'profile');
   let app: ElectronApplication | undefined;
+  let latestPage: Page | undefined;
+  // Renderer-side output never reaches the Playwright report; keep it so a
+  // CI-only failure says what the app showed when the assertion failed.
+  const rendererLog: string[] = [];
   const launch = async (): Promise<Page> => {
     app = await _electron.launch({
       executablePath: process.env.ELECTRON_PATH,
@@ -65,21 +69,55 @@ test('resume before the next tracking tick preserves work recorded before sleep'
       env: { ...process.env, NODE_ENV: 'PROD', LIBGL_ALWAYS_SOFTWARE: '1' },
     });
     const page = await app.firstWindow();
+    latestPage = page;
+    page.on('console', (message) =>
+      rendererLog.push(`[${message.type()}] ${message.text()}`),
+    );
+    page.on('pageerror', (error) => rendererLog.push(`[pageerror] ${error.message}`));
     page.on('dialog', (dialog) => void dialog.accept());
     return page;
   };
   const quit = async (): Promise<void> => {
     const closingApp = app!;
-    const closed = closingApp.waitForEvent('close');
+    const electronProcess = closingApp.process();
+    // Wait for the process itself, not Playwright's "close": that one fires only
+    // after every stdio pipe inherited by a child process closes.
+    const exited = new Promise<void>((resolve) => {
+      if (electronProcess.exitCode !== null) {
+        resolve();
+        return;
+      }
+      electronProcess.once('exit', () => resolve());
+    });
     await closingApp.evaluate(({ app: electronApp }) => {
       setTimeout(() => electronApp.quit(), 0);
     });
-    await closed;
+    await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 15_000))]);
+    expect(
+      electronProcess.exitCode,
+      'the app did not finish quitting; killing it here would hide tracked time lost in the quit flush',
+    ).not.toBeNull();
+    // A child that outlived the app keeps the inherited pipes open, so drop our
+    // ends before asking Playwright to release the app.
+    electronProcess.stdout?.destroy();
+    electronProcess.stderr?.destroy();
+    const released = await Promise.race([
+      closingApp.close().then(
+        () => true,
+        () => true,
+      ),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 10_000)),
+    ]);
+    expect(released, 'Playwright did not release the app after it quit').toBe(true);
     app = undefined;
   };
 
   try {
     let page = await launch();
+    // `firstWindow()` can hand back the window's initial empty document; wait for
+    // the loaded page before touching it, or the evaluate races the navigation
+    // and dies with "Execution context was destroyed".
+    await page.waitForURL(/(index\.html|^https?:\/\/)/);
     await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       for (const key of [
@@ -103,8 +141,18 @@ test('resume before the next tracking tick preserves work recorded before sleep'
     await page.locator('.e2e-add-task-submit').click();
     await page.keyboard.press('Escape');
     await expect(page.locator('task')).toHaveCount(1);
+    // Take the id from the row the test just created. `backup.data.task.ids[0]`
+    // is not necessarily that task: on a clean install the app can add its own
+    // sample tasks before the first reload, and the store order is not the list
+    // order, which made the imported row unfindable on the slower CI runner.
+    const idFromRow = await page.locator('task').first().getAttribute('data-task-id');
+    expect(idFromRow, 'the created task row has no id').not.toBeNull();
+    const id = idFromRow as string;
     const backup = await exportBackup(app!, page, directory);
-    const id = backup.data.task.ids[0];
+    expect(
+      backup.data.task.entities[id],
+      'the exported backup is missing that task',
+    ).toBeDefined();
     const today = await page.evaluate(() => new Date().toLocaleDateString('en-CA'));
     const previousWork = 2 * 60 * 60 * 1000;
     backup.data.task.entities[id].timeSpent = previousWork;
@@ -164,10 +212,48 @@ test('resume before the next tracking tick preserves work recorded before sleep'
     expect(restarted.data.task.entities[id].timeSpent).toBe(after);
     await quit();
   } finally {
+    // The main process logs which before-close holds it waits for, and the
+    // profile is about to be deleted. Keep the log for the artifact; it cannot
+    // be gated on testInfo.status, which still reads "passed" while an error is
+    // unwinding.
+    const logCopy = test.info().outputPath('electron-main.log');
+    await mkdir(path.dirname(logCopy), { recursive: true }).catch(() => {});
+    await copyFile(path.join(profile, 'logs', 'main.log'), logCopy).catch(() => {});
+    const pageAtEnd = latestPage;
+    if (pageAtEnd) {
+      const pageState = await Promise.race([
+        pageAtEnd
+          .evaluate(() => ({
+            url: location.href,
+            tasks: document.querySelectorAll('task').length,
+            body: (document.body.innerText || '').slice(0, 2_000),
+          }))
+          .catch((error: unknown) => ({ error: String(error) })),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ error: 'timed out' }), 5_000),
+        ),
+      ]);
+      rendererLog.push(
+        '--- page state at the end ---',
+        JSON.stringify(pageState, null, 2),
+      );
+    }
+    await writeFile(
+      path.join(path.dirname(logCopy), 'renderer.log'),
+      rendererLog.join('\n'),
+    ).catch(() => {});
     if (app) {
+      const electronProcess = app.process();
       const closed = app.waitForEvent('close').catch(() => {});
-      await app.evaluate(({ app: electronApp }) => electronApp.exit(0)).catch(() => {});
-      await closed;
+      // A wedged main process never answers, so bound the exit request too.
+      await Promise.race([
+        app.evaluate(({ app: electronApp }) => electronApp.exit(0)).catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 5_000)),
+      ]);
+      await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 5_000))]);
+      if (electronProcess.exitCode === null) {
+        electronProcess.kill('SIGKILL');
+      }
     }
     // Electron's child processes can still write to the profile after the main
     // process exits; retry like e2e/electron/packaged-app-smoke.cjs does.

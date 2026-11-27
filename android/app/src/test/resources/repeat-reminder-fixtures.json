@@ -1391,10 +1391,117 @@
           "taskId": "rpt_early_2026-06-28",
           "triggerAtMs": 1782698400000,
           "title": "Standup"
+        }
+      ]
+    },
+    {
+      "name": "after midnight but before start of day keeps the logical day occurrence",
+      "timeZone": "UTC",
+      "now": 1781482500000,
+      "startOfNextDayDiffMs": 14400000,
+      "soonestFirst": false,
+      "snapshot": {
+        "cfgs": [
+          {
+            "id": "night",
+            "title": "Standup",
+            "projectId": null,
+            "lastTaskCreationDay": "2026-06-13",
+            "startTime": "01:00",
+            "remindAt": "AtStart",
+            "isPaused": false,
+            "repeatCycle": "DAILY",
+            "startDate": "2026-01-01",
+            "repeatEvery": 1,
+            "sunday": false,
+            "monday": false,
+            "tuesday": false,
+            "wednesday": false,
+            "thursday": false,
+            "friday": false,
+            "saturday": false,
+            "monthlyLastDay": false,
+            "repeatFromCompletionDate": false,
+            "waitForCompletion": false,
+            "deletedInstanceDates": []
+          }
+        ],
+        "archivedProjectIds": []
+      },
+      "expect": [
+        {
+          "taskId": "rpt_night_2026-06-14",
+          "triggerAtMs": 1781485200000,
+          "title": "Standup"
         },
         {
-          "taskId": "rpt_early_2026-06-29",
-          "triggerAtMs": 1782784800000,
+          "taskId": "rpt_night_2026-06-15",
+          "triggerAtMs": 1781571600000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-16",
+          "triggerAtMs": 1781658000000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-17",
+          "triggerAtMs": 1781744400000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-18",
+          "triggerAtMs": 1781830800000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-19",
+          "triggerAtMs": 1781917200000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-20",
+          "triggerAtMs": 1782003600000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-21",
+          "triggerAtMs": 1782090000000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-22",
+          "triggerAtMs": 1782176400000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-23",
+          "triggerAtMs": 1782262800000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-24",
+          "triggerAtMs": 1782349200000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-25",
+          "triggerAtMs": 1782435600000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-26",
+          "triggerAtMs": 1782522000000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-27",
+          "triggerAtMs": 1782608400000,
+          "title": "Standup"
+        },
+        {
+          "taskId": "rpt_night_2026-06-28",
+          "triggerAtMs": 1782694800000,
           "title": "Standup"
         }
       ]

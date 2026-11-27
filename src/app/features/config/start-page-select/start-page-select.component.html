@@ -8,12 +8,10 @@
     T.G.TODAY_TAG_TITLE | translate
   }}</mat-option>
 
-  <!-- Legacy: render only when the user still has the old numeric Inbox value,
-       so the dropdown reflects their stored selection. Picking any other
-       option removes it from the list on the next change detection pass. -->
-  @if (formControl.value === DefaultStartPage.Inbox) {
-    <mat-option [value]="DefaultStartPage.Inbox">{{
-      T.G.INBOX_PROJECT_TITLE | translate
+  @let legacyInbox = formControl.value === DefaultStartPage.Inbox;
+  @if (legacyInbox || inboxProject()) {
+    <mat-option [value]="legacyInbox ? DefaultStartPage.Inbox : inboxProjectId">{{
+      inboxCustomTitle() ?? (T.G.INBOX_PROJECT_TITLE | translate)
     }}</mat-option>
   }
 

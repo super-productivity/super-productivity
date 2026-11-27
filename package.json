@@ -56,6 +56,7 @@
     "serveFrontend:e2e:pwa": "node e2e/pwa/pwa-test-server.cjs",
     "e2e": "npm run e2e:all -- --grep-invert \"@supersync|@webdav\"",
     "e2e:all": "npx playwright test --config e2e/playwright.config.ts --reporter=line",
+    "e2e:electron": "npx playwright test --config e2e/playwright.electron.config.ts",
     "e2e:ci": "npm run e2e",
     "e2e:pwa": "npm run buildFrontend:prodWeb && npx playwright test --config e2e/playwright.pwa.config.ts --reporter=line",
     "e2e:ui": "npx playwright test --config e2e/playwright.config.ts --ui",

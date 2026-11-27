@@ -16,6 +16,7 @@ import { selectLaterTodayStructure } from '../../tasks/store/task.selectors';
 import { Section } from '../../section/section.model';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { WorkContextType } from '../../work-context/work-context.model';
+import { INBOX_PROJECT } from '../../project/project.const';
 
 describe('getWidgetValidUntil', () => {
   const HOUR = 60 * 60 * 1000;
@@ -254,6 +255,29 @@ describe('selectAndroidWidgetData', () => {
         [],
         new Map(),
       ).projects;
+
+    it('exports Inbox independently of Today and before ordinary projects', () => {
+      const inbox = { ...INBOX_PROJECT, taskIds: ['inboxTask'] };
+      const work = project('work', undefined, ['todayTask']);
+      const result = selectAndroidWidgetData.projector(
+        ['todayTask'],
+        {
+          inboxTask: task('inboxTask', { projectId: inbox.id }),
+          todayTask: task('todayTask', { projectId: work.id }),
+        },
+        projectState([inbox, work]),
+        [work],
+        DAY,
+        0,
+        null,
+        [],
+        new Map(),
+      );
+
+      expect(result.tasks.map((entry) => entry.id)).toEqual(['todayTask']);
+      expect(result.projects.map((entry) => entry.id)).toEqual([inbox.id, work.id]);
+      expect(result.projects[0].tasks.map((entry) => entry.id)).toEqual(['inboxTask']);
+    });
 
     it('should list each selectable project with its open tasks in stored order', () => {
       const work = project('work', '#ff0000', ['t2', 'missing', 't1']);

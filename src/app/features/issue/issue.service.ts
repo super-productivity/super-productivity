@@ -493,31 +493,10 @@ export class IssueService {
           this._updateTaskFromPoll(update.task, update.taskChanges);
         }
 
-        if (updates.length === 1) {
-          this._snackService.open({
-            svgIco: this._getProviderIcon(providerKey),
-            msg: T.F.ISSUE.S.ISSUE_UPDATE_SINGLE,
-            translateParams: {
-              issueProviderName: this._getProviderName(providerKey),
-              issueStr: this._translateService.instant(
-                this._getIssueStrings(providerKey).ISSUE_STR,
-              ),
-              issueTitle: updates[0].taskChanges.title || updates[0].task.title,
-            },
-          });
-        } else if (updates.length > 1) {
-          this._snackService.open({
-            svgIco: this._getProviderIcon(providerKey),
-            msg: T.F.ISSUE.S.ISSUE_UPDATE_MULTIPLE,
-            translateParams: {
-              issueProviderName: this._getProviderName(providerKey),
-              issuesStr: this._translateService.instant(
-                this._getIssueStrings(providerKey).ISSUES_STR,
-              ),
-              nr: updates.length,
-            },
-          });
-        }
+        // Automatic polling stays quiet: an informational update snack would
+        // swallow a pending HTTP error in SnackService's trailing debounce or
+        // replace an already displayed error (including another provider's).
+        // Successful updates still reach the tasks and their issue panels.
       }
     }
 

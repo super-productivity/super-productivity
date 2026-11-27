@@ -77,6 +77,13 @@ const isAllDayEvent = (vevent: ICalVEvent): boolean => {
   }
 };
 
+// RFC 5545 enumerated values such as STATUS are case-insensitive; ical.js keeps their case.
+const isCancelledStatus = (status: unknown): boolean => {
+  if (typeof status === 'string') return status.toUpperCase() === 'CANCELLED';
+  const fn = (status as { toUpperCase?: () => string })?.toUpperCase;
+  return typeof fn === 'function' && fn.call(status) === 'CANCELLED';
+};
+
 /**
  * Exception event data for RECURRENCE-ID handling
  */
@@ -105,11 +112,6 @@ const buildExceptionMap = (vevents: ICalVEvent[]): ExceptionMap => {
         const uid = ve.getFirstPropertyValue('uid');
         if (!uid) continue;
 
-        const status = ve.getFirstPropertyValue('status');
-        const isCancelled =
-          (status as { toUpperCase?: () => string })?.toUpperCase?.() === 'CANCELLED' ||
-          (typeof status === 'string' && status.toUpperCase() === 'CANCELLED');
-
         const uidStr = String(uid);
         if (!exceptionMap.has(uidStr)) {
           exceptionMap.set(uidStr, []);
@@ -118,7 +120,7 @@ const buildExceptionMap = (vevents: ICalVEvent[]): ExceptionMap => {
         exceptionMap.get(uidStr)!.push({
           vevent: ve,
           recurrenceId,
-          isCancelled,
+          isCancelled: isCancelledStatus(ve.getFirstPropertyValue('status')),
         });
       }
     } catch (error) {
@@ -219,7 +221,7 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
         return;
       }
 
-      if (ve.getFirstPropertyValue('status') === 'CANCELLED') {
+      if (isCancelledStatus(ve.getFirstPropertyValue('status'))) {
         // A cancelled master must not resurrect its detached overrides either.
         const uid = ve.getFirstPropertyValue('uid');
         if (uid) processedRecurringUids.add(String(uid));
@@ -601,7 +603,7 @@ const getAllPossibleEventsAfterStartFromIcal = (
       if (rrule) {
         // Keep cancelled masters so their detached overrides remain suppressed
         // even when the series ended before the query window.
-        if (ve.getFirstPropertyValue('status') === 'CANCELLED') {
+        if (isCancelledStatus(ve.getFirstPropertyValue('status'))) {
           return true;
         }
         const until = (rrule as { until?: unknown }).until;

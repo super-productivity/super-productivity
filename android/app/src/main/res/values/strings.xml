@@ -37,7 +37,7 @@
   <string name="widget_header_outdated">%1$s (outdated)</string>
   <!-- Same, but the snapshot's own date could not be read — must still not say "Today" -->
   <string name="widget_header_outdated_unknown">Outdated</string>
-  <string name="widget_description">Shows Today\'s or a selected project\'s tasks with quick done action</string>
+  <string name="widget_description">Shows tasks from Today, Inbox, or a project and lets you mark them done</string>
   <string name="widget_empty">No tasks</string>
   <string name="widget_task_done">Toggle task done</string>
   <!-- Screen-reader labels of a row's checkbox; %1$s is the task title -->

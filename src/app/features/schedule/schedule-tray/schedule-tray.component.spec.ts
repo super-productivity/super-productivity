@@ -80,6 +80,22 @@ describe('ScheduleTrayComponent', () => {
     fixture = TestBed.createComponent(ScheduleTrayComponent);
   });
 
+  it('keeps an expanded day bounded and lets its last task scroll into view', () => {
+    render({ [MON]: fakeTray(Array.from({ length: 30 }, (_, i) => `task-${i}`)) });
+    fixture.componentInstance.isExpanded.set(true);
+    fixture.detectChanges();
+    const cell = el().querySelector<HTMLElement>('.tray-cell')!;
+    const lastChip = cell.querySelector<HTMLElement>('.chip:last-child')!;
+    expect(Math.round(cell.getBoundingClientRect().height)).toBeLessThanOrEqual(
+      Math.ceil(window.innerHeight * 0.3),
+    );
+    expect(cell.scrollHeight).toBeGreaterThan(cell.clientHeight);
+    cell.scrollTop = cell.scrollHeight;
+    expect(lastChip.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      cell.getBoundingClientRect().bottom,
+    );
+  });
+
   it('renders nothing while no shown day has tasks without a time', () => {
     render({ [MON]: fakeTray([]), [NOT_SHOWN]: fakeTray(['A']) });
 

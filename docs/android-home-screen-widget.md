@@ -4,17 +4,17 @@
 >
 > **Last verified:** 2026-11-23
 
-The widget displays up to 20 tasks from the app's last snapshot of either the
-Today view or one selected active project and lets the user toggle completion.
+The widget displays up to 20 tasks from the app's last snapshot of Today,
+Inbox, or one selected active project and lets the user toggle completion.
 It is a native projection of Angular state, not an independent task or calendar
 engine.
 
-Android's configuration screen can select Today or an unarchived, visible
-project for each widget. Launchers that support optional configuration may add
-the widget with Today as the default; the selection can be changed later from
-the launcher's widget settings. Project choices come from the most recent
-Angular snapshot, so immediately after upgrading from an older widget format
-the picker can show only Today until the app has been opened once.
+Android's configuration screen opens when adding a widget. It can select Today
+(the default), Inbox, or an unarchived, visible project for each widget. On
+launchers that support reconfiguration, the selection can be changed later
+from the launcher's widget settings. These selections do not change the app's
+default start page. Inbox and project choices come from the most recent Angular
+snapshot, so the picker can show only Today until the app has been opened once.
 
 Selections are device-local and excluded from Android backup and device
 transfer because launcher widget IDs are not stable across restoration. A
@@ -100,8 +100,7 @@ until the app writes a current snapshot.
   covers project, tags and dates).
 - A project widget lists open tasks; a task checked there disappears after five
   seconds. Undo it later from the app's done list.
-- Inbox, archived projects and projects hidden from the menu are not
-  selectable.
+- Archived projects and projects hidden from the menu are not selectable.
 - Native widget chrome is English-only and uses fixed styling.
 - At most 20 tasks are rendered.
 - Cross-client freshness while the app is dead requires a separate background

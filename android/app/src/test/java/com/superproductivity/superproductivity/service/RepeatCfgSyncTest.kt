@@ -230,6 +230,37 @@ class RepeatCfgSyncTest {
         assertTrue(withTask.isAlarmStale("rpt_cfg_2026-06-17", 50L, "TASK"))
     }
 
+    @Test
+    fun `pausing a series leaves the alarms of instances it already created`() {
+        val created = provider.parseResponse(
+            page(createOp(JSONObject(daily.toString()).put("lastTaskCreationDay", "2026-06-16"))),
+        )
+        val paused = provider.parseResponse(
+            page(updateOp("cfg", JSONObject().put("isPaused", true))),
+            created.nextRepeatState,
+        )
+        // The existing task keeps its own deadline and reminder.
+        assertFalse(paused.isAlarmStale("rpt_cfg_2026-06-16", 50L, "DEADLINE"))
+        assertFalse(paused.isAlarmStale("rpt_cfg_2026-06-16", 50L, "TASK"))
+        // A pre-scheduled future occurrence goes.
+        assertTrue(paused.isAlarmStale("rpt_cfg_2026-06-17", 50L, "TASK"))
+    }
+
+    @Test
+    fun `deleting a series leaves the alarms of instances it already created`() {
+        val created = provider.parseResponse(
+            page(createOp(JSONObject(daily.toString()).put("lastTaskCreationDay", "2026-06-16"))),
+        )
+        val deleted = provider.parseResponse(
+            page(op("DEL", "[TaskRepeatCfg] Delete TaskRepeatCfg", "cfg", null)),
+            created.nextRepeatState,
+        )
+        // The app detaches the existing task and keeps its reminder.
+        assertFalse(deleted.isAlarmStale("rpt_cfg_2026-06-16", 50L, "TASK"))
+        // A pre-scheduled future occurrence goes.
+        assertTrue(deleted.isAlarmStale("rpt_cfg_2026-06-17", 50L, "TASK"))
+    }
+
     private fun createOp(cfg: JSONObject) = op(
         "CRT",
         "[TaskRepeatCfg][Task] Add TaskRepeatCfg to Task",

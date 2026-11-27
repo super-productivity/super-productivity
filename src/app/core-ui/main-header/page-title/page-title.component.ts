@@ -16,8 +16,8 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { of } from 'rxjs';
-import { filter, map, switchMap } from 'rxjs/operators';
+import { firstValueFrom, of } from 'rxjs';
+import { filter, first, map, switchMap } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { WorkContextService } from '../../../features/work-context/work-context.service';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
@@ -42,7 +42,12 @@ import {
 import { BoardCfg } from '../../../features/boards/boards.model';
 import { ViewMenuComponent } from '../../../features/boards/view-menu/view-menu.component';
 import { BoardsService } from '../../../features/boards/boards.service';
+import { MatDialog } from '@angular/material/dialog';
+import { ProjectService } from '../../../features/project/project.service';
+import { TagService } from '../../../features/tag/tag.service';
+import { openWorkContextSettingsWithErrorHandling } from '../../../features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { LayoutService } from '../../layout/layout.service';
+import { SnackService } from '../../../core/snack/snack.service';
 
 @Component({
   selector: 'page-title',
@@ -62,20 +67,25 @@ import { LayoutService } from '../../layout/layout.service';
   ],
   template: `
     @if (activeWorkContextTypeAndId()) {
-      <!-- On a view page the title opens the view's editor and stays put;
-           elsewhere it links to the task list. One element either way: the
-           static tabindex makes it a tab stop on every page (RouterLink leaves
-           a static tabindex alone), and a null routerLink lets the click
-           through to onTitleClick(). -->
+      <!-- On a view page the title opens the editor; on a task-list page it
+           opens the context settings. Elsewhere it links to the task list.
+           One element either way: the static tabindex makes it a tab stop on
+           every page (RouterLink leaves it alone), and a null routerLink lets
+           the click through to onTitleClick() when it opens a dialog. -->
       <div
         [matTooltip]="
-          (viewBoard() ? T.F.BOARDS.V.EDIT_BOARD : T.MH.GO_TO_TASK_LIST) | translate
+          (viewBoard()
+            ? T.F.BOARDS.V.EDIT_BOARD
+            : isWorkViewPage()
+              ? T.MH.SETTINGS
+              : T.MH.GO_TO_TASK_LIST
+          ) | translate
         "
         class="page-title"
         mat-ripple
         tabindex="0"
-        [routerLink]="viewBoard() ? null : '/active/tasks'"
-        [attr.role]="viewBoard() ? 'button' : null"
+        [routerLink]="opensDialog() ? null : '/active/tasks'"
+        [attr.role]="opensDialog() ? 'button' : null"
         (click)="onTitleClick()"
         (keydown.enter)="onTitleClick()"
         (keydown.space)="onTitleClick($event)"
@@ -433,6 +443,10 @@ export class PageTitleComponent {
   private _pluginBridge = inject(PluginBridgeService);
   private _pluginService = inject(PluginService);
   private _boardsService = inject(BoardsService);
+  private _matDialog = inject(MatDialog);
+  private _projectService = inject(ProjectService);
+  private _tagService = inject(TagService);
+  private _snackService = inject(SnackService);
 
   readonly T = T;
 
@@ -618,18 +632,41 @@ export class PageTitleComponent {
     return (this._configService.cfg()?.keyboard as KeyboardConfig) || {};
   }
 
+  /** The title is a button (not a link) on a view page and on a task list. */
+  opensDialog = computed(() => !!this.viewBoard() || this.isWorkViewPage());
+
   /**
-   * Click, Enter or Space on the title: opens the editor on a view page,
-   * where the title is a button; elsewhere the router link (click) is all.
+   * Click, Enter or Space on the title: opens the editor on a view page or
+   * settings on a task-list page; elsewhere the router link navigates.
    */
   onTitleClick(ev?: Event): void {
     const board = this.viewBoard();
     if (!board) {
+      if (this.isWorkViewPage()) {
+        ev?.preventDefault();
+        void this._openContextSettings();
+      }
       return;
     }
     // Space would scroll the page.
     ev?.preventDefault();
     void this._boardsService.editBoard(board);
+  }
+
+  private async _openContextSettings(): Promise<void> {
+    const ctx = this.activeWorkContextTypeAndId();
+    if (!ctx) {
+      return;
+    }
+    const isProject = ctx.activeType === WorkContextType.PROJECT;
+    await openWorkContextSettingsWithErrorHandling(this._matDialog, this._snackService, {
+      contextId: ctx.activeId,
+      isProject,
+      loadEntity: () =>
+        isProject
+          ? firstValueFrom(this._projectService.getByIdOnce$(ctx.activeId))
+          : firstValueFrom(this._tagService.getTagById$(ctx.activeId).pipe(first())),
+    });
   }
 
   /** A list-layout view's filter button (and its shortcut): the editor. */

@@ -470,6 +470,45 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.dueWithTime).toBeDefined();
     });
 
+    it('should not read a number later in the title as an hour (e.g. "Ping @anna re issue 7")', async () => {
+      const now = new Date('2026-06-01T10:00:00');
+      const r = await shortSyntax(
+        { ...TASK, title: 'Ping @anna re issue 7' },
+        CONFIG,
+        undefined,
+        undefined,
+        now,
+      );
+
+      expect(r).toBeUndefined();
+    });
+
+    it('should not read a number later in the title as a deadline hour', async () => {
+      const now = new Date('2026-06-01T10:00:00');
+      const r = await shortSyntax(
+        { ...TASK, title: 'Fix !important step 2' },
+        DEADLINE_CONFIG,
+        undefined,
+        undefined,
+        now,
+      );
+
+      expect(r).toBeUndefined();
+    });
+
+    it('should not read an ordinal day as an hour (e.g. "Pay rent @15th")', async () => {
+      const now = new Date('2026-06-01T10:00:00');
+      const r = await shortSyntax(
+        { ...TASK, title: 'Pay rent @15th' },
+        CONFIG,
+        undefined,
+        undefined,
+        now,
+      );
+
+      expect(r).toBeUndefined();
+    });
+
     it('should not parse deadline syntax when there is no preceding space (e.g. Done!)', async () => {
       const t = {
         ...TASK,
@@ -3945,8 +3984,9 @@ describe('shortSyntax nth weekday (@2monday)', () => {
 
   it('should not consume a word the weekday only prefixes ("@2monx")', async () => {
     const r = await parse('Task @2monx');
-    // Not an nth weekday; the numeric fallback still handles it as before
-    expect(r?.taskChanges.title).toBe('Task monx');
+    // Not an nth weekday, and digits glued to letters are no hour either, so
+    // the token stays in the title as typed
+    expect(r).toBeUndefined();
   });
 
   it('should also support the deadline form ("!2monday")', async () => {

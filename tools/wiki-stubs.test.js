@@ -113,6 +113,59 @@ test('buildStubs writes a stub per page, keeps assets and replaces the sidebar',
   }
 });
 
+test('buildStubs refuses an output that overlaps the wiki, before deleting anything', (t) => {
+  // A private parent, so a regression can only delete this test's own files.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wiki-overlap-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const wiki = path.join(root, 'wiki');
+  fs.mkdirSync(wiki);
+  fs.writeFileSync(path.join(wiki, 'Home.md'), '# Home\n');
+  for (const out of [wiki, `${wiki}/`, root, path.join(wiki, 'stubs')]) {
+    assert.throws(() => buildStubs(wiki, out), /overlap/);
+  }
+  assert.deepEqual(fs.readdirSync(wiki), ['Home.md']);
+});
+
+test('buildStubs sees through symlinks and names that start with ..', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wiki-alias-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const dotWiki = path.join(root, '..wiki');
+  fs.mkdirSync(dotWiki);
+  fs.writeFileSync(path.join(dotWiki, 'Home.md'), '# Home\n');
+  assert.throws(() => buildStubs(dotWiki, root), /overlap/);
+
+  fs.symlinkSync(root, path.join(root, 'alias'), 'junction');
+  assert.throws(() => buildStubs(dotWiki, path.join(root, 'alias', '..wiki')), /overlap/);
+  assert.throws(
+    () => buildStubs(dotWiki, path.join(root, 'alias', '..wiki', 'new')),
+    /overlap/,
+  );
+  const out = path.join(root, 'out');
+  fs.mkdirSync(out);
+  const sourceLink = path.join(out, 'source');
+  fs.symlinkSync(dotWiki, sourceLink, 'junction');
+  assert.throws(() => buildStubs(sourceLink, out), /overlap/);
+  const outputLink = path.join(dotWiki, 'output');
+  fs.symlinkSync(out, outputLink, 'junction');
+  assert.throws(() => buildStubs(dotWiki, outputLink), /overlap/);
+  fs.unlinkSync(outputLink);
+  assert.deepEqual(fs.readdirSync(dotWiki), ['Home.md']);
+});
+
+test('buildStubs validates the source before replacing the output', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wiki-input-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const out = path.join(root, 'out');
+  fs.mkdirSync(out);
+  fs.writeFileSync(path.join(out, 'keep.md'), 'existing output');
+  const file = path.join(root, 'file');
+  fs.writeFileSync(file, '');
+  for (const src of [path.join(root, 'missing'), file]) {
+    assert.throws(() => buildStubs(src, out));
+    assert.equal(fs.readFileSync(path.join(out, 'keep.md'), 'utf8'), 'existing output');
+  }
+});
+
 test('every page in docs/wiki gets a stub', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'wiki-real-'));
   try {

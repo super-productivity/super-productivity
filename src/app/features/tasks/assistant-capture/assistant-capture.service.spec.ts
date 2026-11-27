@@ -16,6 +16,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { DateService } from '../../../core/date/date.service';
 import { addTaskRepeatCfgToTask } from '../../task-repeat-cfg/store/task-repeat-cfg.actions';
+import { selectAllTagIds } from '../../tag/store/tag.reducer';
 
 describe('AssistantCaptureService', () => {
   let service: AssistantCaptureService;
@@ -54,7 +55,9 @@ describe('AssistantCaptureService', () => {
     TestBed.configureTestingModule({
       providers: [
         AssistantCaptureService,
-        provideMockStore(),
+        provideMockStore({
+          selectors: [{ selector: selectAllTagIds, value: ['tag1', 'tag2', 'TODAY'] }],
+        }),
         { provide: TaskService, useValue: taskService },
         { provide: HydrationStateService, useValue: hydrationState },
         { provide: OperationCaptureService, useValue: operationCapture },
@@ -218,6 +221,36 @@ describe('AssistantCaptureService', () => {
     );
   });
 
+  it('tags the task in the one add op', async () => {
+    await service.capture({ title: 'x', tagIds: ['tag1', 'tag2'] });
+
+    expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({ additional: { tagIds: ['tag1', 'tag2'] } }),
+    );
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a tag that does not exist, or TODAY, before dispatching', async () => {
+    for (const tagIds of [['gone'], ['tag1', 'TODAY']]) {
+      expect(await service.capture({ title: 'x', tagIds }))
+        .withContext(tagIds.join())
+        .toEqual({ status: 'TAG_NOT_FOUND' });
+    }
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
+
+  it('gives a recurring capture the same tags for later occurrences', async () => {
+    await service.capture({
+      title: 'x',
+      tagIds: ['tag1'],
+      repeat: { cycle: 'DAILY', every: 1 },
+    });
+
+    const action = dispatchSpy.calls.mostRecent().args[0];
+    expect(action.type).toBe(addTaskRepeatCfgToTask.type);
+    expect(action.taskRepeatCfg.tagIds).toEqual(['tag1']);
+  });
+
   it('makes a recurring capture repeatable before the flush', async () => {
     writeFlush.flushPendingWrites.and.callFake(async () => {
       expect(dispatchSpy).toHaveBeenCalledTimes(2);
@@ -307,6 +340,24 @@ describe('parseAssistantCaptureInput', () => {
       deadlineTime: [8, 0],
       estimateMinutes: 45,
     });
+  });
+
+  it('accepts tagIds and drops an empty list', () => {
+    expect(parseAssistantCaptureInput({ title: 'a', tagIds: ['t1', 't2'] })).toEqual({
+      title: 'a',
+      tagIds: ['t1', 't2'],
+    });
+    expect(parseAssistantCaptureInput({ title: 'a', tagIds: [] })).toEqual({
+      title: 'a',
+    });
+  });
+
+  it('rejects malformed tagIds instead of dropping them', () => {
+    for (const tagIds of ['t1', [1], [''], ['t1', 't1']]) {
+      expect(parseAssistantCaptureInput({ title: 'a', tagIds }))
+        .withContext(JSON.stringify(tagIds))
+        .toBeUndefined();
+    }
   });
 
   it('rejects invalid scheduling fields instead of dropping them', () => {

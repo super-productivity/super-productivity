@@ -1,4 +1,5 @@
-import { isDBDateStr } from '../../util/get-db-date-str';
+import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
+import { Task } from '../tasks/task.model';
 
 /**
  * Generates a deterministic task ID for repeatable tasks.
@@ -53,3 +54,29 @@ export const getRepeatableTaskId = (repeatCfgId: string, dueDay: string): string
  */
 export const getRepeatableSubTaskId = (parentTaskId: string, index: number): string =>
   `${parentTaskId}_sub_${index}`;
+
+/**
+ * The day a deterministic repeat instance id names, or `undefined` for any other
+ * id (a legacy random id, another config's instance or a subtask).
+ */
+export const getRepeatableTaskIdDay = (
+  taskId: string,
+  repeatCfgId: string,
+): string | undefined => {
+  const prefix = `rpt_${repeatCfgId}_`;
+  const day = taskId.startsWith(prefix) ? taskId.slice(prefix.length) : '';
+  return isDBDateStr(day) ? day : undefined;
+};
+
+/**
+ * The calendar day a repeat instance was created for.
+ *
+ * A deterministic id names that day and reads the same on every device.
+ * `created` is noon of that day in the creating device's timezone, which another
+ * timezone can read as the previous or next day. Only instances with a legacy
+ * random id fall back to it.
+ */
+export const getRepeatInstanceDay = (
+  task: Pick<Task, 'id' | 'created'>,
+  repeatCfgId: string,
+): string => getRepeatableTaskIdDay(task.id, repeatCfgId) ?? getDbDateStr(task.created);
