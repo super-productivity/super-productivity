@@ -305,6 +305,14 @@ export type ReminderConfig = Readonly<{
   // Android: alarm-style notifications (louder, more intrusive). Desktop: a bell
   // loops while the reminder dialog is open, and the window is focused.
   useAlarmStyleReminders?: boolean;
+  /**
+   * Mobile: one notification per task planned for a day without a time or
+   * reminder. Replaces `notifyOnDueDate`: installs from v17.3–v19.x stored its
+   * old default `true` without anyone choosing it, and a stored value cannot
+   * be told apart from a choice (2026 survey #88).
+   */
+  isNotifyOnPlannedDay?: boolean;
+  /** @deprecated Never read. Kept so stored configs still match the model. */
   notifyOnDueDate?: boolean;
   dueDateNotificationHour?: number;
 }>;

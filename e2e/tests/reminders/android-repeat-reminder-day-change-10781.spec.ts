@@ -1,8 +1,11 @@
 import { type Page } from '@playwright/test';
-import { expect, test as base } from '../../fixtures/test.fixture';
-import { installAndroidTimerBridge } from '../focus-mode/android-timer-bridge';
-import { skipOnboardingForE2E, waitForAppReady } from '../../utils/waits';
-import { installDevErrorDialogHandler } from '../../utils/runtime-errors';
+import { expect } from '../../fixtures/test.fixture';
+import {
+  androidReminderTest,
+  readCalls,
+  type ReminderCall,
+  type ReminderWindow,
+} from './android-reminder-recorder';
 import {
   openRecurDialog,
   openRecurScheduleDialog,
@@ -21,72 +24,11 @@ import {
  * `cancelNativeReminder` cancels the alarm AND dismisses a notification that is
  * already on screen, so a cancel for the new day's occurrence loses the reminder.
  */
-type ReminderCall = {
-  op: 'schedule' | 'cancel';
-  id: number;
-  reminderId?: string;
-  triggerAtMs?: number;
-};
-type ReminderWindow = Window & {
-  __reminderCalls: ReminderCall[];
-  __e2eTestHelpers: {
-    store: {
-      dispatch: (action: { type: string; [key: string]: unknown }) => void;
-      subscribe: (fn: (state: { tasks: { ids: string[] } }) => void) => {
-        unsubscribe: () => void;
-      };
-    };
-  };
-};
-
-const installReminderRecorder = (): void => {
-  if (window !== window.top) return;
-  const calls: ReminderCall[] = [];
-  const win = window as unknown as ReminderWindow & {
-    SUPAndroid: Record<string, unknown>;
-  };
-  Object.assign(win.SUPAndroid, {
-    scheduleNativeReminder: (
-      id: number,
-      reminderId: string,
-      _relatedId: string,
-      _title: string,
-      _reminderType: string,
-      triggerAtMs: number,
-    ): void => {
-      calls.push({ op: 'schedule', id, reminderId, triggerAtMs });
-    },
-    cancelNativeReminder: (id: number): void => {
-      calls.push({ op: 'cancel', id });
-    },
-  });
-  win.__reminderCalls = calls;
-};
-
 const DAY_1 = '2026-06-15';
 const DAY_2 = '2026-06-16';
 const DAY_2_8AM = new Date(`${DAY_2}T08:00:00`).getTime();
 
-const test = base.extend({
-  page: async ({ isolatedContext }, use) => {
-    const page = await isolatedContext.newPage();
-    installDevErrorDialogHandler(page, 'android-repeat-reminder');
-    await page.clock.install({ time: new Date(`${DAY_1}T07:00:00`) });
-    await page.addInitScript(skipOnboardingForE2E);
-    await page.addInitScript(installAndroidTimerBridge);
-    await page.addInitScript(installReminderRecorder);
-    try {
-      await page.goto('/');
-      await waitForAppReady(page);
-      await use(page);
-    } finally {
-      await page.close();
-    }
-  },
-});
-
-const readCalls = (page: Page): Promise<ReminderCall[]> =>
-  page.evaluate(() => (window as unknown as ReminderWindow).__reminderCalls);
+const test = androidReminderTest(`${DAY_1}T07:00:00`);
 
 const readTaskIds = (page: Page): Promise<string[]> =>
   page.evaluate(() => {
