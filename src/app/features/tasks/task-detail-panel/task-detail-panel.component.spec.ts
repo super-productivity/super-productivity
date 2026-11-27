@@ -19,6 +19,7 @@ import { MarkdownModule } from 'ngx-markdown';
 import { DEFAULT_TASK, TaskDetailTargetPanel, TaskWithSubTasks } from '../task.model';
 import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
+import { Navigation, Router } from '@angular/router';
 
 const MOCK_TASK: TaskWithSubTasks = {
   ...(DEFAULT_TASK as TaskWithSubTasks),
@@ -36,9 +37,11 @@ describe('TaskDetailPanelComponent', () => {
   let mockAttachmentService: jasmine.SpyObj<TaskAttachmentService>;
   let mockTaskService: jasmine.SpyObj<TaskService>;
   let isXs: WritableSignal<boolean>;
+  let currentNavigation: WritableSignal<Navigation | null>;
 
   beforeEach(async () => {
     isXs = signal(true);
+    currentNavigation = signal(null);
     mockClipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
       'handlePasteWithProgress',
     ]);
@@ -116,6 +119,7 @@ describe('TaskDetailPanelComponent', () => {
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
         { provide: Store, useValue: mockStore },
         { provide: MentionConfigService, useValue: { mentionConfig$: EMPTY } },
+        { provide: Router, useValue: { currentNavigation } },
       ],
     })
       .overrideComponent(TaskContextMenuComponent, {
@@ -428,6 +432,23 @@ describe('TaskDetailPanelComponent', () => {
       }
 
       expect(clipped).toEqual([]);
+    });
+  });
+
+  describe('history entry on destroy', () => {
+    // ngOnInit pushed the panel's history entry, so it is the current one here
+    it('pops the panel history entry when the panel just closes', () => {
+      const back = spyOn(window.history, 'back');
+      fixture.destroy();
+      expect(back).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps history alone while a router navigation is in flight', () => {
+      // a popstate here would cancel the navigation that closed the panel
+      const back = spyOn(window.history, 'back');
+      currentNavigation.set({} as Navigation);
+      fixture.destroy();
+      expect(back).not.toHaveBeenCalled();
     });
   });
 });

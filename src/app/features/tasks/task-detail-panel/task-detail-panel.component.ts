@@ -37,6 +37,7 @@ import {
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { DialogTimeEstimateComponent } from '../dialog-time-estimate/dialog-time-estimate.component';
 import { MatDialog } from '@angular/material/dialog';
+import { Router } from '@angular/router';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
@@ -158,6 +159,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _translateService = inject(TranslateService);
   private _destroyRef = inject(DestroyRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _router = inject(Router);
 
   // Exposed so the template can pass the reactive locale to the now-pure
   // `localeDate` pipe, preserving re-render on a locale change.
@@ -621,7 +623,12 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         .clearImgHeaders()
         .catch(() => IssueLog.err('Jira image authentication cleanup failed'));
     }
-    if (window.history.state?.[HISTORY_STATE.TASK_DETAIL_PANEL]) {
+    // Skip while navigating: the navigation closed the panel, and the popstate
+    // from back() would cancel it, swallowing the user's side-nav click.
+    if (
+      window.history.state?.[HISTORY_STATE.TASK_DETAIL_PANEL] &&
+      !this._router.currentNavigation()
+    ) {
       window.history.back();
     }
     window.clearTimeout(this._focusTimeout);
