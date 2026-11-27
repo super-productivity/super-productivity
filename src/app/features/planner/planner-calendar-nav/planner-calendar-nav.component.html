@@ -7,9 +7,13 @@
 
 <div
   class="day-labels"
+  [class.has-week-col]="showWeekNumbers()"
   role="row"
   aria-hidden="true"
 >
+  @if (showWeekNumbers()) {
+    <div class="week-number-label">{{ T.G.WEEK | translate }}</div>
+  }
   @for (label of dayLabels(); track $index) {
     <div>{{ label }}</div>
   }
@@ -28,8 +32,14 @@
     @for (week of weeks(); track $index) {
       <div
         class="week"
+        [class.has-week-col]="showWeekNumbers()"
         role="row"
       >
+        @if (showWeekNumbers()) {
+          <div class="week-number-cell">
+            {{ weekNumbers()[$index] }}
+          </div>
+        }
         @for (day of week; track day.dateStr) {
           <button
             role="gridcell"
