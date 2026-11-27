@@ -1391,6 +1391,7 @@
         "SERVER": "Server: {{host}}",
         "SIGN_IN": "Sign in with SuperSync",
         "START_FAILED": "Couldn't reach {{host}}. Check your connection and try again.",
+        "START_FAILED_HTTP": "{{host}} answered, but couldn't start sign-in (HTTP {{status}}). Check the server address or try again later.",
         "TIMED_OUT_TEXT": "Sign-in has to be finished within 10 minutes, or it was cancelled in the browser.",
         "TIMED_OUT_TITLE": "Sign-in timed out",
         "TITLE": "Sync your tasks",

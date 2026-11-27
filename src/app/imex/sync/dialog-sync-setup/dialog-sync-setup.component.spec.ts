@@ -1,10 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { SyncLog } from '../../../core/log';
 import { T } from '../../../t.const';
 import {
+  ConnectHttpError,
   ConnectRequest,
   ConnectUnsupportedError,
   SignInOutcome,
@@ -190,6 +191,29 @@ describe('DialogSyncSetupComponent', () => {
     expect(component.step()).toBe('choose');
     expect(component.errorKey()).toBe(T.F.SYNC.D_SIGN_IN.START_FAILED);
     expect(connect.waitForApproval).not.toHaveBeenCalled();
+    expect(SyncLog.warn).toHaveBeenCalledWith(jasmine.any(String), {
+      name: 'TypeError',
+      message: 'Failed to fetch',
+    });
+  });
+
+  it('says the server answered, with the HTTP status, when it refuses the request', async () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      [T.F.SYNC.D_SIGN_IN.START_FAILED_HTTP]: '{{host}} answered HTTP {{status}}',
+    });
+    translate.use('en');
+    connect.start.and.rejectWith(new ConnectHttpError(403));
+    await component.signIn();
+    fixture.detectChanges();
+    expect(component.step()).toBe('choose');
+    expect(component.errorKey()).toBe(T.F.SYNC.D_SIGN_IN.START_FAILED_HTTP);
+    expect(text()).toContain('sync.example.com answered HTTP 403');
+    expect(connect.waitForApproval).not.toHaveBeenCalled();
+    expect(SyncLog.warn).toHaveBeenCalledWith(jasmine.any(String), {
+      name: 'ConnectHttpError',
+      message: 'Sign-in request failed: HTTP 403',
+    });
   });
 
   it('signs in to a changed server, and refuses an invalid address', async () => {
