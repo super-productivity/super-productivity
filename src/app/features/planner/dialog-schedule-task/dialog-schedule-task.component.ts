@@ -91,6 +91,12 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     targetDay?: string;
     targetTime?: string;
     isSelectDueOnly?: boolean;
+    /**
+     * The caller combines the returned date with the time as a calendar date,
+     * not a logical day (#12012). shortcut: only the add-task bar and calendar
+     * events — drop once they are logical-day aware.
+     */
+    isCalendarDay?: boolean;
     showQuickAccess?: boolean;
     minDate?: Date | null;
     isSubmitOnQuickAccess?: boolean;
@@ -124,7 +130,8 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
 
   T: typeof T = T;
   readonly DO_NOT_REMIND = TaskReminderOptionId.DoNotRemind;
-  minDate = this.data.minDate === undefined ? new Date() : this.data.minDate;
+  // Logical today, so the day that is still running after midnight stays pickable
+  minDate = this.data.minDate === undefined ? this._todayForPick() : this.data.minDate;
 
   // A repeating task takes its reminder from the repeat config, which holds at
   // most a 1h lead; offering longer leads would silently drop back (#11816).
@@ -569,14 +576,13 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     );
   }
 
+  private _todayForPick(): Date {
+    return this.data.isCalendarDay ? new Date() : this._dateService.getLogicalTodayDate();
+  }
+
   onQuickAccessClick(option: 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'): void {
-    // Scheduling here combines the time on a logical day (#12012), so start from
-    // logical today. shortcut: select-due-only callers (add-task bar, calendar
-    // events) combine with the calendar date, so they keep it until they are
-    // logical-day aware too.
-    const tDate = this.data.isSelectDueOnly
-      ? new Date()
-      : this._dateService.getLogicalTodayDate();
+    // The picked date is combined with the time as a logical day (#12012)
+    const tDate = this._todayForPick();
     tDate.setMinutes(0, 0, 0);
 
     switch (option) {

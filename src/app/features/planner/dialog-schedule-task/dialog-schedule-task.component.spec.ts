@@ -542,6 +542,48 @@ describe('DialogScheduleTaskComponent', () => {
       );
     });
 
+    // Bulk scheduling, board drops and repeat configs combine the picked date
+    // as a logical day, like the dialog itself.
+    it('picks logical today for a select-due-only caller after midnight', () => {
+      component.data = { isSelectDueOnly: true };
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date(2026, 10, 29, 1, 0));
+        component.onQuickAccessClick('today');
+      } finally {
+        jasmine.clock().uninstall();
+      }
+
+      const picked = dialogRefSpy.close.calls.mostRecent().args[0] as { date: Date };
+      expect(getDbDateStr(picked.date)).toBe('2026-11-28');
+    });
+
+    // shortcut: add-task bar and calendar events still combine calendar dates
+    it('keeps calendar today for a calendar-day caller after midnight', () => {
+      component.data = { isSelectDueOnly: true, isCalendarDay: true };
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date(2026, 10, 29, 1, 0));
+        component.onQuickAccessClick('today');
+      } finally {
+        jasmine.clock().uninstall();
+      }
+
+      const picked = dialogRefSpy.close.calls.mostRecent().args[0] as { date: Date };
+      expect(getDbDateStr(picked.date)).toBe('2026-11-29');
+    });
+
+    it('lets the logical day be picked after midnight', () => {
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date(2026, 10, 29, 1, 0));
+        const fresh = TestBed.createComponent(DialogScheduleTaskComponent);
+        expect(getDbDateStr(fresh.componentInstance.minDate as Date)).toBe('2026-11-28');
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
+
     it('shows the day the task belongs to and keeps it when saved unchanged', async () => {
       const dueWithTime = new Date(2026, 10, 29, 2, 0, 0, 0).getTime();
       const mockTask = {
