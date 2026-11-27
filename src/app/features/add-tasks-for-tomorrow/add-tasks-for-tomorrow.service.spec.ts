@@ -11,9 +11,11 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
   selectAllTasksWithDueTime,
   selectTasksDueForDay,
+  selectTaskSchedulingSnapshotRecord,
   selectTasksWithDueTimeForDay,
 } from '../tasks/store/task.selectors';
 import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
+import { selectTodayStr } from '../../root-store/app-state/app-state.selectors';
 import { selectTasksForPlannerDay } from '../planner/store/planner.selectors';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateService } from '../../core/date/date.service';
@@ -185,6 +187,7 @@ describe('AddTasksForTomorrowService', () => {
             },
             tasks: { ids: [], entities: {} },
             projects: { ids: [], entities: {} },
+            tag: { ids: [], entities: {} },
           },
         }),
       ],
@@ -414,7 +417,6 @@ describe('AddTasksForTomorrowService', () => {
       store.overrideSelector(selectTasksDueForDay, []);
       // Empty planner day means no tasks to move to today
       store.overrideSelector(selectTasksForPlannerDay(getDbDateStr(today)), []);
-      store.overrideSelector(selectTodayTaskIds, []);
       const dispatchSpy = spyOn(store, 'dispatch');
 
       const result = await service.addAllDueToday();
@@ -433,7 +435,6 @@ describe('AddTasksForTomorrowService', () => {
         mockTaskWithDueTimeToday,
         mockTaskWithDueDayToday,
       ]);
-      store.overrideSelector(selectTodayTaskIds, []);
       const dispatchSpy = spyOn(store, 'dispatch');
 
       const result = await service.addAllDueToday();
@@ -468,7 +469,6 @@ describe('AddTasksForTomorrowService', () => {
       store.overrideSelector(selectAllTasksWithDueTime, []);
       store.overrideSelector(selectTasksDueForDay, []);
       store.overrideSelector(selectTasksForPlannerDay(getDbDateStr(today)), []);
-      store.overrideSelector(selectTodayTaskIds, []);
       const dispatchSpy = spyOn(store, 'dispatch');
 
       const result = await service.addAllDueToday();
@@ -512,7 +512,6 @@ describe('AddTasksForTomorrowService', () => {
       store.overrideSelector(selectAllTasksWithDueTime, []);
       store.overrideSelector(selectTasksDueForDay, []);
       store.overrideSelector(selectTasksForPlannerDay(getDbDateStr(today)), []);
-      store.overrideSelector(selectTodayTaskIds, []);
 
       await service.addAllDueToday();
 
@@ -537,7 +536,6 @@ describe('AddTasksForTomorrowService', () => {
       store.overrideSelector(selectAllTasksWithDueTime, []);
       store.overrideSelector(selectTasksDueForDay, []);
       store.overrideSelector(selectTasksForPlannerDay(getDbDateStr(today)), []);
-      store.overrideSelector(selectTodayTaskIds, []);
 
       await service.addAllDueToday();
 
@@ -557,11 +555,39 @@ describe('AddTasksForTomorrowService', () => {
       store.overrideSelector(selectAllTasksWithDueTime, []);
       store.overrideSelector(selectTasksDueForDay, []);
       store.overrideSelector(selectTasksForPlannerDay(getDbDateStr(today)), []);
-      store.overrideSelector(selectTodayTaskIds, []);
 
       await service.addAllDueToday();
 
       expect(cfgs.map((c) => c.id)).toEqual(['second', 'first']);
+    });
+
+    it('should not re-plan a timed task due today while the store day lags behind', async () => {
+      // The store is still on yesterday (sync window), but the task is due on
+      // the day captured from the clock, so it is in Today.
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      store.overrideSelector(selectTodayStr, getDbDateStr(yesterday));
+      taskRepeatCfgServiceMock.getAllUnprocessedRepeatableTasks$.and.returnValue(of([]));
+      store.overrideSelector(selectAllTasksWithDueTime, [mockTaskWithDueTimeToday]);
+      store.overrideSelector(selectTasksDueForDay, []);
+      store.overrideSelector(selectTaskSchedulingSnapshotRecord, {
+        [mockTaskWithDueTimeToday.id]: {
+          id: mockTaskWithDueTimeToday.id,
+          isDone: false,
+          dueDay: null,
+          dueWithTime: mockTaskWithDueTimeToday.dueWithTime,
+          deadlineDay: null,
+          deadlineWithTime: null,
+          parentId: null,
+          subTaskIds: [],
+        },
+      });
+      const dispatchSpy = spyOn(store, 'dispatch');
+
+      const result = await service.addAllDueToday();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
     });
   });
 
