@@ -1,0 +1,20 @@
+---
+# Generated from Harper's EnvironmentVariable rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Ensures `environment variables` is used correctly instead of `environmental variables`.
+extends: substitution
+message: "Did you mean %[1]s?"
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "environmental(?!\\s*\\n\\s*\\n)\\s+var(?!['\\x{2019}]s\\b)": "environment var"
+  "environmental(?!\\s*\\n\\s*\\n)\\s+variable(?!['\\x{2019}]s\\b)": "environment variable"
+  "environmental(?!\\s*\\n\\s*\\n)\\s+variables(?!['\\x{2019}]s\\b)": "environment variables"
+  "environmental(?!\\s*\\n\\s*\\n)\\s+vars(?!['\\x{2019}]s\\b)": "environment vars"

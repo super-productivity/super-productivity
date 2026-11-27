@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { TestBed, fakeAsync, tick, flush } from '@angular/core/testing';
 import { ProjectMetricsService } from './project-metrics.service';
-import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { ProjectService } from '../project/project.service';
 import { WorklogService } from '../worklog/worklog.service';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -13,7 +13,7 @@ import { BreakNr, BreakTime } from '../work-context/work-context.model';
 
 describe('ProjectMetricsService', () => {
   let service: ProjectMetricsService;
-  let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let projectService: jasmine.SpyObj<ProjectService>;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let worklogService: jasmine.SpyObj<WorklogService>;
@@ -68,7 +68,10 @@ describe('ProjectMetricsService', () => {
     worklog$ = new BehaviorSubject<Worklog>(createWorklog(10000));
     totalTimeSpent$ = new BehaviorSubject<number>(10000);
 
-    const taskServiceSpy = jasmine.createSpyObj('TaskService', ['getAllTasksForProject']);
+    const taskArchiveOrchestratorSpy = jasmine.createSpyObj(
+      'TaskArchiveOrchestratorService',
+      ['getAllTasksForProject'],
+    );
     const projectServiceSpy = jasmine.createSpyObj('ProjectService', [
       'getBreakNrForProject$',
       'getBreakTimeForProject$',
@@ -82,7 +85,7 @@ describe('ProjectMetricsService', () => {
     });
 
     // Default return values
-    taskServiceSpy.getAllTasksForProject.and.returnValue(
+    taskArchiveOrchestratorSpy.getAllTasksForProject.and.returnValue(
       Promise.resolve([createTask({ id: '1' })]),
     );
     projectServiceSpy.getBreakNrForProject$.and.returnValue(of({}));
@@ -91,7 +94,7 @@ describe('ProjectMetricsService', () => {
     TestBed.configureTestingModule({
       providers: [
         ProjectMetricsService,
-        { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestratorSpy },
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: WorklogService, useValue: worklogServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
@@ -99,7 +102,9 @@ describe('ProjectMetricsService', () => {
     });
 
     service = TestBed.inject(ProjectMetricsService);
-    taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+    taskArchiveOrchestrator = TestBed.inject(
+      TaskArchiveOrchestratorService,
+    ) as jasmine.SpyObj<TaskArchiveOrchestratorService>;
     projectService = TestBed.inject(ProjectService) as jasmine.SpyObj<ProjectService>;
     worklogService = TestBed.inject(WorklogService) as jasmine.SpyObj<WorklogService>;
     workContextService = TestBed.inject(
@@ -123,7 +128,9 @@ describe('ProjectMetricsService', () => {
       const breakNr: BreakNr = { '2025-01-15': 2 };
       const breakTime: BreakTime = { '2025-01-15': 600000 };
 
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve(tasks));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(
+        Promise.resolve(tasks),
+      );
       projectService.getBreakNrForProject$.and.returnValue(of(breakNr));
       projectService.getBreakTimeForProject$.and.returnValue(of(breakTime));
 
@@ -182,7 +189,9 @@ describe('ProjectMetricsService', () => {
       ];
 
       // Set first project
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve(project1Tasks));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(
+        Promise.resolve(project1Tasks),
+      );
       activeWorkContextTypeAndId$.next({
         activeType: WorkContextType.PROJECT,
         activeId: 'project-1',
@@ -195,7 +204,9 @@ describe('ProjectMetricsService', () => {
       expect(metrics?.nrOfAllTasks).toBe(2);
 
       // Switch to second project
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve(project2Tasks));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(
+        Promise.resolve(project2Tasks),
+      );
       activeWorkContextTypeAndId$.next({
         activeType: WorkContextType.PROJECT,
         activeId: 'project-2',
@@ -220,7 +231,9 @@ describe('ProjectMetricsService', () => {
       const worklog = createWorklog(15000);
       const totalTimeSpent = 15000;
 
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve(tasks));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(
+        Promise.resolve(tasks),
+      );
       projectService.getBreakNrForProject$.and.returnValue(of(breakNr));
       projectService.getBreakTimeForProject$.and.returnValue(of(breakTime));
       worklog$.next(worklog);
@@ -249,7 +262,9 @@ describe('ProjectMetricsService', () => {
       const breakNr: BreakNr = { '2025-01-15': 1 };
       const breakTime: BreakTime = { '2025-01-15': 300000 };
 
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve(tasks));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(
+        Promise.resolve(tasks),
+      );
       projectService.getBreakNrForProject$.and.returnValue(of(breakNr));
       projectService.getBreakTimeForProject$.and.returnValue(of(breakTime));
 
@@ -262,7 +277,9 @@ describe('ProjectMetricsService', () => {
       flush();
 
       // Verify getAllTasksForProject was called with correct projectId
-      expect(taskService.getAllTasksForProject).toHaveBeenCalledWith(TEST_PROJECT_ID);
+      expect(taskArchiveOrchestrator.getAllTasksForProject).toHaveBeenCalledWith(
+        TEST_PROJECT_ID,
+      );
 
       // Verify getBreakNrForProject$ was called with correct projectId
       expect(projectService.getBreakNrForProject$).toHaveBeenCalledWith(TEST_PROJECT_ID);
@@ -308,7 +325,9 @@ describe('ProjectMetricsService', () => {
         createTask({ id: '3', projectId: TEST_PROJECT_ID }),
       ];
 
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve(projectTasks));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(
+        Promise.resolve(projectTasks),
+      );
 
       activeWorkContextTypeAndId$.next({
         activeType: WorkContextType.PROJECT,
@@ -318,7 +337,9 @@ describe('ProjectMetricsService', () => {
       tick(200);
       flush();
 
-      expect(taskService.getAllTasksForProject).toHaveBeenCalledWith(TEST_PROJECT_ID);
+      expect(taskArchiveOrchestrator.getAllTasksForProject).toHaveBeenCalledWith(
+        TEST_PROJECT_ID,
+      );
 
       const metrics = service.simpleMetrics();
       expect(metrics?.nrOfAllTasks).toBe(3);
@@ -344,7 +365,9 @@ describe('ProjectMetricsService', () => {
 
     it('should use take(1) to prevent redraws', fakeAsync(() => {
       const tasks = [createTask()];
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve(tasks));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(
+        Promise.resolve(tasks),
+      );
 
       activeWorkContextTypeAndId$.next({
         activeType: WorkContextType.PROJECT,
@@ -370,7 +393,7 @@ describe('ProjectMetricsService', () => {
 
   describe('Edge cases', () => {
     it('should handle project with no tasks', fakeAsync(() => {
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(Promise.resolve([]));
 
       activeWorkContextTypeAndId$.next({
         activeType: WorkContextType.PROJECT,
@@ -447,7 +470,7 @@ describe('ProjectMetricsService', () => {
     }));
 
     it('should handle getAllTasksForProject returning empty array', fakeAsync(() => {
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(Promise.resolve([]));
 
       activeWorkContextTypeAndId$.next({
         activeType: WorkContextType.PROJECT,
@@ -469,7 +492,9 @@ describe('ProjectMetricsService', () => {
         createTask({ id: '3', parentId: '1' }),
       ];
 
-      taskService.getAllTasksForProject.and.returnValue(Promise.resolve(tasks));
+      taskArchiveOrchestrator.getAllTasksForProject.and.returnValue(
+        Promise.resolve(tasks),
+      );
 
       activeWorkContextTypeAndId$.next({
         activeType: WorkContextType.PROJECT,

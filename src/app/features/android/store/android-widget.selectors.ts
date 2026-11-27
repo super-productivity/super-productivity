@@ -7,7 +7,11 @@ import {
   selectTaskEntities,
   SnapshotStructureEntry,
 } from '../../tasks/store/task.selectors';
-import { selectProjectFeatureState } from '../../project/store/project.selectors';
+import {
+  selectProjectFeatureState,
+  selectUnarchivedVisibleProjects,
+} from '../../project/store/project.selectors';
+import { INBOX_PROJECT } from '../../project/project.const';
 import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
@@ -15,6 +19,8 @@ import {
 import {
   AndroidWidgetCurrentTask,
   AndroidWidgetData,
+  AndroidWidgetDay,
+  AndroidWidgetProject,
   AndroidWidgetTask,
 } from '../android-widget.model';
 import { Task } from '../../tasks/task.model';
@@ -32,6 +38,8 @@ import {
   PRESENCE_STALE_AFTER_MS,
   RemoteSessionView,
 } from '../../tracking-presence/tracking-presence.model';
+import { getRepeatableTaskId } from '../../task-repeat-cfg/get-repeatable-task-id.util';
+import { selectAndroidWidgetNextDayPlans } from './android-widget-next-days.selectors';
 
 /**
  * The instant the logical day `dayStr` stops being "today": local midnight after it,
@@ -177,52 +185,151 @@ const orderTodayTasksLikeTodayScreen = (
   ];
 };
 
+/** Rows a widget can show for a project or a next day; the native list's MAX_TASKS. */
+const MAX_WIDGET_PROJECT_TASKS = 20;
+
 /**
- * Projects today's tasks into the exact `widget_data` blob shape, so downstream
+ * Done tasks per project kept for the native tap grace (see selectAndroidWidgetData).
+ * Covers several checkbox taps within the five seconds; more would only be
+ * filtered out natively on every push.
+ */
+const MAX_WIDGET_PROJECT_DONE_TASKS = 5;
+
+/**
+ * Projects today's tasks, plus the tasks of every project a widget can be
+ * pointed at (#9518), into the exact `widget_data` blob shape, so downstream
  * consumers get referential stability from the selector memoization and cheap
  * change detection via JSON comparison in WidgetDataService.
+ *
+ * A project list holds up to 20 open tasks in the project's own order (list, then
+ * backlog), plus its few most recently done tasks in their place. Native shows a
+ * done task only for five seconds after the widget's own checkbox tap on it, by
+ * local tap time (WidgetData.PROJECT_DONE_TASK_GRACE_MS). Such a task is among the
+ * newest done, so keeping those lets the row stay checked through the push that
+ * applies the tap. Done tasks never count against the 20 open rows.
  */
 export const selectAndroidWidgetData = createSelector(
   selectTodayTaskIds,
   selectTaskEntities,
   selectProjectFeatureState,
+  selectUnarchivedVisibleProjects,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
   selectCurrentTaskId,
   selectLaterTodayStructure,
   selectSectionsByContextIdMap,
+  selectAndroidWidgetNextDayPlans,
   (
     todayTaskIds,
     taskEntities,
     projectState,
+    visibleProjects,
     dayStr,
     startOfNextDayDiffMs,
     currentTaskId,
     laterTodayStructure,
     sectionsByContextId,
+    nextDayPlans,
   ): AndroidWidgetData => {
     const tasks: AndroidWidgetTask[] = [];
     const projectColors: { [projectId: string]: string } = {};
+    const withProject = (
+      widgetTask: AndroidWidgetTask,
+      projectId?: string | null,
+    ): AndroidWidgetTask => {
+      if (projectId) {
+        widgetTask.projectId = projectId;
+        const color = projectState.entities[projectId]?.theme?.primary;
+        if (color) {
+          projectColors[projectId] = color;
+        }
+      }
+      return widgetTask;
+    };
+    const toWidgetTask = (task: Task): AndroidWidgetTask =>
+      withProject(
+        { id: task.id, title: task.title, isDone: task.isDone },
+        task.projectId,
+      );
 
     for (const task of orderTodayTasksLikeTodayScreen(todayTaskIds, taskEntities, {
       laterTodayStructure,
       todaySections: sectionsByContextId.get(TODAY_TAG.id) ?? [],
       endOfTodayTime: getEndOfTodayTime(dayStr, startOfNextDayDiffMs),
     })) {
-      const widgetTask: AndroidWidgetTask = {
-        id: task.id,
-        title: task.title,
-        isDone: task.isDone,
-      };
-      if (task.projectId) {
-        widgetTask.projectId = task.projectId;
-        const color = projectState.entities[task.projectId]?.theme?.primary;
-        if (color) {
-          projectColors[task.projectId] = color;
+      tasks.push(toWidgetTask(task));
+    }
+
+    const inbox = projectState.entities[INBOX_PROJECT.id];
+    const selectableProjects =
+      inbox && !inbox.isArchived && !inbox.isHiddenFromMenu
+        ? [inbox, ...visibleProjects]
+        : visibleProjects;
+    const projects: AndroidWidgetProject[] = selectableProjects.map((project) => {
+      const listed: Task[] = [];
+      const done: Task[] = [];
+      let openCount = 0;
+      for (const taskId of [
+        ...(project.taskIds || []),
+        ...(project.backlogTaskIds || []),
+      ]) {
+        const task = taskEntities[taskId];
+        if (!task) {
+          continue;
+        }
+        if (task.isDone) {
+          done.push(task);
+          listed.push(task);
+        } else if (openCount < MAX_WIDGET_PROJECT_TASKS) {
+          openCount++;
+          listed.push(task);
         }
       }
-      tasks.push(widgetTask);
-    }
+      const recentlyDone = new Set(
+        sortDoneTasksByDoneDate(done).slice(0, MAX_WIDGET_PROJECT_DONE_TASKS),
+      );
+      return {
+        id: project.id,
+        title: project.title,
+        tasks: listed
+          .filter((task) => !task.isDone || recentlyDone.has(task))
+          .map(toWidgetTask),
+      };
+    });
+
+    const nextDays: AndroidWidgetDay[] = nextDayPlans.map((plan) => {
+      const dayTasks = plan.taskIds.flatMap((id) => {
+        const task = taskEntities[id];
+        return task ? [task] : [];
+      });
+      // The planner's rule (#8220): a config whose task is already due that day is
+      // not listed again; its lastTaskCreationDay can lag behind the task (#7923).
+      const coveredRepeatCfgIds = new Set(dayTasks.map((task) => task.repeatCfgId));
+      return {
+        dayStr: plan.dayStr,
+        validUntil: getWidgetValidUntil(plan.dayStr, startOfNextDayDiffMs),
+        tasks: [
+          ...dayTasks.filter((task) => !task.isDone).map(toWidgetTask),
+          ...plan.repeatCfgs
+            .filter((cfg) => !coveredRepeatCfgIds.has(cfg.id))
+            .map((cfg) =>
+              withProject(
+                {
+                  id: getRepeatableTaskId(cfg.id, plan.dayStr),
+                  title: cfg.title as string,
+                  isDone: false,
+                  isPending: true,
+                },
+                cfg.projectId,
+              ),
+            ),
+          // As on Today, open tasks (including upcoming repeats) get the first rows.
+          ...sortDoneTasksByDoneDate(dayTasks.filter((task) => task.isDone)).map(
+            toWidgetTask,
+          ),
+        ].slice(0, MAX_WIDGET_PROJECT_TASKS),
+      };
+    });
 
     return {
       v: 1,
@@ -231,6 +338,8 @@ export const selectAndroidWidgetData = createSelector(
       tasks,
       projectColors,
       currentTask: buildLocalCurrentTask(currentTaskId, taskEntities),
+      projects,
+      nextDays,
     };
   },
 );

@@ -1,4 +1,4 @@
-import { createEntityAdapter, EntityAdapter, Update } from '@ngrx/entity';
+import { createEntityAdapter, EntityAdapter } from '@ngrx/entity';
 import { Project, ProjectState } from '../project.model';
 import { createFeatureSelector, createReducer, on } from '@ngrx/store';
 import {
@@ -26,7 +26,6 @@ import {
 import { filterOutId } from '../../../util/filter-out-id';
 
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
-import { devError } from '../../../util/dev-error';
 import {
   addProject,
   addProjects,
@@ -601,34 +600,17 @@ export const projectReducer = createReducer<ProjectState>(
   // ------------
 
   on(moveNoteToOtherProject, (state, { note, targetProjectId }) => {
-    const srcProjectId = note.projectId;
-    const updates: Update<Project>[] = [];
-
-    if (srcProjectId === targetProjectId) {
-      devError('Moving task from same project to same project.');
-      return state;
-    }
-
-    if (srcProjectId) {
-      updates.push({
-        id: srcProjectId,
-        changes: {
-          noteIds: (state.entities[srcProjectId] as Project).noteIds.filter(
-            (id) => id !== note.id,
-          ),
-        },
-      });
-    }
-    if (targetProjectId) {
-      updates.push({
-        id: targetProjectId,
-        changes: {
-          noteIds: [...(state.entities[targetProjectId] as Project).noteIds, note.id],
-        },
-      });
-    }
-
-    return projectAdapter.updateMany(updates, state);
+    // A deleted target is re-homed to the Inbox before it gets here (#10744).
+    if (!state.entities[targetProjectId]) return state;
+    // Taken out of whichever list holds the note, not the payload's source: a
+    // re-homed note is no longer where its mover saw it. Appended last even
+    // within one project, where a delete replayed after the move puts it too.
+    return projectAdapter.map((project) => {
+      const isTarget = project.id === targetProjectId;
+      if (!isTarget && !project.noteIds.includes(note.id)) return project;
+      const noteIds = project.noteIds.filter((id) => id !== note.id);
+      return { ...project, noteIds: isTarget ? [...noteIds, note.id] : noteIds };
+    }, state);
   }),
   on(moveAllProjectBacklogTasksToRegularList, (state, { projectId }) => {
     const project = state.entities[projectId] as Project;

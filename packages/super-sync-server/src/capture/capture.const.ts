@@ -8,6 +8,8 @@ import { MS_PER_DAY } from '../sync/sync.types';
 export const CAPTURE_TITLE_MAX_CHARS = 500;
 export const CAPTURE_NOTES_MAX_BYTES = 8 * 1024;
 export const CAPTURE_REPEAT_EVERY_MAX = 99;
+/** `estimateMinutes`, in minutes: a week. The app and the desktop tool use the same bound. */
+export const CAPTURE_ESTIMATE_MINUTES_MAX = 10080;
 /** Room for JSON escaping: 8 KiB of notes can more than double as `\uXXXX`. */
 export const CAPTURE_MCP_BODY_LIMIT_BYTES = 64 * 1024;
 

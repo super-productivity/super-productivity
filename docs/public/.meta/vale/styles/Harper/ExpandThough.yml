@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ExpandThough rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Expands the informal spelling `tho` to the standard word `though`.
+extends: existence
+message: "Use `though` instead of `tho`"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "though"
+tokens:
+  - "tho(?!['\\x{2019}]s\\b)"

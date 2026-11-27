@@ -924,6 +924,38 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
       });
 
+      it('keeps local title when the imported display title and fresh raw title map identically', async () => {
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo({
+            id: '42',
+            title: 'Original',
+            lastUpdated: 2000,
+          }),
+          fieldMappings: [
+            {
+              taskField: 'title',
+              issueField: 'title',
+              defaultDirection: 'pullOnly',
+              toIssueValue: (value: unknown) => value,
+              toTaskValue: (value: unknown) =>
+                String(value).startsWith('#42 ') ? value : `#42 ${value}`,
+            },
+          ],
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        const task = {
+          id: 'task-1',
+          issueId: '42',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 0,
+          title: 'Local plan',
+          issueLastSyncedValues: { title: '#42 Original' },
+        } as unknown as Task;
+        const result = await service.getFreshDataForIssueTask(task);
+        expect(result?.taskChanges.title).toBeUndefined();
+        expect(result?.taskChanges.issueLastSyncedValues).toEqual({ title: 'Original' });
+      });
+
       // Regression: github-issue-provider ships notes <- body with
       // defaultDirection 'off'. The refresh path applied every mapping regardless
       // of direction, so the next poll after any remote activity replaced whatever

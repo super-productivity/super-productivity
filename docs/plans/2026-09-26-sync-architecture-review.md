@@ -2,6 +2,12 @@
 
 **Status:** Proposal, revised after two adversarial reviews. The maintainer
 decided five of its questions on 2026-09-26 (§7); the rest is still proposed.
+**Correction (2026-11-12):** the v3 default for new setups (decision 4 in §7)
+landed in #10289 and was reverted in #10339; new empty folders are still v2.
+It is now governed by the
+[fleet-boundary plan](2026-11-10-sync-fleet-boundary.md) (draft #11684).
+Which other items landed is recorded in
+[make sync boring](2026-11-09-make-sync-boring.md) §1.2.
 **Date:** 2026-09-26
 **Baseline commit:** `6169df9e9` (`origin/master`); rebased onto `41324d290`.
 The four intervening master commits leave the findings unchanged, although

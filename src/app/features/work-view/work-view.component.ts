@@ -19,12 +19,13 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 
 import { TaskService } from '../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   animationFrameScheduler,
   firstValueFrom,
@@ -45,6 +46,7 @@ import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-pr
 import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
 import {
+  CustomizedTaskGroup,
   CustomizedUndoneTasks,
   TaskViewCustomizerService,
 } from '../task-view-customizer/task-view-customizer.service';
@@ -53,6 +55,11 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import { groupTasksBySection } from '../section/section.util';
+import { WorkContextType } from '../work-context/work-context.model';
+import {
+  AddTaskBarComponent,
+  TaskAddEvent,
+} from '../tasks/add-task-bar/add-task-bar.component';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -155,6 +162,7 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     PluginIndexComponent,
     PlainspaceClaimPoolComponent,
     PlannerCalendarEventComponent,
+    AddTaskBarComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
@@ -162,12 +170,14 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private static readonly _FOCUS_ITEM_MAX_RETRIES = 20;
 
   taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   takeABreakService = inject(TakeABreakService);
   layoutService = inject(LayoutService);
   sectionService = inject(SectionService);
   customizerService = inject(TaskViewCustomizerService);
   workContextService = inject(WorkContextService);
   private _activatedRoute = inject(ActivatedRoute);
+  private _router = inject(Router);
   private _projectService = inject(ProjectService);
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
@@ -277,6 +287,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     },
     { equal: fastArrayCompare },
   );
+  overdueGroups = computed(() =>
+    this.customizerService.groupTasksBySelectedGroup(this.overdueTasks()),
+  );
+  laterTodayGroups = computed(() =>
+    this.customizerService.groupTasksBySelectedGroup(this.laterTodayTasks()),
+  );
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
     this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
@@ -375,6 +391,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   undoneTasksBySection = computed(() =>
     groupTasksBySection(this.undoneTasks(), this.sections()),
   );
+
+  /**
+   * The section (`s:<id>`) or group (`g:<key>`) whose header "+" opened its
+   * inline add bar; one at a time. Local UI state, never persisted.
+   */
+  inlineAddKey = signal<string | null>(null);
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
@@ -557,6 +579,89 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this.layoutService.isWorkViewScrolled.set(false);
   }
 
+  openSectionAddTask(section: Section): void {
+    if (!section.isExpanded) {
+      this.sectionService.updateSection(section.id, { isExpanded: true });
+    }
+    this.inlineAddKey.set('s:' + section.id);
+  }
+
+  openGroupAddTask(key: string): void {
+    if (this.customizerService.collapsedGroupIds().includes(key)) {
+      this.customizerService.toggleGroupExpansion(key);
+    }
+    this.inlineAddKey.set('g:' + key);
+  }
+
+  /** Moves the task the section's add bar created (or picked) into the section. */
+  async addToSection(
+    section: Section,
+    { taskId, isAddToBottom }: TaskAddEvent,
+  ): Promise<void> {
+    const sectionId = section.id;
+    // The bar's chips (project, date, backlog toggle) can send the task out of
+    // the section's list; a section entry for it would be stale.
+    if (!(await this._isShownInSectionContext(section, taskId))) {
+      return;
+    }
+    const sourceSectionId =
+      this.sections().find((s) => s.taskIds.includes(taskId))?.id ?? null;
+    if (sourceSectionId === sectionId) {
+      return;
+    }
+    const sectionTasks = this.undoneTasksBySection().dict[sectionId] ?? [];
+    const afterTaskId = isAddToBottom ? (sectionTasks.at(-1)?.id ?? null) : null;
+    this.sectionService.addTaskToSection(sectionId, taskId, afterTaskId, sourceSectionId);
+  }
+
+  /**
+   * Closes only the given bar: clicking another header's "+" while a bar is open
+   * makes the old bar's click-outside `done` fire after the new key is set.
+   */
+  closeInlineAdd(key: string): void {
+    if (this.inlineAddKey() === key) {
+      this.inlineAddKey.set(null);
+    }
+  }
+
+  /** A collapsed section or group drops its add bar, so it doesn't come back on expand. */
+  onSectionExpandedChange(section: Section, isExpanded: boolean): void {
+    this.sectionService.updateSection(section.id, { isExpanded });
+    if (!isExpanded) {
+      this.closeInlineAdd('s:' + section.id);
+    }
+  }
+
+  onGroupExpandedChange(key: string, isExpanded: boolean): void {
+    if (this.customizerService.collapsedGroupIds().includes(key) === isExpanded) {
+      this.customizerService.toggleGroupExpansion(key);
+    }
+    this.closeInlineAdd('g:' + key);
+  }
+
+  private async _isShownInSectionContext(
+    section: Section,
+    taskId: string,
+  ): Promise<boolean> {
+    const task = await firstValueFrom(this.taskService.getByIdOnce$(taskId));
+    if (!task) {
+      return false;
+    }
+    if (section.contextType === WorkContextType.PROJECT) {
+      const project = await firstValueFrom(
+        this._projectService.getByIdOnce$(section.contextId),
+      );
+      return (
+        task.projectId === section.contextId && !project?.backlogTaskIds.includes(taskId)
+      );
+    }
+    // TODAY is the only tag with sections; its membership is the due date.
+    return (
+      task.dueDay === this._dateService.todayStr() ||
+      (!!task.dueWithTime && this._dateService.isToday(task.dueWithTime))
+    );
+  }
+
   deleteSection(id: string): void {
     this._matDialog
       .open(DialogConfirmComponent, {
@@ -604,7 +709,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    await this.taskService.moveToArchive(doneTasks);
+    await this._taskArchiveOrchestrator.moveToArchive(doneTasks);
     this._snackService.open({
       msg: T.F.TASK.S.MOVED_TO_ARCHIVE,
       type: 'SUCCESS',
@@ -612,6 +717,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       translateParams: {
         nr: doneTasks.length,
       },
+      // archived tasks leave every list; History is where they can be viewed and restored
+      actionStr: T.MH.HISTORY,
+      actionFn: () => this._router.navigate(['/active/history']),
     });
   }
 
@@ -873,16 +981,34 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       this.isDoneHidden.set(false);
     } else if (
       this.isShowOverduePanel() &&
-      this.isOverdueHidden() &&
       this._hasTaskInList(this.overdueTasks(), taskId)
     ) {
       this.isOverdueHidden.set(false);
+      this._expandCollapsedPanelGroupFor(this.overdueGroups(), taskId);
     } else if (
       this.isOnTodayList() &&
-      this.isLaterTodayHidden() &&
       this._hasTaskInList(this.laterTodayTasks(), taskId)
     ) {
       this.isLaterTodayHidden.set(false);
+      this._expandCollapsedPanelGroupFor(this.laterTodayGroups(), taskId);
+    }
+  }
+
+  private _expandCollapsedPanelGroupFor(
+    groups: CustomizedTaskGroup[] | null,
+    taskId: string,
+  ): void {
+    if (!groups) {
+      return;
+    }
+
+    const collapsedGroupIds = this.customizerService.collapsedGroupIds();
+    const group = groups.find(
+      ({ key, tasks }) =>
+        collapsedGroupIds.includes(key) && this._hasTaskInList(tasks, taskId),
+    );
+    if (group) {
+      this.customizerService.toggleGroupExpansion(group.key);
     }
   }
 

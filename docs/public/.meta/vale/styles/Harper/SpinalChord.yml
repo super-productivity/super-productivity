@@ -1,0 +1,24 @@
+---
+# Generated from Harper's SpinalChord rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# The words `spinal`, `vocal`, `umbilical`, and `electrical` are followed by `cord`, so replace accidental `chord`/`chords`.
+extends: substitution
+message: "Drop the `h` after these anatomical or wiring descriptors; the structure is a `cord`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "electrical(?!\\s*\\n\\s*\\n)\\s+chord(?!['\\x{2019}]s\\b)": "electrical cord|electrical cords"
+  "electrical(?!\\s*\\n\\s*\\n)\\s+chords(?!['\\x{2019}]s\\b)": "electrical cord|electrical cords"
+  "spinal(?!\\s*\\n\\s*\\n)\\s+chord(?!['\\x{2019}]s\\b)": "spinal cord|spinal cords"
+  "spinal(?!\\s*\\n\\s*\\n)\\s+chords(?!['\\x{2019}]s\\b)": "spinal cord|spinal cords"
+  "umbilical(?!\\s*\\n\\s*\\n)\\s+chord(?!['\\x{2019}]s\\b)": "umbilical cord|umbilical cords"
+  "umbilical(?!\\s*\\n\\s*\\n)\\s+chords(?!['\\x{2019}]s\\b)": "umbilical cord|umbilical cords"
+  "vocal(?!\\s*\\n\\s*\\n)\\s+chord(?!['\\x{2019}]s\\b)": "vocal cord|vocal cords"
+  "vocal(?!\\s*\\n\\s*\\n)\\s+chords(?!['\\x{2019}]s\\b)": "vocal cord|vocal cords"

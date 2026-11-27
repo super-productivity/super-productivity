@@ -74,12 +74,14 @@ tests, or a focused contract.
 
 ## Active plans
 
-| Document                                                             | Scope                                                                                       |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [sqlite-migration.md](./sqlite-migration.md)                         | Parked native SQLite migration: durability rationale and why it was stopped                 |
-| [lww-field-level-resolution.md](./lww-field-level-resolution.md)     | Proposal: LWW resolutions that carry only the fields that must win (#10379, #10260, #10385) |
-| [protocol-change-options.md](./protocol-change-options.md)           | Decisions D1–D11 after the stopping point; option (6) spike rejected (D11, #10393)          |
-| [order-and-membership-options.md](./order-and-membership-options.md) | D5: list order and membership, measured divergence and options; design only (#10393)        |
+| Document                                                             | Scope                                                                                         |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [sqlite-migration.md](./sqlite-migration.md)                         | Parked native SQLite migration: durability rationale and why it was stopped                   |
+| [lww-field-level-resolution.md](./lww-field-level-resolution.md)     | Proposal: LWW resolutions that carry only the fields that must win (#10379, #10260, #10385)   |
+| [protocol-change-options.md](./protocol-change-options.md)           | Decisions D1–D11 after the stopping point; option (6) spike rejected (D11, #10393)            |
+| [order-and-membership-options.md](./order-and-membership-options.md) | D5: list order and membership, measured divergence and options; design only (#10393)          |
+| [make sync boring](../plans/2026-11-09-make-sync-boring.md)          | Current sync queue: measures, failure classes by evidence, service splits, decisions (#10393) |
+| [fleet boundary](../plans/2026-11-10-sync-fleet-boundary.md)         | Version floor, checkpoints and the v3 file-format default per transport (#10397)              |
 
 ## Related
 

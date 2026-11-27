@@ -1,0 +1,58 @@
+{
+  "TITLE": "账单",
+  "LOADING": "加载中…",
+  "LIST": {
+    "EMPTY": "暂无账单。",
+    "PRINT": "打印 / PDF",
+    "CSV": "CSV",
+    "DELETE": "删除",
+    "CONFIRM_DELETE": "删除账单 {{number}}？其工时将重新计为未结算。"
+  },
+  "NEW": {
+    "TITLE": "新建账单",
+    "PROJECT": "项目",
+    "NO_PROJECTS": "请先创建项目。每个项目单独开账。",
+    "FROM": "开始",
+    "TO": "结束",
+    "RATE": "小时费率",
+    "LANGUAGE": "账单语言",
+    "CLIENT": "付款方",
+    "CLIENT_HINT": "客户名称和地址。将为此项目记住。",
+    "INCLUDE": "包含",
+    "NO_HOURS": "此项目在该期间没有未结算的时间。",
+    "NUMBER": "账单编号",
+    "ISSUE_DATE": "账单日期",
+    "ISSUE": "开具并打印",
+    "BLOCK": {
+      "PERIOD": "请选择开始和结束日期；开始日期必须在前。",
+      "LINES": "请至少勾选一行有工时的记录。",
+      "RATE": "请输入小时费率。",
+      "NUMBER": "请输入账单编号。",
+      "NUMBER_USED": "此账单编号已被使用。",
+      "DATE": "请输入账单日期。"
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "您的信息",
+    "SELLER": "您的姓名、地址和税号",
+    "PAYMENT_NOTE": "付款信息",
+    "PAYMENT_NOTE_HINT": "银行信息或付款条款，打印在底部。",
+    "CURRENCY": "货币代码",
+    "TAX": "税 / 增值税 %",
+    "PAYMENT_DAYS": "到期天数",
+    "ROUNDING": "每行向上取整至",
+    "ROUNDING_NONE": "不取整",
+    "ROUNDING_MIN": "{{min}} 分钟",
+    "PREFIX": "账单编号前缀",
+    "SAVE": "保存",
+    "SAVED": "已保存。"
+  },
+  "INVOICE": {
+    "DESCRIPTION": "描述",
+    "HOURS": "工时",
+    "TOTAL": "合计"
+  },
+  "ERROR": {
+    "GENERIC": "出错了：{{error}}"
+  }
+}

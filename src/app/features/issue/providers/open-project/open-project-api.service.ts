@@ -33,6 +33,7 @@ import { ISSUE_PROVIDER_HUMANIZED, OPEN_PROJECT_TYPE } from '../../issue.const';
 import { devError } from '../../../../util/dev-error';
 import { handleIssueProviderHttpError$ } from '../../handle-issue-provider-http-error';
 import { OpenProjectFilterItem } from './open-project-filter.model';
+import { toBasicAuthHeader } from '../../../../util/to-basic-auth-header';
 
 interface OpenProjectRequestParams {
   url: string;
@@ -357,7 +358,7 @@ export class OpenProjectApiService {
       ...params,
       method: params.method || 'GET',
       headers: {
-        ...(cfg.token ? { Authorization: `Basic ${btoa('apikey:' + cfg.token)}` } : {}),
+        ...(cfg.token ? { Authorization: toBasicAuthHeader('apikey', cfg.token) } : {}),
         ...(params.headers ? params.headers : {}),
       },
     };

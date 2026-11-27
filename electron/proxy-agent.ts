@@ -81,7 +81,7 @@ export const isNoProxyMatch = (requestUrl: string, noProxy = getNoProxy()): bool
 };
 
 /**
- * Builds a node-fetch–compatible HTTPS agent that respects:
+ * Builds an HTTPS agent for `nodeHttpRequest` that respects:
  *  1. Proxy environment variables (HTTPS_PROXY / HTTP_PROXY)
  *  2. NO_PROXY / no_proxy bypasses for the current request URL
  *  3. An opt-in flag to accept self-signed certificates on the **target** server

@@ -56,6 +56,7 @@ import {
   JiraElectronRequestInit,
   JiraRequestMethod,
 } from '../../../../../../electron/shared-with-frontend/jira-request.model';
+import { toBasicAuthHeader } from '../../../../util/to-basic-auth-header';
 
 const BLOCK_ACCESS_KEY = 'SUP_BLOCK_JIRA_ACCESS';
 const API_VERSION = 'latest';
@@ -788,9 +789,7 @@ export class JiraApiService {
             }
           : {
               Cookie: '',
-              authorization: `Basic ${this._b64EncodeUnicode(
-                `${cfg.userName}:${cfg.password}`,
-              )}`,
+              authorization: toBasicAuthHeader(cfg.userName, cfg.password),
             }),
       },
     };
@@ -962,13 +961,6 @@ export class JiraApiService {
     sessionStorage.setItem(BLOCK_ACCESS_KEY, 'true');
     sessionStorage.removeItem(SS.JIRA_WONKY_COOKIE);
     return { jiraBlocked: true };
-  }
-
-  private _b64EncodeUnicode(str: string): string {
-    if (typeof btoa === 'function') {
-      return btoa(str);
-    }
-    throw new Error('Jira: btoo not supported');
   }
 }
 

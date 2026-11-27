@@ -1,0 +1,19 @@
+---
+# Generated from Harper's LetAlone rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Changes `let along` to `let alone`.
+extends: existence
+message: "Did you mean `let alone`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "let alone"
+tokens:
+  - "let(?!\\s*\\n\\s*\\n)\\s+along(?!['\\x{2019}]s\\b)"

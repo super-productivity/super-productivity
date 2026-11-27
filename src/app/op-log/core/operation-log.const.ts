@@ -1,5 +1,3 @@
-import { InjectionToken } from '@angular/core';
-
 /**
  * Configuration constants for the Operation Log system.
  * Centralizes all tunable parameters for easier maintenance and documentation.
@@ -158,18 +156,6 @@ export const EMERGENCY_COMPACTION_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const COMPACTION_TIMEOUT_MS = 25000;
 
 /**
- * Maximum retry attempts for downloading operation files.
- * Transient network errors are retried with exponential backoff.
- */
-export const MAX_DOWNLOAD_RETRIES = 3;
-
-/**
- * Base delay for download retry exponential backoff (milliseconds).
- * Delays: 1s, 2s, 4s for retries 1, 2, 3.
- */
-export const DOWNLOAD_RETRY_BASE_DELAY_MS = 1000;
-
-/**
  * Maximum operations to accumulate in memory during one API download pass.
  * Prevents out-of-memory errors on a large backlog: the download stops at a
  * page boundary, the prefix is applied and checkpointed, and the next sync
@@ -183,12 +169,6 @@ export const MAX_DOWNLOAD_OPS_IN_MEMORY = 50000;
  * and leaves the rest to the next sync (#8763).
  */
 export const MAX_DOWNLOAD_ITERATIONS = 1000;
-
-/**
- * Maximum number of operations to be rejected before showing user warning.
- * Once this threshold is reached, user is notified about permanently failed ops.
- */
-export const MAX_REJECTED_OPS_BEFORE_WARNING = 10;
 
 /**
  * Maximum number of operations in a single batchUpdateForProject call.
@@ -213,23 +193,6 @@ export const CLOCK_DRIFT_THRESHOLD_MS = 5 * 60 * 1000;
  * Default: 3 seconds
  */
 export const SLOW_COMPACTION_THRESHOLD_MS = 3000;
-
-/**
- * Threshold for warning about large state size during compaction (megabytes).
- * Large states may cause compaction to be slow or timeout.
- * Default: 20MB
- */
-export const STATE_SIZE_WARNING_THRESHOLD_MB = 20;
-
-/**
- * Injection token for retry delay base value (milliseconds).
- * Use this token to inject a different delay value in tests (e.g., 0 for instant retries).
- * Defaults to DOWNLOAD_RETRY_BASE_DELAY_MS if not provided.
- */
-export const RETRY_DELAY_BASE_MS = new InjectionToken<number>('RETRY_DELAY_BASE_MS', {
-  providedIn: 'root',
-  factory: () => DOWNLOAD_RETRY_BASE_DELAY_MS,
-});
 
 /**
  * Maximum number of operations per upload request to the sync server.

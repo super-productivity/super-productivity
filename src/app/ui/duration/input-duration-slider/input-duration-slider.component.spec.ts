@@ -33,6 +33,12 @@ describe('InputDurationSliderComponent', () => {
     fixture.detectChanges();
   });
 
+  it('should not throw when destroyed before its first change detection', () => {
+    const unrendered = TestBed.createComponent(InputDurationSliderComponent);
+
+    expect(() => unrendered.destroy()).not.toThrow();
+  });
+
   it('should update handle rotation, minutes, and hour dots from a millisecond value', () => {
     component.setRotationFromValue(ONE_HOUR_AND_THIRTY_MINUTES);
 

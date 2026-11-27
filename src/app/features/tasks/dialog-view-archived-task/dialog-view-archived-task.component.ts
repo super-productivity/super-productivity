@@ -5,6 +5,7 @@ import {
   MatDialogActions,
   MatDialogClose,
   MatDialogContent,
+  MatDialogRef,
   MatDialogTitle,
 } from '@angular/material/dialog';
 import { Task } from '../task.model';
@@ -16,8 +17,10 @@ import { MarkdownComponent } from 'ngx-markdown';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { TaskAttachmentListComponent } from '../task-attachment/task-attachment-list/task-attachment-list.component';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { IssueService } from '../../issue/issue.service';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
@@ -28,6 +31,8 @@ import { from } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { TaskArchiveService } from '../../archive/task-archive.service';
 import { Log } from '../../../core/log';
+import { RestoreArchivedTaskService } from '../restore-archived-task.service';
+import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigate-to-task.service';
 
 export interface ViewArchivedTaskData {
   task: Task;
@@ -60,6 +65,9 @@ export class DialogViewArchivedTaskComponent {
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _issueService = inject(IssueService);
   private _taskArchiveService = inject(TaskArchiveService);
+  private _restoreArchivedTaskService = inject(RestoreArchivedTaskService);
+  private _navigateToTaskService = inject(NavigateToTaskService);
+  private _matDialogRef = inject(MatDialogRef<DialogViewArchivedTaskComponent>);
   readonly data = inject<ViewArchivedTaskData>(MAT_DIALOG_DATA);
 
   // Exposed so the template can pass the reactive locale to the now-pure
@@ -70,23 +78,33 @@ export class DialogViewArchivedTaskComponent {
   subTasks = signal<Task[]>([]);
   repeatCfgLabel = signal<string | null>(null);
   issueUrl = signal<string | null>(null);
+  // What Restore brings back: this task, or its parent for a sub task. Stays
+  // null (no Restore action) for the active tasks this dialog is also opened
+  // for, e.g. from the daily summary.
+  restorableTask = signal<Task | null>(null);
 
   get task(): Task {
     return this.data.task;
   }
 
   constructor() {
-    if (this.task.subTaskIds?.length) {
+    if (
+      this.task.subTaskIds?.length ||
+      !this._restoreArchivedTaskService.isActive(this.task)
+    ) {
       this._taskArchiveService
         .load()
-        .then((archiveState) => {
+        .then((archive) => {
+          this.restorableTask.set(
+            this._restoreArchivedTaskService.findRestorableTask(this.task, archive),
+          );
           this.subTasks.set(
-            this.task.subTaskIds
-              .map((id) => archiveState.entities[id])
-              .filter((v): v is Task => !!v),
+            (this.task.subTaskIds ?? [])
+              .map((id) => archive.entities[id])
+              .filter((sub): sub is Task => !!sub),
           );
         })
-        .catch((e) => Log.warn('Failed to load subtasks from archive', e));
+        .catch((e) => Log.warn('Failed to load archived task details', e));
     }
 
     if (this.task.issueId && this.task.issueType && this.task.issueProviderId) {
@@ -134,5 +152,16 @@ export class DialogViewArchivedTaskComponent {
         targetDate: this.task.dueDay || getDbDateStr(new Date(this.task.created)),
       },
     });
+  }
+
+  async restore(): Promise<void> {
+    const task = this.restorableTask();
+    if (!task || !(await this._restoreArchivedTaskService.confirmAndRestore(task))) {
+      return;
+    }
+    this._matDialogRef.close();
+    // Go to the task rather than the active list: Search can be open over a
+    // project the restored task is not part of.
+    await this._navigateToTaskService.navigate(task.id);
   }
 }

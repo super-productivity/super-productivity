@@ -8,6 +8,7 @@ import { McpToolDefinition, McpToolResult } from './mcp-protocol';
 import {
   DUE_DATE_PATTERN,
   DUE_TIME_PATTERN,
+  ESTIMATE_MINUTES_MAX,
   REPEAT_CYCLES,
   REPEAT_EVERY_MAX,
   REPEAT_WEEKDAYS,
@@ -33,6 +34,7 @@ import {
   findUnknownArg,
   optionalString,
   optionalId,
+  optionalIdList,
   optionalBoolean,
   isRecord,
   toTaskSummary,
@@ -303,6 +305,8 @@ const CAPTURE_MESSAGES: Record<
     'Super Productivity could not save recent changes. Nothing was added; ask the user to check the app.',
   OUTCOME_UNKNOWN:
     'The task may or may not have been saved. Ask the user to check the Inbox before retrying.',
+  TAG_NOT_FOUND:
+    'A tag in tagIds does not exist. Nothing was added; call list_tags for the current ids.',
 };
 
 const createTask: ToolSpec = {
@@ -317,15 +321,25 @@ const createTask: ToolSpec = {
     }),
     description:
       "Adds a new task to the user's Inbox with the given title and optional notes, exactly as written. " +
-      'It gets the same defaults as a task the user adds to the Inbox by hand; no project or tag ' +
-      'comes from the request, and #tags, +projects and dates in the title or notes are not parsed. ' +
+      'It gets the same defaults as a task the user adds to the Inbox by hand; no project comes from ' +
+      'the request, and #tags, +projects and dates in the title or notes are not parsed. ' +
+      'Pass tagIds (ids from list_tags) to add existing tags. ' +
       'Pass dueDate (and optionally dueTime) to schedule the task, and repeat to make it recurring. ' +
-      'Retrying after an error can create a duplicate.',
+      'Pass deadlineDate (and optionally deadlineTime) when the work is due, and estimateMinutes ' +
+      'for how long it takes. Retrying after an error can create a duplicate.',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string', minLength: 1, maxLength: MAX_TITLE_CHARS },
         notes: { type: 'string', maxLength: MAX_NOTES_CHARS },
+        tagIds: {
+          type: 'array',
+          description:
+            'Optional ids of existing tags, from list_tags. NEVER use the TODAY tag',
+          items: { type: 'string' },
+          maxItems: MAX_NAMED_ENTITIES,
+          uniqueItems: true,
+        },
         dueDate: {
           type: 'string',
           description:
@@ -367,6 +381,28 @@ const createTask: ToolSpec = {
           required: ['cycle'],
           additionalProperties: false,
         },
+        deadlineDate: {
+          type: 'string',
+          description:
+            "Optional day the work is due, as YYYY-MM-DD in the user's local calendar. " +
+            'Separate from dueDate, the day to work on it. Not with repeat.',
+          pattern: DUE_DATE_PATTERN,
+        },
+        deadlineTime: {
+          type: 'string',
+          description:
+            "Optional time on deadlineDate, as 24-hour HH:MM in the user's local " +
+            'time zone. Requires deadlineDate.',
+          pattern: DUE_TIME_PATTERN,
+        },
+        estimateMinutes: {
+          type: 'integer',
+          description:
+            `Optional estimate of the work in whole minutes, 1 to ${ESTIMATE_MINUTES_MAX}. ` +
+            "Replaces the user's default estimate.",
+          minimum: 1,
+          maximum: ESTIMATE_MINUTES_MAX,
+        },
       },
       required: ['title'],
       additionalProperties: false,
@@ -376,9 +412,13 @@ const createTask: ToolSpec = {
     const unknownArg = findUnknownArg(args, [
       'title',
       'notes',
+      'tagIds',
       'dueDate',
       'dueTime',
       'repeat',
+      'deadlineDate',
+      'deadlineTime',
+      'estimateMinutes',
     ]);
     if (unknownArg) {
       return invalid(unknownArg);
@@ -393,6 +433,16 @@ const createTask: ToolSpec = {
     if (notes instanceof Error) {
       return invalid(notes.message);
     }
+    const tagIds = optionalIdList(args, 'tagIds', MAX_NAMED_ENTITIES);
+    if (tagIds instanceof Error) {
+      return invalid(tagIds.message);
+    }
+    // TODAY is virtual: membership comes from the due day, never from tagIds.
+    if (tagIds?.includes('TODAY')) {
+      return invalid(
+        'tagIds cannot contain TODAY; pass dueDate to plan the task for a day',
+      );
+    }
     const schedule = validateCaptureSchedule(args);
     if (typeof schedule === 'string') {
       return invalid(schedule);
@@ -403,7 +453,12 @@ const createTask: ToolSpec = {
       reply = await forward({
         method: 'POST',
         path: ASSISTANT_CAPTURE_PATH,
-        body: { title, ...(notes ? { notes } : {}), ...schedule },
+        body: {
+          title,
+          ...(notes ? { notes } : {}),
+          ...(tagIds?.length ? { tagIds } : {}),
+          ...schedule,
+        },
         source: 'mcp',
         timeoutMs: ASSISTANT_CAPTURE_TIMEOUT_MS,
       });

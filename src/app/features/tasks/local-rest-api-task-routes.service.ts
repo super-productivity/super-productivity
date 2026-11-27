@@ -3,6 +3,7 @@ import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import typia from 'typia';
 import { TaskService } from './task.service';
+import { TaskArchiveOrchestratorService } from './task-archive-orchestrator.service';
 import { Task, TaskWithSubTasks } from './task.model';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { ArchiveOperationHandler } from '../../op-log/apply/archive-operation-handler.service';
@@ -77,6 +78,11 @@ const pickAllowedFields = (
       result[key] = body[key];
     }
   }
+  // An empty dueDay is no date, so it removes the planned day like null
+  // instead of being stored.
+  if (result.dueDay === '') {
+    result.dueDay = null;
+  }
   return result as Partial<WritableTaskFields>;
 };
 
@@ -142,9 +148,12 @@ type DeadlineChange =
 const hasOwn = (value: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
 
-const validateDeadlineFields = (
-  fields: Partial<WritableTaskFields>,
-): string | undefined => {
+const validateDateFields = (fields: Partial<WritableTaskFields>): string | undefined => {
+  // A stored dueDay that is no date shows as "planned for -/-" (#6908) and
+  // data repair has to clear it.
+  if (typeof fields.dueDay === 'string' && !isValidDBDateStr(fields.dueDay)) {
+    return 'dueDay must be a valid YYYY-MM-DD date';
+  }
   if (fields.deadlineDay != null && fields.deadlineWithTime != null) {
     return 'deadlineDay and deadlineWithTime cannot both be set';
   }
@@ -357,6 +366,7 @@ const isTaskInToday = (
 @Injectable()
 export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes {
   private readonly _taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _archiveOperationHandler = inject(ArchiveOperationHandler);
   private readonly _projectService = inject(ProjectService);
@@ -441,6 +451,9 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       currentTask,
       currentTaskId: currentTask?.id ?? null,
       taskCount: allTasks.length,
+      // The logical day (start-of-next-day setting), so clients writing
+      // `dueDay` mean the same day as Today.
+      todayStr: this._dateService.todayStr(),
       trackingOnOtherDevice: this._getTrackingOnOtherDevice(),
     });
   }
@@ -535,7 +548,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       const archive = await this._taskArchiveService.load();
       tasks = archive.ids.map((id) => archive.entities[id]).filter((t): t is Task => !!t);
     } else if (source === 'all') {
-      tasks = await this._taskService.getAllTasksEverywhere();
+      tasks = await this._taskArchiveOrchestrator.getAllTasksEverywhere();
     } else {
       // Archiving a project leaves its tasks in the store; the app hides them
       // everywhere, so "active" does too.
@@ -620,14 +633,9 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       );
     }
 
-    const deadlineValidationError = validateDeadlineFields(writableFields);
-    if (deadlineValidationError) {
-      return createErrorResponse(
-        requestId,
-        400,
-        'INVALID_INPUT',
-        deadlineValidationError,
-      );
+    const dateValidationError = validateDateFields(writableFields);
+    if (dateValidationError) {
+      return createErrorResponse(requestId, 400, 'INVALID_INPUT', dateValidationError);
     }
 
     const deadlineFields = Object.fromEntries(
@@ -792,13 +800,13 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
           );
         }
 
-        const deadlineValidationError = validateDeadlineFields(writableFields);
-        if (deadlineValidationError) {
+        const dateValidationError = validateDateFields(writableFields);
+        if (dateValidationError) {
           return createErrorResponse(
             requestId,
             400,
             'INVALID_INPUT',
-            deadlineValidationError,
+            dateValidationError,
           );
         }
 
@@ -996,7 +1004,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       );
     }
 
-    await this._taskService.moveToArchive(task);
+    await this._taskArchiveOrchestrator.moveToArchive(task);
     return createSuccessResponse(requestId, 200, { id: taskId, archived: true });
   }
 
@@ -1015,6 +1023,14 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
     }
 
     const archivedTask = await this._taskArchiveService.getById(taskId);
+    if (archivedTask.parentId) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        'Cannot restore a subtask on its own; restore its parent task, which takes its subtasks with it',
+      );
+    }
     const subTasks: Task[] = [];
 
     if (archivedTask.subTaskIds?.length) {
@@ -1026,7 +1042,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       }
     }
 
-    this._taskService.restoreTask(archivedTask, subTasks);
+    this._taskArchiveOrchestrator.restoreTask(archivedTask, subTasks);
     // The dispatch adds the task to the store; removing it from the archive
     // runs afterwards as a queued side effect. Wait for it, so a 200 means the
     // task has left the archive, the same as archive's 200 means it has

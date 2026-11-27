@@ -214,8 +214,7 @@ export class MainHeaderComponent implements OnDestroy {
   });
   // One icon per state, nothing drawn over it (#10427). All but `wifi_off` are
   // the SVG icons in `BUILT_IN_SVG_ICONS`: one sync ring at the header's icon
-  // size, with a check, "!" or slash inside, so the arrows stay identical
-  // across states and in-sync differs from pending only by the check.
+  // size, with dots, a check, "!" or slash to distinguish states without motion.
   // Same precedence as `syncTooltip`.
   syncIcon = computed(() => {
     if (!this.syncIsEnabledAndReady()) {
@@ -228,13 +227,11 @@ export class MainHeaderComponent implements OnDestroy {
       return 'sync_error';
     }
     if (this.isSyncInProgress()) {
-      return 'sync_ring';
+      return 'sync_in_progress';
     }
     return this.hasNoPendingOps() ? 'sync_done' : 'sync_ring';
   });
-  isSyncIconSpinning = computed(
-    () => this.syncIcon() === 'sync_ring' && !!this.isSyncInProgress(),
-  );
+  isSyncIconSpinning = computed(() => this.syncIcon() === 'sync_in_progress');
   // Test hook for the E2E sync helpers, which wait on these states. 'local':
   // every local change is uploaded. 'remote': the remote was also checked
   // within the last minute. Deliberately independent of the spinner and

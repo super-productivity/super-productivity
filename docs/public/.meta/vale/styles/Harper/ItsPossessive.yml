@@ -1,0 +1,35 @@
+---
+# Hand-written from Harper's ItsPossessive, mid-sentence branch:
+#   a verb or preposition, then `it's`, then a noun or an ordinal
+#
+# `it's` is two tokens -- `it` and `'s` -- so both are matched and both marked,
+# and the fix replaces the pair. The ordinal is why the last slot is a Penn tag
+# rather than a universal one: "it's 3rd iteration" is the same mistake, and
+# `CD` says so where `NOUN` cannot.
+#
+# The noun slot carries a pattern as well as a tag because Penn and Harper
+# disagree about one closed set: `somebody`, `anyone`, `nothing` and the rest
+# are `NN` to Penn and `PRON` to Harper, so "it's somebody else's problem" --
+# a contraction, not a possessive -- matched a slot Harper reads as a pronoun.
+# A token's pattern and tag are both required, so naming the set excludes it.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Use the possessive `its` here."
+level: warning
+ignorecase: true
+model: harper
+action:
+  name: replace
+  params:
+    - "its"
+tokens:
+  - tag: 'VB[DGNPZ]?|IN'
+  - pattern: 'it'
+    target: true
+  - pattern: "'s"
+    target: true
+  - pattern: '^(?!(?:some|any|every|no)(?:body|one|thing)$).+$'
+    tag: 'NNP?S?|CD'

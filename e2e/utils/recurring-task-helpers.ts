@@ -219,3 +219,86 @@ export const gotoToday = (page: Page): Promise<void> =>
     '/#/tag/TODAY/tasks',
     page.locator('page-title .page-title-text', { hasText: /^\s*Today\s*$/ }),
   );
+
+export interface RepeatSeriesTaskView {
+  id: string;
+  dueDay: string | null;
+  repeatCfgId: string | null;
+  isDone: boolean;
+}
+
+export interface RepeatSeriesView {
+  /** The repeat config titled `title`, or null when there is none. */
+  cfg: {
+    deletedInstanceDates: string[];
+    quickSetting: string | null;
+    lastTaskCreationDay: string | null;
+  } | null;
+  /** Every top-level task titled `title`, linked to the series or not. */
+  tasks: RepeatSeriesTaskView[];
+}
+
+/**
+ * The repeat config and the top-level tasks whose title contains `title`,
+ * read from the live store, so tasks on days no view renders are included.
+ */
+export const getRepeatSeriesView = (
+  page: Page,
+  title: string,
+): Promise<RepeatSeriesView> =>
+  page.evaluate((name: string) => {
+    type CfgLike = {
+      title?: string | null;
+      deletedInstanceDates?: string[];
+      quickSetting?: string;
+      lastTaskCreationDay?: string;
+    };
+    type TaskLike = {
+      id: string;
+      title?: string;
+      dueDay?: string | null;
+      repeatCfgId?: string | null;
+      parentId?: string | null;
+      isDone?: boolean;
+    };
+    type StoreState = {
+      taskRepeatCfg?: { entities?: Record<string, CfgLike | undefined> };
+      tasks?: { entities?: Record<string, TaskLike | undefined> };
+    };
+    type StoreLike = {
+      subscribe: (next: (s: StoreState) => void) => { unsubscribe: () => void };
+    };
+    const store = (window as unknown as { __e2eTestHelpers?: { store?: StoreLike } })
+      .__e2eTestHelpers?.store;
+    if (!store) {
+      throw new Error('__e2eTestHelpers.store missing');
+    }
+    let latest: StoreState | undefined;
+    store
+      .subscribe((s) => {
+        latest = s;
+      })
+      .unsubscribe();
+    const cfg = Object.values(latest?.taskRepeatCfg?.entities ?? {}).find((c) =>
+      c?.title?.includes(name),
+    );
+    const tasks = Object.values(latest?.tasks?.entities ?? {})
+      .filter((t): t is TaskLike => !!t && !t.parentId && !!t.title?.includes(name))
+      .map((t) => ({
+        id: t.id,
+        dueDay: t.dueDay ?? null,
+        repeatCfgId: t.repeatCfgId ?? null,
+        isDone: !!t.isDone,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    return {
+      cfg: cfg
+        ? {
+            deletedInstanceDates: cfg.deletedInstanceDates ?? [],
+            quickSetting: cfg.quickSetting ?? null,
+            lastTaskCreationDay: cfg.lastTaskCreationDay ?? null,
+          }
+        : null,
+      tasks,
+    };
+  }, title);

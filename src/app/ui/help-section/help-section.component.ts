@@ -1,18 +1,24 @@
-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
-import { expandFadeAnimation } from '../animations/expand.ani';
-import { MatMiniFabButton } from '@angular/material/button';
+import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
+import { TranslatePipe } from '@ngx-translate/core';
+import { expandFadeAnimation } from '../animations/expand.ani';
+import { T } from '../../t.const';
 
+/**
+ * Short help for a section, opened with a `help-toggle-btn` placed where it
+ * fits the host (section header, dialog title). Depth lives in the public docs.
+ */
 @Component({
   selector: 'help-section',
   templateUrl: './help-section.component.html',
   styleUrls: ['./help-section.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [expandFadeAnimation],
-  imports: [MatMiniFabButton, MatIcon],
+  imports: [MatIcon, TranslatePipe],
 })
 export class HelpSectionComponent {
-  // TODO: Skipped for migration because:
-  //  Your application code writes to the input. This prevents migration.
-  @Input() isShowHelp: boolean = false;
+  readonly isShowHelp = input(false);
+  /** Page on super-productivity.com/docs that covers this section in depth. */
+  readonly docsUrl = input<string>();
+  readonly T = T;
 }

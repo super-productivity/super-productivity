@@ -26,6 +26,8 @@ import {
   PLAINSPACE_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
+import { TaskSchedulingService } from '../tasks/task-scheduling.service';
+import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
@@ -86,11 +88,30 @@ const isIssueAwaitingNextOccurrence = (
   !!(issue as PlainspaceIssue).isRecurring &&
   !(issue as PlainspaceIssue).isDone;
 
+interface AddTaskFromIssueOptions {
+  issueDataReduced: IssueDataReduced;
+  issueProviderId: string;
+  issueProviderKey: IssueProviderKey;
+  additional?: Partial<Task>;
+  isAddToBacklog?: boolean;
+  isForceDefaultProject?: boolean;
+  // Automatic (non-user-initiated) import — a background backlog poll or
+  // calendar auto-import. Such imports fire regardless of what the user is
+  // viewing, so they must not inherit the active context's tag (#8673).
+  isAutoImport?: boolean;
+}
+
 @Injectable({
   providedIn: 'root',
 })
 export class IssueService {
+  private _pendingIssueImports = new Map<
+    string,
+    { promise: Promise<string | undefined>; hasForegroundRequest: boolean }
+  >();
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _pendingRemoteIssueDelete = inject(PendingRemoteIssueDeleteService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
@@ -235,8 +256,8 @@ export class IssueService {
     return service.issueLink(issueId, issueProviderId);
   }
 
-  getPollInterval(providerKey: IssueProviderKey): number {
-    return this._getPollInterval(providerKey);
+  getPollInterval(providerKey: IssueProviderKey, provider?: IssueProvider): number {
+    return this._getPollInterval(providerKey, provider);
   }
 
   getMappedAttachments(
@@ -277,7 +298,9 @@ export class IssueService {
     }
 
     const allExistingIssueIds: string[] | number[] =
-      await this._taskService.getAllIssueIdsForProviderEverywhere(issueProviderId);
+      await this._taskArchiveOrchestrator.getAllIssueIdsForProviderEverywhere(
+        issueProviderId,
+      );
     // A task whose remote delete is still to come is no longer among them, but
     // its item is about to be deleted remotely: not new. Pending before the
     // request too, as a delete that completes while it is in flight leaves the
@@ -472,31 +495,10 @@ export class IssueService {
           this._updateTaskFromPoll(update.task, update.taskChanges);
         }
 
-        if (updates.length === 1) {
-          this._snackService.open({
-            svgIco: this._getProviderIcon(providerKey),
-            msg: T.F.ISSUE.S.ISSUE_UPDATE_SINGLE,
-            translateParams: {
-              issueProviderName: this._getProviderName(providerKey),
-              issueStr: this._translateService.instant(
-                this._getIssueStrings(providerKey).ISSUE_STR,
-              ),
-              issueTitle: updates[0].taskChanges.title || updates[0].task.title,
-            },
-          });
-        } else if (updates.length > 1) {
-          this._snackService.open({
-            svgIco: this._getProviderIcon(providerKey),
-            msg: T.F.ISSUE.S.ISSUE_UPDATE_MULTIPLE,
-            translateParams: {
-              issueProviderName: this._getProviderName(providerKey),
-              issuesStr: this._translateService.instant(
-                this._getIssueStrings(providerKey).ISSUES_STR,
-              ),
-              nr: updates.length,
-            },
-          });
-        }
+        // Automatic polling stays quiet: an informational update snack would
+        // swallow a pending HTTP error in SnackService's trailing debounce or
+        // replace an already displayed error (including another provider's).
+        // Successful updates still reach the tasks and their issue panels.
       }
     }
 
@@ -505,7 +507,36 @@ export class IssueService {
     }
   }
 
-  async addTaskFromIssue({
+  async addTaskFromIssue(options: AddTaskFromIssueOptions): Promise<string | undefined> {
+    const { issueDataReduced, issueProviderId } = options;
+    if (!issueDataReduced || !issueDataReduced.id || !issueProviderId) {
+      throw new Error('No issueData');
+    }
+    const key = JSON.stringify([issueProviderId, String(issueDataReduced.id)]);
+    // Archive lookup is async: two clicks can both observe "not imported".
+    const pending = this._pendingIssueImports.get(key);
+    if (pending) {
+      // Let one foreground caller finish its planning/board action when a
+      // background import won. Further clicks must not repeat that completion.
+      if (!options.isAutoImport && !pending.hasForegroundRequest) {
+        pending.hasForegroundRequest = true;
+        return pending.promise;
+      }
+      return undefined;
+    }
+    const promise = this._addTaskFromIssue(options);
+    this._pendingIssueImports.set(key, {
+      promise,
+      hasForegroundRequest: !options.isAutoImport,
+    });
+    try {
+      return await promise;
+    } finally {
+      this._pendingIssueImports.delete(key);
+    }
+  }
+
+  private async _addTaskFromIssue({
     issueDataReduced,
     issueProviderId,
     issueProviderKey,
@@ -513,22 +544,7 @@ export class IssueService {
     isAddToBacklog = false,
     isForceDefaultProject = false,
     isAutoImport = false,
-  }: {
-    issueDataReduced: IssueDataReduced;
-    issueProviderId: string;
-    issueProviderKey: IssueProviderKey;
-    additional?: Partial<Task>;
-    isAddToBacklog?: boolean;
-    isForceDefaultProject?: boolean;
-    // Automatic (non-user-initiated) import — a background backlog poll or
-    // calendar auto-import. Such imports fire regardless of what the user is
-    // viewing, so they must not inherit the active context's tag (#8673).
-    isAutoImport?: boolean;
-  }): Promise<string | undefined> {
-    if (!issueDataReduced || !issueDataReduced.id || !issueProviderId) {
-      throw new Error('No issueData');
-    }
-
+  }: AddTaskFromIssueOptions): Promise<string | undefined> {
     const issueIdCandidates = this._getIssueIdCandidates(
       issueProviderKey,
       issueDataReduced,
@@ -676,7 +692,7 @@ export class IssueService {
       // pushed to everyone in the Space. Other providers keep parsing.
       const isIgnoreShortSyntax = issueProviderKey === PLAINSPACE_TYPE;
       taskId = taskData.dueWithTime
-        ? await this._taskService.addAndSchedule(
+        ? await this._taskSchedulingService.addAndSchedule(
             title,
             taskData,
             taskData.dueWithTime,
@@ -767,11 +783,12 @@ export class IssueService {
     issueProviderId: string;
     issueProviderKey: IssueProviderKey;
   }): Promise<{ taskId: string; parentTaskId: string } | undefined> {
-    const parentTask = await this._taskService.checkForTaskWithIssueEverywhere(
-      issueParentId,
-      issueProviderKey,
-      issueProviderId,
-    );
+    const parentTask =
+      await this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere(
+        issueParentId,
+        issueProviderKey,
+        issueProviderId,
+      );
 
     // Archived parents cannot receive new sub-tasks (the reducer no-ops silently).
     // Fall through so the child is added as a top-level task instead.
@@ -804,7 +821,7 @@ export class IssueService {
     isBackgroundPoll: boolean,
   ): Promise<void> {
     for (const issue of issues) {
-      const res = await this._taskService.checkForTaskWithIssueEverywhere(
+      const res = await this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere(
         issue.id.toString(),
         providerKey,
         issueProviderId,
@@ -833,7 +850,7 @@ export class IssueService {
         ...subTask,
         remindAt: undefined,
       }));
-      this._taskService.restoreTask(task, subTasks);
+      this._taskArchiveOrchestrator.restoreTask(task, subTasks);
 
       // Background ('always'-mode) polls stay quiet, same as the import snack
       // above: the task reappearing in the project is the signal.
@@ -862,10 +879,10 @@ export class IssueService {
     );
 
     let res: Awaited<
-      ReturnType<typeof this._taskService.checkForTaskWithIssueEverywhere>
+      ReturnType<typeof this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere>
     > | null = null;
     for (const candidateId of idsToCheck) {
-      res = await this._taskService.checkForTaskWithIssueEverywhere(
+      res = await this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere(
         candidateId,
         issueType,
         issueProviderId,
@@ -876,7 +893,7 @@ export class IssueService {
     }
 
     if (res?.isFromArchive) {
-      this._taskService.restoreTask(res.task, res.subTasks || []);
+      this._taskArchiveOrchestrator.restoreTask(res.task, res.subTasks || []);
       this._snackService.open({
         ico: 'info',
         msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,
@@ -1020,11 +1037,14 @@ export class IssueService {
     return ISSUE_STR_MAP[key] ?? DEFAULT_ISSUE_STRS;
   }
 
-  private _getPollInterval(key: IssueProviderKey): number {
+  private _getPollInterval(key: IssueProviderKey, provider?: IssueProvider): number {
     if (this._pluginRegistry.hasProvider(key)) {
       return this._pluginRegistry.getPollIntervalMs(key);
     }
     const service = this.ISSUE_SERVICE_MAP[key];
+    if (provider && service?.getPollIntervalForCfg) {
+      return service.getPollIntervalForCfg(provider as IssueIntegrationCfg);
+    }
     return service?.pollInterval ?? 0;
   }
 

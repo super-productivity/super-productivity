@@ -4,7 +4,7 @@ import { OperationLogStoreService } from '../../../persistence/operation-log-sto
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { executeIntent, FuzzStep, fuzzDay } from './sync-fuzz-actions';
 import { SyncFuzzHarness } from './sync-fuzz-harness';
-import { runFuzz } from './sync-fuzz-runner';
+import { FuzzFailure, runFuzz } from './sync-fuzz-runner';
 
 interface Entities {
   ids: string[];
@@ -12,14 +12,16 @@ interface Entities {
 }
 
 /** Corrupt only snapshots read by the oracles, after the real pipeline ran. */
-const corruptOutcome = (corrupt: (state: AppStateSnapshot) => void): void => {
+const corruptOutcome = (
+  corrupt: (state: AppStateSnapshot, device: string) => void,
+): void => {
   const original = SyncFuzzHarness.prototype.syncedState;
   spyOn(SyncFuzzHarness.prototype, 'syncedState').and.callFake(async function (
     this: SyncFuzzHarness,
     device,
   ) {
     const state = structuredClone(await original.call(this, device));
-    corrupt(state);
+    corrupt(state, device.name);
     return state;
   });
 };
@@ -48,6 +50,129 @@ describe('sync fuzz oracle real-path negative controls', () => {
       expect(lost.failures.map((f) => f.signature)).toContain('lost-entity:note');
     }, 60_000);
   }
+
+  it('runs a trace through the file adapter with the same oracles', async () => {
+    const steps: FuzzStep[] = [
+      { d: 'A', a: ['editNote', 'n1', 'content', 'newer'] },
+      { d: 'A', s: 1 },
+      { d: 'B', s: 1 },
+    ];
+    const kept = await runFuzz({ steps, fileTransport: {} });
+    expect(kept.failures).withContext(JSON.stringify(kept.failures)).toEqual([]);
+    corruptOutcome((state) => removeNote(state, 'n1'));
+    const lost = await runFuzz({ steps, fileTransport: {} });
+    expect(lost.failures.map((f) => f.signature)).toContain('lost-entity:note');
+  }, 60_000);
+
+  it('answers the conflict dialog file sync opens over unsynced changes', async () => {
+    const conflict =
+      'sync-error:LocalDataConflictError: Local data conflict: * unsynced changes would be lost';
+    const trace = (k?: 'L' | 'R'): FuzzStep[] => [
+      { d: 'A', a: ['renameTask', 't1', 'A1'], s: 1 },
+      { d: 'B', s: 1 },
+      { d: 'A', a: ['forceUpload'] },
+      { d: 'B', a: ['renameTask', 't2', 'B1'], s: 1, ...(k ? { k } : {}) },
+    ];
+    const signatures = async (k?: 'L' | 'R'): Promise<string[]> =>
+      (await runFuzz({ steps: trace(k), fileTransport: {} })).failures.map(
+        (f) => f.signature,
+      );
+    expect(await signatures()).toContain(conflict);
+    expect(await signatures('R')).toEqual([]);
+    expect(await signatures('L')).toEqual([]);
+    const answered = await runFuzz({ steps: trace('R'), fileTransport: {} });
+    expect(answered.answeredConflicts).toBe(1);
+  }, 60_000);
+
+  it('marks a list difference as order-only until one device differs in members', async () => {
+    const noteIds = async (): Promise<FuzzFailure | undefined> =>
+      (await runFuzz({ steps: [] })).failures.find(
+        (f) => f.signature === 'divergence:.note.ids.*',
+      );
+    let swapsMember = false;
+    corruptOutcome((state, device) => {
+      const ids = (state.note as Entities).ids;
+      if (device === 'A') ids.reverse();
+      if (device === 'B' && swapsMember) ids[0] = 'not-a-note';
+    });
+    expect((await noteIds())?.orderOnly).toBeTrue();
+    swapsMember = true;
+    expect((await noteIds())?.orderOnly).toBeFalse();
+  }, 60_000);
+
+  it('reports a moved task that its project does not list, lists twice, or that two projects list', async () => {
+    const steps: FuzzStep[] = [
+      { d: 'A', a: ['moveTask', 't3', 'p1'], s: 1 },
+      { d: 'B', s: 1 },
+      { d: 'C', s: 1 },
+    ];
+    const kept = await runFuzz({ steps });
+    expect(kept.steps).toEqual(steps);
+    expect(kept.failures).withContext(JSON.stringify(kept.failures)).toEqual([]);
+
+    const projects = (state: AppStateSnapshot): Entities['entities'] =>
+      (state.project as Entities).entities;
+    let corrupt = (state: AppStateSnapshot): void => {
+      projects(state)['p1']['taskIds'] = [];
+    };
+    corruptOutcome((state) => corrupt(state));
+    const unlisted = await runFuzz({ steps });
+    expect(unlisted.failures.map((f) => f.signature)).toContain(
+      'membership:unlisted-in-own-project',
+    );
+
+    corrupt = (state) => {
+      projects(state)['p2']['taskIds'] = ['t3'];
+      projects(state)['p1']['backlogTaskIds'] = ['t3'];
+      projects(state)['INBOX_PROJECT']['taskIds'] = [
+        ...(projects(state)['INBOX_PROJECT']['taskIds'] as string[]),
+        'gone',
+      ];
+    };
+    const stale = await runFuzz({ steps });
+    expect(stale.failures.map((f) => f.signature)).toEqual(
+      jasmine.arrayContaining([
+        'membership:listed-in-other-project',
+        'membership:listed-twice',
+        'membership:lists-missing-task',
+      ]),
+    );
+  }, 60_000);
+
+  it('detects a move that reverted', async () => {
+    corruptOutcome((state) => {
+      (state.task as Entities).entities['t3']['projectId'] = 'INBOX_PROJECT';
+    });
+    const { failures } = await runFuzz({
+      steps: [{ d: 'A', a: ['moveTask', 't3', 'p1'], s: 1 }],
+    });
+    expect(failures.map((f) => f.signature)).toContain('field-reverted:task.projectId');
+  }, 60_000);
+
+  it('creates the other projects and checks membership only in a run that moves tasks', async () => {
+    let projectIds: string[] = [];
+    corruptOutcome((state) => {
+      const projects = state.project as Entities;
+      projectIds = projects.ids;
+      const inbox = projects.entities['INBOX_PROJECT'];
+      inbox['taskIds'] = (inbox['taskIds'] as string[]).filter((id) => id !== 't1');
+    });
+    const membership = (failures: { signature: string }[]): string[] => [
+      ...new Set(
+        failures.map((f) => f.signature).filter((s) => s.startsWith('membership:')),
+      ),
+    ];
+    const plain = await runFuzz({
+      steps: [{ d: 'A', a: ['renameTask', 't3', 'x'], s: 1 }],
+    });
+    expect(projectIds).toEqual(['INBOX_PROJECT']);
+    expect(membership(plain.failures)).toEqual([]);
+    const moved = await runFuzz({
+      steps: [{ d: 'A', a: ['moveTask', 't3', 'p2'], s: 1 }],
+    });
+    expect(projectIds).toEqual(['INBOX_PROJECT', 'p1', 'p2']);
+    expect(membership(moved.failures)).toEqual(['membership:unlisted-in-own-project']);
+  }, 60_000);
 
   it('checks supplied creation values without treating defaults as user edits', async () => {
     expect((await runFuzz({ steps: [] })).failures).toEqual([]);

@@ -30,9 +30,23 @@ STATUS:CONFIRMED
 END:VEVENT`);
     expect(events.map((event) => event.id)).toEqual(['active']);
   });
-  for (const { description, rule } of [
-    { description: 'count-limited', rule: 'COUNT=3' },
-    { description: 'ended before the query window', rule: 'UNTIL=20261023T120000Z' },
+  for (const { description, rule, status } of [
+    { description: 'count-limited', rule: 'COUNT=3', status: 'CANCELLED' },
+    {
+      description: 'ended before the query window',
+      rule: 'UNTIL=20261023T120000Z',
+      status: 'CANCELLED',
+    },
+    {
+      description: 'lowercase status, count-limited',
+      rule: 'COUNT=3',
+      status: 'cancelled',
+    },
+    {
+      description: 'lowercase status, ended before the query window',
+      rule: 'UNTIL=20261023T120000Z',
+      status: 'cancelled',
+    },
   ]) {
     it(`omits a cancelled series (${description}) including detached overrides`, async () => {
       expect(
@@ -42,7 +56,7 @@ DTSTART:20261022T120000Z
 DTEND:20261022T130000Z
 RRULE:FREQ=DAILY;${rule}
 SUMMARY:Cancelled series
-STATUS:CANCELLED
+STATUS:${status}
 END:VEVENT
 BEGIN:VEVENT
 UID:series

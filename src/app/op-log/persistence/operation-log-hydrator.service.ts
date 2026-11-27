@@ -16,6 +16,7 @@ import { OperationLogRecoveryService } from './operation-log-recovery.service';
 import { SyncHydrationService } from './sync-hydration.service';
 import { ArchiveMigrationService } from './archive-migration.service';
 import { OpLog } from '../../core/log';
+import { withoutReducerRejected } from './without-reducer-rejected.util';
 import { markBoot } from '../../core/startup/boot-timing';
 import { StateSnapshotService, AppStateSnapshot } from '../backup/state-snapshot.service';
 import {
@@ -525,9 +526,7 @@ export class OperationLogHydratorService {
       allTailEntries.length > 0
         ? allTailEntries[allTailEntries.length - 1].seq
         : lastAppliedOpSeq;
-    const tailOps = allTailEntries.filter(
-      (entry) => entry.reducerRejectedAt === undefined,
-    );
+    const tailOps = withoutReducerRejected(allTailEntries);
 
     if (tailOps.length === 0) {
       this.tabSeqFrontier.establishFrontier(coveredSeq);
@@ -541,12 +540,12 @@ export class OperationLogHydratorService {
     // durable reducer outcome. An earlier pending row still needs bulk
     // replay/checkpointing even if a later full-state op replaces its
     // visible state; otherwise that row would quarantine sync forever.
-    const hasPendingReducerWork = tailOps.some(
-      (entry) => entry.applicationStatus === 'pending',
+    // Full-state loads preserve local sync settings, so replay earlier config changes.
+    const requiresReplay = tailOps.some(
+      (entry) =>
+        entry.applicationStatus === 'pending' || entry.op.entityType === 'GLOBAL_CONFIG',
     );
-    const appData = hasPendingReducerWork
-      ? undefined
-      : this._extractFullStateFromOp(lastOp);
+    const appData = requiresReplay ? undefined : this._extractFullStateFromOp(lastOp);
     if (appData) {
       OpLog.normal(
         `OperationLogHydratorService: Last of ${tailOps.length} tail ops is ${lastOp.opType}, loading directly`,
@@ -664,7 +663,7 @@ export class OperationLogHydratorService {
     // reducer-rejected entries included. Not established in fallback mode
     // (partial state; the #9140 guards keep every save path skipped there).
     const coveredSeq = allEntries.length > 0 ? allEntries[allEntries.length - 1].seq : 0;
-    const allOps = allEntries.filter((entry) => entry.reducerRejectedAt === undefined);
+    const allOps = withoutReducerRejected(allEntries);
 
     if (allOps.length === 0) {
       if (fallbackCause !== undefined) {
@@ -1181,6 +1180,7 @@ export class OperationLogHydratorService {
       buildIdbOpenErrorMessage(error, {
         channel: detectChannel(),
         appVersion: getAppVersionStr(),
+        isIdbAvailable: typeof indexedDB !== 'undefined',
       }),
     );
   }

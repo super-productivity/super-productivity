@@ -14,6 +14,7 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { Task, TaskReminderOption, TaskReminderOptionId } from '../task.model';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { ExactAlarmHintComponent } from '../../reminder/exact-alarm-hint/exact-alarm-hint.component';
 import { T } from 'src/app/t.const';
 import { Store } from '@ngrx/store';
@@ -113,7 +114,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
             this.task.deadlineRemindAt,
           );
         } else {
-          this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
+          this.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
         }
       } else if (this.task.deadlineDay) {
         this.hasExistingDeadline = true;
@@ -230,7 +231,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
   }
 
   private _getQuickDate(option: QuickDeadline): Date {
-    const d = new Date();
+    const d = this._dateService.getLogicalTodayDate();
     d.setMinutes(0, 0, 0);
     switch (option) {
       case 'today':

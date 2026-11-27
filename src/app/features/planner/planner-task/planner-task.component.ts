@@ -17,6 +17,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TaskCopy } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { isTouchActive } from '../../../util/input-intent';
 import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
@@ -58,6 +59,7 @@ import { first } from 'rxjs/operators';
 import { isInputElement, isLinkTarget } from '../../../util/dom-element';
 import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
+import { getLogicalDayOfTimestamp } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import {
   moveTaskDownInTodayList,
   moveTaskToBottomInTodayList,
@@ -103,6 +105,7 @@ import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state
 })
 export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
   private _cd = inject(ChangeDetectorRef);
   private _destroyRef = inject(DestroyRef);
   private _elementRef = inject(ElementRef);
@@ -552,8 +555,14 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     const task = this.task();
     const displayedDay = this.day();
+    // the logical day of the time, as _scheduleForDay expects (#12012)
     const baseDate = task.dueWithTime
-      ? new Date(task.dueWithTime)
+      ? parseDbDateStr(
+          getLogicalDayOfTimestamp(
+            task.dueWithTime,
+            this._dateService.getStartOfNextDayDiffMs(),
+          ),
+        )
       : displayedDay
         ? parseDbDateStr(displayedDay)
         : task.dueDay
@@ -569,9 +578,13 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _scheduleForDay(date: Date): void {
     const task = this.task();
     if (task.dueWithTime) {
-      const timestamp = combineDateAndTime(date, new Date(task.dueWithTime)).getTime();
+      const timestamp = combineDateAndTime(
+        date,
+        new Date(task.dueWithTime),
+        this._dateService.getStartOfNextDayDiffMs(),
+      ).getTime();
       const remindCfg = millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt);
-      this._taskService.scheduleTask(task, timestamp, remindCfg, false);
+      this._taskSchedulingService.scheduleTask(task, timestamp, remindCfg, false);
       return;
     }
     this._store.dispatch(

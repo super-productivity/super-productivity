@@ -1,0 +1,58 @@
+{
+  "TITLE": "Laskut",
+  "LOADING": "Ladataan…",
+  "LIST": {
+    "EMPTY": "Ei vielä laskuja.",
+    "PRINT": "Tulosta / PDF",
+    "CSV": "CSV",
+    "DELETE": "Poista",
+    "CONFIRM_DELETE": "Poistetaanko lasku {{number}}? Sen tunnit lasketaan taas laskuttamattomiksi."
+  },
+  "NEW": {
+    "TITLE": "Uusi lasku",
+    "PROJECT": "Projekti",
+    "NO_PROJECTS": "Luo ensin projekti. Jokainen projekti laskutetaan erikseen.",
+    "FROM": "Alkaen",
+    "TO": "Päättyen",
+    "RATE": "Tuntihinta",
+    "LANGUAGE": "Laskun kieli",
+    "CLIENT": "Laskutettava",
+    "CLIENT_HINT": "Asiakkaan nimi ja osoite. Muistetaan tälle projektille.",
+    "INCLUDE": "Sisällytä",
+    "NO_HOURS": "Tällä projektilla ei ole laskuttamatonta aikaa tällä jaksolla.",
+    "NUMBER": "Laskun numero",
+    "ISSUE_DATE": "Laskun päivämäärä",
+    "ISSUE": "Luo ja tulosta",
+    "BLOCK": {
+      "PERIOD": "Valitse alku- ja loppupäivä; alkupäivän on oltava ensin.",
+      "LINES": "Valitse vähintään yksi rivi, jolla on tunteja.",
+      "RATE": "Anna tuntihinta.",
+      "NUMBER": "Anna laskun numero.",
+      "NUMBER_USED": "Tämä laskun numero on jo käytössä.",
+      "DATE": "Anna laskun päivämäärä."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Omat tietosi",
+    "SELLER": "Nimesi, osoitteesi ja verotunnuksesi",
+    "PAYMENT_NOTE": "Maksutiedot",
+    "PAYMENT_NOTE_HINT": "Pankkitiedot tai maksuehdot, tulostetaan alareunaan.",
+    "CURRENCY": "Valuuttakoodi",
+    "TAX": "Vero / ALV %",
+    "PAYMENT_DAYS": "Päivää eräpäivään",
+    "ROUNDING": "Pyöristä jokainen rivi ylös",
+    "ROUNDING_NONE": "Ei pyöristystä",
+    "ROUNDING_MIN": "{{min}} minuuttiin",
+    "PREFIX": "Laskun numeron etuliite",
+    "SAVE": "Tallenna",
+    "SAVED": "Tallennettu."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Kuvaus",
+    "HOURS": "Tunnit",
+    "TOTAL": "Yhteensä"
+  },
+  "ERROR": {
+    "GENERIC": "Jokin meni pieleen: {{error}}"
+  }
+}

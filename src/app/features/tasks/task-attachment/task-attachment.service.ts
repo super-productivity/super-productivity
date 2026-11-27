@@ -87,6 +87,7 @@ export class TaskAttachmentService {
         restoreFocus: true,
         data: {
           attachment: { ...attachment, taskId },
+          taskId,
         },
       })
       .afterClosed()

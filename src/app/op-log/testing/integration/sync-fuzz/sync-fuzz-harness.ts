@@ -91,7 +91,10 @@ import {
 } from '../../../capture/operation-capture.meta-reducer';
 import { OperationCaptureService } from '../../../capture/operation-capture.service';
 import { OperationLogEffects } from '../../../capture/operation-log.effects';
-import { UnsupportedMultiEntityConflictError } from '../../../core/errors/sync-errors';
+import {
+  LocalDataConflictError,
+  UnsupportedMultiEntityConflictError,
+} from '../../../core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../../core/operation-log.const';
 import { PersistentAction } from '../../../core/persistent-action.interface';
 import {
@@ -111,6 +114,7 @@ import { TabSeqFrontierService } from '../../../persistence/tab-seq-frontier.ser
 import { ImmediateUploadService } from '../../../sync/immediate-upload.service';
 import { OperationLogDownloadService } from '../../../sync/operation-log-download.service';
 import { OperationLogSyncService } from '../../../sync/operation-log-sync.service';
+import { RemoteStateRebuildService } from '../../../sync/remote-state-rebuild.service';
 import { OperationWriteFlushService } from '../../../sync/operation-write-flush.service';
 import { RemoteOpsProcessingService } from '../../../sync/remote-ops-processing.service';
 import { RejectedOpsHandlerService } from '../../../sync/rejected-ops-handler.service';
@@ -128,6 +132,13 @@ import {
   FakeSuperSyncServer,
   FuzzUnsupportedTransportError,
 } from './fake-super-sync-server';
+import {
+  FileTransport,
+  FileTransportOptions,
+  FuzzKillError,
+  TransportLog,
+} from './sync-fuzz-file-transport';
+import { OperationSyncCapable } from '../../../sync-providers/provider.interface';
 
 /**
  * Multi-device SuperSync harness on ONE Angular injector and ONE NgRx store.
@@ -167,7 +178,7 @@ import {
  * - state replacements: the force upload and the backup import run the real
  *   services, and a step answers the SYNC_IMPORT conflict dialog and the
  *   whole-dataset conflict dialog after a stop (DialogSyncConflictComponent,
- *   see _answerStopDialog; a stop left unanswered is its cancel). Not run:
+ *   see _answerDataConflict; a stop left unanswered is its cancel). Not run:
  *   cancelling the SYNC_IMPORT dialog as an answer, the
  *   server-migration confirm (closed unanswered), encryption changes and
  *   password changes (they need SyncWrapperService, the provider manager and
@@ -239,7 +250,7 @@ const DEVICE_FIELDS: ReadonlyArray<readonly [ProviderToken<object>, readonly str
     [OperationLogHydratorService, ['_migrationRanDuringHydration']],
     // Once-per-session latches: every device is its own app session.
     [RepairOperationService, ['_hasShownRepairSnackThisSession']],
-    [OperationLogSyncService, ['_hasWarnedRebuildVersionBlockThisSession']],
+    [RemoteStateRebuildService, ['_hasWarnedRebuildVersionBlockThisSession']],
     [
       RemoteOpsProcessingService,
       ['_hasWarnedVersionBlockThisSession', '_hasWarnedMigrationFailureThisSession'],
@@ -282,6 +293,8 @@ const SHARED_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> 
     lastStorageQuotaSnackAt:
       'set only on a storage-quota error, which the fuzz never hits',
     STORAGE_QUOTA_SNACK_DEDUPE_MS: CONSTANT,
+    hasWarnedStorageOff:
+      'set only when the indexedDB global is missing (#11994), which the fuzz never hits',
     _deferredProcessingChain: 'settled at every step boundary: _settle drains it',
   },
   ArchiveOperationHandler: {
@@ -398,7 +411,8 @@ export interface FuzzDevice {
    */
   clientId: string;
   clientIdStale?: boolean;
-  readonly client: FakeSuperSyncClient;
+  /** Replaced when a killed device restarts with its adapter state reloaded. */
+  client: OperationSyncCapable;
   readonly db: IndexedDbOpLogAdapter;
   state: object;
   fields?: FieldValues;
@@ -414,7 +428,8 @@ export type FuzzEventKind =
   | 'lww-retries-exhausted'
   | 'dialog'
   | 'import-dialog' // the SYNC_IMPORT conflict dialog, answered by the step (`k`)
-  | 'stop-dialog' // the whole-dataset dialog after a `stop`, answered by the step (`k`)
+  | 'data-conflict' // a local data conflict whose dialog the step answers: counted, not a failure
+  | 'stop-dialog' // the whole-dataset dialog after a `stop` or a `data-conflict`, answered by the step (`k`)
   | 'error-snack'
   | 'dev-error';
 
@@ -474,6 +489,8 @@ export class SyncFuzzHarness {
   private static _generation = 0;
   private readonly _generation = ++SyncFuzzHarness._generation;
   readonly server: FakeSuperSyncServer;
+  /** Set for a run that syncs through the file-based adapter instead of `server`. */
+  readonly fileTransport?: FileTransport;
   readonly devices: FuzzDevice[] = [];
   readonly events: FuzzEvent[] = [];
   /**
@@ -491,8 +508,9 @@ export class SyncFuzzHarness {
   importDialogAnswer?: ImportDialogAnswer;
   /**
    * The user's answer to the whole-dataset conflict dialog
-   * (DialogSyncConflictComponent) after a multi-entity stop, while it is set.
-   * Unset, the stop is all that happens, as before the dialog was modeled.
+   * (DialogSyncConflictComponent) after a multi-entity stop or a local data
+   * conflict, while it is set. Unset, the stop or the conflict's sync error
+   * is all that happens, as before the dialog was modeled.
    */
   stopDialogAnswer?: ImportDialogAnswer;
   /**
@@ -509,7 +527,13 @@ export class SyncFuzzHarness {
   private _pristineFields!: FieldValues;
   private readonly _deviceFieldNames = new Map<object, ReadonlySet<string>>();
 
-  private constructor() {
+  /** The ops on the wire of whichever transport the run uses. */
+  get wire(): TransportLog {
+    return this.fileTransport?.log ?? this.server;
+  }
+
+  private constructor(fileTransport?: FileTransportOptions) {
+    if (fileTransport) this.fileTransport = new FileTransport(fileTransport);
     // Local noon of the real day: a run never crosses midnight, in any time
     // zone, and its "today" matches `new Date()` in app code.
     const noon = new Date();
@@ -561,8 +585,8 @@ export class SyncFuzzHarness {
   }
 
   /** Configures TestBed; call from an `it`/`beforeEach` with a fresh module. */
-  static async create(): Promise<SyncFuzzHarness> {
-    const harness = new SyncFuzzHarness();
+  static async create(fileTransport?: FileTransportOptions): Promise<SyncFuzzHarness> {
+    const harness = new SyncFuzzHarness(fileTransport);
     harness._configure();
     await harness._init();
     return harness;
@@ -775,7 +799,9 @@ export class SyncFuzzHarness {
     const device: FuzzDevice = {
       name,
       clientId: `fuzzDev${name}`,
-      client: new FakeSuperSyncClient(this.server),
+      client: this.fileTransport
+        ? this.fileTransport.createClient(TestBed.inject(EnvironmentInjector))
+        : new FakeSuperSyncClient(this.server),
       db,
       state: this._pristineState,
     };
@@ -866,6 +892,52 @@ export class SyncFuzzHarness {
     await this.as(device, () =>
       TestBed.inject(OperationLogHydratorService).hydrateStore(),
     );
+  }
+
+  /**
+   * Syncs `device` (file transport only) and kills the app before the
+   * `atWrite`-th durable write of that sync: that write and every later one
+   * fails. Durable writes are read-write database transactions, the adapter's
+   * cursor state and remote uploads; an upload counts twice, so a kill can
+   * fall between its landing and the response. A killed device restarts from
+   * what was durable, with the adapter's persisted state reloaded, and the
+   * events of the killed sync are dropped (a dead app shows nothing).
+   * Returns whether the sync got as far as that write.
+   */
+  async syncKilled(device: FuzzDevice, atWrite: number): Promise<boolean> {
+    const transport = this.fileTransport;
+    if (!transport) throw new Error('SyncFuzz: a kill needs the file transport');
+    const eventCount = this.events.length;
+    let writes = 0;
+    const gate = (): void => {
+      if (++writes >= atWrite) throw new FuzzKillError('killed mid-sync');
+    };
+    const openTransaction = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (
+      this: IDBDatabase,
+      ...args: Parameters<IDBDatabase['transaction']>
+    ): IDBTransaction {
+      if (args[1] === 'readwrite') gate();
+      return openTransaction.apply(this, args);
+    };
+    transport.writeGate = gate;
+    transport.hasLanded = false;
+    try {
+      await this.sync(device);
+    } finally {
+      IDBDatabase.prototype.transaction = openTransaction;
+      transport.writeGate = undefined;
+    }
+    const isKilled = writes >= atWrite;
+    if (isKilled) {
+      // A dead process reports no error, but a dialog it answered was answered.
+      const kept = this.events.slice(eventCount).filter((e) => e.kind !== 'sync-error');
+      this.events.length = eventCount;
+      this.events.push(...kept);
+      device.client = transport.reloadClient(device.client);
+      await this.restart(device);
+    }
+    return isKilled;
   }
 
   /** Compacts the device's op log: a state-cache snapshot, then pruning. */
@@ -969,7 +1041,14 @@ export class SyncFuzzHarness {
           const message = e instanceof Error ? e.message : String(e);
           if (e instanceof UnsupportedMultiEntityConflictError) {
             this.record(device, 'stop', message);
-            await this._answerStopDialog(device, syncService, session);
+            await this._answerDataConflict(device, syncService, session);
+          } else if (e instanceof LocalDataConflictError && this.stopDialogAnswer) {
+            // The app raises this one itself, like the stop: a remote
+            // snapshot over unsynced changes (file sync), or first remote ops
+            // on a never-synced device with data. Answered, it is not a
+            // failure: what the answer drops is judged instead.
+            this.record(device, 'data-conflict', message);
+            await this._answerDataConflict(device, syncService, session);
           } else if (e instanceof FuzzUnsupportedTransportError) {
             this.record(device, 'full-state', message);
           } else {
@@ -1055,15 +1134,16 @@ export class SyncFuzzHarness {
   }
 
   /**
-   * The whole-dataset conflict dialog after a multi-entity stop, answered
-   * with `stopDialogAnswer` as SyncWrapperService._handleDataConflict acts on
-   * it, inside the same sync session. A background sync only offers the
+   * The whole-dataset conflict dialog, answered as
+   * SyncWrapperService._handleDataConflict acts on it, inside the same sync
+   * session, after a multi-entity stop or a local data conflict
+   * (LocalDataConflictError). A background sync only offers the
    * dialog through a snack whose button runs a user-triggered sync, which
    * opens the dialog if it stops again; the harness answers at the first
    * stop, so it never sees another device upload in between. Unset, the
    * dialog stays unanswered: the device keeps its stop.
    */
-  private async _answerStopDialog(
+  private async _answerDataConflict(
     device: FuzzDevice,
     syncService: OperationLogSyncService,
     session: SyncSessionValidationService,

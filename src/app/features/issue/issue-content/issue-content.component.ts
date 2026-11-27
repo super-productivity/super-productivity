@@ -33,7 +33,7 @@ import { T } from '../../../t.const';
 import { devError } from '../../../util/dev-error';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
-import { getByPath } from './get-by-path.util';
+import { getByPath, getIssueFieldValue } from './get-by-path.util';
 
 @Component({
   selector: 'issue-content',
@@ -89,12 +89,12 @@ export class IssueContentComponent {
           if (f.linkField) {
             const linkFieldName = f.linkField;
             field.getLink = (issue: IssueData): string =>
-              (issue as Record<string, unknown>)[linkFieldName] as string;
+              (getByPath(issue, linkFieldName) as string | undefined) ?? '';
           }
           if (f.hideEmpty) {
             const fieldName = f.field;
             field.isVisible = (issue: IssueData): boolean =>
-              !!(issue as Record<string, unknown>)[fieldName];
+              !!getByPath(issue, fieldName);
           }
           return field;
         }),
@@ -169,11 +169,7 @@ export class IssueContentComponent {
     if (!issue) return undefined;
 
     try {
-      if (typeof field.value === 'function') {
-        return field.value(issue);
-      }
-
-      return getByPath(issue, field.value);
+      return getIssueFieldValue(issue, field.value);
     } catch (error) {
       devError(error);
     }
@@ -195,12 +191,12 @@ export class IssueContentComponent {
 
   getCommentBody(comment: IssueComment | null, cfg: IssueContentConfig): string {
     if (!comment) return '';
-    return comment[cfg.comments!.bodyField] || '';
+    return (getByPath(comment, cfg.comments!.bodyField) as string | undefined) || '';
   }
 
   getCommentCreated(comment: IssueComment | null, cfg: IssueContentConfig): string {
     if (!comment) return '';
-    return comment[cfg.comments!.createdField] || '';
+    return (getByPath(comment, cfg.comments!.createdField) as string | undefined) || '';
   }
 
   getCommentAvatar(

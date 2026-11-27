@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ThatChallenged rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `the challenged` to `that challenged` for proper relative clause usage.
+extends: existence
+message: "Use `that challenged` for correct relative clause."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "that challenged"
+tokens:
+  - "the(?!\\s*\\n\\s*\\n)\\s+challenged(?!['\\x{2019}]s\\b)"

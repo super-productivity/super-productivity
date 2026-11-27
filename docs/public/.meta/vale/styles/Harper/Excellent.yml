@@ -1,0 +1,19 @@
+---
+# Generated from Harper's Excellent rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Provides a stronger word choice by replacing `very good` with `excellent` for clarity and emphasis.
+extends: existence
+message: "Vocabulary enhancement: use `excellent` instead of `very good`"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "excellent"
+tokens:
+  - "very(?!\\s*\\n\\s*\\n)\\s+good(?!['\\x{2019}]s\\b)"

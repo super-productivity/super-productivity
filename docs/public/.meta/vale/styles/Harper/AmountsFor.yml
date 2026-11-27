@@ -1,0 +1,22 @@
+---
+# Hand-written from Harper's AmountsFor: the idiom is `amounts to` or
+# `accounts for`, never `amounts for`.
+#
+# Harper takes two contexts, one for each number: `that`, `which`, `it` and
+# `this` before the singular, and the modals plus `they` before the plural.
+# The context is what tells the idiom from an ordinary "the amount for".
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: substitution
+message: "`amounts for` is not idiomatic English. You probably meant `amounts to` or `accounts for`."
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+swap:
+  '(?<=\b(?:that|which|it|this)\s)amounts\s+for\b': "accounts for"
+  '(?<=\b(?:they|can|could|may|might|must|should|will|would)\s)amount\s+for\b': "account for"

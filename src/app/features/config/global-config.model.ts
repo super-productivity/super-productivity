@@ -28,6 +28,8 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  /** Optional for compatibility with settings saved before this option existed. */
+  isHideNavTaskCount?: boolean;
   /** Desktop only; absent in older persisted settings, defaults to off. */
   isShowDueTaskBadge?: boolean;
   // Legacy: the local REST API switch is device-local now (Electron main's
@@ -53,7 +55,7 @@ export type MiscConfig = Readonly<{
   isTrayShowCurrentCountdown?: boolean;
   isUseCustomWindowTitleBar?: boolean;
   customTheme?: string;
-  // number: one of DefaultStartPage. string: project id.
+  // number: one of DefaultStartPage. string: project id, or `view:<boardId>`.
   defaultStartPage?: number | string;
   unsplashApiKey?: string | null;
   // Global wallpaper: shown on pages that don't provide their own background
@@ -286,6 +288,12 @@ export type ScheduleConfig = Readonly<{
   isLunchBreakEnabled: boolean;
   lunchBreakStart: string;
   lunchBreakEnd: string;
+  /**
+   * Where tasks planned for a day without a time go on the Schedule.
+   * Missing = 'auto' (placed in the grid). Keep this at two values: a client
+   * that only knows these two fails validation on a third.
+   */
+  untimedTaskPlacement?: 'auto' | 'tray';
 }>;
 
 export type ReminderConfig = Readonly<{
@@ -297,6 +305,14 @@ export type ReminderConfig = Readonly<{
   // Android: alarm-style notifications (louder, more intrusive). Desktop: a bell
   // loops while the reminder dialog is open, and the window is focused.
   useAlarmStyleReminders?: boolean;
+  /**
+   * Mobile: one notification per task planned for a day without a time or
+   * reminder. Replaces `notifyOnDueDate`: installs from v17.3–v19.x stored its
+   * old default `true` without anyone choosing it, and a stored value cannot
+   * be told apart from a choice (2026 survey #88).
+   */
+  isNotifyOnPlannedDay?: boolean;
+  /** @deprecated Never read. Kept so stored configs still match the model. */
   notifyOnDueDate?: boolean;
   dueDateNotificationHour?: number;
 }>;
@@ -368,6 +384,7 @@ export type TaskWidgetConfig = Readonly<{
 export type FocusModeLocalConfig = Readonly<{
   isLoopBreakEndAlarm?: boolean;
   isNotifyOnSessionEnd?: boolean;
+  isFocusWindowOnSessionEnd?: boolean;
 }>;
 
 export type ClipboardImagesConfig = Readonly<{
@@ -465,7 +482,8 @@ export interface ConfigFormSection<FormModel> {
   title: string;
   key: GlobalConfigFormSectionKey | ProjectCfgFormKey;
   help?: string;
-  helpArr?: { h?: string; p: string; p2?: string; p3?: string; p4?: string }[];
+  /** super-productivity.com/docs page linked under `help`; keep its route stable, released apps link it. */
+  docsUrl?: string;
   customSection?: CustomCfgSection;
   items?: LimitedFormlyFieldConfig<FormModel>[];
   actions?: ConfigSectionAction[];

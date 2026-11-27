@@ -1,0 +1,19 @@
+---
+# Generated from Harper's RoadMap rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Detects when `roadmap` is used instead of `road map`, prompting the correct spacing.
+extends: existence
+message: "Did you mean `road map`?"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "road map"
+tokens:
+  - "roadmap(?!['\\x{2019}]s\\b)"

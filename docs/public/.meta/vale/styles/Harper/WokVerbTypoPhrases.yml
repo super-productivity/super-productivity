@@ -1,0 +1,24 @@
+---
+# Generated from Harper's WokVerbTypoPhrases rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Flags likely typo cases where `wok` appears where the verb `work` is expected.
+extends: existence
+message: "Did you mean `work`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "work"
+nonword: true
+tokens:
+  - "(?<=\\b(?:should|could|might|would|must|will|can|may)(?!\\s*\\n\\s*\\n)\\s+)(?:wok)\\b"
+  - "(?<=\\b(?:they|she|you|he|it|we|i)(?!\\s*\\n\\s*\\n)\\s+)(?:wok)\\b"
+  - "(?<=\\b(?:doesn't|didn't|don't)(?!\\s*\\n\\s*\\n)\\s+)(?:wok)\\b"
+  - "(?<=\\b(?:does|did|do)(?!\\s*\\n\\s*\\n)\\s+)(?:wok)\\b"
+  - "(?<=\\b(?:to)(?!\\s*\\n\\s*\\n)\\s+)(?:wok)\\b"

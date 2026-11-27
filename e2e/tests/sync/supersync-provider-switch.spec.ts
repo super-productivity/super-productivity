@@ -4,6 +4,7 @@ import {
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  getLocalOpLogSummary,
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -16,6 +17,7 @@ import {
 } from '../../utils/sync-helpers';
 import { SyncPage } from '../../pages/sync.page';
 import { isWebDavServerUp } from '../../utils/check-webdav';
+import { waitForAppReady } from '../../utils/waits';
 
 /**
  * SuperSync Provider Switch E2E Tests
@@ -47,7 +49,7 @@ test.describe('@supersync Provider Switch (WebDAV ↔ SuperSync)', () => {
    * 5. New Client B sets up WebDAV with same folder
    * 6. Verify Client B receives all tasks
    */
-  test('Tasks survive switching from SuperSync to WebDAV', async ({
+  test('Tasks and provider survive switching from SuperSync to WebDAV and restarting', async ({
     browser,
     baseURL,
     testRunId,
@@ -82,6 +84,16 @@ test.describe('@supersync Provider Switch (WebDAV ↔ SuperSync)', () => {
       await clientA.sync.syncAndWait();
       console.log('[ProviderSwitch] Tasks created and synced via SuperSync');
 
+      const snapshotSaved = await clientA.page.evaluate(async () => {
+        const helpers = (
+          window as unknown as {
+            __e2eTestHelpers: { compact: () => Promise<boolean> };
+          }
+        ).__e2eTestHelpers;
+        return helpers.compact();
+      });
+      expect(snapshotSaved).toBe(true);
+
       // ============ PHASE 2: Switch to WebDAV ============
       console.log('[ProviderSwitch] Phase 2: Switching to WebDAV');
 
@@ -107,6 +119,78 @@ test.describe('@supersync Provider Switch (WebDAV ↔ SuperSync)', () => {
 
       await syncPageA.triggerSync();
       await waitForSyncComplete(clientA.page, syncPageA);
+
+      const beforeRestart = await clientA.page.evaluate(async () => {
+        await (
+          window as unknown as {
+            __e2eTestHelpers: { flushPendingWrites: () => Promise<void> };
+          }
+        ).__e2eTestHelpers.flushPendingWrites();
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('SUP_OPS');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        try {
+          const tx = db.transaction(['state_cache', 'ops'], 'readonly');
+          const snapshot = await new Promise<{
+            lastAppliedOpSeq: number;
+            state: { globalConfig: { sync: { syncProvider: string } } };
+          }>((resolve, reject) => {
+            const request = tx.objectStore('state_cache').get('current');
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          });
+          const tail = await new Promise<{ seq: number; op: { o: string; e: string } }[]>(
+            (resolve, reject) => {
+              const request = tx
+                .objectStore('ops')
+                .getAll(IDBKeyRange.lowerBound(snapshot.lastAppliedOpSeq, true));
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+            },
+          );
+          return {
+            cachedProvider: snapshot.state.globalConfig.sync.syncProvider,
+            tailTypes: tail.map((entry) => entry.op.o),
+            tailEntities: tail.map((entry) => entry.op.e),
+          };
+        } finally {
+          db.close();
+        }
+      });
+      expect(beforeRestart.cachedProvider).toBe('SuperSync');
+      expect(beforeRestart.tailEntities).toContain('GLOBAL_CONFIG');
+      expect(beforeRestart.tailTypes.at(-1)).toBe('SYNC_IMPORT');
+
+      const opsBeforeRestart = await getLocalOpLogSummary(clientA.page);
+      for (let restart = 0; restart < 2; restart++) {
+        await clientA.page.reload();
+        await waitForAppReady(clientA.page);
+        const providerAfterRestart = await clientA.page.evaluate(() => {
+          let provider: string | undefined;
+          const helpers = (
+            window as unknown as {
+              __e2eTestHelpers: {
+                store: {
+                  subscribe: (
+                    callback: (state: {
+                      globalConfig: { sync: { syncProvider: string } };
+                    }) => void,
+                  ) => { unsubscribe: () => void };
+                };
+              };
+            }
+          ).__e2eTestHelpers;
+          const subscription = helpers.store.subscribe((state) => {
+            provider = state.globalConfig.sync.syncProvider;
+          });
+          subscription.unsubscribe();
+          return provider;
+        });
+        expect(providerAfterRestart).toBe('WebDAV');
+        expect(await getLocalOpLogSummary(clientA.page)).toEqual(opsBeforeRestart);
+      }
 
       // Verify tasks still exist on Client A
       await waitForTask(clientA.page, task1);

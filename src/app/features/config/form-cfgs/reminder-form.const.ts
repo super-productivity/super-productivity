@@ -65,7 +65,7 @@ export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
     ...(IS_NATIVE_PLATFORM
       ? [
           {
-            key: 'notifyOnDueDate' as const,
+            key: 'isNotifyOnPlannedDay' as const,
             type: 'checkbox',
             templateOptions: {
               label: T.GCF.REMINDER.NOTIFY_ON_DUE_DATE,
@@ -74,7 +74,7 @@ export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
           {
             key: 'dueDateNotificationHour' as const,
             type: 'input',
-            hideExpression: (m: ReminderConfig) => !m.notifyOnDueDate,
+            hideExpression: (m: ReminderConfig) => !m.isNotifyOnPlannedDay,
             templateOptions: {
               type: 'number',
               label: T.GCF.REMINDER.DUE_DATE_NOTIFICATION_HOUR,

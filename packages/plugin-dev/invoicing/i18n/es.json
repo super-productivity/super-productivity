@@ -1,0 +1,58 @@
+{
+  "TITLE": "Facturas",
+  "LOADING": "Cargando…",
+  "LIST": {
+    "EMPTY": "Aún no hay facturas.",
+    "PRINT": "Imprimir / PDF",
+    "CSV": "CSV",
+    "DELETE": "Eliminar",
+    "CONFIRM_DELETE": "¿Eliminar la factura {{number}}? Sus horas vuelven a contar como no facturadas."
+  },
+  "NEW": {
+    "TITLE": "Nueva factura",
+    "PROJECT": "Proyecto",
+    "NO_PROJECTS": "Crea primero un proyecto. Cada proyecto se factura por separado.",
+    "FROM": "Desde",
+    "TO": "Hasta",
+    "RATE": "Tarifa por hora",
+    "LANGUAGE": "Idioma de la factura",
+    "CLIENT": "Facturar a",
+    "CLIENT_HINT": "Nombre y dirección del cliente. Se recuerdan para este proyecto.",
+    "INCLUDE": "Incluir",
+    "NO_HOURS": "No hay tiempo sin facturar en este proyecto durante este período.",
+    "NUMBER": "Número de factura",
+    "ISSUE_DATE": "Fecha de factura",
+    "ISSUE": "Emitir e imprimir",
+    "BLOCK": {
+      "PERIOD": "Elige las fechas Desde y Hasta; Desde debe ir primero.",
+      "LINES": "Marca al menos una línea con horas.",
+      "RATE": "Introduce una tarifa por hora.",
+      "NUMBER": "Introduce un número de factura.",
+      "NUMBER_USED": "Este número de factura ya está en uso.",
+      "DATE": "Introduce la fecha de factura."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Tus datos",
+    "SELLER": "Tu nombre, dirección e identificación fiscal",
+    "PAYMENT_NOTE": "Datos de pago",
+    "PAYMENT_NOTE_HINT": "Datos bancarios o condiciones de pago, impresos al final.",
+    "CURRENCY": "Código de moneda",
+    "TAX": "Impuesto / IVA %",
+    "PAYMENT_DAYS": "Días hasta el vencimiento",
+    "ROUNDING": "Redondear cada línea hacia arriba a",
+    "ROUNDING_NONE": "Sin redondeo",
+    "ROUNDING_MIN": "{{min}} minutos",
+    "PREFIX": "Prefijo del número de factura",
+    "SAVE": "Guardar",
+    "SAVED": "Guardado."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Descripción",
+    "HOURS": "Horas",
+    "TOTAL": "Total"
+  },
+  "ERROR": {
+    "GENERIC": "Algo salió mal: {{error}}"
+  }
+}

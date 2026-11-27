@@ -12,7 +12,7 @@ import { DEFAULT_PROJECT } from '../../../features/project/project.const';
 import { Project } from '../../../features/project/project.model';
 import { MenuTreeKind } from '../../../features/menu-tree/store/menu-tree.model';
 import { MenuTreeService } from '../../../features/menu-tree/menu-tree.service';
-import { selectAllDoneIds } from '../../../features/tasks/store/task.selectors';
+import { selectOpenTaskIds } from '../../../features/tasks/store/task.selectors';
 import { TreeDndComponent } from '../../../ui/tree-dnd/tree.component';
 import { MagicNavConfigService } from '../magic-nav-config.service';
 import { NavItem, NavTreeItem } from '../magic-side-nav.model';
@@ -328,7 +328,9 @@ describe('NavListTreeComponent archived projects link (#10473)', () => {
       providers: [
         provideNoopAnimations(),
         provideRouter([{ path: 'archived-projects', children: [] }]),
-        provideMockStore({ selectors: [{ selector: selectAllDoneIds, value: [] }] }),
+        provideMockStore({
+          selectors: [{ selector: selectOpenTaskIds, value: new Set<string>() }],
+        }),
         { provide: GlobalThemeService, useValue: {} },
         {
           provide: MagicNavConfigService,

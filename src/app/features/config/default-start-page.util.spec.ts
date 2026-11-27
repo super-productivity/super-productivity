@@ -121,4 +121,26 @@ describe('getStartPageUrlPath', () => {
       ).toBe(TODAY_URL);
     });
   });
+
+  describe('view start pages', () => {
+    it('resolves to that view when views are enabled', () => {
+      expect(getStartPageUrlPath('view:b1', features(), undefined)).toBe('/boards/b1');
+    });
+
+    it('falls back to Today when views are disabled', () => {
+      expect(
+        getStartPageUrlPath('view:b1', features({ isBoardsEnabled: false }), undefined),
+      ).toBe(TODAY_URL);
+    });
+
+    it('escapes the view id so it stays one path segment', () => {
+      expect(getStartPageUrlPath('view:a/b', features(), undefined)).toBe(
+        '/boards/a%2Fb',
+      );
+    });
+
+    it('treats a bare prefix as an unknown project (Today)', () => {
+      expect(getStartPageUrlPath('view:', features(), undefined)).toBe(TODAY_URL);
+    });
+  });
 });

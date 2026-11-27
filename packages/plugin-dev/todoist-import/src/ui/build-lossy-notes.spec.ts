@@ -14,6 +14,7 @@ const task = (overrides: Partial<TodoistTask>): TodoistTask => ({
   dueWithTime: null,
   timeEstimate: null,
   isRecurring: false,
+  repeat: null,
   wasDemoted: false,
   isDayDurationSkipped: false,
   hasAssignee: false,
@@ -90,6 +91,24 @@ describe('buildLossyNotes', () => {
         { key: 'LOSS.TRUNCATED_FIELDS', params: { count: 3 } },
       ]),
     );
+  });
+
+  it('does not report recurring tasks whose rule becomes a repeat', () => {
+    const repeating = task({
+      extId: 'repeating',
+      projectExtId: 'selected',
+      isRecurring: true,
+      repeat: {
+        schedule: { quickSetting: 'DAILY' },
+        notesWithRule: 'Repeats: every day',
+      },
+    });
+    const withRepeat = { ...model(), tasks: [...model().tasks, repeating] };
+
+    expect(buildLossyNotes(withRepeat, new Set(['selected']), 'none')).toContainEqual({
+      key: 'LOSS.RECURRING',
+      params: { count: 1 },
+    });
   });
 
   it('reports prioritized sub-tasks only when priority mapping is enabled', () => {

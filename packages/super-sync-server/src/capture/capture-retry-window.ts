@@ -28,6 +28,9 @@ const contentKey = (c: CreateTaskArgs): string =>
         c.dueDate ?? null,
         c.dueTime ?? null,
         c.repeat ?? null,
+        c.deadlineDate ?? null,
+        c.deadlineTime ?? null,
+        c.estimateMinutes ?? null,
       ]),
     )
     .digest('base64');

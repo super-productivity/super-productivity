@@ -17,6 +17,7 @@ import { selectIsOverlayShown } from './features/focus-mode/store/focus-mode.sel
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { GlobalConfigService } from './features/config/global-config.service';
 import { getStartPageUrlPath } from './features/config/default-start-page.util';
+import { getStartPageViewId } from './features/config/default-start-page.const';
 import { IS_DONATION_UI_RESTRICTED_TOKEN } from './app.constants';
 import { AppFeaturesConfig } from './features/config/global-config.model';
 import { selectAllBoards } from './features/boards/store/boards.selectors';
@@ -168,7 +169,11 @@ export class DefaultStartPageGuard {
   private _resolve(startPage: number | string | undefined): Observable<UrlTree> {
     const appFeatures = this._globalConfigService.appFeatures();
 
-    if (typeof startPage === 'string' && startPage.length > 0) {
+    if (
+      typeof startPage === 'string' &&
+      startPage.length > 0 &&
+      !getStartPageViewId(startPage)
+    ) {
       // Project id — look it up so getStartPageUrlPath can fall back to Today
       // when the project is missing, archived, or hidden from the menu.
       return this._projectService.getByIdOnce$(startPage).pipe(

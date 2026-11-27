@@ -21,6 +21,7 @@
     [cdkDropListEnterPredicate]="enterPredicate"
     [cdkDropListData]="OVERDUE_LIST_ID"
     [cdkDropListAutoScrollStep]="8"
+    (cdkDropListDropped)="onDropped()"
   >
     @for (task of overdueTasks(); track task.id) {
       <planner-task
@@ -29,10 +30,21 @@
         [cdkDragStartDelay]="dragDelayForTouch()"
         [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
         [cdkDragLockAxis]="isXs() ? 'y' : ''"
+        (cdkDragStarted)="onDragStarted(task, $event)"
+        (cdkDragEnded)="onDragEnded()"
         [task]="task"
         [day]=""
         [focusable]="true"
-      ></planner-task>
+      >
+        @if (multiSelect.selectedIds().has(task.id) && multiSelect.count() > 1) {
+          <ng-template cdkDragPreview>
+            <task-group-drag-preview
+              [count]="multiDrag.ids().length || multiSelect.count()"
+              [tasks]="multiDrag.plannerPreviewTasks()"
+            ></task-group-drag-preview>
+          </ng-template>
+        }
+      </planner-task>
     }
   </div>
 </div>

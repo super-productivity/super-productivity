@@ -1,0 +1,28 @@
+---
+# Generated from Harper's ClickThroughRate rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Hyphenates the verb+preposition pair when it directly precedes rate-style nouns, mirroring how these terms are commonly styled in analytics writing.
+extends: substitution
+message: "Keep the metric modifier bonded so the compound explicitly names the analytics signal."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "click(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+conversion(?!['\\x{2019}]s\\b)": "click-through conversion|view-through conversion"
+  "click(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+conversions(?!['\\x{2019}]s\\b)": "click-through conversions|view-through conversions"
+  "click(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+optimization(?!['\\x{2019}]s\\b)": "click-through optimization|view-through optimization"
+  "click(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+optimizations(?!['\\x{2019}]s\\b)": "click-through optimizations|view-through optimizations"
+  "click(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+rate(?!['\\x{2019}]s\\b)": "click-through rate|view-through rate"
+  "click(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+rates(?!['\\x{2019}]s\\b)": "click-through rates|view-through rates"
+  "view(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+conversion(?!['\\x{2019}]s\\b)": "click-through conversion|view-through conversion"
+  "view(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+conversions(?!['\\x{2019}]s\\b)": "click-through conversions|view-through conversions"
+  "view(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+optimization(?!['\\x{2019}]s\\b)": "click-through optimization|view-through optimization"
+  "view(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+optimizations(?!['\\x{2019}]s\\b)": "click-through optimizations|view-through optimizations"
+  "view(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+rate(?!['\\x{2019}]s\\b)": "click-through rate|view-through rate"
+  "view(?!\\s*\\n\\s*\\n)\\s+through(?!\\s*\\n\\s*\\n)\\s+rates(?!['\\x{2019}]s\\b)": "click-through rates|view-through rates"

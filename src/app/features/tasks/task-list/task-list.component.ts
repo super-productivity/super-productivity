@@ -1,4 +1,5 @@
 import { TaskMultiDragService } from '../task-multi-drag.service';
+import { TaskGroupDragPreviewComponent } from '../task-group-drag-preview/task-group-drag-preview.component';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -117,6 +118,7 @@ export interface DropModelDataForList {
     CdkDragPreview,
     AsyncPipe,
     TranslatePipe,
+    TaskGroupDragPreviewComponent,
     forwardRef(() => TaskComponent),
   ],
 })
@@ -137,7 +139,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private readonly _taskMultiSelectService = inject(TaskMultiSelectService);
   // Set inside a view's column: its lists order the view, not the open context.
   private readonly _viewTaskList = inject(VIEW_TASK_LIST, { optional: true });
-  // Group drags place a selection in the open project's lists. A view's rows
+  // Group drags place a selection in the open project's or tag's lists. A view's rows
   // move one at a time, whatever context was open before (it's stale there).
   protected readonly isInView = !!this._viewTaskList;
   protected readonly isTouchSelectionMode =
@@ -476,6 +478,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return;
     }
 
+    if (this.multiDrag.isCancelled()) {
+      return;
+    }
+
     const isGroupLeaderAtSamePosition =
       this._isListGroupDrag() &&
       ev.previousContainer === ev.container &&
@@ -498,34 +504,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         ev.currentIndex,
         targetListData,
         ev.previousContainer === ev.container,
-      );
-      return;
-    }
-
-    // Grouped-by-tag view: dropping a task into a *different* tag group
-    // reassigns its tags instead of reordering. `groupTagId` is defined only for
-    // lists inside that view; a string is a retag target (a real tagId → move:
-    // drop the source tag, add the target; the NO_TAG_GROUP_ID sentinel → clear
-    // all tags), `null` an un-retaggable bucket ('Unknown tag'/ambiguous). A
-    // `null` target or reordering within one group falls through to the move below.
-    //
-    // NOTE: handled here, before _move() (which owns every other list-type
-    // dispatch). v1 limitations: drop position within the target group isn't
-    // preserved (the task takes the group's natural order), and a subtask
-    // dragged from a SUB list has groupTagId === undefined, so it falls through
-    // to convertToMainTask without acquiring the target tag.
-    const srcTagGroup = srcListData.groupTagId;
-    const targetTagGroup = targetListData.groupTagId;
-    if (
-      typeof targetTagGroup === 'string' &&
-      srcTagGroup !== undefined &&
-      targetTagGroup !== srcTagGroup
-    ) {
-      this.dropListService.blockAniTrigger$.next();
-      this._retagAcrossGroups(
-        srcTagGroup,
-        targetTagGroup,
-        draggedTask as TaskWithSubTasks,
       );
       return;
     }
@@ -578,6 +556,47 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       draggedTaskId: draggedTask.id,
       newIds: newIds.map((t) => t.id),
     });
+
+    // Grouped-by-tag view: dropping a task into a *different* tag group
+    // reassigns its tags and places it at the drop slot. `groupTagId` is defined
+    // only for lists inside that view; a string is a retag target (a real tagId
+    // → move: drop the source tag, add the target; the NO_TAG_GROUP_ID sentinel
+    // → clear all tags), `null` an un-retaggable bucket ('Unknown tag'/ambiguous).
+    // A `null` target or reordering within one group takes the plain move below.
+    //
+    // A group lists its tasks in the work context's order, so the drop slot is
+    // kept by moving the task after its new neighbour in that order (#11921).
+    // Retag and move stay two existing ops on different entities (task, work
+    // context), as Overdue → Today does, so released clients replay both; if
+    // only the retag lands, the task just takes the group's natural position.
+    //
+    // NOTE: a subtask dragged from a SUB list has groupTagId === undefined, so it
+    // falls through to convertToMainTask without acquiring the target tag.
+    const srcTagGroup = srcListData.groupTagId;
+    const targetTagGroup = targetListData.groupTagId;
+    if (
+      typeof targetTagGroup === 'string' &&
+      srcTagGroup !== undefined &&
+      targetTagGroup !== srcTagGroup
+    ) {
+      this.dropListService.blockAniTrigger$.next();
+      this._retagAcrossGroups(
+        srcTagGroup,
+        targetTagGroup,
+        draggedTask as TaskWithSubTasks,
+      );
+      this._move(
+        draggedTask.id,
+        srcListData.listModelId,
+        targetListData.listModelId,
+        srcListData.listId,
+        targetListData.listId,
+        newIds.map((p) => p.id),
+        draggedTask as TaskWithSubTasks,
+      );
+      this._taskViewCustomizerService.setSort(DEFAULT_OPTIONS.sort);
+      return;
+    }
 
     const groupOrderedIds = this._isListGroupDrag()
       ? newIds.map((task) => task.id)
@@ -675,8 +694,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   // Dispatches a drag-drop to the right list-type action (regular/backlog/
-  // section/subtask/overdue). NOTE: grouped-by-tag cross-group drops are
-  // handled earlier, in drop(), and never reach here (see the groupTagId branch).
+  // section/subtask/overdue). Grouped-by-tag cross-group drops retag in drop()
+  // first and then place the task here (see the groupTagId branch).
   private _move(
     taskId: string,
     src: DropListModelSource | string,

@@ -44,12 +44,17 @@ export interface ScheduleNotificationOptions {
    */
   actionTypeId?: string;
   /**
-   * Sound to play. Use 'default' for the system notification sound.
-   * On iOS, omitting this results in a silent notification.
+   * Sound to play. Use 'default' for the system notification sound, or `null`
+   * for a silent notification (iOS plays nothing without a sound).
    *
    * @default 'default'
    */
-  sound?: string;
+  sound?: string | null;
+  /**
+   * iOS: `false` keeps the notification from being presented while the app is
+   * in the foreground. Unset leaves the platform default (presented).
+   */
+  isShownInForeground?: boolean;
 }
 
 export interface NotificationActionEvent {
@@ -225,7 +230,8 @@ export class CapacitorNotificationService {
             body: options.body,
             extra: options.extra,
             // Default to system sound — without this, iOS notifications are silent
-            sound: options.sound ?? 'default',
+            sound: options.sound === null ? undefined : (options.sound ?? 'default'),
+            foreground: options.isShownInForeground,
             // Include action type for iOS notification actions
             actionTypeId: options.actionTypeId,
             schedule: options.scheduleAt

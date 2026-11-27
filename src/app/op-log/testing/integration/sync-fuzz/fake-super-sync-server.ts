@@ -78,6 +78,8 @@ const MAX_CLOCK_DRIFT_MS = 60 * 1000; // DEFAULT_SYNC_CONFIG.maxClockDriftMs
 const MISC_TASKS_SPLIT_SCHEMA_VERSION = 2;
 const PIGGYBACK_LIMIT = 500;
 const FULL_STATE_OP_TYPES = new Set(['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR']);
+/** sync.types.ts MAX_KEPT_REPAIR_PREFIX_OPS. */
+const MAX_KEPT_REPAIR_PREFIX_OPS = 10_000;
 /** The action type the snapshot route stores on a full-state op. */
 export const FULL_STATE_ACTION_TYPE = '[SP_ALL] Load(import) all data';
 /** sync.types.ts STATE_REPLACEMENT_REQUIRED_ERROR: the fence's rejection text. */
@@ -859,7 +861,8 @@ export class FakeSuperSyncServer {
 
   /**
    * services/operation-download.service.ts getOpsSinceWithSeq: a cursor before
-   * the latest causal full-state op starts at that op (the snapshot skip).
+   * the latest causal full-state op starts at that op (the snapshot skip). A
+   * device that synced before still gets the retained ops before a REPAIR.
    */
   getOpsSinceWithSeq(
     sinceSeq: number,
@@ -877,7 +880,21 @@ export class FakeSuperSyncServer {
     const snapshotRow = this._latestCausalFullState(latestSeq);
     let effectiveSinceSeq = sinceSeq;
     let snapshotVectorClock: VectorClock | undefined;
-    if (snapshotRow && sinceSeq < snapshotRow.serverSeq) {
+    const firstSeq = this.rows.length ? this.rows[0].serverSeq : null;
+    const keepsRepairPrefix =
+      snapshotRow?.op.opType === 'REPAIR' &&
+      sinceSeq > 0 &&
+      sinceSeq < snapshotRow.serverSeq &&
+      snapshotRow.serverSeq - sinceSeq <= MAX_KEPT_REPAIR_PREFIX_OPS &&
+      firstSeq !== null &&
+      firstSeq <= sinceSeq + 1 &&
+      !this.rows.some(
+        (row) =>
+          row.serverSeq > sinceSeq &&
+          row.serverSeq < snapshotRow.serverSeq &&
+          FULL_STATE_OP_TYPES.has(row.op.opType),
+      );
+    if (snapshotRow && sinceSeq < snapshotRow.serverSeq && !keepsRepairPrefix) {
       effectiveSinceSeq = snapshotRow.serverSeq - 1;
       if (includeSnapshotMetadata) {
         const preserve = [

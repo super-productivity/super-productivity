@@ -1,3 +1,4 @@
+import { DOCS_URL } from '../../../app.constants';
 import {
   ConfigFormSection,
   ConfigSectionAction,
@@ -21,6 +22,7 @@ export const getAutomaticBackUpFormCfg = (
   title: T.GCF.AUTO_BACKUPS.TITLE,
   key: 'localBackup',
   help: T.GCF.AUTO_BACKUPS.HELP,
+  docsUrl: `${DOCS_URL}how-to/restore-data-from-backup/`,
   actions,
   items: [
     ...(lastBackupInfo

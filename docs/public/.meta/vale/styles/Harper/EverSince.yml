@@ -1,0 +1,19 @@
+---
+# Generated from Harper's EverSince rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `every since` to `ever since`.
+extends: existence
+message: "Did you mean `ever since`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "ever since"
+tokens:
+  - "every(?!\\s*\\n\\s*\\n)\\s+since(?!['\\x{2019}]s\\b)"

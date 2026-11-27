@@ -310,6 +310,30 @@ describe('LayoutService', () => {
       document.body.removeChild(scrollContainer);
     });
 
+    // Real layout, no mocks: a task row's offsetParent is its own `task-list`
+    // (`position: relative`), not the scroll container. Sections, groups and
+    // sub-task lists each add such a list, so the row's `offsetTop` alone says
+    // nothing about where it sits in the scroller.
+    it('should center a task nested in a positioned list far down the scroll container', () => {
+      const taskId = 'nested-task';
+      const scrollContainer = document.createElement('div');
+      scrollContainer.style.cssText = 'height: 300px; overflow-y: auto;';
+      scrollContainer.innerHTML = `
+        <div style="height: 1000px"></div>
+        <div style="position: relative">
+          <div id="t-${taskId}" tabindex="0" style="height: 40px"></div>
+        </div>
+        <div style="height: 1000px"></div>`;
+      document.body.appendChild(scrollContainer);
+
+      service.focusTaskInViewIfPossible(taskId);
+
+      // 1000 (content above) - 150 (half the container) + 20 (half the row)
+      expect(scrollContainer.scrollTop).toBe(870);
+
+      document.body.removeChild(scrollContainer);
+    });
+
     it('should return null when the task element is missing', () => {
       expect(service.focusTaskInViewIfPossible('missing-task')).toBeNull();
     });

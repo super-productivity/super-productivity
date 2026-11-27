@@ -17,6 +17,16 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { getConfig } = require('app-builder-lib/out/util/config/config');
 
+// getConfig logs "loaded configuration" to stdout. Under `node --test` the
+// child's stdout carries the runner's serialized messages, and Node 22's parser
+// tries to deserialize text that lands right after a message in the same chunk
+// ("Unable to deserialize cloned data", build run 42880293974). Send the logger
+// to stderr, which the runner reads as plain lines.
+const builderUtilLog = require.resolve('builder-util/out/log', {
+  paths: [require.resolve('app-builder-lib')],
+});
+require(builderUtilLog).log.stream = process.stderr;
+
 const ROOT = join(__dirname, '..');
 const APPX_CONFIG = 'build/electron-builder.appx.yaml';
 

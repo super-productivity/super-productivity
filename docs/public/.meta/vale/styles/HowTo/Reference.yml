@@ -1,0 +1,29 @@
+# A how-to guide refers the reader to the reference for the full list of
+# options rather than carrying it. A table of every flag is reference.
+# https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+extends: occurrence
+message: "%d table rows. Refer to the reference for the full list of options rather than carrying it here."
+link: https://diataxis.fr/how-to-guides/#the-language-of-how-to-guides
+level: suggestion
+scope: raw
+token: '(?m)^\|[^\n]*\|\s*$'
+max: 6
+
+tests:
+  - name: fires
+    input: |
+      | a | b |
+      | - | - |
+      | 1 | 2 |
+      | 3 | 4 |
+      | 5 | 6 |
+      | 7 | 8 |
+      | 9 | 0 |
+
+    want: |
+      1:1:HowTo.Reference:7 table rows. Refer to the reference for the full list of options rather than carrying it here.
+  - name: clean
+    input: |
+      1. Run the build with `--cache`. See the reference for the other flags.
+
+    want: ""

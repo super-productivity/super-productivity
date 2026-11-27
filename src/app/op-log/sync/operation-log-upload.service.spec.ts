@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
 import { OperationLogUploadService } from './operation-log-upload.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
@@ -9,8 +10,10 @@ import {
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import {
+  AuthFailSPError,
   ClientUpdateRequiredSPError,
   EncryptNoPasswordError,
+  MissingCredentialsSPError,
 } from '../core/errors/sync-errors';
 import { ActionType, OpType, OperationLogEntry } from '../core/operation.types';
 import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
@@ -18,6 +21,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { provideMockStore } from '@ngrx/store/testing';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 describe('OperationLogUploadService', () => {
   let service: OperationLogUploadService;
@@ -107,6 +111,10 @@ describe('OperationLogUploadService', () => {
           // Narrow stub: without a fenceEpoch the #9074 assert is a no-op.
           provide: SyncProviderManager,
           useValue: { assertSyncEpochUnchanged: () => undefined },
+        },
+        {
+          provide: TranslateService,
+          useValue: { instant: (key: string) => `translated:${key}` },
         },
       ],
     });
@@ -1990,17 +1998,108 @@ describe('OperationLogUploadService', () => {
           );
         });
 
-        it('keeps the barrier on SuperSync, whose server can reject on the merits', async () => {
-          const dependentOp = stuckWith(
-            createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
-          );
+        describe('on SuperSync (#11671)', () => {
+          const HEALED_KEY = LS.SUPER_SYNC_HEALED_REJECTED_FULL_STATE_OP_ID;
+          beforeEach(() => localStorage.removeItem(HEALED_KEY));
+          afterEach(() => localStorage.removeItem(HEALED_KEY));
 
-          const result = await service.uploadPendingOps(mockApiProvider);
+          it('heals a rejection that may predate v20.1.0, once per device', async () => {
+            stuckWith(
+              createFullStateEntry(1, 'rejected-import', 'client-1', OpType.SyncImport),
+            );
 
-          expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
-          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
-          expect(mockOpLogStore.markSynced).not.toHaveBeenCalledWith([dependentOp.seq]);
-          expect(result.blockedByRejectedFullState).toBe(true);
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).toHaveBeenCalledOnceWith(
+              {
+                staleRepairOpId: 'rejected-import',
+                repairSummary: RepairOperationService.createEmptyRepairSummary(),
+                clientId: 'client-1',
+                repairBaseServerSeq: 7,
+              },
+            );
+            expect(localStorage.getItem(HEALED_KEY)).toBe('rejected-import');
+            expect(result.blockedByRejectedFullState).toBeUndefined();
+          });
+
+          it('keeps the barrier once this device healed past another rejection', async () => {
+            // A server that keeps rejecting (e.g. quota) must not get a new
+            // full-state op on every sync.
+            localStorage.setItem(HEALED_KEY, 'earlier-rejected-op');
+            const dependentOp = stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+            expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+            expect(mockOpLogStore.markSynced).not.toHaveBeenCalledWith([dependentOp.seq]);
+            expect(result.blockedByRejectedFullState).toBe(true);
+          });
+
+          it('keeps the barrier and the heal on a server without causal REPAIR support', async () => {
+            (
+              mockApiProvider.supportsCausalRepairSnapshots as jasmine.Spy
+            ).and.returnValue(false);
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+            expect(localStorage.getItem(HEALED_KEY)).toBeNull();
+            expect(result.blockedByRejectedFullState).toBe(true);
+          });
+
+          it('does not record the heal when the reseed fails', async () => {
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+            mockRepairOperationService.rebaseStaleRepair.and.rejectWith(
+              new Error('reseed failed'),
+            );
+
+            await expectAsync(
+              service.uploadPendingOps(mockApiProvider),
+            ).toBeRejectedWithError('reseed failed');
+            expect(localStorage.getItem(HEALED_KEY)).toBeNull();
+          });
+
+          it('heals the same rejected op again when an earlier attempt did not finish', async () => {
+            // The server-migration path records the heal before its dialog;
+            // that must not block the upload path for the same op.
+            localStorage.setItem(HEALED_KEY, 'rejected-repair');
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).toHaveBeenCalledTimes(1);
+            expect(result.blockedByRejectedFullState).toBeUndefined();
+          });
+
+          it('writes no REPAIR and keeps the heal when the sync target changed meanwhile', async () => {
+            spyOn(
+              TestBed.inject(SyncProviderManager),
+              'assertSyncEpochUnchanged',
+            ).and.callFake((_epoch: number | undefined, context: string) => {
+              if (context === 'rejected full-state reseed') {
+                throw new Error('sync target changed');
+              }
+            });
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            await expectAsync(
+              service.uploadPendingOps(mockApiProvider),
+            ).toBeRejectedWithError('sync target changed');
+            expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+            expect(localStorage.getItem(HEALED_KEY)).toBeNull();
+          });
         });
       });
 
@@ -2362,15 +2461,98 @@ describe('OperationLogUploadService', () => {
             expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
           });
 
-          it('still reports a thrown SuperSync refusal as a rejection', async () => {
+          it('still reports a thrown SuperSync HTTP 400 as a rejection', async () => {
             mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
             mockApiProvider.uploadSnapshot.and.rejectWith(
-              new Error('HTTP 400 Bad Request'),
+              new Error('HTTP 400 Bad Request — Validation failed'),
             );
 
             const result = await service.uploadPendingOps(mockApiProvider);
 
             expect(result.rejectedOps.map(({ opId }) => opId)).toEqual(['my-import']);
+          });
+
+          it('still reports a thrown SuperSync refusal with an errorCode as a rejection', async () => {
+            mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+            mockApiProvider.uploadSnapshot.and.rejectWith(
+              Object.assign(new Error('HTTP 413 Payload Too Large'), {
+                code: 'PAYLOAD_TOO_LARGE',
+              }),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(result.rejectedOps).toEqual([
+              jasmine.objectContaining({
+                opId: 'my-import',
+                errorCode: 'PAYLOAD_TOO_LARGE',
+              }),
+            ]);
+            expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          });
+
+          // A SuperSync verdict comes as a reply body, a structured errorCode or
+          // a bare HTTP 400. None of these is one, so none may reject the snapshot.
+          const superSyncNonVerdictErrors: Array<[string, () => Error]> = [
+            ['a rejected token', () => new AuthFailSPError('Token expired')],
+            ['missing credentials', () => new MissingCredentialsSPError()],
+            ['a 404 from a proxy', () => new Error('HTTP 404 Not Found')],
+            ['a 413 from a proxy', () => new Error('HTTP 413 Payload Too Large')],
+            ['an unlisted gateway status', () => new Error('HTTP 520 ')],
+            ['an HTML 2xx body', () => new SyntaxError('Unexpected token <')],
+          ];
+          superSyncNonVerdictErrors.forEach(([name, createError]) => {
+            it(`re-throws ${name} from SuperSync, keeping the snapshot pending`, async () => {
+              mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+              const error = createError();
+              mockApiProvider.uploadSnapshot.and.rejectWith(error);
+
+              await expectAsync(
+                service.uploadPendingOps(mockApiProvider),
+              ).toBeRejectedWith(error);
+
+              expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+              expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+              expect(mockOpLogStore.deleteOpsWhere).not.toHaveBeenCalled();
+              expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+            });
+          });
+
+          it('defers a retryable error from SuperSync without rejecting it', async () => {
+            mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+            mockApiProvider.uploadSnapshot.and.rejectWith(
+              new Error('HTTP 503 Service Unavailable'),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(result.rejectedOps).toEqual([]);
+            expect(result.fullStateUploadDeferred).toBe(true);
+            expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          });
+
+          it('reports a thrown SuperSync storage quota error with its errorCode', async () => {
+            mockOpLogStore.getUnsynced.and.resolveTo(pendingImport());
+            mockApiProvider.uploadSnapshot.and.rejectWith(
+              Object.assign(new Error('HTTP 413 — Storage quota exceeded'), {
+                code: 'STORAGE_QUOTA_EXCEEDED',
+              }),
+            );
+            // window.alert is already a spy in the global test setup.
+            const alertSpy = window.alert as jasmine.Spy;
+            alertSpy.calls.reset();
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(result.rejectedOps).toEqual([
+              jasmine.objectContaining({
+                opId: 'my-import',
+                errorCode: 'STORAGE_QUOTA_EXCEEDED',
+              }),
+            ]);
+            expect(alertSpy).toHaveBeenCalledOnceWith(
+              'translated:F.SYNC.A.SERVER_STORAGE_FULL',
+            );
           });
         });
 

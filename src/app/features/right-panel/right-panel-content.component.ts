@@ -223,39 +223,24 @@ export class RightPanelContentComponent implements OnDestroy {
     }, 500);
   });
 
-  // Signal to track previous route for navigation handling
-  private _previousRoute = signal<{ url: string; isWorkView: boolean } | null>(null);
+  private _previousRoute: string | undefined;
 
-  // Effect for navigation handling
   private _navigationEffect = effect(() => {
     const currentRoute = this._currentRoute();
-    const isCurrentWorkView = this._isWorkViewUrl(currentRoute);
 
     untracked(() => {
-      const prev = this._previousRoute();
-
-      if (prev) {
-        // Only close panel when navigating FROM work-view TO non-work-view
-        // Never close when navigating between work-views or to a work-view
-        const shouldClose = prev.isWorkView && !isCurrentWorkView;
-
-        // Debug logging
-        if (shouldClose) {
-          Log.log('RightPanel: Closing panel on navigation', {
-            from: prev.url,
-            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
-            to: currentRoute,
-            fromIsWorkView: prev.isWorkView,
-            toIsWorkView: isCurrentWorkView,
-          });
-          // Close all panels immediately when navigating away from work views
-          // to prevent the overlay mode from briefly showing
-          this.close();
-        }
+      const previousRoute = this._previousRoute;
+      this._previousRoute = currentRoute;
+      // Desktop boards are also task lists from which users can drag onto Schedule.
+      const scheduleBesideBoard =
+        !this.layoutService.isXs() &&
+        !!this._layoutFeatureState()?.isShowScheduleDayPanel;
+      const supportsPanel = (url: string): boolean =>
+        this._isWorkViewUrl(url) || (scheduleBesideBoard && url.startsWith('/boards/'));
+      if (previousRoute && supportsPanel(previousRoute) && !supportsPanel(currentRoute)) {
+        Log.log('RightPanel: Closing panel on navigation away from task views');
+        this.close();
       }
-
-      // Update previous route
-      this._previousRoute.set({ url: currentRoute, isWorkView: isCurrentWorkView });
     });
   });
 

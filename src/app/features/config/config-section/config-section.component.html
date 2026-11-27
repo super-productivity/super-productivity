@@ -6,30 +6,20 @@
 >
   <!--[icon]="section?.icon"-->
 
-  @if (section?.help || section?.helpArr) {
-    <help-section>
-      @if (section?.help) {
-        <div [innerHtml]="$safeNavigationMigration(section?.help) | translate"></div>
-      }
-      @if (section?.helpArr) {
-        @for (helpSection of section?.helpArr; track trackByIndex($index, helpSection)) {
-          @if (helpSection.h) {
-            <div class="mat-caption">{{ helpSection.h | translate }}</div>
-          }
-          @if (helpSection.p) {
-            <p [innerHTML]="helpSection.p | translate"></p>
-          }
-          @if (helpSection.p2) {
-            <p [innerHTML]="helpSection.p2 | translate"></p>
-          }
-          @if (helpSection.p3) {
-            <p [innerHTML]="helpSection.p3 | translate"></p>
-          }
-          @if (helpSection.p4) {
-            <p [innerHTML]="helpSection.p4 | translate"></p>
-          }
-        }
-      }
+  <!-- Own @if: content projection only moves a block with a single root element into [actions]. -->
+  @if (section?.help) {
+    <help-toggle-btn
+      actions
+      class="help-toggle"
+      [(isOpen)]="isShowHelp"
+    />
+  }
+  @if (section?.help) {
+    <help-section
+      [isShowHelp]="isShowHelp()"
+      [docsUrl]="section?.docsUrl"
+    >
+      <div [innerHtml]="$safeNavigationMigration(section?.help) | translate"></div>
     </help-section>
   }
   <div class="form-wrapper {{ section?.key }}">

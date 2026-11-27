@@ -167,6 +167,7 @@
           <schedule-week
             [events]="page.events"
             [beyondBudget]="page.beyondBudget"
+            [trays]="page.trays"
             [daysToShow]="page.daysToShow"
             [workStartEnd]="workStartEnd() || null"
             [currentTimeRow]="page.day === _todayDateStr() ? nowRow() : null"
@@ -180,6 +181,8 @@
     <schedule-week
       [events]="events()"
       [beyondBudget]="beyondBudget()"
+      [trays]="trays()"
+      (openDay)="openDayView($event)"
       [daysToShow]="daysToShow()"
       [workStartEnd]="workStartEnd() || null"
       [currentTimeRow]="currentTimeRow()"

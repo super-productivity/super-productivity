@@ -518,10 +518,6 @@ export class DataValidationFailedError extends Error {
   }
 }
 
-export class ModelVersionToImportNewerThanLocalError extends AdditionalLogErrorBase {
-  override name = 'ModelVersionToImportNewerThanLoca';
-}
-
 // --------------OTHER--------------
 
 export class InvalidFilePrefixError extends AdditionalLogErrorBase {

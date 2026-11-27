@@ -26,6 +26,9 @@ import { selectSyncConfig } from '../../features/config/store/global-config.redu
 import { selectEnabledIssueProviders } from '../../features/issue/store/issue-provider.selectors';
 import { RatePromptService } from '../../features/dialog-please-rate/rate-prompt.service';
 import { JiraElectronBridgeService } from '../../features/issue/providers/jira/jira-electron-bridge.service';
+import { MatDialog } from '@angular/material/dialog';
+import { OnboardingHintService } from '../../features/onboarding/onboarding-hint.service';
+import { SnackParams } from '../snack/snack.model';
 
 describe('StartupService', () => {
   let service: StartupService;
@@ -76,6 +79,7 @@ describe('StartupService', () => {
       misc: signal({
         isShowProductivityTipLonger: false,
       }),
+      sync: signal(undefined),
     });
 
     const snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
@@ -142,6 +146,7 @@ describe('StartupService', () => {
         { provide: LocalBackupService, useValue: localBackupServiceSpy },
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: SnackService, useValue: snackServiceSpy },
+        { provide: MatDialog, useValue: jasmine.createSpyObj('MatDialog', ['open']) },
         { provide: RatePromptService, useValue: ratePromptServiceSpy },
         { provide: PluginService, useValue: pluginServiceSpy },
         { provide: JiraElectronBridgeService, useValue: jiraElectronBridgeSpy },
@@ -580,6 +585,25 @@ describe('StartupService', () => {
 
       flush();
     }));
+
+    it('should offer to open the sync settings when persistence is denied', async () => {
+      spyOn(OnboardingHintService, 'isOnboardingInProgress').and.returnValue(false);
+      stubStorage({
+        persisted: () => Promise.resolve(false),
+        persist: () => Promise.resolve(false),
+      });
+      const snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
+      const matDialog = TestBed.inject(MatDialog) as jasmine.SpyObj<MatDialog>;
+
+      (service as any)._requestPersistence();
+      await new Promise((resolve) => setTimeout(resolve));
+
+      const params = snackService.open.calls.mostRecent().args[0] as SnackParams;
+      expect(params.msg).toBe(T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED);
+      expect(params.actionStr).toBe(T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED_SET_UP_SYNC);
+      await params.actionFn!();
+      expect(matDialog.open).toHaveBeenCalled();
+    });
   });
 
   describe('_initOfflineBanner (private)', () => {

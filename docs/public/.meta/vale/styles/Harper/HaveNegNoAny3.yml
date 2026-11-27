@@ -1,0 +1,25 @@
+---
+# Generated from Harper's HaveNegNoAny rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Rewrites `no` to `any` in clauses like `haven't done no X` so the sentence keeps a single clear negation.
+extends: sequence
+message: "This negative form sounds nonstandard; use `any` after the negated auxiliary."
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "any"
+tokens:
+  - pattern: 'has'
+  - pattern: 'not'
+  - upos: VERB
+  - pattern: 'no'
+    target: true
+  - upos: NOUN

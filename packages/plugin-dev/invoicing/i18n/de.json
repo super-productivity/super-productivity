@@ -1,0 +1,58 @@
+{
+  "TITLE": "Rechnungen",
+  "LOADING": "Laden…",
+  "LIST": {
+    "EMPTY": "Noch keine Rechnungen.",
+    "PRINT": "Drucken / PDF",
+    "CSV": "CSV",
+    "DELETE": "Löschen",
+    "CONFIRM_DELETE": "Rechnung {{number}} löschen? Die Stunden zählen wieder als nicht abgerechnet."
+  },
+  "NEW": {
+    "TITLE": "Neue Rechnung",
+    "PROJECT": "Projekt",
+    "NO_PROJECTS": "Lege zuerst ein Projekt an. Jedes Projekt wird getrennt abgerechnet.",
+    "FROM": "Von",
+    "TO": "Bis",
+    "RATE": "Stundensatz",
+    "LANGUAGE": "Rechnungssprache",
+    "CLIENT": "Rechnung an",
+    "CLIENT_HINT": "Name und Adresse des Kunden. Wird für dieses Projekt gemerkt.",
+    "INCLUDE": "Enthalten",
+    "NO_HOURS": "Keine nicht abgerechnete Zeit in diesem Projekt und Zeitraum.",
+    "NUMBER": "Rechnungsnummer",
+    "ISSUE_DATE": "Rechnungsdatum",
+    "ISSUE": "Ausstellen und drucken",
+    "BLOCK": {
+      "PERIOD": "Wähle Von- und Bis-Datum; Von muss zuerst kommen.",
+      "LINES": "Wähle mindestens eine Zeile mit Stunden aus.",
+      "RATE": "Gib einen Stundensatz ein.",
+      "NUMBER": "Gib eine Rechnungsnummer ein.",
+      "NUMBER_USED": "Diese Rechnungsnummer wird bereits verwendet.",
+      "DATE": "Gib das Rechnungsdatum ein."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Deine Angaben",
+    "SELLER": "Dein Name, deine Adresse und Steuernummer",
+    "PAYMENT_NOTE": "Zahlungsangaben",
+    "PAYMENT_NOTE_HINT": "Bankverbindung oder Zahlungsbedingungen, unten aufgedruckt.",
+    "CURRENCY": "Währungscode",
+    "TAX": "Steuer / USt. %",
+    "PAYMENT_DAYS": "Tage bis zur Fälligkeit",
+    "ROUNDING": "Jede Zeile aufrunden auf",
+    "ROUNDING_NONE": "Nicht runden",
+    "ROUNDING_MIN": "{{min}} Minuten",
+    "PREFIX": "Präfix der Rechnungsnummer",
+    "SAVE": "Speichern",
+    "SAVED": "Gespeichert."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Beschreibung",
+    "HOURS": "Stunden",
+    "TOTAL": "Gesamt"
+  },
+  "ERROR": {
+    "GENERIC": "Etwas ist schiefgelaufen: {{error}}"
+  }
+}

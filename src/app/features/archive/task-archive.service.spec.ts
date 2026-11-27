@@ -691,6 +691,7 @@ describe('TaskArchiveService', () => {
         issueProviderId: 'provider1',
         issueId: 'issue1',
         issueType: 'GITHUB' as any,
+        issueLastSyncedValues: { title: 'Synced title' },
       });
       const task2 = createMockTask('task2', {
         issueProviderId: 'provider1',
@@ -728,6 +729,7 @@ describe('TaskArchiveService', () => {
               issueAttachmentNr: undefined,
               issueTimeTracked: undefined,
               issuePoints: undefined,
+              issueLastSyncedValues: undefined,
             },
           },
           {
@@ -741,6 +743,7 @@ describe('TaskArchiveService', () => {
               issueAttachmentNr: undefined,
               issueTimeTracked: undefined,
               issuePoints: undefined,
+              issueLastSyncedValues: undefined,
             },
           },
         ],

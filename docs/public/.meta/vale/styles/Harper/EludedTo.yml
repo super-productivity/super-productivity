@@ -1,0 +1,19 @@
+---
+# Generated from Harper's EludedTo rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `eluded to` to `alluded to` in contexts referring to indirect references.
+extends: existence
+message: "Did you mean `alluded to`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "alluded to"
+tokens:
+  - "eluded(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"

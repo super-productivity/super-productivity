@@ -1,0 +1,25 @@
+---
+# Hand-written from Harper's MixedBag: `mixed bad` for `mixed bag`.
+#
+# What precedes it is what makes the phrase a noun phrase rather than a list
+# of adjectives -- Harper takes an adjective, an adverb, or the article `a`,
+# and `DT` covers the article here.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: sequence
+message: "Did you mean `mixed bag`?"
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "bag"
+tokens:
+  - tag: 'JJ[RS]?|RB[RS]?|DT'
+  - pattern: 'mixed'
+  - pattern: 'bad'
+    target: true

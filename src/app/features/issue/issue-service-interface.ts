@@ -42,6 +42,10 @@ export interface IssueServiceInterface {
   // OPTIONAL
   // --------
 
+  // Poll interval for one provider's own config, for providers whose interval
+  // is configurable. Falls back to `pollInterval` when not implemented.
+  getPollIntervalForCfg?(cfg: IssueIntegrationCfg): number;
+
   getMappedAttachments?(issueData: IssueData): TaskAttachment[];
 
   getNewIssuesToAddToBacklog?(

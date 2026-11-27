@@ -1936,14 +1936,19 @@ describe('lwwUpdateMetaReducer', () => {
       expect(result[NOTE_FEATURE_NAME]!.todayOrder).toEqual([NOTE_ID]);
     });
 
-    it('leaves project noteIds alone when the note still exists', () => {
+    // An existing note's project list follows its projectId (#11656); an edit
+    // that keeps the project must not duplicate or reorder it.
+    it('leaves project noteIds alone when the note still exists in its project', () => {
       const result = run(
-        createStateWithNotes([createNote()], [], []),
+        createStateWithNotes([createNote()], [NOTE_ID, OTHER_NOTE_ID], []),
         lwwNote(createNote({ content: 'Edited' })),
       );
 
       expect(result[NOTE_FEATURE_NAME]!.entities[NOTE_ID]!.content).toBe('Edited');
-      expect(result[PROJECT_FEATURE_NAME]!.entities[PROJECT_ID]!.noteIds).toEqual([]);
+      expect(result[PROJECT_FEATURE_NAME]!.entities[PROJECT_ID]!.noteIds).toEqual([
+        NOTE_ID,
+        OTHER_NOTE_ID,
+      ]);
       expect(result[NOTE_FEATURE_NAME]!.todayOrder).toEqual([]);
     });
   });
@@ -2040,6 +2045,118 @@ describe('lwwUpdateMetaReducer', () => {
       reducer(stateWith([other, createNote()], [OTHER_NOTE_ID]), action);
       const once = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
       expect(todayOrderAfter(once, action)).toEqual([NOTE_ID, OTHER_NOTE_ID]);
+    });
+  });
+
+  describe('[NOTE] LWW Update of an existing note keeps its project in step (#11656)', () => {
+    const NOTE_ID = 'note1';
+    const note = (projectId: string | null): Note => ({
+      id: NOTE_ID,
+      content: 'Note content',
+      projectId,
+      isPinnedToToday: false,
+      created: 100,
+      modified: 100,
+    });
+    // The note lives in the Inbox; PROJECT_ID exists and lists nothing.
+    const stateInInbox = (): Partial<RootState> => {
+      const base = createMockState();
+      const projects = base[PROJECT_FEATURE_NAME]!;
+      return {
+        ...base,
+        [PROJECT_FEATURE_NAME]: {
+          ...projects,
+          entities: {
+            ...projects.entities,
+            [INBOX_PROJECT.id]: createMockProject({
+              id: INBOX_PROJECT.id,
+              noteIds: ['other', NOTE_ID],
+            }),
+          },
+        },
+        [NOTE_FEATURE_NAME]: {
+          ids: [NOTE_ID],
+          entities: { [NOTE_ID]: note(INBOX_PROJECT.id) },
+          todayOrder: [],
+        },
+      } as Partial<RootState>;
+    };
+    const lwwNote = (winner: Note): Action =>
+      ({
+        type: '[NOTE] LWW Update',
+        ...winner,
+        meta: {
+          isPersistent: true,
+          entityType: 'NOTE',
+          entityId: winner.id,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+        },
+      }) as unknown as Action;
+    const after = (
+      action: Action,
+      state = stateInInbox(),
+    ): { projectId: string | null; noteIds: Record<string, string[]> } => {
+      reducer(state, action);
+      const next = mockReducer.calls.mostRecent().args[0] as RootState;
+      return {
+        projectId: next[NOTE_FEATURE_NAME].entities[NOTE_ID]!.projectId,
+        noteIds: {
+          inbox: next[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id]!.noteIds,
+          project: next[PROJECT_FEATURE_NAME].entities[PROJECT_ID]!.noteIds,
+        },
+      };
+    };
+
+    it('moves the note between project lists when the winner changes its project', () => {
+      expect(after(lwwNote(note(PROJECT_ID)))).toEqual({
+        projectId: PROJECT_ID,
+        noteIds: { inbox: ['other'], project: [NOTE_ID] },
+      });
+    });
+
+    it('sends a note whose winner names a deleted project to the Inbox', () => {
+      expect(after(lwwNote(note('deleted-project')))).toEqual({
+        projectId: INBOX_PROJECT.id,
+        noteIds: { inbox: ['other', NOTE_ID], project: [] },
+      });
+    });
+
+    it('takes a note whose winner has no project out of every project list', () => {
+      expect(after(lwwNote(note(null)))).toEqual({
+        projectId: null,
+        noteIds: { inbox: ['other'], project: [] },
+      });
+    });
+
+    // A patch without projectId keeps the note's own project, so a device whose
+    // lists had drifted from it is brought back in line.
+    it('lists a note in its own project when a patch leaves the project as is', () => {
+      const drifted = stateInInbox();
+      const notes = drifted[NOTE_FEATURE_NAME]!;
+      const patch = {
+        type: '[NOTE] LWW Update',
+        id: NOTE_ID,
+        content: 'Edited',
+        meta: {
+          isPersistent: true,
+          entityType: 'NOTE',
+          entityId: NOTE_ID,
+          isRemote: true,
+        },
+      } as unknown as Action;
+      expect(
+        after(patch, {
+          ...drifted,
+          [NOTE_FEATURE_NAME]: {
+            ...notes,
+            entities: { [NOTE_ID]: note(PROJECT_ID) },
+          },
+        } as Partial<RootState>),
+      ).toEqual({
+        projectId: PROJECT_ID,
+        noteIds: { inbox: ['other'], project: [NOTE_ID] },
+      });
     });
   });
 

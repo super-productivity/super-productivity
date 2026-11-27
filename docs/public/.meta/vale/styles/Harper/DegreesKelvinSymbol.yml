@@ -1,0 +1,20 @@
+---
+# Generated from Harper's DegreesKelvinSymbol rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects use of `°K` to `K`.
+extends: existence
+message: "Use just the symbol `K` when discussing the unit Kelvin."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "K"
+nonword: true
+tokens:
+  - "°K(?!['\\x{2019}]s\\b)"

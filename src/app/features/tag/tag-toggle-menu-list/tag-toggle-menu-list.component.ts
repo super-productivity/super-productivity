@@ -20,6 +20,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { DialogPromptComponent } from '../../../ui/dialog-prompt/dialog-prompt.component';
 import { T } from '../../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { TaskService } from '../../tasks/task.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';

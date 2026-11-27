@@ -17,6 +17,22 @@ export interface AndroidWidgetTask {
   // omitted (not null) when the task has no project — org.json's optString maps
   // JSON null to the literal string "null"
   projectId?: string;
+  /**
+   * Only in `nextDays`: a recurring task due that day that does not exist yet — the
+   * app creates it on its first run that day. The `id` is the one a task linked to
+   * its series gets and only keys the row. Native lists it like a pending quick
+   * add: there is no task to toggle, so its checkbox opens the app.
+   */
+  isPending?: true;
+}
+
+/** What the device already knows about one day after the snapshot's own. */
+export interface AndroidWidgetDay {
+  /** DISPLAY ONLY, like AndroidWidgetData.dayStr. */
+  dayStr: string;
+  /** The end of this day; same rule as AndroidWidgetData.validUntil. */
+  validUntil: number;
+  tasks: AndroidWidgetTask[];
 }
 
 export interface AndroidWidgetCurrentTask {
@@ -34,6 +50,18 @@ export interface AndroidWidgetCurrentTask {
    * run once Android reclaims the process, so the native widget enforces it itself.
    */
   expiresAt?: number;
+}
+
+/** A project that can be selected by an individual Android home-screen widget. */
+export interface AndroidWidgetProject {
+  id: string;
+  title: string;
+  /**
+   * Up to 20 open tasks (the project list, then its backlog) plus the 5 most
+   * recently done, all in stored order. The done ones serve only the native
+   * five-second grace after a widget checkbox tap.
+   */
+  tasks: AndroidWidgetTask[];
 }
 
 export interface AndroidWidgetData {
@@ -57,6 +85,8 @@ export interface AndroidWidgetData {
    * dead across midnight the blob is simply yesterday's, and the widget's only honest
    * move is to say so. Shipping the boundary instant keeps that judgement in one
    * language instead of mirroring `getDbDateStr` semantics into Kotlin, then Swift.
+   * `nextDays` now covers the days right after it the same way: lists and boundaries
+   * computed here, so "say so" is left for when those run out.
    *
    * Tradeoff: this freezes the writer's timezone, because the boundary is resolved in
    * whatever zone the device was in at push time. Fly west and the snapshot expires
@@ -77,4 +107,20 @@ export interface AndroidWidgetData {
    * for today.
    */
   currentTask: AndroidWidgetCurrentTask | null;
+  /**
+   * Projects a widget instance can be pointed at. An old persisted v:1 snapshot may
+   * lack this additive field. Native treats a missing project selection or
+   * unavailable project as the `tasks` list.
+   */
+  projects: AndroidWidgetProject[];
+  /**
+   * The Today list of each of the next days, in order, as far as this device knows
+   * it now: tasks already planned for that day plus the recurring tasks due then.
+   * Once `validUntil` has passed, a Today widget shows the entry covering the
+   * current time instead of calling the snapshot outdated — the app does not have
+   * to run for a day change (#11944). Still nothing native computes: each entry
+   * carries its own boundary. Past the last entry the snapshot is outdated as
+   * before. An old persisted v:1 snapshot may lack this additive field.
+   */
+  nextDays: AndroidWidgetDay[];
 }

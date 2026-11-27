@@ -47,6 +47,7 @@ import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { EdgeSwipeOpenDetector } from './edge-swipe-open';
 
 // 56px = 24px icon + 16px (var(--s2)) padding on each side, so the left-aligned
 // nav icons sit centered in the collapsed rail.
@@ -110,6 +111,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private _multiDrag = inject(TaskMultiDragService);
   private _externalDragService = inject(ScheduleExternalDragService);
   private _pointerUpSubscription: Subscription | null = null;
+  private _removeEdgeSwipeListeners: (() => void) | null = null;
 
   // Use service's computed signal directly
   readonly config = this._sideNavConfigService.navConfig;
@@ -246,10 +248,20 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       }
     });
 
+    // LayoutService is root-provided and outlives this component, which is
+    // destroyed and rebuilt when focus mode opens/closes. Only presses made
+    // after construction count, otherwise the last one replays on every rebuild.
+    const initialFocusTrigger = untracked(() =>
+      this._layoutService.focusSideNavTrigger(),
+    );
+    const initialModeTrigger = untracked(() =>
+      this._layoutService.toggleSideNavModeTrigger(),
+    );
+
     // Listen for focus trigger from LayoutService
     effect(() => {
       const trigger = this._layoutService.focusSideNavTrigger();
-      if (trigger > 0) {
+      if (trigger > initialFocusTrigger) {
         // Small delay to ensure DOM is ready
         window.setTimeout(() => {
           this.toggleNavFocus();
@@ -259,7 +271,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
     effect(() => {
       const trigger = this._layoutService.toggleSideNavModeTrigger();
-      if (trigger > 0) {
+      if (trigger > initialModeTrigger) {
         untracked(() => {
           if (!this.isMobile()) this.toggleSideNavMode();
         });
@@ -318,6 +330,9 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       this._pointerUpSubscription.unsubscribe();
       this._pointerUpSubscription = null;
     }
+
+    this._removeEdgeSwipeListeners?.();
+    this._removeEdgeSwipeListeners = null;
   }
 
   ngAfterViewInit(): void {
@@ -325,6 +340,37 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
     this._pointerUpSubscription = this._dragDropRegistry.pointerUp.subscribe((event) => {
       this._handlePointerUp(event);
     });
+    this._initEdgeSwipeOpen();
+  }
+
+  /**
+   * Swiping left from the right screen edge opens the mobile drawer, which
+   * slides in from that edge (#4464). Passive capture listeners: they only
+   * observe, and claim the touchstart before a task's swipe-block sees it.
+   */
+  private _initEdgeSwipeOpen(): void {
+    const detector = new EdgeSwipeOpenDetector({
+      getViewportWidth: () => window.innerWidth,
+      isEnabled: () => this.isMobile() && !this.showMobileMenuOverlay(),
+      onOpen: () => {
+        if (!this.showMobileMenuOverlay()) this.toggleMobileNav();
+      },
+    });
+    const opts: AddEventListenerOptions = { capture: true, passive: true };
+    const listeners: [keyof DocumentEventMap, (e: TouchEvent) => void][] = [
+      ['touchstart', detector.onTouchStart],
+      ['touchmove', detector.onTouchMove],
+      ['touchend', detector.onTouchEnd],
+      ['touchcancel', detector.onTouchCancel],
+    ];
+    for (const [type, fn] of listeners) {
+      document.addEventListener(type, fn as EventListener, opts);
+    }
+    this._removeEdgeSwipeListeners = () => {
+      for (const [type, fn] of listeners) {
+        document.removeEventListener(type, fn as EventListener, opts);
+      }
+    };
   }
 
   onNavKeyDown(event: KeyboardEvent): void {
@@ -413,8 +459,11 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       else window.history.replaceState(args.state, args.title);
     }
 
-    // Mobile menu is visible but still has state in history - restore it
-    else window.history.back();
+    // Mobile menu is hidden but still has state in history - restore it.
+    // Not while a navigation is in flight (e.g. a nav tap closed the menu): the
+    // popstate would cancel that navigation and drop the tap. The leftover
+    // entry costs one extra back press.
+    else if (!this._router.currentNavigation()) window.history.back();
   }
 
   toggleSideNavMode(): void {

@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
 import { TagListComponent } from './tag-list.component';
 import { Store } from '@ngrx/store';
 import { of, BehaviorSubject } from 'rxjs';
@@ -28,7 +27,6 @@ describe('TagListComponent', () => {
     activeId: string;
     activeType: WorkContextType;
   } | null>;
-  let routerMock: jasmine.SpyObj<Router>;
 
   const createMockTag = (id: string, title: string): Tag =>
     ({
@@ -104,9 +102,6 @@ describe('TagListComponent', () => {
       getHumanReadableName: () => 'Plugin',
     };
 
-    routerMock = jasmine.createSpyObj<Router>('Router', ['navigate']);
-    routerMock.navigate.and.resolveTo(true);
-
     await TestBed.configureTestingModule({
       imports: [TagListComponent, NoopAnimationsModule],
       providers: [
@@ -118,7 +113,6 @@ describe('TagListComponent', () => {
           provide: PluginIssueProviderRegistryService,
           useValue: pluginRegistryMock,
         },
-        { provide: Router, useValue: routerMock },
       ],
     }).compileComponents();
 
@@ -372,82 +366,21 @@ describe('TagListComponent', () => {
   });
 
   describe('project tag click', () => {
-    // The tag-list host stands in for the task row listening for clicks.
-    let rowClick: jasmine.Spy;
-
-    const click = (init: MouseEventInit = {}): MouseEvent =>
-      new MouseEvent('click', { bubbles: true, ...init });
-
-    // [project chip, tag chip]
-    const getChips = (): HTMLElement[] =>
-      Array.from(fixture.nativeElement.querySelectorAll('tag'));
-
-    beforeEach(() => {
+    it('should leave the project chip a label so clicks reach the row', () => {
       projectState$.next({
         ids: ['proj-1'],
         entities: { 'proj-1': createMockProject('proj-1', 'My Project') },
       });
-      tagState$.next({
-        ids: ['tag-1'],
-        entities: { 'tag-1': createMockTag('tag-1', 'Alpha') },
-      });
       workContext$.next({ activeId: 'TODAY', activeType: WorkContextType.TAG });
-      fixture.componentRef.setInput(
-        'task',
-        createMockTask({ projectId: 'proj-1', tagIds: ['tag-1'] }),
-      );
+      fixture.componentRef.setInput('task', createMockTask({ projectId: 'proj-1' }));
       fixture.detectChanges();
-      rowClick = jasmine.createSpy('rowClick');
+      const rowClick = jasmine.createSpy('rowClick');
       fixture.nativeElement.addEventListener('click', rowClick);
-    });
+      const projectChip: HTMLElement = fixture.nativeElement.querySelector('tag');
+      projectChip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    it('should open the project without the click or focus reaching the row', () => {
-      const [projectChip, tagChip] = getChips();
-      const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
-      projectChip.dispatchEvent(mouseDown);
-      projectChip.dispatchEvent(click());
-
-      expect(routerMock.navigate).toHaveBeenCalledOnceWith(['/project/proj-1/tasks']);
-      expect(rowClick).not.toHaveBeenCalled();
-      expect(mouseDown.defaultPrevented).toBe(true);
-      expect(getComputedStyle(projectChip).pointerEvents).toBe('auto');
-      expect(getComputedStyle(tagChip).pointerEvents).toBe('none');
-    });
-
-    it('should blur a focused edit before navigating so it saves', () => {
-      const input = document.createElement('input');
-      document.body.appendChild(input);
-      const onBlur = jasmine.createSpy('onBlur');
-      input.addEventListener('blur', onBlur);
-      input.focus();
-      getChips()[0].dispatchEvent(click());
-
-      // Asserted before removing the input, whose removal can fire blur itself.
-      expect(onBlur).toHaveBeenCalled();
-      expect(routerMock.navigate).toHaveBeenCalled();
-      input.remove();
-    });
-
-    it('should leave tag chips and an opted-out project chip to the row', () => {
-      getChips()[1].dispatchEvent(click());
-      fixture.componentRef.setInput('isProjectTagClickable', false);
-      fixture.detectChanges();
-      const projectChip = getChips()[0];
-      projectChip.dispatchEvent(click());
-
-      expect(routerMock.navigate).not.toHaveBeenCalled();
-      expect(rowClick).toHaveBeenCalledTimes(2);
+      expect(rowClick).toHaveBeenCalledTimes(1);
       expect(getComputedStyle(projectChip).pointerEvents).toBe('none');
-    });
-
-    it('should leave modifier clicks and touch-selection taps to the row', () => {
-      const projectChip = getChips()[0];
-      projectChip.dispatchEvent(click({ ctrlKey: true }));
-      fixture.componentRef.setInput('isTouchSelectionMode', true);
-      projectChip.dispatchEvent(click());
-
-      expect(routerMock.navigate).not.toHaveBeenCalled();
-      expect(rowClick).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -1,3 +1,5 @@
+import { PluginTaskRepeatCfgSchedule } from '@super-productivity/plugin-api';
+
 /**
  * Normalized intermediate shape between the Todoist sync payload and the
  * Super Productivity import plan. Everything lossy is flagged per task so the
@@ -37,6 +39,12 @@ export interface TodoistTask {
   /** ms, from minute-based durations only */
   timeEstimate: number | null;
   isRecurring: boolean;
+  /**
+   * Root tasks only: the Todoist rule as a repeat schedule, when it is fully
+   * understood. `notes` then leaves the rule out; `notesWithRule` keeps it
+   * for when the repeat cannot be set up.
+   */
+  repeat: { schedule: PluginTaskRepeatCfgSchedule; notesWithRule: string } | null;
   /** original depth was ≥ 2 and the task was re-parented to its root ancestor */
   wasDemoted: boolean;
   /** had a day-based duration that is deliberately not imported */

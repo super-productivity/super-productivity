@@ -245,5 +245,12 @@ export const sendCompressedBodyParseFailure = (
     );
   }
 
-  return reply.status(failure.statusCode).send({ error: failure.error });
+  return reply.status(failure.statusCode).send({
+    error: failure.error,
+    // #11672: the client keeps a full-state op pending on an uncoded 413 (it may
+    // be a reverse proxy's), so the server's own size verdict must carry a code.
+    ...(failure.statusCode === 413
+      ? { errorCode: SYNC_ERROR_CODES.PAYLOAD_TOO_LARGE }
+      : {}),
+  });
 };

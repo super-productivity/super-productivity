@@ -1,4 +1,4 @@
-import { inject, Injectable, OnDestroy } from '@angular/core';
+import { inject, Injectable, Injector, OnDestroy } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, exhaustMap, filter, take } from 'rxjs/operators';
 import { isOnline } from '../../util/is-online';
@@ -59,6 +59,7 @@ const IMMEDIATE_UPLOAD_DEBOUNCE_MS = 2000;
 })
 export class ImmediateUploadService implements OnDestroy {
   private _providerManager = inject(SyncProviderManager);
+  private _injector = inject(Injector);
   private _syncService = inject(OperationLogSyncService);
   private _dataInitStateService = inject(DataInitStateService);
   private _syncWrapper = inject(SyncWrapperService);
@@ -394,7 +395,7 @@ export class ImmediateUploadService implements OnDestroy {
 
         // Check for storage quota exceeded - this requires user action
         const message = e instanceof Error ? e.message : 'Unknown error';
-        handleStorageQuotaError(message);
+        handleStorageQuotaError(message, this._injector);
 
         // Validation failure is structural state corruption, not a transient
         // network/throttle error — surface ERROR even though the upload

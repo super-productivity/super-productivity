@@ -19,6 +19,10 @@ import { SharePayload } from '../../core/share/share.model';
 import { TODAY_TAG } from '../tag/tag.const';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { Router } from '@angular/router';
+import { MatButton } from '@angular/material/button';
+import { GlobalConfigService } from '../config/global-config.service';
+import { AppFeaturesConfig } from '../config/global-config.model';
 
 @Component({
   selector: 'metric',
@@ -34,6 +38,7 @@ import { DateTimeFormatService } from '../../core/date-time-format/date-time-for
     ActivityHeatmapComponent,
     ShareButtonComponent,
     LocaleDatePipe,
+    MatButton,
   ],
 })
 export class MetricComponent {
@@ -43,6 +48,8 @@ export class MetricComponent {
   allTasksMetricsService = inject(AllTasksMetricsService);
   // Passed to the pure `localeDate` pipe so dates re-render on a locale change.
   readonly locale = inject(DateTimeFormatService).currentLocale;
+  private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _router = inject(Router);
 
   T: typeof T = T;
 
@@ -57,6 +64,16 @@ export class MetricComponent {
     const context = this.activeWorkContext();
     return context?.type === WorkContextType.TAG && context.id === TODAY_TAG.id;
   });
+
+  /**
+   * The button turns the synced daily-summary feature on when it is off, so the
+   * label says so instead of promising only navigation.
+   */
+  dailySummaryBtnLabel = computed(() =>
+    this._globalConfigService.appFeatures().isFinishDayEnabled
+      ? this.T.F.METRIC.CMP.OPEN_DAILY_SUMMARY
+      : this.T.F.METRIC.CMP.ENABLE_DAILY_SUMMARY,
+  );
 
   /**
    * Dynamic title that changes based on context
@@ -153,4 +170,17 @@ export class MetricComponent {
       },
     );
   });
+
+  /**
+   * The evaluation form lives on the daily summary, which new installs ship
+   * with turned off — enable it on the way so the empty state isn't a dead end.
+   */
+  openDailySummary(): void {
+    if (!this._globalConfigService.appFeatures().isFinishDayEnabled) {
+      this._globalConfigService.updateSection('appFeatures', {
+        isFinishDayEnabled: true,
+      } as Partial<AppFeaturesConfig>);
+    }
+    void this._router.navigate(['/active/daily-summary']);
+  }
 }

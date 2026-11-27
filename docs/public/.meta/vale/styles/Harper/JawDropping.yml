@@ -1,0 +1,19 @@
+---
+# Generated from Harper's JawDropping rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `jar-dropping` to `jaw-dropping`, ensuring the intended meaning of something that causes amazement.
+extends: existence
+message: "Use the correct phrase for something astonishing."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "jaw-dropping"
+tokens:
+  - "jar-dropping(?!['\\x{2019}]s\\b)"

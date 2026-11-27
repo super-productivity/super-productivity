@@ -293,6 +293,30 @@ describe('CalendarCommonInterfacesService', () => {
       expect(result).toBeNull();
     });
 
+    it('does not include notes in a poll update for a rescheduled event', async () => {
+      const task = createMockTask({ notes: 'Local meeting notes' });
+      const calendarEvent = createMockCalendarEvent({
+        start: new Date('2025-01-15T14:00:00Z').getTime(),
+        description: 'Original feed description',
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of(mockCalendarCfg as IssueProviderCalendar),
+      );
+      calendarIntegrationServiceSpy.requestEventsForSchedule$.and.returnValue(
+        of([calendarEvent]),
+      );
+
+      const result = await service.getFreshDataForIssueTask(task);
+
+      expect(result!.taskChanges.dueWithTime).toBe(calendarEvent.start);
+      expect(Object.prototype.hasOwnProperty.call(result!.taskChanges, 'notes')).toBe(
+        false,
+      );
+      expect(service.getAddTaskData(calendarEvent).notes).toBe(
+        'Original feed description',
+      );
+    });
+
     it('should return taskChanges when event time changed', async () => {
       const task = createMockTask();
       const newStartTime = new Date('2025-01-15T14:00:00Z').getTime();

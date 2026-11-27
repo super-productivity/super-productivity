@@ -14,6 +14,8 @@ import {
 } from '../short-syntax';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
+import { getLogicalDayForClockTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { TimeSpentOnDay, TaskPriority, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
@@ -66,6 +68,7 @@ const isSameRepeat = (
 @Injectable()
 export class AddTaskBarParserService implements OnDestroy {
   private readonly _stateService = inject(AddTaskBarStateService);
+  private readonly _dateService = inject(DateService);
   private _previousParseResult: PreviousParseResult | null = null;
   private _parseRunId = 0;
   // Exactly which characters of which input the parser last consumed, so a
@@ -248,6 +251,13 @@ export class AddTaskBarParserService implements OnDestroy {
 
           if (timeStr !== '00:00') {
             dueTime = timeStr;
+            // The bar holds logical days: a time before a custom day start
+            // ("@2am" typed at 22:00) is tonight, the late night of today (#12012)
+            dueDate = getLogicalDayForClockTime(
+              timeStr,
+              dueDateObj,
+              this._dateService.getStartOfNextDayDiffMs(),
+            );
           }
         }
       } else if (defaultDueDate) {

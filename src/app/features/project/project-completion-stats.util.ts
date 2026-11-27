@@ -1,4 +1,5 @@
 import { Task } from '../tasks/task.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import { getDiffInDays } from '../../util/get-diff-in-days';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';

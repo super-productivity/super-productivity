@@ -18,6 +18,10 @@ import {
 } from './test-utils';
 import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { INBOX_PROJECT } from '../../../features/project/project.const';
+import { Project } from '../../../features/project/project.model';
+import { Note } from '../../../features/note/note.model';
+import { moveNoteToOtherProject } from '../../../features/note/store/note.actions';
+import { NOTE_FEATURE_NAME } from '../../../features/note/store/note.reducer';
 import {
   DEFAULT_TASK_REPEAT_CFG,
   TaskRepeatCfg,
@@ -34,6 +38,21 @@ const createMockTaskRepeatCfg = (
   tagIds: [],
   ...overrides,
 });
+
+const addInbox = (state: RootState, overrides: Partial<Project> = {}): RootState => {
+  state[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id] = createMockProject({
+    id: INBOX_PROJECT.id,
+    title: 'Inbox',
+    taskIds: [],
+    backlogTaskIds: [],
+    ...overrides,
+  });
+  (state[PROJECT_FEATURE_NAME].ids as string[]) = [
+    ...(state[PROJECT_FEATURE_NAME].ids as string[]),
+    INBOX_PROJECT.id,
+  ];
+  return state;
+};
 
 describe('projectSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -459,7 +478,103 @@ describe('projectSharedMetaReducer', () => {
     });
   });
 
+  describe('moveNoteToOtherProject action', () => {
+    const moveNote = (targetProjectId: string) =>
+      moveNoteToOtherProject({
+        note: { id: 'note1', projectId: 'project1' } as Note,
+        targetProjectId,
+      });
+
+    const withNote1 = (): RootState => {
+      const testState = addInbox(createBaseState());
+      testState[NOTE_FEATURE_NAME] = {
+        ids: ['note1'],
+        entities: { note1: { id: 'note1', projectId: 'project1' } as Note },
+        todayOrder: [],
+      };
+      return testState;
+    };
+
+    it('should forward a move into a deleted project as a move to the Inbox (#10744)', () => {
+      const testState = withNote1();
+
+      metaReducer(testState, moveNote('deleted-project'));
+
+      expect(mockReducer.calls.mostRecent().args[1]).toEqual(moveNote(INBOX_PROJECT.id));
+    });
+
+    it('should forward a move into an existing project unchanged', () => {
+      const testState = withNote1();
+      const action = moveNote('project1');
+
+      metaReducer(testState, action);
+
+      expect(mockReducer.calls.mostRecent().args[1]).toBe(action);
+    });
+
+    it('should drop a move of a note this device no longer has', () => {
+      const testState = withNote1();
+      testState[NOTE_FEATURE_NAME] = { ids: [], entities: {}, todayOrder: [] };
+
+      const result = metaReducer(testState, moveNote('project1'));
+
+      expect(result).toBe(testState);
+      expect(mockReducer).not.toHaveBeenCalled();
+    });
+  });
+
   describe('deleteProject action', () => {
+    describe('notes the delete does not name (#10744)', () => {
+      const note = (id: string, projectId: string): Note => ({ id, projectId }) as Note;
+      const createState = (): RootState => {
+        const testState = addInbox(createBaseState(), { noteIds: ['inbox-note'] });
+        const projects = testState[PROJECT_FEATURE_NAME].entities;
+        projects.project1 = { ...projects.project1!, noteIds: ['named', 'moved-in'] };
+        testState[NOTE_FEATURE_NAME] = {
+          ids: ['named', 'moved-in', 'inbox-note'],
+          entities: {
+            named: note('named', 'project1'),
+            'moved-in': note('moved-in', 'project1'),
+            'inbox-note': note('inbox-note', INBOX_PROJECT.id),
+          },
+          todayOrder: [],
+        };
+        return testState;
+      };
+      const deleteProject1 = TaskSharedActions.deleteProject({
+        projectId: 'project1',
+        noteIds: ['named'],
+        allTaskIds: [],
+      });
+
+      it('should re-home them to the Inbox', () => {
+        metaReducer(createState(), deleteProject1);
+
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        expect(
+          updatedState[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id].noteIds,
+        ).toEqual(['inbox-note', 'moved-in']);
+        const notes = updatedState[NOTE_FEATURE_NAME].entities;
+        expect(notes['moved-in'].projectId).toBe(INBOX_PROJECT.id);
+        // Left for the note reducer, which removes the notes the delete names.
+        expect(notes.named.projectId).toBe('project1');
+      });
+
+      it('should leave them alone for a legacy delete without the marker', () => {
+        const testState = createState();
+
+        const legacyDelete = { ...deleteProject1, projectDeleteWins: undefined };
+
+        metaReducer(testState, legacyDelete);
+
+        const updatedState = mockReducer.calls.mostRecent().args[0];
+        expect(
+          updatedState[PROJECT_FEATURE_NAME].entities[INBOX_PROJECT.id].noteIds,
+        ).toEqual(['inbox-note']);
+        expect(updatedState[NOTE_FEATURE_NAME]).toBe(testState[NOTE_FEATURE_NAME]);
+      });
+    });
+
     it('should enrich stale task ids from current project relationships only', () => {
       const testState = createStateWithExistingTasks(
         ['listed-root'],

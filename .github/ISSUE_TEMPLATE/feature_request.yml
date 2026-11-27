@@ -12,6 +12,8 @@ body:
 
         ⚠️ Please make sure that there is no similar feature request opened up already by searching the issues in this repository!
 
+        💬 Issues are for concrete, well-scoped requests someone could pick up and build. Early ideas and "would it make sense if…" questions belong in [Discussions → Ideas](https://github.com/super-productivity/super-productivity/discussions/categories/ideas), and plugin ideas in [Plug-ins](https://github.com/super-productivity/super-productivity/discussions/categories/plug-ins). Once an idea has support and a clear shape, it becomes an issue.
+
   - type: textarea
     id: problem-statement
     attributes:

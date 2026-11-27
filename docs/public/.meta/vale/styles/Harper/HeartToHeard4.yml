@@ -1,0 +1,27 @@
+---
+# Generated from Harper's HeartToHeard rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `heart` or `herd` to `heard` in common `have ... heard of/about` questions.
+extends: sequence
+message: "Did you mean the verb `heard` (= past tense of `hear`)?"
+level: warning
+ignorecase: true
+model: harper
+matchcase: true
+action:
+  name: replace
+  params:
+    - "heard"
+tokens:
+  - pattern: 'have|had|has'
+  - pattern: 'n''t'
+  - upos: DET
+  - upos: NOUN
+  - upos: ADV
+  - pattern: 'heart|herd'
+    target: true
+  - pattern: 'about|from|with|for|in|of|on|to'

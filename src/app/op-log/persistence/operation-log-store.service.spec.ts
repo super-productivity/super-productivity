@@ -1758,6 +1758,23 @@ describe('OperationLogStoreService', () => {
       ]);
     });
 
+    // #11651: the force-upload import relies on this to move the stored clock
+    // past its own, so the device's next op does not reuse the import's clock.
+    it('should advance the stored vector clock to a local full-state op', async () => {
+      await service.setVectorClock({ testClient: 2, otherClient: 3 });
+      const syncImport = createTestOperation({
+        id: 'force-upload-import',
+        opType: OpType.SyncImport,
+        vectorClock: { testClient: 3, otherClient: 3 },
+      });
+
+      await service.appendMixedSourceBatchSkipDuplicates([
+        { ops: [syncImport], source: 'local' },
+      ]);
+
+      expect(await service.getVectorClock()).toEqual({ testClient: 3, otherClient: 3 });
+    });
+
     it('should roll back replacement and predecessor rejection when the clock write fails', async () => {
       await service.setVectorClock({ testClient: 4 });
       const predecessor = createTestOperation({ id: 'rollback-predecessor' });

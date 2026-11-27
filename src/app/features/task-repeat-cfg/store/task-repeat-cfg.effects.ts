@@ -17,6 +17,8 @@ import { Task, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
+import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { TaskRepeatCfg, TaskRepeatCfgCopy } from '../task-repeat-cfg.model';
 import { MatDialog } from '@angular/material/dialog';
@@ -49,11 +51,29 @@ import {
 import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { clampPastTimedOccurrence } from './clamp-past-timed-occurrence.util';
 import { SCHEDULE_AFFECTING_FIELDS } from './schedule-affecting-fields.const';
+import { getRepeatDeadlineDay } from './get-repeat-deadline-day.util';
+
+const SUBTASK_TEMPLATE_ACTIONS = [
+  addSubTask,
+  moveSubTask,
+  moveSubTaskUp,
+  moveSubTaskDown,
+  moveSubTaskToTop,
+  moveSubTaskToBottom,
+  TaskSharedActions.updateTask,
+  TaskSharedActions.deleteTask,
+  TaskSharedActions.deleteTasks,
+  TaskSharedActions.restoreDeletedTask,
+  TaskSharedActions.convertToMainTask,
+  TaskSharedActions.convertToSubTask,
+] as const;
 
 @Injectable()
 export class TaskRepeatCfgEffects {
   private _localActions$ = inject(LOCAL_ACTIONS);
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _taskArchiveService = inject(TaskArchiveService);
@@ -203,6 +223,13 @@ export class TaskRepeatCfgEffects {
         const isFirstOccurrenceToday_ = firstOccurrence
           ? this._dateService.isToday(firstOccurrence)
           : true;
+        // The task itself is the first occurrence, so it gets the cfg deadline
+        // too; a deadline with a time is left alone (#10983).
+        const deadlineDay = getRepeatDeadlineDay(taskRepeatCfg, firstOccurrenceStr);
+        const deadlineUpdate: Partial<TaskCopy> =
+          deadlineDay && !task.deadlineWithTime && task.deadlineDay !== deadlineDay
+            ? { deadlineDay }
+            : {};
 
         // Update repeat config with subtask templates AND the correct lastTaskCreationDay
         this._taskRepeatCfgService.updateTaskRepeatCfg(taskRepeatCfg.id, {
@@ -226,6 +253,7 @@ export class TaskRepeatCfgEffects {
           this._taskService.update(task.id, {
             created: firstOccurrence.getTime(),
             ...(isTimedTask ? {} : { dueDay: firstOccurrenceStr }),
+            ...deadlineUpdate,
           });
           // planTaskForDay (below) also sets dueDay redundantly, plus handles
           // planner days and TODAY_TAG removal
@@ -233,7 +261,7 @@ export class TaskRepeatCfgEffects {
           // TODAY FIRST OCCURRENCE:
           // Keep the stable occurrence identity aligned even if the task was
           // originally created before it became repeatable.
-          const update: Partial<TaskCopy> = {};
+          const update: Partial<TaskCopy> = { ...deadlineUpdate };
           if (firstOccurrence && getDbDateStr(task.created) !== firstOccurrenceStr) {
             update.created = firstOccurrence.getTime();
           }
@@ -509,21 +537,10 @@ export class TaskRepeatCfgEffects {
   autoSyncSubtaskTemplatesFromNewest$ = createEffect(
     () =>
       this._localActions$.pipe(
-        ofType(
-          addSubTask,
-          moveSubTask,
-          moveSubTaskUp,
-          moveSubTaskDown,
-          moveSubTaskToTop,
-          moveSubTaskToBottom,
-          TaskSharedActions.updateTask,
-          TaskSharedActions.deleteTask,
-        ),
-        // Ignore delete for parent tasks (no need to sync after parent removed)
-        filter((action) => this._isRelevantSubtaskAction(action)),
-        // Only consider updates relevant to subtasks or parent content updates
-        switchMap((action) =>
-          this._resolveParentTaskFromAction(action).pipe(
+        ofType(...SUBTASK_TEMPLATE_ACTIONS),
+        concatMap((action) => this._affectedParentIds$(action)),
+        concatMap((parentId) =>
+          this._taskService.getByIdOnce$(parentId).pipe(
             first(),
             switchMap((parent: Task | null) => {
               if (!parent || !parent.repeatCfgId) {
@@ -649,7 +666,9 @@ export class TaskRepeatCfgEffects {
 
                 // fallback to archive
                 return from(
-                  this._taskService.getArchiveTasksForRepeatCfgId(repeatCfgId),
+                  this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(
+                    repeatCfgId,
+                  ),
                 ).pipe(
                   switchMap((arch) => {
                     if (!arch || arch.length === 0) {
@@ -771,7 +790,7 @@ export class TaskRepeatCfgEffects {
           return forkJoin([
             rxOf(taskRepeatCfg),
             this._taskService.getTasksByRepeatCfgId$(id).pipe(first()),
-            this._taskService.getArchiveTasksForRepeatCfgId(id),
+            this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(id),
           ]);
         }),
         concatMap(([{ id, changes }, todayTasks, archiveTasks]) => {
@@ -840,7 +859,7 @@ export class TaskRepeatCfgEffects {
                     }
                     return { id: task.id, changes: changesForArchiveTask };
                   });
-                  this._taskService.updateArchiveTasks(archiveUpdates);
+                  this._taskArchiveOrchestrator.updateArchiveTasks(archiveUpdates);
                 }
               }),
             );
@@ -880,14 +899,14 @@ export class TaskRepeatCfgEffects {
         this._dateService.getStartOfNextDayDiffMs(),
       );
       if (task.remindAt) {
-        this._taskService.reScheduleTask({
+        this._taskSchedulingService.reScheduleTask({
           task,
           due: dateTime,
           remindCfg: completeCfg.remindAt,
           isMoveToBacklog: false,
         });
       } else {
-        this._taskService.scheduleTask(task, dateTime, completeCfg.remindAt);
+        this._taskSchedulingService.scheduleTask(task, dateTime, completeCfg.remindAt);
       }
     }
     if (changes.tagIds) {
@@ -937,42 +956,37 @@ export class TaskRepeatCfgEffects {
     return true;
   }
 
-  /**
-   * Determines if an action is relevant for subtask template syncing
-   */
-  private _isRelevantSubtaskAction(action: any): boolean {
-    if (action.type === TaskSharedActions.deleteTask.type) {
-      const task = action.task as Task | undefined;
-      return !!task && !!task.parentId;
+  private _affectedParentIds$(
+    action: ReturnType<(typeof SUBTASK_TEMPLATE_ACTIONS)[number]>,
+  ): Observable<string> {
+    if (action.type === moveSubTask.type) {
+      return from(new Set([action.srcTaskId, action.targetTaskId]));
     }
-    return true;
-  }
-
-  /**
-   * Resolves the parent task from an action that might affect subtasks
-   */
-  private _resolveParentTaskFromAction(action: any): Observable<Task | null> {
-    const parentId: string | undefined = action.parentId || action.srcTaskId;
-    const updatedTaskId: string | undefined = action.task?.id || action.id;
-
-    if (!parentId && !updatedTaskId) {
-      return EMPTY;
+    if (action.type === TaskSharedActions.convertToSubTask.type) {
+      return rxOf(action.targetParentId);
     }
-
-    // Resolve the parent: if parentId given use it, else try to get parent via updated task
-    const resolveParent$ = parentId
-      ? this._taskService.getByIdOnce$(parentId)
-      : updatedTaskId
-        ? this._taskService
-            .getByIdOnce$(updatedTaskId as string)
-            .pipe(
-              switchMap((t) =>
-                t && t.parentId ? this._taskService.getByIdOnce$(t.parentId) : rxOf(null),
-              ),
-            )
-        : rxOf(null);
-
-    return resolveParent$;
+    if (action.type === TaskSharedActions.deleteTasks.type) {
+      // Multi-select deletes lone subtasks individually, but an issue-provider
+      // removal bulk-deletes the linked child. Use its pre-delete snapshot.
+      const deleted = new Set(action.taskIds);
+      const parents = new Set<string>();
+      for (const task of action.tasks ?? []) {
+        if (task.parentId && !deleted.has(task.parentId)) {
+          parents.add(task.parentId);
+        }
+      }
+      return from(parents);
+    }
+    if (action.type === TaskSharedActions.updateTask.type) {
+      return this._taskService.getByIdOnce$(action.task.id as string).pipe(
+        map((task) => task?.parentId),
+        filter((id): id is string => !!id),
+      );
+    }
+    // Add/reorder carry the parent directly. Delete, undo and detach carry
+    // the child snapshot, even when it no longer belongs to that parent.
+    const parentId = 'parentId' in action ? action.parentId : action.task.parentId;
+    return parentId ? rxOf(parentId) : EMPTY;
   }
 
   /**

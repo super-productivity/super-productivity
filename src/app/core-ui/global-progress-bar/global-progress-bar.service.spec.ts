@@ -7,23 +7,25 @@ describe('GlobalProgressBarService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
-    service = TestBed.inject(GlobalProgressBarService);
     values = [];
   });
 
-  // RxJS delay(0) schedules a setInterval that fakeAsync only flushes with tick(1).
+  // The service is injected inside each fakeAsync zone: its constructor schedules
+  // an RxJS delay(0) timer, and one created outside would be a real timer that
+  // the later fake-clock ticks never flush (flaky). tick(10) flushes delay(0).
   const last = (): boolean | undefined => values[values.length - 1];
 
   it('shows while requests are pending and hides after the last one ends', fakeAsync(() => {
+    service = TestBed.inject(GlobalProgressBarService);
     const sub = service.isShowGlobalProgressBar$.subscribe((v) => values.push(v));
     TestBed.tick();
-    tick(1);
+    tick(10);
     expect(last()).toBe(false);
 
     service.countUp();
     service.countUp();
     TestBed.tick();
-    tick(1);
+    tick(10);
     expect(last()).toBe(true);
 
     service.countDown();
@@ -39,20 +41,22 @@ describe('GlobalProgressBarService', () => {
   }));
 
   it('never counts below zero', fakeAsync(() => {
+    service = TestBed.inject(GlobalProgressBarService);
     const sub = service.isShowGlobalProgressBar$.subscribe((v) => values.push(v));
     service.countDown();
     service.countUp();
     TestBed.tick();
-    tick(1);
+    tick(10);
     expect(last()).toBe(true);
     sub.unsubscribe();
   }));
 
   it('force-hides after 60s when a countDown was missed', fakeAsync(() => {
+    service = TestBed.inject(GlobalProgressBarService);
     const sub = service.isShowGlobalProgressBar$.subscribe((v) => values.push(v));
     service.countUp();
     TestBed.tick();
-    tick(1);
+    tick(10);
     expect(last()).toBe(true);
 
     tick(60 * 1000);

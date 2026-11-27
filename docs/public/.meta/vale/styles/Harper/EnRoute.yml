@@ -1,0 +1,23 @@
+---
+# Generated from Harper's EnRoute rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Detects variants like `on route` or `in route` and suggests `en route`.
+extends: existence
+message: "Did you mean `en route`?"
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "en route to"
+    - "en-route to"
+tokens:
+  - "in(?!\\s*\\n\\s*\\n)\\s+route(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"
+  - "on(?!\\s*\\n\\s*\\n)\\s+route(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"
+  - "in-route(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"
+  - "on-route(?!\\s*\\n\\s*\\n)\\s+to(?!['\\x{2019}]s\\b)"

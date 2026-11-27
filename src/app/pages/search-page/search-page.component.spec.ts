@@ -8,6 +8,7 @@ import { MenuTreeService } from '../../features/menu-tree/menu-tree.service';
 
 import { SearchPageComponent } from './search-page.component';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
@@ -69,6 +70,7 @@ describe('SearchPageComponent', () => {
   let tagFolderMapSignal: WritableSignal<Map<string, string>>;
 
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let navigateToTaskServiceSpy: jasmine.SpyObj<NavigateToTaskService>;
   let routerSpy: jasmine.SpyObj<Router>;
   let layoutServiceSpy: jasmine.SpyObj<LayoutService>;
@@ -84,10 +86,15 @@ describe('SearchPageComponent', () => {
     projectFolderMapSignal = signal<Map<string, string>>(new Map());
     tagFolderMapSignal = signal<Map<string, string>>(new Map());
 
-    taskServiceSpy = jasmine.createSpyObj('TaskService', ['getArchivedTasks'], {
+    taskServiceSpy = jasmine.createSpyObj('TaskService', [], {
       allTasks$,
     });
-    taskServiceSpy.getArchivedTasks.and.callFake(() => Promise.resolve(archivedTasks));
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchivedTasks',
+    ]);
+    taskArchiveOrchestrator.getArchivedTasks.and.callFake(() =>
+      Promise.resolve(archivedTasks),
+    );
 
     navigateToTaskServiceSpy = jasmine.createSpyObj('NavigateToTaskService', [
       'navigate',
@@ -113,6 +120,7 @@ describe('SearchPageComponent', () => {
       imports: [SearchPageComponent, NoopAnimationsModule, TranslateModule.forRoot()],
       providers: [
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         {
           provide: ProjectService,
           useValue: { list$: projectList$ },
@@ -193,6 +201,60 @@ describe('SearchPageComponent', () => {
     typeAndFlush('BOB');
     expect(latestResults.length).toBe(1);
     expect(latestResults[0].id).toBe('t1');
+  }));
+
+  it('finds an attachment URL including its query parameters', fakeAsync(() => {
+    allTasks$.next([
+      createTask({
+        id: 'linked-task',
+        attachments: [
+          { id: 'link', type: 'LINK', path: 'https://example.com/ticket?id=SP-123' },
+        ],
+      }),
+      createTask({ id: 'no-attachments', attachments: [] }),
+    ]);
+    initAndFlush();
+    typeAndFlush('sp-123');
+    expect(latestResults.map((item) => item.id)).toEqual(['linked-task']);
+    typeAndFlush('https://example.com/ticket');
+    expect(latestResults.map((item) => item.id)).toEqual(['linked-task']);
+  }));
+
+  it('finds archived tasks by attachment URL when completed tasks are included', fakeAsync(() => {
+    taskArchiveOrchestrator.getArchivedTasks.and.resolveTo([
+      createTask({
+        id: 'archived-link',
+        attachments: [
+          { id: 'link', type: 'LINK', path: 'https://example.com/ARCHIVE-42' },
+        ],
+      }),
+    ]);
+    fixture = TestBed.createComponent(SearchPageComponent);
+    component = fixture.componentInstance;
+    initAndFlush();
+    typeAndFlush('archive-42');
+    expect(latestResults).toEqual([]);
+    component.includeCompletedForm.setValue(true);
+    tick(150);
+    expect(latestResults.map((item) => item.id)).toEqual(['archived-link']);
+  }));
+
+  it('does not search non-link attachment paths or combine separate URLs', fakeAsync(() => {
+    allTasks$.next([
+      createTask({
+        attachments: [
+          { id: 'file', type: 'FILE', path: '/private/file-only' },
+          { id: 'one', type: 'LINK', path: 'https://example.com/end' },
+          { id: 'two', type: 'LINK', path: 'https://example.com/start' },
+          { id: 'legacy', type: 'LINK' },
+        ],
+      }),
+    ]);
+    initAndFlush();
+    typeAndFlush('file-only');
+    expect(latestResults).toEqual([]);
+    typeAndFlush('endhttps');
+    expect(latestResults).toEqual([]);
   }));
 
   it('should limit results to 50', fakeAsync(() => {
@@ -335,7 +397,9 @@ describe('SearchPageComponent', () => {
     // Must set archive tasks before creating a new component instance,
     // because _searchableItems$ calls getArchivedTasks() at construction time.
     const archiveTask = createTask({ id: 'archived-1', title: 'Old Task' });
-    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    taskArchiveOrchestrator.getArchivedTasks.and.returnValue(
+      Promise.resolve([archiveTask]),
+    );
     // Recreate component so the new archive promise is used
     fixture = TestBed.createComponent(SearchPageComponent);
     component = fixture.componentInstance;
@@ -349,7 +413,9 @@ describe('SearchPageComponent', () => {
 
   it('should hide archived tasks by default (#5943)', fakeAsync(() => {
     const archiveTask = createTask({ id: 'archived-1', title: 'Old Task' });
-    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    taskArchiveOrchestrator.getArchivedTasks.and.returnValue(
+      Promise.resolve([archiveTask]),
+    );
     fixture = TestBed.createComponent(SearchPageComponent);
     component = fixture.componentInstance;
     initAndFlush();
@@ -359,7 +425,9 @@ describe('SearchPageComponent', () => {
 
   it('should include archived tasks when completed tasks are enabled (#5943)', fakeAsync(() => {
     const archiveTask = createTask({ id: 'archived-1', title: 'Old Task' });
-    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    taskArchiveOrchestrator.getArchivedTasks.and.returnValue(
+      Promise.resolve([archiveTask]),
+    );
     fixture = TestBed.createComponent(SearchPageComponent);
     component = fixture.componentInstance;
     initAndFlush();
@@ -369,6 +437,48 @@ describe('SearchPageComponent', () => {
     expect(latestResults.length).toBe(1);
     expect(latestResults[0].isArchiveTask).toBe(true);
   }));
+
+  describe('Completed and archived matches hidden by default', () => {
+    let hasHidden: boolean | undefined;
+
+    const initWithArchive = (archive: Task[]): void => {
+      taskArchiveOrchestrator.getArchivedTasks.and.returnValue(Promise.resolve(archive));
+      fixture = TestBed.createComponent(SearchPageComponent);
+      component = fixture.componentInstance;
+      initAndFlush();
+      hasHidden = undefined;
+      component.hasHiddenCompleted$.subscribe((v) => (hasHidden = v));
+    };
+
+    it('are flagged when only an archived task matches, so "no results" is not a dead end', fakeAsync(() => {
+      initWithArchive([createTask({ id: 'archived', title: 'Dentist x-rays' })]);
+      typeAndFlush('dentist');
+      expect(latestResults).toEqual([]);
+      expect(hasHidden).toBe(true);
+    }));
+
+    it('are shown and no longer flagged once the option is ticked', fakeAsync(() => {
+      allTasks$.next([createTask({ id: 'done', title: 'Dentist bill', isDone: true })]);
+      initWithArchive([createTask({ id: 'archived', title: 'Dentist x-rays' })]);
+      typeAndFlush('dentist');
+      component.includeCompletedForm.setValue(true);
+      tick(150);
+      expect(latestResults.map((item) => item.id)).toEqual(['done', 'archived']);
+      expect(hasHidden).toBe(false);
+    }));
+
+    it('are not flagged without a search term or when only other done tasks exist', fakeAsync(() => {
+      allTasks$.next([
+        createTask({ id: 'open', title: 'Dentist call', isDone: false }),
+        createTask({ id: 'done', title: 'Unrelated', isDone: true }),
+      ]);
+      initWithArchive([]);
+      typeAndFlush('  ');
+      expect(hasHidden).toBe(false);
+      typeAndFlush('dentist');
+      expect(hasHidden).toBe(false);
+    }));
+  });
 
   describe('Recently deleted tasks (#2778)', () => {
     const deletedEntry = (
@@ -385,6 +495,16 @@ describe('SearchPageComponent', () => {
       typeAndFlush('lost');
       expect(latestResults.map((r) => r.id)).toEqual(['gone']);
       expect(latestResults[0].deletedEntry).toBeTruthy();
+    }));
+
+    it('are not offered as hidden completed matches', fakeAsync(() => {
+      deletedEntries = [deletedEntry({ id: 'gone', title: 'Lost Report', isDone: true })];
+      initAndFlush();
+      let hasHidden: boolean | undefined;
+      component.hasHiddenCompleted$.subscribe((v) => (hasHidden = v));
+      typeAndFlush('lost');
+      expect(latestResults.map((r) => r.id)).toEqual(['gone']);
+      expect(hasHidden).toBe(false);
     }));
 
     it('are found by a subtask title', fakeAsync(() => {
@@ -726,7 +846,9 @@ describe('SearchPageComponent', () => {
       title: 'Old Task',
       projectId: 'proj-1',
     });
-    taskServiceSpy.getArchivedTasks.and.returnValue(Promise.resolve([archiveTask]));
+    taskArchiveOrchestrator.getArchivedTasks.and.returnValue(
+      Promise.resolve([archiveTask]),
+    );
     projectList$.next([createProject({ id: 'proj-1', title: 'My Project' })]);
 
     // Recreate component so the new archive promise is used

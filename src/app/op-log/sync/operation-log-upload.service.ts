@@ -57,6 +57,10 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { isRebasedTimeDeltaReceipt } from '../persistence/acknowledge-operations.util';
 import { isSyncTimeSpentOp } from './fold-sync-time-spent.util';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import {
+  mayHealRejectedSuperSyncFullState,
+  recordRejectedSuperSyncFullStateHeal,
+} from './super-sync-rejected-full-state-heal';
 import { getRepairSummary } from '../validation/repair-summary.util';
 
 // Re-export for consumers that import from this service
@@ -167,13 +171,7 @@ export class OperationLogUploadService {
         await options.preUploadCallback();
       }
 
-      if (syncProvider.providerMode === 'fileSnapshotOps') {
-        this.providerManager.assertSyncEpochUnchanged(
-          options?.fenceEpoch,
-          'rejected full-state reseed',
-        );
-        await this._reseedRejectedFullStateForFileSync(syncProvider);
-      }
+      await this._reseedRejectedFullState(syncProvider, options?.fenceEpoch);
 
       // Fix the pending-op set and the file snapshot under the same operation-log
       // boundary. A task-time action applied by reducers while waiting for this
@@ -524,7 +522,7 @@ export class OperationLogUploadService {
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           OpLog.error(`OperationLogUploadService: Upload failed: ${message}`);
-          handleStorageQuotaError(err);
+          handleStorageQuotaError(err, this.injector);
           throw err; // Re-throw to propagate the error
         }
 
@@ -950,21 +948,32 @@ export class OperationLogUploadService {
       }
       const message = err instanceof Error ? err.message : 'Unknown error';
       OpLog.error(`OperationLogUploadService: Snapshot upload failed: ${message}`);
-      handleStorageQuotaError(err);
+      handleStorageQuotaError(err, this.injector);
       // #11344/#11352: a file-based remote is plain storage. It cannot judge a
       // snapshot: the adapter returns its only verdict (REPAIR_STALE) as a
       // result. A thrown error (auth, permission, a network message the
       // retryable patterns miss, a target switch) says nothing about the op.
       // Classifying it as rejected made the snapshot a permanent upload barrier,
       // so re-throw: the op stays pending and the error reaches the user.
-      if (
-        syncProvider.providerMode === 'fileSnapshotOps' &&
-        !isRetryableUploadError(err instanceof Error ? err : message)
-      ) {
+      const isRetryable = isRetryableUploadError(err instanceof Error ? err : message);
+      if (syncProvider.providerMode === 'fileSnapshotOps' && !isRetryable) {
         throw err;
       }
 
       const errorCode = getSyncErrorCode(err) ?? this._getLegacyErrorCode(message);
+
+      // SuperSync judges a snapshot in the reply body (`accepted: false`), with
+      // a structured errorCode on a non-2xx reply, or with a bare HTTP 400
+      // (validation, decompression). Any other thrown error (rejected token, a
+      // proxy's 404/413/52x, an HTML or malformed body, missing credentials)
+      // says nothing about the op, and a rejected full-state op blocks every
+      // later upload for good. Re-throw so the op stays pending and the error
+      // reaches the user. A 400 stays a rejection: it is deterministic for this
+      // op, and a pending op would also block a newer full-state op (Force
+      // Upload) queued behind it.
+      if (errorCode === undefined && !isRetryable && !/^HTTP 400\b/.test(message)) {
+        throw err;
+      }
 
       return { accepted: false, error: message, errorCode };
     }
@@ -1005,12 +1014,30 @@ export class OperationLogUploadService {
    * A rejected BACKUP_IMPORT or SYNC_IMPORT becomes a REPAIR too: its result is
    * already in the local state, but receivers replay concurrent work on top
    * instead of dropping it, since the import never reached them as one.
+   *
+   * #11671: SuperSync can reject a snapshot on its merits, but versions before
+   * v20.1.0 also marked unrelated upload failures as rejections. It heals the
+   * same way, once per device (see super-sync-rejected-full-state-heal.ts), and
+   * only on a server that checks a REPAIR's base sequence, so a REPAIR built on
+   * a stale cursor is answered REPAIR_STALE instead of overwriting newer data.
    */
-  private async _reseedRejectedFullStateForFileSync(
+  private async _reseedRejectedFullState(
     syncProvider: OperationSyncCapable,
+    fenceEpoch: number | undefined,
   ): Promise<void> {
     const { rejectedFullState, isBlocking } = await this._getRejectedFullStateBarrier();
     if (!rejectedFullState || !isBlocking) {
+      return;
+    }
+    const isSuperSync = syncProvider.providerMode === 'superSyncOps';
+    if (isSuperSync && syncProvider.supportsCausalRepairSnapshots?.() !== true) {
+      OpLog.warn(
+        'OperationLogUploadService: Not healing the rejected full-state op; ' +
+          'the server has not confirmed causal REPAIR support in this sync.',
+      );
+      return;
+    }
+    if (isSuperSync && !mayHealRejectedSuperSyncFullState(rejectedFullState.op.id)) {
       return;
     }
     const lastServerSeq = await syncProvider.getLastServerSeq();
@@ -1022,9 +1049,13 @@ export class OperationLogUploadService {
     ) {
       return;
     }
+    this.providerManager.assertSyncEpochUnchanged(
+      fenceEpoch,
+      'rejected full-state reseed',
+    );
     OpLog.warn(
       `OperationLogUploadService: Rejected ${rejectedFullState.op.opType} ` +
-        `${rejectedFullState.op.id} blocks file-based uploads; replacing it with a ` +
+        `${rejectedFullState.op.id} blocks uploads; replacing it with a ` +
         'REPAIR of the current state.',
     );
     await this.injector.get(RepairOperationService).rebaseStaleRepair({
@@ -1035,6 +1066,9 @@ export class OperationLogUploadService {
       clientId: rejectedFullState.op.clientId,
       repairBaseServerSeq: lastServerSeq,
     });
+    if (isSuperSync) {
+      recordRejectedSuperSyncFullStateHeal(rejectedFullState.op.id);
+    }
   }
 
   private _getLegacyErrorCode(message: string): string | undefined {

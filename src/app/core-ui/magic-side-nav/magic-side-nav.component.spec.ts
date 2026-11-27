@@ -16,11 +16,14 @@ import { TaskService } from '../../features/tasks/task.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { ScheduleExternalDragService } from '../../features/schedule/schedule-week/schedule-external-drag.service';
 import { NavActionItem, NavConfig, NavPluginItem } from './magic-side-nav.model';
+import { HISTORY_STATE } from '../../app.constants';
 
 describe('MagicSideNavComponent', () => {
   let fixture: ComponentFixture<MagicSideNavComponent>;
   let isXs: ReturnType<typeof signal<boolean>>;
   let isMobileSideNavOpen: ReturnType<typeof signal<boolean>>;
+  let focusSideNavTrigger: ReturnType<typeof signal<number>>;
+  let toggleSideNavModeTrigger: ReturnType<typeof signal<number>>;
   let browserMatches: boolean;
   let navConfigServiceMock: {
     navConfig: ReturnType<typeof signal<NavConfig>>;
@@ -29,6 +32,7 @@ describe('MagicSideNavComponent', () => {
     isTagsExpanded: ReturnType<typeof signal<boolean>>;
     onNavItemClick: jasmine.Spy;
   };
+  let routerMock: { events: typeof EMPTY; currentNavigation: jasmine.Spy };
 
   const navConfig: NavConfig = {
     items: [],
@@ -43,8 +47,14 @@ describe('MagicSideNavComponent', () => {
   };
 
   beforeEach(async () => {
+    routerMock = {
+      events: EMPTY,
+      currentNavigation: jasmine.createSpy('currentNavigation').and.returnValue(null),
+    };
     isXs = signal(false);
     isMobileSideNavOpen = signal(false);
+    focusSideNavTrigger = signal(0);
+    toggleSideNavModeTrigger = signal(0);
     browserMatches = false;
     navConfigServiceMock = {
       navConfig: signal(navConfig),
@@ -84,8 +94,8 @@ describe('MagicSideNavComponent', () => {
           provide: LayoutService,
           useValue: {
             isXs,
-            focusSideNavTrigger: signal(0),
-            toggleSideNavModeTrigger: signal(0),
+            focusSideNavTrigger,
+            toggleSideNavModeTrigger,
             isMobileSideNavOpen,
           },
         },
@@ -99,7 +109,7 @@ describe('MagicSideNavComponent', () => {
           provide: DataInitStateService,
           useValue: { isAllDataLoadedInitially$: of(false) },
         },
-        { provide: Router, useValue: { events: EMPTY } },
+        { provide: Router, useValue: routerMock },
         { provide: DragDropRegistry, useValue: { pointerUp: EMPTY } },
         {
           provide: ScheduleExternalDragService,
@@ -454,6 +464,73 @@ describe('MagicSideNavComponent', () => {
     );
 
     expect(fixture.componentInstance.showMobileMenuOverlay()).toBe(false);
+  });
+
+  describe('mobile drawer history entry', () => {
+    let backSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      isXs.set(true);
+      backSpy = spyOn(window.history, 'back');
+      window.history.replaceState({ [HISTORY_STATE.MOBILE_NAVIGATION]: true }, '');
+    });
+
+    afterEach(() => {
+      window.history.replaceState(null, '');
+    });
+
+    it('pops the drawer entry when the drawer closes without navigating', () => {
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+
+      fixture.componentInstance.syncMobileNavHistory(false);
+
+      expect(backSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the drawer entry while a nav tap is navigating', () => {
+      // The popstate from back() would cancel the in-flight navigation.
+      routerMock.currentNavigation.and.returnValue({ id: 1 });
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+
+      fixture.componentInstance.syncMobileNavHistory(false);
+
+      expect(backSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('layout shortcut triggers', () => {
+    // LayoutService outlives the nav, which is rebuilt when focus mode closes;
+    // a press from before the rebuild must not replay on the new instance.
+    it('does not replay an earlier Ctrl+B or Shift+D press on creation', async () => {
+      const toggleModeSpy = spyOn(MagicSideNavComponent.prototype, 'toggleSideNavMode');
+      const toggleFocusSpy = spyOn(MagicSideNavComponent.prototype, 'toggleNavFocus');
+      toggleSideNavModeTrigger.set(1);
+      focusSideNavTrigger.set(1);
+
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+      fixture.detectChanges();
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(toggleModeSpy).not.toHaveBeenCalled();
+      expect(toggleFocusSpy).not.toHaveBeenCalled();
+    });
+
+    it('reacts to presses made after creation', async () => {
+      const toggleModeSpy = spyOn(MagicSideNavComponent.prototype, 'toggleSideNavMode');
+      const toggleFocusSpy = spyOn(MagicSideNavComponent.prototype, 'toggleNavFocus');
+      toggleSideNavModeTrigger.set(1);
+      focusSideNavTrigger.set(1);
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+      fixture.detectChanges();
+
+      toggleSideNavModeTrigger.set(2);
+      focusSideNavTrigger.set(2);
+      fixture.detectChanges();
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(toggleModeSpy).toHaveBeenCalledTimes(1);
+      expect(toggleFocusSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('onItemClick', () => {

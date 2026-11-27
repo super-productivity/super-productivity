@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { PluginBridgeRepeatCfgService } from './plugin-bridge-repeat-cfg.service';
 import { Injector, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { of } from 'rxjs';
@@ -72,6 +73,11 @@ describe('PluginBridgeService.addTask() — subtask creation', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        // its real dependencies need a full Store; not under test here
+        {
+          provide: PluginBridgeRepeatCfgService,
+          useValue: { createBoundMethods: () => ({}) },
+        },
         PluginBridgeService,
         { provide: Store, useValue: storeSpy },
         { provide: TaskService, useValue: taskServiceSpy },

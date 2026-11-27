@@ -1,0 +1,58 @@
+{
+  "TITLE": "청구서",
+  "LOADING": "불러오는 중…",
+  "LIST": {
+    "EMPTY": "아직 청구서가 없습니다.",
+    "PRINT": "인쇄 / PDF",
+    "CSV": "CSV",
+    "DELETE": "삭제",
+    "CONFIRM_DELETE": "청구서 {{number}}을(를) 삭제할까요? 해당 시간은 다시 미청구로 계산됩니다."
+  },
+  "NEW": {
+    "TITLE": "새 청구서",
+    "PROJECT": "프로젝트",
+    "NO_PROJECTS": "먼저 프로젝트를 만드세요. 프로젝트별로 따로 청구됩니다.",
+    "FROM": "시작일",
+    "TO": "종료일",
+    "RATE": "시간당 단가",
+    "LANGUAGE": "청구서 언어",
+    "CLIENT": "청구 대상",
+    "CLIENT_HINT": "고객 이름과 주소. 이 프로젝트에 기억됩니다.",
+    "INCLUDE": "포함",
+    "NO_HOURS": "이 프로젝트에는 이 기간에 미청구 시간이 없습니다.",
+    "NUMBER": "청구서 번호",
+    "ISSUE_DATE": "청구일",
+    "ISSUE": "발행 및 인쇄",
+    "BLOCK": {
+      "PERIOD": "시작일과 종료일을 선택하세요. 시작일이 먼저여야 합니다.",
+      "LINES": "시간이 있는 줄을 하나 이상 선택하세요.",
+      "RATE": "시간당 단가를 입력하세요.",
+      "NUMBER": "청구서 번호를 입력하세요.",
+      "NUMBER_USED": "이미 사용 중인 청구서 번호입니다.",
+      "DATE": "청구일을 입력하세요."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "내 정보",
+    "SELLER": "이름, 주소, 세금 번호",
+    "PAYMENT_NOTE": "결제 정보",
+    "PAYMENT_NOTE_HINT": "은행 정보 또는 결제 조건. 하단에 인쇄됩니다.",
+    "CURRENCY": "통화 코드",
+    "TAX": "세금 / 부가세 %",
+    "PAYMENT_DAYS": "지급 기한까지 일수",
+    "ROUNDING": "각 줄 올림 단위",
+    "ROUNDING_NONE": "반올림 안 함",
+    "ROUNDING_MIN": "{{min}}분",
+    "PREFIX": "청구서 번호 접두사",
+    "SAVE": "저장",
+    "SAVED": "저장했습니다."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "내역",
+    "HOURS": "시간",
+    "TOTAL": "합계"
+  },
+  "ERROR": {
+    "GENERIC": "문제가 발생했습니다: {{error}}"
+  }
+}

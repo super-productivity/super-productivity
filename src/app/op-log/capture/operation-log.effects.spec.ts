@@ -921,6 +921,87 @@ describe('OperationLogEffects', () => {
     });
   });
 
+  describe('persist-failed snack when IndexedDB is missing (#11994)', () => {
+    // iOS Lockdown Mode removes the `indexedDB` global. The startup dialog
+    // already explains that; a "please reload" snack on every edit cannot help.
+    const failAppend = (): void => {
+      mockOpLogStore.appendWithVectorClockOverwrite.and.rejectWith(
+        new ReferenceError("Can't find variable: indexedDB"),
+      );
+      actions$ = of(createPersistentAction(ActionType.TASK_SHARED_UPDATE));
+    };
+    // Swap the descriptor (spyOnProperty needs an accessor). Restored in
+    // afterEach so a hung or failed test cannot leak the missing global.
+    let originalIdb: PropertyDescriptor | undefined;
+    let didRemoveIdb = false;
+    const removeIndexedDbGlobal = (): void => {
+      originalIdb = Object.getOwnPropertyDescriptor(window, 'indexedDB');
+      didRemoveIdb = true;
+      Object.defineProperty(window, 'indexedDB', {
+        value: undefined,
+        configurable: true,
+      });
+    };
+    afterEach(() => {
+      if (!didRemoveIdb) {
+        return;
+      }
+      didRemoveIdb = false;
+      if (originalIdb) {
+        Object.defineProperty(window, 'indexedDB', originalIdb);
+      } else {
+        Reflect.deleteProperty(window, 'indexedDB');
+      }
+    });
+    const persistFailedSnackShown = (): boolean =>
+      mockSnackService.open.calls
+        .allArgs()
+        .some(([p]) => (p as { msg?: string }).msg === T.F.SYNC.S.PERSIST_FAILED);
+
+    it('should still show the reload snack when IndexedDB exists', (done) => {
+      failAppend();
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          expect(persistFailedSnackShown()).toBe(true);
+          done();
+        },
+      });
+    });
+
+    it('should warn once, with OK instead of reload, when the indexedDB global is missing', (done) => {
+      removeIndexedDbGlobal();
+      failAppend();
+      // Two failed writes in one session: the user needs to learn once that
+      // edits are not kept, not be nagged on every change.
+      actions$ = of(
+        createPersistentAction(ActionType.TASK_SHARED_UPDATE),
+        createPersistentAction(ActionType.TASK_SHARED_UPDATE),
+      );
+      effects.persistOperation$.subscribe({
+        complete: () => {
+          const msgs = mockSnackService.open.calls
+            .allArgs()
+            .map(
+              ([p]) =>
+                p as { msg?: string; actionStr?: string; config?: { duration?: number } },
+            );
+          expect(persistFailedSnackShown()).toBe(false);
+          const storageOff = msgs.filter((m) => m.msg === T.F.SYNC.S.PERSIST_STORAGE_OFF);
+          expect(storageOff.length).toBe(1);
+          // Sticky + actionable is what SnackService protects from being
+          // replaced by e.g. TASK_CREATED; the action is a plain OK, not Reload.
+          expect(storageOff[0].actionStr).toBe(T.G.OK);
+          expect(storageOff[0].config?.duration).toBe(0);
+          // The divergence is still recorded; only the useless prompt is dropped.
+          expect(
+            mockOperationCaptureService.markUnrecoveredPersistFailure,
+          ).toHaveBeenCalled();
+          done();
+        },
+      });
+    });
+  });
+
   describe('compaction failures', () => {
     it('should track compaction failures', (done) => {
       // Counter starts at threshold - 1, after increment it reaches threshold
@@ -1297,7 +1378,7 @@ describe('OperationLogEffects', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: 'ERROR',
-          msg: T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+          msg: T.F.SYNC.S.DEVICE_STORAGE_FULL,
         }),
       );
     });
@@ -1325,17 +1406,17 @@ describe('OperationLogEffects', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: 'ERROR',
-          msg: T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+          msg: T.F.SYNC.S.DEVICE_STORAGE_FULL,
         }),
       );
       // 2. Dedupe: even though the retry loop calls handleQuotaExceeded 3
-      //    times, STORAGE_QUOTA_EXCEEDED snack must fire ONLY ONCE.
+      //    times, DEVICE_STORAGE_FULL snack must fire ONLY ONCE.
       //    Without the dedupe (lastStorageQuotaSnackAt window) the user
       //    would see 3 identical sticky snacks per quota event.
       const storageQuotaSnackCalls = mockSnackService.open.calls
         .allArgs()
         .filter(
-          ([arg]) => (arg as { msg?: string })?.msg === T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+          ([arg]) => (arg as { msg?: string })?.msg === T.F.SYNC.S.DEVICE_STORAGE_FULL,
         );
       expect(storageQuotaSnackCalls.length).toBe(1);
       // 3. The retry loop saw the throw and actually retried — appendWith*

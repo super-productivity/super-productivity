@@ -7,7 +7,12 @@ import type { TaskAddEvent } from './add-task-bar/add-task-bar.component';
  * remove: the user's choice wins over the column's rules.
  */
 export interface ViewTaskPrefill {
-  fields: { projectId?: string; tagIds?: string[]; dueDay?: string };
+  fields: {
+    projectId?: string;
+    tagIds?: string[];
+    dueDay?: string;
+    deadlineDay?: string;
+  };
   /** Whether a task with these fields would not show in the column. */
   isHidden(fields: Partial<TaskCopy>): boolean;
 }

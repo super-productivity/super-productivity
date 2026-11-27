@@ -53,6 +53,19 @@ In the three #10438 seeds the resolving device's `'replace'` row carries an
 older value with a merged clock that dominates the newer write, so every other
 device ends on the older value while the resolver keeps the newer one.
 
+**Re-run on `954256d` (2026-11-10).** `older-write-won` shows 10 seeds; this
+is no regression. `npm run sync-fuzz:compare -- 1620939` runs all 120 seeds
+with identical executed steps, and the base reproduces the 5 seeds above. The 6
+new seeds (`title` on `noReorder:20725018`, `noReorder:20725028`,
+`tasks:20725018`, `replace:20725008`, `replace:20725029`; `isDone` on
+`replace:20725002`; `dueDay` on `replace:20725029`) reach the same final values
+on both revisions: #10498 now records creation values and implicit writes, which
+turned the same `field-reverted`/`field-unwritten` losses into
+`older-write-won` (and newly observed the implicit `dueDay` write).
+`noReorder:20725003` and `tasks:20725017` lost their `title` entry and its
+divergence, consistent with #10438's fix (#10463). The other family counts in
+the table were not re-measured.
+
 Pins: 56 of 57 pass; the one failure is the stale #10443 pin that #10452
 improved; #10453 has since re-pinned it on master.
 

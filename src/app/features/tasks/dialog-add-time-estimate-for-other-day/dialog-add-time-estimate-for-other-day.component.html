@@ -1,12 +1,15 @@
 <div class="dialog-help-wrapper">
-  <h1 mat-dialog-title>{{ T.F.TASK.D_TIME_FOR_DAY.TITLE | translate }}</h1>
+  <div class="dialog-title-row">
+    <h1 mat-dialog-title>{{ T.F.TASK.D_TIME_FOR_DAY.TITLE | translate }}</h1>
+    <help-toggle-btn [(isOpen)]="isShowHelp" />
+  </div>
 
   <form
     (submit)="$event.preventDefault(); submit()"
     name="addForAnotherDayForm"
   >
     <mat-dialog-content>
-      <help-section>
+      <help-section [isShowHelp]="isShowHelp()">
         <div
           [innerHTML]="T.F.TASK.D_TIME_FOR_DAY.HELP | translate"
           class="side-info"

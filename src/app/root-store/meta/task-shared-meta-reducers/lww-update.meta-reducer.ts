@@ -1,5 +1,5 @@
 import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
-import { EntityAdapter } from '@ngrx/entity';
+import { EntityAdapter, Update } from '@ngrx/entity';
 import { RootState } from '../../root-state';
 import {
   getEntityConfig,
@@ -507,6 +507,42 @@ const syncExistingNoteTodayOrder = (
 };
 
 /**
+ * An LWW Update that replaces an existing NOTE keeps `noteIds` in step with
+ * the winner's `projectId`, as `moveNoteToOtherProject` does locally (#11656):
+ * the owner lists the note, appended if absent, and no other project does.
+ * `moveToEnd` appends it even when listed: a note re-homed to the Inbox goes
+ * last, as the retargeted move on the other device puts it. This writes
+ * PROJECT without declaring it, a recorded rule 13 exception
+ * (docs/sync-and-op-log/contributor-sync-model.md).
+ */
+const syncExistingNoteProjectMembership = (
+  state: RootState,
+  note: Record<string, unknown>,
+  moveToEnd: boolean,
+): RootState => {
+  const noteId = note['id'] as string;
+  const projectState = state[PROJECT_FEATURE_NAME];
+  const updates: Update<Project>[] = [];
+  for (const id of projectState.ids as string[]) {
+    const { noteIds } = projectState.entities[id] as Project;
+    const isOwner = id === note['projectId'];
+    const isMisplaced =
+      !noteIds.includes(noteId) || (moveToEnd && noteIds.at(-1) !== noteId);
+    if (isOwner && isMisplaced) {
+      const others = noteIds.filter((n) => n !== noteId);
+      updates.push({ id, changes: { noteIds: [...others, noteId] } });
+    } else if (!isOwner && noteIds.includes(noteId)) {
+      updates.push({ id, changes: { noteIds: noteIds.filter((n) => n !== noteId) } });
+    }
+  }
+  if (!updates.length) return state;
+  return {
+    ...state,
+    [PROJECT_FEATURE_NAME]: projectAdapter.updateMany(updates, projectState),
+  };
+};
+
+/**
  * Applies an LWW Update to an array-pattern feature state (BOARD, REMINDER,
  * PLUGIN_USER_DATA, PLUGIN_METADATA): items live in a plain array — the feature
  * state itself for `arrayKey: null`, else under `arrayKey` — addressed by their
@@ -874,6 +910,22 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       }
     }
 
+    // A winning note can name a project this client deleted, e.g. a move that
+    // beat a local edit (#11656). It goes to the Inbox, where a move replayed
+    // after the delete puts it too (#10744); independent of local state, so
+    // every device agrees.
+    let isNoteRehomed = false;
+    if (
+      entityType === 'NOTE' &&
+      existingEntity &&
+      typeof entityData['projectId'] === 'string' &&
+      !getProjectOrUndefined(rootState, entityData['projectId']) &&
+      getProjectOrUndefined(rootState, INBOX_PROJECT.id)
+    ) {
+      entityData['projectId'] = INBOX_PROJECT.id;
+      isNoteRehomed = true;
+    }
+
     // Marked patch rows reconcile relationships after a full replacement. If
     // pagination/conflict resolution delivers one without that replacement,
     // it must not synthesize a partial TASK/PROJECT from relationship fields.
@@ -1041,7 +1093,11 @@ export const lwwUpdateMetaReducer: MetaReducer = (
 
     if (entityType === 'NOTE' && updatedEntity) {
       updatedState = existingEntity
-        ? syncExistingNoteTodayOrder(updatedState, updatedEntity)
+        ? syncExistingNoteProjectMembership(
+            syncExistingNoteTodayOrder(updatedState, updatedEntity),
+            updatedEntity,
+            isNoteRehomed,
+          )
         : restoreRecreatedNoteMembership(updatedState, updatedEntity);
     }
 
