@@ -119,6 +119,13 @@ const updateApp = async (client: SimulatedE2EClient): Promise<void> => {
   await client.workView.waitForTaskList();
 };
 
+/** Console lines of this page from now on; heal paths log a distinct warning. */
+const collectLogs = (page: Page): string[] => {
+  const logs: string[] = [];
+  page.on('console', (msg) => logs.push(msg.text()));
+  return logs;
+};
+
 /** Both devices sync and end up with every title, with no sync error. */
 const expectConverged = async (
   clients: SimulatedE2EClient[],
@@ -172,11 +179,15 @@ test.describe('@supersync #11671 a client stuck on a pre-v20.1.0 rejected snapsh
       // What a pre-v20.1.0 build left behind; then the user updates the app.
       expect(await markPendingFullStateRejected(clientA.page)).toBe(1);
       await updateApp(clientA);
+      const logs = collectLogs(clientA.page);
 
       const afterUpdate = `After-update-${testRunId}`;
       await clientA.workView.addTask(afterUpdate);
       await clientA.sync.syncAndWait();
       await expect(clientA.sync.syncErrorIcon).toBeHidden();
+      expect(logs.some((line) => line.includes('seeding again from current state'))).toBe(
+        true,
+      );
 
       clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
@@ -242,7 +253,10 @@ test.describe('@supersync #11671 a client stuck on a pre-v20.1.0 rejected snapsh
       await clientB.sync.syncAndWait();
 
       await updateApp(clientA);
+      const logs = collectLogs(clientA.page);
       await expectConverged([clientA, clientB], [shared, whileStuck, fromB]);
+      // Healed by the upload-path REPAIR reseed, not some other route.
+      expect(logs.some((line) => line.includes('replacing it with a REPAIR'))).toBe(true);
 
       // A's uploads stay unblocked afterwards.
       const afterHeal = `After-heal-${testRunId}`;

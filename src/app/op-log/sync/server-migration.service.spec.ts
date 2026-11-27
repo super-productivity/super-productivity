@@ -265,6 +265,36 @@ describe('ServerMigrationService', () => {
         expect(localStorage.getItem(HEALED_KEY)).toBe(rejected.op.id);
       });
 
+      it('keeps the heal for the same snapshot when the user declines to overwrite', async () => {
+        // The heal is recorded before the dialog; declining must not spend it,
+        // so a later sync can still seed.
+        const provider = createMockSyncProvider();
+        (provider.downloadOps as jasmine.Spy).and.resolveTo({
+          ops: [],
+          latestSeq: 3,
+          hasMore: false,
+        });
+        const rejected = createMigrationEntry(Date.now());
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([rejected]);
+        matDialogSpy.open.and.returnValue({
+          afterClosed: () => of(false),
+        } as MatDialogRef<unknown>);
+
+        await service.checkAndHandleMigration(provider);
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
+
+        matDialogSpy.open.and.returnValue({
+          afterClosed: () => of(true),
+        } as MatDialogRef<unknown>);
+        await service.checkAndHandleMigration(provider);
+
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(lastAppendedOp().syncImportReason).toBe('SERVER_MIGRATION');
+        expect(localStorage.getItem(HEALED_KEY)).toBe(rejected.op.id);
+      });
+
       it('blocks instead of appending another once this device used its heal', async () => {
         // A server that keeps rejecting must not get a new snapshot every sync.
         localStorage.setItem(HEALED_KEY, 'earlier-rejected-op');
