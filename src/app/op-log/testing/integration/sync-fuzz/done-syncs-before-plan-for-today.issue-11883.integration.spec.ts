@@ -13,8 +13,9 @@ const TASK_ID = 't3';
 
 /**
  * #11883: the desktop marks a task done, the phone adds the same task to
- * today, neither has synced. The desktop syncs first, so the phone resolves
- * its pending `planTasksForToday` (an opaque op) against the remote done.
+ * today, neither has synced. Whichever syncs second resolves its pending op
+ * against the other's: a pending `planTasksForToday` (an opaque op) against a
+ * remote done, or a pending done against a remote plan.
  */
 describe('#11883 a done that syncs before "add to today" from another device', () => {
   afterEach(() => SyncFuzzHarness.dispose());
@@ -23,10 +24,18 @@ describe('#11883 a done that syncs before "add to today" from another device', (
   for (const providerId of [undefined, SyncProviderId.Dropbox]) {
     // Not yet the auto-plan tracking emits beside its time delta: see the
     // shortcut in isPlanForTodayBesideDisjointUpdates.
-    for (const doneIsNewer of [true, false]) {
-      const order = doneIsNewer ? 'done is newer' : 'done is older';
+    for (const [doneIsNewer, desktopSyncsFirst] of [
+      [true, true],
+      [false, true],
+      [true, false],
+      [false, false],
+    ]) {
+      const order = `done is ${doneIsNewer ? 'newer' : 'older'}, ${desktopSyncsFirst ? 'desktop' : 'phone'} syncs first`;
       const provider = providerId ?? 'SuperSync';
       it(`keeps both edits on every device (${provider}, ${order})`, async () => {
+        const [first, second] = desktopSyncsFirst
+          ? (['D', 'P'] as const)
+          : (['P', 'D'] as const);
         const harness = await SyncFuzzHarness.create({ providerId });
         const desktop = await harness.addDevice('D');
         const phone = await harness.addDevice('P');
@@ -56,8 +65,9 @@ describe('#11883 a done that syncs before "add to today" from another device', (
           harness.tick();
           await planOnPhone();
         }
-        await harness.sync(desktop);
-        await harness.sync(phone);
+        const byName = { D: desktop, P: phone };
+        await harness.sync(byName[first]);
+        await harness.sync(byName[second]);
 
         for (let round = 0; round < 3; round++) {
           harness.tick();
