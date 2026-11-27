@@ -167,8 +167,13 @@ export interface AndroidInterface {
   // Delete one capture after its task is persisted. Returns false on failure.
   acknowledgeCapture?(id: string): boolean;
 
-  // Widget done queue - get pending done-state changes from the home screen
-  // widget as a JSON object string `{taskId: targetIsDone}` and clear the queue
+  // Widget done queue - pending done-state changes from the home screen widget
+  // as a JSON object string `{taskId: targetIsDone}`. Read with peek, then ack
+  // that read once its ops are written; native keeps the taps until then.
+  peekWidgetDoneQueue?(): string | null;
+  ackWidgetDoneQueue?(ackedJson: string): void;
+  // Get-and-clear read of the same queue, for a native shell without peek/ack
+  // (legacy online-mode installs load this web app into an older APK).
   getWidgetDoneQueue?(): string | null;
 
   // Project ID selected by the most recent project-widget tap (header or row)
@@ -210,7 +215,7 @@ export interface AndroidInterface {
   getReminderSnoozeQueue?(): string | null;
 
   // Contentless "drain now" signal after a widget done-checkbox tap while the app
-  // is alive; the queued IDs are always pulled via getWidgetDoneQueue() (startup
+  // is alive; the queued IDs are always pulled via peekWidgetDoneQueue() (startup
   // and resume drains are triggered by the effect itself and onResume$)
   onWidgetDoneDrainRequest$: Subject<void>;
 

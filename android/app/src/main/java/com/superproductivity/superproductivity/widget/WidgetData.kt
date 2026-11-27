@@ -102,7 +102,7 @@ object WidgetData {
 
     /**
      * @param pendingDoneTargets per-task done-state targets queued via
-     * [WidgetDoneQueue] but not yet applied by Angular — overlaid so a checkbox
+     * [WidgetDoneQueue] but not yet acknowledged by Angular — overlaid so a checkbox
      * tap is reflected immediately even while the app process is dead.
      * @param selectedProjectId the project this widget instance shows, or null for
      * Today. An id missing from the snapshot (deleted, archived or hidden project,

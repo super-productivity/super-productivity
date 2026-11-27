@@ -31,6 +31,9 @@ import { Task } from '../../tasks/task.model';
 import { selectProjectById } from '../../project/store/project.selectors';
 import { Project } from '../../project/project.model';
 import { Router } from '@angular/router';
+import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
+import { OperationCaptureService } from '../../../op-log/capture/operation-capture.service';
+import { getDeferredActions } from '../../../op-log/capture/operation-capture.meta-reducer';
 
 /**
  * Decides which queued widget checkbox taps become setDone()/setUnDone() calls.
@@ -61,6 +64,46 @@ export const getTaskDoneChangesToApply = (
     .map(([id, isDone]) => ({ id, isDone: isDone as boolean }));
 };
 
+export type WidgetDoneAckDeps = {
+  flushPendingWrites: () => Promise<void>;
+  hasUnrecoveredPersistFailure: () => boolean;
+  hasDeferredActions: () => boolean;
+  ack: (queueJson: string) => void;
+};
+
+/**
+ * Removes drained taps from the native queue only once their ops are in the op
+ * log. A WebView that Android has frozen applies a tap in memory but cannot
+ * write it, and the process may be killed before it can
+ * (docs/plans/2026-10-30-narrow-mobile-background-sync.md § 17). Taps left in
+ * the queue are read again by the next drain, which skips the ones whose task
+ * already has the target state.
+ */
+export const ackWidgetDoneQueueOnceWritten = async (
+  queueJson: string,
+  deps: WidgetDoneAckDeps,
+): Promise<void> => {
+  try {
+    await deps.flushPendingWrites();
+  } catch (e) {
+    DroidLog.err('Widget done queue kept: op writes did not finish', e);
+    return;
+  }
+  // The flush also resolves after a failed write; such a change exists only in
+  // memory and is gone after the reload the user is asked for.
+  if (deps.hasUnrecoveredPersistFailure()) {
+    DroidLog.err('Widget done queue kept: an op write failed');
+    return;
+  }
+  // A tap applied while remote ops were being applied is buffered, not counted
+  // by the flush, and stays buffered until its op is written.
+  if (deps.hasDeferredActions()) {
+    DroidLog.log('Widget done queue kept: a change is still buffered');
+    return;
+  }
+  deps.ack(queueJson);
+};
+
 export const getWidgetProjectRoute = (
   projectId: string,
   project: Project | undefined,
@@ -77,6 +120,8 @@ export class AndroidWidgetEffects {
   private _hydrationState = inject(HydrationStateService);
   private _dataInitState = inject(DataInitStateService);
   private _router = inject(Router);
+  private _opWriteFlush = inject(OperationWriteFlushService);
+  private _opCapture = inject(OperationCaptureService);
 
   // The selector emission is only a change trigger; pushCurrent() re-reads the
   // store at push time (fresher than debounce-stale data) and dedupes itself.
@@ -137,8 +182,8 @@ export class AndroidWidgetEffects {
   // Single delivery path for widget done-taps: cold start by startWith (the
   // native onResume call runs before this bundle defines onResume$ and is
   // dropped), background→foreground by onResume$, taps while the app is alive
-  // by the contentless native drain signal. The queue read is get-and-clear, so
-  // overlapping triggers drain at most once.
+  // by the contentless native drain signal. The queue read does not clear, so
+  // overlapping triggers read the same taps; only the first finds a task to change.
   drainWidgetDoneQueue$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
@@ -197,7 +242,11 @@ export class AndroidWidgetEffects {
     );
 
   private _drainDoneQueue(taskEntities: Dictionary<Task>): void {
-    const queueJson = androidInterface.getWidgetDoneQueue?.();
+    const ack = androidInterface.ackWidgetDoneQueue?.bind(androidInterface);
+    // A native shell without ack (legacy online-mode APK) only has get-and-clear.
+    const queueJson = ack
+      ? androidInterface.peekWidgetDoneQueue?.()
+      : androidInterface.getWidgetDoneQueue?.();
     if (!queueJson) {
       return;
     }
@@ -216,6 +265,16 @@ export class AndroidWidgetEffects {
         type: 'SUCCESS',
         msg: T.F.ANDROID.WIDGET_TASKS_UPDATED,
         translateParams: { count: changes.length },
+      });
+    }
+
+    if (ack) {
+      void ackWidgetDoneQueueOnceWritten(queueJson, {
+        flushPendingWrites: () => this._opWriteFlush.flushPendingWrites(),
+        hasUnrecoveredPersistFailure: () =>
+          this._opCapture.hasUnrecoveredPersistFailure(),
+        hasDeferredActions: () => getDeferredActions().length > 0,
+        ack,
       });
     }
   }
