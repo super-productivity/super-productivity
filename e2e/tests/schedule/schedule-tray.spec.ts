@@ -50,6 +50,7 @@ const drag = async (
   source: Locator,
   to: { x: number; y: number },
 ): Promise<void> => {
+  await expect(source).toBeVisible(); // see centerOf()
   const box = (await source.boundingBox())!;
   const halfWidth = box.width / 2;
   const halfHeight = box.height / 2;
@@ -63,6 +64,9 @@ const drag = async (
 };
 
 const centerOf = async (target: Locator): Promise<{ x: number; y: number }> => {
+  // boundingBox() is null while the element is hidden, e.g. an event re-rendering
+  // right after a drop; wait it out rather than read null.
+  await expect(target).toBeVisible();
   const box = (await target.boundingBox())!;
   const halfWidth = box.width / 2;
   const halfHeight = box.height / 2;
