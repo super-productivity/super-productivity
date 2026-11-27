@@ -140,6 +140,7 @@ export class ShortSyntaxEffects {
                 isReplaceTagIds ? 'replace' : 'combine',
                 false,
                 this._dateTimeFormatService.dateInputLocale(),
+                this._dateService.todayStr(),
               ),
             )
             .then((r) => {
