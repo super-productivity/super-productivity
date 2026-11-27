@@ -40,6 +40,7 @@ import {
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { initialSimpleCounterState } from '../../features/simple-counter/store/simple-counter.reducer';
 import { deepEqual } from '@sp/sync-core';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 describe('ServerMigrationService', () => {
   let service: ServerMigrationService;
@@ -244,14 +245,37 @@ describe('ServerMigrationService', () => {
       expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     });
 
-    it('should block after a rejected server-migration snapshot instead of appending another', async () => {
-      const provider = createMockSyncProvider();
-      opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry(Date.now())]);
+    describe('SuperSync with a rejected server-migration snapshot (#11671)', () => {
+      const HEALED_KEY = LS.SUPER_SYNC_HEALED_REJECTED_FULL_STATE_OP_ID;
+      beforeEach(() => localStorage.removeItem(HEALED_KEY));
+      afterEach(() => localStorage.removeItem(HEALED_KEY));
 
-      await expectAsync(service.checkAndHandleMigration(provider)).toBeRejected();
+      it('seeds again once, since the rejection may predate v20.1.0', async () => {
+        const provider = createMockSyncProvider();
+        const rejected = createMigrationEntry(Date.now());
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([rejected]);
 
-      expect(provider.downloadOps).not.toHaveBeenCalled();
-      expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
+        await service.checkAndHandleMigration(provider);
+
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(lastAppendedOp().syncImportReason).toBe('SERVER_MIGRATION');
+        expect(lastAppendedOp().id).not.toBe(rejected.op.id);
+        expect(localStorage.getItem(HEALED_KEY)).toBe(rejected.op.id);
+      });
+
+      it('blocks instead of appending another once this device used its heal', async () => {
+        // A server that keeps rejecting must not get a new snapshot every sync.
+        localStorage.setItem(HEALED_KEY, 'earlier-rejected-op');
+        const provider = createMockSyncProvider();
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry(Date.now())]);
+
+        await expectAsync(service.checkAndHandleMigration(provider)).toBeRejected();
+
+        expect(provider.downloadOps).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
+      });
     });
 
     describe('file-based provider with a rejected server-migration snapshot (#11344)', () => {

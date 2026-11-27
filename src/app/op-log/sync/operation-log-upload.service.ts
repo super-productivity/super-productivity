@@ -57,6 +57,10 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { isRebasedTimeDeltaReceipt } from '../persistence/acknowledge-operations.util';
 import { isSyncTimeSpentOp } from './fold-sync-time-spent.util';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import {
+  mayHealRejectedSuperSyncFullState,
+  recordRejectedSuperSyncFullStateHeal,
+} from './super-sync-rejected-full-state-heal';
 import { getRepairSummary } from '../validation/repair-summary.util';
 
 // Re-export for consumers that import from this service
@@ -167,13 +171,11 @@ export class OperationLogUploadService {
         await options.preUploadCallback();
       }
 
-      if (syncProvider.providerMode === 'fileSnapshotOps') {
-        this.providerManager.assertSyncEpochUnchanged(
-          options?.fenceEpoch,
-          'rejected full-state reseed',
-        );
-        await this._reseedRejectedFullStateForFileSync(syncProvider);
-      }
+      this.providerManager.assertSyncEpochUnchanged(
+        options?.fenceEpoch,
+        'rejected full-state reseed',
+      );
+      await this._reseedRejectedFullState(syncProvider);
 
       // Fix the pending-op set and the file snapshot under the same operation-log
       // boundary. A task-time action applied by reducers while waiting for this
@@ -1016,12 +1018,26 @@ export class OperationLogUploadService {
    * A rejected BACKUP_IMPORT or SYNC_IMPORT becomes a REPAIR too: its result is
    * already in the local state, but receivers replay concurrent work on top
    * instead of dropping it, since the import never reached them as one.
+   *
+   * #11671: SuperSync can reject a snapshot on its merits, but versions before
+   * v20.1.0 also marked unrelated upload failures as rejections. It heals the
+   * same way, once per device (see super-sync-rejected-full-state-heal.ts), and
+   * only on a server that checks a REPAIR's base sequence, so a REPAIR built on
+   * a stale cursor is answered REPAIR_STALE instead of overwriting newer data.
    */
-  private async _reseedRejectedFullStateForFileSync(
+  private async _reseedRejectedFullState(
     syncProvider: OperationSyncCapable,
   ): Promise<void> {
     const { rejectedFullState, isBlocking } = await this._getRejectedFullStateBarrier();
     if (!rejectedFullState || !isBlocking) {
+      return;
+    }
+    const isSuperSync = syncProvider.providerMode === 'superSyncOps';
+    if (
+      isSuperSync &&
+      (syncProvider.supportsCausalRepairSnapshots?.() !== true ||
+        !mayHealRejectedSuperSyncFullState(rejectedFullState.op.id))
+    ) {
       return;
     }
     const lastServerSeq = await syncProvider.getLastServerSeq();
@@ -1035,7 +1051,7 @@ export class OperationLogUploadService {
     }
     OpLog.warn(
       `OperationLogUploadService: Rejected ${rejectedFullState.op.opType} ` +
-        `${rejectedFullState.op.id} blocks file-based uploads; replacing it with a ` +
+        `${rejectedFullState.op.id} blocks uploads; replacing it with a ` +
         'REPAIR of the current state.',
     );
     await this.injector.get(RepairOperationService).rebaseStaleRepair({
@@ -1046,6 +1062,9 @@ export class OperationLogUploadService {
       clientId: rejectedFullState.op.clientId,
       repairBaseServerSeq: lastServerSeq,
     });
+    if (isSuperSync) {
+      recordRejectedSuperSyncFullStateHeal(rejectedFullState.op.id);
+    }
   }
 
   private _getLegacyErrorCode(message: string): string | undefined {

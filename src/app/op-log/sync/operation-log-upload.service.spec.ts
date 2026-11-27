@@ -20,6 +20,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { provideMockStore } from '@ngrx/store/testing';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 describe('OperationLogUploadService', () => {
   let service: OperationLogUploadService;
@@ -1992,17 +1993,74 @@ describe('OperationLogUploadService', () => {
           );
         });
 
-        it('keeps the barrier on SuperSync, whose server can reject on the merits', async () => {
-          const dependentOp = stuckWith(
-            createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
-          );
+        describe('on SuperSync (#11671)', () => {
+          const HEALED_KEY = LS.SUPER_SYNC_HEALED_REJECTED_FULL_STATE_OP_ID;
+          beforeEach(() => localStorage.removeItem(HEALED_KEY));
+          afterEach(() => localStorage.removeItem(HEALED_KEY));
 
-          const result = await service.uploadPendingOps(mockApiProvider);
+          it('heals a rejection that may predate v20.1.0, once per device', async () => {
+            stuckWith(
+              createFullStateEntry(1, 'rejected-import', 'client-1', OpType.SyncImport),
+            );
 
-          expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
-          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
-          expect(mockOpLogStore.markSynced).not.toHaveBeenCalledWith([dependentOp.seq]);
-          expect(result.blockedByRejectedFullState).toBe(true);
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).toHaveBeenCalledOnceWith(
+              {
+                staleRepairOpId: 'rejected-import',
+                repairSummary: RepairOperationService.createEmptyRepairSummary(),
+                clientId: 'client-1',
+                repairBaseServerSeq: 7,
+              },
+            );
+            expect(localStorage.getItem(HEALED_KEY)).toBe('rejected-import');
+            expect(result.blockedByRejectedFullState).toBeUndefined();
+          });
+
+          it('keeps the barrier once this device healed past another rejection', async () => {
+            // A server that keeps rejecting (e.g. quota) must not get a new
+            // full-state op on every sync.
+            localStorage.setItem(HEALED_KEY, 'earlier-rejected-op');
+            const dependentOp = stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+            expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+            expect(mockOpLogStore.markSynced).not.toHaveBeenCalledWith([dependentOp.seq]);
+            expect(result.blockedByRejectedFullState).toBe(true);
+          });
+
+          it('keeps the barrier and the heal on a server without causal REPAIR support', async () => {
+            (
+              mockApiProvider.supportsCausalRepairSnapshots as jasmine.Spy
+            ).and.returnValue(false);
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+            expect(localStorage.getItem(HEALED_KEY)).toBeNull();
+            expect(result.blockedByRejectedFullState).toBe(true);
+          });
+
+          it('does not record the heal when the reseed fails', async () => {
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+            mockRepairOperationService.rebaseStaleRepair.and.rejectWith(
+              new Error('reseed failed'),
+            );
+
+            await expectAsync(
+              service.uploadPendingOps(mockApiProvider),
+            ).toBeRejectedWithError('reseed failed');
+            expect(localStorage.getItem(HEALED_KEY)).toBeNull();
+          });
         });
       });
 
