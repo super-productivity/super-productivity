@@ -219,8 +219,8 @@ counts.
 > account that holds a plaintext operation with any release from v18.15.0 on,
 > so they stop syncing and look dormant while the server holds their only
 > copy. Do not delete the dormant sublist until such users have a supported
-> way to recover; today that is only v18.14.0 on a clean profile
-> (`e2e/tests/sync/supersync-plaintext-history-recovery-9439.spec.ts`).
+> way to recover; today that is only v18.14.0 on a clean profile, then
+> importing its backup into a current client (`e2e/tests/sync/supersync-plaintext-history-recovery-9439.spec.ts`).
 
 Rebuild the list from both detectors, then:
 

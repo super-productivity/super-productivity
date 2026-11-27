@@ -151,6 +151,8 @@ const getCursor = (client: SimulatedE2EClient): Promise<number> =>
 
 test.describe('@supersync @encryption fresh client on an account with more than 500 operations', () => {
   for (const hasLegacyPlaintextOp of [false, true]) {
+    // The plaintext variant pins today's stop (#9439), not the desired behavior:
+    // a fix that lets such a client recover should flip its assertions.
     const title = hasLegacyPlaintextOp
       ? 'stops after the first 500 operations when that page holds a legacy plaintext operation'
       : 'pages past the first 500 operations and shows all data';
