@@ -3,8 +3,8 @@ import { expect, test } from '../../fixtures/test.fixture';
 // v20.0.0 moved GitLab to the plugin adapter, which deleted a linked task
 // without tracked time as soon as a refresh got a 404. GitLab also answers 404
 // for lost access or a wrong base URL, so the task must stay until the user
-// deletes it from the warning. GitHub stands in for GitLab: the E2E plugin build
-// has no GitLab, and both take the same adapter path (getById, no getByIds).
+// deletes it from the warning. GitHub stands in for GitLab because both take the
+// same adapter path (getById, no getByIds).
 test('plugin issue refresh 404 keeps the linked task until the user deletes it', async ({
   page,
   workViewPage,

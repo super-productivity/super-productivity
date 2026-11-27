@@ -294,6 +294,21 @@ const seedProviders = async (
       },
     });
   }
+  if (providerKey !== 'ALL_JIRA') {
+    // The E2E build ships the GitLab plugin. Without metadata, plugin discovery
+    // auto-enables it after a reload and adds an unsynced op the pending-op checks
+    // race, so record it as enabled up front, as setPluginEnabled() does.
+    await dispatch(page, {
+      type: '[Plugin] Upsert Metadata',
+      pluginMetadata: { id: 'gitlab-issue-provider', isEnabled: true },
+      meta: {
+        isPersistent: true,
+        entityType: 'PLUGIN_METADATA',
+        entityId: 'gitlab-issue-provider',
+        opType: 'UPD',
+      },
+    });
+  }
 };
 const configWitness = async (page: Page, side: 'A' | 'B'): Promise<void> => {
   const sectionKey = side === 'A' ? 'misc' : 'evaluation';
