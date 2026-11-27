@@ -10,7 +10,10 @@ data class WidgetTask(
     val title: String,
     val isDone: Boolean,
     val projectColor: String?,
-    /** A quick add the app has not imported yet; it has no task to toggle. */
+    /**
+     * A quick add the app has not imported yet, or a recurring task it has not
+     * created yet; either way there is no task to toggle.
+     */
     val isPending: Boolean = false
 )
 
@@ -22,7 +25,7 @@ enum class WidgetCheckboxAction {
     MARK_DONE,
     MARK_UNDONE,
 
-    /** A pending quick add has no task to toggle yet; the tap opens the app. */
+    /** A pending row has no task to toggle yet; the tap opens the app. */
     OPEN_APP
 }
 
@@ -107,6 +110,8 @@ object WidgetData {
      * @param doneTapTimes when this device's widget checkbox last marked each task
      * done ([WidgetDoneQueue.peekDoneTapTimes]). Local instants only: a synced
      * `doneOn` comes from whichever device completed the task, with its clock.
+     * @param nowMs picks the day a Today widget lists ([activeDay]) and ends the
+     * done grace of project rows.
      */
     fun parse(
         json: String,
@@ -122,7 +127,9 @@ object WidgetData {
         val projectTasks = selectedProjectId
             ?.let { usableProject(root, it) }
             ?.optJSONArray("tasks")
-        val tasksArray = projectTasks ?: root.optJSONArray("tasks") ?: return emptyList()
+        val tasksArray = projectTasks
+            ?: activeDay(root, nowMs).optJSONArray("tasks")
+            ?: return emptyList()
         val projectColors = root.optJSONObject("projectColors")
         val result = mutableListOf<WidgetTask>()
         for (i in 0 until tasksArray.length()) {
@@ -148,11 +155,33 @@ object WidgetData {
                     id = id,
                     title = task.getString("title"),
                     isDone = isDone,
-                    projectColor = color
+                    projectColor = color,
+                    isPending = task.optBoolean("isPending", false)
                 )
             )
         }
         return result
+    }
+
+    /**
+     * The part of the snapshot describing the day [nowMs] falls in: the snapshot
+     * itself until its `validUntil`, then the first `nextDays` entry that has not
+     * ended (#11944). Angular writes those in order, each with the day's list as far
+     * as the device knew it and its own boundary, so the widget moves on without the
+     * app running and still mirrors no calendar rule. Past the last entry, or
+     * without the field, it stays the snapshot itself — expired, and labelled so by
+     * [headerFor].
+     */
+    private fun activeDay(root: JSONObject, nowMs: Long): JSONObject {
+        val validUntil = root.optLong("validUntil", 0L)
+        if (validUntil <= 0L || nowMs < validUntil) {
+            return root
+        }
+        val nextDays = root.optJSONArray("nextDays") ?: return root
+        return (0 until nextDays.length())
+            .mapNotNull { nextDays.optJSONObject(it) }
+            .firstOrNull { nowMs < it.optLong("validUntil", 0L) }
+            ?: root
     }
 
     /** The projects the snapshot offers for the widget's project picker. */
@@ -277,19 +306,21 @@ object WidgetData {
     }
 
     /**
-     * Reads only the staleness stamp — the task list is loaded separately, in the
-     * RemoteViewsFactory, while the header lives in the provider's RemoteViews.
+     * Reads only the staleness stamp of the day [nowMs] falls in ([activeDay]) — the
+     * task list is loaded separately, in the RemoteViewsFactory, while the header
+     * lives in the provider's RemoteViews.
      *
      * Every field degrades independently to null rather than to a plausible-looking
      * default: a defaulted stamp is indistinguishable from a real one and would make
      * the widget assert a verdict it cannot support.
      */
-    fun parseMeta(json: String): WidgetMeta {
+    fun parseMeta(json: String, nowMs: Long): WidgetMeta {
         return try {
-            val root = JSONObject(json)
-            if (root.optInt("v", -1) != SUPPORTED_VERSION) {
+            val snapshot = JSONObject(json)
+            if (snapshot.optInt("v", -1) != SUPPORTED_VERSION) {
                 WidgetMeta(null, null)
             } else {
+                val root = activeDay(snapshot, nowMs)
                 WidgetMeta(
                     // isNull guard because Android's optString maps JSON null to the
                     // string "null" (the reference org.json this is tested against does

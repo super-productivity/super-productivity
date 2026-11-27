@@ -39,8 +39,8 @@ export const WORK_CONTEXT_FEATURE_NAME = 'workContext';
  *
  * See: ARCHITECTURE-DECISIONS.md Decision #2
  */
-const computeOrderedTaskIdsForToday = (
-  todayTag: Tag | undefined,
+export const computeOrderedTaskIdsForToday = (
+  todayTag: Pick<Tag, 'taskIds'> | undefined,
   taskEntities: Record<
     string,
     | {

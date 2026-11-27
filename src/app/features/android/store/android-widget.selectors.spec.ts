@@ -17,6 +17,21 @@ import { Section } from '../../section/section.model';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { INBOX_PROJECT } from '../../project/project.const';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfg,
+} from '../../task-repeat-cfg/task-repeat-cfg.model';
+
+// Due every day since the 1st, last created on Friday 2026-07-17 (the specs' today).
+const repeatCfg = (id: string, partial: Partial<TaskRepeatCfg> = {}): TaskRepeatCfg => ({
+  ...DEFAULT_TASK_REPEAT_CFG,
+  id,
+  title: `Repeat ${id}`,
+  repeatCycle: 'DAILY',
+  startDate: '2026-07-01',
+  lastTaskCreationDay: '2026-07-17',
+  ...partial,
+});
 
 describe('getWidgetValidUntil', () => {
   const HOUR = 60 * 60 * 1000;
@@ -113,6 +128,7 @@ describe('selectAndroidWidgetData', () => {
       null,
       [],
       new Map(),
+      [],
     );
     expect(result).toEqual({
       v: 1,
@@ -125,6 +141,7 @@ describe('selectAndroidWidgetData', () => {
       projectColors: { p1: '#ff0000' },
       currentTask: null,
       projects: [],
+      nextDays: [],
     });
   });
 
@@ -139,6 +156,7 @@ describe('selectAndroidWidgetData', () => {
       null,
       [],
       new Map(),
+      [],
     );
     expect(result.tasks.length).toBe(1);
     expect(result.tasks[0].id).toBe('t1');
@@ -155,6 +173,7 @@ describe('selectAndroidWidgetData', () => {
       null,
       [],
       new Map(),
+      [],
     );
     expect('projectId' in result.tasks[0]).toBe(false);
   });
@@ -170,6 +189,7 @@ describe('selectAndroidWidgetData', () => {
       null,
       [],
       new Map(),
+      [],
     );
     expect(result.projectColors).toEqual({});
     expect(result.tasks[0].projectId).toBe('p1');
@@ -189,6 +209,7 @@ describe('selectAndroidWidgetData', () => {
       null,
       [],
       new Map(),
+      [],
     );
     expect(result.dayStr).toBe('2026-07-16');
     expect(result.validUntil).toBe(new Date(2026, 6, 17).getTime() + fourAmOffset);
@@ -205,6 +226,7 @@ describe('selectAndroidWidgetData', () => {
       't1',
       [],
       new Map(),
+      [],
     );
     expect(result.currentTask).toEqual({
       id: 't1',
@@ -229,13 +251,115 @@ describe('selectAndroidWidgetData', () => {
       null,
       [],
       new Map(),
+      [
+        {
+          dayStr: '2026-07-18',
+          taskIds: ['t2'],
+          repeatCfgs: [repeatCfg('r1', { title: 'Daily review' })],
+        },
+      ],
     );
     expect(JSON.stringify(result)).toBe(
       `{"v":1,"dayStr":"${DAY}","validUntil":${VALID_UNTIL},"tasks":[` +
         '{"id":"t1","title":"Task one","isDone":false,"projectId":"p1"},' +
         '{"id":"t2","title":"Task two","isDone":true}],' +
-        '"projectColors":{"p1":"#ff0000"},"currentTask":null,"projects":[]}',
+        '"projectColors":{"p1":"#ff0000"},"currentTask":null,"projects":[],' +
+        `"nextDays":[{"dayStr":"2026-07-18","validUntil":${new Date(2026, 6, 19).getTime()},` +
+        '"tasks":[{"id":"t2","title":"Task two","isDone":true},' +
+        '{"id":"rpt_r1_2026-07-18","title":"Daily review","isDone":false,"isPending":true}]}]}',
     );
+  });
+
+  // #11944: the days after today, so the widget can move on without the app running
+  it('should give each next day its own boundary, its tasks and its recurring tasks', () => {
+    const result = selectAndroidWidgetData.projector(
+      [],
+      { t3: task('t3') },
+      projectState([project('p1', '#ff0000')]),
+      [],
+      DAY,
+      0,
+      null,
+      [],
+      new Map(),
+      [
+        {
+          dayStr: '2026-07-18',
+          // 'gone' was deleted after the plan was computed
+          taskIds: ['t3', 'gone'],
+          repeatCfgs: [repeatCfg('r1', { title: 'Daily review', projectId: 'p1' })],
+        },
+        { dayStr: '2026-07-19', taskIds: [], repeatCfgs: [] },
+      ],
+    );
+    expect(result.nextDays).toEqual([
+      {
+        dayStr: '2026-07-18',
+        validUntil: new Date(2026, 6, 19).getTime(),
+        tasks: [
+          { id: 't3', title: 'Task t3', isDone: false },
+          {
+            id: 'rpt_r1_2026-07-18',
+            title: 'Daily review',
+            isDone: false,
+            isPending: true,
+            projectId: 'p1',
+          },
+        ],
+      },
+      { dayStr: '2026-07-19', validUntil: new Date(2026, 6, 20).getTime(), tasks: [] },
+    ]);
+    expect(result.projectColors).toEqual({ p1: '#ff0000' });
+  });
+
+  // The planner's rule (#8220): a task of the recurring config is already due that
+  // day, so listing the config as well would show the same task twice. Its
+  // lastTaskCreationDay can lag behind the task (#7923).
+  it('should not list a recurring task again when its task for that day exists', () => {
+    const result = selectAndroidWidgetData.projector(
+      [],
+      { t3: task('t3', { repeatCfgId: 'r1' }) },
+      projectState([]),
+      [],
+      DAY,
+      0,
+      null,
+      [],
+      new Map(),
+      [
+        {
+          dayStr: '2026-07-18',
+          taskIds: ['t3'],
+          repeatCfgs: [
+            repeatCfg('r1', { title: 'Daily review' }),
+            repeatCfg('r2', { title: 'Water plants' }),
+          ],
+        },
+      ],
+    );
+    expect(result.nextDays[0].tasks.map((t) => t.id)).toEqual([
+      't3',
+      'rpt_r2_2026-07-18',
+    ]);
+  });
+
+  // The native list renders 20 rows (MAX_TASKS); more would only grow every push.
+  it('should keep a next day to the rows the widget can show', () => {
+    const ids = Array.from({ length: 25 }, (_, i) => `t${i}`);
+    const result = selectAndroidWidgetData.projector(
+      [],
+      Object.fromEntries(ids.map((id) => [id, task(id)])),
+      projectState([]),
+      [],
+      DAY,
+      0,
+      null,
+      [],
+      new Map(),
+      [{ dayStr: '2026-07-18', taskIds: ids, repeatCfgs: [repeatCfg('r1', {})] }],
+    );
+    expect(result.nextDays[0].tasks.length).toBe(20);
+    expect(result.nextDays[0].tasks[19].id).toBe('t19');
   });
 
   // #9518: a widget instance can show one project instead of Today.
@@ -254,6 +378,7 @@ describe('selectAndroidWidgetData', () => {
         null,
         [],
         new Map(),
+        [],
       ).projects;
 
     it('exports Inbox independently of Today and before ordinary projects', () => {
@@ -272,6 +397,7 @@ describe('selectAndroidWidgetData', () => {
         null,
         [],
         new Map(),
+        [],
       );
 
       expect(result.tasks.map((entry) => entry.id)).toEqual(['todayTask']);
@@ -372,6 +498,7 @@ describe('selectAndroidWidgetData', () => {
         null,
         [],
         new Map(),
+        [],
       );
       expect(result.projectColors).toEqual({ work: '#00ff00' });
     });
@@ -428,6 +555,7 @@ describe('selectAndroidWidgetData', () => {
           currentTaskId,
           laterTodayStructureFor(tasks, currentTaskId),
           new Map([[TODAY_TAG.id, todaySections]]),
+          [],
         )
         .tasks.map((t) => t.id);
 
@@ -536,6 +664,7 @@ describe('selectAndroidWidgetData', () => {
         null,
         staleStructure,
         new Map(),
+        [],
       );
       expect(staleStructure.map((e) => e.id)).toEqual(['B']);
       expect(result.tasks.map((t) => t.id)).toEqual(['B', 'C']);
