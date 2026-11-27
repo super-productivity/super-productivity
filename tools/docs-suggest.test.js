@@ -2,7 +2,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
-const { buildIndex, suggest, buildComment, cleanBody } = require('./docs-suggest');
+const {
+  buildIndex,
+  candidates,
+  formatCandidates,
+  pickLinks,
+  buildComment,
+  cleanBody,
+} = require('./docs-suggest');
 const { FIXTURES } = require('./docs-suggest.fixtures');
 
 // Runs against the real docs on purpose: the fixtures check real questions against real pages.
@@ -26,22 +33,64 @@ test('index holds published content pages only, with website URLs', () => {
   );
 });
 
-for (const fixture of FIXTURES) {
-  test(`#${fixture.n} (${fixture.expect}): ${fixture.title}`, () => {
-    const links = suggest(index, fixture).map((link) => pathOf(link.url));
-    const wrong = links.filter((link) => !fixture.ok.includes(link));
-    assert.deepEqual(wrong, [], 'never post a wrong link');
-    if (fixture.expect === 'silent') assert.deepEqual(links, []);
-    assert.ok(links.length <= 3);
-  });
-}
+test('shortlist: the right page is a candidate for most answerable questions', () => {
+  // Regression guard, not a target: the model can only pick a page that is shortlisted.
+  // Term matching misses questions that don't use the page's words (#9343 "time detection"
+  // -> Short Syntax). Raise the floor when retrieval improves.
+  const answerable = FIXTURES.filter((fixture) => fixture.ok.length > 0);
+  const found = answerable.filter((fixture) =>
+    candidates(index, fixture).some((page) => fixture.ok.includes(pathOf(page.url))),
+  );
+  assert.ok(found.length >= 25, `${found.length}/${answerable.length} shortlisted`);
+});
 
-test('recall floor: most questions a page clearly answers get a link', () => {
-  // Regression guard, not a target: term matching misses questions that don't use the
-  // page's words (#9343 "time detection" -> Short Syntax). Raise the floor when recall improves.
-  const answerable = FIXTURES.filter((fixture) => fixture.expect === 'hit');
-  const found = answerable.filter((fixture) => suggest(index, fixture).length > 0);
-  assert.ok(found.length >= 6, `${found.length}/${answerable.length} answered`);
+test('shortlist: at most 8 published pages, best first', () => {
+  for (const fixture of FIXTURES) {
+    const pages = candidates(index, fixture);
+    assert.ok(pages.length <= 8);
+    assert.deepEqual(
+      pages.map((page) => page.score),
+      [...pages.map((page) => page.score)].sort((a, b) => b - a),
+    );
+  }
+});
+
+test('formatCandidates numbers the pages from 1 and shows only title and description', () => {
+  const text = formatCandidates([
+    { title: 'Idle Time', description: 'What counts as idle.', url: `${DOCS}x/` },
+    { title: 'Worklog', description: '', url: `${DOCS}y/` },
+  ]);
+  assert.equal(text, '1. Idle Time: What counts as idle.\n2. Worklog');
+});
+
+const PAGES = ['A', 'B', 'C', 'D'].map((title) => ({
+  title,
+  url: `${DOCS}${title.toLowerCase()}/`,
+  score: 1,
+}));
+
+test('pickLinks keeps only listed page numbers, in order, at most 3', () => {
+  const titles = (response) => pickLinks(response, PAGES).map((link) => link.title);
+  assert.deepEqual(titles('{"pages": [2]}'), ['B']);
+  assert.deepEqual(titles('{"pages": [3, 1]}'), ['C', 'A']);
+  assert.deepEqual(titles('{"pages": [1, 2, 3, 4]}'), ['A', 'B', 'C']);
+  assert.deepEqual(titles('{"pages": [2, 2]}'), ['B']);
+  assert.deepEqual(titles('{"pages": []}'), []);
+});
+
+test('pickLinks: an invented, malformed or chatty reply adds no link', () => {
+  for (const response of [
+    '{"pages": [0, 5, 99]}',
+    '{"pages": ["1", 1.5, null]}',
+    '{"pages": "1"}',
+    '{"related": [1]}',
+    'Page 1 answers it: {"pages": [1]}',
+    '```json\n{"pages": [1]}\n```',
+    '',
+    undefined,
+  ]) {
+    assert.deepEqual(pickLinks(response, PAGES), [], String(response));
+  }
 });
 
 test('buildComment: one short reply, plain links, closing next step', () => {

@@ -1,33 +1,31 @@
 #!/usr/bin/env node
 /**
- * Suggests up to three pages of the public docs (super-productivity.com/docs/) for a new
- * GitHub question, or nothing when no page is a confident match: a wrong link is worse
- * than silence. Deterministic term matching against page titles, descriptions and
- * headings from `docs/wiki/`; no network, no model.
+ * Docs suggestions for a new GitHub question, in two halves around a model call
+ * (docs-suggest.yml):
  *
- *   node tools/docs-suggest.js <docs/wiki dir> <event.json> [comment output file]
+ *   node tools/docs-suggest.js candidates <docs/wiki dir> <event.json> <work dir>
+ *     Writes title.txt, body.txt and candidates.txt (the prompt inputs) and candidates.json.
+ *   node tools/docs-suggest.js comment <work dir> <model response file>
+ *     Writes comment.md when the model picked a page from the list; prints the links.
  *
- * Prints the matches as JSON. When there is a match and an output file is given, writes the
- * comment to post there (docs-suggest.yml decides whether to post it).
- *
- * shortcut: bag-of-words with a fixed threshold, tuned on the fixtures in
- * docs-suggest.fixtures.js — if it misses too often, rank with Pagefind or a model instead.
+ * Retrieval is plain term matching against page titles, descriptions, headings and text in
+ * `docs/wiki/`. It only shortlists; the model decides which page, if any, answers the
+ * question, because term matching alone linked the wrong page on about half of its posts.
  */
 const fs = require('node:fs');
 const path = require('node:path');
 const { docsUrl, contributingPages } = require('./wiki-stubs');
 
 const MAX_LINKS = 3;
-// Minimum score for the best page; lower than this and we stay silent.
-const MIN_SCORE = 4;
-// Further pages must score at least this share of the best one.
-const RELATIVE_CUTOFF = 0.8;
+const MAX_CANDIDATES = 8;
+// Pages scoring lower share too little with the question to be worth showing the model.
+const MIN_SCORE = 2;
 // Only the start of a long body says what the question is about.
 const BODY_CHARS = 600;
 
 const FIELD_WEIGHTS = { title: 3, description: 1.5, headings: 1 };
-// Share of a page's distinctive title words the question must contain.
-const MIN_COVERAGE = 0.6;
+// Words only in a page's text count a little: enough to shortlist, not to outrank a title.
+const BODY_WEIGHT = 0.3;
 
 const STOPWORDS = new Set(
   `a about above after again all also am an and any app are as at be because been before
@@ -112,47 +110,21 @@ const buildIndex = (wikiDir) => {
       continue;
     }
     const page = readPage(name, fs.readFileSync(path.join(wikiDir, file), 'utf8'));
-    // The URL slug and the H1 each name the page's topic; they differ for some pages (Worklog / "History").
     const slugWords = url.split('/').at(-2).replace(/-/g, ' ');
     pages.push({
       url,
       title: page.title,
+      description: page.description.replace(/\s+/g, ' ').trim(),
       fields: {
         title: new Set([...terms(page.title), ...terms(slugWords)]),
         description: new Set(terms(page.description)),
         headings: new Set(terms(page.headings)),
       },
-      keySets: [slugWords, page.title].map((name) =>
-        [...new Set(terms(name))].filter((term) => !GENERIC_TITLE_TERMS.has(term)),
-      ),
       all: new Set(terms(page.body)),
     });
   }
   return pages;
 };
-
-// Words too common in page titles to tell pages apart ("Manage Scheduled Tasks", "Inbox View").
-const GENERIC_TITLE_TERMS = new Set(
-  [
-    'manage',
-    'add',
-    'task',
-    'view',
-    'set',
-    'configure',
-    'choose',
-    'run',
-    'build',
-    'create',
-    'time',
-    'sync',
-    'data',
-    'app',
-    'new',
-    'index',
-    'guide',
-  ].map(stem),
-);
 
 const idf = (index) => {
   const df = new Map();
@@ -166,44 +138,61 @@ const questionTerms = ({ title = '', body = '' }) => ({
   any: new Set([...terms(title), ...terms(cleanBody(body).slice(0, BODY_CHARS))]),
 });
 
-/**
- * A page qualifies only if the question names what the page is about: most of the distinctive
- * words of its URL slug or its H1 appear in the question, one of them in the question's title.
- * Description and heading matches then only rank qualifying pages.
- */
 const scorePage = (page, question, weightOf) => {
-  const names = (key) =>
-    key.length > 0 &&
-    key.some((term) => question.title.has(term)) &&
-    key.filter((term) => question.any.has(term)).length / key.length >= MIN_COVERAGE;
-  if (!page.keySets.some(names)) return 0;
   let score = 0;
   for (const term of question.any) {
     const field = Object.keys(FIELD_WEIGHTS).find((name) => page.fields[name].has(term));
-    if (field)
-      score += weightOf(term) * FIELD_WEIGHTS[field] * (question.title.has(term) ? 2 : 1);
+    const weight = field ? FIELD_WEIGHTS[field] : page.all.has(term) ? BODY_WEIGHT : 0;
+    score += weightOf(term) * weight * (question.title.has(term) ? 2 : 1);
   }
   return score;
 };
 
-/** Up to three `{ title, url, score }` for a `{ title, body }` question; empty when unsure. */
-const suggest = (index, question) => {
+/**
+ * Up to MAX_CANDIDATES pages that share words with a `{ title, body }` question, best first.
+ * Deliberately loose: the model decides which, if any, answer the question.
+ */
+const candidates = (index, question) => {
   const query = questionTerms(question);
   const weightOf = idf(index);
-  const ranked = index
+  return index
     .map((page) => ({
       title: page.title,
       url: page.url,
+      description: page.description,
       score: scorePage(page, query, weightOf),
     }))
-    .filter((page) => page.score > 0)
-    .sort((a, b) => b.score - a.score);
-  const best = ranked[0]?.score ?? 0;
-  if (best < MIN_SCORE) return [];
-  return ranked
-    .filter((page) => page.score >= best * RELATIVE_CUTOFF)
-    .slice(0, MAX_LINKS)
-    .map((page) => ({ ...page, score: Math.round(page.score * 10) / 10 }));
+    .filter((page) => page.score >= MIN_SCORE)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_CANDIDATES);
+};
+
+/** The candidate list as the model sees it: numbered, title and description only. */
+const formatCandidates = (pages) =>
+  pages
+    .map(
+      (page, i) =>
+        `${i + 1}. ${page.title}${page.description ? `: ${page.description}` : ''}`,
+    )
+    .join('\n');
+
+/**
+ * The pages the model picked, as `{ title, url }`. Anything not a number from the candidate
+ * list is dropped, so a malformed or injected reply can only ever cost a link, never add one.
+ */
+const pickLinks = (response, pages) => {
+  let picked;
+  try {
+    picked = JSON.parse(String(response ?? '').trim()).pages;
+  } catch {
+    // not JSON: the model ignored the format, so suggest nothing rather than guess
+    return [];
+  }
+  if (!Array.isArray(picked)) return [];
+  const chosen = [...new Set(picked)]
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= pages.length)
+    .map((n) => pages[n - 1]);
+  return chosen.slice(0, MAX_LINKS).map(({ title, url }) => ({ title, url }));
 };
 
 /** The reply to post, or null when there is nothing to suggest. */
@@ -222,24 +211,53 @@ const buildComment = (links) => {
   ].join('\n');
 };
 
-module.exports = { buildIndex, suggest, buildComment, cleanBody };
+module.exports = {
+  buildIndex,
+  candidates,
+  formatCandidates,
+  pickLinks,
+  buildComment,
+  cleanBody,
+};
+
+const writeCandidates = (wikiDir, eventPath, workDir) => {
+  const thread = JSON.parse(fs.readFileSync(eventPath, 'utf8')).discussion;
+  if (!thread) throw new Error('not a discussion event');
+  const question = { title: thread.title ?? '', body: thread.body ?? '' };
+  const pages = candidates(buildIndex(wikiDir), question);
+  fs.mkdirSync(workDir, { recursive: true });
+  fs.writeFileSync(path.join(workDir, 'title.txt'), question.title);
+  fs.writeFileSync(
+    path.join(workDir, 'body.txt'),
+    cleanBody(question.body).slice(0, 4000),
+  );
+  fs.writeFileSync(path.join(workDir, 'candidates.txt'), formatCandidates(pages));
+  fs.writeFileSync(path.join(workDir, 'candidates.json'), JSON.stringify(pages, null, 2));
+  console.log(JSON.stringify({ candidates: pages.map((page) => page.url) }, null, 2));
+};
+
+const writeComment = (workDir, responsePath) => {
+  const pages = JSON.parse(
+    fs.readFileSync(path.join(workDir, 'candidates.json'), 'utf8'),
+  );
+  const response = fs.existsSync(responsePath)
+    ? fs.readFileSync(responsePath, 'utf8')
+    : '';
+  const links = pickLinks(response, pages);
+  const comment = buildComment(links);
+  if (comment) fs.writeFileSync(path.join(workDir, 'comment.md'), comment);
+  console.log(JSON.stringify({ links }, null, 2));
+};
 
 if (require.main === module) {
-  const [wikiDir, eventPath, commentPath] = process.argv.slice(2);
-  if (!wikiDir || !eventPath) {
+  const [mode, ...args] = process.argv.slice(2);
+  if (mode === 'candidates' && args.length === 3) writeCandidates(...args);
+  else if (mode === 'comment' && args.length === 2) writeComment(...args);
+  else {
     console.error(
-      'usage: node tools/docs-suggest.js <docs/wiki dir> <event.json> [comment file]',
+      'usage: node tools/docs-suggest.js candidates <docs/wiki dir> <event.json> <work dir>\n' +
+        '       node tools/docs-suggest.js comment <work dir> <model response file>',
     );
     process.exit(1);
   }
-  const event = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
-  const thread = event.discussion;
-  if (!thread) throw new Error('not a discussion event');
-  const links = suggest(buildIndex(wikiDir), {
-    title: thread.title ?? '',
-    body: thread.body ?? '',
-  });
-  const comment = buildComment(links);
-  if (comment && commentPath) fs.writeFileSync(commentPath, comment);
-  console.log(JSON.stringify({ links }, null, 2));
 }

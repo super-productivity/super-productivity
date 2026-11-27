@@ -1,8 +1,11 @@
 ---
 name: Docs Suggestions
 
-# Suggests up to three docs pages on new Q&A discussions (tools/docs-suggest.js). Issues are
-# left out: issue-triage.yml already replies to every new issue, and questions go to Q&A.
+# Suggests up to three docs pages on new Q&A discussions. tools/docs-suggest.js shortlists
+# pages by shared words; a model (same setup as issue-triage.yml) picks the ones, if any,
+# that answer the question; the script checks its picks against the shortlist. Any failure
+# along the way means no comment: a wrong link is worse than none. Issues are left out:
+# issue-triage.yml already replies to every new issue, and questions go to Q&A.
 #
 # Dry run by default: the suggestion only goes to the job summary. Live posting needs the
 # repository variable DOCS_SUGGEST_LIVE set to 'true' (Settings -> Secrets and variables ->
@@ -29,38 +32,80 @@ jobs:
       contents: read
       discussions: write
     steps:
-      - name: Checkout docs and matcher
+      - name: Checkout docs, matcher and prompt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Load-bearing: the default writes the job token into .git/config, inside the
+          # directory the Copilot CLI runs in and can read.
           persist-credentials: false
           sparse-checkout: |
             docs/wiki
             tools
+            .github/prompts
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
+      # Pinned deliberately, as in issue-triage.yml: the package publishes near-daily.
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot@1.0.83
+
       # Title and body are read from the event file, never interpolated into the script:
-      # they are attacker-controlled text.
-      - name: Match docs pages
+      # they are attacker-controlled text. The scripts are copied out of the workspace
+      # first so the code that later writes the comment is never one the model could edit.
+      - name: Shortlist docs pages
+        id: shortlist
         run: |
-          node tools/docs-suggest.js docs/wiki "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/comment.md" \
-            > "$RUNNER_TEMP/links.json"
-          cat "$RUNNER_TEMP/links.json"
+          work="$RUNNER_TEMP/docs-suggest"
+          mkdir -p "$work/bin"
+          cp tools/docs-suggest.js tools/wiki-stubs.js "$work/bin/"
+          node "$work/bin/docs-suggest.js" candidates docs/wiki "$GITHUB_EVENT_PATH" "$work"
+          if [ -s "$work/candidates.txt" ]; then echo 'found=true' >> "$GITHUB_OUTPUT"; fi
+
+      # An outage, exhausted credits, a retired model or a hung CLI ends in no comment.
+      # Leave copilot-allow-tools unset: the question text is untrusted.
+      - name: Pick pages
+        id: pick
+        if: steps.shortlist.outputs.found == 'true'
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: actions/ai-inference@2c43c91ae16266ca159d311430343c67a5ffa222 # v3
+        with:
+          prompt-file: .github/prompts/docs-suggest.prompt.yml
+          model: gpt-5.6-luna
+          file_input: |
+            title: ${{ runner.temp }}/docs-suggest/title.txt
+            body: ${{ runner.temp }}/docs-suggest/body.txt
+            candidates: ${{ runner.temp }}/docs-suggest/candidates.txt
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+
+      - name: Write comment
+        if: steps.pick.outcome == 'success'
+        env:
+          RESPONSE: ${{ steps.pick.outputs.response }}
+        run: |
+          work="$RUNNER_TEMP/docs-suggest"
+          printf '%s' "$RESPONSE" > "$work/response.txt"
+          node "$work/bin/docs-suggest.js" comment "$work" "$work/response.txt"
 
       - name: Post or report
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
           LIVE: ${{ vars.DOCS_SUGGEST_LIVE == 'true' }}
           DISCUSSION_ID: ${{ github.event.discussion.node_id }}
           DISCUSSION_URL: ${{ github.event.discussion.html_url }}
+          PICK_OUTCOME: ${{ steps.pick.outcome }}
         run: |
-          comment="$RUNNER_TEMP/comment.md"
+          comment="$RUNNER_TEMP/docs-suggest/comment.md"
           {
             echo "### Docs suggestion for $DISCUSSION_URL"
-            if [ ! -s "$comment" ]; then
+            if [ "$PICK_OUTCOME" = 'failure' ]; then
+              echo 'Model step failed: nothing posted.'
+            elif [ ! -s "$comment" ]; then
               echo 'No confident match: nothing posted.'
             elif [ "$LIVE" = 'true' ] && [ "$GITHUB_RUN_ATTEMPT" != '1' ]; then
               echo 'Re-run: not posted again. First run posted:'
@@ -73,6 +118,13 @@ jobs:
               echo
               sed 's/^/> /' "$comment"
             fi
+            # what the model saw and said, to judge the dry run before going live
+            for file in candidates.txt response.txt; do
+              if [ -s "$RUNNER_TEMP/docs-suggest/$file" ]; then
+                printf '\n%s:\n\n' "$file"
+                sed 's/^/    /' "$RUNNER_TEMP/docs-suggest/$file"
+              fi
+            done
           } >> "$GITHUB_STEP_SUMMARY"
           # A manual re-run must not post a second comment on the same thread.
           if [ -s "$comment" ] && [ "$LIVE" = 'true' ] && [ "$GITHUB_RUN_ATTEMPT" = '1' ]; then
