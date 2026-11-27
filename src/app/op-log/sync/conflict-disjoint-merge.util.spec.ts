@@ -655,24 +655,10 @@ describe('conflict-disjoint-merge.util', () => {
       expect(commutes([done, update({ title: 'A' })], [planOp()])).toBe(true);
     });
 
-    it('is true beside the time deltas tracking emits, on either side', () => {
-      expect(commutes([planOp(), syncTimeSpentOp()], [done])).toBe(true);
-      expect(commutes([done, syncTimeSpentOp()], [planOp()])).toBe(true);
-      expect(commutes([planOp(), syncTimeSpentOp()], [done, syncTimeSpentOp()])).toBe(
-        true,
-      );
-    });
-
-    it('is false for an edit that writes the time beside a time delta', () => {
-      const setTime = update({ isDone: true, timeSpent: 5 });
-      expect(commutes([planOp()], [setTime])).toBe(true);
-      expect(commutes([planOp(), syncTimeSpentOp()], [setTime])).toBe(false);
-      expect(commutes([planOp()], [setTime, syncTimeSpentOp()])).toBe(false);
-    });
-
-    it('is false without both an add to Today and an edit', () => {
+    it('is false beside the time deltas tracking emits (rebase gap)', () => {
+      expect(commutes([planOp(), syncTimeSpentOp()], [done])).toBe(false);
+      expect(commutes([done, syncTimeSpentOp()], [planOp()])).toBe(false);
       expect(commutes([syncTimeSpentOp()], [done])).toBe(false);
-      expect(commutes([planOp()], [syncTimeSpentOp()])).toBe(false);
     });
 
     it('is false when the edit writes a field the add to Today writes', () => {

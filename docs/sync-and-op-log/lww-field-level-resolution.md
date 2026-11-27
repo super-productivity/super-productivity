@@ -312,9 +312,10 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    (also one planning several tasks), the losing device re-emits the local fields that survived it
    (see "A later round"). Narrowed by #11883 (2026-11-27): a single-task
    `planTasksForToday` and `updateTask` edits of fields it never writes
-   (anything but `dueDay`, `remindAt`, `dueWithTime`) commute, also beside
-   the time deltas tracking emits: conflict detection applies both as they
-   are, in either order (`isPlanForTodayBesideDisjointUpdates`). On SuperSync
+   (anything but `dueDay`, `remindAt`, `dueWithTime`) commute: conflict
+   detection applies both as they are, in either order
+   (`isPlanForTodayBesideDisjointUpdates`). Not yet beside the time delta
+   tracking emits: SuperSync's delta rebase cannot re-send it past this pair. On SuperSync
    the server still rejects the later upload once; its re-send follows. Before, a done that synced first
    was undone by the auto-plan's winning snapshot, or the losing auto-plan
    stayed on its own device.

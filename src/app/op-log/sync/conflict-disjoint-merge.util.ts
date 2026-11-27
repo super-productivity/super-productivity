@@ -572,38 +572,24 @@ const isUpdateBesidePlanForToday = (
   );
 };
 
-/**
- * `planSide` holds a single-task auto-plan, `updateSide` an `updateTask` of
- * other fields; either may also hold `syncTimeSpent` deltas, as tracking an
- * unscheduled task emits one beside its auto-plan. A delta adds to whatever
- * the other side leaves, so an update beside one must not write the time.
- */
+// shortcut: plain sides only. A pending time delta beside the auto-plan
+// (tracking) is rejected on SuperSync and the delta rebase
+// (`rebaseCommutingTimeDeltaRejections`) admits only time-commuting rows, so
+// it would drop the time; admit deltas once that rebase reads this pair.
 const isPlanSideBesideUpdates = (
   planSide: Operation[],
   updateSide: Operation[],
   { payloadKey, entityId }: { payloadKey: string; entityId: string },
-): boolean => {
-  const isPlan = (op: Operation): boolean => isSingleTaskPlanForToday(op, entityId);
-  const isUpdate = (op: Operation): boolean =>
-    isUpdateBesidePlanForToday(op, payloadKey, entityId);
-  const hasDelta = [...planSide, ...updateSide].some(isSyncTimeSpentDelta);
-  return (
-    planSide.some(isPlan) &&
-    updateSide.some(isUpdate) &&
-    planSide.every((op) => isPlan(op) || isSyncTimeSpentDelta(op)) &&
-    updateSide.every(
-      (op) =>
-        isSyncTimeSpentDelta(op) ||
-        (isUpdate(op) && (!hasDelta || writesNoTaskTime(op, payloadKey, entityId))),
-    )
-  );
-};
+): boolean =>
+  planSide.length > 0 &&
+  updateSide.length > 0 &&
+  planSide.every((op) => isSingleTaskPlanForToday(op, entityId)) &&
+  updateSide.every((op) => isUpdateBesidePlanForToday(op, payloadKey, entityId));
 
 /**
  * True when one side is only single-task `planTasksForToday` ops and the other
  * only `updateTask` edits of fields the auto-plan never writes, e.g. a done
- * (#11883), each optionally beside time deltas. Both apply as they are, in
- * either order, to the same task. Whole-
+ * (#11883). Both apply as they are, in either order, to the same task. Whole-
  * entity LWW instead let the auto-plan's snapshot undo the done, or dropped the
  * auto-plan on every device but its own: the auto-plan is opaque, so neither
  * side could be re-sent as fields (#10393 decision 6, narrowed for this pair).
