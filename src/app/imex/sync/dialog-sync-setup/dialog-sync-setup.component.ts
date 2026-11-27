@@ -234,16 +234,10 @@ export class DialogSyncSetupComponent {
       this.step.set('manual');
       return;
     }
-    // The message holds the HTTP status or the platform's network error text
-    // (at most naming the server host), no user content; the name alone
-    // ("TypeError") hid the cause (#12067).
-    SyncLog.warn('SuperSync sign-in could not start', {
-      name: e instanceof Error ? e.name : typeof e,
-      message: e instanceof Error ? e.message : undefined,
-    });
-    this.step.set('choose');
-    // Without an answer, a dropped connection, CORS and TLS all look the same.
     const status = e instanceof ConnectHttpError ? e.status : null;
+    // Platform errors can include credentials from a custom server URL.
+    SyncLog.warn('SuperSync sign-in could not start', { status });
+    this.step.set('choose');
     this.errorStatus.set(status);
     this.errorKey.set(
       status === null

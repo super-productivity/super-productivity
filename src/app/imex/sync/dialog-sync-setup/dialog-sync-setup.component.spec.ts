@@ -185,15 +185,16 @@ describe('DialogSyncSetupComponent', () => {
     expect(dialogRef.close).toHaveBeenCalledWith(true);
   });
 
-  it('stays on the first step with an error when the server is unreachable', async () => {
-    connect.start.and.rejectWith(new TypeError('Failed to fetch'));
+  it('shows a connection error and keeps platform error details out of the log', async () => {
+    connect.start.and.rejectWith(
+      new TypeError('Request URL contains credentials: https://user:pass@sync.example/'),
+    );
     await component.signIn();
     expect(component.step()).toBe('choose');
     expect(component.errorKey()).toBe(T.F.SYNC.D_SIGN_IN.START_FAILED);
     expect(connect.waitForApproval).not.toHaveBeenCalled();
-    expect(SyncLog.warn).toHaveBeenCalledWith(jasmine.any(String), {
-      name: 'TypeError',
-      message: 'Failed to fetch',
+    expect(SyncLog.warn).toHaveBeenCalledOnceWith('SuperSync sign-in could not start', {
+      status: null,
     });
   });
 
@@ -210,9 +211,8 @@ describe('DialogSyncSetupComponent', () => {
     expect(component.errorKey()).toBe(T.F.SYNC.D_SIGN_IN.START_FAILED_HTTP);
     expect(text()).toContain('sync.example.com answered HTTP 403');
     expect(connect.waitForApproval).not.toHaveBeenCalled();
-    expect(SyncLog.warn).toHaveBeenCalledWith(jasmine.any(String), {
-      name: 'ConnectHttpError',
-      message: 'Sign-in request failed: HTTP 403',
+    expect(SyncLog.warn).toHaveBeenCalledOnceWith('SuperSync sign-in could not start', {
+      status: 403,
     });
   });
 
