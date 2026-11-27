@@ -7,6 +7,7 @@ import {
   ElementRef,
   inject,
   OnInit,
+  signal,
   viewChild,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -98,6 +99,9 @@ const OPEN_BY_DEFAULT_SECTION_KEY = 'appFeatures';
 /** Kept in sync with `animationDuration` on the settings `mat-tab-group`. */
 const TAB_ANIMATION_DURATION_MS = 200;
 
+/** Two beats of the 2s `onboarding-pulse`, then it fades. */
+const LINKED_SECTION_HIGHLIGHT_MS = 4000;
+
 @Component({
   selector: 'config-page',
   templateUrl: './config-page.component.html',
@@ -153,6 +157,8 @@ export class ConfigPageComponent implements OnInit {
 
   selectedTabIndex = 0;
   expandedSection: string | null = null;
+  /** A section opened by link (`?section=`) glows briefly so it is found. */
+  readonly highlightedSection = signal<string | null>(null);
   private _isDefaultSectionCollapsed = false;
 
   searchQuery = '';
@@ -318,6 +324,7 @@ export class ConfigPageComponent implements OnInit {
         if (params['section'] !== undefined) {
           this.expandedSection = params['section'];
           this._cd.detectChanges();
+          this._revealLinkedSection(params['section']);
         }
       });
   }
@@ -485,13 +492,24 @@ export class ConfigPageComponent implements OnInit {
     this.selectedTabIndex = target.tabIndex;
     this.expandedSection = target.sectionKey ?? null;
     this._cd.detectChanges();
+    this._scrollToAfterTabSwitch(target.scrollSelector);
+  }
+
+  private _revealLinkedSection(sectionKey: string): void {
+    this._scrollToAfterTabSwitch(`.section-${sectionKey}`);
+    this.highlightedSection.set(sectionKey);
+    // shortcut: an untracked timer, harmless after destroy (it only resets a signal)
+    setTimeout(() => this.highlightedSection.set(null), LINKED_SECTION_HIGHLIGHT_MS);
+  }
+
+  private _scrollToAfterTabSwitch(selector: string): void {
     // The tab body swaps in over `animationDuration`, so the element doesn't
     // exist yet; wait it out before scrolling.
     // shortcut: a fixed delay, not an animation-done hook. Switch to
     // `MatTabGroup.animationDone` if the duration ever stops being a constant.
     setTimeout(() => {
       this._elRef.nativeElement
-        .querySelector(target.scrollSelector)
+        .querySelector(selector)
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, TAB_ANIMATION_DURATION_MS);
   }
