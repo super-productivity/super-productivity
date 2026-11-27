@@ -165,8 +165,8 @@ const buildGenericErrorMessage = (
 const buildUnavailableErrorMessage = (error: IndexedDBOpenError): string =>
   'Storage Turned Off - Cannot Save Data\n\n' +
   'Super Productivity cannot load or save anything because your device has ' +
-  'turned off the storage it needs (IndexedDB). Your existing data was not ' +
-  'touched, and clearing storage would not help.\n\n' +
+  'turned off the storage it needs (IndexedDB). Super Productivity did not ' +
+  'change or delete anything, and clearing storage would not help.\n\n' +
   'On iPhone or iPad this is usually caused by Lockdown Mode. To keep Lockdown Mode on ' +
   'and still use the app, go to Settings > Privacy & Security > Lockdown Mode > ' +
   'Configure Web Browsing and exclude Super Productivity, then restart the app.\n\n' +

@@ -2562,6 +2562,9 @@ describe('OperationLogHydratorService', () => {
       } finally {
         if (original) {
           Object.defineProperty(window, 'indexedDB', original);
+        } else {
+          // Not an own property before: drop ours so the inherited one shows again.
+          Reflect.deleteProperty(window, 'indexedDB');
         }
       }
 

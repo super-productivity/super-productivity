@@ -169,6 +169,9 @@ describe('buildIdbOpenErrorMessage', () => {
 
       expect(msg).not.toContain('Low disk space');
       expect(msg).not.toContain('may need to be cleared');
+      // Claims only what the app did: it never opened the database, so it
+      // cannot vouch for the stored data itself.
+      expect(msg).toContain('Super Productivity did not change or delete anything');
     });
   });
 
