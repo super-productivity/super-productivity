@@ -22,6 +22,7 @@ import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-t
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../core/date/date.service';
 import { DialogScheduleTaskComponent } from '../dialog-schedule-task/dialog-schedule-task.component';
@@ -79,6 +80,7 @@ export class PlannerDayComponent {
   private _store = inject(Store);
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
   private _dateService = inject(DateService);
   private _layoutService = inject(LayoutService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
@@ -268,6 +270,11 @@ export class PlannerDayComponent {
       task.dueWithTime as number,
       task.remindAt,
     );
-    this._taskService.scheduleTask(task, newDate.getTime(), selectedReminderCfgId, false);
+    this._taskSchedulingService.scheduleTask(
+      task,
+      newDate.getTime(),
+      selectedReminderCfgId,
+      false,
+    );
   }
 }

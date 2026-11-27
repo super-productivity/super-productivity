@@ -16,6 +16,7 @@ import {
 } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { Task } from '../../tasks/task.model';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -50,6 +51,7 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
   T: typeof T = T;
 
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
   private _store = inject(Store);
   private readonly _snackService = inject(SnackService);
   private readonly _globalConfigService = inject(GlobalConfigService);
@@ -255,7 +257,7 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
         );
       } else {
         // Schedule task with specific time
-        this._taskService.addAndSchedule(
+        this._taskSchedulingService.addAndSchedule(
           title,
           {
             timeEstimate: 30 * 60 * 1000,
@@ -285,7 +287,7 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
       );
     } else {
       // Schedule existing task with specific time
-      this._taskService.scheduleTask(
+      this._taskSchedulingService.scheduleTask(
         task,
         this.due(),
         this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??

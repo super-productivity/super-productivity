@@ -4,6 +4,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 import { PlannerTaskComponent } from './planner-task.component';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { DEFAULT_TASK, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
@@ -39,6 +40,7 @@ const makeTask = (overrides: Partial<TaskCopy> = {}): TaskCopy =>
 describe('PlannerTaskComponent', () => {
   let currentTaskId: WritableSignal<string | null>;
   let taskServiceMock: { toggleDoneWithAnimation: jasmine.Spy };
+  let taskSchedulingMock: { scheduleTask: jasmine.Spy };
   let storeMock: jasmine.SpyObj<Store>;
   let matDialogMock: jasmine.SpyObj<MatDialog>;
   let config: typeof DEFAULT_GLOBAL_CONFIG;
@@ -80,7 +82,6 @@ describe('PlannerTaskComponent', () => {
         'setSelectedId',
         'setCurrentId',
         'scheduleForTodayById',
-        'scheduleTask',
         'remove',
         'toggleDoneWithAnimation',
         'update',
@@ -89,6 +90,7 @@ describe('PlannerTaskComponent', () => {
       getByIdLive$: () => of(null),
       getByIdWithSubTaskData$: () => of(null),
     };
+    taskSchedulingMock = jasmine.createSpyObj('TaskSchedulingService', ['scheduleTask']);
     config = DEFAULT_GLOBAL_CONFIG;
     logicalToday = new Date(2026, 8, 12);
     firstDayOfWeek = 1;
@@ -112,6 +114,7 @@ describe('PlannerTaskComponent', () => {
       schemas: [NO_ERRORS_SCHEMA],
       providers: [
         { provide: TaskService, useValue: taskServiceMock },
+        { provide: TaskSchedulingService, useValue: taskSchedulingMock },
         {
           provide: GlobalConfigService,
           useValue: {
@@ -223,7 +226,7 @@ describe('PlannerTaskComponent', () => {
 
       component.onKeydown(moveDayEvent(component, 'ArrowRight'));
 
-      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
         task,
         new Date(2026, 0, 1, 23, 15).getTime(),
         'm30',
@@ -242,7 +245,7 @@ describe('PlannerTaskComponent', () => {
 
         component.onKeydown(moveDayEvent(component, key));
 
-        expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+        expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
           task,
           expectedDate,
           TaskReminderOptionId.DoNotRemind,
@@ -358,7 +361,7 @@ describe('PlannerTaskComponent', () => {
 
       component.onTaskShortcut(shortcutEvent('m'));
 
-      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
         task,
         new Date(2026, 8, 13, 14, 45).getTime(),
         'm30',
@@ -382,7 +385,7 @@ describe('PlannerTaskComponent', () => {
 
       component.onTaskShortcut(shortcutEvent('m'));
 
-      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
         task,
         new Date(2026, 8, 13, 14, 45).getTime(),
         TaskReminderOptionId.m30,
@@ -401,7 +404,7 @@ describe('PlannerTaskComponent', () => {
 
       component.onTaskShortcut(shortcutEvent('m'));
 
-      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
         task,
         new Date(2026, 8, 13, 14, 45).getTime(),
         TaskReminderOptionId.DoNotRemind,
@@ -598,7 +601,7 @@ describe('PlannerTaskComponent', () => {
       spyOn(next, 'focus');
       spyOn(moved, 'focus');
       host.focus();
-      taskServiceMock['scheduleTask'].and.callFake(() => {
+      taskSchedulingMock.scheduleTask.and.callFake(() => {
         component.ngOnDestroy();
         host.remove();
       });

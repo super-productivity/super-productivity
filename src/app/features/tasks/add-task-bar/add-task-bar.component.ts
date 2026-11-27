@@ -28,6 +28,7 @@ import { blendInOutAnimation } from 'src/app/ui/animations/blend-in-out.ani';
 import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { TaskCopy, TaskReminderOptionId } from '../task.model';
 import { TaskService } from '../task.service';
+import { TaskSchedulingService } from '../task-scheduling.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { WorkContext, WorkContextType } from '../../work-context/work-context.model';
 import { ProjectService } from '../../project/project.service';
@@ -143,6 +144,7 @@ export interface TaskAddEvent {
 })
 export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _taskService = inject(TaskService);
+  private readonly _taskSchedulingService = inject(TaskSchedulingService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
@@ -694,7 +696,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           .getByIdOnce$(taskId)
           .pipe(timeout(1000))
           .subscribe((task) => {
-            this._taskService.scheduleTask(
+            this._taskSchedulingService.scheduleTask(
               task,
               taskData.dueWithTime!,
               resolvedRemindOption,

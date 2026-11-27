@@ -14,6 +14,7 @@ import { SnackParams } from '../../../core/snack/snack.model';
 import { T } from 'src/app/t.const';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { TaskService } from '../../../features/tasks/task.service';
+import { TaskSchedulingService } from '../../../features/tasks/task-scheduling.service';
 import { WorkContextService } from '../../../features/work-context/work-context.service';
 import { of } from 'rxjs';
 import { PlannerService } from '../planner.service';
@@ -37,6 +38,7 @@ describe('DialogScheduleTaskComponent', () => {
   let dialogRefSpy: jasmine.SpyObj<MatDialogRef<DialogScheduleTaskComponent>>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskSchedulingServiceSpy: jasmine.SpyObj<TaskSchedulingService>;
   let plannerServiceSpy: jasmine.SpyObj<PlannerService>;
   let workContextServiceSpy: jasmine.SpyObj<WorkContextService>;
   let reminderServiceSpy: jasmine.SpyObj<ReminderService>;
@@ -85,7 +87,10 @@ describe('DialogScheduleTaskComponent', () => {
       'getSnackExtraStr',
     ]);
     reminderServiceSpy = jasmine.createSpyObj('ReminderService', ['getById']);
-    taskServiceSpy = jasmine.createSpyObj('TaskService', ['scheduleTask']);
+    taskSchedulingServiceSpy = jasmine.createSpyObj('TaskSchedulingService', [
+      'scheduleTask',
+    ]);
+    taskServiceSpy = {} as jasmine.SpyObj<TaskService>;
     workContextServiceSpy = jasmine.createSpyObj(
       'WorkContextService',
       ['activeWorkContextId$'],
@@ -130,6 +135,7 @@ describe('DialogScheduleTaskComponent', () => {
         { provide: ReminderService, useValue: reminderServiceSpy },
         { provide: PlannerService, useValue: plannerServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskSchedulingService, useValue: taskSchedulingServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         TranslateService,
         TranslateStore,
@@ -280,7 +286,7 @@ describe('DialogScheduleTaskComponent', () => {
   });
 
   describe('submit()', () => {
-    it('should call taskService.scheduleTask with correct parameters when submit is called', async () => {
+    it('should call taskSchedulingService.scheduleTask with correct parameters when submit is called', async () => {
       const testDate = new Date(2023, 5, 1);
       const expectedDate = new Date(testDate);
       expectedDate.setHours(10, 0, 0, 0); // Set time to 10:00 AM
@@ -305,7 +311,7 @@ describe('DialogScheduleTaskComponent', () => {
       component.task = mockTask;
       await component.submit();
 
-      expect(taskServiceSpy.scheduleTask).toHaveBeenCalledWith(
+      expect(taskSchedulingServiceSpy.scheduleTask).toHaveBeenCalledWith(
         jasmine.objectContaining({
           id: 'task123',
           title: 'Test Task',
@@ -328,7 +334,7 @@ describe('DialogScheduleTaskComponent', () => {
       component.selectedDate = undefined as any;
       component.selectedTime = undefined as any;
       await component.submit();
-      expect(taskServiceSpy.scheduleTask).not.toHaveBeenCalled();
+      expect(taskSchedulingServiceSpy.scheduleTask).not.toHaveBeenCalled();
       expect(dialogRefSpy.close).not.toHaveBeenCalled();
     });
 
@@ -350,7 +356,7 @@ describe('DialogScheduleTaskComponent', () => {
         created: 1640995200000, // Fixed timestamp
         subTaskIds: [],
       } as TaskCopy;
-      taskServiceSpy.scheduleTask.and.throwError('Schedule failed');
+      taskSchedulingServiceSpy.scheduleTask.and.throwError('Schedule failed');
       try {
         await component.submit();
       } catch {}
@@ -398,7 +404,7 @@ describe('DialogScheduleTaskComponent', () => {
         created: 1640995200000, // Fixed timestamp
         subTaskIds: [],
       } as TaskCopy;
-      taskServiceSpy.scheduleTask.and.throwError('Error');
+      taskSchedulingServiceSpy.scheduleTask.and.throwError('Error');
       try {
         await component.submit();
       } catch {}

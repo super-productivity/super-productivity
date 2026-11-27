@@ -2,8 +2,9 @@ import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { first } from 'rxjs/operators';
-import { Task, TaskArchive, TaskWithSubTasks } from './task.model';
+import { ArchiveTask, Task, TaskArchive, TaskWithSubTasks } from './task.model';
 import { TaskService } from './task.service';
+import { IssueProviderKey } from '../issue/issue.model';
 import { RootState } from '../../root-store/root-state';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
@@ -217,6 +218,61 @@ export class TaskArchiveOrchestratorService {
     return ids
       .map((id) => archiveTaskState.entities[id])
       .filter((task): task is Task => !!task);
+  }
+
+  async checkForTaskWithIssueEverywhere(
+    issueId: string | number,
+    issueProviderKey: IssueProviderKey,
+    issueProviderId: string,
+  ): Promise<{
+    task: Task;
+    subTasks: Task[] | null;
+    isFromArchive: boolean;
+  } | null> {
+    if (!issueProviderId) {
+      throw new Error('No issueProviderId');
+    }
+
+    const findTaskFn = (task: Task | ArchiveTask | undefined): boolean =>
+      !!task &&
+      // NOTE: we check all, since it is theoretically possible for the same issueId to appear across issue providers
+      task.issueId === issueId &&
+      task.issueType === issueProviderKey &&
+      task.issueProviderId === issueProviderId;
+
+    const allTasks = (await this._taskService.allTasks$
+      .pipe(first())
+      .toPromise()) as Task[];
+    const taskWithSameIssue: Task = allTasks.find(findTaskFn) as Task;
+
+    if (taskWithSameIssue) {
+      return {
+        task: taskWithSameIssue,
+        isFromArchive: false,
+        subTasks: null,
+      };
+    } else {
+      const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
+      const ids = archiveTaskState && (archiveTaskState.ids as string[]);
+      if (ids) {
+        const archiveTaskWithSameIssue = ids
+          .map((id) => archiveTaskState.entities[id])
+          .find(findTaskFn);
+
+        return archiveTaskWithSameIssue
+          ? {
+              task: archiveTaskWithSameIssue as Task,
+              subTasks: archiveTaskWithSameIssue.subTaskIds
+                ? archiveTaskWithSameIssue.subTaskIds
+                    .map((id) => archiveTaskState.entities[id])
+                    .filter((task): task is Task => !!task)
+                : null,
+              isFromArchive: true,
+            }
+          : null;
+      }
+      return null;
+    }
   }
 
   async getAllIssueIdsForProviderEverywhere(issueProviderId: string): Promise<string[]> {

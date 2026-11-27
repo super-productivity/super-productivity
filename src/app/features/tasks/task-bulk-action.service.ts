@@ -4,6 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { TaskService } from './task.service';
+import { TaskSchedulingService } from './task-scheduling.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { ProjectService } from '../project/project.service';
@@ -81,6 +82,7 @@ interface DateTimePick {
 export class TaskBulkActionService {
   private readonly _store = inject(Store);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskSchedulingService = inject(TaskSchedulingService);
   private readonly _multiSelect = inject(TaskMultiSelectService);
   private readonly _moveToProjectService = inject(TaskMoveToProjectService);
   private readonly _projectService = inject(ProjectService);
@@ -387,7 +389,7 @@ export class TaskBulkActionService {
           const due = getDateTimeFromClockString(pick.time as string, pick.date as Date);
           const remindOption = pick.remindOption ?? TaskReminderOptionId.DoNotRemind;
           // repeating tasks stay on the leads their series can hold (#11816)
-          this._taskService.scheduleTask(
+          this._taskSchedulingService.scheduleTask(
             task,
             due,
             task.repeatCfgId ? toPersistableRemindOption(remindOption) : remindOption,
@@ -401,7 +403,12 @@ export class TaskBulkActionService {
           // Day-only pick for a timed task: keep its time on the new day, as
           // the context menu's quick-access buttons do.
           const due = combineDateAndTime(pick.date as Date, new Date(task.dueWithTime));
-          this._taskService.scheduleTask(task, due.getTime(), defaultRemindOption, false);
+          this._taskSchedulingService.scheduleTask(
+            task,
+            due.getTime(),
+            defaultRemindOption,
+            false,
+          );
           applied++;
         } else if (day === todayStr) {
           // Already due today with a time → plain "add to today" (clears the

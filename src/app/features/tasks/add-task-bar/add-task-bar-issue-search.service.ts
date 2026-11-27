@@ -169,7 +169,7 @@ export class AddTaskBarIssueSearchService {
         throw new Error('No issueData');
       }
 
-      const res = await this._taskService.checkForTaskWithIssueEverywhere(
+      const res = await this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere(
         item.issueData.id,
         item.issueType,
         this._workContextService.activeWorkContextId as string,

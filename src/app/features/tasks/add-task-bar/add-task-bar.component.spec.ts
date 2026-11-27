@@ -6,6 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AddTaskBarComponent } from './add-task-bar.component';
 import { TaskService } from '../task.service';
+import { TaskSchedulingService } from '../task-scheduling.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
@@ -58,6 +59,7 @@ describe('AddTaskBarComponent', () => {
   let component: AddTaskBarComponent;
   let fixture: ComponentFixture<AddTaskBarComponent>;
   let mockTaskService: jasmine.SpyObj<TaskService>;
+  let mockTaskSchedulingService: jasmine.SpyObj<TaskSchedulingService>;
   let mockWorkContextService: jasmine.SpyObj<WorkContextService>;
   let mockProjectService: jasmine.SpyObj<ProjectService>;
   let mockTagService: jasmine.SpyObj<TagService>;
@@ -187,11 +189,13 @@ describe('AddTaskBarComponent', () => {
     sessionStorage.removeItem(SS.ADD_TASK_BAR_NOTE);
 
     // Create spies
+    mockTaskSchedulingService = jasmine.createSpyObj('TaskSchedulingService', [
+      'scheduleTask',
+    ]);
     mockTaskService = jasmine.createSpyObj('TaskService', [
       'add',
       'getByIdOnce$',
       'getByIdWithSubTaskData$',
-      'scheduleTask',
       'moveToCurrentWorkContext',
     ]);
     mockWorkContextService = jasmine.createSpyObj('WorkContextService', [], {
@@ -248,6 +252,7 @@ describe('AddTaskBarComponent', () => {
       imports: [AddTaskBarComponent, NoopAnimationsModule, TranslateModule.forRoot()],
       providers: [
         { provide: TaskService, useValue: mockTaskService },
+        { provide: TaskSchedulingService, useValue: mockTaskSchedulingService },
         { provide: WorkContextService, useValue: mockWorkContextService },
         { provide: ProjectService, useValue: mockProjectService },
         { provide: TagService, useValue: mockTagService },
@@ -1463,6 +1468,7 @@ describe('AddTaskBarComponent', () => {
         imports: [AddTaskBarComponent, NoopAnimationsModule, TranslateModule.forRoot()],
         providers: [
           { provide: TaskService, useValue: mockTaskService },
+          { provide: TaskSchedulingService, useValue: mockTaskSchedulingService },
           { provide: WorkContextService, useValue: mockWorkContextService },
           { provide: ProjectService, useValue: mockProjectServiceEmpty },
           { provide: TagService, useValue: mockTagService },
@@ -1783,6 +1789,7 @@ describe('AddTaskBarComponent', () => {
           imports: [AddTaskBarComponent, NoopAnimationsModule, TranslateModule.forRoot()],
           providers: [
             { provide: TaskService, useValue: mockTaskService },
+            { provide: TaskSchedulingService, useValue: mockTaskSchedulingService },
             { provide: WorkContextService, useValue: mockWorkContextService },
             { provide: ProjectService, useValue: mockProjectService },
             { provide: TagService, useValue: mockTagService },

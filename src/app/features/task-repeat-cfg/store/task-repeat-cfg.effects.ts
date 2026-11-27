@@ -17,6 +17,7 @@ import { Task, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
 import { TaskRepeatCfg, TaskRepeatCfgCopy } from '../task-repeat-cfg.model';
@@ -56,6 +57,7 @@ import { getRepeatDeadlineDay } from './get-repeat-deadline-day.util';
 export class TaskRepeatCfgEffects {
   private _localActions$ = inject(LOCAL_ACTIONS);
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
   private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
@@ -893,14 +895,14 @@ export class TaskRepeatCfgEffects {
         this._dateService.getStartOfNextDayDiffMs(),
       );
       if (task.remindAt) {
-        this._taskService.reScheduleTask({
+        this._taskSchedulingService.reScheduleTask({
           task,
           due: dateTime,
           remindCfg: completeCfg.remindAt,
           isMoveToBacklog: false,
         });
       } else {
-        this._taskService.scheduleTask(task, dateTime, completeCfg.remindAt);
+        this._taskSchedulingService.scheduleTask(task, dateTime, completeCfg.remindAt);
       }
     }
     if (changes.tagIds) {
