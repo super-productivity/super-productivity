@@ -497,6 +497,8 @@ describe('mapArchiveToWorklog weeks crossing a month boundary (#9950)', () => {
     expect(w[2026].ent[9].weeks[0].startDateStr).toBe('2026-08-30');
     expect(w[2026].ent[9].weeks[0].endDateStr).toBe('2026-09-05');
     expect(w[2026].ent[9].weeks[1].startDateStr).toBe('2026-09-06');
+    // #11855: Mon 2026-08-31 – Sat 09-05 are ISO W36, Mon 09-07 – Sat 09-12 are W37
+    expect(w[2026].ent[9].weeks.map((wk) => wk.weekNr)).toEqual([36, 37]);
   });
 
   it('should keep a week crossing the year boundary whole', () => {
