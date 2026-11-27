@@ -82,7 +82,9 @@ export class ReminderModule {
     this._initIOSNotificationActions();
     this._initAndroidNotificationActions();
 
-    this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
+    // Strict gate: the lenient one skips the wait for SuperSync, which would pop
+    // reminders already done/snoozed on another device. Capped and offline-safe.
+    this._syncTriggerService.afterInitialSyncDoneStrict$
       .pipe(
         first(),
         delay(1000),
