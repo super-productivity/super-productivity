@@ -326,14 +326,14 @@
   {
     "name": "NavoPath Sync",
     "shortDescription": "Two-way project, task and subtask sync with NavoPath Cloud, first-import review and conflict choices.",
-    "url": "https://github.com/shawn89890916/NavoPath-planner/tree/50f5b7b889df9b1bd50093b7cce891d9305288e4/integrations/super-productivity-navopath",
+    "url": "https://github.com/shawn89890916/NavoPath-planner/tree/a204267224e8a06de3e7cbb1f8bbd414d284ff27/integrations/super-productivity-navopath",
     "author": "NavoPath",
     "authorUrl": "https://github.com/shawn89890916",
     "id": "navopath-sync",
     "release": {
-      "version": "1.1.0",
-      "downloadUrl": "https://raw.githubusercontent.com/shawn89890916/NavoPath-planner/50f5b7b889df9b1bd50093b7cce891d9305288e4/integrations/super-productivity-navopath/navopath-sync-1.1.0.zip",
-      "sha256": "9f77783624f7e08aa585cc414aba9d5af208f75c3cb74925cbf839b410a6aef2"
+      "version": "1.1.1",
+      "downloadUrl": "https://raw.githubusercontent.com/shawn89890916/NavoPath-planner/a204267224e8a06de3e7cbb1f8bbd414d284ff27/integrations/super-productivity-navopath/navopath-sync-1.1.1.zip",
+      "sha256": "a9396e2b9f0e9cf16ec919b2ed6a10ce0cf3480fe862510279a34e8f86a1228c"
     }
   }
 ]
