@@ -75,6 +75,8 @@ const rejectedPendingFullStateOps = async (
     .filter((op) => op.source === 'local' && isFullStateOpType(op.opType) && !op.isSynced)
     .map((op) => ({ opType: op.opType, isRejected: op.isRejected }));
 
+// Either blocker may fire: the server-migration refusal (account wiped, so the
+// client must seed it again) or the upload barrier (account still seeded).
 const BLOCKED_LOG =
   /Upload remains blocked|snapshot was rejected|rejected full-state baseline/;
 
@@ -82,8 +84,9 @@ const BLOCKED_LOG =
  * #11671 reproduction, not a fix. Before v20.1.0 a SuperSync snapshot upload
  * that failed for an unrelated reason (here: a 401) marked the full-state op
  * rejected. v20.1.0 (#11673) stops new misclassifications, but a client that
- * is already marked keeps the upload barrier: the file-sync self-heal (#11445)
- * does not run for SuperSync.
+ * is already marked stays blocked: SuperSync refuses to seed the server again
+ * and keeps the upload barrier, while the file-sync self-heal (#11445) only
+ * runs for file-based providers.
  *
  * This spec asserts today's stuck behavior. When #11671 is fixed, invert the
  * expectations (sync succeeds, the task reaches B) and drop the log check.
@@ -137,11 +140,12 @@ test.describe('@supersync #11671 a client already stuck on a rejected snapshot',
       await clientA.workView.addTask(afterUpdate);
       await expect(clientA.sync.syncAndWait()).rejects.toThrow(/error state/);
       await expect(clientA.sync.syncErrorIcon).toBeVisible();
-      expect(logs.some((line) => BLOCKED_LOG.test(line))).toBe(true);
+      await expect.poll(() => logs.some((line) => BLOCKED_LOG.test(line))).toBe(true);
 
       // Sign out and in again: disable sync, then set it up with the same account.
       await clientA.sync.disableSync();
-      await clientA.sync.setupSuperSync(syncConfig);
+      // The initial sync of this setup fails too, so don't wait for it to settle.
+      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
       await expect(clientA.sync.syncAndWait()).rejects.toThrow(/error state/);
       expect(await rejectedPendingFullStateOps(clientA.page)).toEqual([
         { opType: 'SYNC_IMPORT', isRejected: true },
@@ -151,8 +155,15 @@ test.describe('@supersync #11671 a client already stuck on a rejected snapshot',
       clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
+      await clientB.workView.waitForTaskList();
       await expect(clientB.page.locator('task', { hasText: afterUpdate })).toHaveCount(0);
       await expect(clientB.page.locator('task', { hasText: beforeFault })).toHaveCount(0);
+
+      // Control: the account itself accepts uploads, so A is what's stuck.
+      const fromB = `From-B-${testRunId}`;
+      await clientB.workView.addTask(fromB);
+      await clientB.sync.syncAndWait();
+      await expect(clientB.sync.syncErrorIcon).toBeHidden();
     } finally {
       if (clientA) {
         await clientA.page.unroute(SUPERSYNC_SNAPSHOT_ROUTE).catch(() => {});
