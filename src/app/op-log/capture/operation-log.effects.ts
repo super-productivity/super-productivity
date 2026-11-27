@@ -61,6 +61,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   private compactionFailures = 0;
   /** Circuit breaker: prevents recursive quota exceeded handling */
   private isHandlingQuotaExceeded = false;
+  /** #11994: the storage-off warning is shown once per session, not per write. */
+  private hasWarnedStorageOff = false;
   /** Counter for total operations written. Used for high-volume sync debugging. */
   private writeCount = 0;
   /**
@@ -543,8 +545,17 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    */
   private notifyUserAndTriggerRollback(): void {
     // #11994: without the `indexedDB` global (iOS Lockdown Mode) every write
-    // fails and a reload cannot help; the startup dialog already explained why.
+    // fails and a reload cannot help. Warn once that edits are not kept, for
+    // users who skimmed the startup dialog, instead of a reload prompt per edit.
     if (typeof indexedDB === 'undefined') {
+      if (!this.hasWarnedStorageOff) {
+        this.hasWarnedStorageOff = true;
+        this.snackService.open({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.PERSIST_STORAGE_OFF,
+          config: { duration: 0 },
+        });
+      }
       return;
     }
     this.snackService.open({
