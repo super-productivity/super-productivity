@@ -930,6 +930,29 @@ describe('OperationLogEffects', () => {
       );
       actions$ = of(createPersistentAction(ActionType.TASK_SHARED_UPDATE));
     };
+    // Swap the descriptor (spyOnProperty needs an accessor). Restored in
+    // afterEach so a hung or failed test cannot leak the missing global.
+    let originalIdb: PropertyDescriptor | undefined;
+    let didRemoveIdb = false;
+    const removeIndexedDbGlobal = (): void => {
+      originalIdb = Object.getOwnPropertyDescriptor(window, 'indexedDB');
+      didRemoveIdb = true;
+      Object.defineProperty(window, 'indexedDB', {
+        value: undefined,
+        configurable: true,
+      });
+    };
+    afterEach(() => {
+      if (!didRemoveIdb) {
+        return;
+      }
+      didRemoveIdb = false;
+      if (originalIdb) {
+        Object.defineProperty(window, 'indexedDB', originalIdb);
+      } else {
+        Reflect.deleteProperty(window, 'indexedDB');
+      }
+    });
     const persistFailedSnackShown = (): boolean =>
       mockSnackService.open.calls
         .allArgs()
@@ -946,33 +969,16 @@ describe('OperationLogEffects', () => {
     });
 
     it('should NOT show the reload snack when the indexedDB global is missing', (done) => {
-      // Swap the descriptor (spyOnProperty needs an accessor) and restore it.
-      const original = Object.getOwnPropertyDescriptor(window, 'indexedDB');
-      Object.defineProperty(window, 'indexedDB', {
-        value: undefined,
-        configurable: true,
-      });
-      const restore = (): void => {
-        if (original) {
-          Object.defineProperty(window, 'indexedDB', original);
-        } else {
-          Reflect.deleteProperty(window, 'indexedDB');
-        }
-      };
+      removeIndexedDbGlobal();
       failAppend();
       effects.persistOperation$.subscribe({
         complete: () => {
-          restore();
           expect(persistFailedSnackShown()).toBe(false);
           // The divergence is still recorded; only the useless prompt is dropped.
           expect(
             mockOperationCaptureService.markUnrecoveredPersistFailure,
           ).toHaveBeenCalled();
           done();
-        },
-        error: (e) => {
-          restore();
-          done.fail(e);
         },
       });
     });
