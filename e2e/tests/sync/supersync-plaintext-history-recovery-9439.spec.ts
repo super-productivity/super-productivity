@@ -1,19 +1,28 @@
 import {
   SuperSyncDownloadOpsResponseSchema,
   SuperSyncOperationSchema,
+  SuperSyncUploadOpsResponseSchema,
 } from '@sp/shared-schema/supersync-http-contract';
 import { decrypt } from '@sp/sync-core';
 import { expect, test } from '../../fixtures/supersync.fixture';
+import { ImportPage } from '../../pages/import.page';
+import { serveReleasedClientAssets } from '../../utils/released-client-assets';
 import {
   closeClient,
   createSimulatedClient,
   createTestUser,
   getSuperSyncConfig,
+  renameTask,
   routeSuperSyncOps,
   SUPERSYNC_BASE_URL,
   type SimulatedE2EClient,
+  type TestUser,
   waitForTask,
 } from '../../utils/supersync-helpers';
+
+// v18.14.0 is the last release without the plaintext download guard (added in
+// v18.15.0). Bundle: scripts/fetch-released-client-assets.sh.
+const preGuardAssets = process.env.COMPAT_PRE_GUARD_ASSETS;
 
 type DownloadHistory = ReturnType<typeof SuperSyncDownloadOpsResponseSchema.parse>;
 
@@ -134,6 +143,73 @@ const seedPlaintextClone = async (
   return { id: plaintextOp.id, serverSeq: result.serverSeq };
 };
 
+/**
+ * Uploads an encrypted copy of a genuine app-created task update, so the
+ * history continues after the plaintext row as it does on a real account.
+ */
+const uploadEncryptedCloneAfter = async (
+  token: string,
+  testRunId: string,
+  history: DownloadHistory,
+): Promise<void> => {
+  const source = history.ops.find(
+    ({ op }) =>
+      op.entityType === 'TASK' && op.opType === 'UPD' && op.isPayloadEncrypted === true,
+  )?.op;
+  if (!source) throw new Error('No encrypted TASK update available to clone');
+  const clientId = `issue-9439-later-${testRunId}`;
+  const response = await fetch(`${SUPERSYNC_BASE_URL}/api/sync/ops`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      clientId,
+      ops: [
+        {
+          ...source,
+          id: crypto.randomUUID(),
+          clientId,
+          vectorClock: { ...mergeHistoryClock(history), [clientId]: 1 },
+          timestamp: Date.now(),
+        },
+      ],
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to upload encrypted clone: ${response.status}`);
+  }
+  const result = SuperSyncUploadOpsResponseSchema.parse(await response.json());
+  expect(result.results.every((entry) => entry.accepted)).toBe(true);
+};
+
+/** Waits until an encrypted full-state upload has replaced the mixed history. */
+const expectHistoryReplacedWithoutPlaintext = async (
+  user: TestUser,
+  plaintextOp: SeededPlaintextOperation,
+): Promise<void> => {
+  await expect
+    .poll(
+      async () => {
+        const [history, rawOps] = await Promise.all([
+          downloadServerHistory(user.token),
+          downloadRawServerOps(user.userId),
+        ]);
+        return (
+          !rawOps.some(({ id }) => id === plaintextOp.id) &&
+          history.latestSeq > plaintextOp.serverSeq &&
+          history.ops.every(({ op }) => op.isPayloadEncrypted === true) &&
+          history.ops.some(
+            ({ op, serverSeq }) =>
+              op.opType === 'SYNC_IMPORT' &&
+              op.isPayloadEncrypted === true &&
+              serverSeq > plaintextOp.serverSeq,
+          )
+        );
+      },
+      { timeout: 60000 },
+    )
+    .toBe(true);
+};
+
 const forceOverwriteFromTrustedClient = async (
   client: SimulatedE2EClient,
 ): Promise<void> => {
@@ -250,28 +326,7 @@ test.describe('@supersync @encryption #9439 plaintext history recovery', () => {
       await expect(integritySnack).toContainText('Force Overwrite');
 
       await forceOverwriteFromTrustedClient(trustedClient);
-      await expect
-        .poll(
-          async () => {
-            const [history, rawOps] = await Promise.all([
-              downloadServerHistory(user.token),
-              downloadRawServerOps(user.userId),
-            ]);
-            return (
-              !rawOps.some(({ id }) => id === plaintextOp.id) &&
-              history.latestSeq > plaintextOp.serverSeq &&
-              history.ops.every(({ op }) => op.isPayloadEncrypted === true) &&
-              history.ops.some(
-                ({ op, serverSeq }) =>
-                  op.opType === 'SYNC_IMPORT' &&
-                  op.isPayloadEncrypted === true &&
-                  serverSeq > plaintextOp.serverSeq,
-              )
-            );
-          },
-          { timeout: 60000 },
-        )
-        .toBe(true);
+      await expectHistoryReplacedWithoutPlaintext(user, plaintextOp);
 
       const recoveredHistory = await downloadServerHistory(user.token);
       expect(recoveredHistory.ops.every(({ op }) => op.isPayloadEncrypted === true)).toBe(
@@ -286,6 +341,141 @@ test.describe('@supersync @encryption #9439 plaintext history recovery', () => {
     } finally {
       if (trustedClient) await closeClient(trustedClient);
       if (freshClient) await closeClient(freshClient);
+    }
+  });
+});
+
+// The reporter's case: the only install with the data is gone, so no trusted
+// current client exists. Skips without the released bundle; the scheduled
+// workflow's released-client job supplies it.
+test.describe('@supersync @encryption #9439 recovery without a trusted client', () => {
+  test.skip(
+    !preGuardAssets,
+    'Set COMPAT_PRE_GUARD_ASSETS to the unmodified v18.14.0 assets',
+  );
+  let assets: Awaited<ReturnType<typeof serveReleasedClientAssets>>;
+
+  test.beforeAll(async () => {
+    // A free port: other released suites may serve their bundle concurrently.
+    assets = await serveReleasedClientAssets(
+      { old: preGuardAssets!, new: preGuardAssets! },
+      0,
+    );
+  });
+  test.afterAll(async () => assets?.close());
+
+  test('v18.14.0 downloads the mixed history and its backup restores the account', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }, testInfo) => {
+    test.setTimeout(300000);
+    const clients: SimulatedE2EClient[] = [];
+
+    try {
+      const user = await createTestUser(testRunId);
+      const password = `issue-9439-${testRunId}`;
+      const syncConfig = {
+        ...getSuperSyncConfig(user),
+        isEncryptionEnabled: true,
+        password,
+      };
+      const originalTask = `Original-${testRunId}`;
+      const renamedTask = `Renamed-${testRunId}`;
+      const secondTask = `Second-${testRunId}`;
+
+      // The install that no longer exists: it is never used after seeding.
+      const lostClient = await createSimulatedClient(
+        browser,
+        baseURL!,
+        'lost',
+        testRunId,
+      );
+      clients.push(lostClient);
+      await lostClient.sync.setupSuperSync(syncConfig);
+      await lostClient.workView.addTask(originalTask);
+      await lostClient.workView.addTask(secondTask);
+      await lostClient.sync.syncAndWait();
+      await renameTask(lostClient, originalTask, renamedTask);
+      await lostClient.sync.syncAndWait();
+
+      const plaintextOp = await seedPlaintextClone(
+        user.userId,
+        password,
+        testRunId,
+        await downloadServerHistory(user.token),
+      );
+      await uploadEncryptedCloneAfter(
+        user.token,
+        testRunId,
+        await downloadServerHistory(user.token),
+      );
+
+      // The current version cannot download the account.
+      const stuckClient = await createSimulatedClient(
+        browser,
+        baseURL!,
+        'stuck',
+        testRunId,
+      );
+      clients.push(stuckClient);
+      await stuckClient.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+      });
+      await expect(stuckClient.sync.syncErrorIcon).toBeVisible({ timeout: 60000 });
+      await expect(
+        stuckClient.page.locator(`task:has-text("${renamedTask}")`),
+      ).toHaveCount(0);
+
+      // v18.14.0 downloads it with the same password and exports a backup.
+      const preGuardClient = await createSimulatedClient(
+        browser,
+        assets.url,
+        'pre-guard',
+        testRunId,
+        { serviceWorkers: 'block' },
+      );
+      clients.push(preGuardClient);
+      await preGuardClient.sync.setupSuperSync(syncConfig);
+      await preGuardClient.sync.syncAndWait();
+      await waitForTask(preGuardClient.page, renamedTask);
+      await waitForTask(preGuardClient.page, secondTask);
+      await expect(preGuardClient.sync.syncErrorIcon).not.toBeVisible();
+
+      const exportPage = new ImportPage(preGuardClient.page);
+      await exportPage.navigateToImportPage();
+      const download = preGuardClient.page.waitForEvent('download');
+      await exportPage.exportBackupBtn.click();
+      const backupPath = testInfo.outputPath('pre-guard-backup.json');
+      await (await download).saveAs(backupPath);
+
+      // The current version imports that backup and replaces the server copy.
+      const importPage = new ImportPage(stuckClient.page);
+      await importPage.navigateToImportPage();
+      await importPage.importBackupFile(backupPath);
+      await forceOverwriteFromTrustedClient(stuckClient);
+      await expectHistoryReplacedWithoutPlaintext(user, plaintextOp);
+      await stuckClient.page.keyboard.press('Escape');
+      await stuckClient.page.goto('/#/work-view');
+      await waitForTask(stuckClient.page, renamedTask);
+      await waitForTask(stuckClient.page, secondTask);
+
+      // Any further current install now syncs normally.
+      const freshClient = await createSimulatedClient(
+        browser,
+        baseURL!,
+        'fresh',
+        testRunId,
+      );
+      clients.push(freshClient);
+      await freshClient.sync.setupSuperSync(syncConfig);
+      await freshClient.sync.syncAndWait();
+      await waitForTask(freshClient.page, renamedTask);
+      await waitForTask(freshClient.page, secondTask);
+      await expect(freshClient.sync.syncErrorIcon).not.toBeVisible();
+    } finally {
+      for (const client of clients) await closeClient(client);
     }
   });
 });
