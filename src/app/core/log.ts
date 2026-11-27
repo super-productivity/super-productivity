@@ -37,7 +37,7 @@ const truncateSerialized = (value: string): string =>
 // Windows usernames may contain spaces but none of these: " / \ [ ] : ; | = , + * ? < >
 const WINDOWS_HOME_RE =
   /(?<![\w.-])([a-z]:[\\/]+users[\\/]+)[^\\/"'[\]:;|=,+*?<>\r\n\t]+/gi;
-const POSIX_HOME_RE = /(?<![\w.-])(\/(?:Users|home)\/)[^\\/"'\s:)]+/g;
+const POSIX_HOME_RE = /(?<![\w.-])(\/(?:Users|home|var\/home)\/)[^\\/"'\s:)]+/g;
 
 const redactHomePaths = (value: string): string =>
   value.replace(WINDOWS_HOME_RE, '$1<user>').replace(POSIX_HOME_RE, '$1<user>');
