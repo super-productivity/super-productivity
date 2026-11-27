@@ -1180,6 +1180,7 @@ export class OperationLogHydratorService {
       buildIdbOpenErrorMessage(error, {
         channel: detectChannel(),
         appVersion: getAppVersionStr(),
+        isIdbAvailable: typeof indexedDB !== 'undefined',
       }),
     );
   }
