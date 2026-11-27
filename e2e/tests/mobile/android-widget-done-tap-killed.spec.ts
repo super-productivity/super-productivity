@@ -93,25 +93,6 @@ const readState = async (page: Page): Promise<TaskState> => {
 const isTaskDone = async (page: Page, taskId: string): Promise<boolean | undefined> =>
   (await readState(page)).tasks.entities[taskId]?.isDone;
 
-const hasOpFor = (page: Page, taskId: string): Promise<boolean> =>
-  page.evaluate(async (id) => {
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const r = indexedDB.open('SUP_OPS');
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
-    });
-    try {
-      const ops = await new Promise<unknown[]>((resolve, reject) => {
-        const r = db.transaction('ops').objectStore('ops').getAll();
-        r.onsuccess = () => resolve(r.result);
-        r.onerror = () => reject(r.error);
-      });
-      return JSON.stringify(ops).includes(id);
-    } finally {
-      db.close();
-    }
-  }, taskId);
-
 /**
  * Holds a write transaction over the whole op-log database until the page
  * goes away. This is what a tap on a frozen Android app looks like from JS
@@ -140,7 +121,55 @@ const stallOpLogWrites = (page: Page): Promise<void> =>
     });
   });
 
+const tapWidget = (page: Page, id: string): Promise<void> =>
+  page.evaluate(
+    ({ key, taskId }) => {
+      const queue = JSON.parse(localStorage.getItem(key) || '{}');
+      localStorage.setItem(key, JSON.stringify({ ...queue, [taskId]: true }));
+      (window as unknown as WidgetWindow).SUPAndroid.onWidgetDoneDrainRequest$.next();
+    },
+    { key: QUEUE_KEY, taskId: id },
+  );
+
 test.describe('Android widget done tap', () => {
+  test('applies a second widget tap while the first still awaits a deferred write', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('First widget tap');
+    await workViewPage.addTask('Second widget tap');
+    const [firstId, secondId] = Object.keys((await readState(page)).tasks.entities);
+
+    await page.evaluate(async () => {
+      const helpers = (window as unknown as WidgetWindow).__e2eTestHelpers;
+      await helpers.flushPendingWrites();
+      helpers.hydrationState.startApplyingRemoteOps();
+    });
+    await tapWidget(page, firstId);
+    await expect.poll(() => isTaskDone(page, firstId)).toBe(true);
+    // A remote apply can exit before its deferred actions are persisted.
+    await page.evaluate(() =>
+      (
+        window as unknown as WidgetWindow
+      ).__e2eTestHelpers.hydrationState.endApplyingRemoteOps(),
+    );
+    await tapWidget(page, secondId);
+    await expect.poll(() => isTaskDone(page, secondId), { timeout: 8000 }).toBe(true);
+    expect(
+      await page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key) || '{}'),
+        QUEUE_KEY,
+      ),
+    ).toHaveProperty(firstId, true);
+    await page.evaluate(() =>
+      (window as unknown as WidgetWindow).__e2eTestHelpers.processDeferredActions(),
+    );
+    await expect
+      .poll(() => page.evaluate((key) => localStorage.getItem(key), QUEUE_KEY))
+      .toBeNull();
+  });
+
   test('keeps a later reopen after the widget tap was written at the end of sync', async ({
     page,
     workViewPage,
@@ -185,20 +214,17 @@ test.describe('Android widget done tap', () => {
   }) => {
     await workViewPage.waitForTaskList();
     await workViewPage.addTask('Widget tap on a frozen app');
-    const taskId = Object.keys((await readState(page)).tasks.entities)[0];
-    expect(taskId).toBeTruthy();
-    // The task itself must be durable before writes are stalled.
-    await expect.poll(() => hasOpFor(page, taskId)).toBe(true);
+    await workViewPage.addTask('Second tap before a frozen write finishes');
+    const [taskId, secondId] = Object.keys((await readState(page)).tasks.entities);
+    await page.evaluate(() =>
+      (window as unknown as WidgetWindow).__e2eTestHelpers.flushPendingWrites(),
+    );
 
     await stallOpLogWrites(page);
-    await page.evaluate(
-      ([key, id]) => {
-        localStorage.setItem(key, JSON.stringify({ [id]: true }));
-        (window as unknown as WidgetWindow).SUPAndroid.onWidgetDoneDrainRequest$.next();
-      },
-      [QUEUE_KEY, taskId],
-    );
+    await tapWidget(page, taskId);
     await expect.poll(() => isTaskDone(page, taskId)).toBe(true);
+    await tapWidget(page, secondId);
+    await expect.poll(() => isTaskDone(page, secondId), { timeout: 8000 }).toBe(true);
 
     // Process death: the in-memory change is gone, the native queue is not.
     await page.reload();
@@ -212,6 +238,7 @@ test.describe('Android widget done tap', () => {
     await page.reload();
     await waitForAppReady(page);
     await expect.poll(() => isTaskDone(page, taskId)).toBe(true);
+    await expect.poll(() => isTaskDone(page, secondId)).toBe(true);
   });
 
   // Legacy online mode loads this web app into an APK older than peek/ack.

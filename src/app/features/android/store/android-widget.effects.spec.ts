@@ -56,6 +56,24 @@ describe('AndroidWidgetEffects - getTaskDoneChangesToApply', () => {
     expect(getTaskDoneChangesToApply('{"a":false}', entities({ id: 'a' }))).toEqual([]);
   });
 
+  it('only applies new or changed native targets while a previous read awaits acknowledgement', () => {
+    const tasks = entities(
+      { id: 'reopened' },
+      { id: 'toggled', isDone: true },
+      { id: 'new' },
+    );
+    expect(
+      getTaskDoneChangesToApply(
+        '{"reopened":true,"toggled":false,"new":true}',
+        tasks,
+        '{"reopened":true,"toggled":true}',
+      ),
+    ).toEqual([
+      { id: 'toggled', isDone: false },
+      { id: 'new', isDone: true },
+    ]);
+  });
+
   it('should return empty for invalid JSON', () => {
     expect(getTaskDoneChangesToApply('not json', entities({ id: 'a' }))).toEqual([]);
   });
@@ -83,7 +101,7 @@ describe('AndroidWidgetEffects - ackWidgetDoneQueueOnceWritten', () => {
           };
         }),
       hasUnrecoveredPersistFailure: () => false,
-      waitForDeferredWrites: () => Promise.resolve(),
+      hasDeferredWrites: () => false,
       ack: (queueJson) => calls.push(`ack ${queueJson}`),
     });
 
@@ -100,7 +118,7 @@ describe('AndroidWidgetEffects - ackWidgetDoneQueueOnceWritten', () => {
     await ackWidgetDoneQueueOnceWritten('{"a":true}', {
       flushPendingWrites: () => Promise.reject(new Error('flush timeout')),
       hasUnrecoveredPersistFailure: () => false,
-      waitForDeferredWrites: () => Promise.resolve(),
+      hasDeferredWrites: () => false,
       ack,
     });
     expect(ack).not.toHaveBeenCalled();
@@ -111,7 +129,7 @@ describe('AndroidWidgetEffects - ackWidgetDoneQueueOnceWritten', () => {
     await ackWidgetDoneQueueOnceWritten('{"a":true}', {
       flushPendingWrites: () => Promise.resolve(),
       hasUnrecoveredPersistFailure: () => true,
-      waitForDeferredWrites: () => Promise.resolve(),
+      hasDeferredWrites: () => false,
       ack,
     });
     expect(ack).not.toHaveBeenCalled();
@@ -119,19 +137,15 @@ describe('AndroidWidgetEffects - ackWidgetDoneQueueOnceWritten', () => {
 
   it('should keep the queue while a tap applied during a sync is still unwritten', async () => {
     const ack = jasmine.createSpy('ack');
-    let finishDeferredWrites!: () => void;
-    const done = ackWidgetDoneQueueOnceWritten('{"a":true}', {
-      flushPendingWrites: () => Promise.resolve(),
+    const flush = jasmine.createSpy('flush');
+    await ackWidgetDoneQueueOnceWritten('{"a":true}', {
+      flushPendingWrites: flush,
       hasUnrecoveredPersistFailure: () => false,
-      waitForDeferredWrites: () =>
-        new Promise<void>((resolve) => (finishDeferredWrites = resolve)),
+      hasDeferredWrites: () => true,
       ack,
     });
-    await Promise.resolve();
+    expect(flush).not.toHaveBeenCalled();
     expect(ack).not.toHaveBeenCalled();
-    finishDeferredWrites();
-    await done;
-    expect(ack).toHaveBeenCalledOnceWith('{"a":true}');
   });
 });
 
