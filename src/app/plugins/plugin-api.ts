@@ -213,6 +213,11 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#boundMethods.stopTracking();
   }
 
+  async openProject(projectId: string): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} opened a project`, { projectId });
+    return this.#boundMethods.openProject(projectId);
+  }
+
   async getTasks(): Promise<Task[]> {
     PluginLog.log(`Plugin ${this.#pluginId} requested all tasks`);
     const tasks = await this.#pluginBridge.getTasks();

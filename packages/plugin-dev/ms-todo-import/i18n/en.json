@@ -55,6 +55,7 @@
     "CREATED_TAGS": "Created tags: {{tags}}",
     "NOT_CARRIED_OVER": "Not carried over",
     "SNACK_FINISHED": "Microsoft To Do import finished",
+    "OPEN_PROJECT": "Open “{{title}}”",
     "UNDO": "The import is additive — to undo it, delete the created projects."
   },
   "PARSE": {

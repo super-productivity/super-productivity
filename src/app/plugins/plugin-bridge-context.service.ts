@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
@@ -12,6 +13,7 @@ import {
 } from '../features/tasks/store/task.selectors';
 import { DateService } from '../core/date/date.service';
 import { T } from '../t.const';
+import { selectProjectFeatureState } from '../features/project/store/project.selectors';
 import { toActiveWorkContext } from './util/active-work-context.util';
 import { pluginAssert } from './plugin-bridge-asserts';
 
@@ -22,11 +24,12 @@ export type PluginContextBoundMethods = {
   getDayContext: () => Promise<PluginDayContext>;
   startTracking: (taskId: string) => Promise<void>;
   stopTracking: () => Promise<void>;
+  openProject: (projectId: string) => Promise<void>;
 };
 
 /**
  * Plugin API methods about "where and when the user is": the open work
- * context, the logical day and time tracking. Split from PluginBridgeService,
+ * context, the logical day, time tracking and opening a project. Split from PluginBridgeService,
  * which is at its size cap.
  */
 @Injectable({ providedIn: 'root' })
@@ -36,6 +39,7 @@ export class PluginBridgeContextService {
   private _taskService = inject(TaskService);
   private _dateService = inject(DateService);
   private _translateService = inject(TranslateService);
+  private _router = inject(Router);
 
   createBoundMethods(): PluginContextBoundMethods {
     return {
@@ -43,6 +47,7 @@ export class PluginBridgeContextService {
       getDayContext: () => this.getDayContext(),
       startTracking: (taskId: string) => this.startTracking(taskId),
       stopTracking: () => this.stopTracking(),
+      openProject: (projectId: string) => this.openProject(projectId),
     };
   }
 
@@ -99,5 +104,26 @@ export class PluginBridgeContextService {
 
   async stopTracking(): Promise<void> {
     this._taskService.setCurrentId(null);
+  }
+
+  /** Shows the project's task list, e.g. after an importer created it. */
+  async openProject(projectId: string): Promise<void> {
+    pluginAssert.string(projectId);
+    const { entities } = await firstValueFrom(
+      this._store.select(selectProjectFeatureState),
+    );
+    if (!entities[projectId]) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.PROJECT_NOT_FOUND, {
+          contextId: projectId,
+        }),
+      );
+    }
+    // a guard (e.g. focus mode overlay) can block it; tell the plugin instead of a silent no-op
+    if (!(await this._router.navigate(['/project', projectId, 'tasks']))) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.PROJECT_NAVIGATION_BLOCKED),
+      );
+    }
   }
 }

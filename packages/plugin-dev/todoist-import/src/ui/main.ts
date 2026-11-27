@@ -336,6 +336,26 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
       ]
     : [];
 
+  // hand the user straight to what landed instead of leaving them on this page
+  const landing = result.imported[0];
+  const openAction: HTMLElement[] = [];
+  if (landing && api().openProject) {
+    const openBtn = el('button', {
+      text: t('SUMMARY.OPEN_PROJECT', { title: landing.title }),
+    });
+    openBtn.addEventListener('click', () => {
+      api()
+        .openProject?.(landing.projectId)
+        .catch((e: unknown) =>
+          api().showSnack({
+            msg: e instanceof Error ? e.message : String(e),
+            type: 'ERROR',
+          }),
+        );
+    });
+    openAction.push(el('div', { className: 'actions' }, [openBtn]));
+  }
+
   if (!result.errorMessage) {
     api().showSnack({ msg: t('SUMMARY.SNACK_FINISHED'), type: 'SUCCESS' });
   }
@@ -348,6 +368,7 @@ const renderSummaryStep = (result: ImportResult, lossyNotes: LossNote[]): void =
     ...failedRepeats,
     ...tagLine,
     ...failure,
+    ...openAction,
     ...lossy,
     el('p', {
       className: 'text-muted text-sm',
