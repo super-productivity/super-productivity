@@ -968,7 +968,7 @@ describe('OperationLogEffects', () => {
       });
     });
 
-    it('should warn once, without a reload action, when the indexedDB global is missing', (done) => {
+    it('should warn once, with OK instead of reload, when the indexedDB global is missing', (done) => {
       removeIndexedDbGlobal();
       failAppend();
       // Two failed writes in one session: the user needs to learn once that
@@ -981,11 +981,17 @@ describe('OperationLogEffects', () => {
         complete: () => {
           const msgs = mockSnackService.open.calls
             .allArgs()
-            .map(([p]) => p as { msg?: string; actionStr?: string });
+            .map(
+              ([p]) =>
+                p as { msg?: string; actionStr?: string; config?: { duration?: number } },
+            );
           expect(persistFailedSnackShown()).toBe(false);
           const storageOff = msgs.filter((m) => m.msg === T.F.SYNC.S.PERSIST_STORAGE_OFF);
           expect(storageOff.length).toBe(1);
-          expect(storageOff[0].actionStr).toBeUndefined();
+          // Sticky + actionable is what SnackService protects from being
+          // replaced by e.g. TASK_CREATED; the action is a plain OK, not Reload.
+          expect(storageOff[0].actionStr).toBe(T.G.OK);
+          expect(storageOff[0].config?.duration).toBe(0);
           // The divergence is still recorded; only the useless prompt is dropped.
           expect(
             mockOperationCaptureService.markUnrecoveredPersistFailure,
