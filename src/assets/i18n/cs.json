@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Nelze synchronizovat, protože je offline",
-        "SYNC_ERROR": "Dropbox: Chyba při synchronizaci",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Synchronizace Dropbox vyžaduje zabezpečené připojení (HTTPS). Ujistěte se, že aplikaci používáte přes HTTPS, nebo vyzkoušejte stabilní verzi."
       }
     },
@@ -1765,7 +1764,6 @@
         "RESTORE_SUCCESS": "Data úspěšně obnovena",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Nepodařilo se migrovat data na server – validace lokálních dat selhala. Zkuste prosím importovat zálohu.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Tato synchronizační složka byla upgradována na formát s rozdělenými soubory. Chcete-li pokračovat, zapněte Surgical sync v nastavení synchronizace.",
-        "STORAGE_QUOTA_EXCEEDED": "Úložiště na synchronizačním serveru je plné. Vaše změny se NESYNCHRONIZUJÍ. Archivujte prosím staré úkoly nebo upgradujte svůj tarif.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Kapacita úložiště byla nízká. Stará data byla úspěšně vyčištěna.",
         "SUCCESS_DOWNLOAD": "Data synchronizována ze vzdáleného serveru",
         "SUCCESS_VIA_BUTTON": "Data úspěšně synchronizována",

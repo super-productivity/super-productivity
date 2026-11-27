@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Nie można zsynchronizować danych, ponieważ utracono połączenie z internetem",
-        "SYNC_ERROR": "Dropbox: Wystąpił błąd podczas synchronizacji",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Nie można wygenerować wyzwania PKCE."
       }
     },
@@ -1766,7 +1765,6 @@
         "RESTORE_SUCCESS": "Dane przywrócone pomyślnie",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Nie udało się zmigrować danych na serwer - walidacja danych lokalnych nie powiodła się. Spróbuj zaimportować kopię zapasową.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Ten folder synchronizacji został zaktualizowany do formatu podzielonych plików. Aby kontynuować, włącz Surgical sync w ustawieniach synchronizacji.",
-        "STORAGE_QUOTA_EXCEEDED": "Serwer synchronizacji jest pełny. Twoje zmiany NIE są synchronizowane! Zarchiwizuj stare zadania lub uaktualnij plan.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Przestrzeń dyskowa była na wyczerpaniu. Stare dane zostały pomyślnie wyczyszczone.",
         "SUCCESS_DOWNLOAD": "Zsynchronizowano dane ze zdalnego źródła",
         "SUCCESS_VIA_BUTTON": "Dane zostały pomyślnie zsynchronizowane",

@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox：オフラインのため、同期できません",
-        "SYNC_ERROR": "Dropbox：同期中のエラー",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: PKCE チャレンジを生成できません。"
       }
     },
@@ -1764,7 +1763,6 @@
         "RESTORE_SUCCESS": "データが正常に復元されました",
         "SERVER_MIGRATION_VALIDATION_FAILED": "サーバーへのデータ移行ができませんでした - ローカルデータの検証に失敗しました。バックアップのインポートをお試しください。",
         "SPLIT_FORMAT_ENABLE_SETTING": "この同期フォルダーは分割ファイル形式にアップグレードされました。続行するには、同期設定で Surgical sync を有効にしてください。",
-        "STORAGE_QUOTA_EXCEEDED": "同期サーバーのストレージがいっぱいです。変更は同期されていません！古いタスクをアーカイブするか、プランをアップグレードしてください。",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "ストレージが不足していました。古いデータのクリーンアップに成功しました。",
         "SUCCESS_DOWNLOAD": "リモートからの同期データ",
         "SUCCESS_VIA_BUTTON": "データが正常に同期されました",

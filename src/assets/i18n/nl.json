@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: kan niet synchroniseren omdat je offline bent",
-        "SYNC_ERROR": "Synchroniseren voor afsluiten mislukt. Je wijzigingen zijn op dit apparaat opgeslagen; bij de volgende start wordt het opnieuw geprobeerd.",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox-synchronisatie vereist een beveiligde verbinding (HTTPS). Zorg dat je de app via HTTPS gebruikt of probeer de stabiele versie."
       }
     },
@@ -1709,6 +1708,7 @@
         "DEFERRED_ACTION_FAILED": "Sommige wijzigingen tijdens de synchronisatie konden nog niet worden opgeslagen. De volgende synchronisatie probeert het opnieuw; laat de app open.",
         "DEFERRED_ACTION_PERMANENT_FAILED": "Een wijziging kon niet worden opgeslagen en de synchronisatie is gepauzeerd. Laad opnieuw om de laatst opgeslagen staat te herstellen.",
         "DEFERRED_ACTIONS_STUCK": "Synchronisatie lijkt vast te lopen. Je recente wijzigingen staan in de wachtrij en zijn nog niet opgeslagen. Als je de app opnieuw laadt, wordt de synchronisatie hersteld, maar gaan deze wijzigingen verloren.",
+        "DEVICE_STORAGE_FULL": "Dit apparaat heeft geen opslagruimte meer voor de app, dus je laatste wijziging is niet opgeslagen. Maak schijfruimte of browseropslag vrij en herlaad.",
         "DISABLE_ENCRYPTION_FAILED": "Versleuteling uitschakelen mislukt: {{message}}",
         "ENABLE_ENCRYPTION_FAILED": "Versleuteling inschakelen mislukt: {{message}}",
         "ENCRYPTION_PASSWORD_REQUIRED": "Versleutelde gegevens ontvangen maar er is geen versleutelingswachtwoord geconfigureerd. Stel je versleutelingswachtwoord in bij de synchronisatie-instellingen.",
@@ -1764,10 +1764,10 @@
         "RESTORE_SUCCESS": "Gegevens succesvol hersteld",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Kan gegevens niet naar de server migreren - lokale gegevensvalidatie is mislukt. Probeer een back-up te importeren.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Deze synchronisatiemap is bijgewerkt naar de gesplitste bestandsindeling. Schakel Surgical sync in de synchronisatie-instellingen in om door te gaan.",
-        "STORAGE_QUOTA_EXCEEDED": "Dit apparaat heeft geen opslagruimte meer voor de app, dus je laatste wijziging is niet opgeslagen. Maak schijfruimte of browseropslag vrij en herlaad.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Opslag was bijna vol. Oude gegevens succesvol opgeschoond.",
         "SUCCESS_DOWNLOAD": "Gegevens van extern gesynchroniseerd",
         "SUCCESS_VIA_BUTTON": "Gegevens succesvol gesynchroniseerd",
+        "SYNC_BEFORE_CLOSE_FAILED": "Synchroniseren voor afsluiten mislukt. Je wijzigingen zijn op dit apparaat opgeslagen; bij de volgende start wordt het opnieuw geprobeerd.",
         "SYNC_DATA_RECOVERED_FROM_BACKUP": "Synchronisatiegegevens zijn uit een back-up hersteld nadat het hoofdbestand niet kon worden gelezen.",
         "SYNC_VALIDATION_FAILED": "De gegevens konden na de synchronisatie niet worden gevalideerd. Sommige gegevens kunnen inconsistent zijn.",
         "TIMEOUT_ERROR": "De synchronisatiebewerking is verlopen. {{suggestion}}",

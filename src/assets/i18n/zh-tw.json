@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox：已離線，無法同步",
-        "SYNC_ERROR": "Dropbox：同步時發生錯誤",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox 同步需要安全連線（HTTPS）。請確保您透過 HTTPS 使用應用程式，或嘗試使用穩定版本。"
       }
     },
@@ -1764,7 +1763,6 @@
         "RESTORE_SUCCESS": "資料還原成功",
         "SERVER_MIGRATION_VALIDATION_FAILED": "無法將資料遷移到伺服器——本地資料驗證失敗。請嘗試匯入備份。",
         "SPLIT_FORMAT_ENABLE_SETTING": "此同步資料夾已升級為分割檔案格式。請在同步設定中啟用 Surgical sync 以繼續。",
-        "STORAGE_QUOTA_EXCEEDED": "同步伺服器儲存空間已滿。您的變更未在同步！請封存舊任務或升級您的方案。",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "儲存空間即將不足。舊資料已成功清理。",
         "SUCCESS_DOWNLOAD": "已從遠端同步資料",
         "SUCCESS_VIA_BUTTON": "資料同步成功",

@@ -82,7 +82,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    * Dedupe timestamp for the storage-quota snackbar. #7700: when quota fires
    * inside the deferred-action retry loop, the retry loop calls handleQuotaExceeded
    * up to MAX_RETRIES times — without dedupe the user would see 3 identical
-   * STORAGE_QUOTA_EXCEEDED snacks plus the final DEFERRED_ACTION_FAILED.
+   * DEVICE_STORAGE_FULL snacks plus the final DEFERRED_ACTION_FAILED.
    */
   private lastStorageQuotaSnackAt = 0;
   /** Suppression window for duplicate storage-quota snackbars. */
@@ -710,7 +710,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     this.lastStorageQuotaSnackAt = now;
     this.snackService.open({
       type: 'ERROR',
-      msg: T.F.SYNC.S.STORAGE_QUOTA_EXCEEDED,
+      msg: T.F.SYNC.S.DEVICE_STORAGE_FULL,
       actionStr: T.PS.RELOAD,
       actionFn: (): void => {
         window.location.reload();

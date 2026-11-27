@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: 无法同步，因为离线",
-        "SYNC_ERROR": "Dropbox: 同步时出错",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: 无法生成 PKCE 挑战。"
       }
     },
@@ -1764,7 +1763,6 @@
         "RESTORE_SUCCESS": "数据恢复成功",
         "SERVER_MIGRATION_VALIDATION_FAILED": "无法将数据迁移到服务器——本地数据验证失败。请尝试导入备份。",
         "SPLIT_FORMAT_ENABLE_SETTING": "此同步文件夹已升级为拆分文件格式。请在同步设置中启用“精细同步”以继续。",
-        "STORAGE_QUOTA_EXCEEDED": "同步服务器存储空间已满。您的更改未同步。请归档旧任务或升级您的套餐。",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "存储空间即将不足。旧数据已成功清理。",
         "SUCCESS_DOWNLOAD": "已从远程同步数据",
         "SUCCESS_VIA_BUTTON": "数据已成功同步",

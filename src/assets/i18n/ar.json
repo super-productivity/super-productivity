@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "دروب باكس: غير قادر على المزامنة ، لأنك غير متصل بالإنترنت",
-        "SYNC_ERROR": "دروب باكس: حدث خطأ أثناء المزامنة",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "دروب باكس: غير قادر على إنشاء نمط للمصادقة"
       }
     },
@@ -1764,7 +1763,6 @@
         "RESTORE_SUCCESS": "تمت الاستعادة بنجاح",
         "SERVER_MIGRATION_VALIDATION_FAILED": "فشل التحقق من ترحيل الخادم",
         "SPLIT_FORMAT_ENABLE_SETTING": "تمت ترقية مجلد المزامنة هذا إلى تنسيق الملفات المنفصلة. فعّل Surgical sync في إعدادات المزامنة للمتابعة.",
-        "STORAGE_QUOTA_EXCEEDED": "تم تجاوز حصة التخزين",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "تم استعادة التخزين بعد الضغط",
         "SUCCESS_DOWNLOAD": "البيانات المتزامنة من جهاز التحكم عن بعد",
         "SUCCESS_VIA_BUTTON": "تمت مزامنة البيانات بنجاح",

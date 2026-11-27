@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Não foi possível sincronizar por estar offline",
-        "SYNC_ERROR": "Dropbox: Erro ao sincronizar",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "A sincronização do Dropbox requer uma conexão segura (HTTPS). Certifique-se de que está usando o aplicativo via HTTPS ou tente a versão estável."
       }
     },
@@ -1764,7 +1763,6 @@
         "RESTORE_SUCCESS": "Dados restaurados com sucesso",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Não foi possível migrar os dados - falha na validação dos dados locais. Tente importar um backup.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Esta pasta de sincronização foi atualizada para o formato de arquivos divididos. Ative o Surgical sync nas configurações de Sincronização para continuar.",
-        "STORAGE_QUOTA_EXCEEDED": "O armazenamento do servidor está cheio. Suas alterações NÃO estão sincronizando! Arquive tarefas antigas ou mude seu plano.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "O espaço estava acabando. Limpeza de dados antigos concluída com sucesso.",
         "SUCCESS_DOWNLOAD": "Dados sincronizados do remoto",
         "SUCCESS_VIA_BUTTON": "Dados sincronizados com sucesso",

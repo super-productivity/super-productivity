@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: impossibile sincronizzare, perché offline",
-        "SYNC_ERROR": "Dropbox: errore durante la sincronizzazione",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: impossibile generare scambio PKCE."
       }
     },
@@ -1764,7 +1763,6 @@
         "RESTORE_SUCCESS": "Dati ripristinati con successo",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Impossibile migrare i dati al server - validazione dati locali fallita. Prova a importare un backup.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Questa cartella di sincronizzazione è stata aggiornata al formato con file suddivisi. Per continuare, attiva Surgical sync nelle impostazioni di sincronizzazione.",
-        "STORAGE_QUOTA_EXCEEDED": "Lo spazio del server di sincronizzazione è pieno. Le tue modifiche NON vengono sincronizzate! Archivia le vecchie attività o aggiorna il tuo piano.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Lo spazio stava per esaurirsi. Vecchi dati eliminati con successo.",
         "SUCCESS_DOWNLOAD": "Dati sincronizzati da remoto",
         "SUCCESS_VIA_BUTTON": "Dati sincronizzati con successo",

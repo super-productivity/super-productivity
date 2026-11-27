@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Không thể đồng bộ vì ngoại tuyến",
-        "SYNC_ERROR": "Dropbox: Lỗi khi đồng bộ",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Đồng bộ Dropbox yêu cầu kết nối bảo mật (HTTPS). Hãy đảm bảo bạn đang sử dụng ứng dụng qua HTTPS hoặc thử phiên bản ổn định."
       }
     },
@@ -1764,7 +1763,6 @@
         "RESTORE_SUCCESS": "Khôi phục thành công",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Không thể di chuyển dữ liệu lên máy chủ - xác thực dữ liệu cục bộ thất bại. Vui lòng thử nhập một bản sao lưu.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Thư mục đồng bộ này đã được nâng cấp sang định dạng tệp phân tách. Hãy bật Đồng bộ phân tách trong cài đặt Đồng bộ để tiếp tục.",
-        "STORAGE_QUOTA_EXCEEDED": "Đầy bộ nhớ đồng bộ!",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Đã dọn dẹp bộ nhớ.",
         "SUCCESS_DOWNLOAD": "Đã đồng bộ từ xa",
         "SUCCESS_VIA_BUTTON": "Đã đồng bộ thành công",

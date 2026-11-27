@@ -524,7 +524,7 @@ export class OperationLogUploadService {
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           OpLog.error(`OperationLogUploadService: Upload failed: ${message}`);
-          handleStorageQuotaError(err);
+          handleStorageQuotaError(err, this.injector);
           throw err; // Re-throw to propagate the error
         }
 
@@ -950,7 +950,7 @@ export class OperationLogUploadService {
       }
       const message = err instanceof Error ? err.message : 'Unknown error';
       OpLog.error(`OperationLogUploadService: Snapshot upload failed: ${message}`);
-      handleStorageQuotaError(err);
+      handleStorageQuotaError(err, this.injector);
       // #11344/#11352: a file-based remote is plain storage. It cannot judge a
       // snapshot: the adapter returns its only verdict (REPAIR_STALE) as a
       // result. A thrown error (auth, permission, a network message the

@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Tidak dapat menyinkron, karena offline",
-        "SYNC_ERROR": "Dropbox: Error saat menyinkronkan",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Tidak dapat membuat tantangan PKCE."
       }
     },
@@ -1764,7 +1763,6 @@
         "RESTORE_SUCCESS": "Data berhasil dipulihkan",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Tidak dapat memigrasikan data ke server - validasi data lokal gagal. Silakan coba impor cadangan.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Folder sinkronisasi ini telah ditingkatkan ke format berkas terpisah. Aktifkan Surgical sync di pengaturan Sinkronisasi untuk melanjutkan.",
-        "STORAGE_QUOTA_EXCEEDED": "Penyimpanan server sinkronisasi penuh. Perubahan Anda TIDAK tersinkronkan! Harap arsipkan tugas lama atau tingkatkan paket Anda.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Penyimpanan hampir penuh. Data lama berhasil dibersihkan.",
         "SUCCESS_DOWNLOAD": "Data yang disinkronkan dari jarak jauh",
         "SUCCESS_VIA_BUTTON": "Data berhasil disinkronkan",
