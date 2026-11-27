@@ -9,31 +9,6 @@ import { IMPORTANT_TAG, IN_PROGRESS_TAG, URGENT_TAG } from '../tag/tag.const';
 import { T } from '../../t.const';
 
 export const DEFAULT_BOARDS: BoardCfg[] = [
-  // First, so turning on Views opens a list of everything. New installs only:
-  // stored boards replace this list on load.
-  {
-    id: 'ALL_TASKS',
-    title: T.F.BOARDS.DEFAULT.ALL_TASKS,
-    cols: 1,
-    panels: [
-      {
-        // not the board's id: a reorder declares the panel id and an edit the
-        // board id as the same entity type, so a shared id makes them conflict
-        id: 'ALL_TASKS_LIST',
-        title: T.F.BOARDS.DEFAULT.ALL_TASKS,
-        includedTagIds: [],
-        excludedTagIds: [],
-        taskIds: [],
-        taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
-        scheduledState: BoardPanelCfgScheduledState.All,
-        backlogState: BoardPanelCfgTaskTypeFilter.All,
-        // not parent tasks only: the list nests sub tasks by itself, and an
-        // open sub task of a done parent would be hidden
-        isParentTasksOnly: false,
-        projectIds: [''],
-      },
-    ],
-  },
   {
     id: 'EISENHOWER_MATRIX',
     title: T.F.BOARDS.DEFAULT.EISENHAUER_MATRIX,

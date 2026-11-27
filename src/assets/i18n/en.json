@@ -145,7 +145,6 @@
     },
     "BOARDS": {
       "DEFAULT": {
-        "ALL_TASKS": "All tasks",
         "DONE": "Done",
         "EISENHAUER_MATRIX": "Eisenhower Matrix",
         "IN_PROGRESS": "In Progress",
