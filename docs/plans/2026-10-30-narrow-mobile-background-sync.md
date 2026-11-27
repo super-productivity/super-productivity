@@ -1,12 +1,12 @@
 # Narrow mobile background sync: push on pause and on notification actions
 
-> **Status: Step 0 in progress** (§ 5); steps 1–2 and § 14 are parked for
-> later investigation (§ 16)
+> **Status: Step 0 shipped in v20.0.0** (#11330, § 5); step 1 is proposed
+> for a decision (§ 17); step 2 and § 14 stay parked (§ 16)
 >
-> **Owner / tracking:** Unassigned; no tracking issue yet. Open one before the PR.
+> **Owner / tracking:** Unassigned; #11365.
 > Each implementation step is a sync PR (AGENTS.md sync rules 15–16).
 >
-> **Last verified against the code:** 2026-10-30 (`ed27bd1e95`)
+> **Last verified against the code:** 2026-11-27 (`43ce2fa442`)
 >
 > **Removal condition:** delete once the steps in § 5 are shipped or declined
 > in an issue; move anything that still matters into
@@ -327,8 +327,10 @@ ops pending
   makes it more frequent (WebDAV on iOS rarely fits the budget). Check the
   Nextcloud/WebDAV E2E for the interruption case before shipping step 0 for
   file providers. If it is not clean, run step 0 as flush-only for them.
-  Not checked yet: the step 0 branch pushes for every provider, so this
-  check gates its PR leaving draft (§ 16).
+  Checked for WebDAV with strong ETags:
+  `e2e/tests/sync/webdav-android-pause-push-interrupted.spec.ts` converges
+  for both outcomes (upload never arrived; stored but response lost). Weak or
+  missing ETags keep the existing best-effort race.
 - **R4: stale intent** (§ 7). This is a content override, not loss, and it
   already exists.
 - **Persisted formats.** No persisted model, sync wire, schema version or
@@ -457,18 +459,68 @@ launch.
 
 Parked while step 0 ships. Revisit after one release with step 0:
 
-- [ ] Re-check new reports shaped like #25/#88/#89. Persisting reports
-      decide step 1 (§ 5).
+- [x] Re-check new reports shaped like #25/#88/#89: done 2026-11-27 (§ 17).
 - [ ] Step 1: Android notification actions while the app is alive, with
       ack-after-persist (R1, E2Es 3–5).
 - [ ] Step 2: iOS non-foreground actions, only if a device test shows R2.
-- [ ] R3 (§ 10) was not checked before step 0: file providers push on
-      pause too (only with an unsynced op and their interval on, as their
-      old pause/hidden triggers did). Run the WebDAV interruption case; if it is not clean, make
-      the exit path flush-only for file providers on iOS (Q4). Add the
-      `@webdav` variant of E2E 1 (§ 11).
+- [x] R3 (§ 10): the WebDAV interruption case is clean
+      (`webdav-android-pause-push-interrupted.spec.ts`). Still open: the
+      `@webdav` variant of E2E 1 (§ 11) and the iOS budget (Q4).
 - [ ] Q1–Q6 (§ 14), in particular Q3 (cold E2EE key derivation inside the
       iOS budget) and Q4 (WebDAV inside the budget).
 - [ ] Device-check step 0 on Android: does the push finish before the
       freezer stops JS (Q1)? On iOS: does `finish()` always come before
       expiry?
+
+## 17. Re-check after step 0 (2026-11-27)
+
+**Survey export of 2026-11-27 (284 responses, last one 2026-11-24).** Twelve
+answers describe this problem: the nine in § 1 minus the two timing-conflict
+rows, plus #204, #215, #216, #218 and #234. All are dated 2026-10-27 to
+11-08. v20.0.0, the first release with step 0, was tagged 2026-11-06, so none
+of them can be read as "still broken after step 0". Of the 18 phone users who
+answered the sync question from 2026-11-09 on, one may describe it (#235,
+Dropbox: tasks completed on the desktop sometimes stay open on the phone;
+it does not say whether the app was opened). That is weak evidence (store
+rollout lags the tag), not proof.
+
+| What the twelve describe                                    | Rows                      | After step 0                                          |
+| ----------------------------------------------------------- | ------------------------- | ----------------------------------------------------- |
+| A phone change needs a manual sync, or the app closes first | #89, #204, #234           | Pushed on pause; a cut-off push retries safely (§ 9). |
+| Notification or widget "done" does not reach other devices  | #25, #88, #218            | **Open**: see below.                                  |
+| Nothing arrives while the app is closed                     | #26, #72, #83, #215, #216 | Open by design (sibling note: A.1, iOS limit).        |
+| Opening the app just to sync is discouraging                | #96                       | Partly: outbound only.                                |
+
+**Reproduced (2026-11-27, single client, fake Android bridge, throwaway
+spec).** With the app alive in the background for 8 s, a queued reminder
+"done" is never read: the task stays open and no op exists until `onResume$`.
+The same tap from the widget is applied at once, because the widget sends a
+drain signal and the reminder receiver does not (§ 2). Not reproduced here:
+the two-client variant (provider servers are unreachable from a sandboxed
+session, `e2e/AGENTS.md`), and anything that depends on the real Android
+freezer or on iOS suspension (§ 14 Q1–Q2).
+
+**What a tap needs today to reach other devices:**
+
+| Phone app state         | Reminder "done"/snooze    | Widget checkbox                                                          |
+| ----------------------- | ------------------------- | ------------------------------------------------------------------------ |
+| Alive in the background | Waits for the next resume | Applied at once; SuperSync uploads, file providers wait for a timer tick |
+| Frozen (cached)         | Waits for the next resume | Unmeasured (Q1)                                                          |
+| Killed                  | Waits for the next launch | Waits for the next launch                                                |
+
+**Proposed for a decision: step 1, with two additions.**
+
+1. Step 1 as in § 5 (drain signal, ack after persist, push after the drain),
+   for the reminder and the widget queue alike. The widget queue has R1
+   today: it is cleared on read while the app is in the background.
+2. The receiver holds a short `goAsync()` window (as `ReminderAlarmReceiver`
+   does) until JS reports the push settled or about 8 s pass, so a thawed
+   process is not refrozen mid-push (Q1).
+
+Not safe as a smaller change: a drain signal without ack-after-persist.
+`_handleDoneAction` awaits a full `sync()` before it marks the task done, and
+the queue is already empty by then. A process killed in that wait loses the
+tap for good, while its notification and alarm are gone.
+
+It still does not cover a killed app. Only A.2 does (SuperSync only), and its
+preconditions are unchanged (§ 5 "Not proposed").
