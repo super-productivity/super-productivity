@@ -1,4 +1,7 @@
-import { getRepeatDueWithTime } from './get-repeat-due-with-time.util';
+import {
+  getLogicalDayForClockTime,
+  getRepeatDueWithTime,
+} from './get-repeat-due-with-time.util';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 
@@ -70,5 +73,27 @@ describe('getRepeatDueWithTime', () => {
 
   it('throws for an invalid clock string like getDateTimeFromClockString', () => {
     expect(() => getRepeatDueWithTime('nope', logicalDay, 5 * H)).toThrowError();
+  });
+});
+
+describe('getLogicalDayForClockTime', () => {
+  const FOUR_HOURS = 4 * 60 * 60 * 1000;
+
+  it('puts a time before the day start on the previous day', () => {
+    expect(getLogicalDayForClockTime('02:00', new Date(2026, 2, 31), FOUR_HOURS)).toBe(
+      '2026-03-30',
+    );
+  });
+
+  it('keeps a time at or after the day start on its own day', () => {
+    expect(getLogicalDayForClockTime('04:00', new Date(2026, 2, 31), FOUR_HOURS)).toBe(
+      '2026-03-31',
+    );
+  });
+
+  it('keeps the calendar day without an offset', () => {
+    expect(getLogicalDayForClockTime('00:30', new Date(2026, 2, 31), 0)).toBe(
+      '2026-03-31',
+    );
   });
 });

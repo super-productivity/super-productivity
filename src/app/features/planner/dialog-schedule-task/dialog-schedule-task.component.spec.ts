@@ -542,6 +542,28 @@ describe('DialogScheduleTaskComponent', () => {
       );
     });
 
+    // select-due-only callers (add-task bar, calendar events, bulk schedule)
+    // combine the returned date with the time as a logical day too
+    it('returns logical today from the Today pick for select-due-only callers', async () => {
+      component.data = { isSelectDueOnly: true };
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date(2026, 10, 29, 1, 0));
+        component.selectedTime = '02:00';
+        component.onQuickAccessClick('today');
+        await Promise.resolve();
+      } finally {
+        jasmine.clock().uninstall();
+      }
+
+      const result = dialogRefSpy.close.calls.mostRecent().args[0] as {
+        date: Date;
+        time: string;
+      };
+      expect(getDbDateStr(result.date)).toBe('2026-11-28');
+      expect(result.time).toBe('02:00');
+    });
+
     it('shows the day the task belongs to and keeps it when saved unchanged', async () => {
       const dueWithTime = new Date(2026, 10, 29, 2, 0, 0, 0).getTime();
       const mockTask = {

@@ -7,6 +7,7 @@ import { Tag } from '../../tag/tag.model';
 import { TaskReminderOptionId } from '../task.model';
 import { findSpringForwardSunday } from '../dst.test-helper';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
 
 describe('AddTaskBarParserService', () => {
   let service: AddTaskBarParserService;
@@ -2168,6 +2169,52 @@ describe('AddTaskBarParserService', () => {
       await inFlight;
 
       expect(realState.state().deadlineDate).toBe('2027-05-01');
+    });
+
+    // With the day starting at 04:00, "@2am" typed at 22:00 means tonight, the
+    // late night of logical today. The bar holds logical days, so the chip and
+    // the submit place it on today, not on tomorrow's calendar date (#12012).
+    it('should keep "@2am" typed before midnight on logical today with a custom day start', async () => {
+      spyOn(TestBed.inject(DateService), 'getStartOfNextDayDiffMs').and.returnValue(
+        4 * 60 * 60 * 1000,
+      );
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 2, 30, 22, 0));
+      try {
+        await parse('Night shift @2am');
+      } finally {
+        jasmine.clock().uninstall();
+      }
+
+      expect(realState.state().date).toBe('2026-03-30');
+      expect(realState.state().time).toBe('02:00');
+    });
+
+    // On the spring-forward Sunday a time just after the day start is less
+    // than the offset past midnight, yet it belongs to that Sunday
+    it('should keep a time just after a custom day start on its day on a spring-forward day', async () => {
+      const gap = findSpringForwardSunday(2026);
+      if (!gap) {
+        // Timezone without a spring-forward transition (UTC, Tokyo).
+        return;
+      }
+      const dayStartHour = gap.missingHour + 2;
+      spyOn(TestBed.inject(DateService), 'getStartOfNextDayDiffMs').and.returnValue(
+        dayStartHour * 60 * 60 * 1000,
+      );
+      const saturdayEvening = new Date(gap.sunday);
+      saturdayEvening.setDate(saturdayEvening.getDate() - 1);
+      saturdayEvening.setHours(20, 0, 0, 0);
+      jasmine.clock().install();
+      jasmine.clock().mockDate(saturdayEvening);
+      try {
+        await parse(`Early run @${dayStartHour}:30am`);
+      } finally {
+        jasmine.clock().uninstall();
+      }
+
+      expect(realState.state().date).toBe(getDbDateStr(gap.sunday));
+      expect(realState.state().time).toBe(`0${dayStartHour}:30`);
     });
   });
 

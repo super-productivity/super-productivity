@@ -570,13 +570,9 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   }
 
   onQuickAccessClick(option: 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'): void {
-    // Scheduling here combines the time on a logical day (#12012), so start from
-    // logical today. shortcut: select-due-only callers (add-task bar, calendar
-    // events) combine with the calendar date, so they keep it until they are
-    // logical-day aware too.
-    const tDate = this.data.isSelectDueOnly
-      ? new Date()
-      : this._dateService.getLogicalTodayDate();
+    // Every caller combines the time on a logical day (#12012), so start from
+    // logical today
+    const tDate = this._dateService.getLogicalTodayDate();
     tDate.setMinutes(0, 0, 0);
 
     switch (option) {

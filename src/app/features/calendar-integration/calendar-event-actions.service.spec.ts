@@ -14,6 +14,9 @@ import { ScheduleFromCalendarEvent } from '../schedule/schedule.model';
 import { IssueProviderPluginType } from '../issue/issue.model';
 import { Log } from '../../core/log';
 import { T } from '../../t.const';
+import { DateService } from '../../core/date/date.service';
+import { findSpringForwardSunday } from '../tasks/dst.test-helper';
+import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 
 describe('CalendarEventActionsService', () => {
   let service: CalendarEventActionsService;
@@ -182,6 +185,69 @@ describe('CalendarEventActionsService', () => {
     expect(calendarIntegrationService.triggerRefresh).toHaveBeenCalled();
     expect(snackService.open).toHaveBeenCalledWith(
       jasmine.objectContaining({ actionStr: T.G.UNDO }),
+    );
+  });
+
+  // With the day starting at 04:00, an event at 02:00 on the 21st belongs to
+  // logical day 20; the dialog shows that day, and saving it unchanged must
+  // keep the event where it is (#12012)
+  it('keeps an event before a custom day start in place when saved unchanged', async () => {
+    spyOn(TestBed.inject(DateService), 'getStartOfNextDayDiffMs').and.returnValue(
+      4 * 60 * 60 * 1000,
+    );
+    matDialog.open.and.returnValue({
+      afterClosed: () => of({ date: new Date(2026, 2, 20), time: '02:00' }),
+    } as any);
+
+    await service.reschedule(
+      createCalendarEvent({ start: new Date(2026, 2, 21, 2, 0).getTime() }),
+    );
+
+    expect(matDialog.open.calls.mostRecent().args[1]?.data).toEqual(
+      jasmine.objectContaining({ targetDay: '2026-03-20', targetTime: '02:00' }),
+    );
+    expect(adapter.pushChanges).toHaveBeenCalledWith(
+      'cal-1:event-1',
+      jasmine.objectContaining({
+        ['start_dateTime']: new Date(2026, 2, 21, 2, 0).toISOString(),
+      }),
+      providerCfg,
+    );
+  });
+
+  // On the spring-forward Sunday the hours after midnight are one short, so a
+  // time just after the day start is less than the offset past midnight. It
+  // still belongs to that Sunday, not the Saturday before.
+  it('keeps an event just after a custom day start in place on a spring-forward day', async () => {
+    const gap = findSpringForwardSunday(2026);
+    if (!gap) {
+      // Timezone without a spring-forward transition (UTC, Tokyo).
+      return;
+    }
+    const dayStartHour = gap.missingHour + 2;
+    spyOn(TestBed.inject(DateService), 'getStartOfNextDayDiffMs').and.returnValue(
+      dayStartHour * 60 * 60 * 1000,
+    );
+    const start = new Date(gap.sunday);
+    start.setHours(dayStartHour, 30, 0, 0);
+    // the dialog hands back what it was opened with
+    matDialog.open.and.callFake(
+      (_c: unknown, cfg?: { data?: { targetDay: string; targetTime: string } }) =>
+        ({
+          afterClosed: () =>
+            of({
+              date: dateStrToUtcDate(cfg!.data!.targetDay),
+              time: cfg!.data!.targetTime,
+            }),
+        }) as any,
+    );
+
+    await service.reschedule(createCalendarEvent({ start: start.getTime() }));
+
+    expect(adapter.pushChanges).toHaveBeenCalledWith(
+      'cal-1:event-1',
+      jasmine.objectContaining({ ['start_dateTime']: start.toISOString() }),
+      providerCfg,
     );
   });
 
