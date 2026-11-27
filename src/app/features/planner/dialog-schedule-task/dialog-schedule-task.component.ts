@@ -39,7 +39,10 @@ import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
 import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { ReminderService } from '../../reminder/reminder.service';
-import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
+import {
+  getLogicalDayOfTimestamp,
+  getRepeatDueWithTime,
+} from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -290,8 +293,11 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         // Do NOT add timezone offset here as it would double-apply the conversion (fixes #5515)
         // Show the logical day, or saving unchanged would push an early-morning
         // time (before a custom day start) one day later (#12012)
-        this.selectedDate = new Date(
-          this.data.task.dueWithTime - this._dateService.getStartOfNextDayDiffMs(),
+        this.selectedDate = dateStrToUtcDate(
+          getLogicalDayOfTimestamp(
+            this.data.task.dueWithTime,
+            this._dateService.getStartOfNextDayDiffMs(),
+          ),
         );
         this.selectedTime = new Date(this.data.task.dueWithTime).toLocaleTimeString(
           'en-GB',

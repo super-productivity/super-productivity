@@ -48,3 +48,13 @@ export const getLogicalDayForClockTime = (
   }
   return getDbDateStr(day);
 };
+
+/** The logical day a timestamp's clock time belongs to (see above). */
+export const getLogicalDayOfTimestamp = (
+  timestamp: number,
+  startOfNextDayDiffMs: number,
+): string => {
+  const d = new Date(timestamp);
+  const clock = `${d.getHours()}:${d.getMinutes()}`;
+  return getLogicalDayForClockTime(clock, d, startOfNextDayDiffMs);
+};

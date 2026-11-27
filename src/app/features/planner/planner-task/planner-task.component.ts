@@ -59,6 +59,7 @@ import { first } from 'rxjs/operators';
 import { isInputElement, isLinkTarget } from '../../../util/dom-element';
 import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
+import { getLogicalDayOfTimestamp } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import {
   moveTaskDownInTodayList,
   moveTaskToBottomInTodayList,
@@ -556,7 +557,12 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     const displayedDay = this.day();
     // the logical day of the time, as _scheduleForDay expects (#12012)
     const baseDate = task.dueWithTime
-      ? new Date(task.dueWithTime - this._dateService.getStartOfNextDayDiffMs())
+      ? parseDbDateStr(
+          getLogicalDayOfTimestamp(
+            task.dueWithTime,
+            this._dateService.getStartOfNextDayDiffMs(),
+          ),
+        )
       : displayedDay
         ? parseDbDateStr(displayedDay)
         : task.dueDay

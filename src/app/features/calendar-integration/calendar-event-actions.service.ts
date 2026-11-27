@@ -21,7 +21,7 @@ import { IS_ELECTRON } from '../../app.constants';
 import { DialogScheduleTaskComponent } from '../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import {
-  getLogicalDayForClockTime,
+  getLogicalDayOfTimestamp,
   getRepeatDueWithTime,
 } from '../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { DateService } from '../../core/date/date.service';
@@ -152,9 +152,9 @@ export class CalendarEventActionsService {
       : `${String(eventDate.getHours()).padStart(2, '0')}:${String(eventDate.getMinutes()).padStart(2, '0')}`;
     // The dialog picks logical days: a timed event before a custom day start
     // belongs to the previous one (#12012). All-day events keep their date.
-    const targetDay = targetTime
-      ? getLogicalDayForClockTime(targetTime, eventDate, startOfNextDayDiffMs)
-      : getDbDateStr(eventDate);
+    const targetDay = calEv.isAllDay
+      ? getDbDateStr(eventDate)
+      : getLogicalDayOfTimestamp(calEv.start, startOfNextDayDiffMs);
 
     const dialogRef = this._matDialog.open(DialogScheduleTaskComponent, {
       restoreFocus: true,

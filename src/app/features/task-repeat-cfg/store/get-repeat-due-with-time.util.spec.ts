@@ -1,5 +1,6 @@
 import {
   getLogicalDayForClockTime,
+  getLogicalDayOfTimestamp,
   getRepeatDueWithTime,
 } from './get-repeat-due-with-time.util';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
@@ -95,5 +96,17 @@ describe('getLogicalDayForClockTime', () => {
     expect(getLogicalDayForClockTime('00:30', new Date(2026, 2, 31), 0)).toBe(
       '2026-03-31',
     );
+  });
+});
+
+describe('getLogicalDayOfTimestamp', () => {
+  it('puts a time before the day start on the previous day', () => {
+    const ts = new Date(2026, 2, 31, 2, 0).getTime();
+    expect(getLogicalDayOfTimestamp(ts, 4 * 60 * 60 * 1000)).toBe('2026-03-30');
+  });
+
+  it('keeps a time at or after the day start on its own day', () => {
+    const ts = new Date(2026, 2, 31, 4, 0).getTime();
+    expect(getLogicalDayOfTimestamp(ts, 4 * 60 * 60 * 1000)).toBe('2026-03-31');
   });
 });

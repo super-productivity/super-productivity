@@ -28,6 +28,7 @@ import { ReminderService } from '../../reminder/reminder.service';
 import { PlannerActions } from '../store/planner.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { findSpringForwardSunday } from '../../tasks/dst.test-helper';
 import { DateService } from '../../../core/date/date.service';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { ScheduleConfig } from '../../config/global-config.model';
@@ -583,6 +584,39 @@ describe('DialogScheduleTaskComponent', () => {
       expect(taskSchedulingServiceSpy.scheduleTask).toHaveBeenCalledWith(
         jasmine.objectContaining({ id: 'earlyMorningTask' }),
         dueWithTime,
+        jasmine.anything(),
+        false,
+      );
+    });
+
+    // On the spring-forward Sunday a time just after the day start is less
+    // than the offset past midnight, yet it belongs to that Sunday
+    it('opens a time just after the day start on its own day on a spring-forward day', async () => {
+      const gap = findSpringForwardSunday(2026);
+      if (!gap) {
+        // Timezone without a spring-forward transition (UTC, Tokyo).
+        return;
+      }
+      const dayStartHour = gap.missingHour + 2;
+      dateService.setStartOfNextDayDiff(dayStartHour);
+      const due = new Date(gap.sunday);
+      due.setHours(dayStartHour, 30, 0, 0);
+      const mockTask = {
+        ...component.data.task,
+        id: 'dstTask',
+        dueWithTime: due.getTime(),
+        reminderId: null,
+      } as unknown as TaskCopy;
+      component.data = { task: mockTask };
+      component.task = mockTask;
+
+      await component.ngAfterViewInit();
+      expect(getDbDateStr(component.selectedDate as Date)).toBe(getDbDateStr(gap.sunday));
+
+      await component.submit();
+      expect(taskSchedulingServiceSpy.scheduleTask).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'dstTask' }),
+        due.getTime(),
         jasmine.anything(),
         false,
       );
