@@ -1,0 +1,70 @@
+name: 'Performance Benchmark'
+
+# On demand, plus one weekly run on master. Reports only: slow numbers never
+# fail the job; setup or endpoint failures do. See e2e/README.md.
+on:
+  schedule:
+    - cron: '0 3 * * 1' # Mondays 03:00 UTC
+
+  workflow_dispatch:
+    inputs:
+      profiles:
+        description: 'Comma-separated profiles (empty = all: baseline,large-account,long-list)'
+        required: false
+        type: string
+        default: ''
+      scenarios:
+        description: 'Comma-separated scenarios (empty = all: reload,switch-project,add-task)'
+        required: false
+        type: string
+        default: ''
+      samples:
+        description: 'Measured samples per profile/scenario'
+        required: false
+        type: string
+        default: '5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    name: Benchmark
+    # One fixed runner class: numbers from different classes are not comparable.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup E2E Environment
+        uses: ./.github/actions/setup-e2e
+
+      - name: Build production web app
+        run: npm run buildFrontend:prodWeb
+
+      - name: Run benchmark
+        timeout-minutes: 20
+        env:
+          PERF_PROFILES: ${{ inputs.profiles }}
+          PERF_SCENARIOS: ${{ inputs.scenarios }}
+          PERF_SAMPLES: ${{ inputs.samples || '5' }}
+        run: npm run perf:run
+
+      - name: Upload results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-benchmark
+          path: |
+            .tmp/perf/results.json
+            .tmp/perf/summary.md
+            .tmp/perf/test-results/**
+          retention-days: 30
+          if-no-files-found: warn
