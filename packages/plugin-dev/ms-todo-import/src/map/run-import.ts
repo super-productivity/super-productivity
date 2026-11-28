@@ -158,6 +158,9 @@ const importProject = async (
       continue;
     }
     const updates: Partial<Task> = {};
+    if (followUp.created !== undefined) {
+      updates.created = followUp.created;
+    }
     if (followUp.dueDay) {
       updates.dueDay = followUp.dueDay;
     }

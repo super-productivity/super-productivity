@@ -24,6 +24,7 @@ export const MICROSOFT_TODO_TAG_TITLE = 'microsoft-todo';
 
 export interface TaskFollowUp {
   tempId: string;
+  created?: number;
   dueDay?: string;
   /** resolved to tag IDs at run time (existing tags are reused by title) */
   tagTitles?: string[];
@@ -173,6 +174,9 @@ export const planImport = (
     const followUps: TaskFollowUp[] = [];
     for (const t of tasks) {
       const followUp: TaskFollowUp = { tempId: tempId(t.extId) };
+      if (t.created !== undefined) {
+        followUp.created = t.created;
+      }
       if (t.dueDay) {
         followUp.dueDay = t.dueDay;
       }
@@ -188,7 +192,12 @@ export const planImport = (
       if (t.repeat) {
         followUp.repeat = t.repeat;
       }
-      if (followUp.dueDay || followUp.tagTitles || followUp.repeat) {
+      if (
+        followUp.created !== undefined ||
+        followUp.dueDay ||
+        followUp.tagTitles ||
+        followUp.repeat
+      ) {
         followUps.push(followUp);
       }
     }

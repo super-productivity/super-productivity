@@ -156,6 +156,26 @@ describe('runImport', () => {
     expect(ops[1].data.parentId).toBe('temp-a');
   });
 
+  it('applies imported creation timestamps through updateTask follow-ups', async () => {
+    const plan = planImport(
+      model([
+        task({ extId: 'a', created: 1_700_000_000_000 }),
+        task({ extId: 'b', created: 1_700_000_001_000 }),
+      ]),
+      { isTagImportant: false },
+    );
+    const { api, sentBatches, updates } = createFakeApi();
+
+    await runImport(api, plan, () => {});
+
+    const createOps = sentBatches[0].operations as BatchTaskCreate[];
+    expect(createOps.every((op) => op.data.created === undefined)).toBe(true);
+    expect(updates).toEqual([
+      { taskId: 'real-temp-a', changes: { created: 1_700_000_000_000 } },
+      { taskId: 'real-temp-b', changes: { created: 1_700_000_001_000 } },
+    ]);
+  });
+
   it('never maps a category onto the virtual TODAY tag', async () => {
     const plan = planImport(model([task({ extId: 'a', categories: ['Today'] })]), {
       isTagImportant: false,

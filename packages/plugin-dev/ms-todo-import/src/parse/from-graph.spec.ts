@@ -19,6 +19,33 @@ describe('parseGraphData', () => {
     ]);
   });
 
+  it('imports valid creation timestamps and inherits the parent timestamp for untimed steps', () => {
+    const [parent, step, inheritedStep] = parseTasks([
+      {
+        id: 'T1',
+        title: 'Created task',
+        createdDateTime: '2026-09-01T10:30:00Z',
+        checklistItems: [
+          { id: 's1', displayName: 'Step', createdDateTime: '2026-09-01T11:30:00Z' },
+          { id: 's2', displayName: 'Untimed step' },
+        ],
+      },
+    ]);
+    expect(parent.created).toBe(Date.parse('2026-09-01T10:30:00Z'));
+    expect(step.created).toBe(Date.parse('2026-09-01T11:30:00Z'));
+    expect(inheritedStep.created).toBe(Date.parse('2026-09-01T10:30:00Z'));
+    expect(
+      parseTasks([
+        {
+          id: 'T2',
+          title: 'Invalid timestamp',
+          createdDateTime: 'not a timestamp',
+          checklistItems: [{ id: 's3', displayName: 'Step' }],
+        },
+      ]).map((task) => task.created),
+    ).toEqual([undefined, undefined]);
+  });
+
   it('maps an open task with notes, categories, star, reminder and attachments', () => {
     const [t] = parseTasks([
       {
@@ -93,6 +120,8 @@ describe('parseGraphData', () => {
       ['Next', null, false],
     ]);
     expect(tasks[1].extId).toBe('T1-step-s1');
+    expect(tasks[1].created).toBe(Date.parse('2026-09-01T10:30:00Z'));
+    expect(tasks[2].created).toBe(Date.parse('2026-09-01T11:30:00Z'));
   });
 
   it('turns a mappable recurrence into a repeat and keeps the rule for a fallback', () => {

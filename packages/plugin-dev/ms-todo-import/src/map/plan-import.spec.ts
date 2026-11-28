@@ -106,7 +106,7 @@ describe('planImport', () => {
     }
   });
 
-  it('emits follow-ups only for tasks with a due day, tags or a repeat', () => {
+  it('emits follow-ups for task creation timestamps, due days, tags or repeats', () => {
     const repeat = {
       schedule: { quickSetting: 'DAILY' as const },
       notesWithRule: 'Repeats: every day',
@@ -114,16 +114,17 @@ describe('planImport', () => {
     const plan = planImport(
       model({
         tasks: [
-          task({ extId: 'plain' }),
-          task({ extId: 'due', dueDay: '2026-12-01' }),
-          task({ extId: 'rep', dueDay: '2026-12-02', repeat }),
+          task({ extId: 'plain', created: 1 }),
+          task({ extId: 'due', created: 2, dueDay: '2026-12-01' }),
+          task({ extId: 'rep', created: 3, dueDay: '2026-12-02', repeat }),
         ],
       }),
       NO_TAG,
     );
     expect(plan.projects[0].followUps).toEqual([
-      { tempId: 'temp-due', dueDay: '2026-12-01' },
-      { tempId: 'temp-rep', dueDay: '2026-12-02', repeat },
+      { tempId: 'temp-plain', created: 1 },
+      { tempId: 'temp-due', created: 2, dueDay: '2026-12-01' },
+      { tempId: 'temp-rep', created: 3, dueDay: '2026-12-02', repeat },
     ]);
   });
 

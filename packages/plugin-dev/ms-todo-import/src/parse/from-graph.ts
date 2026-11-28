@@ -44,6 +44,7 @@ export interface RawGraphData {
 const MAX_TITLE_LEN = 1000;
 const MAX_CATEGORY_LEN = 200;
 const MAX_NOTES_LEN = 50_000;
+const MAX_CREATED_MS = 32_503_680_000_000;
 
 export interface ParseStrings {
   untitledList: string;
@@ -58,6 +59,13 @@ const DEFAULT_PARSE_STRINGS: ParseStrings = {
 };
 
 const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+const parseCreated = (value: string | undefined): number | undefined => {
+  const timestamp = Date.parse(asStr(value).trim());
+  return Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= MAX_CREATED_MS
+    ? timestamp
+    : undefined;
+};
 
 interface Clamped {
   value: string;
@@ -148,6 +156,7 @@ const parseRepeat = (
 
 const parseTask = (raw: RawTask, listId: string, strings: ParseStrings): MsTodoTask => {
   const title = clamp(asStr(raw.title).trim() || strings.untitledTask, MAX_TITLE_LEN);
+  const created = parseCreated(raw.createdDateTime);
   const dueDay = parseDueDay(raw.dueDateTime);
   const description = bodyToText(raw.body);
   const { repeat, ruleNote } = parseRepeat(raw, dueDay, description, strings);
@@ -164,6 +173,7 @@ const parseTask = (raw: RawTask, listId: string, strings: ParseStrings): MsTodoT
   return {
     extId: asStr(raw.id),
     projectExtId: listId,
+    created,
     parentExtId: null,
     title: title.value,
     notes: notes.value,
@@ -188,9 +198,13 @@ const parseStep = (
     asStr(raw.displayName).trim() || strings.untitledTask,
     MAX_TITLE_LEN,
   );
+  const created = parseCreated(raw.createdDateTime);
+  const resolvedCreated = created ?? parent.created;
+
   return {
     extId: `${parent.extId}-step-${asStr(raw.id)}`,
     projectExtId: parent.projectExtId,
+    created: resolvedCreated,
     parentExtId: parent.extId,
     title: title.value,
     notes: '',
