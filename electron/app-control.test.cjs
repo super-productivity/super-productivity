@@ -15,6 +15,7 @@ let refreshIndicatorCalls;
 let localRestApiConfig;
 let focusCalls;
 let badgeCounts;
+let savedSettings;
 
 const resetModule = () => {
   delete require.cache[appControlModulePath];
@@ -91,6 +92,9 @@ const installMocks = () => {
         setIsMinimizeToTray: (value) => {
           sharedState.isMinimizeToTray = value;
         },
+        setIsKeepTaskbarIcon: (value) => {
+          sharedState.isKeepTaskbarIcon = value;
+        },
         setIsTrayShowCurrentTask: (value) => {
           sharedState.isTrayShowCurrentTask = value;
         },
@@ -126,7 +130,9 @@ const installMocks = () => {
 
     if (request === '../simple-store') {
       return {
-        saveSimpleStore: async () => {},
+        saveSimpleStore: async (key, value) => {
+          savedSettings.set(key, value);
+        },
       };
     }
 
@@ -134,6 +140,7 @@ const installMocks = () => {
       return {
         SimpleStoreKey: {
           IS_USE_CUSTOM_WINDOW_TITLE_BAR: 'isUseCustomWindowTitleBar',
+          IS_KEEP_TASKBAR_ICON: 'isKeepTaskbarIcon',
         },
       };
     }
@@ -160,6 +167,7 @@ test.beforeEach(() => {
   nextIsLocked = false;
   sharedState = {
     isMinimizeToTray: undefined,
+    isKeepTaskbarIcon: undefined,
     isTrayShowCurrentTask: undefined,
     isTrayShowCurrentCountdown: undefined,
   };
@@ -167,6 +175,7 @@ test.beforeEach(() => {
   localRestApiConfig = undefined;
   focusCalls = [];
   badgeCounts = [];
+  savedSettings = new Map();
 
   installMocks();
 });
@@ -269,4 +278,97 @@ test('SHOW_OR_FOCUS routes reminder requests to the raise-only path (#10410)', (
   showOrFocusHandler({}, { isReminder: true });
 
   assert.deepEqual(focusCalls, ['showOrFocus', 'raiseForReminder']);
+});
+
+test('settings update enables and persists keep-taskbar-icon', async () => {
+  const { initAppControlIpc } = loadAppControlModule();
+  initAppControlIpc();
+
+  const updateSettings = ipcHandlers.get('TRANSFER_SETTINGS_TO_ELECTRON');
+
+  await updateSettings(
+    {},
+    {
+      misc: {
+        isMinimizeToTray: true,
+        isKeepTaskbarIcon: true,
+      },
+    },
+  );
+
+  assert.equal(sharedState.isMinimizeToTray, true);
+  assert.equal(sharedState.isKeepTaskbarIcon, true);
+  assert.equal(savedSettings.get('isKeepTaskbarIcon'), true);
+});
+
+test('settings update defaults keep-taskbar-icon to false', async () => {
+  const { initAppControlIpc } = loadAppControlModule();
+  initAppControlIpc();
+
+  const updateSettings = ipcHandlers.get('UPDATE_SETTINGS');
+
+  await updateSettings(
+    {},
+    {
+      misc: {
+        isMinimizeToTray: true,
+      },
+    },
+  );
+
+  assert.equal(sharedState.isKeepTaskbarIcon, false);
+  assert.equal(savedSettings.get('isKeepTaskbarIcon'), false);
+});
+
+test('startup preference requires minimize-to-tray to be enabled', async () => {
+  const { initAppControlIpc } = loadAppControlModule();
+  initAppControlIpc();
+
+  const updateSettings = ipcHandlers.get('UPDATE_SETTINGS');
+
+  await updateSettings(
+    {},
+    {
+      misc: {
+        isMinimizeToTray: false,
+        isKeepTaskbarIcon: true,
+      },
+    },
+  );
+
+  assert.equal(sharedState.isMinimizeToTray, false);
+  assert.equal(sharedState.isKeepTaskbarIcon, true);
+  assert.equal(savedSettings.get('isKeepTaskbarIcon'), false);
+});
+
+test('settings update clears the persisted startup preference', async () => {
+  const { initAppControlIpc } = loadAppControlModule();
+  initAppControlIpc();
+
+  const updateSettings = ipcHandlers.get('UPDATE_SETTINGS');
+
+  await updateSettings(
+    {},
+    {
+      misc: {
+        isMinimizeToTray: true,
+        isKeepTaskbarIcon: true,
+      },
+    },
+  );
+
+  assert.equal(savedSettings.get('isKeepTaskbarIcon'), true);
+
+  await updateSettings(
+    {},
+    {
+      misc: {
+        isMinimizeToTray: true,
+        isKeepTaskbarIcon: false,
+      },
+    },
+  );
+
+  assert.equal(sharedState.isKeepTaskbarIcon, false);
+  assert.equal(savedSettings.get('isKeepTaskbarIcon'), false);
 });

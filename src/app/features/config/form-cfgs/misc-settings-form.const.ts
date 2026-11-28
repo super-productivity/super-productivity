@@ -53,6 +53,16 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         label: T.GCF.MISC.IS_MINIMIZE_TO_TRAY,
       },
     },
+    {
+      key: 'isKeepTaskbarIcon',
+      type: 'checkbox',
+      defaultValue: false,
+      hideExpression: (model) => !IS_ELECTRON || !model?.isMinimizeToTray,
+      resetOnHide: false,
+      templateOptions: {
+        label: T.GCF.MISC.IS_KEEP_TASKBAR_ICON,
+      },
+    },
     ...((IS_ELECTRON
       ? [
           {

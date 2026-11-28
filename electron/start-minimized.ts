@@ -12,7 +12,9 @@ export type StartMinimizedMode = 'hide' | 'minimize';
 export const getStartMinimizedMode = ({
   hasTray,
   isMac,
+  keepTaskbarIcon = false,
 }: {
   hasTray: boolean;
   isMac: boolean;
-}): StartMinimizedMode => (hasTray || isMac ? 'hide' : 'minimize');
+  keepTaskbarIcon: boolean;
+}): StartMinimizedMode => (!keepTaskbarIcon && (hasTray || isMac) ? 'hide' : 'minimize');

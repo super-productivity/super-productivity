@@ -12,6 +12,7 @@ const originalDateNow = Date.now;
 
 let mockNow = 0;
 let mockIsMinimizeToTray = false;
+let mockIsKeepTaskbarIcon = false;
 let mockEnsureIndicator = false;
 let mockIsMac = false;
 let mockWasMaximizedBeforeHide = false;
@@ -47,6 +48,7 @@ const installMocks = () => {
     if (request === './shared-state') {
       return {
         getIsMinimizeToTray: () => mockIsMinimizeToTray,
+        getIsKeepTaskbarIcon: () => mockIsKeepTaskbarIcon,
         setIsQuiting: () => {},
       };
     }
@@ -135,6 +137,7 @@ const makeWin = (state) => {
 test.beforeEach(() => {
   mockNow = 100000;
   mockIsMinimizeToTray = false;
+  mockIsKeepTaskbarIcon = false;
   mockEnsureIndicator = false;
   mockIsMac = false;
   mockWasMaximizedBeforeHide = false;
@@ -499,4 +502,73 @@ test('raiseForReminder on other platforms keeps plain showOrFocus behavior', (t)
 
     assert.deepEqual(win.calls, ['restore', 'show', 'focus', 'wc.focus'], platform);
   }
+});
+
+test('keeps the taskbar entry when minimizing to tray', () => {
+  mockIsMinimizeToTray = true;
+  mockIsKeepTaskbarIcon = true;
+  mockEnsureIndicator = true;
+
+  const { toggleWindowVisibility } = loadModule();
+  const win = makeWin({
+    visible: true,
+    minimized: false,
+    focused: true,
+  });
+
+  toggleWindowVisibility(win);
+
+  assert.deepEqual(win.calls, ['minimize']);
+  assert.equal(win.isMinimized(), true);
+});
+
+test('does not hide the window when the tray is unavailable', () => {
+  mockIsMinimizeToTray = true;
+  mockIsKeepTaskbarIcon = true;
+  mockEnsureIndicator = false;
+
+  const { toggleWindowVisibility } = loadModule();
+  const win = makeWin({
+    visible: true,
+    minimized: false,
+    focused: true,
+  });
+
+  toggleWindowVisibility(win);
+
+  assert.deepEqual(win.calls, ['minimize']);
+});
+
+test('keeps the window minimized on macOS when requested', () => {
+  mockIsMac = true;
+  mockIsMinimizeToTray = true;
+  mockIsKeepTaskbarIcon = true;
+
+  const { toggleWindowVisibility } = loadModule();
+  const win = makeWin({
+    visible: true,
+    minimized: false,
+    focused: true,
+  });
+
+  toggleWindowVisibility(win);
+
+  assert.deepEqual(win.calls, ['minimize']);
+});
+
+test('ignores keep-taskbar-icon when minimize-to-tray is disabled', () => {
+  mockIsMac = true;
+  mockIsMinimizeToTray = false;
+  mockIsKeepTaskbarIcon = true;
+
+  const { toggleWindowVisibility } = loadModule();
+  const win = makeWin({
+    visible: true,
+    minimized: false,
+    focused: true,
+  });
+
+  toggleWindowVisibility(win);
+
+  assert.deepEqual(win.calls, ['hide']);
 });

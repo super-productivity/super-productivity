@@ -28,6 +28,8 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  /** Desktop only; keep the taskbar icon visible when minimizing to tray. */
+  isKeepTaskbarIcon?: boolean;
   /** Optional for compatibility with settings saved before this option existed. */
   isHideNavTaskCount?: boolean;
   /** Desktop only; absent in older persisted settings, defaults to off. */

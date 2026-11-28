@@ -7,7 +7,7 @@ import {
   getIsTaskWidgetUserForcedVisible,
   hideTaskWidget,
 } from './task-widget/task-widget';
-import { getIsMinimizeToTray, setIsQuiting } from './shared-state';
+import { getIsMinimizeToTray, getIsKeepTaskbarIcon, setIsQuiting } from './shared-state';
 import { ensureIndicator } from './indicator';
 import { IS_MAC } from './common.const';
 
@@ -155,7 +155,9 @@ export function toggleWindowVisibility(passedWin: BrowserWindow): void {
   //   enabled AND the tray was successfully (re)created; otherwise minimize so a taskbar
   //   handle remains as a safety net. blur() is a Windows focus workaround (electron#20464)
   //   and a no-op elsewhere.
-  if (IS_MAC) {
+  if (getIsMinimizeToTray() && getIsKeepTaskbarIcon()) {
+    win.minimize();
+  } else if (IS_MAC) {
     win.hide();
   } else if (getIsMinimizeToTray() && ensureIndicator()) {
     win.blur();

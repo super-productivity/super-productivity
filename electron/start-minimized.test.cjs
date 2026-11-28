@@ -23,3 +23,47 @@ test('hides the window on macOS even without a tray (the Dock icon remains)', ()
 test('minimizes instead of hiding without a tray on Windows/Linux (#7282)', () => {
   assert.equal(getStartMinimizedMode({ hasTray: false, isMac: false }), 'minimize');
 });
+
+test('keeps the taskbar entry when explicitly requested', () => {
+  assert.equal(
+    getStartMinimizedMode({
+      hasTray: true,
+      isMac: false,
+      keepTaskbarIcon: true,
+    }),
+    'minimize',
+  );
+});
+
+test('preserves the default tray behavior when disabled', () => {
+  assert.equal(
+    getStartMinimizedMode({
+      hasTray: true,
+      isMac: false,
+      keepTaskbarIcon: false,
+    }),
+    'hide',
+  );
+});
+
+test('keeps the window minimized on macOS when requested', () => {
+  assert.equal(
+    getStartMinimizedMode({
+      hasTray: false,
+      isMac: true,
+      keepTaskbarIcon: true,
+    }),
+    'minimize',
+  );
+});
+
+test('keeps the window reachable without a tray', () => {
+  assert.equal(
+    getStartMinimizedMode({
+      hasTray: false,
+      isMac: false,
+      keepTaskbarIcon: true,
+    }),
+    'minimize',
+  );
+});
