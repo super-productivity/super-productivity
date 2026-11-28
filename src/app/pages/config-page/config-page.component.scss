@@ -73,6 +73,15 @@
         background-color: var(--state-selected);
       }
 
+      // Round the hover/focus state layer and the press ripple like the tab,
+      // so only the color changes on hover, press and select. The tab itself
+      // can't clip: the ink bar lives inside it and slides in from the
+      // previous tab on switch. `.mat-mdc-tab-ripple` clips its ripple already.
+      .mdc-tab__ripple::before,
+      .mat-mdc-tab-ripple {
+        border-radius: var(--card-border-radius) var(--card-border-radius) 0 0;
+      }
+
       @include mq(md, max) {
         min-width: 48px;
         padding: 0 var(--s);
