@@ -21,8 +21,10 @@ import {
   createSuccessResponse,
 } from '../../core/electron/local-rest-api-response';
 import {
-  MAX_TIME_SPENT_PER_DAY_MS,
+  exceedsTimeSpentPerDay,
+  isTimeSpentChange,
   parseTimeSpentBody,
+  rejectTimeSpentField,
 } from './local-rest-api-task-time';
 import { mapLegacyPlannedAt } from './local-rest-api-legacy-fields';
 
@@ -42,7 +44,6 @@ const ALLOWED_TASK_FIELDS = new Set<string>([
   'notes',
   'isDone',
   'timeEstimate',
-  'timeSpent',
   'projectId',
   'tagIds',
   'dueDay',
@@ -99,7 +100,6 @@ interface WritableTaskFields {
   notes?: string;
   isDone?: boolean;
   timeEstimate?: number;
-  timeSpent?: number;
   projectId?: string;
   tagIds?: string[];
   dueDay?: string | null;
@@ -608,6 +608,10 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
       );
     }
 
+    if (isTimeSpentChange(body, 0)) {
+      return rejectTimeSpentField(requestId);
+    }
+
     const shortSyntaxFlag = readIsIgnoreShortSyntax(body);
     if (!shortSyntaxFlag.ok) {
       return createErrorResponse(
@@ -814,6 +818,9 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
         if (!task) {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
+        if (isTimeSpentChange(body, task.timeSpent)) {
+          return rejectTimeSpentField(requestId);
+        }
         // An echoed `isDone: true` (GET→PATCH round trip) would only stamp a
         // new `doneOn`: it moves the completion date and turns a won't-do task
         // into a completed one.
@@ -965,8 +972,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
         }
         return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
       }
-      const dayTotal = (task.timeSpentOnDay?.[parsed.date] || 0) + parsed.duration;
-      if (dayTotal > MAX_TIME_SPENT_PER_DAY_MS) {
+      if (exceedsTimeSpentPerDay(task.timeSpentOnDay, parsed)) {
         const msg = 'Time spent on one day cannot exceed 24h';
         return createErrorResponse(requestId, 400, 'INVALID_INPUT', msg);
       }
