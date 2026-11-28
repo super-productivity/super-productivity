@@ -50,7 +50,8 @@ export class NavigateToTaskService {
    * revealed row. Threaded through as a query param on the route-change branch
    * so the destination view can honour it too. (#5476)
    * @returns `false` when the task could not be found or located (the error
-   * snack has already been shown), `true` once navigation was handed off.
+   * snack has already been shown) or the route change was cancelled or
+   * superseded; `true` once the jump has landed.
    */
   async navigate(
     taskId: string,
@@ -121,8 +122,9 @@ export class NavigateToTaskService {
         location,
         queryParams,
       });
-      await this._router.navigate([location], { queryParams });
-      return true;
+      // `false` when the route change was cancelled (e.g. FocusOverlayOpenGuard)
+      // or superseded. Awaited so a rejection still reaches the catch below.
+      return await this._router.navigate([location], { queryParams });
     } catch (err) {
       recordSearchNavDebug('navigateToTask:error', {
         taskId,

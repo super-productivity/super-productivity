@@ -176,6 +176,35 @@ describe('NavigateToTaskService', () => {
     expectNoStateChange();
   });
 
+  describe('return value', () => {
+    beforeEach(() => {
+      setNavigatedTask(createTask({ id: 't2', projectId: 'p1', tagIds: [] }), [
+        createProject('p1', ['t2']),
+      ]);
+    });
+
+    it('reports true once the route change has landed', async () => {
+      expect(await service.navigate('t2')).toBeTrue();
+    });
+
+    it('reports false when the route change is cancelled or superseded', async () => {
+      // e.g. FocusOverlayOpenGuard blocking the project/tag routes.
+      router.navigate.and.resolveTo(false);
+
+      expect(await service.navigate('t2')).toBeFalse();
+    });
+
+    it('reports false and shows the error snack when the route change throws', async () => {
+      const snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
+      router.navigate.and.rejectWith(new Error('nav failed'));
+
+      expect(await service.navigate('t2')).toBeFalse();
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ type: 'ERROR' }),
+      );
+    });
+  });
+
   it('navigates to the tag list for a tagged task with no project WITHOUT re-homing it', async () => {
     // Tag membership is task.tagIds (tag.taskIds only stores ordering), so this
     // task already renders at /tag/tag-a/tasks. Navigating to it must not write.

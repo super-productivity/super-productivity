@@ -162,6 +162,17 @@ describe('AppUriQuickActionsService', () => {
       expect(store.dispatch).not.toHaveBeenCalled();
     }));
 
+    it('should not open the panel when the route change was cancelled', fakeAsync(() => {
+      // NavigateToTaskService reports false when e.g. FocusOverlayOpenGuard
+      // blocks the route; the panel must not open on the page the user is on.
+      navigateToTaskService.navigate.and.resolveTo(false);
+      openTask$.next('live1');
+      flushMicrotasks();
+
+      expect(navigateToTaskService.navigate).toHaveBeenCalledOnceWith('live1', false);
+      expect(store.dispatch).not.toHaveBeenCalled();
+    }));
+
     it('should treat a task missing from the store as archived', fakeAsync(() => {
       openTask$.next('archived1');
       flushMicrotasks();
