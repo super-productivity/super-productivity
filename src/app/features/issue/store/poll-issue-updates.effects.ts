@@ -42,7 +42,7 @@ export class PollIssueUpdatesEffects {
 
   /**
    * Polls issue updates for providers scoped to the current work context.
-   * Restarts on every context switch or data load.
+   * Restarts on context, data load or provider configuration changes.
    */
   pollIssueChangesForCurrentContext$: Observable<unknown> = createEffect(
     () =>
@@ -51,7 +51,7 @@ export class PollIssueUpdatesEffects {
           // Plugin providers report a poll interval of 0 until they register,
           // so re-evaluate on registration changes too (#10112).
           combineLatest([
-            this._store.select(selectEnabledIssueProviders).pipe(first()),
+            this._store.select(selectEnabledIssueProviders),
             this._pluginRegistry.registrationChanges$,
           ]),
         ),

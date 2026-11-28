@@ -117,6 +117,33 @@ describe('PollIssueUpdatesEffects', () => {
   });
 
   describe('pollIssueChangesForCurrentContext$', () => {
+    it('stops a running timer when the provider is disabled and restarts when enabled', fakeAsync(() => {
+      const provider = createMockIssueProvider({ id: 'cal-provider-1' });
+      const task = createMockTask({ issueId: 'issue-1', issueProviderId: provider.id });
+      const enabled = store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.overrideSelector(selectAllCalendarIssueTasks, [task]);
+      const actionsSubject = new Subject<ReturnType<typeof setActiveWorkContext>>();
+      actions$ = actionsSubject;
+      const sub = effects.pollIssueChangesForCurrentContext$.subscribe();
+      actionsSubject.next(
+        setActiveWorkContext({
+          activeType: WorkContextType.PROJECT,
+          activeId: 'project-1',
+        }),
+      );
+      tick(10001);
+      expect(issueServiceSpy.refreshIssueTasks).toHaveBeenCalledTimes(1);
+      enabled.setResult([]);
+      store.refreshState();
+      tick(600001);
+      expect(issueServiceSpy.refreshIssueTasks).toHaveBeenCalledTimes(1);
+      enabled.setResult([provider]);
+      store.refreshState();
+      tick(10001);
+      expect(issueServiceSpy.refreshIssueTasks).toHaveBeenCalledTimes(2);
+      sub.unsubscribe();
+    }));
+
     it('should start polling when a plugin provider registers after the context switch', fakeAsync(() => {
       let linearInterval = 0;
       issueServiceSpy.getPollInterval.and.callFake(() => linearInterval);
