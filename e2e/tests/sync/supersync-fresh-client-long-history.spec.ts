@@ -19,6 +19,11 @@ import {
   type SimulatedE2EClient,
   waitForTask,
 } from '../../utils/supersync-helpers';
+import {
+  installIdbTransactionTiming,
+  readIdbTransactionTiming,
+  type IdbTransactionTiming,
+} from '../../utils/idb-transaction-timing';
 
 // Measurement, not a regression gate. Reported 2026-11-27: a fresh client on a
 // long-history account downloaded ~69k ops after the newest SYNC_IMPORT
@@ -32,6 +37,11 @@ const IS_REQUESTED =
   (process.env.E2E_GREP ?? '').includes('@long-history');
 const TAIL_OPS = Number(process.env.E2E_LONG_HISTORY_OPS ?? 69_000);
 const DOWNLOAD_CAP = 50_000; // MAX_DOWNLOAD_OPS_IN_MEMORY in the app
+// Several tracked tasks and devices taking turns, so the tail spans more
+// entities and clocks carry several entries (a production tail had two
+// devices; one task and one author made conflict checks unrealistically cheap).
+const SEED_TASKS = 12;
+const SEED_CLIENTS = 6;
 const LOG_PREFIX = '[long-history-measure]';
 const PHASE_MARKERS =
   /Starting download|Download limit reached|Downloaded ops breakdown|Applying \d+ remote operations|Finished applying operations|Applied and marked|APPLYING FULL-STATE/;
@@ -115,22 +125,28 @@ const uploadBatch = async (
 
 // Each copy is a genuine encrypted op the real app produced (time tracking),
 // with a fresh ID and an advancing clock, so the server stores, pages and
-// serves it exactly like production history.
+// serves it exactly like production history. Devices take turns per batch, as
+// a user's laptop and phone do; each op's clock covers everything before it.
 const seedTail = async (
   token: string,
-  clientId: string,
-  templates: SuperSyncOperation[],
-  baseClock: Record<string, number>,
+  seed: {
+    clientIds: string[];
+    templates: SuperSyncOperation[];
+    baseClock: Record<string, number>;
+  },
 ): Promise<void> => {
+  const clock = { ...seed.baseClock };
   for (let offset = 0; offset < TAIL_OPS; offset += SUPER_SYNC_MAX_OPS_PER_UPLOAD) {
+    const clientId =
+      seed.clientIds[(offset / SUPER_SYNC_MAX_OPS_PER_UPLOAD) % seed.clientIds.length];
     const size = Math.min(SUPER_SYNC_MAX_OPS_PER_UPLOAD, TAIL_OPS - offset);
     const ops = Array.from({ length: size }, (_, index): SuperSyncOperation => {
-      const counter = offset + index + 1;
+      clock[clientId] = (clock[clientId] ?? 0) + 1;
       return {
-        ...templates[counter % templates.length],
+        ...seed.templates[(offset + index) % seed.templates.length],
         id: crypto.randomUUID(),
         clientId,
-        vectorClock: { ...baseClock, [clientId]: counter },
+        vectorClock: { ...clock },
         timestamp: Date.now(),
       };
     });
@@ -243,20 +259,36 @@ const watchPasswordSubmit = (page: Page): Promise<number | null> => {
 };
 
 // Real app activity: encryption setup leaves a SYNC_IMPORT on the server, and
-// time tracking produces the encrypted UPD ops that dominate real tails.
+// time tracking produces the encrypted UPD ops that dominate real tails (#11397).
 const createAccountWithImport = async (
   client: SimulatedE2EClient,
   syncConfig: ReturnType<typeof getSuperSyncConfig>,
-  taskName: string,
+  taskNames: string[],
 ): Promise<void> => {
   await client.workView.waitForTaskList();
-  await client.workView.addTask(taskName);
+  for (const taskName of taskNames) await client.workView.addTask(taskName);
   await client.sync.setupSuperSync(syncConfig);
-  await startTimeTracking(client, taskName);
-  await client.page.waitForTimeout(3000); // real elapsed time to track
-  await stopTimeTracking(client, taskName);
+  for (const taskName of taskNames) {
+    await startTimeTracking(client, taskName);
+    await client.page.waitForTimeout(2000); // real elapsed time to track
+    await stopTimeTracking(client, taskName);
+  }
   await client.sync.syncAndWait();
 };
+
+// Relative to t0, so each op-log stage lines up with the phase markers.
+const summarizeIdb = (
+  timing: IdbTransactionTiming,
+  t0: number,
+): Record<string, unknown> => ({
+  large: timing.large
+    .filter((record) => record.startedAt >= t0 - 1000)
+    .map(({ startedAt, ...record }) => ({
+      at: +((startedAt - t0) / 1000).toFixed(1),
+      ...record,
+    })),
+  small: timing.small,
+});
 
 const readSeedSource = async (
   token: string,
@@ -308,25 +340,35 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
       const user = await createTestUser(testRunId);
       const password = `long-history-${testRunId}`;
       const syncConfig = { ...getSuperSyncConfig(user), password };
-      const taskName = `Long-history-${testRunId}`;
+      // Zero-padded so no name is a prefix of another when located by text.
+      const taskNames = Array.from(
+        { length: SEED_TASKS },
+        (_, index) => `Long-history-${testRunId}-${String(index + 1).padStart(2, '0')}`,
+      );
+      const taskName = taskNames[0];
 
       seeder = await createSimulatedClient(browser, baseURL!, 'seeder', testRunId);
-      await createAccountWithImport(seeder, syncConfig, taskName);
+      await createAccountWithImport(seeder, syncConfig, taskNames);
       // Closed before seeding so its own syncs don't compete for the runner.
       await closeClient(seeder);
       seeder = null;
       const { history, importSeq, templates } = await readSeedSource(user.token);
       const seedStart = Date.now();
-      await seedTail(
-        user.token,
-        `long_history_seed_${testRunId}`,
+      await seedTail(user.token, {
+        clientIds: Array.from(
+          { length: SEED_CLIENTS },
+          (_, index) => `long_history_seed${index}_${testRunId}`,
+        ),
         templates,
-        mergeClock(history),
-      );
+        baseClock: mergeClock(history),
+      });
       const seedMs = Date.now() - seedStart;
       const latestSeq = await getLatestSeq(user.token);
 
       fresh = await createSimulatedClient(browser, baseURL!, 'fresh', testRunId);
+      // The init script applies from the next load on, so reload once.
+      await installIdbTransactionTiming(fresh.page);
+      await fresh.page.reload();
       await fresh.workView.waitForTaskList();
       const pagePromises: Promise<PageRecord | null>[] = [];
       const phases: { t: number; text: string }[] = [];
@@ -354,6 +396,7 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
       await expect(fresh.sync.syncErrorIcon).not.toBeVisible();
 
       const { profile } = (await cdp.send('Profiler.stop')) as { profile: CpuProfile };
+      const idbTiming = await readIdbTransactionTiming(freshPage);
       const pages = (await Promise.all(pagePromises)).filter(
         (record): record is PageRecord => record !== null,
       );
@@ -372,6 +415,8 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
         tailOps: TAIL_OPS,
         importSeq,
         latestSeq,
+        seedTasks: SEED_TASKS,
+        seedClients: SEED_CLIENTS,
         templateTypes: templates.map((op) => `${op.entityType}:${op.actionType}`),
         seedMs,
         passwordDialogSeen: passwordAt !== null,
@@ -387,6 +432,7 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
           .filter(({ t }) => t >= t0 - 1000)
           .map(({ t, text }) => `+${((t - t0) / 1000).toFixed(1)}s ${text}`),
         cpu: summarizeProfile(profile),
+        idb: summarizeIdb(idbTiming, t0),
       };
       console.log(`${LOG_PREFIX} ${JSON.stringify(report, null, 2)}`);
       await test.info().attach('long-history-report.json', {
