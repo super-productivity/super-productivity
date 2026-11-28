@@ -93,15 +93,6 @@ describe('ShortcutService', () => {
         { provide: Store, useValue: { dispatch: jasmine.createSpy('dispatch') } },
         { provide: PluginBridgeService, useValue: mockPluginBridgeService },
         { provide: TaskViewCustomizerService, useValue: mockTaskViewCustomizerService },
-        {
-          provide: OverlayContainer,
-          useValue: {
-            getContainerElement: () => ({
-              querySelector: () => null,
-              children: [],
-            }),
-          },
-        },
       ],
     });
 
@@ -109,6 +100,30 @@ describe('ShortcutService', () => {
   });
 
   describe('handleKeyDown', () => {
+    it('preserves the selection when a menu has handled Escape from a task row', async () => {
+      const row = document.createElement('task');
+      const escape = (): KeyboardEvent => {
+        const ev = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+        Object.defineProperty(ev, 'target', { value: row });
+        return ev;
+      };
+      const menuEscape = escape();
+      menuEscape.preventDefault();
+      await service.handleKeyDown(menuEscape);
+      expect(mockTaskShortcutService.handleTaskShortcuts).not.toHaveBeenCalled();
+
+      const container = TestBed.inject(OverlayContainer).getContainerElement();
+      container.innerHTML = `
+        <div class="cdk-global-overlay-wrapper">
+          <div class="cdk-overlay-pane"><mat-snack-bar-container></mat-snack-bar-container></div>
+        </div>`;
+      const rowEscape = escape();
+      await service.handleKeyDown(rowEscape);
+      expect(mockTaskShortcutService.handleTaskShortcuts).toHaveBeenCalledOnceWith(
+        rowEscape,
+      );
+    });
+
     it('should open the header filter menu on the filter shortcut', async () => {
       const ev = new KeyboardEvent('keydown', { key: 'c', code: 'KeyC' });
       Object.defineProperty(ev, 'target', { value: document.body });

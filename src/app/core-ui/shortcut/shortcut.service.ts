@@ -199,6 +199,12 @@ export class ShortcutService {
   }
 
   async handleKeyDown(ev: KeyboardEvent): Promise<void> {
+    // Material handles Escape on the body, even while focus is still on the task
+    // row. Let that keypress close the menu without also clearing the selection.
+    if (ev.key === 'Escape' && ev.defaultPrevented) {
+      return;
+    }
+
     const cfg = this._configService.cfg();
     if (!cfg) {
       throw new Error();
