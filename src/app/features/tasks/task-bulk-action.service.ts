@@ -99,6 +99,9 @@ export class TaskBulkActionService {
 
   private readonly _taskEntities = this._store.selectSignal(selectTaskEntities);
 
+  /** A touch-mode tag toggle is waiting for the bulk menu to close (#11943). */
+  private _isFinishPendingOnMenuClose = false;
+
   /** See TaskMultiSelectService.isBulkFeedbackSuppressed. */
   readonly isFeedbackSuppressed = this._multiSelect.isBulkFeedbackSuppressed;
 
@@ -326,6 +329,15 @@ export class TaskBulkActionService {
     if (!affected.length) {
       return;
     }
+    // The tag menu stays open so several tags can be toggled. Ending a touch
+    // selection now would remove the bar and the trigger the bulk menu hangs
+    // on, closing it and stranding the open tag submenu (#11943). So the
+    // selection ends when the bulk menu closes. Set before the await, in case
+    // the menu closes while the updates run.
+    const isTouchSelection = this._multiSelect.isTouchSelectionMode();
+    if (isTouchSelection) {
+      this._isFinishPendingOnMenuClose = true;
+    }
     await this._runSuppressed(() =>
       affected.forEach((t) =>
         this._taskService.updateTags(
@@ -334,6 +346,17 @@ export class TaskBulkActionService {
         ),
       ),
     );
+    if (!isTouchSelection) {
+      this._finish();
+    }
+  }
+
+  /** The bulk menu closed: end a touch selection that a tag toggle kept open. */
+  onBulkMenuClosed(): void {
+    if (!this._isFinishPendingOnMenuClose) {
+      return;
+    }
+    this._isFinishPendingOnMenuClose = false;
     this._finish();
   }
 

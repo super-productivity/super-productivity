@@ -615,9 +615,36 @@ describe('TaskBulkActionService', () => {
       expect(multiSelect.clear).not.toHaveBeenCalled();
     });
 
+    it('ends after a tag toggle only when the bulk menu closes, so more tags can be toggled (#11943)', async () => {
+      multiSelect.isTouchSelectionMode.set(true);
+      select([t('a', { tagIds: [] }), t('b', { tagIds: [] })]);
+      await service.toggleTag('x');
+      await service.toggleTag('y');
+      expect(taskService.updateTags).toHaveBeenCalledTimes(4);
+      expect(multiSelect.clear).not.toHaveBeenCalled();
+      service.onBulkMenuClosed();
+      expect(multiSelect.clear).toHaveBeenCalledTimes(1);
+      service.onBulkMenuClosed();
+      expect(multiSelect.clear).toHaveBeenCalledTimes(1);
+    });
+
+    it('is not ended by closing the bulk menu when no tag was toggled', () => {
+      multiSelect.isTouchSelectionMode.set(true);
+      select([t('a', { tagIds: ['x'] })]);
+      service.onBulkMenuClosed();
+      expect(multiSelect.clear).not.toHaveBeenCalled();
+    });
+
     it('is not ended on desktop, where the selection is a working set', async () => {
       select([t('a'), t('b')]);
       await service.setEstimate(1000);
+      expect(multiSelect.clear).not.toHaveBeenCalled();
+    });
+
+    it('is not ended on desktop by a tag toggle or the bulk menu closing', async () => {
+      select([t('a', { tagIds: [] })]);
+      await service.toggleTag('x');
+      service.onBulkMenuClosed();
       expect(multiSelect.clear).not.toHaveBeenCalled();
     });
   });
