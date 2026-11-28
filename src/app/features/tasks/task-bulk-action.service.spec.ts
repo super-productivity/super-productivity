@@ -879,6 +879,31 @@ describe('TaskBulkActionService', () => {
   });
 
   describe('openDeadlineDialog', () => {
+    it('sets and displays the next calendar morning for a deadline before the day start', async () => {
+      startOfNextDayDiffMs = 4 * 60 * 60 * 1000;
+      select([t('a'), t('b')]);
+      dialogResult = {
+        date: new Date(2026, 8, 10),
+        time: '02:00',
+        remindOption: TaskReminderOptionId.h1,
+      };
+      const formatDate = spyOn(
+        TestBed.inject(LocaleDatePipe),
+        'transform',
+      ).and.callThrough();
+
+      await service.openDeadlineDialog();
+
+      const deadlineWithTime = new Date(2026, 8, 11, 2).getTime();
+      const deadlineRemindAt = new Date(2026, 8, 11, 1).getTime();
+      for (const taskId of ['a', 'b']) {
+        expect(store.dispatch).toHaveBeenCalledWith(
+          TaskSharedActions.setDeadline({ taskId, deadlineWithTime, deadlineRemindAt }),
+        );
+      }
+      expect(formatDate).toHaveBeenCalledWith(deadlineWithTime, 'short');
+    });
+
     it("reports a removal when the dialog's Remove button closes with a null date", async () => {
       // DialogDeadlineComponent.remove() closes with {date: null, ...}, which is
       // a removal, not a set. Reporting DEADLINE_SET renders "Set the deadline

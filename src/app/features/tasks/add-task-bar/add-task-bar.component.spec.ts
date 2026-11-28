@@ -1097,21 +1097,28 @@ describe('AddTaskBarComponent', () => {
       expect(taskData.deadlineWithTime).toBeUndefined();
     });
 
-    it('should pass deadlineWithTime and deadlineRemindAt when a deadline is set with a time and reminder', async () => {
-      mockTaskService.add.and.returnValue('task-1');
+    [
+      { time: '14:30', startHour: 0, expected: new Date(2026, 5, 15, 14, 30) },
+      { time: '02:30', startHour: 4, expected: new Date(2026, 5, 16, 2, 30) },
+    ].forEach(({ time, startHour, expected }) => {
+      it(`saves a ${time} deadline and reminder when the day starts at ${startHour}:00`, async () => {
+        mockDateService.getStartOfNextDayDiffMs.and.returnValue(
+          startHour * 60 * 60 * 1000,
+        );
+        mockTaskService.add.and.returnValue('task-1');
 
-      component.stateService.updateInputTxt('Dentist appointment');
-      component.stateService.updateCleanText('Dentist appointment');
-      component.stateService.updateDeadline('2026-06-15', '14:30');
-      component.stateService.updateDeadlineRemindOption(TaskReminderOptionId.AtStart);
+        component.stateService.updateInputTxt('Dentist appointment');
+        component.stateService.updateCleanText('Dentist appointment');
+        component.stateService.updateDeadline('2026-06-15', time);
+        component.stateService.updateDeadlineRemindOption(TaskReminderOptionId.AtStart);
 
-      await component.addTask();
+        await component.addTask();
 
-      const taskData = mockTaskService.add.calls.mostRecent()
-        .args[2] as Partial<TaskCopy>;
-      const expectedTimestamp = new Date(2026, 5, 15, 14, 30, 0, 0).getTime();
-      expect(taskData.deadlineWithTime).toBe(expectedTimestamp);
-      expect(taskData.deadlineRemindAt).toBe(expectedTimestamp);
+        const taskData = mockTaskService.add.calls.mostRecent()
+          .args[2] as Partial<TaskCopy>;
+        expect(taskData.deadlineWithTime).toBe(expected.getTime());
+        expect(taskData.deadlineRemindAt).toBe(expected.getTime());
+      });
     });
 
     it('should pass the trimmed note text as notes when a note is entered', async () => {

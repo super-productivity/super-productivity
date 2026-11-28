@@ -160,6 +160,26 @@ describe('DialogDeadlineComponent', () => {
     });
   });
 
+  it('opens a 02:00 deadline on its logical day and keeps it at 02:00 when moved', () => {
+    const dateService = new DateService();
+    dateService.setStartOfNextDayDiff('04:00');
+    TestBed.overrideProvider(DateService, { useValue: dateService });
+    const component = createComponent({
+      ...buildTask(),
+      deadlineWithTime: new Date(2030, 5, 17, 2).getTime(),
+      deadlineRemindAt: new Date(2030, 5, 17, 1, 45).getTime(),
+    });
+
+    expect(component.selectedDate).toEqual(new Date(2030, 5, 16));
+    expect(component.selectedTime).toBe('02:00');
+    component.dateSelected(new Date(2030, 5, 18));
+    component.submit();
+
+    const [action] = setDeadlineCalls();
+    expect(action.deadlineWithTime).toBe(new Date(2030, 5, 19, 2).getTime());
+    expect(action.deadlineRemindAt).toBe(new Date(2030, 5, 19, 1, 45).getTime());
+  });
+
   it('dispatches setDeadline with deadlineWithTime for a valid HH:MM time', () => {
     const component = createComponent();
     component.selectedDate = new Date(2026, 4, 6);

@@ -29,7 +29,6 @@ import {
 import { DialogDeadlineComponent } from './dialog-deadline/dialog-deadline.component';
 import { T } from '../../t.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
-import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../util/is-valid-split-time';
 import { combineDateAndTime } from '../../util/combine-date-and-time';
 import { getRepeatDueWithTime } from '../task-repeat-cfg/store/get-repeat-due-with-time.util';
@@ -532,47 +531,39 @@ export class TaskBulkActionService {
       await this.removeDeadline();
       return;
     }
-    await this._runSuppressed(() => {
-      tasks.forEach((task) => {
-        if (pick.time && isValidSplitTime(pick.time)) {
-          const deadlineWithTime = getDateTimeFromClockString(
-            pick.time,
-            pick.date as Date,
-          );
-          const deadlineRemindAt =
-            pick.remindOption && pick.remindOption !== TaskReminderOptionId.DoNotRemind
-              ? remindOptionToMilliseconds(deadlineWithTime, pick.remindOption)
-              : undefined;
-          this._store.dispatch(
-            TaskSharedActions.setDeadline({
-              taskId: task.id,
-              deadlineWithTime,
-              deadlineRemindAt,
-              ...getDeadlineAutoPlanFields(
-                this._dateService,
-                undefined,
-                deadlineWithTime,
-              ),
-            }),
-          );
-        } else {
-          const deadlineDay = getDbDateStr(pick.date as Date);
-          this._store.dispatch(
-            TaskSharedActions.setDeadline({
-              taskId: task.id,
-              deadlineDay,
-              ...getDeadlineAutoPlanFields(this._dateService, deadlineDay),
-            }),
-          );
-        }
-      });
-    });
-    const date =
+    const deadlineWithTime =
       pick.time && isValidSplitTime(pick.time)
-        ? this._datePipe.transform(
-            getDateTimeFromClockString(pick.time, pick.date as Date),
-            'short',
+        ? getRepeatDueWithTime(
+            pick.time,
+            pick.date,
+            this._dateService.getStartOfNextDayDiffMs(),
           )
+        : undefined;
+    const deadline =
+      deadlineWithTime !== undefined
+        ? {
+            deadlineWithTime,
+            deadlineRemindAt:
+              pick.remindOption && pick.remindOption !== TaskReminderOptionId.DoNotRemind
+                ? remindOptionToMilliseconds(deadlineWithTime, pick.remindOption)
+                : undefined,
+          }
+        : { deadlineDay: getDbDateStr(pick.date) };
+    const autoPlan = getDeadlineAutoPlanFields(
+      this._dateService,
+      deadline.deadlineDay,
+      deadlineWithTime,
+    );
+    await this._runSuppressed(() =>
+      tasks.forEach((task) =>
+        this._store.dispatch(
+          TaskSharedActions.setDeadline({ taskId: task.id, ...deadline, ...autoPlan }),
+        ),
+      ),
+    );
+    const date =
+      deadlineWithTime !== undefined
+        ? this._datePipe.transform(deadlineWithTime, 'short')
         : this._datePipe.transform(pick.date, 'shortDate');
     this._snack('DEADLINE_SET', tasks.length, { date: date || '' }, 'flag');
     this._finish();

@@ -1,7 +1,10 @@
 import {
   getDeadlineOffsetDays,
   getRepeatDeadlineDay,
+  getTaskDeadlineDay,
 } from './get-repeat-deadline-day.util';
+import { findSpringForwardSunday } from '../../tasks/dst.test-helper';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('getRepeatDeadlineDay', () => {
   it('should return undefined without an offset', () => {
@@ -32,6 +35,21 @@ describe('getRepeatDeadlineDay', () => {
     );
     expect(getRepeatDeadlineDay({ deadlineOffsetDays: 2 }, '2026-10-24')).toBe(
       '2026-10-26',
+    );
+  });
+});
+
+describe('getTaskDeadlineDay', () => {
+  it('keeps a deadline just after the day start on the spring-forward Sunday', () => {
+    const gap = findSpringForwardSunday(2026);
+    if (!gap) {
+      pending('The local timezone has no spring-forward Sunday');
+      return;
+    }
+    const startHour = gap.missingHour + 2;
+    const deadlineWithTime = new Date(gap.sunday).setHours(startHour, 30);
+    expect(getTaskDeadlineDay({ deadlineWithTime }, startHour * 60 * 60 * 1000)).toBe(
+      getDbDateStr(gap.sunday),
     );
   });
 });

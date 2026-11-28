@@ -23,7 +23,10 @@ import { DEADLINE_REMINDER_OPTIONS } from './deadline-reminder-options.const';
 import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import {
+  getLogicalDayOfTimestamp,
+  getRepeatDueWithTime,
+} from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { normalizeClockStr } from '../../../util/normalize-clock-str';
 import { getDbDateStr } from '../../../util/get-db-date-str';
@@ -99,7 +102,12 @@ export class DialogDeadlineComponent implements AfterViewInit {
     if (this.task) {
       if (this.task.deadlineWithTime) {
         this.hasExistingDeadline = true;
-        this.selectedDate = new Date(this.task.deadlineWithTime);
+        this.selectedDate = dateStrToUtcDate(
+          getLogicalDayOfTimestamp(
+            this.task.deadlineWithTime,
+            this._dateService.getStartOfNextDayDiffMs(),
+          ),
+        );
         this.selectedTime = new Date(this.task.deadlineWithTime).toLocaleTimeString(
           'en-GB',
           {
@@ -194,7 +202,11 @@ export class DialogDeadlineComponent implements AfterViewInit {
 
     if (this.task) {
       if (time && isValidSplitTime(time)) {
-        const deadlineTimestamp = getDateTimeFromClockString(time, this.selectedDate!);
+        const deadlineTimestamp = getRepeatDueWithTime(
+          time,
+          this.selectedDate,
+          this._dateService.getStartOfNextDayDiffMs(),
+        );
         const deadlineRemindAt =
           this.selectedReminderCfgId !== TaskReminderOptionId.DoNotRemind
             ? remindOptionToMilliseconds(deadlineTimestamp, this.selectedReminderCfgId)
