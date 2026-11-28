@@ -27,7 +27,7 @@ inputs:
   xcode_path:
     description: 'Full path of the Xcode.app to select'
     required: false
-    default: '/Applications/Xcode_26.2.app'
+    default: '/Applications/Xcode_27.1.app'
 
 runs:
   using: 'composite'
@@ -46,15 +46,11 @@ runs:
         sudo xcode-select -s '${{ inputs.xcode_path }}'
         echo "SDKROOT=$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" >> "$GITHUB_ENV"
 
-    - name: Verify Xcode and SDK version
+    - name: Show Xcode and iOS SDK versions
       shell: bash
       run: |
-        echo "=== Xcode Version ==="
         xcodebuild -version
-        echo ""
-        echo "=== SDK Information ==="
-        xcrun --show-sdk-version
-        xcodebuild -showsdks | grep -E "(iOS|iphoneos)"
+        xcrun --sdk iphoneos --show-sdk-version
 
     - name: Install Apple WWDR intermediate certificate
       shell: bash

@@ -23,7 +23,7 @@ jobs:
     if: >
       github.event.label.name == 'ios-test-flight' &&
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 60
 
     steps:
@@ -75,16 +75,15 @@ jobs:
           git show "$TRUSTED_SHA:package.json" > "$RUNNER_TEMP/trusted-package.json"
           echo "TRUSTED_SHA=$TRUSTED_SHA" >> "$GITHUB_ENV"
 
-      - name: Select Xcode 26.2
+      - name: Select Xcode 27.1
         run: |
-          sudo xcode-select -s /Applications/Xcode_26.2.app
+          sudo xcode-select -s /Applications/Xcode_27.1.app
           echo "SDKROOT=$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" >> "$GITHUB_ENV"
 
-      - name: Verify Xcode and SDK version
+      - name: Show Xcode and iOS SDK versions
         run: |
           xcodebuild -version
-          xcrun --show-sdk-version
-          xcodebuild -showsdks | grep -E "(iOS|iphoneos)"
+          xcrun --sdk iphoneos --show-sdk-version
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
         with:

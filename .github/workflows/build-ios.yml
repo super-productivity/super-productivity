@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   ios-app-store-release:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 45
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}

@@ -282,7 +282,7 @@ jobs:
     name: 'Publish PR #${{ needs.discover.outputs.pr_number }} (${{ needs.discover.outputs.head_sha }})'
     needs: [discover, validate]
     if: needs.validate.outputs.validated == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 60
     permissions:
       actions: read
