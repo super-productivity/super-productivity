@@ -34,10 +34,15 @@ import {
   enforceStorageQuota,
   findExistingSyncImport,
   isIdempotentSyncImportRetry,
-  sendQuotaExceededReply,
+  rejectIfOverStorageQuota,
   sendSyncImportExistsReply,
 } from './sync.routes.quota';
 import { createSnapshotRequestFingerprint } from './services/request-deduplication.service';
+
+// The pre-gate runs before the snapshot size is known. Quota checks allow
+// `used + delta <= quota`, so a delta of 1 rejects at `used >= quota`; 0 would
+// let an account sitting exactly at quota through to the expensive preparation.
+const SNAPSHOT_PRE_GATE_DELTA_BYTES = 1;
 
 export const uploadSnapshotHandler = async (
   req: FastifyRequest<{ Body: unknown }>,
@@ -175,32 +180,20 @@ export const uploadSnapshotHandler = async (
     }
 
     // Cheap pre-quota gate BEFORE prepareSnapshotCache so quota-exhausted
-    // clients can't burn CPU on JSON.stringify + zlib.gzipSync. Uses only
-    // the cached counter; if it says we're already at quota, reconcile
-    // once before rejecting — a stale-high counter would otherwise lock
-    // out a user whose new snapshot would actually shrink storage. Skip
-    // for clean-slate which wipes existing usage. REPAIR also skips this cheap
-    // gate so a response-loss retry can reach the durable op-id check inside
-    // the lock; a genuinely new REPAIR still gets the full quota check below.
+    // clients can't burn CPU on JSON.stringify + zlib.gzipSync. Reconciles a
+    // stale-high counter once before rejecting — it would otherwise lock out a
+    // user whose new snapshot would actually shrink storage — and never runs
+    // destructive cleanup. Skip for clean-slate which wipes existing usage.
+    // REPAIR also skips this cheap gate so a response-loss retry can reach the
+    // durable op-id check inside the lock; a genuinely new REPAIR still gets
+    // the full quota check below.
     if (!shouldCleanSlate && snapshotOpType !== 'REPAIR') {
-      let cachedInfo = await syncService.getStorageInfo(userId);
-      if (cachedInfo.storageUsedBytes >= cachedInfo.storageQuotaBytes) {
-        try {
-          await syncService.updateStorageUsage(userId);
-          cachedInfo = await syncService.getStorageInfo(userId);
-        } catch (err) {
-          Logger.warn(
-            `[user:${userId}] Snapshot pre-gate reconcile failed: ${errorMessage(err)}`,
-          );
-        }
-        if (cachedInfo.storageUsedBytes >= cachedInfo.storageQuotaBytes) {
-          return sendQuotaExceededReply(reply, {
-            storageUsedBytes: cachedInfo.storageUsedBytes,
-            storageQuotaBytes: cachedInfo.storageQuotaBytes,
-            autoCleanupAttempted: false,
-          });
-        }
-      }
+      const quotaOk = await rejectIfOverStorageQuota(
+        userId,
+        SNAPSHOT_PRE_GATE_DELTA_BYTES,
+        reply,
+      );
+      if (!quotaOk) return;
     }
 
     // Pin the fingerprint BEFORE processing mutates anything, but AFTER the
