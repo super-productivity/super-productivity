@@ -36,9 +36,20 @@ version2Manifest.hashTable['/index.html'] = createHash('sha1')
   .digest('hex');
 const version2ManifestBody = Buffer.from(JSON.stringify(version2Manifest));
 
-// Installs from before #10715 registered ngsw-worker.js directly. The
-// "legacy" version serves this build with only that registration changed, so a
-// test can update such an install to the sw.js entry point.
+// Preserve the old registration path with the current response transport.
+const buildLegacyWorker = () => {
+  const wrapper = readFileSync(path.join(DIST_ROOT, 'sw.js'), 'utf8');
+  const angularImport = "importScripts('./ngsw-worker.js');";
+  if (!wrapper.includes(angularImport)) {
+    throw new Error('Missing Angular worker import in sw.js');
+  }
+  const angularWorker = readFileSync(path.join(DIST_ROOT, 'ngsw-worker.js'), 'utf8');
+  // Keep the legacy entry point safe from Chromium's response-stream GC bug.
+  return Buffer.from(
+    `${angularWorker}\nif (self.location.pathname === '/ngsw-worker.js') {\n${wrapper.replace(angularImport, '')}\n}\n`,
+  );
+};
+
 const buildLegacyVersion = () => {
   const mainScript = version1Html.match(/<script src="(main-[^"]+\.js)"/)?.[1];
   if (!mainScript) {
@@ -66,6 +77,7 @@ const buildLegacyVersion = () => {
     mainPath: `/${mainScript}`,
     mainBody,
     manifestBody: Buffer.from(JSON.stringify(manifest)),
+    workerBody: buildLegacyWorker(),
   };
 };
 let legacyVersion = null;
@@ -118,6 +130,16 @@ const interceptVersionedRequests = (request, response) => {
 
   if (activeVersion === 'v2' && (pathname === '/' || pathname === '/index.html')) {
     sendBuffer(request, response, 'text/html; charset=utf-8', version2Index);
+    return;
+  }
+
+  if (pathname === '/ngsw-worker.js' && legacyVersion) {
+    sendBuffer(
+      request,
+      response,
+      'text/javascript; charset=utf-8',
+      legacyVersion.workerBody,
+    );
     return;
   }
 
