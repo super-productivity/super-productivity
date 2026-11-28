@@ -144,7 +144,7 @@ test.describe('Schedule tray mode', () => {
       ).toBe(false);
       await page.mouse.up();
       const scheduledEvent = schedule
-        .locator('schedule-event')
+        .locator('schedule-event:not(.custom-drag-preview)')
         .filter({ hasText: title });
       await expect(scheduledEvent).toHaveCount(1);
       await expect(scheduledEvent.locator('.time-badge')).toHaveText(
@@ -174,7 +174,9 @@ test.describe('Schedule tray mode', () => {
     await page.getByRole('menuitem', { name: 'Schedule' }).click();
 
     const week = page.locator('schedule schedule-week');
-    const event = week.locator('schedule-event').filter({ hasText: TITLE });
+    const event = week
+      .locator('schedule-event:not(.custom-drag-preview)')
+      .filter({ hasText: TITLE });
     const cells = week.locator('schedule-tray .tray-cell');
     const chip = cells.first().locator('.chip').filter({ hasText: TITLE });
 
