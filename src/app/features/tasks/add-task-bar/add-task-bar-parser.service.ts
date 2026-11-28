@@ -13,7 +13,11 @@ import {
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { DateService } from '../../../core/date/date.service';
-import { getLogicalDayForClockTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
+import {
+  getLogicalDayForClockTime,
+  getLogicalDayOfTimestamp,
+} from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
+import { formatTimeHHmm } from '../../../util/format-time-hhmm';
 import { TimeSpentOnDay, TaskPriority, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
@@ -242,17 +246,15 @@ export class AddTaskBarParserService {
         parseResult.taskChanges.deadlineDay !== undefined;
 
       if (parseResult.taskChanges.deadlineWithTime) {
-        const deadlineDateObj = new Date(parseResult.taskChanges.deadlineWithTime);
-        deadlineDate = getDbDateStr(deadlineDateObj);
-
-        if (parseResult.taskChanges.hasDeadlineTime !== false) {
-          const hours = deadlineDateObj.getHours().toString().padStart(2, '0');
-          const minutes = deadlineDateObj.getMinutes().toString().padStart(2, '0');
-          const timeStr = `${hours}:${minutes}`;
-
-          if (timeStr !== '00:00') {
-            deadlineTime = timeStr;
-          }
+        const { deadlineWithTime, hasDeadlineTime } = parseResult.taskChanges;
+        if (hasDeadlineTime === false) {
+          deadlineDate = getDbDateStr(deadlineWithTime);
+        } else {
+          deadlineTime = formatTimeHHmm(deadlineWithTime);
+          deadlineDate = getLogicalDayOfTimestamp(
+            deadlineWithTime,
+            this._dateService.getStartOfNextDayDiffMs(),
+          );
         }
 
         if (parseResult.taskChanges.deadlineRemindAt) {

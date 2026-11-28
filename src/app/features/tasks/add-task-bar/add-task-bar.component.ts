@@ -75,7 +75,6 @@ import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-
 import { MarkdownPasteService } from '../markdown-paste.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
 import { unique } from '../../../util/unique';
@@ -610,10 +609,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
       if (state.deadlineDate) {
         if (state.deadlineTime && isValidSplitTime(state.deadlineTime)) {
-          const deadlineDateObj = dateStrToUtcDate(state.deadlineDate);
-          const deadlineTimestamp = getDateTimeFromClockString(
+          const deadlineTimestamp = getRepeatDueWithTime(
             state.deadlineTime,
-            deadlineDateObj,
+            dateStrToUtcDate(state.deadlineDate),
+            this._dateService.getStartOfNextDayDiffMs(),
           );
           taskData.deadlineWithTime = deadlineTimestamp;
           if (

@@ -402,6 +402,26 @@ describe('AddTaskBarParserService', () => {
     });
 
     describe('Deadline Parsing', () => {
+      [
+        { input: '00:00', day: '2030-06-16', time: '00:00' },
+        { input: '02:00', day: '2030-06-16', time: '02:00' },
+        { input: '04:00', day: '2030-06-17', time: '04:00' },
+        { input: '', day: '2030-06-17', time: null },
+      ].forEach(({ input, day, time }) => {
+        it(`keeps the logical day and time of "!2030-06-17 ${input}" with a 04:00 day start`, async () => {
+          TestBed.inject(DateService).setStartOfNextDayDiff('04:00');
+          await service.parseAndUpdateText(
+            `Do taxes !2030-06-17 ${input}`.trimEnd(),
+            mockConfig,
+            mockProjects,
+            mockTags,
+            mockDefaultProject,
+          );
+
+          expect(mockStateService.updateDeadline).toHaveBeenCalledWith(day, time);
+        });
+      });
+
       it('should parse deadline date with !friday', async () => {
         const text = 'Do taxes !friday';
         await service.parseAndUpdateText(

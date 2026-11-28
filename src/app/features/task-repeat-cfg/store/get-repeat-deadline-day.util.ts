@@ -2,6 +2,7 @@ import { TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getDiffInDays } from '../../../util/get-diff-in-days';
+import { getLogicalDayOfTimestamp } from './get-repeat-due-with-time.util';
 
 // Deadline day for the occurrence on `dueStr`, keeping the cfg's due→deadline
 export const getRepeatDeadlineDay = (
@@ -23,7 +24,7 @@ export const getTaskDeadlineDay = (
 ): string | undefined =>
   task.deadlineDay ??
   (task.deadlineWithTime
-    ? getDbDateStr(task.deadlineWithTime - startOfNextDayDiffMs)
+    ? getLogicalDayOfTimestamp(task.deadlineWithTime, startOfNextDayDiffMs)
     : undefined);
 
 export const getDeadlineOffsetDays = (
