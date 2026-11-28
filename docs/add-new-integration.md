@@ -207,6 +207,12 @@ async function getHeaders(): Promise<Record<string, string>> {
 }
 ```
 
+Some APIs authenticate with an OpenID Connect ID token instead of an access
+token, for example services behind Google Cloud Identity-Aware Proxy. Request the
+`openid` scope and use `PluginAPI.getOAuthIdToken()` in the same way. It is
+refreshed together with the access token and resolves to `null` when the
+provider issued no ID token.
+
 See the Google Calendar provider for desktop, Android, iOS, scope, and PKCE
 configuration. A `clientSecret` embedded in plugin source or configuration is not
 confidential. Include one only when the provider explicitly treats that client as

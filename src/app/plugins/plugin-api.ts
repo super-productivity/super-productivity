@@ -667,6 +667,10 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#boundMethods.getOAuthToken(tokenKey);
   }
 
+  async getOAuthIdToken(tokenKey?: string): Promise<string | null> {
+    return this.#boundMethods.getOAuthIdToken(tokenKey);
+  }
+
   async clearOAuthToken(tokenKey?: string): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested OAuth token clear`);
     return this.#boundMethods.clearOAuthToken(tokenKey);

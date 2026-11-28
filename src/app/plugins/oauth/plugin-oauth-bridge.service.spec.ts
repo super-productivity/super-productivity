@@ -85,6 +85,7 @@ describe('PluginOAuthBridgeService', () => {
         'hasTokens',
         'restoreTokens',
         'getValidToken',
+        'getValidIdToken',
       ],
       {
         tokenInvalidated$: new Subject<string>(),
@@ -471,6 +472,49 @@ describe('PluginOAuthBridgeService', () => {
     expect(token).toBeNull();
     expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar__oauth');
     expect(oauthService.getValidToken).not.toHaveBeenCalled();
+  });
+
+  it('binds the plugin id and reads the OAuth config on every call', async () => {
+    oauthService.hasTokens.and.returnValue(true);
+    oauthService.getValidToken.and.resolveTo('access-token');
+    oauthService.getValidIdToken.and.resolveTo('id-token');
+    let config: OAuthFlowConfig | undefined = baseConfig;
+    const bound = service.createBoundMethods('test-plugin', () => config);
+
+    // baseConfig has no webClientId, so it is unavailable in this (web) test build.
+    expect(await bound.getOAuthIdToken()).toBeNull();
+    config = { ...baseConfig, webClientId: 'web-client-id' };
+    expect(await bound.getOAuthToken('account-a')).toBe('access-token');
+    expect(await bound.getOAuthIdToken('account-a')).toBe('id-token');
+    expect(oauthService.getValidIdToken).toHaveBeenCalledWith(
+      'test-plugin__oauth__account-a',
+    );
+  });
+
+  it('returns the ID token for a scoped account', async () => {
+    oauthService.hasTokens.and.returnValue(true);
+    oauthService.getValidIdToken.and.resolveTo('id-token');
+
+    const token = await service.getOAuthIdToken(
+      'test-plugin',
+      { ...baseConfig, webClientId: 'web-client-id' },
+      'account-a',
+    );
+
+    expect(token).toBe('id-token');
+    expect(oauthService.getValidIdToken).toHaveBeenCalledWith(
+      'test-plugin__oauth__account-a',
+    );
+  });
+
+  it('does not return stale browser ID tokens for providers that are unavailable on web', async () => {
+    oauthService.hasTokens.and.returnValue(true);
+
+    const token = await service.getOAuthIdToken('google-calendar', baseConfig);
+
+    expect(token).toBeNull();
+    expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar__oauth');
+    expect(oauthService.getValidIdToken).not.toHaveBeenCalled();
   });
 
   describe('with a real PluginOAuthService', () => {

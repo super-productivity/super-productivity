@@ -62,6 +62,7 @@ const PLUGIN_API_MEMBERS: Record<keyof PluginAPIInterface, true> = {
   getCurrentLanguage: true,
   startOAuthFlow: true,
   getOAuthToken: true,
+  getOAuthIdToken: true,
   clearOAuthToken: true,
   setSecret: true,
   getSecret: true,

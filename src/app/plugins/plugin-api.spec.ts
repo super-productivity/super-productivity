@@ -23,6 +23,7 @@ describe('PluginAPI', () => {
   let getSelectedTaskSpy: jasmine.Spy;
   let getFocusedTaskSpy: jasmine.Spy;
   let registerTaskContextMenuEntrySpy: jasmine.Spy;
+  let getOAuthIdTokenSpy: jasmine.Spy;
   let mockBridge: jasmine.SpyObj<{
     createBoundMethods: () => Record<string, unknown>;
     getAppState: () => Promise<unknown>;
@@ -55,6 +56,7 @@ describe('PluginAPI', () => {
       .createSpy('getFocusedTask')
       .and.resolveTo({ id: 'focused-task', title: 'Focused Task' });
     registerTaskContextMenuEntrySpy = jasmine.createSpy('registerTaskContextMenuEntry');
+    getOAuthIdTokenSpy = jasmine.createSpy('getOAuthIdToken').and.resolveTo('id-token');
 
     mockBridge = jasmine.createSpyObj('PluginBridgeService', [
       'createBoundMethods',
@@ -75,6 +77,7 @@ describe('PluginAPI', () => {
       getFocusedTask: getFocusedTaskSpy,
       persistDataSynced: jasmine.createSpy('persistDataSynced'),
       registerTaskContextMenuEntry: registerTaskContextMenuEntrySpy,
+      getOAuthIdToken: getOAuthIdTokenSpy,
       log: {
         critical: jasmine.createSpy(),
         err: jasmine.createSpy(),
@@ -150,6 +153,24 @@ describe('PluginAPI', () => {
     expect(await pluginAPI.listSyncedDataKeys()).toEqual(['a:b']);
     expect(listSyncedDataKeysSpy).toHaveBeenCalledOnceWith(undefined);
   });
+  describe('getOAuthIdToken()', () => {
+    it('delegates to the bound bridge method and returns the ID token', async () => {
+      const publicAPI: Pick<PublicPluginAPI, 'getOAuthIdToken'> = pluginAPI;
+      expect(await publicAPI.getOAuthIdToken()).toBe('id-token');
+      expect(getOAuthIdTokenSpy).toHaveBeenCalledOnceWith(undefined);
+    });
+
+    it('forwards the token key', async () => {
+      await pluginAPI.getOAuthIdToken('work');
+      expect(getOAuthIdTokenSpy).toHaveBeenCalledOnceWith('work');
+    });
+
+    it('resolves to null when the grant has no ID token', async () => {
+      getOAuthIdTokenSpy.and.resolveTo(null);
+      expect(await pluginAPI.getOAuthIdToken()).toBeNull();
+    });
+  });
+
   describe('showIndexHtmlAsView()', () => {
     it('should delegate to the bridge method', () => {
       pluginAPI.showIndexHtmlAsView();

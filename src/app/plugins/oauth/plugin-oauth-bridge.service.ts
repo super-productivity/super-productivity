@@ -18,6 +18,17 @@ import {
 } from '../../util/is-native-platform';
 import { PluginLog } from '../../core/log';
 
+/** The OAuth part of the plugin API, with the plugin id bound. */
+export type PluginOAuthBoundMethods = {
+  startOAuthFlow: (
+    config: OAuthFlowConfig,
+    tokenKey?: string,
+  ) => Promise<OAuthTokenResult>;
+  getOAuthToken: (tokenKey?: string) => Promise<string | null>;
+  getOAuthIdToken: (tokenKey?: string) => Promise<string | null>;
+  clearOAuthToken: (tokenKey?: string) => Promise<void>;
+};
+
 /**
  * Bridges OAuth operations between plugin API surface and the underlying
  * PluginOAuthService + persistence layer. Extracted from PluginBridgeService
@@ -105,6 +116,21 @@ export class PluginOAuthBridgeService {
     return tokens;
   }
 
+  /** `getConfig` is read on every call: the provider's OAuth config can change after binding. */
+  createBoundMethods(
+    pluginId: string,
+    getConfig: () => OAuthFlowConfig | undefined,
+  ): PluginOAuthBoundMethods {
+    return {
+      startOAuthFlow: (config, tokenKey) =>
+        this.startOAuthFlow(pluginId, config, tokenKey),
+      getOAuthToken: (tokenKey) => this.getOAuthToken(pluginId, getConfig(), tokenKey),
+      getOAuthIdToken: (tokenKey) =>
+        this.getOAuthIdToken(pluginId, getConfig(), tokenKey),
+      clearOAuthToken: (tokenKey) => this.clearOAuthToken(pluginId, tokenKey),
+    };
+  }
+
   async clearOAuthToken(pluginId: string, tokenKey?: string): Promise<void> {
     const scopedPluginId = this._oauthPersistenceKey(pluginId, tokenKey);
     this._pluginOAuthService.clearTokens(scopedPluginId);
@@ -175,6 +201,22 @@ export class PluginOAuthBridgeService {
       await this._restoreOAuthTokens(scopedPluginId);
     }
     return this._pluginOAuthService.getValidToken(scopedPluginId);
+  }
+
+  async getOAuthIdToken(
+    pluginId: string,
+    config?: OAuthFlowConfig,
+    tokenKey?: string,
+  ): Promise<string | null> {
+    if (this._isUnavailableInWeb(config)) {
+      await this.clearOAuthToken(pluginId, tokenKey);
+      return null;
+    }
+    const scopedPluginId = this._oauthPersistenceKey(pluginId, tokenKey);
+    if (!this._pluginOAuthService.hasTokens(scopedPluginId)) {
+      await this._restoreOAuthTokens(scopedPluginId);
+    }
+    return this._pluginOAuthService.getValidIdToken(scopedPluginId);
   }
 
   private _isUnavailableInWeb(config?: OAuthFlowConfig): boolean {
