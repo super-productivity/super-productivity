@@ -186,7 +186,13 @@ test.describe('@supersync First subtask added while the parent is tracked', () =
               await waitForAppReady(client.page);
             }
             const childTime = await readTimeSpent(client.page, childId!);
-            expect(childTime).toEqual(trackedTime);
+            if (explicitTime) {
+              // A pasted subtask's timeSpent can be 0 next to its day map on one
+              // device and the map's sum on the other, so compare the map.
+              expect(childTime!.timeSpentOnDay).toEqual(trackedTime!.timeSpentOnDay);
+            } else {
+              expect(childTime).toEqual(trackedTime);
+            }
             expect(await readTimeSpent(client.page, parentId!)).toEqual(parentTime);
           }
         }
