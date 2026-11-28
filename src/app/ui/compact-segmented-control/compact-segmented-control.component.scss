@@ -1,0 +1,54 @@
+@use '@angular/material' as mat;
+
+:host {
+  display: inline-flex;
+  max-inline-size: 100%;
+}
+
+.track {
+  @include mat.button-toggle-overrides(
+    (
+      height: var(--s4),
+      shape: 0,
+      label-text-size: var(--font-size-md),
+      label-text-weight: var(--font-weight-medium),
+      background-color: transparent,
+      text-color: var(--text-color-muted),
+      divider-color: transparent,
+      selected-state-background-color: transparent,
+      selected-state-text-color: var(--text-color-most-intense),
+    )
+  );
+
+  flex-wrap: wrap;
+  border: 0;
+
+  @media (pointer: coarse) {
+    @include mat.button-toggle-overrides(
+      (
+        height: var(--s5),
+      )
+    );
+  }
+}
+
+.option {
+  position: relative;
+
+  &.selected::after {
+    content: '';
+    position: absolute;
+    inset-inline: var(--s);
+    inset-block-end: 0;
+    border-block-end: var(--s-quarter) solid var(--link-color);
+    pointer-events: none;
+    @media (forced-colors: active) {
+      border-color: Highlight;
+    }
+  }
+
+  &:has(:focus-visible) {
+    outline: var(--focus-ring-width) solid var(--link-color);
+    outline-offset: calc(-1 * var(--focus-ring-width));
+  }
+}

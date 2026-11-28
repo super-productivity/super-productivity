@@ -108,15 +108,12 @@
           @if (teamOverview(); as team) {
             <div class="team-toolbar">
               <h2>
-                <mat-icon aria-hidden="true">group</mat-icon>
                 {{ T.PLAINSPACE.TEAM_OVERVIEW | translate }}
               </h2>
-              <segmented-button-group
-                size="md"
-                [options]="teamFilterOptions"
-                [selectedId]="onlyMine() ? 'mine' : 'everyone'"
+              <compact-segmented-control
                 [ariaLabel]="T.PLAINSPACE.TEAM_OVERVIEW | translate"
-                (selectionChange)="onlyMine.set($event === 'mine')"
+                [options]="teamFilterOptions"
+                [(value)]="onlyMine"
               />
             </div>
             @if (team.status !== 'ready') {

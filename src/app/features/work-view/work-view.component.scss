@@ -67,24 +67,12 @@ h2 {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: var(--s2);
-  margin-bottom: var(--s2);
+  gap: var(--s) var(--s-half);
 
   h2 {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--s);
     margin: 0;
     font-size: var(--font-size-md);
     font-weight: var(--font-weight-semibold);
-  }
-
-  mat-icon {
-    color: var(--button-primary-label);
-  }
-
-  segmented-button-group {
-    width: min(100%, 19rem);
   }
 }
 

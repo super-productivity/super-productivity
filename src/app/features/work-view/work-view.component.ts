@@ -83,6 +83,7 @@ import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
+import { CompactSegmentedControlComponent } from '../../ui/compact-segmented-control/compact-segmented-control.component';
 import { TaskListComponent } from '../tasks/task-list/task-list.component';
 import { SplitComponent } from './split/split.component';
 import { BacklogComponent } from './backlog/backlog.component';
@@ -133,7 +134,6 @@ import { DateService } from '../../core/date/date.service';
 import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PlainspaceClaimPoolComponent } from '../plainspace/claim-pool/claim-pool.component';
-import { SegmentedButtonGroupComponent } from '../../ui/segmented-button-group/segmented-button-group.component';
 import {
   PLAINSPACE_PROJECT_ROWS,
   PlainspaceSharedTask,
@@ -182,7 +182,7 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     RepeatCfgPreviewComponent,
     PluginIndexComponent,
     PlainspaceClaimPoolComponent,
-    SegmentedButtonGroupComponent,
+    CompactSegmentedControlComponent,
     PlannerCalendarEventComponent,
     AddTaskBarComponent,
     AddSubtaskInputComponent,
@@ -392,8 +392,8 @@ export class WorkViewComponent implements OnInit, OnChanges, OnDestroy {
   });
   private readonly _localSubtaskInput = viewChild(AddSubtaskInputComponent);
   readonly teamFilterOptions = [
-    { id: 'everyone', labelKey: T.PLAINSPACE.EVERYONE },
-    { id: 'mine', labelKey: T.PLAINSPACE.ONLY_MINE },
+    { value: false, labelKey: T.PLAINSPACE.EVERYONE },
+    { value: true, labelKey: T.PLAINSPACE.ONLY_MINE },
   ];
   readonly onlyMine = model(false);
 
