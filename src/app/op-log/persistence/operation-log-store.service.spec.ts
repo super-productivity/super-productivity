@@ -2425,6 +2425,55 @@ describe('OperationLogStoreService', () => {
       expect(applied.filter((e) => e.applicationStatus === 'applied').length).toBe(1200);
     });
 
+    // Statuses in seq order, so index i is the op at seq i + 1.
+    const statusesInSeqOrder = async (): Promise<(string | undefined)[]> =>
+      (await service.getOpsAfterSeq(0)).map((e) => e.applicationStatus);
+
+    it('should change only the named ops when unnamed ops sit between them', async () => {
+      const ops = Array.from({ length: 6 }, () => createTestOperation());
+      await service.appendBatchSkipDuplicates(ops, 'remote', { pendingApply: true });
+
+      await service.markReducersCommittedAndMergeClocks(
+        [1, 3, 5],
+        [ops[0], ops[2], ops[4]],
+      );
+      expect(await statusesInSeqOrder()).toEqual([
+        'archive_pending',
+        'pending',
+        'archive_pending',
+        'pending',
+        'archive_pending',
+        'pending',
+      ]);
+
+      await service.markApplied([1, 3, 5]);
+      expect(await statusesInSeqOrder()).toEqual([
+        'applied',
+        'pending',
+        'applied',
+        'pending',
+        'applied',
+        'pending',
+      ]);
+    });
+
+    it('should change only the named ops when their seqs are far apart', async () => {
+      const ops = Array.from({ length: 10 }, () => createTestOperation());
+      await service.appendBatchSkipDuplicates(ops, 'remote', { pendingApply: true });
+
+      await service.markReducersCommittedAndMergeClocks([1, 10], [ops[0], ops[9]]);
+      const committed = await statusesInSeqOrder();
+      expect([committed[0], committed[9]]).toEqual([
+        'archive_pending',
+        'archive_pending',
+      ]);
+
+      await service.markApplied([1, 10]);
+      const statuses = await statusesInSeqOrder();
+      expect([statuses[0], statuses[9]]).toEqual(['applied', 'applied']);
+      expect(statuses.filter((s) => s === 'pending').length).toBe(8);
+    });
+
     it('should update applicationStatus from pending to applied', async () => {
       const op = createTestOperation();
       const seq = await service.append(op, 'remote', { pendingApply: true });
