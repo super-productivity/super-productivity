@@ -24,6 +24,10 @@
   z-index: var(--z-mobile-bottom-nav);
   display: flex;
 
+  :host-context([dir='rtl']) & {
+    flex-direction: row-reverse;
+  }
+
   //// Glass effect only when background image is present
   :host-context(.hasBgImage) & {
     //backdrop-filter: blur(10px);
