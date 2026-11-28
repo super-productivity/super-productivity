@@ -56,6 +56,7 @@ import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { isRebasedTimeDeltaReceipt } from '../persistence/acknowledge-operations.util';
 import { isSyncTimeSpentOp } from './fold-sync-time-spent.util';
+import { captureFileState } from '../sync-providers/file-based/captured-file-state';
 import { RepairOperationService } from '../validation/repair-operation.service';
 import {
   mayHealRejectedSuperSyncFullState,
@@ -173,9 +174,10 @@ export class OperationLogUploadService {
 
       await this._reseedRejectedFullState(syncProvider, options?.fenceEpoch);
 
-      // Fix the pending-op set and the file snapshot under the same operation-log
-      // boundary. A task-time action applied by reducers while waiting for this
-      // lock remains visible to snapshot projection as an in-flight delta.
+      // Fix pending ops and the active-state cutoff under one operation-log
+      // boundary. V2 proof also captures archives here; known split uploads keep
+      // their legacy raw-state path and read archives only during compaction.
+      // Task-time actions applied while waiting remain visible as in-flight deltas.
       const { pendingOps, localStateSnapshot } = await this.lockService.request(
         LOCK_NAMES.OPERATION_LOG,
         async () => {
@@ -195,8 +197,15 @@ export class OperationLogUploadService {
           return {
             pendingOps: capturedPendingOps,
             localStateSnapshot:
+              capturedPendingOps.length > 0 &&
               syncProvider.providerMode === 'fileSnapshotOps'
-                ? this.stateSnapshotService.getStateSnapshotForOperationLog()
+                ? syncProvider.requiresTaskArchiveSnapshot?.() === false
+                  ? this.stateSnapshotService.getStateSnapshotForOperationLog()
+                  : await this.lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
+                      const { snapshot, taskDataUnmodified } =
+                        await this.stateSnapshotService.getStateSnapshotWithArchiveIntegrity();
+                      return captureFileState(snapshot, taskDataUnmodified);
+                    })
                 : undefined,
           };
         },

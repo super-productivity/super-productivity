@@ -376,6 +376,26 @@ describe('WrappedProviderService', () => {
       expect(adapter.setLastServerSeq).toHaveBeenCalledWith(123);
     });
 
+    it('forwards a synchronous archive hint through the epoch guard', async () => {
+      let required = false;
+      const adapter = Object.assign(createMockSyncCapableAdapter(), {
+        requiresTaskArchiveSnapshot: () => required,
+      });
+      mockFileBasedAdapter.createAdapter.and.returnValue(adapter);
+      const guarded = (await service.getOperationSyncCapable(
+        createMockFileProvider(SyncProviderId.Dropbox),
+        { fenceEpoch: 5 },
+      )) as OperationSyncCapable & { requiresTaskArchiveSnapshot: () => boolean };
+
+      expect(guarded.requiresTaskArchiveSnapshot()).toBeFalse();
+      required = true;
+      expect(guarded.requiresTaskArchiveSnapshot()).toBeTrue();
+      expect(mockProviderManager.assertSyncEpochUnchanged).toHaveBeenCalledWith(
+        5,
+        'provider.requiresTaskArchiveSnapshot',
+      );
+    });
+
     it('blocks the underlying call when the epoch has changed', async () => {
       const adapter = createMockSyncCapableAdapter();
       mockFileBasedAdapter.createAdapter.and.returnValue(adapter);

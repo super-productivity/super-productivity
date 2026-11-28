@@ -25,7 +25,10 @@ export type FileBasedSyncData = GenericFileBasedSyncData<
   unknown,
   CompactOperation,
   ArchiveModel
->;
+> & {
+  /** Общий срез задач и архивов без подмены повреждённых task-разделов. */
+  taskArchiveSnapshotVersion?: 1;
+};
 
 /**
  * SPAP-11: app-specific binding for the split-format ops file (`sync-ops.json`).

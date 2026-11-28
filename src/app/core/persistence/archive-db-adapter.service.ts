@@ -48,6 +48,38 @@ const normalizeArchiveModel = (
 export class ArchiveDbAdapter {
   private _archiveStore = inject(ArchiveStoreService);
 
+  /** Сохраняет нормализацию для sync и сообщает, подменяла ли она задачи. */
+  async loadArchivesForSnapshot(): Promise<{
+    archiveYoung: ArchiveModel | undefined;
+    archiveOld: ArchiveModel | undefined;
+    taskDataUnmodified: boolean;
+  }> {
+    const [rawYoung, rawOld] = await Promise.all([
+      this._archiveStore.loadArchiveYoung(),
+      this._archiveStore.loadArchiveOld(),
+    ]);
+    // Only an undefined payload is ambiguous: hasArchive* reads the whole row,
+    // so avoid cloning each populated archive a second time just to check it exists.
+    const [hasYoung, hasOld] = await Promise.all([
+      rawYoung === undefined ? this._archiveStore.hasArchiveYoung() : true,
+      rawOld === undefined ? this._archiveStore.hasArchiveOld() : true,
+    ]);
+    const archiveYoung = normalizeArchiveModel(rawYoung);
+    const archiveOld = normalizeArchiveModel(rawOld);
+    const unchanged = (
+      raw: ArchiveModel | undefined,
+      normalized: ArchiveModel | undefined,
+      exists: boolean,
+    ): boolean => (raw === undefined ? !exists : !!raw && raw.task === normalized?.task);
+    return {
+      archiveYoung,
+      archiveOld,
+      taskDataUnmodified:
+        unchanged(rawYoung, archiveYoung, hasYoung) &&
+        unchanged(rawOld, archiveOld, hasOld),
+    };
+  }
+
   /**
    * Loads archiveYoung data from SUP_OPS IndexedDB.
    */

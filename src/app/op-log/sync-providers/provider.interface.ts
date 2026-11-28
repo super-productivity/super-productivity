@@ -61,7 +61,10 @@ export type RestorePointType = 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR';
 
 export type OperationSyncCapable<
   M extends OperationSyncProviderMode = OperationSyncProviderMode,
-> = GenericOperationSyncCapable<M, RestorePointType>;
+> = GenericOperationSyncCapable<M, RestorePointType> & {
+  /** App-only capture hint; false preserves legacy split snapshot semantics. */
+  requiresTaskArchiveSnapshot?(): boolean;
+};
 
 export type SnapshotUploadResponse = GenericSnapshotUploadResponse;
 export type RestorePoint = GenericRestorePoint<RestorePointType>;
