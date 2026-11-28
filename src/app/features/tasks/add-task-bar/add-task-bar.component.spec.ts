@@ -656,6 +656,46 @@ describe('AddTaskBarComponent', () => {
       expect(secondTaskData.tagIds).toEqual(['tag-1']);
     });
 
+    // #11917: cancelling the new-tag prompt must not save the task with the
+    // rest of what was typed (a schedule moved it out of view); the input stays.
+    describe('new tag prompt', () => {
+      let addTagSpy: jasmine.Spy;
+
+      beforeEach(() => {
+        addTagSpy = jasmine.createSpy('addTag').and.returnValue('tag-new');
+        (mockTagService as unknown as { addTag: jasmine.Spy }).addTag = addTagSpy;
+        mockTaskService.add.and.returnValue('task-1');
+        component.stateService.updateInputTxt('Call Bob #wrok 16:00');
+        component.stateService.updateCleanText('Call Bob');
+        component.stateService.updateNewTagTitles(['wrok']);
+      });
+
+      it('keeps the input and adds nothing when the prompt is cancelled', async () => {
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(false),
+        } as ReturnType<MatDialog['open']>);
+
+        await component.addTask();
+
+        expect(mockTaskService.add).not.toHaveBeenCalled();
+        expect(addTagSpy).not.toHaveBeenCalled();
+        expect(component.stateService.inputTxt()).toBe('Call Bob #wrok 16:00');
+      });
+
+      it('creates the tag and adds the task when the prompt is confirmed', async () => {
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(true),
+        } as ReturnType<MatDialog['open']>);
+
+        await component.addTask();
+
+        expect(addTagSpy).toHaveBeenCalledWith({ title: 'wrok' });
+        const taskData = mockTaskService.add.calls.mostRecent()
+          .args[2] as Partial<TaskCopy>;
+        expect(taskData.tagIds).toContain('tag-new');
+      });
+    });
+
     it('should pass a syntax-parsed priority to the new task and reset it after', async () => {
       mockTaskService.add.and.returnValue('task-1');
 
