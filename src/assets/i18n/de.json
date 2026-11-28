@@ -2372,7 +2372,9 @@
         "WEDNESDAY": "Mittwoch",
         "WEEK_OF_MONTH": "Woche des Monats",
         "WEEKDAY": "Wochentag",
-        "WEEKDAY_REQUIRED": "Mindestens einen Wochentag auswählen"
+        "WEEKDAY_REQUIRED": "Mindestens einen Wochentag auswählen",
+        "DEADLINE_OFFSET_DAYS": "Fälligkeit (Tage nach jedem Auftreten)",
+        "DEADLINE_OFFSET_DAYS_DESCRIPTION": "Leer lassen für keine Fälligkeit. 0 = fällig am selben Tag."
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Wiederholungskonfigurationsdialog konnte nicht geöffnet werden. du kannst es über das Aufgabenmenü konfigurieren."
     },
@@ -2605,7 +2607,9 @@
     "S_ERR_TICKTICK_IMPORT_OPEN": "Der TickTick-Importer konnte nicht geöffnet werden",
     "S_ERR_TODOIST_IMPORT_OPEN": "Der Todoist-Importer konnte nicht geöffnet werden",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Fehler: Die URL-Parameter für den Import konnten nicht dekodiert werden. Bitte stelle sicher, dass sie korrekt formatiert sind.",
-    "URL_PLACEHOLDER": "URL zum Importieren eingeben"
+    "URL_PLACEHOLDER": "URL zum Importieren eingeben",
+    "IMPORT_FROM_MS_TODO": "Aus Microsoft To Do importieren",
+    "S_ERR_MS_TODO_IMPORT_OPEN": "Der Microsoft-To-Do-Importer konnte nicht geöffnet werden"
   },
   "G": {
     "ADD": "Hinzufügen",
@@ -2794,7 +2798,8 @@
       "L_IS_LOOP_BREAK_END_ALARM": "Ton am Pausenende wiederholen, bis ich die Pause beende (nur dieses Gerät)",
       "L_IS_NOTIFY_ON_SESSION_END": "Browser-Benachrichtigung anzeigen, wenn eine Pomodoro-Sitzung oder Pause endet",
       "S_NOTIFICATION_PERMISSION_DENIED": "Benachrichtigungen sind für diese Seite nicht erlaubt. Erlaube sie in deinem Browser, um diese Option zu nutzen.",
-      "TITLE": "Fokusmodus (dieses Gerät)"
+      "TITLE": "Fokusmodus (dieses Gerät)",
+      "L_IS_FOCUS_WINDOW_ON_SESSION_END": "App-Fenster in den Vordergrund holen, wenn eine Fokus-Session oder Pause endet"
     },
     "TASK_WIDGET": {
       "TITLE": "Aufgaben-Widget",
@@ -3005,7 +3010,8 @@
       "WALLPAPER": "Hintergrundbild",
       "WALLPAPER_BUTTON": "Hintergrundbild festlegen…",
       "WALLPAPER_DIALOG_TITLE": "Globales Hintergrundbild",
-      "WALLPAPER_HINT": "Wird auf Seiten ohne eigenen Hintergrund angezeigt (Planer, Zeitplan, Ansichten, Einstellungen …). Tags und Projekte mit eigenem Bild überschreiben es."
+      "WALLPAPER_HINT": "Wird auf Seiten ohne eigenen Hintergrund angezeigt (Planer, Zeitplan, Ansichten, Einstellungen …). Tags und Projekte mit eigenem Bild überschreiben es.",
+      "IS_HIDE_NAV_TASK_COUNT": "Aufgabenzähler in der Seitenleiste ausblenden"
     },
     "POMODORO": {
       "BREAK_DURATION": "Dauer der kurzen Pausen",
