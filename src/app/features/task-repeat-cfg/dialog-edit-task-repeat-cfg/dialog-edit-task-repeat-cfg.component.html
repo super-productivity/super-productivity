@@ -164,6 +164,13 @@
         </collapsible>
       }
     </div>
+    <a
+      mat-button
+      routerLink="/scheduled-list"
+      (click)="closeForRecurringOverview($event)"
+    >
+      {{ T.WW.SHOW_ALL_RECURRING_TASKS | translate }}
+    </a>
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">

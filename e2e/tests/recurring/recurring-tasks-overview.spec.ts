@@ -47,6 +47,26 @@ test('opens the overview of all recurring tasks from a project panel', async ({
   ).toBeVisible();
 });
 
+test('opens the overview from the repeat dialog without saving a new repeat', async ({
+  page,
+  workViewPage,
+  taskPage,
+  testPrefix,
+}) => {
+  await workViewPage.waitForTaskList();
+  const title = `${testPrefix}-one-off`;
+  await workViewPage.addTask(title);
+  await taskPage.openTaskDetail(taskPage.getTaskByText(title).first());
+  const repeatDialog = await openRecurDialog(page);
+
+  await repeatDialog.getByRole('link', { name: 'All recurring tasks' }).press('Enter');
+
+  await expect(page.locator('mat-dialog-container')).toHaveCount(0);
+  const overview = page.locator('scheduled-list-page');
+  await expect(overview).toBeVisible();
+  await expect(overview.getByText(title)).toHaveCount(0);
+});
+
 test('opens the overview with the keyboard', async ({
   page,
   workViewPage,
