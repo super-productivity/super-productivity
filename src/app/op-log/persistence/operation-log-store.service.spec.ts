@@ -1399,6 +1399,40 @@ describe('OperationLogStoreService', () => {
       expect(storedOps.length).toBe(1);
     });
 
+    // Large batches are written in chunks of 500; these pin chunk boundaries.
+    it('should store a 1000-op batch once, in order, when an op repeats across a chunk boundary', async () => {
+      const unique = Array.from({ length: 1000 }, (_, i) =>
+        createTestOperation({ id: `chunk-op-${i}` }),
+      );
+      // Copy 499 closes the first chunk; its repeat opens the second.
+      const batch = [...unique.slice(0, 500), unique[499], ...unique.slice(500)];
+
+      const result = await service.appendBatchSkipDuplicates(batch, 'remote');
+
+      expect(result.skippedCount).toBe(1);
+      expect(result.seqs).toEqual(Array.from({ length: 1000 }, (_, i) => i + 1));
+      const storedIds = (await service.getOpsAfterSeq(0)).map((entry) => entry.op.id);
+      expect(storedIds).toEqual(unique.map((op) => op.id));
+    });
+
+    it('should record a full-state op that follows a full chunk at its own seq', async () => {
+      const before = Array.from({ length: 600 }, () => createTestOperation());
+      const syncImportOp = createTestOperation({
+        opType: OpType.SyncImport,
+        entityType: 'ALL' as EntityType,
+        entityId: undefined,
+      });
+
+      await service.appendBatchSkipDuplicates(
+        [...before, syncImportOp, createTestOperation()],
+        'remote',
+      );
+
+      const latest = await service.getLatestFullStateOpEntry();
+      expect(latest?.op.id).toBe(syncImportOp.id);
+      expect(latest?.seq).toBe(601);
+    });
+
     it('should append snapshot-included ops and atomically advance the state-cache frontier', async () => {
       const existingOp = createTestOperation({ id: 'snapshot-op-existing' });
       const newOp = createTestOperation({ id: 'snapshot-op-new' });
@@ -2360,6 +2394,35 @@ describe('OperationLogStoreService', () => {
       expect(stored.applicationStatus).toBe('applied');
       service.clearVectorClockCache();
       expect(await service.getVectorClock()).toEqual({ testClient: 2 });
+    });
+
+    it('should reject a checkpoint that names the same seq twice', async () => {
+      const op = createTestOperation();
+      const seq = await service.append(op, 'remote', { pendingApply: true });
+
+      await expectAsync(
+        service.markReducersCommittedAndMergeClocks([seq, seq], [op, op]),
+      ).toBeRejectedWithError(/distinct operation sequences/);
+
+      const [stored] = await service.getOpsAfterSeq(0);
+      expect(stored.applicationStatus).toBe('pending');
+    });
+
+    it('should checkpoint and then apply every op of a batch larger than one chunk', async () => {
+      const ops = Array.from({ length: 1200 }, () => createTestOperation());
+      const { seqs } = await service.appendBatchSkipDuplicates(ops, 'remote', {
+        pendingApply: true,
+      });
+
+      await service.markReducersCommittedAndMergeClocks(seqs, ops);
+      const committed = await service.getOpsAfterSeq(0);
+      expect(
+        committed.filter((e) => e.applicationStatus === 'archive_pending').length,
+      ).toBe(1200);
+
+      await service.markApplied(seqs);
+      const applied = await service.getOpsAfterSeq(0);
+      expect(applied.filter((e) => e.applicationStatus === 'applied').length).toBe(1200);
     });
 
     it('should update applicationStatus from pending to applied', async () => {
