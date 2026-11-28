@@ -43,6 +43,10 @@ import {
 } from './mobile-bottom-nav-slot';
 import { selectAllBoards } from '../../features/boards/store/boards.selectors';
 
+// Views without tasks, where adding one has no context (#8828).
+const NO_TASKS_VIEW_URL =
+  /^\/(?:config|donate|habits|archived-projects|(?:tag|project)\/[^/]+\/metrics)(?:[/?#]|$)/;
+
 @Component({
   selector: 'mobile-bottom-nav',
   standalone: true,
@@ -132,6 +136,7 @@ export class MobileBottomNavComponent {
     { initialValue: this._router.url },
   );
   readonly isSlotActive = computed(() => isBottomNavSlotActive(this.slot(), this._url()));
+  readonly isShowAddTaskButton = computed(() => !NO_TASKS_VIEW_URL.test(this._url()));
   private readonly _slotMenuTrigger = viewChild('slotMenuTrigger', {
     read: MatMenuTrigger,
   });

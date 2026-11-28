@@ -322,6 +322,14 @@ export class OnboardingHintComponent {
         this.hintPosition.set(null);
         this._clearPositionTimeout();
         this._schedulePosition(step, 0);
+      } else if (this._targetEl) {
+        // The target is gone and the step waits instead of ending (e.g. the
+        // create-task tip while the bottom nav hides its + on /config): drop
+        // the stale placement so the chip does not keep pointing at where the
+        // button was; the next reposition re-attaches once a target shows up.
+        this._targetEl = null;
+        this.hintPosition.set(null);
+        this._clearPositionTimeout();
       }
     });
   }
