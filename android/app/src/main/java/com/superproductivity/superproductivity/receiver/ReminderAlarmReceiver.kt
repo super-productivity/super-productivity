@@ -232,11 +232,11 @@ internal suspend fun <T> awaitWithin(
 }
 
 /**
- * A task's own reminder is pointless while its timer runs (#6823). Deadline and
- * due-date reminders still ring, as before.
+ * Skip task and deadline alarms while tracking that task. Due-date notifications still ring.
  */
 internal fun isReminderForTrackedTask(
     reminderType: String,
     relatedId: String,
     trackedTaskId: String?,
-): Boolean = reminderType == "TASK" && trackedTaskId != null && trackedTaskId == relatedId
+): Boolean = (reminderType == "TASK" || reminderType == "DEADLINE") &&
+    trackedTaskId != null && trackedTaskId == relatedId

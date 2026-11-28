@@ -13,16 +13,22 @@ class TrackedTaskReminderTest {
     @Test
     fun `rings when nothing is tracked`() {
         assertFalse(isReminderForTrackedTask("TASK", "task-1", null))
+        assertFalse(isReminderForTrackedTask("DEADLINE", "task-1", null))
     }
 
     @Test
     fun `rings when another task is tracked`() {
         assertFalse(isReminderForTrackedTask("TASK", "task-1", "task-2"))
+        assertFalse(isReminderForTrackedTask("DEADLINE", "task-1", "task-2"))
     }
 
     @Test
-    fun `deadline and due-date reminders of the tracked task still ring`() {
-        assertFalse(isReminderForTrackedTask("DEADLINE", "task-1", "task-1"))
+    fun `drops the deadline reminder of the task being tracked`() {
+        assertTrue(isReminderForTrackedTask("DEADLINE", "task-1", "task-1"))
+    }
+
+    @Test
+    fun `due-date reminders of the tracked task still ring`() {
         assertFalse(isReminderForTrackedTask("DUE_DATE", "task-1", "task-1"))
     }
 }
