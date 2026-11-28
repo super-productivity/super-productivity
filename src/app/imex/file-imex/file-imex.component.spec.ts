@@ -22,6 +22,7 @@ import { createAppDataCompleteMock } from '../../util/app-data-mock';
 import { ImportEncryptionHandlerService } from '../sync/import-encryption-handler.service';
 import { PluginService } from '../../plugins/plugin.service';
 import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
+import { DialogBackupsListComponent } from '../local-backup/dialog-backups-list/dialog-backups-list.component';
 
 describe('FileImexComponent', () => {
   let component: FileImexComponent;
@@ -437,6 +438,51 @@ describe('FileImexComponent', () => {
       await component.privacyAppDataDownload();
 
       expect(mockBackupService.loadCompleteBackup).toHaveBeenCalled();
+    });
+  });
+
+  describe('layout', () => {
+    // button text minus the icon ligature
+    const labelsIn = (root: Element): string[] =>
+      Array.from(root.querySelectorAll('h3, .mdc-button__label')).map((n) =>
+        n.textContent!.trim(),
+      );
+    const groupLabels = (): string[][] => {
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      return Array.from(el.querySelectorAll('section')).map(labelsIn);
+    };
+
+    it('lists the switching-app importers before backup & restore', () => {
+      const [importers, backup] = groupLabels();
+      expect(importers[0]).toBe('FILE_IMEX.GROUP_FROM_OTHER_APP');
+      expect(importers).toContain('FILE_IMEX.IMPORT_FROM_TODOIST');
+      expect(importers).toContain('FILE_IMEX.IMPORT_FROM_TICKTICK');
+      expect(backup).toEqual([
+        'FILE_IMEX.GROUP_BACKUP_RESTORE',
+        'FILE_IMEX.EXPORT_DATA',
+        'FILE_IMEX.IMPORT_FROM_FILE',
+        'FILE_IMEX.OPEN_IMPORT_FROM_URL_DIALOG',
+        'GCF.AUTO_BACKUPS.BROWSE',
+      ]);
+    });
+
+    it('keeps the rare tools outside both groups', () => {
+      const grouped = groupLabels().flat();
+      const all = labelsIn(fixture.nativeElement as HTMLElement);
+      expect(all).toContain('FILE_IMEX.BTN_COMPRESS_ARCHIVE');
+      expect(all).toContain('FILE_IMEX.PRIVACY_EXPORT');
+      expect(grouped).not.toContain('FILE_IMEX.BTN_COMPRESS_ARCHIVE');
+      expect(grouped).not.toContain('FILE_IMEX.PRIVACY_EXPORT');
+    });
+  });
+
+  describe('openBackupsList', () => {
+    it('opens the backups list dialog', () => {
+      component.openBackupsList();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(DialogBackupsListComponent, {
+        restoreFocus: true,
+      });
     });
   });
 });

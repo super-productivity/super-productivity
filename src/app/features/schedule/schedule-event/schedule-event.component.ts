@@ -33,6 +33,8 @@ import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-e
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
+import { DateService } from '../../../core/date/date.service';
+import { isRepeatPreviewSeparable } from '../../task-repeat-cfg/is-repeat-preview-separable.util';
 import { TaskCopy } from '../../tasks/task.model';
 import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -46,6 +48,14 @@ import { isTouchActive } from '../../../util/input-intent';
 import { isLinkTarget } from '../../../util/dom-element';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
+
+const REPEAT_PROJECTION_TYPES: ReadonlySet<SVEType> = new Set([
+  SVEType.RepeatProjection,
+  SVEType.RepeatProjectionSplit,
+  SVEType.ScheduledRepeatProjection,
+  SVEType.RepeatProjectionSplitContinued,
+  SVEType.RepeatProjectionSplitContinuedLast,
+]);
 
 @Component({
   selector: 'schedule-event',
@@ -73,6 +83,10 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
     '[style.height]': '_resizeHeight()',
     '(click)': 'clickHandler($event)',
     '(contextmenu)': 'onContextMenu($event)',
+    '(touchstart)': 'onTouchStart()',
+    '(touchend)': 'onTouchEnd($event)',
+    '(touchcancel)': 'onTouchCancel()',
+    '(cdkDragStarted)': 'onDragStarted()',
   },
   /* eslint-enable @typescript-eslint/naming-convention */
   hostDirectives: [
@@ -89,6 +103,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   private _matDialog = inject(MatDialog);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translateService = inject(TranslateService);
+  private _dateService = inject(DateService);
   private _taskService = inject(TaskService);
   private _calEventActions = inject(CalendarEventActionsService);
   private _ngZone = inject(NgZone);
@@ -164,6 +179,10 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     T.F.SCHEDULE.EXCESS_TASK_TOOLTIP,
   );
 
+  readonly repeatPreviewHint = this._translateService.instant(
+    T.F.TASK_REPEAT.PREVIEW_HINT,
+  );
+
   readonly hoverTitle = computed(() => {
     const evt = this.se();
     const is12Hour = !this._dateTimeFormatService.is24HourFormat();
@@ -188,6 +207,17 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     }
     if (evt.isBeyondBudget) {
       result += `  ${this.beyondBudgetTooltip}`;
+    }
+    // A preview can't be dragged, so point to the way out where there is one.
+    if (
+      REPEAT_PROJECTION_TYPES.has(evt.type) &&
+      isRepeatPreviewSeparable(
+        evt.data as TaskRepeatCfg,
+        evt.sourceOccurrenceDate ?? evt.plannedForDay,
+        this._dateService.todayStr(),
+      )
+    ) {
+      result += `  ${this.repeatPreviewHint}`;
     }
     return result;
   });
@@ -386,13 +416,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     if (t) {
       // Use bottom panel on mobile, sidebar on desktop
       this._taskService.setSelectedId(t.id);
-    } else if (
-      evt.type === SVEType.RepeatProjection ||
-      evt.type === SVEType.RepeatProjectionSplit ||
-      evt.type === SVEType.ScheduledRepeatProjection ||
-      evt.type === SVEType.RepeatProjectionSplitContinued ||
-      evt.type === SVEType.RepeatProjectionSplitContinuedLast
-    ) {
+    } else if (REPEAT_PROJECTION_TYPES.has(evt.type)) {
       const repeatCfg: TaskRepeatCfg = evt.data as TaskRepeatCfg;
       this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
         data: {
@@ -457,14 +481,50 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     this._calEventActions.hideForever(evt.data as ScheduleFromCalendarEvent);
   }
 
-  onContextMenu(ev: MouseEvent | TouchEvent): void {
-    const t = this.task();
-    if (t) {
-      this.openContextMenu(ev);
+  // A touch long-press fires contextmenu with the finger still down, before CDK knows
+  // whether the press becomes a drag. The menu waits for the release and is dropped
+  // once the press turns into a drag (#11977).
+  private _touchGesture: 'none' | 'held' | 'menuPending' | 'dragged' = 'none';
+
+  onTouchStart(): void {
+    this._touchGesture = 'held';
+  }
+
+  onDragStarted(): void {
+    if (this._touchGesture !== 'none') {
+      this._touchGesture = 'dragged';
     }
   }
 
-  openContextMenu(event: TouchEvent | MouseEvent): void {
+  onTouchEnd(ev: TouchEvent): void {
+    const isMenuPending = this._touchGesture === 'menuPending';
+    this._touchGesture = 'none';
+    if (isMenuPending) {
+      // a click from this release would land on the new menu's backdrop and close it
+      ev.preventDefault();
+      this.openContextMenu();
+    }
+  }
+
+  onTouchCancel(): void {
+    this._touchGesture = 'none';
+  }
+
+  onContextMenu(ev: MouseEvent | TouchEvent): void {
+    if (!this.task()) {
+      return;
+    }
+    if (this._touchGesture !== 'none') {
+      ev.preventDefault();
+      if (this._touchGesture === 'held') {
+        this._touchGesture = 'menuPending';
+      }
+      return;
+    }
+    this.openContextMenu(ev);
+  }
+
+  openContextMenu(event?: TouchEvent | MouseEvent): void {
     this.taskContextMenu()?.open(event);
   }
 

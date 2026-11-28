@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
 import { OperationLogUploadService } from './operation-log-upload.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
@@ -20,6 +21,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { provideMockStore } from '@ngrx/store/testing';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 describe('OperationLogUploadService', () => {
   let service: OperationLogUploadService;
@@ -109,6 +111,10 @@ describe('OperationLogUploadService', () => {
           // Narrow stub: without a fenceEpoch the #9074 assert is a no-op.
           provide: SyncProviderManager,
           useValue: { assertSyncEpochUnchanged: () => undefined },
+        },
+        {
+          provide: TranslateService,
+          useValue: { instant: (key: string) => `translated:${key}` },
         },
       ],
     });
@@ -1992,17 +1998,108 @@ describe('OperationLogUploadService', () => {
           );
         });
 
-        it('keeps the barrier on SuperSync, whose server can reject on the merits', async () => {
-          const dependentOp = stuckWith(
-            createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
-          );
+        describe('on SuperSync (#11671)', () => {
+          const HEALED_KEY = LS.SUPER_SYNC_HEALED_REJECTED_FULL_STATE_OP_ID;
+          beforeEach(() => localStorage.removeItem(HEALED_KEY));
+          afterEach(() => localStorage.removeItem(HEALED_KEY));
 
-          const result = await service.uploadPendingOps(mockApiProvider);
+          it('heals a rejection that may predate v20.1.0, once per device', async () => {
+            stuckWith(
+              createFullStateEntry(1, 'rejected-import', 'client-1', OpType.SyncImport),
+            );
 
-          expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
-          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
-          expect(mockOpLogStore.markSynced).not.toHaveBeenCalledWith([dependentOp.seq]);
-          expect(result.blockedByRejectedFullState).toBe(true);
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).toHaveBeenCalledOnceWith(
+              {
+                staleRepairOpId: 'rejected-import',
+                repairSummary: RepairOperationService.createEmptyRepairSummary(),
+                clientId: 'client-1',
+                repairBaseServerSeq: 7,
+              },
+            );
+            expect(localStorage.getItem(HEALED_KEY)).toBe('rejected-import');
+            expect(result.blockedByRejectedFullState).toBeUndefined();
+          });
+
+          it('keeps the barrier once this device healed past another rejection', async () => {
+            // A server that keeps rejecting (e.g. quota) must not get a new
+            // full-state op on every sync.
+            localStorage.setItem(HEALED_KEY, 'earlier-rejected-op');
+            const dependentOp = stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+            expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+            expect(mockOpLogStore.markSynced).not.toHaveBeenCalledWith([dependentOp.seq]);
+            expect(result.blockedByRejectedFullState).toBe(true);
+          });
+
+          it('keeps the barrier and the heal on a server without causal REPAIR support', async () => {
+            (
+              mockApiProvider.supportsCausalRepairSnapshots as jasmine.Spy
+            ).and.returnValue(false);
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+            expect(localStorage.getItem(HEALED_KEY)).toBeNull();
+            expect(result.blockedByRejectedFullState).toBe(true);
+          });
+
+          it('does not record the heal when the reseed fails', async () => {
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+            mockRepairOperationService.rebaseStaleRepair.and.rejectWith(
+              new Error('reseed failed'),
+            );
+
+            await expectAsync(
+              service.uploadPendingOps(mockApiProvider),
+            ).toBeRejectedWithError('reseed failed');
+            expect(localStorage.getItem(HEALED_KEY)).toBeNull();
+          });
+
+          it('heals the same rejected op again when an earlier attempt did not finish', async () => {
+            // The server-migration path records the heal before its dialog;
+            // that must not block the upload path for the same op.
+            localStorage.setItem(HEALED_KEY, 'rejected-repair');
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            const result = await service.uploadPendingOps(mockApiProvider);
+
+            expect(mockRepairOperationService.rebaseStaleRepair).toHaveBeenCalledTimes(1);
+            expect(result.blockedByRejectedFullState).toBeUndefined();
+          });
+
+          it('writes no REPAIR and keeps the heal when the sync target changed meanwhile', async () => {
+            spyOn(
+              TestBed.inject(SyncProviderManager),
+              'assertSyncEpochUnchanged',
+            ).and.callFake((_epoch: number | undefined, context: string) => {
+              if (context === 'rejected full-state reseed') {
+                throw new Error('sync target changed');
+              }
+            });
+            stuckWith(
+              createFullStateEntry(1, 'rejected-repair', 'client-1', OpType.Repair),
+            );
+
+            await expectAsync(
+              service.uploadPendingOps(mockApiProvider),
+            ).toBeRejectedWithError('sync target changed');
+            expect(mockRepairOperationService.rebaseStaleRepair).not.toHaveBeenCalled();
+            expect(localStorage.getItem(HEALED_KEY)).toBeNull();
+          });
         });
       });
 
@@ -2441,6 +2538,9 @@ describe('OperationLogUploadService', () => {
                 code: 'STORAGE_QUOTA_EXCEEDED',
               }),
             );
+            // window.alert is already a spy in the global test setup.
+            const alertSpy = window.alert as jasmine.Spy;
+            alertSpy.calls.reset();
 
             const result = await service.uploadPendingOps(mockApiProvider);
 
@@ -2450,6 +2550,9 @@ describe('OperationLogUploadService', () => {
                 errorCode: 'STORAGE_QUOTA_EXCEEDED',
               }),
             ]);
+            expect(alertSpy).toHaveBeenCalledOnceWith(
+              'translated:F.SYNC.A.SERVER_STORAGE_FULL',
+            );
           });
         });
 

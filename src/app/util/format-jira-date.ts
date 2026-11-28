@@ -13,8 +13,8 @@ export const formatJiraDate = (date: Date | number | string): string => {
 
   // Timezone offset without colon (to match moment's ZZ format)
   const offsetMinutes = d.getTimezoneOffset();
-  const offsetHours = Math.abs(Math.floor(offsetMinutes / 60));
-  const offsetMinPart = Math.abs(offsetMinutes % 60);
+  const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+  const offsetMinPart = Math.abs(offsetMinutes) % 60;
   // getTimezoneOffset returns POSITIVE for zones WEST of UTC, and NEGATIVE for EAST.
   // The standard ISO format requires the opposite sign (+ for EAST, - for WEST).
   const offsetSign = offsetMinutes <= 0 ? '+' : '-';

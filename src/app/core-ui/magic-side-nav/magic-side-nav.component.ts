@@ -459,8 +459,11 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       else window.history.replaceState(args.state, args.title);
     }
 
-    // Mobile menu is visible but still has state in history - restore it
-    else window.history.back();
+    // Mobile menu is hidden but still has state in history - restore it.
+    // Not while a navigation is in flight (e.g. a nav tap closed the menu): the
+    // popstate would cancel that navigation and drop the tap. The leftover
+    // entry costs one extra back press.
+    else if (!this._router.currentNavigation()) window.history.back();
   }
 
   toggleSideNavMode(): void {

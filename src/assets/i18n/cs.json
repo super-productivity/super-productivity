@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Nelze synchronizovat, protože je offline",
-        "SYNC_ERROR": "Dropbox: Chyba při synchronizaci",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Synchronizace Dropbox vyžaduje zabezpečené připojení (HTTPS). Ujistěte se, že aplikaci používáte přes HTTPS, nebo vyzkoušejte stabilní verzi."
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Alternativní hostitel odkazů Jira (např. veřejná adresa URL, pokud se hostitel API liší; předpona cesty je povolena)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Pokročilá konfigurace",
-        "HELP_ARR": {
-          "H1": "Základní konfigurace",
-          "H2": "Nastavení záznamu práce",
-          "H3": "Výchozí přechody",
-          "P1_1": "Prosím, poskytněte přihlašovací jméno (najdete ho na své profilové stránce) a <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> nebo heslo, pokud jej nemůžete vygenerovat z nějakého důvodu. Vezměte na vědomí, že novější verze Jiry někdy fungují pouze s tokenem.",
-          "P1_2": "Musíte také specifikovat JQL dotaz, který se použije pro návrhy na přidání úkolů z Jiry. Pokud potřebujete pomoc, podívejte se na tuto stránku <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Můžete také konfigurovat, zda chcete automaticky (např. pokaždé, když navštívíte zobrazení plánování), importovat všechny nové problémy specifikované vlastním JQL dotazem.",
-          "P1_4": "Další možností je „Zkontrolovat, zda je aktuální lístek přiřazen aktuálnímu uživateli“. Pokud je povoleno a začnete pracovat, bude provedena kontrola, zda jste aktuálně přiřazeni k tomuto lístku v Jiráze. Pokud ne, zobrazí se dialog, ve kterém si můžete vybrat, zda chcete lístek přiřadit sobě.",
-          "P2_1": "Existuje několik možností, jak určit, kdy a jak chcete odeslat pracovní záznam. Povolením <em>'Otevřít dialog pracovního záznamu pro přidání pracovního záznamu do Jiry, když je úkol hotov'</em> se otevře dialog pro přidání pracovního záznamu pokaždé, když označíte úkol Jiry jako hotový. Mějte na paměti, že pracovní záznamy budou přidány navíc k všemu, co bylo dosud sledováno. Pokud tedy úkol označíte za hotový podruhé, nemusíte chtít odeslat celý pracovní čas na úkol znovu.",
-          "P2_2": "<em>'Otevřít dialog pracovního záznamu, když je hotov podúkol a ne pro úkoly s podúkoly sami o sobě'</em> otevírá dialog pracovního záznamu pokaždé, když označíte podúkol úkolu Jiry jako hotový. Protože již sledujete svůj čas pomocí podúkolů, není otevírán žádný dialog, když označíte samotný úkol Jiry jako hotový.",
-          "P2_3": "<em>'Automaticky odesílat aktualizace pracovního záznamu bez dialogu'</em> dělá to, co říká. Protože označení úkolu jako hotového několikrát vede k celkovému sledování celého pracovního času dvakrát, toto se nedoporučuje.",
-          "P3_1": "Zde můžete znovu nakonfigurovat výchozí přechody. Jira umožňuje širokou konfiguraci přechodů, které obvykle vstupují v platnost jako různé sloupce na vaší agilní tabuli Jiry, nemůžeme dělat předpoklady o tom, kde a kdy přecházet úkoly, a musíte je nastavit manuálně."
-        }
+        "ADV_CFG": "Pokročilá konfigurace"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Přiřazený",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Touto hodnotou upravíte rozmazání obrázku na pozadí. Výchozí hodnota je 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Upravte tuto hodnotu pro více či méně průhledné pozadí. Výchozí je 20 %.",
-        "HELP": "Nastavení tématu pro váš projekt.",
         "L_BACKGROUND_IMAGE_BLUR": "Rozmazání obrázku na pozadí",
         "L_BACKGROUND_IMAGE_DARK": "Adresa URL obrázku pozadí (tmavé téma)",
         "L_BACKGROUND_IMAGE_LIGHT": "Adresa URL obrázku pozadí (světlé téma)",
@@ -1765,7 +1750,6 @@
         "RESTORE_SUCCESS": "Data úspěšně obnovena",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Nepodařilo se migrovat data na server – validace lokálních dat selhala. Zkuste prosím importovat zálohu.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Tato synchronizační složka byla upgradována na formát s rozdělenými soubory. Chcete-li pokračovat, zapněte Surgical sync v nastavení synchronizace.",
-        "STORAGE_QUOTA_EXCEEDED": "Úložiště na synchronizačním serveru je plné. Vaše změny se NESYNCHRONIZUJÍ. Archivujte prosím staré úkoly nebo upgradujte svůj tarif.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Kapacita úložiště byla nízká. Stará data byla úspěšně vyčištěna.",
         "SUCCESS_DOWNLOAD": "Data synchronizována ze vzdáleného serveru",
         "SUCCESS_VIA_BUTTON": "Data úspěšně synchronizována",

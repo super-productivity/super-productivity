@@ -1,12 +1,13 @@
 # Narrow mobile background sync: push on pause and on notification actions
 
-> **Status: Step 0 in progress** (§ 5); steps 1–2 and § 14 are parked for
-> later investigation (§ 16)
+> **Status: Step 0 shipped in v20.0.0** (#11330, § 5); step 1 does not work
+> on a frozen app as designed (emulator, § 17), so only its ack-after-persist
+> part is built, for the widget queue; step 2 and § 14 stay parked (§ 16)
 >
-> **Owner / tracking:** Unassigned; no tracking issue yet. Open one before the PR.
+> **Owner / tracking:** Unassigned; #11365.
 > Each implementation step is a sync PR (AGENTS.md sync rules 15–16).
 >
-> **Last verified against the code:** 2026-10-30 (`ed27bd1e95`)
+> **Last verified against the code:** 2026-11-27 (`43ce2fa442`)
 >
 > **Removal condition:** delete once the steps in § 5 are shipped or declined
 > in an issue; move anything that still matters into
@@ -104,7 +105,7 @@ alarms. There is no headless JS path on either platform.
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Foreground                            | Everything runs.                                                                                                                                                                                       | Everything runs.                                                                                                                                                                              |
 | Just backgrounded                     | JS keeps running. Capacitor's `KeepRunning` defaults to true (`@capacitor/android` `Bridge.java:463-464`), so the WebView does not pause its timers. A broadcast receiver can reach the live Activity. | About 30 s of `beginBackgroundTask` time, via `BackgroundTask.beforeExit`. After `finish()`, or when the budget runs out, the WKWebView is suspended.                                         |
-| Backgrounded a while (process cached) | The process may be frozen by the cached-app freezer (Android 14+). A broadcast delivery thaws it briefly; **whether WebView JS then runs long enough to sync is unmeasured** (§ 14, Q1).               | Suspended: no JS. A non-foreground notification action may wake the app briefly, but the plugin forwards the event and finishes at once, so a WebView sync is not expected to fit (§ 14, Q2). |
+| Backgrounded a while (process cached) | The process may be frozen by the cached-app freezer (Android 14+). A broadcast delivery thaws it for 10 s; **the drain then runs, but no op is written until the next resume** (emulator, § 17).       | Suspended: no JS. A non-foreground notification action may wake the app briefly, but the plugin forwards the event and finishes at once, so a WebView sync is not expected to fit (§ 14, Q2). |
 | Killed                                | No WebView. The receiver writes the SharedPreferences queue; the next launch drains it. Nothing can record an op until then.                                                                           | The action may relaunch the app in the background, but no JS work can be counted on. Today the tap survives only as the plugin's in-memory retained event.                                    |
 
 Consequence: "record the op and push it while killed" is impossible without
@@ -316,8 +317,9 @@ ops pending
   notification is already gone and the task is still open. Today this
   window opens only at launch or resume. A drain while backgrounded (step 1)
   moves it to exactly the moment the OS likes to kill processes. That is why
-  ack-after-persist is part of step 1, not separate hardening. Without step
-  1, R1 has no observed instance; file it as a gap issue, not a fix.
+  ack-after-persist is part of step 1, not separate hardening. For the
+  widget queue the loss was reproduced on an emulator and is closed by
+  ack-after-persist (§ 17); the reminder queues have no observed instance.
 - **R2 (iOS, unverified): the retained action event lives only in the
   plugin's memory.** If iOS evicts the process before JS registers its
   listener, the tap is lost. Reproduce it on a device before building
@@ -327,8 +329,10 @@ ops pending
   makes it more frequent (WebDAV on iOS rarely fits the budget). Check the
   Nextcloud/WebDAV E2E for the interruption case before shipping step 0 for
   file providers. If it is not clean, run step 0 as flush-only for them.
-  Not checked yet: the step 0 branch pushes for every provider, so this
-  check gates its PR leaving draft (§ 16).
+  Checked for WebDAV with strong ETags:
+  `e2e/tests/sync/webdav-android-pause-push-interrupted.spec.ts` converges
+  for both outcomes (upload never arrived; stored but response lost). Weak or
+  missing ETags keep the existing best-effort race.
 - **R4: stale intent** (§ 7). This is a content override, not loss, and it
   already exists.
 - **Persisted formats.** No persisted model, sync wire, schema version or
@@ -428,7 +432,9 @@ like `ShareUploadWorker`), not periodic full sync.
    WebView JS on current devices, and does a LocalBroadcast-driven drain get
    enough CPU to finish `flush` + `sync`? If not, should step 1 hold a
    short `goAsync()` window (as `ReminderAlarmReceiver` does with its 8 s
-   budget) while JS works?
+   budget) while JS works? **Measured on an emulator (§ 17):** frozen about
+   10 s after another app comes to the front; the drain runs, the write does
+   not, and a longer awake window does not help.
 2. **Q2 (iOS):** for a non-foreground action on a suspended or killed app,
    does the WebView boot and the listener fire before suspension? This
    decides whether step 2 is needed (R2).
@@ -457,18 +463,122 @@ launch.
 
 Parked while step 0 ships. Revisit after one release with step 0:
 
-- [ ] Re-check new reports shaped like #25/#88/#89. Persisting reports
-      decide step 1 (§ 5).
+- [x] Re-check new reports shaped like #25/#88/#89: done 2026-11-27 (§ 17).
 - [ ] Step 1: Android notification actions while the app is alive, with
       ack-after-persist (R1, E2Es 3–5).
 - [ ] Step 2: iOS non-foreground actions, only if a device test shows R2.
-- [ ] R3 (§ 10) was not checked before step 0: file providers push on
-      pause too (only with an unsynced op and their interval on, as their
-      old pause/hidden triggers did). Run the WebDAV interruption case; if it is not clean, make
-      the exit path flush-only for file providers on iOS (Q4). Add the
-      `@webdav` variant of E2E 1 (§ 11).
+- [x] R3 (§ 10): the WebDAV interruption case is clean
+      (`webdav-android-pause-push-interrupted.spec.ts`). Still open: the
+      `@webdav` variant of E2E 1 (§ 11) and the iOS budget (Q4).
 - [ ] Q1–Q6 (§ 14), in particular Q3 (cold E2EE key derivation inside the
       iOS budget) and Q4 (WebDAV inside the budget).
 - [ ] Device-check step 0 on Android: does the push finish before the
       freezer stops JS (Q1)? On iOS: does `finish()` always come before
       expiry?
+
+## 17. Re-check after step 0 (2026-11-27)
+
+**Survey export of 2026-11-27 (284 responses, last one 2026-11-24).** Twelve
+answers describe this problem: the nine in § 1 minus the two timing-conflict
+rows, plus #204, #215, #216, #218 and #234. All are dated 2026-10-27 to
+11-08. v20.0.0, the first release with step 0, was tagged 2026-11-06, so none
+of them can be read as "still broken after step 0". Of the 18 phone users who
+answered the sync question from 2026-11-09 on, one may describe it (#235,
+Dropbox: tasks completed on the desktop sometimes stay open on the phone;
+it does not say whether the app was opened). That is weak evidence (store
+rollout lags the tag), not proof.
+
+| What the twelve describe                                    | Rows                      | After step 0                                          |
+| ----------------------------------------------------------- | ------------------------- | ----------------------------------------------------- |
+| A phone change needs a manual sync, or the app closes first | #89, #204, #234           | Pushed on pause; a cut-off push retries safely (§ 9). |
+| Notification or widget "done" does not reach other devices  | #25, #88, #218            | **Open**: see below.                                  |
+| Nothing arrives while the app is closed                     | #26, #72, #83, #215, #216 | Open by design (sibling note: A.1, iOS limit).        |
+| Opening the app just to sync is discouraging                | #96                       | Partly: outbound only.                                |
+
+**Reproduced (2026-11-27, single client, fake Android bridge, throwaway
+spec).** With the app alive in the background for 8 s, a queued reminder
+"done" is never read: the task stays open and no op exists until `onResume$`.
+The same tap from the widget is applied at once, because the widget sends a
+drain signal and the reminder receiver does not (§ 2). Not reproduced here:
+the two-client variant (provider servers are unreachable from a sandboxed
+session, `e2e/AGENTS.md`), and anything that depends on the real Android
+freezer or on iOS suspension (§ 14 Q1–Q2).
+
+**What a tap needs today to reach other devices:**
+
+| Phone app state         | Reminder "done"/snooze    | Widget checkbox                                                          |
+| ----------------------- | ------------------------- | ------------------------------------------------------------------------ |
+| Alive in the background | Waits for the next resume | Applied at once; SuperSync uploads, file providers wait for a timer tick |
+| Frozen (cached)         | Waits for the next resume | Applied in memory only; written and sent at the next resume (see below)  |
+| Killed                  | Waits for the next launch | Waits for the next launch                                                |
+
+**Measured on an emulator (2026-11-27; Android 15 `AE3A.240806.036`, WebView
+156.0.8078.47, fdroid debug build of `9896fd9fe1`, no sync provider).** The
+widget tap was simulated with the broadcast the widget sends
+(`am broadcast -n …/.widget.TaskListWidgetProvider -a …WIDGET_CLICK --es
+WIDGET_TASK_ID <id> --ez WIDGET_SET_DONE <bool>`); the op write was read from
+the `[ol] incrementVectorClock` and `Processed action` log lines.
+
+| App state at the tap                                                | Drain and reducer | Op written                               |
+| ------------------------------------------------------------------- | ----------------- | ---------------------------------------- |
+| Background 4 s and 60 s, still the "previous app" (never frozen)    | Within 0.1 s      | Within 0.3 s                             |
+| Frozen for about 20 s (two taps, 2026-11-27 re-check)               | Within 0.1 s      | Within 0.2 s                             |
+| Frozen for 1 min (four runs)                                        | Within 0.1 s      | Not until the Activity resumed           |
+| Frozen for 10 min, screen off, on battery (main process kept awake) | Within 0.1 s      | Not until the Activity resumed           |
+| The first of those, then `am kill` before a resume                  | Within 0.1 s      | Never: the task is unchanged on relaunch |
+
+- The freezer acts about 10 s after the process becomes cached, which
+  happens once another app is in front. With only the launcher in front it
+  stayed the "previous app" and was not frozen for minutes.
+- A broadcast thaws the app and the WebView renderer for 10 s. In that window
+  the injected drain call and the synchronous reducer run, but nothing
+  asynchronous completes: no op write, and not the 500 ms widget snapshot
+  push either. A second wake-up 20 s later does not complete them, nor does
+  `am unfreeze --sticky` on the app process before the tap. They complete
+  within 0.3 s of the Activity resuming. The cause is not identified (the
+  stall follows the renderer process having been frozen). It needs more than
+  about 20 s of freezing: two taps that soon after the freeze were written
+  and pushed to the widget snapshot at once.
+- So R1 is real for the widget queue on a path released since v18.14.0: the
+  queue is cleared, the change exists only in memory, and a process killed
+  before the next resume loses the tap. The widget's overlay and its
+  snapshot are both stale in that window, so the checkbox probably falls
+  back as well (not observed: no widget was placed on the launcher).
+- Not run: 1 h (the result was already negative), a real device, and a tap
+  with a sync provider configured.
+
+**Consequence for step 1.** As designed it cannot work on a frozen app: the
+push would wait behind the same stalled write, and a `goAsync()` hold does
+not help. It would only cover taps in the first seconds after leaving the
+app. Step 1 stays undecided until the stall is understood.
+
+**Done instead: ack-after-persist alone, for the widget queue.** The tap
+stays in the native queue (and the widget overlay) until JS reports the op
+written (`peekWidgetDoneQueue` / `ackWidgetDoneQueue`); a drain that finds it
+again applies it once (the drain already skips tasks in the target state). No
+drain signal for the reminder queues, no push, no `goAsync()`.
+
+- Reproduction: `e2e/tests/mobile/android-widget-done-tap-killed.spec.ts`
+  holds a write transaction over the op-log database (the stall as JS sees
+  it), sends the tap and reloads. A browser cannot freeze a real WebView, so
+  the native side is the fake bridge the Android timer specs use.
+- Emulator, same setup with the fix: frozen 1 min, tap, `am kill`, relaunch.
+  The queue kept the tap through the kill, the relaunch applied and wrote it
+  and then emptied the queue. Frozen 1 min, tap, resume: written and
+  acknowledged within 0.4 s of the resume.
+- Not covered: a legacy online-mode shell older than this change keeps
+  get-and-clear, and the reminder queues are unchanged.
+- Accepted: a tap stays queued while its write is stuck or failed, or when it
+  landed while remote ops were being applied (the ack is then left to the
+  next drain). If the user sets the same task the other way in the app before
+  that drain, the drain applies the widget's target again. The emulator runs
+  predate the buffered-action condition and had no sync provider.
+
+Still not safe: a drain signal for the reminder queues without
+ack-after-persist.
+`_handleDoneAction` awaits a full `sync()` before it marks the task done, and
+the queue is already empty by then. A process killed in that wait loses the
+tap for good, while its notification and alarm are gone.
+
+It still does not cover a killed app. Only A.2 does (SuperSync only), and its
+preconditions are unchanged (§ 5 "Not proposed").

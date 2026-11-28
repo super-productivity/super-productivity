@@ -23,6 +23,7 @@ import {
   ProjectWithTasks,
 } from './map-to-project-with-tasks.util';
 import { DateService } from 'src/app/core/date/date.service';
+import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { MatIcon } from '@angular/material/icon';
 import { TaskSummaryTableComponent } from '../task-summary-table/task-summary-table.component';
 import { MatButton } from '@angular/material/button';
@@ -121,13 +122,14 @@ export class TaskSummaryTablesComponent {
   }
 
   showExportModal(projectId?: string | null): void {
+    const day = parseDbDateStr(this.dayStr());
     this._matDialog.open(DialogWorklogExportComponent, {
       restoreFocus: true,
       panelClass: 'big',
       data: {
         projectId,
-        rangeStart: new Date().setHours(0, 0, 0, 0),
-        rangeEnd: new Date().setHours(23, 59, 59),
+        rangeStart: new Date(day).setHours(0, 0, 0, 0),
+        rangeEnd: new Date(day).setHours(23, 59, 59),
       },
     });
   }

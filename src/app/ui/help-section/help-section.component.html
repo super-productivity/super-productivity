@@ -1,25 +1,18 @@
-<button
-  (click)="isShowHelp = !isShowHelp"
-  aria-label="Show Help for section"
-  class="help-btn mat-elevation-z2"
-  color=""
-  mat-mini-fab
-  type="button"
->
-  <mat-icon>{{ isShowHelp ? 'close' : 'help_outline' }}</mat-icon>
-</button>
-
-@if (isShowHelp) {
+@if (isShowHelp()) {
   <div
     [@expandFade]
-    class="help-text border-color-primary"
+    class="help-text"
   >
-    <div class="help-icon-wrapper color-primary">
-      <mat-icon>help_outline</mat-icon>
-    </div>
     <ng-content></ng-content>
-    <div class="help-icon-wrapper color-primary">
-      <mat-icon>help_outline</mat-icon>
-    </div>
+    @if (docsUrl(); as url) {
+      <a
+        class="docs-link"
+        [href]="url"
+        target="_blank"
+        rel="noopener"
+        >{{ T.G.HELP_READ_GUIDE | translate
+        }}<mat-icon aria-hidden="true">open_in_new</mat-icon></a
+      >
+    }
   </div>
 }

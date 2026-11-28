@@ -1,3 +1,4 @@
+import { DOCS_URL } from '../../../app.constants';
 import { ConfigFormSection, ScheduleConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
@@ -5,6 +6,7 @@ import { isValidSplitTime } from '../../../util/is-valid-split-time';
 export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
   title: T.GCF.SCHEDULE.TITLE,
   help: T.GCF.SCHEDULE.HELP,
+  docsUrl: `${DOCS_URL}explanation/schedule-view/`,
   key: 'schedule',
   items: [
     {

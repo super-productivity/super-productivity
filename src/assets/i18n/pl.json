@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Nie można zsynchronizować danych, ponieważ utracono połączenie z internetem",
-        "SYNC_ERROR": "Dropbox: Wystąpił błąd podczas synchronizacji",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Nie można wygenerować wyzwania PKCE."
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Alternatywny host linków Jiry (np. publiczny URL, gdy host API jest inny; dozwolony jest prefiks ścieżki)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Zaawansowana konfiguracja",
-        "HELP_ARR": {
-          "H1": "Podstawowa konfiguracja",
-          "H2": "Ustawienia worklogu",
-          "H3": "Domyślne przejścia",
-          "P1_1": "Podaj login (znajdziesz go w profilu) oraz <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">token API</a> albo hasło, jeśli nie możesz go wygenerować. Pamiętaj, że nowsze wersje Jiry czasem działają tylko z tokenem.",
-          "P1_2": "Musisz też podać zapytanie JQL używane do sugestii dodawania zadań z Jiry. Jeśli potrzebujesz pomocy, zobacz ten link: <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Możesz także ustawić automatyczne (np. przy każdej wizycie w widoku planowania) dodawanie wszystkich nowych zadań wskazanych przez niestandardowe zapytanie JQL do zaległości.",
-          "P1_4": "Opcja „Sprawdź, czy bieżące zgłoszenie jest przypisane do użytkownika” po uruchomieniu zadania sprawdza przypisanie w Jirze. Jeśli zgłoszenie nie jest przypisane do Ciebie, pojawi się okno, w którym możesz przypisać je do siebie.",
-          "P2_1": "Możesz określić, kiedy i jak wysyłać worklog. Włączenie <em>„Otwieraj okno dodania worklogu do Jiry po ukończeniu zadania”</em> powoduje, że przy oznaczeniu zadania Jira jako ukończonego pojawia się okno dodania worklogu. Pamiętaj, że worklogi będą dodawane do wszystkiego, co do tej pory zostało zmierzone. Jeśli oznaczysz zadanie jako ukończone ponownie, możesz nie chcieć wysyłać pełnego czasu drugi raz.",
-          "P2_2": "<em>„Otwieraj okno worklogu po ukończeniu podzadania, ale nie dla zadań z podzadaniami”</em> otwiera okno worklogu za każdym razem, gdy ukończysz podzadanie zgłoszenia Jira. Ponieważ czas śledzisz na podzadaniach, okno nie pojawi się po ukończeniu zadania głównego Jira.",
-          "P2_3": "<em>„Wysyłaj aktualizacje worklogu automatycznie bez okna dialogowego”</em> robi dokładnie to, co mówi. Ponieważ wielokrotne oznaczanie zadania jako ukończonego może spowodować podwójne naliczenie czasu, ta opcja nie jest zalecana.",
-          "P3_1": "Tutaj możesz zmienić domyślne przejścia. Jira pozwala bardzo szeroko konfigurować przejścia (często odpowiadają kolumnom na tablicy agile), więc nie możemy zgadywać, kiedy i jak przełączać statusy — musisz ustawić to ręcznie."
-        }
+        "ADV_CFG": "Zaawansowana konfiguracja"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Przypisany",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Dostosuj tę wartość, aby rozmyć obraz tła. Wartość domyślna to 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Dostosuj tę wartość, aby tło było bardziej lub mniej przezroczyste. Domyślna wartość to 20%.",
-        "HELP": "Ustawienia motywu dla projektu.",
         "L_BACKGROUND_IMAGE_BLUR": "Rozmycie obrazu tła",
         "L_BACKGROUND_IMAGE_DARK": "URL obrazu tła (ciemny motyw)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL obrazu tła (jasny motyw)",
@@ -1766,7 +1751,6 @@
         "RESTORE_SUCCESS": "Dane przywrócone pomyślnie",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Nie udało się zmigrować danych na serwer - walidacja danych lokalnych nie powiodła się. Spróbuj zaimportować kopię zapasową.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Ten folder synchronizacji został zaktualizowany do formatu podzielonych plików. Aby kontynuować, włącz Surgical sync w ustawieniach synchronizacji.",
-        "STORAGE_QUOTA_EXCEEDED": "Serwer synchronizacji jest pełny. Twoje zmiany NIE są synchronizowane! Zarchiwizuj stare zadania lub uaktualnij plan.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Przestrzeń dyskowa była na wyczerpaniu. Stare dane zostały pomyślnie wyczyszczone.",
         "SUCCESS_DOWNLOAD": "Zsynchronizowano dane ze zdalnego źródła",
         "SUCCESS_VIA_BUTTON": "Dane zostały pomyślnie zsynchronizowane",

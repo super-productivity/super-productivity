@@ -1,3 +1,4 @@
+import { DOCS_URL } from '../../../../app.constants';
 import { T } from '../../../../t.const';
 import {
   ConfigFormSection,
@@ -150,4 +151,5 @@ export const CALDAV_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderCaldav> 
   key: 'CALDAV',
   items: CALDAV_CONFIG_FORM,
   help: T.F.CALDAV.FORM_SECTION.HELP,
+  docsUrl: `${DOCS_URL}how-to/set-up-caldav/`,
 };

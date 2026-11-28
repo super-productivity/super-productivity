@@ -12,6 +12,7 @@ import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translat
 import { SnackService } from '../../../core/snack/snack.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { TaskService } from '../../../features/tasks/task.service';
+import { TaskSchedulingService } from '../../../features/tasks/task-scheduling.service';
 import { WorkContextService } from '../../../features/work-context/work-context.service';
 import { of } from 'rxjs';
 import { PlannerService } from '../planner.service';
@@ -31,6 +32,7 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
   let dialogRefSpy: jasmine.SpyObj<MatDialogRef<DialogScheduleTaskComponent>>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskSchedulingServiceSpy: jasmine.SpyObj<TaskSchedulingService>;
   let plannerServiceSpy: jasmine.SpyObj<PlannerService>;
   let workContextServiceSpy: jasmine.SpyObj<WorkContextService>;
   let reminderServiceSpy: jasmine.SpyObj<ReminderService>;
@@ -43,7 +45,10 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
       'getSnackExtraStr',
     ]);
     reminderServiceSpy = jasmine.createSpyObj('ReminderService', ['getById']);
-    taskServiceSpy = jasmine.createSpyObj('TaskService', ['scheduleTask']);
+    taskSchedulingServiceSpy = jasmine.createSpyObj('TaskSchedulingService', [
+      'scheduleTask',
+    ]);
+    taskServiceSpy = {} as jasmine.SpyObj<TaskService>;
     workContextServiceSpy = jasmine.createSpyObj(
       'WorkContextService',
       ['activeWorkContextId$'],
@@ -87,6 +92,7 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
         { provide: ReminderService, useValue: reminderServiceSpy },
         { provide: PlannerService, useValue: plannerServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskSchedulingService, useValue: taskSchedulingServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         TranslateService,
         TranslateStore,
@@ -130,7 +136,7 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
         time: testTime,
         remindOption: TaskReminderOptionId.AtStart,
       });
-      expect(taskServiceSpy.scheduleTask).not.toHaveBeenCalled();
+      expect(taskSchedulingServiceSpy.scheduleTask).not.toHaveBeenCalled();
     });
 
     it('should return null time and null remindOption when no time selected', async () => {

@@ -32,11 +32,10 @@ const jiraToMarkdown = (str: string): string =>
     .replace(/~([^~]*)~/g, '<sub>$1</sub>')
     // Strikethrough
     .replace(/(\s+)-(\S+.*?\S)-(\s+)/g, '$1~~$2~~$3')
-    // Code Block
-    .replace(
-      /\{code(:([a-z]+))?([:|]?(title|borderStyle|borderColor|borderWidth|bgColor|titleBGColor)=.+?)*\}([^]*?)\n?\{code\}/gm,
-      '```$2$5\n```',
-    )
+    // Code Block (any same-line parameters such as title=… are dropped; `[^}\n]*`
+    // instead of a repeated `name=.+?` group avoids exponential backtracking,
+    // CodeQL #82)
+    .replace(/\{code(:([a-z]+))?(?:[:|][^}\n]*)?\}([^]*?)\n?\{code\}/gm, '```$2$3\n```')
     // Pre-formatted text
     .replace(/{noformat}/g, '```')
     // Un-named Links
@@ -54,8 +53,9 @@ const jiraToMarkdown = (str: string): string =>
       /\{panel:title=([^}]*)\}\n?([^]*?)\n?\{panel\}/gm,
       '\n| $1 |\n| --- |\n| $2 |',
     )
-    // table header
-    .replace(/^[ \t]*((?:\|\|.*?)+\|\|)[ \t]*$/gm, (_, headers: string) => {
+    // table header (a line from `||` to `||`; a repeated `(\|\|.*?)+` group
+    // backtracks exponentially on long runs of bars, CodeQL #83)
+    .replace(/^[ \t]*(\|\|.*\|\|)[ \t]*$/gm, (_, headers: string) => {
       const singleBarred = headers.replace(/\|\|/g, '|');
       return '\n' + singleBarred + '\n' + singleBarred.replace(/\|[^|]+/g, '| --- ');
     })

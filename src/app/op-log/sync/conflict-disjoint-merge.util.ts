@@ -523,3 +523,84 @@ const isTimeDeltaBesideTimelessOps = (
 
 const isSyncTimeSpentDelta = (op: Operation): boolean =>
   op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT;
+
+/**
+ * The task fields `planTasksForToday` writes: `dueDay`, and clears of
+ * `remindAt` and `dueWithTime`. Its other writes (the Today order, planner
+ * days) follow from `dueDay`, which an `updateTask` without `dueDay` leaves
+ * alone; its spec runs the reducer to prove the field set.
+ */
+const PLAN_FOR_TODAY_TASK_FIELDS: readonly string[] = [
+  'dueDay',
+  'remindAt',
+  'dueWithTime',
+];
+
+const isSingleTaskPlanForToday = (op: Operation, entityId: string): boolean => {
+  const ids = getOpEntityIds(op);
+  return (
+    op.actionType === ActionType.TASK_SHARED_PLAN_FOR_TODAY &&
+    op.entityType === 'TASK' &&
+    op.opType === OpType.Update &&
+    !isLwwUpdatePayload(op.payload) &&
+    ids.length === 1 &&
+    ids[0] === entityId
+  );
+};
+
+/** A readable single-task `updateTask` that writes no field of the auto-plan. */
+const isUpdateBesidePlanForToday = (
+  op: Operation,
+  payloadKey: string,
+  entityId: string,
+): boolean => {
+  const ids = getOpEntityIds(op);
+  if (
+    op.actionType !== ActionType.TASK_SHARED_UPDATE ||
+    op.entityType !== 'TASK' ||
+    op.opType !== OpType.Update ||
+    isLwwUpdatePayload(op.payload) ||
+    ids.length !== 1 ||
+    ids[0] !== entityId
+  ) {
+    return false;
+  }
+  const changes = extractOpChanges(op, payloadKey, entityId);
+  return (
+    Object.keys(changes).length > 0 &&
+    !PLAN_FOR_TODAY_TASK_FIELDS.some((field) => field in changes)
+  );
+};
+
+// shortcut: plain sides only. A pending time delta beside the auto-plan
+// (tracking) is rejected on SuperSync and the delta rebase
+// (`rebaseCommutingTimeDeltaRejections`) admits only time-commuting rows, so
+// it would drop the time; admit deltas once that rebase reads this pair.
+// Detection passes remote ops one at a time, so a tracker's remote auto-plan
+// still commutes here; only the tracker's own side stays on whole-entity LWW.
+const isPlanSideBesideUpdates = (
+  planSide: Operation[],
+  updateSide: Operation[],
+  { payloadKey, entityId }: { payloadKey: string; entityId: string },
+): boolean =>
+  planSide.length > 0 &&
+  updateSide.length > 0 &&
+  planSide.every((op) => isSingleTaskPlanForToday(op, entityId)) &&
+  updateSide.every((op) => isUpdateBesidePlanForToday(op, payloadKey, entityId));
+
+/**
+ * True when one side is only single-task `planTasksForToday` ops and the other
+ * only `updateTask` edits of fields the auto-plan never writes, e.g. a done
+ * (#11883). Both apply as they are, in either order, to the same task. Whole-
+ * entity LWW instead let the auto-plan's snapshot undo the done, or dropped the
+ * auto-plan on every device but its own: the auto-plan is opaque, so neither
+ * side could be re-sent as fields (#10393 decision 6, narrowed for this pair).
+ */
+export const isPlanForTodayBesideDisjointUpdates = (params: {
+  localOps: Operation[];
+  remoteOps: Operation[];
+  payloadKey: string;
+  entityId: string;
+}): boolean =>
+  isPlanSideBesideUpdates(params.localOps, params.remoteOps, params) ||
+  isPlanSideBesideUpdates(params.remoteOps, params.localOps, params);

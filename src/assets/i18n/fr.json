@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: impossible de synchroniser, car hors ligne",
-        "SYNC_ERROR": "Dropbox: erreur lors de la synchronisation",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox : Impossible de générer le défi PKCE."
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Hôte alternatif pour les liens Jira (par exemple, une URL publique si l'hôte de l'API est différent ; préfixe de chemin autorisé)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Configuration avancée",
-        "HELP_ARR": {
-          "H1": "configuration de base",
-          "H2": "Paramètres du backlog",
-          "H3": "Transitions par défaut",
-          "P1_1": "Veuillez fournir un login (qui se trouve sur votre page de profil) et un <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">jeton d'API</a> ou un mot de passe si vous ne pouvez pas en générer un pour une raison quelconque. Veuillez noter que les versions les plus récentes de jira ne fonctionnent parfois qu'avec le jeton.",
-          "P1_2": "Vous devez également spécifier une requête JQL utilisée pour les suggestions permettant d'ajouter des tâches à partir de Jira. Si vous avez besoin d’aide, consultez ce lien <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Vous pouvez également configurer si vous souhaitez ajouter automatiquement (par exemple, chaque fois que vous consultez la vue Planification), toutes les nouvelles tâches spécifiées par une requête JQL personnalisée au backlog.",
-          "P1_4": "Une autre option est \"Vérifier si le ticket actuel est attribué à l'utilisateur actuel\". Si activé et que vous démarrez un ticket, il sera vérifié que vous êtes actuellement affecté à ce ticket sur Jira. Sinon, un dialogue apparaît dans lequel vous pouvez choisir de vous attribuer le ticket.",
-          "P2_1": "Plusieurs options permettent de déterminer quand et comment vous souhaitez soumettre le temps de travail. L'activation de <em>'Ouvrir la boîte de dialogue pour soumettre à jira le temps de travail lorsque la tâche est terminée'</em> ouvre une boîte de dialogue permettant d'ajouter le temps de travail chaque fois que vous marquez une tâche Jira comme terminée. Gardez donc à l'esprit que le temps de travail s'ajoutera à tout ce qui a été suivi jusqu'à présent. Ainsi, si vous marquez une tâche comme terminée pour une seconde fois, vous ne voudrez peut-être pas soumettre à nouveau le temps complet travaillé pour la tâche.",
-          "P2_2": "<em>'Ouvrir la boîte de dialogue du temps de travail lorsque la sous-tâche est terminée et non pas pour les tâches avec sous-tâches'</em> ouvre une boîte pour le temps de travail chaque fois que vous marquez une sous-tâche d'un ticket Jira comme terminée. Comme vous suivez déjà votre temps via les sous-tâches, aucune boîte de dialogue ne s'ouvre lorsque vous indiquez que la tâche Jira est terminée.",
-          "P2_3": "<em>\"Envoyer les mises à jour du temps de travail automatiquement sans boîte de dialogue\"</em> fait ce qu'il dit. Comme marquer une tâche plusieurs fois entraîne le suivi complet du temps de travail complet à deux reprises, ceci n'est pas recommandé.",
-          "P3_1": "Ici, vous pouvez reconfigurer vos transitions par défaut. Jira permet une configuration étendue de transitions entrant généralement en action sous forme de colonnes différentes sur votre tableau agile Jira. Nous ne pouvons donc pas supposer où et quand transiter vos tâches et vous devez le définir manuellement."
-        }
+        "ADV_CFG": "Configuration avancée"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Responsable",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Ajustez cette valeur pour flouter l'image d'arrière-plan. La valeur par défaut est 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Ajustez cette valeur pour rendre l'arrière-plan plus ou moins transparent. La valeur par défaut est 20%.",
-        "HELP": "Paramètres du thème pour votre projet.",
         "L_BACKGROUND_IMAGE_BLUR": "Flou de l'image d'arrière-plan",
         "L_BACKGROUND_IMAGE_DARK": "URL de l'image d'arrière-plan (thème sombre)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL de l'image d'arrière-plan (thème clair)",
@@ -1764,7 +1749,6 @@
         "RESTORE_SUCCESS": "Données restaurées avec succès",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Impossible de migrer les données vers le serveur — la validation des données locales a échoué. Veuillez essayer d'importer une sauvegarde.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Ce dossier de synchronisation a été converti au format de fichiers séparés. Activez la synchronisation segmentée dans les paramètres de synchronisation pour continuer.",
-        "STORAGE_QUOTA_EXCEEDED": "Le stockage du serveur de synchronisation est plein. Vos modifications ne sont PAS synchronisées ! Veuillez archiver les anciennes tâches ou améliorer votre forfait.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Le stockage était presque plein. Les anciennes données ont été nettoyées avec succès.",
         "SUCCESS_DOWNLOAD": "Données synchronisées depuis le distant",
         "SUCCESS_VIA_BUTTON": "Données synchronisées avec succès",

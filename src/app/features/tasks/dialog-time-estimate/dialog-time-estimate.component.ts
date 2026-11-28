@@ -5,8 +5,10 @@ import {
   Component,
   ElementRef,
   inject,
+  signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Store } from '@ngrx/store';
 import { filter } from 'rxjs/operators';
 import {
   MAT_DIALOG_DATA,
@@ -19,7 +21,8 @@ import {
 } from '@angular/material/dialog';
 import { Task, TaskCopy, TimeSpentOnDayCopy } from '../task.model';
 import { TaskService } from '../task.service';
-import { getTodayStr } from '../util/get-today-str';
+import { selectTaskEntities } from '../store/task.selectors';
+import { DateService } from '../../../core/date/date.service';
 import { createTaskCopy } from '../util/create-task-copy';
 import {
   DialogAddTimeEstimateForOtherDayComponent,
@@ -29,6 +32,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { T } from '../../../t.const';
 import { FormsModule } from '@angular/forms';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
+import { HelpToggleBtnComponent } from '../../../ui/help-section/help-toggle-btn.component';
 import { InputDurationSliderComponent } from '../../../ui/duration/input-duration-slider/input-duration-slider.component';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -50,6 +54,7 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
     FormsModule,
     MatDialogContent,
     HelpSectionComponent,
+    HelpToggleBtnComponent,
     InputDurationSliderComponent,
     MatButton,
     MatIcon,
@@ -71,8 +76,11 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
   private _cd = inject(ChangeDetectorRef);
+  readonly isShowHelp = signal(false);
   private _el = inject(ElementRef);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _dateService = inject(DateService);
+  private _taskEntities = inject(Store).selectSignal(selectTaskEntities);
   data = inject(MAT_DIALOG_DATA);
 
   // Exposed so the template can pass the reactive locale to the now-pure
@@ -89,7 +97,7 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
     const _taskService = this._taskService;
 
     this.task = this.data.task;
-    this.todayStr = getTodayStr();
+    this.todayStr = this._dateService.todayStr();
     this._taskService = _taskService;
     this.taskCopy = createTaskCopy(this.task);
     this.timeSpentOnDayCopy = this.taskCopy.timeSpentOnDay || {};
@@ -118,13 +126,26 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
   }
 
   submit(): void {
+    // Tracking keeps adding to the store while the dialog is open, so only the
+    // edited days are written over the task's current time spent.
+    const editedDays = this._getEditedDays();
+    const timeSpentOnDay: TimeSpentOnDayCopy = {
+      ...(this._taskEntities()[this.task.id] ?? this.task).timeSpentOnDay,
+    };
+    editedDays.forEach((day) => {
+      if (day in this.timeSpentOnDayCopy) {
+        timeSpentOnDay[day] = this.timeSpentOnDayCopy[day];
+      } else {
+        delete timeSpentOnDay[day];
+      }
+    });
     this._taskService.update(this.taskCopy.id, {
       timeEstimate: this.taskCopy.timeEstimate,
-      timeSpentOnDay: this.timeSpentOnDayCopy,
+      ...(editedDays.length > 0 && { timeSpentOnDay }),
     });
     this._matDialogRef.close({
       timeEstimate: this.taskCopy.timeEstimate,
-      timeSpentOnDay: this.timeSpentOnDayCopy,
+      timeSpentOnDay,
     });
   }
 
@@ -157,10 +178,14 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
     if ((this.taskCopy.timeEstimate || 0) !== (this.task.timeEstimate || 0)) {
       return true;
     }
+    return this._getEditedDays().length > 0;
+  }
+
+  private _getEditedDays(): string[] {
     const before = this.task.timeSpentOnDay || {};
     const after = this.timeSpentOnDayCopy;
     const days = new Set([...Object.keys(before), ...Object.keys(after)]);
-    return [...days].some((day) => (before[day] || 0) !== (after[day] || 0));
+    return [...days].filter((day) => (before[day] || 0) !== (after[day] || 0));
   }
 
   trackByIndex(i: number, p: any): number {

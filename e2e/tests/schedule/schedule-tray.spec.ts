@@ -3,6 +3,7 @@ import { expect, test } from '../../fixtures/test.fixture';
 
 const TITLE = 'Plan without a time';
 const OVERDUE_TITLE = 'Left over from yesterday';
+const DRAG_SETTLE_MS = 50;
 
 type E2eWindow = {
   __e2eTestHelpers: { store: { dispatch: (action: unknown) => void } };
@@ -49,6 +50,7 @@ const drag = async (
   source: Locator,
   to: { x: number; y: number },
 ): Promise<void> => {
+  await expect(source).toBeVisible(); // see centerOf()
   const box = (await source.boundingBox())!;
   const halfWidth = box.width / 2;
   const halfHeight = box.height / 2;
@@ -57,9 +59,14 @@ const drag = async (
   await page.mouse.down();
   await page.mouse.move(from.x + 10, from.y + 10, { steps: 3 });
   await page.mouse.move(to.x, to.y, { steps: 15 });
+  // Let the 30 ms drag update and its render finish before inspecting or releasing.
+  await page.waitForTimeout(DRAG_SETTLE_MS);
 };
 
 const centerOf = async (target: Locator): Promise<{ x: number; y: number }> => {
+  // boundingBox() is null while the element is hidden, e.g. an event re-rendering
+  // right after a drop; wait it out rather than read null.
+  await expect(target).toBeVisible();
   const box = (await target.boundingBox())!;
   const halfWidth = box.width / 2;
   const halfHeight = box.height / 2;
@@ -67,6 +74,95 @@ const centerOf = async (target: Locator): Promise<{ x: number; y: number }> => {
 };
 
 test.describe('Schedule tray mode', () => {
+  for (const mode of ['week', 'phone-panel'] as const) {
+    test(`scrolls an expanded ${mode} tray and drags a task outside it`, async ({
+      page,
+      workViewPage,
+    }) => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await workViewPage.waitForTaskList();
+      for (let i = 0; i < 16; i++) {
+        await workViewPage.addTask(`Tray overflow ${i}`);
+      }
+      await enableTrayMode(page);
+      if (mode === 'phone-panel') {
+        await page.locator('.e2e-toggle-schedule-day-panel').first().click();
+        await page.setViewportSize({ width: 390, height: 844 });
+      } else {
+        await page.getByRole('menuitem', { name: 'Schedule', exact: true }).click();
+      }
+      const schedule =
+        mode === 'week'
+          ? page.locator('schedule schedule-week')
+          : page.locator('schedule-day-panel .page:not([inert]) schedule-week');
+      const cell = schedule.locator('schedule-tray .tray-cell').first();
+      await cell.getByRole('button', { name: /more/ }).click();
+      await expect(cell.locator('.chip')).toHaveCount(16);
+      const dimensions = await cell.evaluate((element) => ({
+        height: element.getBoundingClientRect().height,
+        viewport: window.innerHeight,
+        content: element.scrollHeight,
+        client: element.clientHeight,
+      }));
+      expect(Math.round(dimensions.height)).toBeLessThanOrEqual(
+        Math.ceil(dimensions.viewport * 0.3),
+      );
+      expect(dimensions.content).toBeGreaterThan(dimensions.client);
+      const chip = cell.locator('.chip').last();
+      const title = (await chip.locator('.chip-title').textContent())!.trim();
+      await chip.scrollIntoViewIfNeeded();
+      const targetCell =
+        mode === 'week' ? schedule.locator('schedule-tray .tray-cell').nth(1) : cell;
+      const day = (await targetCell.getAttribute('data-tray-day'))!;
+      const column = schedule.locator(`.col[data-day="${day}"]:not(.end-of-day)`).first();
+      const target = await centerOf(column);
+      const trayCenter = await centerOf(cell);
+      await drag(page, chip, { x: target.x, y: 500 });
+      const gridPreview = schedule.locator('.custom-drag-preview');
+      const detachedPreview = page.locator('.cdk-drag-preview');
+      await expect(gridPreview).toBeVisible();
+      await expect(detachedPreview).toHaveCSS('opacity', '0');
+      await page.mouse.move(trayCenter.x, trayCenter.y, { steps: 15 });
+      await expect(gridPreview).toBeHidden();
+      await expect(detachedPreview).toHaveCSS('opacity', '1');
+      await page.mouse.move(target.x, 500, { steps: 15 });
+      // As in drag(): the throttled update for the last step lands up to 30 ms
+      // later. Read before it, the badge shows an earlier step's time, higher up
+      // the grid than where the drop lands (CI: 5:30 shown, dropped at 5:40).
+      await page.waitForTimeout(DRAG_SETTLE_MS);
+      await expect(gridPreview).toBeVisible();
+      await expect(detachedPreview).toHaveCSS('opacity', '0');
+      const previewTime = (await schedule
+        .locator('.drag-preview-time-badge')
+        .textContent())!
+        .trim()
+        .split(' - ')[0];
+      await expect(detachedPreview).toBeAttached();
+      expect(
+        await detachedPreview.evaluate((element) => !!element.closest('schedule-tray')),
+      ).toBe(false);
+      await page.mouse.up();
+      const scheduledEvent = schedule
+        .locator('schedule-event')
+        .filter({ hasText: title });
+      await expect(scheduledEvent).toHaveCount(1);
+      await expect(scheduledEvent.locator('.time-badge')).toHaveText(
+        previewTime.replace(/^0(?=\d:)/, ''),
+      );
+      const columnBox = (await column.boundingBox())!;
+      const eventCenter = await centerOf(scheduledEvent);
+      expect(eventCenter.x).toBeGreaterThan(columnBox.x);
+      expect(eventCenter.x).toBeLessThan(columnBox.x + columnBox.width);
+      await expect(cell.locator('.chip')).toHaveCount(15);
+      await cell.evaluate((element) => {
+        element.scrollTop = 0;
+      });
+      await cell.getByRole('button', { name: 'Show less', exact: true }).click();
+      await expect(cell.locator('.chip')).toHaveCount(mode === 'week' ? 3 : 2);
+    });
+  }
+
   test('keeps a task without a time in the tray until it is dragged to a time', async ({
     page,
     workViewPage,

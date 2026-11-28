@@ -403,7 +403,9 @@ export class MobileNotificationEffects {
             try {
               // Opt-in: one notification per planned task fires at the same hour, which
               // rang phones once per Today task every morning (2026 survey #88).
-              const notifyOnDueDate = reminderCfg?.notifyOnDueDate ?? false;
+              // The legacy `notifyOnDueDate` is deliberately not read: its old
+              // default-on value is still stored on installs that never chose it.
+              const isNotifyOnPlannedDay = reminderCfg?.isNotifyOnPlannedDay ?? false;
               const disableReminders = reminderCfg?.disableReminders ?? false;
               const dueDateHour = Math.floor(
                 Math.max(0, Math.min(23, reminderCfg?.dueDateNotificationHour ?? 9)),
@@ -411,7 +413,7 @@ export class MobileNotificationEffects {
 
               // If disabled (by master switch or per-category), cancel previously
               // scheduled due-date notifications and short-circuit.
-              if (disableReminders || !notifyOnDueDate) {
+              if (disableReminders || !isNotifyOnPlannedDay) {
                 // The persisted tracked set misses alarms armed by builds that kept
                 // it in-memory only (e.g. under the old default-on); native alarms
                 // outlive the app, so those would still fire. Ids are

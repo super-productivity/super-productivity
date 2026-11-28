@@ -455,7 +455,6 @@ export const TaskSharedActions = createActionGroup({
       startOfNextDayDiffMs?: number;
       parentTaskMap?: { [taskId: string]: string | undefined };
       isShowSnack?: boolean;
-      isSkipRemoveReminder?: boolean;
       isClearScheduledTime?: boolean;
     }) => ({
       ...taskProps,

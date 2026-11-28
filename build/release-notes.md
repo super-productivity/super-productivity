@@ -1,39 +1,44 @@
-For all current downloads, package links, and platform-specific notes: [check the wiki](https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install).
+For all current downloads, package links, and platform-specific notes: [see the docs](https://super-productivity.com/docs/how-to/downloads-and-install/).
 
-### Tasks and views
+### Planning and tasks
 
-- Added Smart Lists, multi-tag filtering, and a redesigned view editor with rule chips, pinned views, and improved mobile layouts.
-- Open a project directly from a task’s project chip, and add deadlines from the add-task bar.
-- Duplicating tasks now preserves links, files, and deadlines. Unplanned tasks with missed deadlines appear in Today’s overdue list.
-- Fixed recurring task start dates, placement, and duplicate schedule entries. Planning no longer double-counts subtasks, and overflowing work skips local weekend days.
-- Improved cross-project search and offered a way to clear filters hiding a searched task.
+- Drag selected tasks together in Today, tag views and the planner.
+- Set recurring deadlines or turn a future repeating occurrence into a normal task.
+- Use the schedule's new tray mode for tasks without a time, and see overdue tasks in the day panel.
+- See deadlines on board cards and open tasks from planner deadline cards.
+- Add tasks from section and group headers, and search by attached link URLs.
+- Hide sidebar task counts with a new option. Boards is now called Views.
+- Fixed drops into empty sections, multi-select shortcuts, Markdown checklist pasting and Escape to cancel dragging.
 
-### Plugins and integrations
+### Time tracking and focus
 
-- Added the bundled AI Command plugin, off by default, with multi-select and Add to Today actions.
-- Added guided plugin creation with AI prompts, and information about data plugins send off your device.
-- Moved GitLab into a bundled plugin. Expanded the community catalog with Deadlines, Task Colors, Timesheet, standalone Markdown notes, monday.com, and Ridonculous plugins.
-- Added an option to include Gitea pull requests and support for sending task completion to Azure DevOps work items.
-- Added calendar logging for tracked work sessions. Cancelled or moved-away calendar events are no longer imported.
+- Optionally bring the window forward when a focus session or break ends.
+- See an indicator on the play button when another device is tracking time.
+- View time per project in the worklog export dialog.
+- Fixed tracked-time saving when hiding the page, quitting the desktop app or choosing “finish day and close.”
+- Fixed lost time around sleep and backward clock changes; desktop sleep now counts as a break for break reminders.
+- Improved duration parsing for spaces, spelled-out units and decimal commas.
 
-### Time tracking and worklog
+### Sync and integrations
 
-- Added optional web notifications when focus sessions or breaks end, and looping bells for desktop alarm-style reminders.
-- Recording idle time as a break now resets the break timer.
-- Added Friday weekly wrap-ups. Worklog exports now include archived projects, export the displayed week, and keep weeks spanning two months together.
+- See local changes in the sync import conflict dialog, a distinct syncing icon and clearer error guidance.
+- Fixed cases where concurrent edits, task completion, notes or tracked time could be lost during sync.
+- Manual-only sync no longer runs on desktop quit, while tracked time is still saved.
+- Added a Microsoft To Do importer and support for importing Todoist repeats.
+- Added a bundled invoicing plugin, disabled by default, and listed Cat Court, Desk Pet and Gamify community plugins.
+- New CalDAV providers import todos automatically by default. Fixed polling intervals and handling of deleted todos.
+- Fixed calendar updates overwriting task notes and issue refreshes deleting tasks when an issue is not found.
 
-### Sync and Android
+### Mobile
 
-- Simplified SuperSync setup and fixed file-sync recovery and preservation of pending edits.
-- Fixed conflicts involving tag deletion, counter restoration, task section moves, and Today ordering.
-- Added Android task creation from the home-screen widget and share saving without opening the app.
-- Added Android background reminders for WebDAV/Nextcloud, fixed stale or missing reminders, and kept widget task order aligned with Today.
-- Mobile sync now sends pending changes when the app enters the background; Android also checks file-based providers while in the foreground.
+- Open the navigation drawer with a swipe from the right edge.
+- Android repeating reminders stay visible after firing, and reminders are skipped for the task currently being tracked.
+- Fixed Android focus breaks automatically starting work when they finish.
+- Added iOS background focus-session notifications and prioritized the soonest reminders within the notification limit.
+- Fixed mobile SuperSync sign-in and request timeouts.
 
-### Interface, desktop, and performance
+### Other improvements
 
-- Added smoother page transitions that respect reduced-motion settings, faster startup, and performance improvements for long task lists and tracking.
-- Improved keyboard menus, touch interactions, and IME input in notes and the focus task picker.
-- Added desktop launch shortcuts for New task, Today, and Inbox, plus a `--start-minimized` option.
-- Fixed desktop task copying and macOS window dragging. Resuming or unlocking no longer raises the app or requests attention.
-- Exported logs now redact home-folder paths. Updated Russian translations and German tag terminology.
+- In-app help now opens the website documentation.
+- Updated Dutch and Simplified Chinese translations and fixed missing plural forms.
+- Reduced the initial app bundle by 197 kB and unnecessary planner processing.

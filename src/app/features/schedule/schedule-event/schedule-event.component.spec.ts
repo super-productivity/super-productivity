@@ -1,7 +1,7 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { Component, NO_ERRORS_SCHEMA } from '@angular/core';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { DragDropModule } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragStart, DragDropModule } from '@angular/cdk/drag-drop';
 import { TranslateModule } from '@ngx-translate/core';
 import { ScheduleEventComponent } from './schedule-event.component';
 import { SVEType } from '../schedule.const';
@@ -14,6 +14,8 @@ import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors'
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { isTouchActive } from '../../../util/input-intent';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { T } from '../../../t.const';
+import { DateService } from '../../../core/date/date.service';
 
 const makeCalendarScheduleEvent = (isReferenceCalendar: boolean): ScheduleEvent => ({
   id: 'cal-1',
@@ -74,6 +76,7 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
           // is24HourFormat is a signal (a function); the component must call it.
           useValue: { is24HourFormat: () => true },
         },
+        { provide: DateService, useValue: { todayStr: () => '2026-07-15' } },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -198,6 +201,50 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
         );
         matDialog.open.calls.reset();
       }
+    });
+
+    const setProjection = (
+      repeatCfg: Partial<TaskRepeatCfg>,
+      plannedForDay = '2026-07-30',
+    ): void => {
+      fixture.componentRef.setInput('event', {
+        id: 'rc1_2026-07-30',
+        type: SVEType.RepeatProjection,
+        style: '',
+        startHours: 10,
+        timeLeftInHours: 1,
+        plannedForDay,
+        data: { id: 'rc1', title: 'Water plants', ...repeatCfg } as TaskRepeatCfg,
+      } as ScheduleEvent);
+      fixture.detectChanges();
+    };
+
+    // No translations are loaded, so instant() returns the key.
+    it('says on hover that a preview cannot be moved and how to move one day', () => {
+      setProjection({});
+
+      expect(fixture.nativeElement.title).toBe(
+        `10:00 - 11:00  Water plants  ${T.F.TASK_REPEAT.PREVIEW_HINT}`,
+      );
+    });
+
+    it('leaves the hint out for a series repeating from its completion date', () => {
+      setProjection({ repeatFromCompletionDate: true });
+
+      expect(fixture.nativeElement.title).toBe('10:00 - 11:00  Water plants');
+    });
+
+    it('leaves the hint out for today, which cannot become a separate task', () => {
+      setProjection({}, '2026-07-15');
+
+      expect(fixture.nativeElement.title).toBe('10:00 - 11:00  Water plants');
+    });
+
+    it('leaves the hint out for a real task', () => {
+      fixture.componentRef.setInput('event', makeTaskScheduleEvent());
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.title).not.toContain(T.F.TASK_REPEAT.PREVIEW_HINT);
     });
 
     // The spec above calls clickHandler() directly, so it cannot see the host
@@ -402,6 +449,55 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
       setEvent(SVEType.SplitTaskContinuedLast);
       expect(component.isResizable()).toBe(false);
       expect(fixture.nativeElement.querySelector('.resize-handle')).toBeNull();
+    });
+  });
+
+  describe('touch long-press menu (#11977)', () => {
+    // real TouchEvents: the host's CdkDrag reads their touches too
+    const fire = (type: string): Event => {
+      const target: HTMLElement = fixture.nativeElement;
+      const init = { bubbles: true, cancelable: true };
+      const touch = new Touch({ identifier: 1, target });
+      const down = type === 'touchstart' ? [touch] : [];
+      const ev =
+        type === 'contextmenu'
+          ? new MouseEvent(type, init)
+          : new TouchEvent(type, {
+              ...init,
+              touches: down,
+              targetTouches: down,
+              changedTouches: [touch],
+            });
+      target.dispatchEvent(ev);
+      return ev;
+    };
+
+    const longPress = (): jasmine.Spy => {
+      fixture.componentRef.setInput('event', makeTaskScheduleEvent());
+      fixture.detectChanges();
+      const openSpy = spyOn(component.taskContextMenu()!, 'open');
+      fire('touchstart');
+      expect(fire('contextmenu').defaultPrevented).toBe(true);
+      return openSpy;
+    };
+
+    it('should not open the menu when the long-press turns into a drag', () => {
+      const openSpy = longPress();
+      const drag = fixture.debugElement.injector.get(CdkDrag);
+      drag.started.emit({ source: drag } as CdkDragStart);
+      // a long-press timer that fires late, mid-drag
+      fire('contextmenu');
+      fire('touchend');
+
+      expect(openSpy).not.toHaveBeenCalled();
+    });
+
+    it('should open the menu on release when the long-press did not drag', () => {
+      const openSpy = longPress();
+      expect(openSpy).not.toHaveBeenCalled();
+
+      expect(fire('touchend').defaultPrevented).toBe(true);
+      expect(openSpy).toHaveBeenCalledTimes(1);
     });
   });
 

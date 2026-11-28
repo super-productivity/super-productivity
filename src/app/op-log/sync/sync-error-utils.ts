@@ -1,13 +1,10 @@
 /**
  * Utility functions for handling common sync errors.
  */
+import { Injector } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
+import { T } from '../../t.const';
 import { alertDialog } from '../../util/native-dialogs';
-
-const STORAGE_QUOTA_ALERT =
-  'Sync storage is full! Your changes are saved on this device but are NOT syncing. ' +
-  'Your account has reached its storage limit on the sync server. ' +
-  "If you host the server yourself, raise this account's storage quota in its database. " +
-  'Otherwise, write to contact@super-productivity.com.';
 
 export const getSyncErrorCode = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null) {
@@ -38,9 +35,18 @@ const getSyncErrorMessage = (error: unknown): string | undefined => {
   return undefined;
 };
 
-export const handleStorageQuotaError = (error: unknown): boolean => {
+/**
+ * Alerts the user, in their language, when the sync server refused an upload
+ * because the account is over its storage quota.
+ *
+ * @returns true if the error was a storage quota error (and the alert shown)
+ */
+export const handleStorageQuotaError = (error: unknown, injector: Injector): boolean => {
   if (isStorageQuotaError(error)) {
-    alertDialog(STORAGE_QUOTA_ALERT);
+    // TranslateService is resolved here rather than injected by each caller:
+    // only this rare path needs it, and the upload services are built in many
+    // contexts that have no reason to provide it.
+    alertDialog(injector.get(TranslateService).instant(T.F.SYNC.A.SERVER_STORAGE_FULL));
     return true;
   }
   return false;

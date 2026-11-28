@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Nu se poate sincroniza pentru că e offline",
-        "SYNC_ERROR": "Dropbox: Eroare la sincronizare",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Sincronizarea cu Dropbox necesită o conexiune sigură (HTTPS). Asigură-te că folosești aplicația prin HTTPS sau încearcă versiunea stabilă."
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Gazdă alternativă pentru legăturile Jira (de ex. URL public când gazda API diferă; prefix de cale permis)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Configurație avansată",
-        "HELP_ARR": {
-          "H1": "Configurare de bază",
-          "H2": "Setări worklog",
-          "H3": "Tranziții implicite",
-          "P1_1": "Te rugăm să furnizezi un nume de utilizator (poate fi găsit pe pagina profilului tău) și un <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> sau parolă dacă nu poți genera unul din vreun motiv. Reține că versiunile mai noi de Jira funcționează uneori doar cu token-ul.",
-          "P1_2": "Trebuie să specifici și o interogare JQL care este folosită pentru sugestiile de adăugare a sarcinilor din Jira. Dacă ai nevoie de ajutor, consultă acest link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Poți configura și dacă vrei să imporți automat toate problemele noi specificate de o interogare JQL personalizată (de exemplu, de fiecare dată când vizitezi vizualizarea de planificare).",
-          "P1_4": "O altă opțiune este „Verifică dacă tichetul curent este atribuit utilizatorului curent”. Dacă este activată și începi, se va verifica dacă ești atribuit în prezent acelui tichet în Jira. Dacă nu, apare un dialog în care poți alege să atribui tichetul ție.",
-          "P2_1": "Există mai multe opțiuni pentru a determina când și cum vrei să trimiți un worklog. Activarea <em>'Deschide dialogul worklog pentru a adăuga un worklog în Jira când sarcina este finalizată'</em> deschide un dialog pentru a adăuga un worklog de fiecare dată când marchezi o sarcină Jira ca finalizată. Ține cont că worklogurile vor fi adăugate peste tot timpul urmărit până în acel moment. Dacă marchezi o sarcină ca finalizată pentru a doua oară, poate nu vei dori să trimiți din nou întregul timp lucrat pentru sarcină.",
-          "P2_2": "<em>'Deschide dialogul worklog când subtasca este finalizată și nu pentru sarcinile care au subtasks'</em> deschide un dialog worklog de fiecare dată când marchezi o subtask a unei probleme Jira ca finalizată. Pentru că deja îți urmărești timpul prin subtasks, nu se deschide niciun dialog atunci când marchezi problema Jira în sine ca finalizată.",
-          "P2_3": "<em>'Trimite actualizările în worklog automat fără dialog'</em> face exact ce spune. Deoarece marcarea unei sarcini ca finalizată de mai multe ori duce la dublarea timpului total lucrat, acest lucru nu este recomandat.",
-          "P3_1": "Aici poți reconfigura tranzițiile implicite. Jira permite o configurație largă a tranzițiilor care de obicei sunt reprezentate ca coloane pe board-ul agil, iar noi nu putem ghici unde și când să tranzităm sarcinile tale, deci trebuie să le setezi manual."
-        }
+        "ADV_CFG": "Configurație avansată"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Responsabil",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Ajustează această valoare pentru a estompa imaginea de fundal. Valoarea implicită este 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Ajustează această valoare pentru a face fundalul mai transparent sau mai puțin transparent. Implicit este 20%.",
-        "HELP": "Setări de temă pentru proiectul tău.",
         "L_BACKGROUND_IMAGE_BLUR": "Estompează imaginea de fundal",
         "L_BACKGROUND_IMAGE_DARK": "URL imagine fundal (Temă întunecată)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL imagine fundal (Temă deschisă)",
@@ -1765,7 +1750,6 @@
         "RESTORE_SUCCESS": "Date restaurate cu succes",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Nu s-au putut migra datele către server - validarea datelor locale a eșuat. Te rog să încerci să importi un backup.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Acest dosar de sincronizare a fost actualizat la formatul cu fișiere separate. Activează Sincronizarea chirurgicală în setările de sincronizare pentru a continua.",
-        "STORAGE_QUOTA_EXCEEDED": "Spațiul de stocare de pe serverul de sincronizare este plin. Modificările tale nu sunt sincronizate! Te rog să arhivezi sarcini vechi sau să actualizezi planul.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Spațiul de stocare era pe terminate. Datele vechi au fost curățate cu succes.",
         "SUCCESS_DOWNLOAD": "S-au sincronizat datele de la distanță",
         "SUCCESS_VIA_BUTTON": "Datele au fost sincronizate cu succes",

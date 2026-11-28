@@ -1,12 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Subject } from 'rxjs';
 import { DEFAULT_TASK, Task } from '../task.model';
 import { TaskService } from '../task.service';
+import { selectTaskEntities } from '../store/task.selectors';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { DateService } from '../../../core/date/date.service';
 import { DialogTimeEstimateComponent } from './dialog-time-estimate.component';
 
 const OTHER_DAY = '2026-10-01';
+const EARLIER_DAY = '2026-09-30';
 
 describe('DialogTimeEstimateComponent closing (#10823)', () => {
   let backdropClick$: Subject<MouseEvent>;
@@ -25,6 +29,15 @@ describe('DialogTimeEstimateComponent closing (#10823)', () => {
 
   const createComponent = (): DialogTimeEstimateComponent =>
     TestBed.createComponent(DialogTimeEstimateComponent).componentInstance;
+
+  // Tracking adds to today in the store while the dialog is open.
+  const trackWhileOpen = (todayStr: string): void => {
+    const store = TestBed.inject(MockStore);
+    store.overrideSelector(selectTaskEntities, {
+      [task.id]: { ...task, timeSpentOnDay: { [OTHER_DAY]: 1000, [todayStr]: 9000 } },
+    });
+    store.refreshState();
+  };
 
   beforeEach(async () => {
     backdropClick$ = new Subject();
@@ -45,6 +58,9 @@ describe('DialogTimeEstimateComponent closing (#10823)', () => {
         { provide: MatDialog, useValue: {} },
         { provide: TaskService, useValue: taskService },
         { provide: DateTimeFormatService, useValue: { currentLocale: () => 'en' } },
+        provideMockStore({
+          selectors: [{ selector: selectTaskEntities, value: { [task.id]: task } }],
+        }),
       ],
     })
       .overrideTemplate(DialogTimeEstimateComponent, '')
@@ -57,20 +73,44 @@ describe('DialogTimeEstimateComponent closing (#10823)', () => {
 
     backdropClick$.next(new MouseEvent('click'));
 
-    expect(taskService.update).toHaveBeenCalledWith('task-1', {
+    // Unedited time spent is left out, so time tracked meanwhile is kept.
+    expect(taskService.update).toHaveBeenCalledOnceWith('task-1', {
       timeEstimate: 120000,
-      timeSpentOnDay: { [OTHER_DAY]: 1000 },
     });
     expect(dialogRef.close).toHaveBeenCalledTimes(1);
   });
 
   it('saves changed time spent when tapping outside', () => {
     const cmp = createComponent();
+    trackWhileOpen(cmp.todayStr);
     cmp.timeSpentOnDayCopy[cmp.todayStr] = 5000;
 
     backdropClick$.next(new MouseEvent('click'));
 
-    expect(taskService.update).toHaveBeenCalledTimes(1);
+    // An edited day wins over time tracked meanwhile.
+    expect(taskService.update).toHaveBeenCalledOnceWith('task-1', {
+      timeEstimate: 60000,
+      timeSpentOnDay: { [OTHER_DAY]: 1000, [cmp.todayStr]: 5000 },
+    });
+  });
+
+  it('keeps time tracked while open when other days are edited', () => {
+    const cmp = createComponent();
+    trackWhileOpen(cmp.todayStr);
+
+    cmp.deleteValue(OTHER_DAY);
+    cmp.timeSpentOnDayCopy[EARLIER_DAY] = 2000;
+    cmp.submit();
+
+    const timeSpentOnDay = { [cmp.todayStr]: 9000, [EARLIER_DAY]: 2000 };
+    expect(taskService.update).toHaveBeenCalledOnceWith('task-1', {
+      timeEstimate: 60000,
+      timeSpentOnDay,
+    });
+    expect(dialogRef.close).toHaveBeenCalledOnceWith({
+      timeEstimate: 60000,
+      timeSpentOnDay,
+    });
   });
 
   it('closes without an update when tapping outside unchanged', () => {
@@ -98,5 +138,23 @@ describe('DialogTimeEstimateComponent closing (#10823)', () => {
     createComponent();
 
     expect(dialogRef.disableClose).toBeTrue();
+  });
+
+  describe('before a 04:00 day start', () => {
+    // 02:00 on 2026-10-02 still belongs to the logical day 2026-10-01.
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 9, 2, 2));
+      TestBed.inject(DateService).setStartOfNextDayDiff('04:00');
+    });
+
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('shows the time tracked on the logical day as today', () => {
+      const cmp = createComponent();
+
+      expect(cmp.todayStr).toBe(OTHER_DAY);
+      expect(cmp.timeSpentOnDayCopy[cmp.todayStr]).toBe(1000);
+    });
   });
 });

@@ -86,6 +86,15 @@ export interface AndroidInterface {
   stopTrackingService?(): void;
   updateTrackingService?(timeSpentMs: number): void;
   getTrackingElapsed?(): string;
+  // Native notifies when the tracked task exceeds it, also while the WebView
+  // is paused (#11896). timeEstimateMs <= 0 clears it. Strings arrive
+  // pre-translated. Absent on APKs that predate it.
+  setTrackingTimeEstimate?(
+    taskId: string,
+    timeEstimateMs: number,
+    title: string,
+    body: string,
+  ): void;
   openAppNotificationSettings?(): void;
 
   // Silent notification mirroring tracking on ANOTHER device (SuperSync
@@ -158,9 +167,17 @@ export interface AndroidInterface {
   // Delete one capture after its task is persisted. Returns false on failure.
   acknowledgeCapture?(id: string): boolean;
 
-  // Widget done queue - get pending done-state changes from the home screen
-  // widget as a JSON object string `{taskId: targetIsDone}` and clear the queue
+  // Widget done queue - pending done-state changes from the home screen widget
+  // as a JSON object string `{taskId: targetIsDone}`. Read with peek, then ack
+  // that read once its ops are written; native keeps the taps until then.
+  peekWidgetDoneQueue?(): string | null;
+  ackWidgetDoneQueue?(ackedJson: string): void;
+  // Get-and-clear read of the same queue, for a native shell without peek/ack
+  // (legacy online-mode installs load this web app into an older APK).
   getWidgetDoneQueue?(): string | null;
+
+  // Project ID selected by the most recent project-widget tap (header or row)
+  getWidgetProjectToOpen?(): string | null;
 
   // Re-render the home screen widget from the current widget_data snapshot
   updateWidget?(): void;
@@ -198,13 +215,18 @@ export interface AndroidInterface {
   getReminderSnoozeQueue?(): string | null;
 
   // Contentless "drain now" signal after a widget done-checkbox tap while the app
-  // is alive; the queued IDs are always pulled via getWidgetDoneQueue() (startup
+  // is alive; the queued IDs are always pulled via peekWidgetDoneQueue() (startup
   // and resume drains are triggered by the effect itself and onResume$)
   onWidgetDoneDrainRequest$: Subject<void>;
 
   // Contentless "drain now" signal after a tracking/focus/remote-stop notification
   // tap while the activity is alive; the actions are pulled via the queue getters
   onNotificationActionDrainRequest$: Subject<void>;
+
+  // Contentless native signal after a project-widget tap. Angular pulls the
+  // project ID from the native queue so cold and warm starts share one path.
+  onWidgetProjectOpenDrainRequest$: Subject<void>;
+  onWidgetProjectOpen$: ReplaySubject<string>;
 
   // Background sync credential bridge (for WorkManager-based reminder cancellation)
   setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
@@ -267,6 +289,8 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onReminderSnooze$ = new ReplaySubject(20);
   androidInterface.onWidgetDoneDrainRequest$ = new Subject();
   androidInterface.onNotificationActionDrainRequest$ = new Subject();
+  androidInterface.onWidgetProjectOpenDrainRequest$ = new Subject();
+  androidInterface.onWidgetProjectOpen$ = new ReplaySubject(1);
   androidInterface.isKeyboardShown$ = new BehaviorSubject(false);
 
   androidInterface.isInBackground$ = merge(
@@ -340,6 +364,17 @@ if (IS_ANDROID_WEB_VIEW) {
     }
   } catch (e) {
     DroidLog.err('Failed to parse reminder tap queue', e);
+  }
+
+  // Pull-based: retrieve the project a project-widget tap asked to open (cold start).
+  try {
+    const projectId = androidInterface.getWidgetProjectToOpen?.();
+    if (projectId) {
+      DroidLog.log('Pulled project-widget open queue from SharedPreferences');
+      androidInterface.onWidgetProjectOpen$.next(projectId);
+    }
+  } catch (e) {
+    DroidLog.err('Failed to process project-widget open queue', e);
   }
 
   // Pull-based: retrieve queued "Done" task IDs from notification actions

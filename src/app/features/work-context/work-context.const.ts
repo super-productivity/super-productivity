@@ -94,7 +94,6 @@ export const WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG: ConfigFormSection<WorkContex
   {
     title: T.F.PROJECT.FORM_THEME.TITLE,
     key: 'basic',
-    help: T.F.PROJECT.FORM_THEME.HELP,
     items: [
       {
         key: 'primary',

@@ -5,8 +5,8 @@ import { SimpleCounter } from '../simple-counter/simple-counter.model';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../tasks/task.model';
 import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
+import { RestoreArchivedTaskService } from '../tasks/restore-archived-task.service';
 import { DialogWorklogExportComponent } from '../worklog/dialog-worklog-export/dialog-worklog-export.component';
-import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { ActivatedRoute, Router } from '@angular/router';
 import { WorklogService } from '../worklog/worklog.service';
 import { getDateRangeForMonth } from '../../util/get-date-range-for-month';
@@ -27,13 +27,11 @@ import { MsToStringPipe } from '../../ui/duration/ms-to-string.pipe';
 import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
 import { NumberToMonthPipe } from '../../ui/pipes/number-to-month.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
-import { TaskArchiveService } from '../archive/task-archive.service';
-import { Log } from '../../core/log';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { WorklogTaskRowComponent } from '../worklog/worklog-task-row/worklog-task-row.component';
 import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.component';
 import { DateService } from '../../core/date/date.service';
-import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
 import {
   WorklogDay,
@@ -71,17 +69,19 @@ export class HistoryComponent {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _simpleCounterService = inject(SimpleCounterService);
   private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
+  private readonly _restoreArchivedTaskService = inject(RestoreArchivedTaskService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _router = inject(Router);
   private readonly _route = inject(ActivatedRoute);
   private readonly _store = inject(Store);
-  private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _dateService = inject(DateService);
+  private readonly _dateTimeFormatService = inject(DateTimeFormatService);
   private readonly _queryParams = toSignal(this._route.queryParams, {
     initialValue: this._route.snapshot.queryParams,
   });
 
   T: typeof T = T;
+  readonly textLocale = this._dateTimeFormatService.textLocale;
   readonly worklogData = toSignal(this._worklogService.worklogData$);
   readonly enabledSimpleCounters = toSignal(
     this._simpleCounterService.enabledSimpleCounters$,
@@ -182,43 +182,11 @@ export class HistoryComponent {
     return this._allProjectsColorAndTitle()[task.projectId] ?? null;
   }
 
-  restoreTask(task: TaskCopy): void {
-    this._matDialog
-      .open(DialogConfirmComponent, {
-        restoreFocus: true,
-        data: {
-          okTxt: T.G.DO_IT,
-          message: T.F.WORKLOG.D_CONFIRM_RESTORE,
-          translateParams: { title: task.title },
-        },
-      })
-      .afterClosed()
-      .subscribe(async (isConfirm: boolean) => {
-        // because we navigate away we don't need to worry about updating the worklog itself
-        if (isConfirm) {
-          let subTasks: Task[] | undefined;
-          if (task.subTaskIds && task.subTaskIds.length) {
-            const archiveState = await this._taskArchiveService.load();
-            subTasks = task.subTaskIds
-              .map((id) => archiveState.entities[id])
-              .filter((t): t is Task => !!t);
-          }
-          const restoreToToday = {
-            today: this._dateService.todayStr(),
-            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
-          };
-
-          Log.log('RESTORE', { taskId: task.id, subTaskCount: subTasks?.length });
-          this._store.dispatch(
-            TaskSharedActions.restoreTask({
-              task,
-              subTasks: subTasks || [],
-              restoreToToday,
-            }),
-          );
-          this._router.navigate(['/active/tasks']);
-        }
-      });
+  async restoreTask(task: TaskCopy): Promise<void> {
+    if (await this._restoreArchivedTaskService.confirmAndRestore(task)) {
+      // because we navigate away we don't need to worry about updating the worklog itself
+      this._router.navigate(['/active/tasks']);
+    }
   }
 
   toggleMonth(yearKey: string, monthKey: string): void {

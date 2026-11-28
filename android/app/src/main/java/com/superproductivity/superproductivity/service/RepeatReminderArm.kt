@@ -26,12 +26,14 @@ internal fun armRepeatReminders(
     val offset = BackgroundReminderSettingsStore.get(context).startOfNextDayDiffMs
     val derived = upcomingRepeatReminders(state, now, zone, offset)
         .filter { it.taskId !in protectedIds }
+    val armed = ReminderAlarmStore.getAll(context)
     val previous = stored ?: seedRepeatSlots(
-        ReminderAlarmStore.getAll(context).map { it.reminderId to it.triggerAtMs },
+        armed.map { it.reminderId to it.triggerAtMs },
         state,
         zone,
     ).ifEmpty { null }
-    val plan = planRepeatReminderSlots(previous, derived, now)
+    val armedTitles = armed.associate { it.reminderId to it.title }
+    val plan = planRepeatReminderSlots(previous, derived, now, armedTitles)
     for (reminderId in plan.toCancel) {
         if (reminderId in protectedIds || isLiveRepeatInstance(reminderId, state, zone)) continue
         cancelReminderById(context, reminderId)

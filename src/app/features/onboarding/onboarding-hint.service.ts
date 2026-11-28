@@ -20,6 +20,8 @@ import { TaskFocusService } from '../tasks/task-focus.service';
 import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { WorkContextService } from '../work-context/work-context.service';
 import { QuickTourService } from './quick-tour.service';
+import { SETTINGS_SYNC_BACKUP_TAB_INDEX } from '../config/settings-search.util';
+import { IMEX_FORM } from '../config/form-cfgs/imex-form.const';
 
 export type OnboardingStep =
   | 'create-task'
@@ -270,6 +272,18 @@ export class OnboardingHintService {
     const taskId = this.firstTaskId();
     this._markDone();
     this._quickTourService.start(taskId, this._wasTaskMenuOpened);
+  }
+
+  /**
+   * "Or import from another app": someone switching brings their own list, so a
+   * throwaway first task would only be in the way. Guidance ends here; the
+   * imported tasks replace what the tips would have explained.
+   */
+  openImport(): void {
+    this._markDone();
+    void this._router.navigate(['/config'], {
+      queryParams: { tab: SETTINGS_SYNC_BACKUP_TAB_INDEX, section: IMEX_FORM.key },
+    });
   }
 
   /** No thanks: say where the tour lives, then go. */

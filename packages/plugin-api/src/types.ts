@@ -745,6 +745,12 @@ export interface PluginAPI {
   stopTracking?(): Promise<void>;
 
   /**
+   * Navigate to a project's task list, e.g. to show what the plugin just
+   * created. Rejects for an unknown project. Feature-detect on older hosts.
+   */
+  openProject?(projectId: string): Promise<void>;
+
+  /**
    * Mount this plugin's index.html inside the work-view body, in place of
    * the task list.
    *

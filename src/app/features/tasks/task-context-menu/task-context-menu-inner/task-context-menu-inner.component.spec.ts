@@ -20,6 +20,7 @@ import { of, throwError } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../../core/date/date.service';
+import { TaskSchedulingService } from '../../task-scheduling.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
 import { Project } from '../../../project/project.model';
@@ -648,6 +649,57 @@ describe('TaskContextMenuInnerComponent', () => {
 
       expect(component.plainspaceMembers()).toBeNull();
       expect(closeSpy).toHaveBeenCalled();
+    });
+  });
+
+  // #12012: at 02:00 on Mon 2030-06-17 with a 04:00 day start, today is still Jun 16
+  describe('quick picks for a timed task before a 04:00 day start', () => {
+    let scheduleSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2030, 5, 17, 2));
+      TestBed.inject(DateService).setStartOfNextDayDiff('04:00');
+      scheduleSpy = spyOn(TestBed.inject(TaskSchedulingService), 'scheduleTask');
+    });
+
+    afterEach(() => {
+      TestBed.inject(DateService).setStartOfNextDayDiff(0);
+      jasmine.clock().uninstall();
+    });
+
+    it('labels the tomorrow pick with the day after the logical today', () => {
+      const fresh = TestBed.createComponent(TaskContextMenuInnerComponent);
+      fresh.componentInstance.task = component.task;
+      const label = (fresh.componentInstance as unknown as { tomorrowLabel: string })
+        .tomorrowLabel;
+      fresh.destroy();
+      // Mon 02:00 is still Sunday's logical day, so tomorrow is Monday
+      expect(label).toBe('Mon');
+    });
+
+    [
+      { item: 1, time: [1, 30], expected: new Date(2030, 5, 17, 1, 30) },
+      { item: 2, time: [1, 30], expected: new Date(2030, 5, 18, 1, 30) },
+      { item: 1, time: [10, 0], expected: new Date(2030, 5, 16, 10, 0) },
+    ].forEach(({ item, time, expected }) => {
+      it(`keeps ${time[0]}h${time[1]}m on the logical day of quick pick ${item}`, async () => {
+        component.task = {
+          ...component.task,
+          dueDay: undefined,
+          dueWithTime: new Date(2030, 5, 20, time[0], time[1]).getTime(),
+        };
+
+        component.quickAccessBtnClick(item);
+        await Promise.resolve();
+
+        expect(scheduleSpy).toHaveBeenCalledOnceWith(
+          jasmine.anything(),
+          expected.getTime(),
+          jasmine.anything(),
+          false,
+        );
+      });
     });
   });
 

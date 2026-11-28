@@ -26,13 +26,13 @@ describe('mapRecurrence', () => {
       { quickSetting: 'WEEKLY_CURRENT_WEEKDAY' },
     ],
     [
-      'every 2 weeks on mon and fri',
-      { type: 'weekly', interval: 2, daysOfWeek: ['monday', 'friday'] },
+      'every 2 weeks on tue and fri',
+      { type: 'weekly', interval: 2, daysOfWeek: ['tuesday', 'friday'] },
       {
         quickSetting: 'CUSTOM',
         repeatCycle: 'WEEKLY',
         repeatEvery: 2,
-        monday: true,
+        tuesday: true,
         friday: true,
       },
     ],
@@ -58,6 +58,38 @@ describe('mapRecurrence', () => {
     ],
   ])('maps %s', (_name, pattern, expected) => {
     expect(mapRecurrence({ pattern, range: { type: 'noEnd' } }, START)).toEqual(expected);
+  });
+
+  describe('every other week', () => {
+    const monFri = (firstDayOfWeek?: string): Parameters<typeof mapRecurrence>[0] => ({
+      pattern: {
+        type: 'weekly',
+        interval: 2,
+        daysOfWeek: ['monday', 'friday'],
+        firstDayOfWeek,
+      },
+      range: { type: 'noEnd' },
+    });
+
+    // Due Fri 2026-11-27, weeks start Sunday: To Do's next occurrence is
+    // Mon 2026-12-07, but 7-day blocks from the due day would give Mon 11-30.
+    it('keeps the rule as text when a day falls before the due day in its week', () => {
+      expect(mapRecurrence(monFri('sunday'), '2026-11-27')).toBeNull();
+    });
+
+    it('defaults to Sunday as the first day of the week', () => {
+      expect(mapRecurrence(monFri(), '2026-11-27')).toBeNull();
+    });
+
+    it('maps when the due day starts its week', () => {
+      expect(mapRecurrence(monFri('monday'), '2026-11-30')).toEqual({
+        quickSetting: 'CUSTOM',
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 2,
+        monday: true,
+        friday: true,
+      });
+    });
   });
 
   it('maps the full shape Graph actually returns (zero-filled fields, placeholder end)', () => {

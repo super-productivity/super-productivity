@@ -46,6 +46,7 @@ import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-pr
 import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
 import {
+  CustomizedTaskGroup,
   CustomizedUndoneTasks,
   TaskViewCustomizerService,
 } from '../task-view-customizer/task-view-customizer.service';
@@ -285,6 +286,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       );
     },
     { equal: fastArrayCompare },
+  );
+  overdueGroups = computed(() =>
+    this.customizerService.groupTasksBySelectedGroup(this.overdueTasks()),
+  );
+  laterTodayGroups = computed(() =>
+    this.customizerService.groupTasksBySelectedGroup(this.laterTodayTasks()),
   );
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
@@ -625,8 +632,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  onGroupExpandedChange(key: string): void {
-    this.customizerService.toggleGroupExpansion(key);
+  onGroupExpandedChange(key: string, isExpanded: boolean): void {
+    if (this.customizerService.collapsedGroupIds().includes(key) === isExpanded) {
+      this.customizerService.toggleGroupExpansion(key);
+    }
     this.closeInlineAdd('g:' + key);
   }
 
@@ -972,16 +981,34 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       this.isDoneHidden.set(false);
     } else if (
       this.isShowOverduePanel() &&
-      this.isOverdueHidden() &&
       this._hasTaskInList(this.overdueTasks(), taskId)
     ) {
       this.isOverdueHidden.set(false);
+      this._expandCollapsedPanelGroupFor(this.overdueGroups(), taskId);
     } else if (
       this.isOnTodayList() &&
-      this.isLaterTodayHidden() &&
       this._hasTaskInList(this.laterTodayTasks(), taskId)
     ) {
       this.isLaterTodayHidden.set(false);
+      this._expandCollapsedPanelGroupFor(this.laterTodayGroups(), taskId);
+    }
+  }
+
+  private _expandCollapsedPanelGroupFor(
+    groups: CustomizedTaskGroup[] | null,
+    taskId: string,
+  ): void {
+    if (!groups) {
+      return;
+    }
+
+    const collapsedGroupIds = this.customizerService.collapsedGroupIds();
+    const group = groups.find(
+      ({ key, tasks }) =>
+        collapsedGroupIds.includes(key) && this._hasTaskInList(tasks, taskId),
+    );
+    if (group) {
+      this.customizerService.toggleGroupExpansion(group.key);
     }
   }
 

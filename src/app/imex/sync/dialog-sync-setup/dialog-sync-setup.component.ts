@@ -28,6 +28,7 @@ import { T } from '../../../t.const';
 import {
   connectLink,
   ConnectRequest,
+  ConnectHttpError,
   ConnectUnsupportedError,
   SignInOutcome,
 } from '../super-sync-connect/super-sync-connect.api';
@@ -83,6 +84,8 @@ export class DialogSyncSetupComponent {
   readonly step = signal<Step>('choose');
   readonly isBusy = signal(false);
   readonly errorKey = signal<string | null>(null);
+  /** The server's HTTP status, when it answered but refused the sign-in request. */
+  readonly errorStatus = signal<number | null>(null);
   readonly matchCode = signal('');
   readonly isEditingServer = signal(false);
   serverInput = '';
@@ -231,10 +234,16 @@ export class DialogSyncSetupComponent {
       this.step.set('manual');
       return;
     }
-    SyncLog.warn('SuperSync sign-in could not start', {
-      name: e instanceof Error ? e.name : typeof e,
-    });
+    // Without an answer, a dropped connection, CORS and TLS all look the same.
+    const status = e instanceof ConnectHttpError ? e.status : null;
+    // Platform error text can include private URLs. The log history is exportable.
+    SyncLog.warn('SuperSync sign-in could not start', { status });
     this.step.set('choose');
-    this.errorKey.set(T.F.SYNC.D_SIGN_IN.START_FAILED);
+    this.errorStatus.set(status);
+    this.errorKey.set(
+      status === null
+        ? T.F.SYNC.D_SIGN_IN.START_FAILED
+        : T.F.SYNC.D_SIGN_IN.START_FAILED_HTTP,
+    );
   }
 }

@@ -1,6 +1,9 @@
 <div
   (click)="editTaskRepeatCfg()"
-  [title]="T.F.PLANNER.EDIT_REPEATED_TASK | translate: { taskName: repeatCfg().title }"
+  [title]="
+    (T.F.PLANNER.EDIT_REPEATED_TASK | translate: { taskName: repeatCfg().title }) +
+    (isSeparable() ? '  ' + (T.F.TASK_REPEAT.PREVIEW_HINT | translate) : '')
+  "
 >
   <mat-icon>repeat</mat-icon>
   <div class="wrap">

@@ -1,33 +1,40 @@
 :host {
   display: block;
+}
 
-  .help-text {
-    margin-bottom: var(--s5);
-    border-width: 2px;
-    border-left: 0;
-    border-right: 0;
-    border-style: solid;
-    padding: 0 var(--s2);
+// A calm aside: page-background tint, no border or icons, so it reads as a
+// note next to the fields rather than another control.
+.help-text {
+  margin: var(--s2) var(--s) var(--s);
+  padding: var(--s-half) var(--s2);
+  border-radius: var(--card-border-radius);
+  background: var(--bg);
+}
+
+// Projected help markup carries the host's view encapsulation.
+:host ::ng-deep .help-text p {
+  margin: var(--s) 0;
+}
+
+// Separated from the tips so "go deeper" never reads as part of them.
+.docs-link {
+  display: block;
+  margin: var(--s) calc(-1 * var(--s2)) 0;
+  padding: var(--s) var(--s2);
+  border-top: 1px solid var(--divider-color);
+  color: var(--c-primary);
+  font-weight: 500;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
   }
 
-  .help-btn {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    z-index: 1;
-  }
-
-  :host-context([dir='rtl']) {
-    .help-btn {
-      position: absolute;
-      right: unset;
-      left: -8px;
-    }
-  }
-
-  .help-icon-wrapper {
-    margin-top: var(--s);
-    margin-bottom: var(--s);
-    text-align: center;
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    margin-inline-start: 2px;
+    vertical-align: -2px;
   }
 }

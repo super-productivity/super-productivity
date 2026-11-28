@@ -309,7 +309,6 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
         state,
         TaskSharedActions.planTasksForToday({
           taskIds: [day1TaskId],
-          isSkipRemoveReminder: true,
         }),
       );
 
@@ -341,7 +340,6 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
         state,
         TaskSharedActions.planTasksForToday({
           taskIds: ['task1'],
-          isSkipRemoveReminder: true,
         }),
       );
 

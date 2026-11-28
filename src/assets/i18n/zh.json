@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: 无法同步，因为离线",
-        "SYNC_ERROR": "Dropbox: 同步时出错",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: 无法生成 PKCE 挑战。"
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Jira 链接的备用主机地址（例如 API 主机与公开 URL 不同时使用；允许带路径前缀）"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "高级配置",
-        "HELP_ARR": {
-          "H1": "基本配置",
-          "H2": "工作日志设置",
-          "H3": "默认转换",
-          "P1_1": "请提供登录名（可以在您的个人资料页面上找到）和 <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html \" target=\"_blank\">API 令牌</a> 或密码，如果您出于某种原因无法生成一个。请注意，较新版本的 Jira 有时仅使用令牌。",
-          "P1_2": "您还需要指定一个 JQL 查询，用于从 Jira 添加任务的建议。如果您需要帮助，请查看此链接 <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html \" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html </a>。",
-          "P1_3": "您还可以配置是否想要自动（例如，每次访问规划视图时）通过自定义 JQL 查询指定导入所有新问题。",
-          "P1_4": "另一个选项是 \"检查当前票证是否分配给当前用户\"。如果启用并且您正在启动，将检查您是否当前在 Jira 上分配给该票证，如果不是，则会出现一个对话框，您可以选择将票证分配给自己。",
-          "P2_1": "有几种选项可以确定何时以及如何提交工作日志。启用 <em>'在任务完成时打开工作日志对话框以向 Jira 添加工作日志'</em> 会在您每次将 Jira 任务标记为完成时打开一个对话框以添加工作日志。因此，请记住，工作日志将添加到迄今为止跟踪的所有内容之上。因此，如果您第二次将任务标记为完成，您可能不想再次提交任务的完整工作时间。",
-          "P2_2": "<em>'在子任务完成时打开工作日志对话框，而不是对具有子任务的任务本身打开工作日志对话框'</em> 会在您将 Jira 问题的子任务标记为完成时每次都打开一个工作日志对话框。因为您已经通过子任务跟踪了您的时间，所以在您将 Jira 任务本身标记为完成时不会打开任何对话框。",
-          "P2_3": "<em>'在没有对话框的情况下自动将更新发送到工作日志'</em> 会执行它所说的操作。因为多次将任务标记为完成会导致整个工作时间被跟踪两次，所以不推荐这样做。",
-          "P3_1": "在这里，您可以重新配置默认转换。Jira 支持转换的广泛配置，通常作为 Jira 敏捷板上的不同列生效，我们无法假设在哪里以及何时转换您的任务，您需要手动设置它。"
-        }
+        "ADV_CFG": "高级配置"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "负责人",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "调整此值可模糊背景图片。默认值为 0px。",
         "D_BACKGROUND_OVERLAY_OPACITY": "调整此值使背景更透明或更不透明。默认为 20%。",
-        "HELP": "项目的主题设置。",
         "L_BACKGROUND_IMAGE_BLUR": "模糊背景图片",
         "L_BACKGROUND_IMAGE_DARK": "背景图片网址（暗主题）",
         "L_BACKGROUND_IMAGE_LIGHT": "背景图片网址（亮主题）",
@@ -1764,7 +1749,6 @@
         "RESTORE_SUCCESS": "数据恢复成功",
         "SERVER_MIGRATION_VALIDATION_FAILED": "无法将数据迁移到服务器——本地数据验证失败。请尝试导入备份。",
         "SPLIT_FORMAT_ENABLE_SETTING": "此同步文件夹已升级为拆分文件格式。请在同步设置中启用“精细同步”以继续。",
-        "STORAGE_QUOTA_EXCEEDED": "同步服务器存储空间已满。您的更改未同步。请归档旧任务或升级您的套餐。",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "存储空间即将不足。旧数据已成功清理。",
         "SUCCESS_DOWNLOAD": "已从远程同步数据",
         "SUCCESS_VIA_BUTTON": "数据已成功同步",
@@ -2317,6 +2301,8 @@
         "C_YEAR": "年",
         "C_YEARS": "年",
         "DEFAULT_ESTIMATE": "默认预估时间",
+        "DEADLINE_OFFSET_DAYS": "截止日期（每次重复后的天数）",
+        "DEADLINE_OFFSET_DAYS_DESCRIPTION": "留空表示无截止日期。0 表示当天到期。",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "禁用自动更新子任务",
         "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "当最新任务实例发生变化时，不自动更新继承的子任务",
         "FALL_BEHIND": "如果进度落后",
@@ -2605,6 +2591,7 @@
     "EXPORT_DATA": "导出数据",
     "IMPORT_FROM_FILE": "从文件导入",
     "IMPORT_FROM_TICKTICK": "从 TickTick 导入",
+    "IMPORT_FROM_MS_TODO": "从 Microsoft To Do 导入",
     "IMPORT_FROM_TODOIST": "从 Todoist 导入",
     "IMPORT_FROM_URL": "从 URL 导入",
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "请输入您要导入的超级生产力备份 JSON 文件的完整 URL。",
@@ -2619,6 +2606,7 @@
     "S_ERR_INVALID_URL": "导入失败：提供的 URL 无效",
     "S_ERR_NETWORK": "导入失败：从 URL 获取数据时网络错误",
     "S_ERR_TICKTICK_IMPORT_OPEN": "无法打开 TickTick 导入工具",
+    "S_ERR_MS_TODO_IMPORT_OPEN": "无法打开 Microsoft To Do 导入工具",
     "S_ERR_TODOIST_IMPORT_OPEN": "无法打开 Todoist 导入工具",
     "S_IMPORT_FROM_URL_ERR_DECODE": "错误：无法解码用于导入的 URL 参数。请确保其格式正确。",
     "URL_PLACEHOLDER": "输入要从中导入的 URL"
@@ -2807,6 +2795,7 @@
     },
     "FOCUS_MODE_LOCAL": {
       "HELP": "这些设置仅适用于此设备，不会同步。",
+      "L_IS_FOCUS_WINDOW_ON_SESSION_END": "专注会话或休息结束时将应用窗口置于前台",
       "L_IS_LOOP_BREAK_END_ALARM": "循环播放休息结束提示音，直到我结束休息（仅此设备）",
       "L_IS_NOTIFY_ON_SESSION_END": "番茄钟会话或休息结束时显示浏览器通知",
       "S_NOTIFICATION_PERMISSION_DENIED": "此站点不允许通知。请在浏览器中允许通知以使用此选项。",
@@ -2971,6 +2960,7 @@
       "IS_DARK_MODE": "深色模式",
       "IS_DISABLE_ANIMATIONS": "禁用所有动画",
       "IS_DISABLE_CELEBRATION": "在每日摘要中禁用庆祝",
+      "IS_HIDE_NAV_TASK_COUNT": "隐藏侧边栏中的任务数量徽章",
       "IS_LOCAL_REST_API_ENABLED": "启用本地 REST API（仅桌面端）",
       "IS_LOCAL_REST_API_ENABLED_HINT": "允许本地脚本通过 http://127.0.0.1:3876 控制正在运行的应用。此计算机上运行的任何应用都将能够读取和修改您的任务。",
       "LOCAL_REST_API_TOKEN": "访问令牌",

@@ -26,6 +26,7 @@ import {
   PLAINSPACE_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
+import { TaskSchedulingService } from '../tasks/task-scheduling.service';
 import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrator.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -109,6 +110,7 @@ export class IssueService {
     { promise: Promise<string | undefined>; hasForegroundRequest: boolean }
   >();
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
   private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _pendingRemoteIssueDelete = inject(PendingRemoteIssueDeleteService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
@@ -493,31 +495,10 @@ export class IssueService {
           this._updateTaskFromPoll(update.task, update.taskChanges);
         }
 
-        if (updates.length === 1) {
-          this._snackService.open({
-            svgIco: this._getProviderIcon(providerKey),
-            msg: T.F.ISSUE.S.ISSUE_UPDATE_SINGLE,
-            translateParams: {
-              issueProviderName: this._getProviderName(providerKey),
-              issueStr: this._translateService.instant(
-                this._getIssueStrings(providerKey).ISSUE_STR,
-              ),
-              issueTitle: updates[0].taskChanges.title || updates[0].task.title,
-            },
-          });
-        } else if (updates.length > 1) {
-          this._snackService.open({
-            svgIco: this._getProviderIcon(providerKey),
-            msg: T.F.ISSUE.S.ISSUE_UPDATE_MULTIPLE,
-            translateParams: {
-              issueProviderName: this._getProviderName(providerKey),
-              issuesStr: this._translateService.instant(
-                this._getIssueStrings(providerKey).ISSUES_STR,
-              ),
-              nr: updates.length,
-            },
-          });
-        }
+        // Automatic polling stays quiet: an informational update snack would
+        // swallow a pending HTTP error in SnackService's trailing debounce or
+        // replace an already displayed error (including another provider's).
+        // Successful updates still reach the tasks and their issue panels.
       }
     }
 
@@ -711,7 +692,7 @@ export class IssueService {
       // pushed to everyone in the Space. Other providers keep parsing.
       const isIgnoreShortSyntax = issueProviderKey === PLAINSPACE_TYPE;
       taskId = taskData.dueWithTime
-        ? await this._taskService.addAndSchedule(
+        ? await this._taskSchedulingService.addAndSchedule(
             title,
             taskData,
             taskData.dueWithTime,
@@ -802,11 +783,12 @@ export class IssueService {
     issueProviderId: string;
     issueProviderKey: IssueProviderKey;
   }): Promise<{ taskId: string; parentTaskId: string } | undefined> {
-    const parentTask = await this._taskService.checkForTaskWithIssueEverywhere(
-      issueParentId,
-      issueProviderKey,
-      issueProviderId,
-    );
+    const parentTask =
+      await this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere(
+        issueParentId,
+        issueProviderKey,
+        issueProviderId,
+      );
 
     // Archived parents cannot receive new sub-tasks (the reducer no-ops silently).
     // Fall through so the child is added as a top-level task instead.
@@ -839,7 +821,7 @@ export class IssueService {
     isBackgroundPoll: boolean,
   ): Promise<void> {
     for (const issue of issues) {
-      const res = await this._taskService.checkForTaskWithIssueEverywhere(
+      const res = await this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere(
         issue.id.toString(),
         providerKey,
         issueProviderId,
@@ -897,10 +879,10 @@ export class IssueService {
     );
 
     let res: Awaited<
-      ReturnType<typeof this._taskService.checkForTaskWithIssueEverywhere>
+      ReturnType<typeof this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere>
     > | null = null;
     for (const candidateId of idsToCheck) {
-      res = await this._taskService.checkForTaskWithIssueEverywhere(
+      res = await this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere(
         candidateId,
         issueType,
         issueProviderId,

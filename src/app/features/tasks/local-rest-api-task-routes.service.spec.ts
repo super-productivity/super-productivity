@@ -192,6 +192,17 @@ describe('LocalRestApiTaskRoutesService', () => {
     dispatchSpy = spyOn(store, 'dispatch');
   });
 
+  const expectInvalidDueDay = (
+    response: Awaited<ReturnType<typeof sendRequestAndWait>>,
+  ): void => {
+    expect(response.status).toBe(400);
+    if (response.body.ok) {
+      throw new Error('Expected an error response');
+    }
+    expect(response.body.error.code).toBe('INVALID_INPUT');
+    expect(response.body.error.message).toBe('dueDay must be a valid YYYY-MM-DD date');
+  };
+
   describe('GET /status', () => {
     it('should return status with current task info', async () => {
       const mockTask = createMockTask('task-1');
@@ -556,6 +567,50 @@ describe('LocalRestApiTaskRoutesService', () => {
     });
 
     describe('POST /tasks', () => {
+      describe('dueDay', () => {
+        beforeEach(() => {
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(createMockTask('new-task-id')),
+          });
+        });
+
+        it('should create a task planned for a valid day', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'New Task', dueDay: '2026-05-13' },
+            }),
+          );
+
+          expect(response.status).toBe(201);
+          expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+            title: 'New Task',
+            dueDay: '2026-05-13',
+          });
+        });
+
+        for (const dueDay of ['tomorrow', '2026-5-13', '2026-02-30', '2026-13-01']) {
+          it(`should reject the dueDay "${dueDay}"`, async () => {
+            expectInvalidDueDay(
+              await sendRequestAndWait(
+                createRequest('POST', '/tasks', { body: { title: 'New Task', dueDay } }),
+              ),
+            );
+            expect(taskServiceMock.add).not.toHaveBeenCalled();
+          });
+        }
+
+        it('should reject an invalid dueDay on a subtask', async () => {
+          expectInvalidDueDay(
+            await sendRequestAndWait(
+              createRequest('POST', '/tasks', {
+                body: { title: 'Child', parentId: 'parent-1', dueDay: 'tomorrow' },
+              }),
+            ),
+          );
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+        });
+      });
+
       it('should create a task with valid input', async () => {
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
           get: () => (_id: string) => of(createMockTask('new-task-id')),
@@ -1242,6 +1297,59 @@ describe('LocalRestApiTaskRoutesService', () => {
     });
 
     describe('PATCH /tasks/:id', () => {
+      describe('dueDay', () => {
+        beforeEach(() => {
+          const mockTask = createMockTask('task-1');
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(mockTask),
+          });
+        });
+
+        it('should plan a task for a valid day', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { dueDay: '2026-05-13' } }),
+          );
+
+          expect(response.status).toBe(200);
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            dueDay: '2026-05-13',
+          });
+        });
+
+        it('should still unplan a task with a null dueDay', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { dueDay: null } }),
+          );
+
+          expect(response.status).toBe(200);
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            dueDay: null,
+          } as unknown as Partial<Task>);
+        });
+
+        it('should unplan a task with an empty dueDay', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { dueDay: '' } }),
+          );
+
+          expect(response.status).toBe(200);
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            dueDay: null,
+          } as unknown as Partial<Task>);
+        });
+
+        for (const dueDay of ['tomorrow', '2026-02-30', '13/05/2026']) {
+          it(`should reject the dueDay "${dueDay}"`, async () => {
+            expectInvalidDueDay(
+              await sendRequestAndWait(
+                createRequest('PATCH', '/tasks/task-1', { body: { dueDay } }),
+              ),
+            );
+            expect(taskServiceMock.update).not.toHaveBeenCalled();
+          });
+        }
+      });
+
       it('should update a task', async () => {
         const mockTask = createMockTask('task-1');
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {

@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Kan inte synkronisera, eftersom du är offline",
-        "SYNC_ERROR": "Dropbox: Fel vid synkronisering",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Det går inte att generera PKCE-utmaning."
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Alternativ värd för Jira-länkar (t.ex. publik URL när API-värden skiljer sig; sökvägsprefix tillåts)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Avancerad konfiguration",
-        "HELP_ARR": {
-          "H1": "Grundläggande konfiguration",
-          "H2": "Inställningar för arbetslogg",
-          "H3": "Standardövergångar",
-          "P1_1": "Ange ett inloggningsnamn (finns på din profilsida) och en <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API-token</a> eller lösenord om du av någon anledning inte kan generera en. Observera att nyare versioner av Jira ibland endast fungerar med token. ",
-          "P1_2": "Du måste också ange en JQL-fråga som används för förslagen om att lägga till uppgifter från Jira. Om du behöver hjälp, kolla in den här länken <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching -764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Du kan också konfigurera om du vill importera alla nya ärenden som anges av en anpassad JQL-fråga automatiskt (t.ex. varje gång du besöker planeringsvyn).",
-          "P1_4": "Ett annat alternativ är \"Kontrollera om aktuell biljett är tilldelad till aktuell användare\". Om detta alternativ är aktiverat och du startar, kommer en kontroll att göras om du för närvarande är tilldelad den biljetten på Jira. Om så inte är fallet visas en dialogruta där du kan välja att tilldela biljetten till dig själv.",
-          "P2_1": "Det finns flera alternativ för att bestämma när och hur du vill skicka in en arbetslogg. Om du aktiverar <em>'Öppna arbetsloggdialogrutan för att lägga till en arbetslogg i Jira när uppgiften är klar'</em> öppnas en dialogruta där du kan lägga till en arbetslogg varje gång du markerar en Jira-uppgift som klar. Tänk på att arbetsloggar läggs till ovanpå allt som hittills har spårats. Om du markerar en uppgift som klar för andra gången kanske du inte vill skicka in den totala arbetstiden för uppgiften igen.",
-          "P2_2": "<em>'Öppna arbetsloggdialogrutan när deluppgiften är klar, men inte för uppgifter med deluppgifter'</em> öppnar en arbetsloggdialogruta varje gång du markerar en deluppgift i ett Jira-ärende som klar. Eftersom du redan spårar din tid via deluppgifterna öppnas ingen dialogruta när du markerar själva Jira-uppgiften som klar.",
-          "P2_3": "<em>'Skicka uppdateringar till arbetsloggen automatiskt utan dialogruta'</em> gör precis vad det säger. Eftersom det inte rekommenderas att markera en uppgift som klar flera gånger, eftersom det leder till att hela arbetstiden spåras två gånger.",
-          "P3_1": "Här kan du konfigurera om dina standardövergångar. Jira möjliggör en bred konfiguration av övergångar som vanligtvis aktiveras som olika kolumner på din Jira agile-tavla. Vi kan inte göra antaganden om var och när dina uppgifter ska övergå, utan du måste ställa in det manuellt."
-        }
+        "ADV_CFG": "Avancerad konfiguration"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Mottagare",
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Justera det här värdet för att göra bakgrundsbilden oskarp. Standardvärdet är 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Justera detta värde för att göra bakgrunden mer eller mindre genomskinlig. Standard är 20 %.",
-        "HELP": "Temainställningar för ditt projekt.",
         "L_BACKGROUND_IMAGE_BLUR": "Oskärpa för bakgrundsbild",
         "L_BACKGROUND_IMAGE_DARK": "URL för bakgrundsbild (mörkt tema)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL för bakgrundsbild (ljust tema)",
@@ -1764,7 +1749,6 @@
         "RESTORE_SUCCESS": "Data återställd",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Kunde inte migrera data till servern – lokal datavalidering misslyckades. Försök importera en säkerhetskopia.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Den här synkroniseringsmappen har uppgraderats till formatet med separata filer. Aktivera Kirurgisk synkronisering i synkroniseringsinställningarna för att fortsätta.",
-        "STORAGE_QUOTA_EXCEEDED": "Synkroniseringsserverns lagring är full. Dina ändringar synkroniseras INTE! Arkivera gamla uppgifter eller uppgradera din plan.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Lagringsutrymmet var lågt. Gamla data rensade.",
         "SUCCESS_DOWNLOAD": "Synkroniserade data från fjärrplats",
         "SUCCESS_VIA_BUTTON": "Data synkroniserad",

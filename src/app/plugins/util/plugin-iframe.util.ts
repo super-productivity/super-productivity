@@ -80,6 +80,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'getDayContext',
   'startTracking',
   'stopTracking',
+  'openProject',
   'getAppState',
   'persistDataSynced',
   'loadPersistedData',
@@ -460,6 +461,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           getDayContext: () => callApi('getDayContext'),
           startTracking: (taskId) => callApi('startTracking', [taskId]),
           stopTracking: () => callApi('stopTracking'),
+          openProject: (projectId) => callApi('openProject', [projectId]),
           getAppState: () => callApi('getAppState'),
 
           // Persistence methods (optional second arg = key, forwarded by callApi)

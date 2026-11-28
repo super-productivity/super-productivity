@@ -365,7 +365,6 @@
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: não é possível sincronizar, porque off-line",
-        "SYNC_ERROR": "Dropbox: erro ao sincronizar",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Não foi possível gerar o desafio PKCE."
       }
     },
@@ -701,20 +700,7 @@
         "ALT_PUBLIC_LINK_HOST": "Host alternativo para links do Jira (por exemplo, URL público quando o host da API é diferente; é permitido um prefixo de caminho)"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Configurações avançadas",
-        "HELP_ARR": {
-          "H1": "Configurações Básicas",
-          "H2": "Configurações do log de trabalho",
-          "H3": "Transições padrão",
-          "P1_1": "Forneça um nome de login (pode ser encontrado na sua página de perfil) e um <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> ou senha, se você não puder gerar uma por algum motivo. Às vezes, as versões mais recentes do Jira funcionam apenas com o token. ",
-          "P1_2": "Você também precisa especificar uma consulta JQL que é usada para as sugestões para adicionar tarefas do Jira. Se precisar de ajuda, confira este link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "Você também pode configurar, se desejar automaticamente (por exemplo, sempre que visitar a exibição de planejamento), adicionar todas as novas tarefas especificadas por uma consulta JQL customizada ao backlog.",
-          "P1_4": "Outra opção é \"Verifique se o ticket atual está atribuído ao usuário atual\". Se ativado e você estiver começando, será feita uma verificação se você estiver atualmente atribuído a esse ticket no Jira, se não aparecer uma caixa de diálogo na qual você pode optar por atribuir o ticket a si mesmo.",
-          "P2_1": "Existem várias opções para determinar quando e como você deseja enviar um log de trabalho. Ativar <em>'Abrir caixa de diálogo do log de trabalho para adicionar um log de trabalho ao Jira quando a tarefa estiver concluída'</em> abre uma caixa de diálogo para adicionar um log de trabalho toda vez que você marcar uma tarefa do Jira como concluída. Portanto, lembre-se de que os logs de trabalho serão adicionados além de tudo rastreado até o momento. Portanto, se você marcar uma tarefa como concluída pela segunda vez, talvez não queira enviar o tempo de trabalho completo para a tarefa novamente.",
-          "P2_2": "<em>'Abre a caixa de diálogo do log de trabalho quando a subtarefa é concluída e não para tarefas com as próprias subtarefas'</em> abre uma caixa de diálogo do log de trabalho toda vez que você marca uma subtarefa de um problema do Jira como concluída. Você já acompanha seu tempo através das subtarefas, nenhuma caixa de diálogo é aberta depois que você marca a tarefa Jira como concluída.",
-          "P2_3": "<em>'Enviar atualizações para o log de trabalho automaticamente sem caixa de diálogo'</em> faz o que diz. Como marcar uma tarefa como executada várias vezes faz com que todo o tempo de trabalho seja rastreado duas vezes, isso não é recomendado.",
-          "P3_1": "Aqui você pode reconfigurar suas transições padrão. O Jira permite uma ampla configuração de transições que geralmente entram em ação como colunas diferentes no seu painel ágil Jira. Não podemos fazer suposições sobre onde e quando fazer a transição de suas tarefas e você precisa defina-o manualmente"
-        }
+        "ADV_CFG": "Configurações avançadas"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Resposável",
@@ -971,7 +957,7 @@
       "S": {
         "REMOVED_PLAN_DATE": "Data do plano removida para a tarefa ' {{taskTitle}}'",
         "TASK_ALREADY_PLANNED": "A tarefa já está planeada para {{date}}",
-        "TASK_PLANNED_FOR": "Tarefa planejada para {{date}}"
+        "TASK_PLANNED_FOR": "Tarefa planeada para <strong>{{date}}</strong>{{extra}}"
       }
     },
     "POMODORO": {
@@ -1032,7 +1018,6 @@
       "FORM_THEME": {
         "D_BACKGROUND_IMAGE_BLUR": "Ajuste este valor para desfocar a imagem de fundo. O valor predefinido é 0px.",
         "D_BACKGROUND_OVERLAY_OPACITY": "Ajuste este valor para tornar o fundo mais ou menos transparente. O valor predefinido é 20%.",
-        "HELP": "Configurações do tema para o seu projeto.",
         "L_BACKGROUND_IMAGE_BLUR": "Desfocar imagem de fundo",
         "L_BACKGROUND_IMAGE_DARK": "URL da imagem de fundo (tema escuro)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL da imagem de fundo (tema claro)",
@@ -1144,8 +1129,8 @@
       "VIEW_WEEK": "Ver semana",
       "NO_TASKS": "De momento não existem tarefas. Adicione tarefas através do botão mais (+) na barra superior.",
       "NOW": "Agora",
-      "PLAN_END_DAY": "Planeje no final do dia",
-      "PLAN_START_DAY": "Planeje o início do dia",
+      "PLAN_END_DAY": "Fim de {{date}}",
+      "PLAN_START_DAY": "Início de {{date}}",
       "SCHEDULE_TASK_PLACEHOLDER": "Agendar tarefa...",
       "SHIFT_KEY_INFO": "Mantenha Shift para alternar o modo de planeamento diário",
       "START": "Início do Trabalho",
@@ -1764,14 +1749,13 @@
         "RESTORE_SUCCESS": "Dados restaurados com sucesso",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Não foi possível migrar dados para o servidor - validação de dados locais falhou. Tente importar uma cópia de segurança.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Esta pasta de sincronização foi atualizada para o formato de ficheiros divididos. Ative o Surgical sync nas definições de Sincronização para continuar.",
-        "STORAGE_QUOTA_EXCEEDED": "O armazenamento do servidor de sincronização está cheio. As suas alterações NÃO estão a ser sincronizadas! Arquive tarefas antigas ou atualize o seu plano.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "O espaço estava a ficar reduzido. Dados antigos limpos com sucesso.",
         "SUCCESS_DOWNLOAD": "Dados sincronizados do controle remoto",
         "SUCCESS_VIA_BUTTON": "Dados sincronizados com sucesso",
         "SYNC_DATA_RECOVERED_FROM_BACKUP": "Os dados de sincronização foram recuperados da cópia de segurança depois de não ter sido possível ler o ficheiro principal.",
         "SYNC_VALIDATION_FAILED": "Falha na validação do estado após a sincronização. Alguns dados podem estar inconsistentes.",
         "TIMEOUT_ERROR": "Operação de sincronização expirou. {{suggestion}}",
-        "UNKNOWN_ERROR": "Erro desconhecido durante a sincronização. Verifique o console.",
+        "UNKNOWN_ERROR": "Erro de sincronização desconhecido: {{err}}",
         "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "A sincronização foi interrompida por segurança para evitar a perda de dados. Comunica este código: {{details}}",
         "UPLOAD_ERROR": "Erro de carregamento desconhecido (definições corretas?): {{err}}",
         "UPLOAD_REJECTED_REPEATEDLY": "Não foi possível carregar as suas alterações em várias sincronizações seguidas. Permanecem neste dispositivo e a sincronização continua a tentar. Se isto persistir, verifique o seu servidor de sincronização ou as definições de proxy.",
@@ -2210,7 +2194,7 @@
         "MOVED_TO_PROJECT": "Movida a tarefa \"{{taskTitle}}\" para o projeto \"{{projectTitle}}\"",
         "NOT_FOUND_VIA_APP_URI": "Não foi encontrada nenhuma tarefa correspondente a \"{{title}}\"",
         "PROJECT_NOT_FOUND_VIA_APP_URI": "Projeto não encontrado — a tarefa \"{{title}}\" não foi adicionada",
-        "REMINDER_ADDED": "Tarefa agendada \"{{title}}\"",
+        "REMINDER_ADDED": "Agendada <strong>\"{{title}}\"</strong> para <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Lembrete excluído da tarefa",
         "REMINDER_UPDATED": "Lembrete atualizado para a tarefa \"{{title}}\"",
         "TASK_ALREADY_EXISTS": "A tarefa <strong>{{title}}</strong> já existe",
@@ -2317,6 +2301,8 @@
         "C_YEAR": "Ano",
         "C_YEARS": "Anos",
         "DEFAULT_ESTIMATE": "Estimativa padrão",
+        "DEADLINE_OFFSET_DAYS": "Prazo (dias após cada ocorrência)",
+        "DEADLINE_OFFSET_DAYS_DESCRIPTION": "Deixe em branco para não ter prazo. 0 = termina no mesmo dia.",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "Desativar atualização automática das subtarefas",
         "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "Não atualizar automaticamente as subtarefas herdadas quando a instância mais recente mudar",
         "FALL_BEHIND": "Se ficar para trás",
@@ -2605,6 +2591,7 @@
     "EXPORT_DATA": "Exportar dados",
     "IMPORT_FROM_FILE": "Importar do arquivo",
     "IMPORT_FROM_TICKTICK": "Importar do TickTick",
+    "IMPORT_FROM_MS_TODO": "Importar do Microsoft To Do",
     "IMPORT_FROM_TODOIST": "Importar do Todoist",
     "IMPORT_FROM_URL": "Importar de URL",
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Por favor, insira o URL completo do arquivo de backup JSON do Super Productivity que deseja importar.",
@@ -2619,6 +2606,7 @@
     "S_ERR_INVALID_URL": "Falha na importação: URL fornecido inválido",
     "S_ERR_NETWORK": "Falha na importação: Erro de rede ao buscar dados do URL",
     "S_ERR_TICKTICK_IMPORT_OPEN": "Não foi possível abrir o importador do TickTick",
+    "S_ERR_MS_TODO_IMPORT_OPEN": "Não foi possível abrir o importador do Microsoft To Do",
     "S_ERR_TODOIST_IMPORT_OPEN": "Não foi possível abrir o importador do Todoist",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Erro: Não foi possível decodificar o parâmetro URL para importação. Certifique-se de que está corretamente formatado.",
     "URL_PLACEHOLDER": "Insira o URL para importar"
@@ -2807,6 +2795,7 @@
     },
     "FOCUS_MODE_LOCAL": {
       "HELP": "Estas definições aplicam-se apenas a este dispositivo e não são sincronizadas.",
+      "L_IS_FOCUS_WINDOW_ON_SESSION_END": "Trazer a janela da aplicação para primeiro plano quando uma sessão de foco ou uma pausa terminar",
       "L_IS_LOOP_BREAK_END_ALARM": "Repetir o som de fim da pausa até terminar a pausa (apenas neste dispositivo)",
       "L_IS_NOTIFY_ON_SESSION_END": "Mostrar uma notificação do navegador quando uma sessão Pomodoro ou uma pausa terminar",
       "S_NOTIFICATION_PERMISSION_DENIED": "As notificações não são permitidas para este site. Permita-as no seu navegador para usar esta opção.",
@@ -2971,6 +2960,7 @@
       "IS_DARK_MODE": "Modo escuro",
       "IS_DISABLE_ANIMATIONS": "Desativar todas as animações",
       "IS_DISABLE_CELEBRATION": "Desativar celebração no resumo diário",
+      "IS_HIDE_NAV_TASK_COUNT": "Ocultar os indicadores do número de tarefas na barra lateral",
       "IS_LOCAL_REST_API_ENABLED": "Ativar API REST local (apenas desktop)",
       "IS_LOCAL_REST_API_ENABLED_HINT": "Permite que scripts locais controlem a aplicação em execução via http://127.0.0.1:3876. Qualquer aplicação em execução neste computador poderá ler e modificar as suas tarefas.",
       "LOCAL_REST_API_TOKEN": "Token de acesso",
