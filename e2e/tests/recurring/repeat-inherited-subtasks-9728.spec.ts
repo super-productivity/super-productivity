@@ -189,6 +189,8 @@ test.describe('Recurring task inherited subtasks (#9728)', () => {
     await openRecurDialog(page);
     await saveRecurDialog(page);
     await page.keyboard.press('Escape');
+    // Closing the panel shifts the drag handle until the slide animation finishes.
+    await expect(page.locator('right-panel > .side')).toHaveCount(0);
 
     const children = (name: string): Locator =>
       workViewPage.taskList
@@ -201,6 +203,7 @@ test.describe('Recurring task inherited subtasks (#9728)', () => {
       children(source).filter({ hasText: moved }).locator('done-toggle'),
     );
     await dropTaskDrag(page, children(routine).filter({ hasText: existing }));
+    await expect(page.locator('.cdk-drag-preview')).toHaveCount(0);
     await expect(children(routine).filter({ hasText: moved })).toBeVisible();
 
     const next = await completeAndGetNextDayInstance(page, routine);
