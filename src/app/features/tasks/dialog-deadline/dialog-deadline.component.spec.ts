@@ -8,6 +8,7 @@ import { DEFAULT_TASK, Task, TaskReminderOptionId } from '../task.model';
 import { DialogDeadlineComponent } from './dialog-deadline.component';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../core/date/date.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { GlobalConfigService } from '../../config/global-config.service';
 
 /**
@@ -76,6 +77,7 @@ describe('DialogDeadlineComponent', () => {
           useValue: {
             isToday: () => false,
             todayStr: () => '2026-05-06',
+            getLogicalTodayDate: () => new Date(2026, 4, 6),
             getStartOfNextDayDiffMs: () => 0,
           },
         },
@@ -154,6 +156,26 @@ describe('DialogDeadlineComponent', () => {
         expect(setDeadlineCalls().length).toBe(1);
         expect(action.deadlineDay).toBe(day);
         expect(action.deadlineWithTime).toBeUndefined();
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
+  });
+
+  [
+    { now: new Date(2030, 5, 17, 2), day: '2030-06-16' },
+    { now: new Date(2030, 5, 17, 10), day: '2030-06-17' },
+  ].forEach(({ now, day }) => {
+    it(`starts the calendar at logical today ${day} with a 04:00 day start`, () => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(now);
+      try {
+        const dateService = new DateService();
+        dateService.setStartOfNextDayDiff('04:00');
+        TestBed.overrideProvider(DateService, { useValue: dateService });
+        const component = createComponent();
+
+        expect(getDbDateStr(component.minDate)).toBe(day);
       } finally {
         jasmine.clock().uninstall();
       }

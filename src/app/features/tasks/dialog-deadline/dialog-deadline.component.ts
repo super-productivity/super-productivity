@@ -91,7 +91,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
   selectedDate: Date | null = null;
   selectedTime: string | null = null;
   selectedReminderCfgId: TaskReminderOptionId = TaskReminderOptionId.DoNotRemind;
-  minDate = new Date();
+  minDate = this._dateService.getLogicalTodayDate();
 
   hasExistingDeadline = false;
 
