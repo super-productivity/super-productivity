@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { signal, WritableSignal } from '@angular/core';
 import { registerLocaleData } from '@angular/common';
+import { By } from '@angular/platform-browser';
 import localeSv from '@angular/common/locales/sv';
 import { HabitTrackerComponent } from './habit-tracker.component';
 import { SimpleCounterService } from '../simple-counter.service';
@@ -201,6 +202,34 @@ describe('HabitTrackerComponent', () => {
 
     expect(matDialog.open).toHaveBeenCalled();
   }));
+
+  for (const holdDuration of [550, 850]) {
+    it(`cancels cell editing when dragging starts after ${holdDuration}ms`, fakeAsync(() => {
+      const monday = '2026-05-18';
+      component.onPressStart(mockCounter, monday, 1);
+      tick(holdDuration);
+
+      fixture.debugElement
+        .query(By.css('.habit-row'))
+        .triggerEventHandler('cdkDragStarted');
+      tick(800);
+      component.onPressEnd();
+
+      expect(matDialog.open).not.toHaveBeenCalled();
+      expect(simpleCounterService.setCounterForDate).not.toHaveBeenCalled();
+
+      // A new press must still toggle the cell normally after dragging.
+      component.onPressStart(mockCounter, monday, 1);
+      tick(50);
+      component.onPressEnd();
+      component.onCellClick(mockCounter, monday, 1);
+      expect(simpleCounterService.setCounterForDate).toHaveBeenCalledWith(
+        'c1',
+        monday,
+        1,
+      );
+    }));
+  }
 
   describe('onCellClick', () => {
     const mondayDow = 1;

@@ -192,6 +192,13 @@ export class HabitTrackerComponent {
     }, 700); // 700ms for long press
   }
 
+  onDragStarted(): void {
+    // Dragging takes over the gesture, even if the edit is already queued.
+    window.clearTimeout(this._longPressTimer);
+    this._longPressTimer = undefined;
+    this._pendingLongPressAction = undefined;
+  }
+
   onPressEnd(): void {
     if (this._longPressTimer) {
       window.clearTimeout(this._longPressTimer);
