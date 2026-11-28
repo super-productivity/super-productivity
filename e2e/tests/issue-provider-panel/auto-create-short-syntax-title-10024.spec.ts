@@ -14,13 +14,15 @@ import { expectNoGlobalError } from '../../utils/assertions';
  * real reducer — and holds the create response until short syntax has landed
  * locally, which is exactly the reported timing.
  *
- * The add-task bar runs its own async short-syntax parse and would often
- * dispatch the already-cleaned title, hiding the effect-level race. We hold
- * the lazy date-parser module (imported on the first date-token parse)
- * until after the task is added, so the action carries the RAW title — the
- * exact input from the report — and assert the raw title landed before
- * letting the parse proceed. The hold matches the parser chunk by name in
- * dev and falls back to same-origin lazy chunks for CI's built app.
+ * Enter in the add-task bar waits for the bar's own parse and adds the
+ * cleaned title, so it can't reach the effect-level race. A Markdown list
+ * pasted into the bar still adds the RAW title and leaves the tokens to the
+ * short-syntax effect, so the task comes in that way. We hold the lazy
+ * date-parser module (imported on the first date-token parse) until after
+ * the task is added, so the action carries the raw title — the exact input
+ * from the report — and assert the raw title landed before letting the parse
+ * proceed. The hold matches the parser chunk by name in dev and falls back to
+ * same-origin lazy chunks for CI's built app.
  */
 type TaskSnapshot = {
   title: string;
@@ -170,13 +172,32 @@ test('auto-created issue excludes short syntax tokens (#10024)', async ({
   await expect(dialog).toBeHidden();
   await page.locator('.e2e-toggle-issue-provider-panel').click();
 
+  // The reported case: raw tokens in the title of an auto-created task. Paste
+  // it as a Markdown list (see file comment); the sub-task only makes the
+  // paste multi-line, and auto-create skips sub-tasks.
+  const tomorrowBeforeAdd = await getTomorrowDbDate(page);
+  const addBarInput = page.locator('add-task-bar.global .main-input');
+  if (!(await addBarInput.isVisible())) {
+    await page.locator('.tour-addBtn').click();
+  }
+  await expect(addBarInput).toBeVisible();
+  await addBarInput.evaluate((element, markdown) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', markdown);
+    element.dispatchEvent(
+      new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }),
+    );
+  }, `- [ ] ${testPrefix}-Write report #work @tomorrow\n  - [ ] ${testPrefix}-Outline`);
+  const confirmPasteBtn = page.locator('dialog-confirm button[e2e="confirmBtn"]');
+  await expect(confirmPasteBtn).toBeVisible();
+
   // Hold the date parser's lazy chunk (see file comment) so the dispatched
   // action carries the raw title. CI serves the built app, whose lazy chunks
   // are `chunk-<hash>.js`, so the parser cannot be matched by name there:
   // hold every same-origin lazy-chunk request instead. Registered only once
-  // the provider dialog is closed — at that point the parser's chunk is the
-  // only dynamic import left to happen, because none of the setup titles
-  // carried date syntax to load it earlier.
+  // the paste dialog is open — at that point the parser's chunk is the only
+  // dynamic import left to happen, because none of the setup titles carried
+  // date syntax to load it earlier.
   let releaseChrono!: () => void;
   const chronoReleased = new Promise<void>((resolve): void => {
     releaseChrono = resolve;
@@ -192,13 +213,11 @@ test('auto-created issue excludes short syntax tokens (#10024)', async ({
     },
   );
 
-  // The reported case: raw tokens in the title of an auto-created task
-  const tomorrowBeforeAdd = await getTomorrowDbDate(page);
-  await workViewPage.addTask('Write report #work @tomorrow', false, null);
+  await confirmPasteBtn.click();
   // The hold must actually gate the parse — in dev AND built assets. If it
-  // did not, the add-task bar's parse would have dispatched the cleaned
-  // title and the rest would pass trivially, so prove the raw title is on
-  // the task before letting parsing proceed.
+  // did not, the short-syntax effect could clean the title before the
+  // auto-create effect reads it and the rest would pass trivially, so prove
+  // the raw title is on the task before letting parsing proceed.
   const rawTitle = `${testPrefix}-Write report #work @tomorrow`;
   await expect
     .poll(async () => (await getTaskSnapshot(page, cleanTitle))?.title ?? null)
