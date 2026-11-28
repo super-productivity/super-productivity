@@ -17,7 +17,7 @@ import { Task, TaskWithDueTime, TaskWithSubTasks } from '../../tasks/task.model'
 import { devError } from '../../../util/dev-error';
 import { selectProjectFeatureState } from '../../project/store/project.selectors';
 import { selectNoteTodayOrder } from '../../note/store/note.reducer';
-import { TODAY_TAG } from '../../tag/tag.const';
+import { IN_PROGRESS_TAG, TODAY_TAG } from '../../tag/tag.const';
 import { Log } from '../../../core/log';
 import { isTodayWithOffset } from '../../../util/is-today.util';
 import { Tag } from '../../tag/tag.model';
@@ -263,7 +263,16 @@ export const selectTrackableTasksForActiveContext = createSelector(
 export const selectStartableTasksForActiveContext = createSelector(
   selectTrackableTasksForActiveContext,
   (trackableTasks): Task[] => {
-    return trackableTasks.filter((task) => !task.isDone);
+    const startableTasks = trackableTasks.filter((task) => !task.isDone);
+    const inProgressTasks = startableTasks.filter((task) =>
+      task.tagIds.includes(IN_PROGRESS_TAG.id),
+    );
+    return inProgressTasks.length
+      ? [
+          ...inProgressTasks,
+          ...startableTasks.filter((task) => !task.tagIds.includes(IN_PROGRESS_TAG.id)),
+        ]
+      : startableTasks;
   },
 );
 
