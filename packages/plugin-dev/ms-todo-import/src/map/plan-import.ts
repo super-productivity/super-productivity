@@ -1,5 +1,9 @@
 import { BatchOperation } from '@super-productivity/plugin-api';
-import { MsTodoImportModel, MsTodoTask } from '../parse/normalized-model';
+import {
+  getTasksToImport,
+  MsTodoImportModel,
+  MsTodoTask,
+} from '../parse/normalized-model';
 
 /**
  * Batch chunk size. Must stay ≤ the host's MAX_BATCH_OPERATIONS_SIZE (50):
@@ -44,15 +48,18 @@ export interface ImportPlan {
 export interface PlanImportOptions {
   /** tag starred (importance `high`) tasks with SP's `important` tag */
   isTagImportant: boolean;
+  /** include completed Microsoft To Do tasks; omitted by default */
+  includeCompletedTasks?: boolean;
   /** omit to import everything */
   selectedProjectExtIds?: ReadonlySet<string>;
 }
 
 export const groupTasksByProject = (
   model: MsTodoImportModel,
+  includeCompletedTasks = false,
 ): Map<string, MsTodoTask[]> => {
   const byProject = new Map<string, MsTodoTask[]>();
-  for (const t of model.tasks) {
+  for (const t of getTasksToImport(model.tasks, includeCompletedTasks)) {
     const list = byProject.get(t.projectExtId) || [];
     list.push(t);
     byProject.set(t.projectExtId, list);
@@ -125,7 +132,10 @@ export const planImport = (
   const titles = buildProjectTitles(model);
   const tagTitles = new Set<string>();
   const projects: ProjectImportPlan[] = [];
-  const tasksByProject = groupTasksByProject(model);
+  const tasksByProject = groupTasksByProject(
+    model,
+    options.includeCompletedTasks ?? false,
+  );
 
   for (const project of model.projects) {
     if (

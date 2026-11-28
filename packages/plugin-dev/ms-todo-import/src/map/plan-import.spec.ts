@@ -55,6 +55,31 @@ describe('planImport', () => {
     ]);
   });
 
+  it('omits completed tasks and their steps unless explicitly included', () => {
+    const tasks = [
+      task({ extId: 'done', isDone: true }),
+      task({ extId: 'done-step', parentExtId: 'done', isDone: true }),
+      task({ extId: 'open' }),
+      task({ extId: 'open-step', parentExtId: 'open', isDone: true }),
+    ];
+    const defaultPlan = planImport(model({ tasks }), NO_TAG);
+    expect(
+      (defaultPlan.projects[0].batchChunks.flat() as BatchTaskCreate[]).map(
+        (operation) => operation.tempId,
+      ),
+    ).toEqual(['temp-open', 'temp-open-step']);
+
+    const includedPlan = planImport(model({ tasks }), {
+      ...NO_TAG,
+      includeCompletedTasks: true,
+    });
+    expect(
+      (includedPlan.projects[0].batchChunks.flat() as BatchTaskCreate[]).map(
+        (operation) => operation.tempId,
+      ),
+    ).toEqual(['temp-done', 'temp-done-step', 'temp-open', 'temp-open-step']);
+  });
+
   it('chunks operations at the batch limit, keeping parents before children', () => {
     const tasks: MsTodoTask[] = [];
     for (let i = 0; i < 60; i++) {
