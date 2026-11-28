@@ -1,5 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { ClipboardImageService, pathToFileUrl } from './clipboard-image.service';
+import {
+  ClipboardImageService,
+  isCustomClipboardImageUrl,
+  pathToFileUrl,
+} from './clipboard-image.service';
 import { SnackService } from '../snack/snack.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 
@@ -28,6 +32,27 @@ describe('pathToFileUrl', () => {
     expect(pathToFileUrl('/home/john doe/img.png')).toBe(
       'file:///home/john%20doe/img.png',
     );
+  });
+});
+
+describe('isCustomClipboardImageUrl', () => {
+  const folder = 'C:\\Users\\Acer\\AppData\\Roaming\\superProductivity\\Tes Gambar';
+  const prefix = 'file:///C:/Users/Acer/AppData/Roaming/superProductivity/Tes%20Gambar';
+
+  it('recognizes a saved image in the configured folder', () => {
+    expect(isCustomClipboardImageUrl(`${prefix}/clip-123-abc.png`, folder)).toBeTrue();
+  });
+
+  it('rejects other folders, nested paths and remote URLs', () => {
+    for (const url of [
+      `${prefix}-other/clip-123-abc.png`,
+      `${prefix}/nested/clip-123-abc.png`,
+      `${prefix}/%2e%2e/clip-123-abc.png`,
+      'file://host/share/clip-123-abc.png',
+      `${prefix}/other.png`,
+    ]) {
+      expect(isCustomClipboardImageUrl(url, folder)).toBeFalse();
+    }
   });
 });
 

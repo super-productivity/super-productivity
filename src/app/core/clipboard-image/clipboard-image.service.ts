@@ -19,6 +19,15 @@ export const pathToFileUrl = (filePath: string): string => {
     : `file:///${encodeURI(normalized)}`;
 };
 
+/** Whether a file URL names a direct child of the configured image folder. */
+export const isCustomClipboardImageUrl = (url: string, imagePath: string): boolean => {
+  if (!imagePath || !url.startsWith('file:///')) return false;
+  const base = pathToFileUrl(imagePath).replace(/\/+$/, '') + '/';
+  if (!url.startsWith(base)) return false;
+  const name = url.slice(base.length);
+  return /^clip-[a-z0-9-]+\.(?:png|jpe?g|gif|webp|svg|bmp)$/i.test(name);
+};
+
 const DB_NAME = 'sp-clipboard-images';
 const DB_VERSION = 1;
 const STORE_NAME = 'images';
@@ -383,11 +392,22 @@ export class ClipboardImageService {
    * Resolves any clipboard image URL to a blob: URL safe for use in Angular [src] bindings.
    * Handles both indexeddb:// (web) and file:/// clipboard-image paths (Electron).
    */
+  isResolvableClipboardImageUrl(url: string): boolean {
+    const customPath = this._globalConfigService.clipboardImages()?.imagePath;
+    return (
+      this.isIndexedDbUrl(url) ||
+      (IS_ELECTRON &&
+        url.startsWith('file:///') &&
+        (url.includes('/clipboard-images/') ||
+          (!!customPath && isCustomClipboardImageUrl(url, customPath))))
+    );
+  }
+
   async resolveClipboardImageUrl(url: string): Promise<string | null> {
     if (this.isIndexedDbUrl(url)) {
       return this.resolveIndexedDbUrl(url);
     }
-    if (IS_ELECTRON && url.startsWith('file:///') && url.includes('/clipboard-images/')) {
+    if (IS_ELECTRON && this.isResolvableClipboardImageUrl(url)) {
       const filename = url.split('/').pop() ?? '';
       const id = filename.replace(/\.[^.]+$/, '');
       if (!id) return null;

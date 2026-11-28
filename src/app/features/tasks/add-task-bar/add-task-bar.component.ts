@@ -98,6 +98,8 @@ import { DateService } from '../../../core/date/date.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 import { toPersistableRemindOption } from '../../planner/dialog-schedule-task/task-reminder-options.const';
+import { AddTaskBarImagesService } from './add-task-bar-images.service';
+import { EnlargeImgDirective } from '../../../ui/enlarge-img/enlarge-img.directive';
 
 export interface TaskAddEvent {
   taskId: string;
@@ -140,10 +142,12 @@ export interface TaskAddEvent {
     AddTaskBarActionsComponent,
     TranslateModule,
     SelectOptionRowComponent,
+    EnlargeImgDirective,
   ],
   providers: [AddTaskBarStateService, AddTaskBarParserService],
 })
 export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
+  readonly draftImages = inject(AddTaskBarImagesService);
   private readonly _taskService = inject(TaskService);
   private readonly _taskSchedulingService = inject(TaskSchedulingService);
   private readonly _workContextService = inject(WorkContextService);
@@ -549,7 +553,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // Public methods
   async addTask(): Promise<void> {
-    if (this._processingAutocompleteSelection || this._isAddingTask) {
+    if (
+      this._processingAutocompleteSelection ||
+      this._isAddingTask ||
+      this.draftImages.isLoading()
+    ) {
       return;
     }
 
@@ -570,6 +578,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const title = currentState.cleanText || rawInput;
     if (!title) return;
 
+    const draftAttachments = this.draftImages.attachments();
     this._isAddingTask = true;
     try {
       const state = currentState;
@@ -589,10 +598,12 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         ]),
         // needs to be 0
         timeEstimate: state.estimate || 0,
-        attachments:
-          state.attachments.length > 0
+        attachments: [
+          ...(state.attachments.length > 0
             ? state.attachments
-            : additionalFields?.attachments || [],
+            : additionalFields?.attachments || []),
+          ...draftAttachments,
+        ],
       };
 
       const note = this.stateService.noteTxt().trim();
@@ -753,6 +764,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         }
       }
 
+      for (const attachment of draftAttachments) {
+        this.draftImages.remove(attachment.id!);
+      }
       this.afterTaskAdd.emit({
         taskId,
         isAddToBottom: this.isAddToBottom(),
@@ -896,6 +910,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   onPaste(event: ClipboardEvent): void {
+    if (!this.isSearchMode() && this.draftImages.paste(event)) return;
     const pastedText = event.clipboardData?.getData('text/plain');
     if (!pastedText) return;
 
@@ -920,7 +935,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   onDocumentClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     const component = target.closest('add-task-bar');
-    const overlayContainer = target.closest('.cdk-overlay-container');
+    const overlayContainer = target.closest(
+      '.cdk-overlay-container, .enlarged-image-wrapper',
+    );
 
     // If click is outside the component and not on autocomplete or menu options, close it
     if (!component && !overlayContainer && !this.isScheduleDialogOpen()) {
