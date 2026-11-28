@@ -5,14 +5,19 @@ import {
   SuperSyncUploadOpsResponseSchema,
   type SuperSyncOperation,
 } from '@sp/shared-schema/supersync-http-contract';
+import { clearSessionKeyCache, decryptBatch, encryptBatch } from '@sp/sync-core';
 import type { CDPSession, Page, Request } from '@playwright/test';
+import { uuidv7 } from 'uuidv7';
 import { expect, test } from '../../fixtures/supersync.fixture';
 import {
   SUPERSYNC_BASE_URL,
   closeClient,
   createSimulatedClient,
   createTestUser,
+  deleteTestUser,
+  expectExactTaskTime,
   getSuperSyncConfig,
+  getTaskTimeSpentFromState,
   isFullStateOpType,
   startTimeTracking,
   stopTimeTracking,
@@ -37,6 +42,10 @@ const IS_REQUESTED =
   (process.env.E2E_GREP ?? '').includes('@long-history');
 const TAIL_OPS = Number(process.env.E2E_LONG_HISTORY_OPS ?? 69_000);
 const DOWNLOAD_CAP = 50_000; // MAX_DOWNLOAD_OPS_IN_MEMORY in the app
+// Each app session encrypts with a fresh salt, and a fresh client derives one
+// Argon2id key per salt (0.5-2 s each). Estimate, not measured: two devices
+// restarting once a day over the five weeks of the reported tail.
+const SEED_SESSIONS = 70;
 // Several tracked tasks and devices taking turns, so the tail spans more
 // entities and clocks carry several entries (a production tail had two
 // devices; one task and one author made conflict checks unrealistically cheap).
@@ -123,28 +132,54 @@ const uploadBatch = async (
   throw new Error('Seed upload stayed rate-limited for 2 minutes');
 };
 
+// The app re-salts once per process session; clearing the key cache does the
+// same here, so every session's copies need their own key on download.
+const encryptPerSession = async (
+  templates: SuperSyncOperation[],
+  password: string,
+): Promise<string[][]> => {
+  const ciphertexts = templates.map(({ payload }) => {
+    if (typeof payload !== 'string') throw new Error('Encrypted payload is not a string');
+    return payload;
+  });
+  const plaintexts = await decryptBatch(ciphertexts, password);
+  const sessions: string[][] = [];
+  for (let session = 0; session < SEED_SESSIONS; session++) {
+    clearSessionKeyCache();
+    sessions.push(await encryptBatch(plaintexts, password));
+  }
+  return sessions;
+};
+
 // Each copy is a genuine encrypted op the real app produced (time tracking),
-// with a fresh ID and an advancing clock, so the server stores, pages and
-// serves it exactly like production history. Devices take turns per batch, as
-// a user's laptop and phone do; each op's clock covers everything before it.
+// with a fresh UUIDv7 and an advancing clock, so the server stores, pages and
+// serves it like production history. Devices take turns per batch, as a
+// user's laptop and phone do; each op's clock covers everything before it.
+// `total` is whole template cycles, so each task's time grows predictably.
 const seedTail = async (
   token: string,
   seed: {
     clientIds: string[];
     templates: SuperSyncOperation[];
+    sessionPayloads: string[][];
     baseClock: Record<string, number>;
+    total: number;
   },
 ): Promise<void> => {
+  const { templates, sessionPayloads, total } = seed;
   const clock = { ...seed.baseClock };
-  for (let offset = 0; offset < TAIL_OPS; offset += SUPER_SYNC_MAX_OPS_PER_UPLOAD) {
+  for (let offset = 0; offset < total; offset += SUPER_SYNC_MAX_OPS_PER_UPLOAD) {
     const clientId =
       seed.clientIds[(offset / SUPER_SYNC_MAX_OPS_PER_UPLOAD) % seed.clientIds.length];
-    const size = Math.min(SUPER_SYNC_MAX_OPS_PER_UPLOAD, TAIL_OPS - offset);
+    const size = Math.min(SUPER_SYNC_MAX_OPS_PER_UPLOAD, total - offset);
     const ops = Array.from({ length: size }, (_, index): SuperSyncOperation => {
+      const position = offset + index;
+      const session = Math.floor((position * sessionPayloads.length) / total);
       clock[clientId] = (clock[clientId] ?? 0) + 1;
       return {
-        ...seed.templates[(offset + index) % seed.templates.length],
-        id: crypto.randomUUID(),
+        ...templates[position % templates.length],
+        id: uuidv7(),
+        payload: sessionPayloads[session][position % templates.length],
         clientId,
         vectorClock: { ...clock },
         timestamp: Date.now(),
@@ -246,25 +281,31 @@ const summarizeViolations = (violations: string[]): Record<string, unknown> => {
 };
 
 // setupSuperSync enters the joiner's password itself; this only notes when the
-// dialog closes, the moment a real user's sync wait starts. null = never shown.
-const watchPasswordSubmit = (page: Page): Promise<number | null> => {
+// dialog opens and closes, around a real user's sync wait. null = never shown.
+const watchPasswordDialog = (
+  page: Page,
+): Promise<{ shownAt: number; closedAt: number } | null> => {
   const dialog = page
     .locator('dialog-enter-encryption-password, dialog-handle-decrypt-error')
     .first();
   return dialog
     .waitFor({ state: 'visible', timeout: 180000 })
-    .then(() => dialog.waitFor({ state: 'hidden', timeout: 180000 }))
-    .then(() => Date.now())
+    .then(async () => {
+      const shownAt = Date.now();
+      await dialog.waitFor({ state: 'hidden', timeout: 180000 });
+      return { shownAt, closedAt: Date.now() };
+    })
     .catch(() => null);
 };
 
 // Real app activity: encryption setup leaves a SYNC_IMPORT on the server, and
 // time tracking produces the encrypted UPD ops that dominate real tails (#11397).
+// Returns each task's tracked time, which its synced deltas add up to.
 const createAccountWithImport = async (
   client: SimulatedE2EClient,
   syncConfig: ReturnType<typeof getSuperSyncConfig>,
   taskNames: string[],
-): Promise<void> => {
+): Promise<number[]> => {
   await client.workView.waitForTaskList();
   for (const taskName of taskNames) await client.workView.addTask(taskName);
   await client.sync.setupSuperSync(syncConfig);
@@ -274,6 +315,11 @@ const createAccountWithImport = async (
     await stopTimeTracking(client, taskName);
   }
   await client.sync.syncAndWait();
+  const tracked: number[] = [];
+  for (const taskName of taskNames) {
+    tracked.push((await getTaskTimeSpentFromState(client, taskName)) ?? 0);
+  }
+  return tracked;
 };
 
 // Relative to t0, so each op-log stage lines up with the phase markers.
@@ -333,11 +379,17 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
     testRunId,
   }) => {
     test.setTimeout(48 * 60 * 1000); // the CI SuperSync job stops at 50 min
+    expect(
+      Number.isSafeInteger(TAIL_OPS) && TAIL_OPS > 0,
+      'E2E_LONG_HISTORY_OPS must be a positive integer',
+    ).toBe(true);
     let seeder: SimulatedE2EClient | null = null;
     let fresh: SimulatedE2EClient | null = null;
+    let userId: number | undefined;
 
     try {
       const user = await createTestUser(testRunId);
+      userId = user.userId;
       const password = `long-history-${testRunId}`;
       const syncConfig = { ...getSuperSyncConfig(user), password };
       // Zero-padded so no name is a prefix of another when located by text.
@@ -348,11 +400,14 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
       const taskName = taskNames[0];
 
       seeder = await createSimulatedClient(browser, baseURL!, 'seeder', testRunId);
-      await createAccountWithImport(seeder, syncConfig, taskNames);
+      const tracked = await createAccountWithImport(seeder, syncConfig, taskNames);
+      expect(tracked.every((ms) => ms > 0)).toBe(true);
       // Closed before seeding so its own syncs don't compete for the runner.
       await closeClient(seeder);
       seeder = null;
       const { history, importSeq, templates } = await readSeedSource(user.token);
+      const cycles = Math.max(1, Math.round(TAIL_OPS / templates.length));
+      const seededOps = cycles * templates.length;
       const seedStart = Date.now();
       await seedTail(user.token, {
         clientIds: Array.from(
@@ -360,10 +415,13 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
           (_, index) => `long_history_seed${index}_${testRunId}`,
         ),
         templates,
+        sessionPayloads: await encryptPerSession(templates, password),
         baseClock: mergeClock(history),
+        total: seededOps,
       });
       const seedMs = Date.now() - seedStart;
       const latestSeq = await getLatestSeq(user.token);
+      expect(latestSeq - history.latestSeq).toBe(seededOps);
 
       fresh = await createSimulatedClient(browser, baseURL!, 'fresh', testRunId);
       // The init script applies from the next load on, so reload once.
@@ -383,10 +441,10 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
       });
       const cdp = await startProfiling(fresh.page, violations);
 
-      const passwordSubmitted = watchPasswordSubmit(fresh.page);
+      const passwordWatch = watchPasswordDialog(fresh.page);
       const setupStart = Date.now();
       await fresh.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
-      const passwordAt = await passwordSubmitted;
+      const passwordDialog = await passwordWatch;
       const freshPage = fresh.page;
       await expect
         .poll(() => getCursor(freshPage), { timeout: 35 * 60 * 1000, intervals: [2000] })
@@ -400,10 +458,14 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
       const pages = (await Promise.all(pagePromises)).filter(
         (record): record is PageRecord => record !== null,
       );
-      // The sync starts over from seq 0 once the password is in; that request
-      // can start before the dialog's close is observed, so it marks t0.
-      const firstPage = pages.filter((record) => record.sinceSeq === 0).at(-1);
-      const t0 = firstPage?.startedAt ?? passwordAt ?? setupStart;
+      // Requests from seq 0 before the dialog opened ended in it. The first one
+      // after it opened is the real download (retries stay inside the window);
+      // it can start before the dialog's close is observed, so it marks t0.
+      const firstPage = pages.find(
+        (record) =>
+          record.sinceSeq === 0 && record.startedAt >= (passwordDialog?.shownAt ?? 0),
+      );
+      const t0 = firstPage?.startedAt ?? passwordDialog?.closedAt ?? setupStart;
       const wallMs = syncedAt - t0;
       const afterPassword = pages.filter((record) => record.startedAt >= t0);
       const download = buildPageStats(afterPassword);
@@ -412,15 +474,24 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
       ).length;
 
       const report = {
-        tailOps: TAIL_OPS,
+        tailOps: seededOps,
+        seedSessions: SEED_SESSIONS,
         importSeq,
         latestSeq,
         seedTasks: SEED_TASKS,
         seedClients: SEED_CLIENTS,
         templateTypes: templates.map((op) => `${op.entityType}:${op.actionType}`),
         seedMs,
-        passwordDialogSeen: passwordAt !== null,
+        // Measurement windows differ; wall, download and phases share t0.
+        windows: {
+          wall: 'first post-password seq-0 request -> cursor caught up',
+          cpuAndViolations: 'setup start -> cursor caught up',
+          idbLarge: 't0 - 1s -> cursor caught up',
+          idbSmall: 'reload -> cursor caught up',
+        },
+        passwordDialogSeen: passwordDialog !== null,
         setupToPasswordMs: t0 - setupStart,
+        t0ToPasswordClosedMs: passwordDialog ? passwordDialog.closedAt - t0 : null,
         beforePassword: buildPageStats(pages.filter((record) => record.startedAt < t0)),
         wallMs,
         passes,
@@ -440,15 +511,22 @@ test.describe('@supersync @encryption @long-history fresh client on a long-histo
         contentType: 'application/json',
       });
 
-      // Today's behavior: the server starts at the newest import and streams
-      // every op after it; no snapshot replaces the tail. A fix that serves a
+      // Today's behavior: the server starts at the account's only full-state op
+      // (seq 1) and streams every op after it; no snapshot replaces the tail.
+      // Skipping ahead to a later import is not exercised. A fix that serves a
       // snapshot or a compacted tail should flip these assertions.
       expect(firstPage?.firstOpType).toBe('SYNC_IMPORT');
       expect(download.ops).toBeGreaterThanOrEqual(latestSeq - importSeq + 1);
-      if (TAIL_OPS > DOWNLOAD_CAP) expect(passes).toBeGreaterThanOrEqual(2);
+      if (seededOps > DOWNLOAD_CAP) expect(passes).toBeGreaterThanOrEqual(2);
+      // Applied, not just downloaded: syncTimeSpent adds its delta, and each
+      // whole template cycle carries every task's tracked delta once more.
+      for (const [index, name] of taskNames.entries()) {
+        await expectExactTaskTime(fresh, name, tracked[index] * (cycles + 1));
+      }
     } finally {
       if (seeder) await closeClient(seeder);
       if (fresh) await closeClient(fresh);
+      if (userId !== undefined) await deleteTestUser(userId);
     }
   });
 });
