@@ -26,7 +26,7 @@
         [attr.aria-label]="'Close right panel or drag to resize'"
         (pointerdown)="onCloseButtonPointerDown($event)"
         (pointerup)="onCloseButtonPointerUp($event)"
-        (keydown.enter)="close()"
+        (keydown.enter)="$event.preventDefault(); close()"
       >
         <mat-icon>chevron_right</mat-icon>
       </button>
