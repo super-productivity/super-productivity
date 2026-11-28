@@ -1,8 +1,12 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, flushMicrotasks } from '@angular/core/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Router, Routes } from '@angular/router';
 import { ReplaySubject, Subject } from 'rxjs';
 import { take } from 'rxjs/operators';
-import { AppUriQuickActionsService } from './app-uri-quick-actions.service';
+import {
+  AppUriQuickActionsService,
+  OPEN_TASK_FROM_APP_URI,
+} from './app-uri-quick-actions.service';
 import { PENDING_CAPACITOR_QUICK_ACTION } from '../../core/app-uri-actions/pending-capacitor-quick-action';
 import { AppUriQuickAction } from '../../core/app-uri-actions/parse-app-uri-quick-action';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
@@ -11,19 +15,29 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { APP_ROUTES } from '../../app.routes';
 import { PROJECT_CHILD_ROUTES, TAG_CHILD_ROUTES } from '../../routes/context.routes';
+import { NavigateToTaskService } from '../navigate-to-task/navigate-to-task.service';
+import { selectTaskEntities } from '../../features/tasks/store/task.selectors';
+import { setSelectedTask } from '../../features/tasks/store/task.actions';
+import { Task, TaskDetailTargetPanel } from '../../features/tasks/task.model';
 
 describe('AppUriQuickActionsService', () => {
   let service: AppUriQuickActionsService;
   let router: jasmine.SpyObj<Router>;
   let layoutService: jasmine.SpyObj<LayoutService>;
   let pendingAction$: Subject<AppUriQuickAction>;
+  let openTask$: Subject<string>;
   let isAllDataLoadedInitially$: ReplaySubject<boolean>;
+  let navigateToTaskService: jasmine.SpyObj<NavigateToTaskService>;
+  let store: MockStore;
 
   const setUp = (): void => {
+    navigateToTaskService = jasmine.createSpyObj('NavigateToTaskService', ['navigate']);
+    navigateToTaskService.navigate.and.returnValue(Promise.resolve(true));
     router = jasmine.createSpyObj('Router', ['navigateByUrl']);
     router.navigateByUrl.and.returnValue(Promise.resolve(true));
     layoutService = jasmine.createSpyObj('LayoutService', ['showAddTaskBar']);
     pendingAction$ = new Subject<AppUriQuickAction>();
+    openTask$ = new Subject<string>();
     // A ReplaySubject, not `of(true)`: the cold-launch tests below need to
     // control *when* data init completes relative to the incoming action.
     isAllDataLoadedInitially$ = new ReplaySubject<boolean>(1);
@@ -43,9 +57,21 @@ describe('AppUriQuickActionsService', () => {
           } as unknown as DataInitStateService,
         },
         { provide: PENDING_CAPACITOR_QUICK_ACTION, useValue: pendingAction$ },
+        { provide: OPEN_TASK_FROM_APP_URI, useValue: openTask$ },
+        { provide: NavigateToTaskService, useValue: navigateToTaskService },
+        provideMockStore({
+          selectors: [
+            {
+              selector: selectTaskEntities,
+              value: { live1: { id: 'live1' } as Task },
+            },
+          ],
+        }),
       ],
     });
 
+    store = TestBed.inject(MockStore);
+    spyOn(store, 'dispatch');
     service = TestBed.inject(AppUriQuickActionsService);
   };
 
@@ -93,6 +119,77 @@ describe('AppUriQuickActionsService', () => {
       [`/project/${INBOX_PROJECT.id}/tasks`],
       [`/tag/${TODAY_TAG.id}/tasks`],
     ]);
+  });
+
+  describe('open-task', () => {
+    const openPanelAction = setSelectedTask({
+      id: 'live1',
+      taskDetailTargetPanel: TaskDetailTargetPanel.Default,
+      isSkipToggle: true,
+    });
+
+    it('should navigate to a live task and then open its detail panel', fakeAsync(() => {
+      openTask$.next('live1');
+      flushMicrotasks();
+
+      expect(navigateToTaskService.navigate).toHaveBeenCalledOnceWith('live1', false);
+      expect(store.dispatch).toHaveBeenCalledOnceWith(openPanelAction);
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
+    }));
+
+    it('should open the panel only after navigation finished', fakeAsync(() => {
+      // Navigation clears the selection, so dispatching first would be undone.
+      let resolveNav!: (v: boolean) => void;
+      navigateToTaskService.navigate.and.returnValue(
+        new Promise<boolean>((r) => (resolveNav = r)),
+      );
+      openTask$.next('live1');
+      flushMicrotasks();
+      expect(store.dispatch).not.toHaveBeenCalled();
+
+      resolveNav(true);
+      flushMicrotasks();
+      expect(store.dispatch).toHaveBeenCalledOnceWith(openPanelAction);
+    }));
+
+    it('should not open the panel for an unknown id', fakeAsync(() => {
+      // NavigateToTaskService shows the "could not find the task" snack and
+      // reports false.
+      navigateToTaskService.navigate.and.returnValue(Promise.resolve(false));
+      openTask$.next('live1');
+      flushMicrotasks();
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    }));
+
+    it('should not open the panel when the route change was cancelled', fakeAsync(() => {
+      // NavigateToTaskService reports false when e.g. FocusOverlayOpenGuard
+      // blocks the route; the panel must not open on the page the user is on.
+      navigateToTaskService.navigate.and.resolveTo(false);
+      openTask$.next('live1');
+      flushMicrotasks();
+
+      expect(navigateToTaskService.navigate).toHaveBeenCalledOnceWith('live1', false);
+      expect(store.dispatch).not.toHaveBeenCalled();
+    }));
+
+    it('should treat a task missing from the store as archived', fakeAsync(() => {
+      openTask$.next('archived1');
+      flushMicrotasks();
+
+      expect(navigateToTaskService.navigate).toHaveBeenCalledOnceWith('archived1', true);
+      expect(store.dispatch).not.toHaveBeenCalled();
+    }));
+
+    it('should not take an Object.prototype key for a live task', fakeAsync(() => {
+      openTask$.next('constructor');
+      flushMicrotasks();
+
+      expect(navigateToTaskService.navigate).toHaveBeenCalledOnceWith(
+        'constructor',
+        true,
+      );
+    }));
   });
 
   describe('cold launch', () => {

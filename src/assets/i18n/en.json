@@ -1936,6 +1936,7 @@
         "CHECKLIST_PROGRESS": "Checklist: {{done}} of {{total}} done",
         "CLEAR_ESTIMATE": "Clear estimate",
         "CONVERT_TO_PARENT_TASK": "Convert to parent task",
+        "COPY_TASK_LINK": "Copy task link",
         "CUSTOM_ESTIMATE": "Custom…",
         "DELETE": "Delete task",
         "DELETE_REPEAT_INSTANCE": "Delete recurring task instance",

@@ -322,6 +322,18 @@
     </button>
   }
 
+  @if (isElectron) {
+    <button
+      (click)="copyTaskLink()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>link</mat-icon>
+        {{ T.F.TASK.CMP.COPY_TASK_LINK | translate }}
+      </span>
+    </button>
+  }
+
   <mat-divider></mat-divider>
 
   <!--TODO maybe handle dynamically -->

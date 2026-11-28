@@ -95,6 +95,8 @@ import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
 import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
 import { TaskDuplicateService } from '../../task-duplicate.service';
+import { IS_ELECTRON } from '../../../../app.constants';
+import { buildOpenTaskUrl } from '../../../../../../electron/shared-with-frontend/open-task-url';
 import { TaskMoveToProjectService } from '../../task-move-to-project.service';
 import { TaskMultiSelectService } from '../../task-multi-select.service';
 import {
@@ -163,6 +165,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
+  /** Only desktop registers the `superproductivity://` scheme a link opens with. */
+  protected readonly isElectron = IS_ELECTRON;
   // Weekday names instead of "Tomorrow"/"Next week" keep every label on one
   // line in the narrow menu row; the tooltips keep the full wording. Matches
   // the dates quickAccessBtnClick schedules: tomorrow and the week's first day.
@@ -632,6 +636,19 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       return;
     }
     this._taskDuplicateService.duplicate(taskWithSubtasks);
+  }
+
+  /**
+   * Copies a `superproductivity://open-task?id=` link (wiki 3.01 §4) so the
+   * task can be referenced from notes or other tools.
+   */
+  async copyTaskLink(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(buildOpenTaskUrl(this.task.id));
+      this._snackService.open(T.GLOBAL_SNACK.COPY_TO_CLIPPBOARD);
+    } catch {
+      this._snackService.open({ type: 'ERROR', msg: T.PS.FAILED_TO_COPY_TO_CLIPBOARD });
+    }
   }
 
   moveToTop(): void {

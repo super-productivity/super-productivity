@@ -1,5 +1,6 @@
 import { ipcEvent$, ipcEventReplay$ } from '../util/ipc-event';
 import { IPC } from '../../../electron/shared-with-frontend/ipc-events.const';
+import { normalizeOpenTaskId } from '../../../electron/shared-with-frontend/open-task-url';
 import { map, filter } from 'rxjs/operators';
 import { EMPTY, Observable } from 'rxjs';
 import { IS_ELECTRON } from '../app.constants';
@@ -106,6 +107,20 @@ export const ipcCompleteTaskFromAppUri$: Observable<CompleteTaskFromAppUriPayloa
         filter((data): data is CompleteTaskFromAppUriPayload => data !== null),
       )
     : EMPTY;
+
+/** The task id of a `superproductivity://open-task?id=` link (desktop only). */
+export const parseOpenTaskFromAppUriPayload = (data: unknown): string | null =>
+  data && typeof data === 'object'
+    ? normalizeOpenTaskId((data as { taskId?: unknown }).taskId)
+    : null;
+
+// Replayed for the same cold-launch reason as `ipcAddTaskFromAppUri$`.
+export const ipcOpenTaskFromAppUri$: Observable<string> = IS_ELECTRON
+  ? ipcEventReplay$(IPC.OPEN_TASK_FROM_APP_URI).pipe(
+      map(([data]) => parseOpenTaskFromAppUriPayload(data)),
+      filter((taskId): taskId is string => taskId !== null),
+    )
+  : EMPTY;
 
 // Replayed for the same cold-launch reason as `ipcAddTaskFromAppUri$`.
 export const ipcAppUriQuickAction$: Observable<AppUriQuickAction> = IS_ELECTRON

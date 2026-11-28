@@ -99,7 +99,7 @@ describe('SearchPageComponent', () => {
     navigateToTaskServiceSpy = jasmine.createSpyObj('NavigateToTaskService', [
       'navigate',
     ]);
-    navigateToTaskServiceSpy.navigate.and.returnValue(Promise.resolve());
+    navigateToTaskServiceSpy.navigate.and.returnValue(Promise.resolve(true));
 
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
@@ -536,6 +536,7 @@ describe('SearchPageComponent', () => {
       });
       navigateToTaskServiceSpy.navigate.and.callFake(async () => {
         calls.push('navigate');
+        return true;
       });
       initAndFlush();
       typeAndFlush('lost');

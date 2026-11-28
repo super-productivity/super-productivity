@@ -2,6 +2,10 @@ import { App, BrowserWindow } from 'electron';
 import { log } from 'electron-log/main';
 import * as path from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
+import {
+  OPEN_TASK_PROTOCOL_ACTION,
+  normalizeOpenTaskId,
+} from './shared-with-frontend/open-task-url';
 import { getIsAppReady } from './main-window';
 import { showOrFocus, toggleWindowVisibility } from './various-shared';
 
@@ -166,6 +170,19 @@ export const processProtocolUrl = (url: string, mainWin: BrowserWindow | null): 
         showOrFocus(mainWin);
         mainWin.webContents.send(IPC.APP_URI_QUICK_ACTION, url);
         break;
+      // The link copied by the task context menu's "Copy task link".
+      case OPEN_TASK_PROTOCOL_ACTION: {
+        const taskId = normalizeOpenTaskId(urlObj.searchParams.get('id'));
+        if (!taskId) {
+          log('Ignoring open-task without a usable id');
+          break;
+        }
+        // Don't log the id — it identifies the user's task.
+        log('Opening task from protocol URL');
+        showOrFocus(mainWin);
+        mainWin.webContents.send(IPC.OPEN_TASK_FROM_APP_URI, { taskId });
+        break;
+      }
       default:
         log('Unknown protocol action:', action);
     }

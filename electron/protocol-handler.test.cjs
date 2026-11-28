@@ -103,6 +103,43 @@ test('today and inbox show the window and forward the URL to the renderer', () =
   ]);
 });
 
+test('open-task shows the window and forwards the trimmed, decoded id', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl('superproductivity://open-task?id=AbC_123-x', win);
+  processProtocolUrl('superproductivity://Open-Task?id=%20a%2Fb%20', win);
+
+  assert.equal(showOrFocusCalls.length, 2);
+  assert.deepEqual(win.sent, [
+    { channel: 'OPEN_TASK_FROM_APP_URI', payload: { taskId: 'AbC_123-x' } },
+    { channel: 'OPEN_TASK_FROM_APP_URI', payload: { taskId: 'a/b' } },
+  ]);
+});
+
+test('open-task without a usable id is a no-op', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl('superproductivity://open-task', win);
+  processProtocolUrl('superproductivity://open-task?id=', win);
+  processProtocolUrl('superproductivity://open-task?id=%20%20', win);
+  processProtocolUrl(`superproductivity://open-task?id=${'x'.repeat(201)}`, win);
+
+  assert.equal(showOrFocusCalls.length, 0);
+  assert.deepEqual(win.sent, []);
+});
+
+test('open-task never logs the task id', () => {
+  const { processProtocolUrl } = loadModule();
+  const win = makeWin();
+
+  processProtocolUrl('superproductivity://open-task?id=secretId42', win);
+
+  assert.ok(logCalls.length > 0);
+  assert.ok(!JSON.stringify(logCalls).includes('secretId42'));
+});
+
 test('toggle-visibility delegates to the shared toggle helper without sending IPC', () => {
   const { processProtocolUrl } = loadModule();
   const win = makeWin();

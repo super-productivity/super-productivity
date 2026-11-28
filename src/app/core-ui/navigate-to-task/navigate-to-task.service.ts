@@ -49,12 +49,15 @@ export class NavigateToTaskService {
    * "where is this?" — the only caller that earns the attention highlight on the
    * revealed row. Threaded through as a query param on the route-change branch
    * so the destination view can honour it too. (#5476)
+   * @returns `false` when the task could not be found or located (the error
+   * snack has already been shown) or the route change was cancelled or
+   * superseded; `true` once the jump has landed.
    */
   async navigate(
     taskId: string,
     isArchiveTask: boolean = false,
     { isFromSearch = false }: { isFromSearch?: boolean } = {},
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       const task = await this._taskArchiveOrchestrator.getByIdFromEverywhere(taskId);
       if (!task) {
@@ -97,7 +100,7 @@ export class NavigateToTaskService {
           location,
         });
         this._focusTaskElement(taskId, isFromSearch);
-        return;
+        return true;
       }
 
       // Route-change path: focus is handed off to the destination view via the
@@ -119,7 +122,9 @@ export class NavigateToTaskService {
         location,
         queryParams,
       });
-      await this._router.navigate([location], { queryParams });
+      // `false` when the route change was cancelled (e.g. FocusOverlayOpenGuard)
+      // or superseded. Awaited so a rejection still reaches the catch below.
+      return await this._router.navigate([location], { queryParams });
     } catch (err) {
       recordSearchNavDebug('navigateToTask:error', {
         taskId,
@@ -128,6 +133,7 @@ export class NavigateToTaskService {
       });
       Log.err(err);
       this._showNavErrorSnack();
+      return false;
     }
   }
 
