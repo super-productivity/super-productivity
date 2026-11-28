@@ -100,25 +100,28 @@ describe('ShortcutService', () => {
   });
 
   describe('handleKeyDown', () => {
-    it('leaves Escape to an open menu and restores task shortcuts with only a snackbar', async () => {
+    it('preserves the selection when a menu has handled Escape from a task row', async () => {
+      const row = document.createElement('task');
+      const escape = (): KeyboardEvent => {
+        const ev = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+        Object.defineProperty(ev, 'target', { value: row });
+        return ev;
+      };
+      const menuEscape = escape();
+      menuEscape.preventDefault();
+      await service.handleKeyDown(menuEscape);
+      expect(mockTaskShortcutService.handleTaskShortcuts).not.toHaveBeenCalled();
+
       const container = TestBed.inject(OverlayContainer).getContainerElement();
       container.innerHTML = `
         <div class="cdk-global-overlay-wrapper">
           <div class="cdk-overlay-pane"><mat-snack-bar-container></mat-snack-bar-container></div>
-        </div>
-        <div class="cdk-overlay-connected-position-bounding-box">
-          <div class="cdk-overlay-pane"><div role="menu" class="mat-mdc-menu-panel"></div></div>
         </div>`;
-      const ev = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape' });
-      Object.defineProperty(ev, 'target', { value: document.createElement('task') });
-      mockTaskShortcutService.handleTaskShortcuts.and.returnValue(true);
-
-      await service.handleKeyDown(ev);
-      expect(mockTaskShortcutService.handleTaskShortcuts).not.toHaveBeenCalled();
-
-      container.querySelector('.cdk-overlay-connected-position-bounding-box')!.remove();
-      await service.handleKeyDown(ev);
-      expect(mockTaskShortcutService.handleTaskShortcuts).toHaveBeenCalledOnceWith(ev);
+      const rowEscape = escape();
+      await service.handleKeyDown(rowEscape);
+      expect(mockTaskShortcutService.handleTaskShortcuts).toHaveBeenCalledOnceWith(
+        rowEscape,
+      );
     });
 
     it('should open the header filter menu on the filter shortcut', async () => {

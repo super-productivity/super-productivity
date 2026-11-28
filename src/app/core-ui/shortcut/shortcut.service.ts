@@ -199,6 +199,12 @@ export class ShortcutService {
   }
 
   async handleKeyDown(ev: KeyboardEvent): Promise<void> {
+    // Material handles Escape on the body, even while focus is still on the task
+    // row. Let that keypress close the menu without also clearing the selection.
+    if (ev.key === 'Escape' && ev.defaultPrevented) {
+      return;
+    }
+
     const cfg = this._configService.cfg();
     if (!cfg) {
       throw new Error();
@@ -383,12 +389,14 @@ export class ShortcutService {
 
   private _hasOpenCdkOverlay(): boolean {
     const containerEl = this._overlayContainer.getContainerElement();
-    // A connected menu sits inside a positioning wrapper and can receive Escape
-    // before focus moves off the task row. Snackbars also have wrapped panes.
-    return !!containerEl.querySelector(
-      `:scope > .${CDK_OVERLAY_PANE_CLASS}:not(.${MAT_TOOLTIP_PANEL_CLASS}) > *, ` +
-        `.${CDK_OVERLAY_PANE_CLASS} [role="menu"]`,
-    );
+    // NOTE: All CDK class name knowledge is encapsulated here to ease future updates.
+    return Array.from(containerEl.children).some((child) => {
+      return (
+        child.classList.contains(CDK_OVERLAY_PANE_CLASS) &&
+        child.childElementCount > 0 &&
+        !child.classList.contains(MAT_TOOLTIP_PANEL_CLASS)
+      );
+    });
   }
 
   private _isEventFromOverlay(ev: KeyboardEvent): boolean {
