@@ -9,17 +9,254 @@
     />
   </head>
   <body>
-    <div id="task-widget-container">
-      <div id="content">
-        <div id="task-title">No active task</div>
-        <div id="time-display">--:--</div>
-      </div>
-      <button
-        id="show-main"
-        title="Show main window"
+    <svg
+      class="symbols"
+      aria-hidden="true"
+    >
+      <symbol
+        id="i-pause"
+        viewBox="0 0 16 16"
       >
-        ▲
-      </button>
+        <rect
+          x="3"
+          y="2"
+          width="3.5"
+          height="12"
+          rx="1.2"
+        />
+        <rect
+          x="9.5"
+          y="2"
+          width="3.5"
+          height="12"
+          rx="1.2"
+        />
+      </symbol>
+      <symbol
+        id="i-play"
+        viewBox="0 0 16 16"
+      >
+        <path
+          d="M4 2.8c0-.9 1-1.5 1.8-1l8 5.2c.7.5.7 1.5 0 2l-8 5.2c-.8.5-1.8-.1-1.8-1z"
+        />
+      </symbol>
+      <symbol
+        id="i-done"
+        viewBox="0 0 16 16"
+      >
+        <path d="M3 8.5l3.2 3.2L13 4.8" />
+      </symbol>
+      <symbol
+        id="i-open"
+        viewBox="0 0 16 16"
+      >
+        <path d="M6 3H3.500v9.500H13V10M9 3h4v4M13 3 7.500 8.500" />
+      </symbol>
+      <symbol
+        id="i-tracking"
+        viewBox="0 0 16 16"
+      >
+        <path
+          d="M4 2h8M4 14h8M5 2v2.300c0 1.700 3 2.200 3 3.700s-3 2-3 3.700V14M11 2v2.300C11 6 8 6.500 8 8s3 2 3 3.700V14"
+        />
+      </symbol>
+      <symbol
+        id="i-paused"
+        viewBox="0 0 16 16"
+      >
+        <circle
+          cx="8"
+          cy="8"
+          r="6"
+        />
+        <path d="M6.400 5.800v4.400M9.600 5.800v4.400" />
+      </symbol>
+      <symbol
+        id="i-over"
+        viewBox="0 0 16 16"
+      >
+        <path d="M8 2.500 14.500 13.500h-13zM8 6.500v3.200M8 11.800v.01" />
+      </symbol>
+      <symbol
+        id="i-none"
+        viewBox="0 0 16 16"
+      >
+        <circle
+          cx="8"
+          cy="9.200"
+          r="5"
+        />
+        <path d="M8 9.200V6.600M6.300 1.800h3.400M8 1.800v2.400" />
+      </symbol>
+      <symbol
+        id="i-focus"
+        viewBox="0 0 16 16"
+      >
+        <circle
+          cx="8"
+          cy="8"
+          r="6"
+        />
+        <circle
+          cx="8"
+          cy="8"
+          r="2.300"
+        />
+      </symbol>
+    </svg>
+
+    <div
+      id="widget"
+      data-state="idle"
+      data-base="idle"
+      data-theme="dark"
+      data-dock="none"
+      data-near="none"
+      data-open="false"
+      data-solid="false"
+      data-resizable="false"
+      data-resizing="false"
+    >
+      <div id="shape">
+        <div class="face face-capsule">
+          <div class="top">
+            <button
+              class="disc"
+              data-action="toggle"
+            >
+              <span class="wedge"></span>
+              <span class="hub">
+                <svg class="ico-pause"><use href="#i-pause" /></svg>
+                <svg class="ico-play"><use href="#i-play" /></svg>
+              </span>
+            </button>
+            <div class="main">
+              <div
+                class="ttl"
+                data-text="title"
+              ></div>
+              <div class="prj">
+                <i></i>
+                <span data-text="projectTitle"></span>
+              </div>
+            </div>
+            <button
+              class="rt"
+              data-action="details"
+            >
+              <svg class="st"><use data-status-icon /></svg>
+              <span
+                class="time"
+                data-text="time"
+              ></span>
+            </button>
+            <button
+              class="icon-btn idle-open"
+              data-action="open"
+            >
+              <svg><use href="#i-open" /></svg>
+            </button>
+          </div>
+          <div class="more">
+            <div class="status">
+              <svg class="st"><use data-status-icon /></svg>
+              <span
+                class="words"
+                data-text="statusText"
+              ></span>
+            </div>
+            <button
+              class="icon-btn"
+              data-action="open"
+            >
+              <svg><use href="#i-open" /></svg>
+            </button>
+            <button
+              class="icon-btn"
+              data-action="done"
+            >
+              <svg><use href="#i-done" /></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="face face-bar">
+          <button
+            class="disc"
+            data-action="toggle"
+          >
+            <span class="wedge"></span>
+            <span class="hub">
+              <svg class="ico-pause"><use href="#i-pause" /></svg>
+              <svg class="ico-play"><use href="#i-play" /></svg>
+            </span>
+          </button>
+          <button
+            class="ts"
+            data-action="details"
+          >
+            <svg class="st"><use data-status-icon /></svg>
+            <b>
+              <i
+                class="sign"
+                data-text="timeSign"
+              ></i>
+              <span data-text="timeTop"></span>
+            </b>
+            <b data-text="timeBottom"></b>
+          </button>
+          <button
+            class="icon-btn bar-open"
+            data-action="open"
+          >
+            <svg><use href="#i-open" /></svg>
+          </button>
+        </div>
+        <div class="face face-panel">
+          <div class="btns">
+            <button
+              class="icon-btn"
+              data-action="done"
+            >
+              <svg><use href="#i-done" /></svg>
+            </button>
+            <button
+              class="icon-btn"
+              data-action="open"
+            >
+              <svg><use href="#i-open" /></svg>
+            </button>
+          </div>
+          <div class="txt">
+            <div
+              class="ttl"
+              data-text="title"
+            ></div>
+            <div class="prj">
+              <i></i>
+              <span data-text="projectTitle"></span>
+            </div>
+            <div class="status">
+              <svg class="st"><use data-status-icon /></svg>
+              <span
+                class="words"
+                data-text="statusText"
+              ></span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="resize"
+          data-side="left"
+          aria-hidden="true"
+        ></div>
+        <div
+          class="resize"
+          data-side="right"
+          aria-hidden="true"
+        ></div>
+      </div>
     </div>
     <script src="task-widget-renderer.js"></script>
   </body>
