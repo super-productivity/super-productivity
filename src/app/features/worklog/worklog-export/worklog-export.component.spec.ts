@@ -9,7 +9,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { TagService } from '../../tag/tag.service';
 import { TimeTrackingService } from '../../time-tracking/time-tracking.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { selectAllProjects } from '../../project/store/project.selectors';
+import { initialProjectState, projectAdapter } from '../../project/store/project.reducer';
 import { DEFAULT_PROJECT } from '../../project/project.const';
 import { Project } from '../../project/project.model';
 import { DEFAULT_TASK, WorklogTask } from '../../tasks/task.model';
@@ -39,13 +39,16 @@ describe('WorklogExportComponent', () => {
   const createComponent = async (
     projects: Project[],
     tasks: WorklogTask[],
+    groupBy = WorklogGrouping.DATE,
   ): Promise<ComponentFixture<WorklogExportComponent>> => {
     TestBed.configureTestingModule({
       imports: [WorklogExportComponent, TranslateModule.forRoot()],
       providers: [
         provideNoopAnimations(),
         provideMockStore({
-          selectors: [{ selector: selectAllProjects, value: projects }],
+          initialState: {
+            projects: projectAdapter.setAll(projects, initialProjectState),
+          },
         }),
         {
           provide: WorklogService,
@@ -56,12 +59,12 @@ describe('WorklogExportComponent', () => {
           useValue: {
             advancedCfg$: of({
               worklogExportSettings: {
-                cols: ['DATE', 'PROJECTS', 'TITLES_INCLUDING_SUB'],
+                cols: ['DATE', 'PROJECTS', 'TITLES_INCLUDING_SUB', 'TIME_MS'],
                 roundWorkTimeTo: null,
                 roundStartTimeTo: null,
                 roundEndTimeTo: null,
                 separateTasksBy: ' | ',
-                groupBy: WorklogGrouping.DATE,
+                groupBy,
               },
             }),
             activeWorkContext$: of({ id: 'TODAY' }),
@@ -90,13 +93,15 @@ describe('WorklogExportComponent', () => {
     return fixture;
   };
 
-  it('should export tasks of archived projects (#11351)', async () => {
-    const fixture = await createComponent([archivedProject], [archivedTask]);
+  for (const groupBy of Object.values(WorklogGrouping)) {
+    it(`should export tasks of archived projects grouped by ${groupBy} (#11351)`, async () => {
+      const fixture = await createComponent([archivedProject], [archivedTask], groupBy);
 
-    expect(fixture.componentInstance.txt).toBe(
-      'Date;Projects;Titles\n2026-09-15;Client Work;Write report',
-    );
-  });
+      expect(fixture.componentInstance.txt).toBe(
+        'Date;Projects;Titles;Worked\n2026-09-15;Client Work;Write report;3600000',
+      );
+    });
+  }
 
   it('should total the time per project for the range', async () => {
     const otherProject: Project = { ...DEFAULT_PROJECT, id: 'other', title: 'Other' };
