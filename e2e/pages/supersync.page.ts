@@ -1625,12 +1625,12 @@ export class SuperSyncPage extends BasePage {
     // [(ngModel)] value-accessor is wired, so the typed value never reaches the
     // model (and the first writeValue('') erases the DOM value). The confirm
     // field then stays empty, isPasswordValid is false, and [disabled] never
-    // flips. Re-fill both fields until they stick and the button enables.
+    // flips. Allow both fills their 15s action timeouts plus time for a retry.
     await expect(async () => {
       await passwordInput.fill(password);
       await confirmPasswordInput.fill(password);
       await expect(confirmBtn).toBeEnabled({ timeout: 1000 });
-    }).toPass({ timeout: 10000 });
+    }).toPass({ timeout: 45000 });
     await confirmBtn.click();
 
     await this.page.waitForTimeout(500);
