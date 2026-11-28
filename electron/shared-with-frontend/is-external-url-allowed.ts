@@ -14,8 +14,8 @@
  * exists to block. They are allow-listed because productivity users routinely
  * link tasks to such apps (#8429: obsidian:// links stopped opening after the
  * GHSA-hr87 fix; #8859: outlook: deep-links to mail items; #9292: siyuan://
- * links to notes; x-devonthink-item: links to DEVONthink documents, reported by
- * email with no issue). The GHSA-hr87 fix was a regression that silently broke
+ * links to notes; #11151: anytype:// links to objects; x-devonthink-item:
+ * links to DEVONthink documents, reported by email with no issue). The GHSA-hr87 fix was a regression that silently broke
  * every previously-working scheme at once, so the popular note/task apps in this
  * same low-risk class (notion:, things:, omnifocus:, bear:, joplin:) are
  * restored proactively alongside #8859.
@@ -46,6 +46,7 @@ export const ALLOWED_EXTERNAL_URL_SCHEMES = [
   'bear:',
   'joplin:',
   'siyuan:',
+  'anytype:',
   'outlook:', // #8859 — Outlook desktop deep-links (outlook:<EntryID>)
   'webexteams:',
   'x-devonthink-item:', // DEVONthink item links (x-devonthink-item://<uuid>)
