@@ -1,4 +1,17 @@
-[
+[  
+  {
+    "name": "Kibellule CRM",
+    "shortDescription": "A simple CRM for freelancers (contacts, companies, pipeline, interactions, quotes and invoices, profitability) built on SP projects, tasks, tags and time tracking, plus free-form canvases for notes, lists, links, photos, documents and kDrive files. French and English.",
+    "url": "https://github.com/Kibellule/kibellule-crm",
+    "author": "Kibellule",
+    "authorUrl": "https://github.com/Kibellule",
+    "id": "kibellule-crm",
+    "release": {
+      "version": "1.0.0",
+      "downloadUrl": "https://github.com/Kibellule/kibellule-crm/releases/download/v1.0.0/kibellule-crm-1.0.0.zip",
+      "sha256": "eb4ebb7714de36ce55018efc8713a7e9135d49673cb1729bb2d6cde173b2f56a"
+    }
+  },
   {
     "name": "Task Colors",
     "shortDescription": "Choose colors for tasks and subtasks, or apply them automatically by priority. Includes a configurable palette, bulk application and recovery; requires Super Productivity 19.3.1.",
