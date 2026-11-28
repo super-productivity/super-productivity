@@ -319,10 +319,15 @@ export class MentionDirective implements OnChanges {
     }
     //console.log("keyHandler", this.startPos, pos, val, charPressed, event);
 
-    const config = this.triggerChars[charPressed];
+    const config =
+      this.triggerChars[(pos > 0 ? val.charAt(pos - 1) : '') + charPressed] ??
+      this.triggerChars[charPressed];
     if (config) {
       this.activeConfig = config;
-      this.startPos = event.inputEvent ? pos - 1 : pos;
+      // Sometimes the trigger will be 2 characters, now
+      this.startPos = event.inputEvent
+        ? pos - config.triggerChar!.length
+        : pos - config.triggerChar!.length + 1;
       const selection = this.iframe
         ? this.iframe.contentWindow?.getSelection()
         : window.getSelection();
@@ -419,7 +424,10 @@ export class MentionDirective implements OnChanges {
           this.stopEvent(event);
           return false;
         } else if (this.searching) {
-          let mention = val.substring(this.startPos + 1, pos);
+          let mention = val.substring(
+            this.startPos + this.activeConfig!.triggerChar!.length,
+            pos,
+          );
           if (event.keyCode !== KEY_BACKSPACE && !event.inputEvent) {
             mention += charPressed;
           }

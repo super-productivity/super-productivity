@@ -125,7 +125,6 @@ export class AddTaskBarParserService {
       allTags,
       allProjects,
       undefined,
-      'replace',
       true,
       dateLocale,
     );

@@ -372,4 +372,81 @@ describe('MentionDirective', () => {
       expect(() => directive.stopEvent(undefined as any)).not.toThrow();
     });
   });
+
+  describe('multi-char trigger (#-)', () => {
+    let input: HTMLInputElement;
+    let listShownSpy: jasmine.Spy;
+
+    const typeKey = (key: string, keyCode: number): void => {
+      directive.keyHandler({ key, keyCode } as any, input);
+    };
+
+    beforeEach(() => {
+      input = fixture.debugElement.query(By.css('input')).nativeElement;
+      listShownSpy = jasmine.createSpy('listShownChange');
+      directive.listShownChange.subscribe(listShownSpy);
+      directive.mentionConfig = {
+        items: [],
+        mentions: [
+          { triggerChar: '#', labelKey: 'title', items: [{ title: 'blu' }] },
+          { triggerChar: '#-', labelKey: 'title', items: [{ title: 'blu' }] },
+        ],
+      };
+      directive.updateConfig();
+    });
+
+    it('does not open the list for a bare "-"', () => {
+      input.value = 'well-known';
+      input.setSelectionRange(10, 10);
+
+      typeKey('-', 189);
+
+      expect(listShownSpy).not.toHaveBeenCalledWith(true);
+    });
+
+    it('does not open the list for a bare "-", after space', () => {
+      input.value = 'well-known ';
+      input.setSelectionRange(11, 11);
+
+      typeKey('-', 189);
+
+      expect(listShownSpy).not.toHaveBeenCalledWith(true);
+    });
+
+    it('does not open the list for a bare "-", initially', () => {
+      input.value = '';
+      input.setSelectionRange(0, 0);
+
+      typeKey('-', 189);
+
+      expect(listShownSpy).not.toHaveBeenCalledWith(true);
+    });
+
+    it('opens the list when "-" is typed right after "#"', () => {
+      input.value = 'task #';
+      input.setSelectionRange(6, 6);
+
+      typeKey('-', 189);
+
+      expect(listShownSpy).toHaveBeenCalledWith(true);
+    });
+
+    it('opens the list when "-" is typed right after "#", task-initially', () => {
+      input.value = '#';
+      input.setSelectionRange(6, 6);
+
+      typeKey('-', 189);
+
+      expect(listShownSpy).toHaveBeenCalledWith(true);
+    });
+
+    it('opens the list when "-" is typed right after "#", task-initially', () => {
+      input.value = 'bad-grammar#';
+      input.setSelectionRange(6, 6);
+
+      typeKey('-', 189);
+
+      expect(listShownSpy).not.toHaveBeenCalledWith(true);
+    });
+  });
 });
