@@ -110,6 +110,21 @@ describe('AddTaskBarImagesService', () => {
     expect(snack.open).not.toHaveBeenCalled();
   });
 
+  it('keeps a saved attachment when its preview URL cannot be resolved', async () => {
+    const path = 'file:///home/u/Pictures/sp/clip-image.png';
+    clipboard.saveImage.and.resolveTo(path);
+    clipboard.resolveClipboardImageUrl.and.resolveTo(null);
+
+    service.paste(paste(['one.png']));
+    await settled();
+
+    expect(service.images()[0]).toEqual(
+      jasmine.objectContaining({ path, preview: path, isLoading: false }),
+    );
+    expect(service.attachments()[0].path).toBe(path);
+    expect(snack.open).not.toHaveBeenCalled();
+  });
+
   it('preserves the quota error already reported by the clipboard service', async () => {
     const error = new Error('Storage quota exceeded');
     clipboard.saveImage.and.rejectWith(error);
