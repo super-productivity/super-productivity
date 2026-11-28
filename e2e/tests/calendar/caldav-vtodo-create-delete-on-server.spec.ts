@@ -57,12 +57,16 @@ const todoResponse = (todo: StoredTodo): string =>
   );
 
 /**
- * Enough CalDAV for `@nextcloud/cdav-library`: principal discovery, the
- * calendar home, VTODO REPORTs (narrowed by a UID text-match), PUT with
- * If-None-Match, PROPFIND of a single object, and DELETE.
+ * Enough CalDAV for `@nextcloud/cdav-library` v2: OPTIONS (DAV feature
+ * advertisement on the principal), principal discovery, the calendar home,
+ * VTODO REPORTs (narrowed by a UID text-match), PUT with If-None-Match,
+ * PROPFIND of a single object, and DELETE.
  */
 const stubCaldav = async (page: Page): Promise<CaldavStub> => {
   const stub: CaldavStub = { todos: [], puts: [], deletes: [] };
+  const davHeaders = {
+    DAV: '1, 2, 3, calendar-access',
+  };
   await page.route(`**${DAV_ROOT}**`, async (route: Route) => {
     const req = route.request();
     const method = req.method();
@@ -72,11 +76,23 @@ const stubCaldav = async (page: Page): Promise<CaldavStub> => {
       route.fulfill({
         status: 207,
         contentType: 'application/xml; charset=utf-8',
-        headers: { DAV: '1, 2, 3, calendar-access' },
+        headers: davHeaders,
         body,
       });
     const todo = stub.todos.find((t) => t.path === path);
 
+    // v2 connect() PROPFINDs the principal and OPTIONs it in parallel; without
+    // a DAV header the library throws and CalDAV never connects.
+    if (method === 'OPTIONS') {
+      return route.fulfill({
+        status: 200,
+        headers: {
+          ...davHeaders,
+          Allow: 'OPTIONS, PROPFIND, REPORT, PUT, DELETE',
+        },
+        body: '',
+      });
+    }
     if (method === 'PUT') {
       const body = req.postData() ?? '';
       const ifNoneMatch = req.headers()['if-none-match'];
