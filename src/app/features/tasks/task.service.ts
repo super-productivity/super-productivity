@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import typia from 'typia';
 import { distinctUntilChanged, first, map, take, withLatestFrom } from 'rxjs/operators';
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { merge, Observable } from 'rxjs';
 import { pageHidden$ } from '../../util/page-hidden';
 import {
@@ -234,10 +234,10 @@ export class TaskService {
         }
       });
 
-    // Flush when the task stops or changes, and when the page is hidden (tab/app switch)
-    merge(this.currentTaskId$, pageHidden$()).subscribe(() => {
-      this._flushAccumulatedTimeSpent();
-    });
+    // Flush after the task stops or changes (with its cause) and when the page is hidden
+    merge(this._taskTimeSync.taskChange$, pageHidden$())
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this._flushAccumulatedTimeSpent());
 
     effect(() => {
       if (!this.isTimeTrackingEnabled() && untracked(this.currentTaskId) != null) {

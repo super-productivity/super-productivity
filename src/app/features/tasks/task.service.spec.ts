@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { ScannedActionsSubject } from '@ngrx/store';
 import { TaskService } from './task.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -125,6 +126,7 @@ describe('TaskService', () => {
     TestBed.configureTestingModule({
       providers: [
         TaskService,
+        ScannedActionsSubject,
         provideMockStore({
           initialState: {
             tasks: {
