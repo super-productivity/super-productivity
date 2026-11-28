@@ -2818,10 +2818,21 @@
       "TITLE": "Focus Mode (this device)"
     },
     "TASK_WIDGET": {
-      "TITLE": "Task Widget",
+      "TITLE": "Desktop widgets (this device)",
       "IS_ENABLED": "Enable task widget",
       "IS_ALWAYS_SHOW": "Always show task widget (even when main window is visible)",
-      "OPACITY": "Task widget opacity"
+      "OPACITY": "Widget opacity",
+      "LIST": {
+        "IS_ENABLED": "Show open-task list widget (always on top)",
+        "FILTER": "Tasks shown in the list widget",
+        "ALL": "All open tasks",
+        "TODAY": "Today",
+        "EMPTY": "No open tasks in this view.",
+        "COLLAPSE": "Collapse to title bar",
+        "EXPAND": "Expand task list",
+        "HIDE": "Hide widget (enable again in Settings)",
+        "OPEN": "Open Super Productivity"
+      }
     },
     "IDLE": {
       "HELP": "When you come back after being away for the set time, a dialog asks what to do with that time: track it on a task, count it as a break or discard it.",
