@@ -414,6 +414,48 @@ describe('MenuTreeService', () => {
       expect(lastTree()[0].k).toBe(MenuTreeKind.PROJECT);
     });
 
+    it('inserts a project right after its sibling inside a nested folder', () => {
+      store.overrideSelector(selectMenuTreeProjectTree, [
+        { id: 'p-0', k: MenuTreeKind.PROJECT },
+        folderNode('folder-1', [
+          folderNode('folder-2', [
+            { id: 'p-1', k: MenuTreeKind.PROJECT },
+            { id: 'p-2', k: MenuTreeKind.PROJECT },
+          ]),
+        ]),
+      ]);
+      store.refreshState();
+
+      service.addProjectAfter('p-copy', 'p-1');
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      const folder1 = lastTree()[1] as MenuTreeFolderNode;
+      const folder2 = folder1.children[0] as MenuTreeFolderNode;
+      expect(folder2.children.map((c) => c.id)).toEqual(['p-1', 'p-copy', 'p-2']);
+      expect(lastTree().map((n) => n.id)).toEqual(['p-0', 'folder-1']);
+    });
+
+    it('inserts a project right after its sibling at root', () => {
+      store.overrideSelector(selectMenuTreeProjectTree, [
+        { id: 'p-1', k: MenuTreeKind.PROJECT },
+        folderNode('folder-1'),
+      ]);
+      store.refreshState();
+
+      service.addProjectAfter('p-copy', 'p-1');
+
+      expect(lastTree().map((n) => n.id)).toEqual(['p-1', 'p-copy', 'folder-1']);
+    });
+
+    it('does not persist anything when the sibling is not in the tree', () => {
+      store.overrideSelector(selectMenuTreeProjectTree, [folderNode('folder-1')]);
+      store.refreshState();
+
+      service.addProjectAfter('p-copy', 'missing');
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
     it('moves a tag already at root into the folder without duplicating it', () => {
       store.overrideSelector(selectMenuTreeTagTree, [
         folderNode('folder-1'),
