@@ -1,3 +1,4 @@
+import { TextDirectionDirective } from '../text-direction/text-direction.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -35,7 +36,13 @@ import { SubmitTrigger } from 'src/app/features/tasks/task.model';
  */
 @Component({
   selector: 'task-title',
-  imports: [TranslateModule, MentionModule, AsyncPipe, RenderLinksPipe],
+  imports: [
+    TextDirectionDirective,
+    TranslateModule,
+    MentionModule,
+    AsyncPipe,
+    RenderLinksPipe,
+  ],
   templateUrl: './task-title.component.html',
   styleUrl: './task-title.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

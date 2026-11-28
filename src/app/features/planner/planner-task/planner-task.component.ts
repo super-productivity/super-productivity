@@ -1,3 +1,4 @@
+import { TextDirectionDirective } from '../../../ui/text-direction/text-direction.directive';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -79,6 +80,7 @@ import { IssueSyncStateService } from '../../issue/two-way-sync/issue-sync-state
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
+    TextDirectionDirective,
     MatIcon,
     TagListComponent,
     InlineInputComponent,

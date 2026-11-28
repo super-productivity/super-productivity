@@ -1,3 +1,4 @@
+import { TextDirectionDirective } from '../text-direction/text-direction.directive';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -79,6 +80,7 @@ const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TE
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
+    TextDirectionDirective,
     FormsModule,
     MarkdownComponent,
     MatButton,

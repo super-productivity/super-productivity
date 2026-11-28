@@ -158,13 +158,9 @@
     tab-size: 8;
     white-space: pre-wrap;
     overflow-wrap: break-word;
-    // `inherit`, not a fixed value: the app's RTL comes from `[dir]` on a shared
-    // ancestor (app.component.html), which both layers must keep following. What
-    // this pins is that they follow the SAME source — a theme rule targeting the
-    // textarea alone (`textarea { text-align: center }`) would otherwise move the
-    // glyphs out from under the backgrounds.
-    direction: inherit;
-    text-align: inherit;
+    // The textarea and highlight mirror share the explicitly detected direction.
+    unicode-bidi: isolate;
+    text-align: start;
     word-break: inherit;
   }
 

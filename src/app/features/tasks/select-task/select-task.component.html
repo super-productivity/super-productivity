@@ -43,6 +43,7 @@
           <!---->
         }
         <span
+          [spTextDirection]="task.title"
           [innerHTML]="task.title"
           [matTooltip]="task.title || ''"
           [matTooltipDisabled]="!task.title"
