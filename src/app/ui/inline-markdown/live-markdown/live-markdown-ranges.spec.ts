@@ -85,6 +85,34 @@ describe('buildLiveMarkdownRanges', () => {
       expect(classesAt('###### f')).toContain('cm-md-h6');
     });
 
+    describe('Jira-style hN. headings (#10153 case 2)', () => {
+      it('styles an h1.-h6. line like the matching heading level', () => {
+        expect(classesAt('h1. Title')).toContain('cm-md-h1');
+        expect(classesAt('h6. Title')).toContain('cm-md-h6');
+      });
+
+      it('hides the hN. marker and its single trailing space when unrevealed', () => {
+        expect(hiddenText('h2. Title')).toEqual(['h2. ']);
+      });
+
+      it('keeps the hN. marker visible on the revealed (caret) line', () => {
+        expect(hiddenText('h2. Title', [1])).toEqual([]);
+        expect(classesAt('h2. Title', [1])).toContain('cm-md-h2');
+      });
+
+      it('styles each matching line of a multi-line paragraph independently', () => {
+        expect(classesAt('h1. One\nplain\nh3. Three')).toEqual(
+          jasmine.arrayContaining(['cm-md-h1', 'cm-md-h3']),
+        );
+      });
+
+      it('ignores invalid levels, a missing space, and mid-line matches', () => {
+        expect(classesAt('h7. x')).not.toContain('cm-md-h7');
+        expect(classesAt('h1.x')).not.toContain('cm-md-h1');
+        expect(classesAt('see h1. x')).not.toContain('cm-md-h1');
+      });
+    });
+
     it('emits a line class per line of a multi-line blockquote', () => {
       const quoteLines = build('> one\n> two').filter((r) => r.cls === 'cm-md-quote');
       expect(quoteLines.length).toBe(2);
