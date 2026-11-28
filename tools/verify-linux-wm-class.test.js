@@ -75,4 +75,7 @@ test('the argv wrapper execs the binary afterPack actually renames', () => {
   // does not start.
   const wrapper = readRoot('build', 'linux', 'snap-wrapper.sh');
   assert.match(wrapper, new RegExp(`/${RENAMED}"`));
+  // core24 organizes the app under $SNAP/app. The core22 root path stays as
+  // the fallback; without the app/ check the wrapper execs a missing binary.
+  assert.match(wrapper, /\$SNAP\/app\/superproductivity-bin/);
 });

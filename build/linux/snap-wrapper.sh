@@ -5,10 +5,11 @@
 # Wayland session. This is load-bearing: the programmatic
 # app.commandLine.appendSwitch('ozone-platform','x11') in electron/start-app.ts
 # is not enough in practice — field reports on issue #7270 show Chromium's
-# Ozone init dlopens libEGL/libgbm on the core22 Mesa path before
+# Ozone init dlopens libEGL/libgbm on the confined Mesa path before
 # appendSwitch is honored, which segfaults under host-vs-snap Mesa ABI
 # drift. Putting the flag into argv before Electron's argv parser runs
-# bypasses that.
+# bypasses that. Retire once core24 + gpu-2404 Wayland is field-verified
+# (docs/research/snap-wayland-gpu-fix-research.md "Removal conditions").
 #
 # Same mechanism used by Signal Desktop and Mattermost Desktop snaps
 # (snapcrafters/signal-desktop, snapcrafters/mattermost-desktop).
@@ -27,9 +28,18 @@
 # revision mount root and is more reliable than $0 resolution through
 # snapd's wrapper chain. Elsewhere, resolve $0 through symlinks — this
 # handles /usr/bin/superproductivity symlinks from .deb/.rpm installs.
+#
+# core22 left the binary at $SNAP/superproductivity-bin. core24's organize
+# step moves the staged app under $SNAP/app/, and the generated command.sh
+# execs $SNAP/app/superproductivity (this wrapper). Looking only at $SNAP
+# then fails with "superproductivity-bin: not found".
 if [ -n "$SNAP" ] && [ "$SNAP_NAME" = "superproductivity" ]; then
   IS_OUR_SNAP=1
-  BIN_DIR="$SNAP"
+  if [ -x "$SNAP/app/superproductivity-bin" ]; then
+    BIN_DIR="$SNAP/app"
+  else
+    BIN_DIR="$SNAP"
+  fi
 else
   IS_OUR_SNAP=
   SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")

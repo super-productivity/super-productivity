@@ -130,64 +130,79 @@ rpm:
 #    Icon: build/icon.png
 #    GenericName: ToDo List and Time Tracker
 
-snap:
-  # We upload the .snap to the Snap Store ourselves via Canonical's snapcraft
-  # container in CI (build.yml). electron-builder's snap target has a
-  # hard-coded fallback to `snapStore` in `findSnapPublishConfig` (snap.js):
-  # if `snap.publish` is unset, it falls through `linux.publish`/`config.publish`
-  # to `{ provider: "snapStore" }`, then invokes `snapcraft` on the runner
-  # during upload — and we no longer install snapcraft there (it was an
-  # unreliable `sudo snap install`). Setting `snap.publish: github` overrides
-  # that fallback. The .snap also lands on the GitHub release as a side effect,
-  # which is harmless (and a useful manual-download fallback).
+# Prefer the structured `snapcraft` key (electron-builder ≥ 26). `base: core24`
+# selects SnapCore24, which runs snapcraft with the GNOME extension and pulls in
+# gnome-46-2404 + gpu-2404 — the Mesa stack that should clear the Snap+Wayland
+# ABI drift tracked in docs/research/snap-wayland-gpu-fix-research.md (#5672).
+# The flat `snap:` key is legacy and only targets core22 and older.
+#
+# We upload the .snap to the Snap Store ourselves via Canonical's snapcraft
+# container in CI (build.yml). electron-builder's snap target has a hard-coded
+# fallback to `snapStore` in `findSnapPublishConfig`: if publish is unset, it
+# falls through to `{ provider: "snapStore" }` and invokes snapcraft on the
+# runner during upload. Setting `publish: github` overrides that fallback. The
+# .snap also lands on the GitHub release as a side effect (manual-download
+# fallback).
+snapcraft:
+  base: core24
   publish: github
-  grade: stable
-  allowNativeWayland: true
-  autoStart: true
-  base: core22
-  confinement: strict
-  environment:
-    # Fix for issue #4920: Isolate fontconfig cache to prevent GTK dialog rendering issues
-    # https://github.com/super-productivity/super-productivity/issues/4920
-    FC_CACHEDIR: $SNAP_USER_DATA/.cache/fontconfig
-    # Fix for issue #7298: tray icon renders as three dots on Ubuntu 24.04+ snap.
-    # Chromium's StatusIconLinuxDbus writes the tray PNG to TMPDIR and sends
-    # its path to gnome-shell via the SNI IconThemePath property. The default
-    # /tmp inside a strict snap is bind-mounted to
-    # /tmp/snap-private-tmp/snap.<name>/tmp with mode 0700 on the parent, so
-    # gnome-shell (outside the mount namespace) cannot stat the file and
-    # falls back to 'image-loading-symbolic' (three dots). $XDG_RUNTIME_DIR
-    # (= /run/user/$UID) is visible to both sides, so redirecting Chromium's
-    # temp writes there restores icon rendering. Matches Signal Desktop's
-    # snap and the official Electron snapcraft guide. electron-builder's
-    # SnapOptions docstring claims this as a default but snap.js no longer
-    # injects it (see node_modules/app-builder-lib/out/targets/snap.js).
-    TMPDIR: $XDG_RUNTIME_DIR
-  plugs:
-    - default # Includes: home, desktop, desktop-legacy, x11, wayland, etc.
-    - password-manager-service
-    - system-observe
-    - login-session-observe
-    # Fix for issue #6031: Add filesystem access for local file sync
-    # https://github.com/super-productivity/super-productivity/issues/6031
-    - removable-media # Allows sync to external drives/USB storage
-    # Lets the opt-in local REST API / assistant endpoint listen on 127.0.0.1.
-    # Not in electron-builder's `default` plugs; today listening may only work
-    # through browser-support's seccomp rules, which core24 no longer includes.
-    # Auto-connects, so users see no prompt.
-    - network-bind
-    # Override electron-builder's hardcoded gnome-3-28-1804 content snap (core20 era)
-    # with gnome-42-2204 (core22 era) for up-to-date Mesa drivers and GSettings schemas.
-    # The plug name must match the template key to replace it rather than duplicate it.
-    # The explicit `content` attribute tells snapd to match the gnome-42-2204 slot.
-    # Pattern from Tidal HiFi: https://github.com/Mastermindzh/tidal-hifi
-    # gnome-42-2204 has global auto-connect (granted June 2022).
-    # Ref: electron-builder#9452, electron-builder#8548 (closed, not planned)
-    - gnome-3-28-1804:
-        interface: content
-        content: gnome-42-2204
-        target: $SNAP/gnome-platform
-        default-provider: gnome-42-2204
+  core24:
+    # LXD is required for the GNOME extension (destructive mode rejects it).
+    # build.yml installs snapcraft + LXD before packaging.
+    useLXD: true
+    grade: stable
+    confinement: strict
+    autoStart: true
+    # Chromium's setuid/namespace sandbox fails under strict confinement
+    # (FATAL credentials.cc: Permission denied). The snap is the sandbox.
+    # electron-builder also adds this when allow-sandbox is not set; keep it
+    # explicit so a later plug change cannot turn the sandbox back on.
+    executableArgs:
+      - --no-sandbox
+    # Leave forceX11 unset so core24 allows native Wayland. The afterPack
+    # snap-wrapper.sh still injects --ozone-platform=x11 for our Snap on
+    # Wayland until field verification retires that guard (research doc
+    # "Removal conditions"). Do not set forceX11: true here — that would bake
+    # X11 into every session and defeat the migration's purpose.
+    environment:
+      # Fix for issue #4920: Isolate fontconfig cache to prevent GTK dialog rendering issues
+      # https://github.com/super-productivity/super-productivity/issues/4920
+      FC_CACHEDIR: $SNAP_USER_DATA/.cache/fontconfig
+      # Fix for issue #7298: tray icon renders as three dots on Ubuntu 24.04+ snap.
+      # Chromium's StatusIconLinuxDbus writes the tray PNG to TMPDIR and sends
+      # its path to gnome-shell via the SNI IconThemePath property. The default
+      # /tmp inside a strict snap is bind-mounted to
+      # /tmp/snap-private-tmp/snap.<name>/tmp with mode 0700 on the parent, so
+      # gnome-shell (outside the mount namespace) cannot stat the file and
+      # falls back to 'image-loading-symbolic' (three dots). $XDG_RUNTIME_DIR
+      # (= /run/user/$UID) is visible to both sides, so redirecting Chromium's
+      # temp writes there restores icon rendering. Matches Signal Desktop's
+      # snap and the official Electron snapcraft guide. core24 also defaults
+      # TMPDIR to $XDG_RUNTIME_DIR when unset; keep it explicit.
+      TMPDIR: $XDG_RUNTIME_DIR
+    # With the GNOME extension active, content snaps (gnome-46-2404, gpu-2404,
+    # themes) are added automatically. The old gnome-3-28-1804 → gnome-42-2204
+    # override is obsolete on core24.
+    #
+    # Setting `plugs` at all disables electron-builder's plug defaults AND its
+    # browser-support auto-inject. Put `default` first so home, network,
+    # audio-playback, pulseaudio and unity7 stay (GNOME alone does not restore
+    # them). Keep browser-support without allow-sandbox: Chromium's namespace
+    # sandbox still dies in credentials.cc, and --no-sandbox above is what runs.
+    plugs:
+      - default # desktop, desktop-legacy, home, x11, wayland, unity7, network, gsettings, audio-playback, pulseaudio, opengl
+      - browser-support
+      - password-manager-service
+      - system-observe
+      - login-session-observe
+      # Fix for issue #6031: Add filesystem access for local file sync
+      # https://github.com/super-productivity/super-productivity/issues/6031
+      - removable-media # Allows sync to external drives/USB storage
+      # Lets the opt-in local REST API / assistant endpoint listen on 127.0.0.1.
+      # Not in electron-builder's default plug set; core24 also dropped the
+      # browser-support seccomp path that sometimes allowed listening before.
+      # Auto-connects, so users see no prompt.
+      - network-bind
 
 flatpak:
   runtimeVersion: '25.08'
