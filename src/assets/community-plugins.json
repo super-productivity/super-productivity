@@ -184,11 +184,16 @@
   },
   {
     "name": "Joplin Notes Sync",
-    "shortDescription": "One-way sync of project notes (and optional two-way task notes) to Joplin notebooks. Desktop only.",
+    "shortDescription": "Sync project notes, task notes, tags, due dates and done state into Joplin notebooks via Joplin's Web Clipper API. Desktop only.",
     "url": "https://github.com/BigWebstas/SuperProd-Joplin-Sync",
     "author": "BigWebstas",
     "authorUrl": "https://github.com/BigWebstas",
-    "id": "joplin-notes-sync"
+    "id": "joplin-notes-sync",
+    "release": {
+      "version": "1.15.1",
+      "downloadUrl": "https://github.com/BigWebstas/SuperProd-Joplin-Sync/releases/download/v1.15.1/joplin-notes-sync-1.15.1.zip",
+      "sha256": "d041d8dcd28c0a502334436474ae8f29c6ac18da8de8d8223b4b521be73ec6ca"
+    }
   },
   {
     "name": "Bulk Add Tasks",
