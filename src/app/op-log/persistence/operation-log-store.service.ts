@@ -87,11 +87,6 @@ import {
   rebasePendingLocalOpsInTx,
 } from './rebase-pending-local-ops.util';
 import { acknowledgeOperations } from './acknowledge-operations.util';
-import {
-  appendMissingOpsInTx,
-  markAppliedInTx,
-  markReducersCommittedInTx,
-} from './batched-op-writes.util';
 
 export interface MixedSourceOperationBatch {
   ops: readonly Operation[];
@@ -1019,6 +1014,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     await this._ensureInit();
     try {
+      const seqs: number[] = [];
+      const writtenOps: Operation[] = [];
+      let skippedCount = 0;
+
       const storeNames: OpLogStoreName[] = [STORE_NAMES.OPS];
       if (advanceSnapshotFrontier) {
         storeNames.push(STORE_NAMES.STATE_CACHE);
@@ -1027,60 +1026,70 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         storeNames.push(STORE_NAMES.META);
       }
 
-      const { seqs, writtenOps, skippedCount } = await this._adapter.transaction(
-        storeNames,
-        'readwrite',
-        async (tx) => {
-          let stateCache: StateCacheEntry | undefined;
-          if (advanceSnapshotFrontier) {
-            stateCache = await tx.get<StateCacheEntry>(
-              STORE_NAMES.STATE_CACHE,
-              SINGLETON_KEY,
+      await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
+        let stateCache: StateCacheEntry | undefined;
+        if (advanceSnapshotFrontier) {
+          stateCache = await tx.get<StateCacheEntry>(
+            STORE_NAMES.STATE_CACHE,
+            SINGLETON_KEY,
+          );
+          if (!stateCache) {
+            throw new Error(
+              'Cannot append snapshot-included operations without an existing state cache',
             );
-            if (!stateCache) {
-              throw new Error(
-                'Cannot append snapshot-included operations without an existing state cache',
-              );
-            }
-
-            let preAppendLastSeq = 0;
-            await tx.iterate<StoredOperationLogEntry>(
-              STORE_NAMES.OPS,
-              { direction: 'prev', limit: 1 },
-              (_value, key) => {
-                if (typeof key !== 'number') {
-                  throw new Error('Operation sequence key is not numeric');
-                }
-                preAppendLastSeq = key;
-                return 'stop';
-              },
-            );
-            if (stateCache.lastAppliedOpSeq !== preAppendLastSeq) {
-              throw new Error(
-                'Cannot append snapshot-included operations when the state-cache frontier does not match the operation-log tail',
-              );
-            }
           }
 
-          // Duplicate check and add share this transaction, so they stay atomic.
-          const appended = await appendMissingOpsInTx(tx, ops, {
-            addOp: (op) =>
-              tx.add(STORE_NAMES.OPS, this._buildStoredEntry(op, source, options)),
-            recordFullStateOp: (op, seq) => this._recordFullStateOpInTx(tx, op, seq),
+          let preAppendLastSeq = 0;
+          await tx.iterate<StoredOperationLogEntry>(
+            STORE_NAMES.OPS,
+            { direction: 'prev', limit: 1 },
+            (_value, key) => {
+              if (typeof key !== 'number') {
+                throw new Error('Operation sequence key is not numeric');
+              }
+              preAppendLastSeq = key;
+              return 'stop';
+            },
+          );
+          if (stateCache.lastAppliedOpSeq !== preAppendLastSeq) {
+            throw new Error(
+              'Cannot append snapshot-included operations when the state-cache frontier does not match the operation-log tail',
+            );
+          }
+        }
+
+        let lastIncludedSeq = 0;
+        for (const op of ops) {
+          // Check if op already exists in the same transaction (atomic)
+          const existingKey = await tx.getKeyFromIndex(
+            STORE_NAMES.OPS,
+            OPS_INDEXES.BY_ID,
+            op.id,
+          );
+          if (existingKey !== undefined) {
+            if (typeof existingKey !== 'number') {
+              throw new Error('Operation sequence key is not numeric');
+            }
+            lastIncludedSeq = Math.max(lastIncludedSeq, existingKey);
+            skippedCount++;
+            continue;
+          }
+
+          const entry = this._buildStoredEntry(op, source, options);
+          const seq = await tx.add(STORE_NAMES.OPS, entry);
+          await this._recordFullStateOpInTx(tx, entry.op, seq);
+          lastIncludedSeq = Math.max(lastIncludedSeq, seq);
+          seqs.push(seq);
+          writtenOps.push(op);
+        }
+
+        if (stateCache) {
+          await tx.put(STORE_NAMES.STATE_CACHE, {
+            ...stateCache,
+            lastAppliedOpSeq: Math.max(stateCache.lastAppliedOpSeq, lastIncludedSeq),
           });
-
-          if (stateCache) {
-            await tx.put(STORE_NAMES.STATE_CACHE, {
-              ...stateCache,
-              lastAppliedOpSeq: Math.max(
-                stateCache.lastAppliedOpSeq,
-                appended.lastIncludedSeq,
-              ),
-            });
-          }
-          return appended;
-        },
-      );
+        }
+      });
 
       if (skippedCount > 0) {
         Log.warn(
@@ -1366,7 +1375,16 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           SINGLETON_KEY,
         );
 
-        await markReducersCommittedInTx(tx, seqs);
+        for (const seq of seqs) {
+          const entry = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, seq);
+          if (entry?.applicationStatus !== 'pending') {
+            throw new Error(
+              `Reducer checkpoint requires pending remote operation at seq ${seq}.`,
+            );
+          }
+          entry.applicationStatus = 'archive_pending';
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
 
         for (const opId of rejectedOpIds) {
           const entry = await tx.getFromIndex<StoredOperationLogEntry>(
@@ -1423,9 +1441,21 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    */
   async markApplied(seqs: number[]): Promise<void> {
     await this._ensureInit();
-    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', (tx) =>
-      markAppliedInTx(tx, seqs),
-    );
+    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
+      for (const seq of seqs) {
+        const entry = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, seq);
+        // Reducer-committed/failed ops can be retried and cleared when successful.
+        if (
+          entry &&
+          (entry.applicationStatus === 'pending' ||
+            entry.applicationStatus === 'archive_pending' ||
+            entry.applicationStatus === 'failed')
+        ) {
+          entry.applicationStatus = 'applied';
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
+      }
+    });
   }
 
   /**
