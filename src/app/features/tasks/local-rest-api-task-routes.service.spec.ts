@@ -629,6 +629,52 @@ describe('LocalRestApiTaskRoutesService', () => {
         );
       });
 
+      it('should create a task with a priority', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', { body: { title: 'New Task', priority: 3 } }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          title: 'New Task',
+          priority: 3,
+        });
+      });
+
+      it('should store a string priority as its number on create', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', priority: 'medium' },
+          }),
+        );
+
+        expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          title: 'New Task',
+          priority: 2,
+        });
+      });
+
+      it('should reject an invalid priority on create', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', { body: { title: 'New Task', priority: 4 } }),
+        );
+
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect((response.body as any).error.details).toContain(
+          jasmine.objectContaining({ path: '$input.priority' }),
+        );
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+      });
+
       it('should map plannedAt to dueWithTime when creating a task', async () => {
         const plannedAt = new Date('2026-07-12T10:00:00Z').getTime();
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
@@ -2045,6 +2091,81 @@ describe('LocalRestApiTaskRoutesService', () => {
           timeEstimate: 1000,
           isDone: true,
         });
+      });
+
+      it('should set a priority, storing a string priority as its number', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', { body: { priority: 'high' } }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', { priority: 3 });
+      });
+
+      it('should clear a priority with null', async () => {
+        const mockTask = createMockTask('task-1', { priority: 3 });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', { body: { priority: null } }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', { priority: null });
+      });
+
+      it('should drop an echoed priority at the same level', async () => {
+        const mockTask = createMockTask('task-1', { priority: 'high' });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { title: 'Renamed', priority: 'high' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+          title: 'Renamed',
+        });
+      });
+
+      it('should not dispatch when the only change is an echoed priority', async () => {
+        const mockTask = createMockTask('task-1', { priority: 3 });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', { body: { priority: 'high' } }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should reject an invalid priority without dispatching', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', { body: { priority: 'urgent' } }),
+        );
+
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
       });
 
       // A GET→PATCH round trip echoes `isDone: true`; a new `doneOn` stamp would

@@ -28,6 +28,7 @@ import { mapLegacyPlannedAt } from './local-rest-api-legacy-fields';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
+import { getTaskPriority } from './task-priority.const';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -51,6 +52,7 @@ const ALLOWED_TASK_FIELDS = new Set<string>([
   'deadlineDay',
   'deadlineWithTime',
   'deadlineRemindAt',
+  'priority',
 ]);
 
 /**
@@ -108,6 +110,11 @@ interface WritableTaskFields {
   deadlineDay?: string | null;
   deadlineWithTime?: number | null;
   deadlineRemindAt?: number | null;
+  /**
+   * Accepts both encodings a GET can return (1/2/3 and 'low'/'medium'/'high'),
+   * so GET→PATCH round trips keep working; `normalizePriority` stores numbers.
+   */
+  priority?: Task['priority'];
 }
 
 type FieldTypeError = { path: string; expected: string };
@@ -147,6 +154,16 @@ type DeadlineChange =
 
 const hasOwn = (value: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
+
+/**
+ * Writes an explicit priority change as a number, the encoding the app's own
+ * priority menu writes. `null` clears the priority.
+ */
+const normalizePriority = (fields: Partial<WritableTaskFields>): void => {
+  if (hasOwn(fields, 'priority')) {
+    fields.priority = getTaskPriority(fields.priority);
+  }
+};
 
 const validateDateFields = (fields: Partial<WritableTaskFields>): string | undefined => {
   // A stored dueDay that is no date shows as "planned for -/-" (#6908) and
@@ -632,6 +649,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
         validation.errors,
       );
     }
+    normalizePriority(writableFields);
 
     const dateValidationError = validateDateFields(writableFields);
     if (dateValidationError) {
@@ -799,6 +817,7 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
             validation.errors,
           );
         }
+        normalizePriority(writableFields);
 
         const dateValidationError = validateDateFields(writableFields);
         if (dateValidationError) {
@@ -819,6 +838,12 @@ export class LocalRestApiTaskRoutesService implements LocalRestApiFeatureRoutes 
         // into a completed one.
         if (writableFields.isDone === true && task.isDone) {
           delete writableFields.isDone;
+        }
+        if (
+          hasOwn(writableFields, 'priority') &&
+          writableFields.priority === getTaskPriority(task.priority)
+        ) {
+          delete writableFields.priority;
         }
 
         const deadlineFields = Object.fromEntries(
