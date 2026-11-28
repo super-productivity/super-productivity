@@ -19,6 +19,7 @@ import { BoardPanelCfg } from '../boards.model';
 import {
   getPanelItems,
   getPanelSortKey,
+  getProjectRankById,
   matchPanelTasks,
   panelToCriteria,
 } from '../boards.util';
@@ -45,6 +46,7 @@ import {
 } from '../../tasks/view-task-list.token';
 import { INBOX_PROJECT } from '../../project/project.const';
 import { selectAllTags } from '../../tag/store/tag.reducer';
+import { selectAllProjects } from '../../project/store/project.selectors';
 import { Store } from '@ngrx/store';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { T } from '../../../t.const';
@@ -406,8 +408,9 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
   readonly sortKey = computed(() => getPanelSortKey(this.panelCfg()));
   isManualOrder = computed(() => !this.sortKey());
 
-  // Only read for the tag sort; `selectSignal` doesn't subscribe until then.
+  // Only read for the tag/project sort; `selectSignal` doesn't subscribe until then.
   private readonly _allTags = this.store.selectSignal(selectAllTags);
+  private readonly _allProjects = this.store.selectSignal(selectAllProjects);
   // The UI language, like the task lists' sort, so a saved view sorts titles
   // like the list it came from.
   private readonly _collator = new Intl.Collator(
@@ -434,6 +437,8 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
             cmp: buildTaskComparator(sortKey, {
               collator: this._collator,
               tagRankById: sortKey === 'tag' ? this._tagRankById() : undefined,
+              projectRankById:
+                sortKey === 'project' ? this._projectRankById() : undefined,
             }),
             dir: panelCfg.sortDir === 'desc' ? -1 : 1,
           }
@@ -658,6 +663,16 @@ export class BoardPanelComponent implements TaskCardList, ViewTaskListHost {
           )
           .map((tag, index) => [tag.id, index]),
       ),
+  );
+
+  // Side-menu project order, for sorting by project. Only read when the panel
+  // sorts by project.
+  private readonly _projectRankById = computed(() =>
+    getProjectRankById(
+      this._injector
+        .get(MenuTreeService)
+        .buildProjectListInTreeOrder(this._allProjects()),
+    ),
   );
 
   // === WHAT THE PANEL SHOWS (both renderers) ===

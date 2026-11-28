@@ -64,7 +64,7 @@ export interface BoardSrcCfg {
   priorityRule?: string;
   isUntagged?: boolean;
   // Sort keys `sortBy` can't hold ('deadline', 'timeSpent', 'priority',
-  // 'tag'); `sortBy` wins when both are set. See `getPanelSortKey`.
+  // 'tag', 'project'); `sortBy` wins when both are set. See `getPanelSortKey`.
   sortKey?: string;
 }
 

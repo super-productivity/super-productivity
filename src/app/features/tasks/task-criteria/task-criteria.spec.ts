@@ -434,4 +434,22 @@ describe('buildTaskComparator', () => {
     });
     expect(ids(tasks.sort(cmp))).toEqual(['a', 'b', 'none']);
   });
+
+  it('orders by project rank, unknown then no project last, keeping order within one', () => {
+    const tasks = [
+      mkTask({ id: 'none', projectId: '' }),
+      mkTask({ id: 'gone', projectId: 'deleted' }),
+      mkTask({ id: 'b1', projectId: 'b' }),
+      mkTask({ id: 'a', projectId: 'a' }),
+      mkTask({ id: 'b2', projectId: 'b' }),
+    ];
+    const cmp = buildTaskComparator('project', {
+      ...sortCtx,
+      projectRankById: new Map([
+        ['a', 0],
+        ['b', 1],
+      ]),
+    });
+    expect(ids(tasks.sort(cmp))).toEqual(['a', 'b1', 'b2', 'gone', 'none']);
+  });
 });

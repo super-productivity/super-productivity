@@ -108,6 +108,7 @@ export const SORT_OPTIONS: readonly { value: string; label: string }[] = [
   { value: 'timeSpent', label: T.F.TASK_VIEW.CUSTOMIZER.TIME_SPENT },
   { value: 'priority', label: T.F.TASK_VIEW.CUSTOMIZER.SORT_PRIORITY },
   { value: 'tag', label: T.F.TASK_VIEW.CUSTOMIZER.GROUP_TAG },
+  { value: 'project', label: T.F.TASK_VIEW.CUSTOMIZER.GROUP_PROJECT },
 ];
 
 const isSetString = (value: unknown): boolean =>

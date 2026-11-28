@@ -19,6 +19,7 @@ import {
   TaskSortKey,
 } from '../tasks/task-criteria/task-criteria';
 import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from './boards.const';
+import { INBOX_PROJECT } from '../project/project.const';
 import { T } from '../../t.const';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
@@ -41,6 +42,7 @@ const NEW_SORT_KEYS: ReadonlySet<string> = new Set<TaskSortKey>([
   'timeSpent',
   'priority',
   'tag',
+  'project',
 ]);
 
 // Optional string fields Formly writes `null` into; unknown strings are kept,
@@ -496,6 +498,18 @@ export const getPanelSortKey = (
   return panel.sortKey && NEW_SORT_KEYS.has(panel.sortKey)
     ? (panel.sortKey as TaskSortKey)
     : undefined;
+};
+
+/**
+ * Ranks for the `project` sort, from the side menu's project tree order. The
+ * menu shows the Inbox above the tree, so it ranks first wherever the tree has it.
+ */
+export const getProjectRankById = (
+  projectsInTreeOrder: readonly { id: string }[],
+): Map<string, number> => {
+  const ranks = new Map(projectsInTreeOrder.map((project, index) => [project.id, index]));
+  ranks.set(INBOX_PROJECT.id, -1);
+  return ranks;
 };
 
 /**
