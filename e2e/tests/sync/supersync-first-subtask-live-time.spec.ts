@@ -36,8 +36,15 @@ const readTimeSpent = (page: Page, taskId: string): Promise<TrackedTime | undefi
       const subscription = store.subscribe((state) => {
         window.setTimeout(() => subscription.unsubscribe());
         const task = state.tasks.entities[id];
+        // A tick under the paused test clock can leave a 0 ms day entry that
+        // is never synced. It means the same as no entry.
         resolve(
-          task && { timeSpent: task.timeSpent, timeSpentOnDay: task.timeSpentOnDay },
+          task && {
+            timeSpent: task.timeSpent,
+            timeSpentOnDay: Object.fromEntries(
+              Object.entries(task.timeSpentOnDay).filter(([, ms]) => ms !== 0),
+            ),
+          },
         );
       });
     });
