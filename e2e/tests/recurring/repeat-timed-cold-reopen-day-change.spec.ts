@@ -47,8 +47,7 @@ test.describe('Repeat Task - Timed + Cold Reopen Day Change', () => {
     await taskPage.openTaskDetail(task);
     await openRecurDialog(page);
 
-    // 4. Make it a TIMED daily repeat: Open schedule dialog and set a start time (13:00).
-    //    remindAt defaults to AtStart once startTime is set, so the config is timed.
+    // 4. Give the series a 13:00 start and a non-default reminder.
     const scheduleDialog = await openRecurScheduleDialog(page);
 
     // Set a valid startTime
@@ -56,6 +55,9 @@ test.describe('Repeat Task - Timed + Cold Reopen Day Change', () => {
     await expect(startTimeField).toBeVisible({ timeout: 5000 });
     await startTimeField.fill('13:00');
     await startTimeField.blur();
+    const reminderLead = '10 minutes before it starts';
+    await scheduleDialog.getByRole('combobox', { name: 'Remind at' }).click();
+    await page.getByRole('option', { name: reminderLead, exact: true }).click();
 
     // Click Schedule button
     const scheduleSubmitBtn = scheduleDialog.locator(
@@ -92,9 +94,14 @@ test.describe('Repeat Task - Timed + Cold Reopen Day Change', () => {
     // 1s interval tick, mirroring #6230.
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 
-    // 9. A fresh undone instance for Day X+1 must appear in Today.
+    // 9. The new instance in Today inherits the series time and reminder.
+    const nextCopy = undoneWithTitle.first();
+    await expect(nextCopy).toBeVisible({ timeout: 60000 });
+    await nextCopy.press('s');
+    const nextSchedule = page.getByRole('dialog');
+    await expect(nextSchedule.getByLabel('Time', { exact: true })).toHaveValue('13:00');
     await expect(
-      taskPage.getUndoneTasks().filter({ hasText: taskTitle }).first(),
-    ).toBeVisible({ timeout: 60000 });
+      nextSchedule.getByRole('combobox', { name: 'Reminder for this occurrence' }),
+    ).toHaveText(reminderLead);
   });
 });

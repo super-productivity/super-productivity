@@ -4,6 +4,11 @@
       [selectedDate]="selectedDate"
       [selectedTime]="selectedTime"
       [selectedReminderCfgId]="selectedReminderCfgId"
+      [reminderLabel]="
+        repeatCfgLabel() !== null
+          ? T.F.TASK.D_SCHEDULE_TASK.REMINDER_FOR_THIS_OCCURRENCE
+          : T.F.TASK.D_SCHEDULE_TASK.REMIND_AT
+      "
       [reminderOptions]="remindAvailableOptions()"
       [minDate]="minDate"
       [showQuickAccess]="data.showQuickAccess !== false"
