@@ -34,6 +34,12 @@ describe('get-task-delete-confirm', () => {
     );
   });
 
+  it('says that only this copy goes when the task belongs to a recurring task', () => {
+    expect(getTaskDeleteConfirmData({ ...localTask, repeatCfgId: 'cfg1' }).message).toBe(
+      T.F.TASK.D_CONFIRM_DELETE.MSG_REPEAT_INSTANCE,
+    );
+  });
+
   it('accepts a display title override (e.g. truncated)', () => {
     expect(getTaskDeleteConfirmData(plainspaceTask, 'Sh…').translateParams).toEqual({
       title: 'Sh…',

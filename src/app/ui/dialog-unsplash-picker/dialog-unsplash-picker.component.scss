@@ -21,7 +21,7 @@
     height: 150px;
     object-fit: cover;
     display: block;
-    transition: transform 0.2s ease;
+    transition: transform var(--transition-duration-m) ease;
 
     &:hover {
       outline: 2px solid var(--c-primary);

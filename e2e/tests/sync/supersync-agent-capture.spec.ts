@@ -306,6 +306,48 @@ const joinClient = async (
   return client;
 };
 
+type ClaimResponseBody =
+  | { status: 'ok'; items: Array<{ itemId: string }> }
+  | { status: 'no_key' | 'key_mismatch' };
+
+/**
+ * Like joinClient, but also resolves with the body of the joining device's
+ * first capture claim. Counting tasks right after the join proves nothing on
+ * its own: B's import may not have run yet, and a later run could still add a
+ * duplicate. Waiting for that claim shows what B's import was given.
+ */
+const joinClientRecordingFirstClaim = async (
+  browser: Browser,
+  baseURL: string,
+  testRunId: string,
+  user: TestUser,
+): Promise<{ client: SimulatedE2EClient; firstClaim: Promise<ClaimResponseBody> }> => {
+  const client = await createSimulatedClient(browser, baseURL, 'B', testRunId);
+  const firstClaim = client.page
+    .waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname.endsWith('/api/capture/claim'),
+      { timeout: IMPORT_TIMEOUT },
+    )
+    .then(async (response) => {
+      expect(response.status()).toBe(200);
+      return (await response.json()) as ClaimResponseBody;
+    });
+  // Awaited by the caller; never left as an unhandled rejection.
+  firstClaim.catch(() => undefined);
+  await client.sync.setupSuperSync(getSuperSyncConfig(user));
+  await client.sync.syncAndWait();
+  return { client, firstClaim };
+};
+
+/** B's first claim ran with the key and was given nothing to import. */
+const expectEmptyClaim = async (
+  firstClaim: Promise<ClaimResponseBody>,
+): Promise<void> => {
+  expect(await firstClaim).toEqual({ status: 'ok', items: [] });
+};
+
 test.describe('@supersync Agent task capture', () => {
   let clientA: SimulatedE2EClient | null = null;
   let clientB: SimulatedE2EClient | null = null;
@@ -402,7 +444,15 @@ test.describe('@supersync Agent task capture', () => {
     await a.sync.startSync();
     await expectInboxTasks(a, title, 1);
     await a.sync.syncAndWait();
-    clientB = await joinClient(browser, baseURL!, testRunId, user);
+    const joined = await joinClientRecordingFirstClaim(
+      browser,
+      baseURL!,
+      testRunId,
+      user,
+    );
+    clientB = joined.client;
+    // A acked the item, so B's import must get nothing to create again.
+    await expectEmptyClaim(joined.firstClaim);
     await expectInboxTasks(clientB, title, 1);
     await clientB.sync.syncAndWait();
     await expectInboxTasks(clientB, title, 1);
@@ -423,8 +473,15 @@ test.describe('@supersync Agent task capture', () => {
     await expectInboxTasks(a, title, 1);
     await a.sync.syncAndWait();
 
-    clientB = await joinClient(browser, baseURL!, testRunId, user);
+    const joined = await joinClientRecordingFirstClaim(
+      browser,
+      baseURL!,
+      testRunId,
+      user,
+    );
+    clientB = joined.client;
     // B imports too (the key arrived by sync): the acked item must not return.
+    await expectEmptyClaim(joined.firstClaim);
     await clientB.sync.syncAndWait();
     await expectInboxTasks(clientB, title, 1);
   });
@@ -562,7 +619,16 @@ test.describe('@supersync Agent task capture', () => {
 
     // A goes away still holding the lease; B finds nothing it may claim.
     await a.context.setOffline(true);
-    clientB = await joinClient(browser, baseURL!, testRunId, user);
+    const joined = await joinClientRecordingFirstClaim(
+      browser,
+      baseURL!,
+      testRunId,
+      user,
+    );
+    clientB = joined.client;
+    // B's claim must actually have run (and found the lease held) before the
+    // pending count says anything.
+    await expectEmptyClaim(joined.firstClaim);
     expect(await pendingCount(user)).toBe(1);
     // Once the lease expires, B takes the item over.
     await expireCaptureLeases(user);

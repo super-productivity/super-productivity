@@ -49,6 +49,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { EmlDropDirective } from '../../core/drop-paste-input/eml-drop.directive';
 import { wheelDeltaPx } from '../../util/wheel-delta-px';
+import { openSyncSettingsDialog } from '../../imex/sync/open-sync-settings-dialog';
 
 /**
  * How long a reveal keeps re-asserting its edge while the row's own box is
@@ -213,8 +214,7 @@ export class MainHeaderComponent implements OnDestroy {
   });
   // One icon per state, nothing drawn over it (#10427). All but `wifi_off` are
   // the SVG icons in `BUILT_IN_SVG_ICONS`: one sync ring at the header's icon
-  // size, with a check, "!" or slash inside, so the arrows stay identical
-  // across states and in-sync differs from pending only by the check.
+  // size, with dots, a check, "!" or slash to distinguish states without motion.
   // Same precedence as `syncTooltip`.
   syncIcon = computed(() => {
     if (!this.syncIsEnabledAndReady()) {
@@ -227,13 +227,11 @@ export class MainHeaderComponent implements OnDestroy {
       return 'sync_error';
     }
     if (this.isSyncInProgress()) {
-      return 'sync_ring';
+      return 'sync_in_progress';
     }
     return this.hasNoPendingOps() ? 'sync_done' : 'sync_ring';
   });
-  isSyncIconSpinning = computed(
-    () => this.syncIcon() === 'sync_ring' && !!this.isSyncInProgress(),
-  );
+  isSyncIconSpinning = computed(() => this.syncIcon() === 'sync_in_progress');
   // Test hook for the E2E sync helpers, which wait on these states. 'local':
   // every local change is uploaded. 'remote': the remote was also checked
   // within the last minute. Deliberately independent of the spinner and
@@ -678,9 +676,10 @@ export class MainHeaderComponent implements OnDestroy {
     if (this.dialogSyncCfgRef) {
       return;
     }
-    const { DialogSyncCfgComponent } =
-      await import('../../imex/sync/dialog-sync-cfg/dialog-sync-cfg.component');
-    this.dialogSyncCfgRef = this.matDialog.open(DialogSyncCfgComponent);
+    this.dialogSyncCfgRef = await openSyncSettingsDialog(
+      this.matDialog,
+      this._configService.sync(),
+    );
     this._subs.add(
       this.dialogSyncCfgRef.afterClosed().subscribe(() => {
         this.dialogSyncCfgRef = null;

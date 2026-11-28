@@ -69,7 +69,11 @@ for (const [sleepEvent, wakeEvent] of [
     const win = createWin();
     const idleTimes = [];
     lockedStates = [];
-    initPowerMonitorHandlers(powerMonitor, win, (idleTime) => idleTimes.push(idleTime));
+    initPowerMonitorHandlers(
+      powerMonitor,
+      () => win,
+      (idleTime) => idleTimes.push(idleTime),
+    );
 
     powerMonitor.emit(sleepEvent);
     powerMonitor.emit(wakeEvent);
@@ -84,3 +88,41 @@ for (const [sleepEvent, wakeEvent] of [
     assert.deepEqual(lockedStates, [true, false]);
   });
 }
+
+// start-app registers the handlers on `ready` while createMainWin() is still
+// awaiting createWindow(), so the window must be read when the event fires.
+test('sends to a window created after the handlers are registered (#11430)', () => {
+  const { initPowerMonitorHandlers } = loadModule();
+  const powerMonitor = createPowerMonitor();
+  let win;
+  lockedStates = [];
+  initPowerMonitorHandlers(
+    powerMonitor,
+    () => win,
+    () => {},
+  );
+  win = createWin();
+
+  powerMonitor.emit('lock-screen');
+  powerMonitor.emit('unlock-screen');
+
+  assert.deepEqual(
+    win.sent.map(([channel]) => channel),
+    ['SUSPEND', 'RESUME'],
+  );
+});
+
+test('does not throw when no window exists yet (#11430)', () => {
+  const { initPowerMonitorHandlers } = loadModule();
+  const powerMonitor = createPowerMonitor();
+  lockedStates = [];
+  initPowerMonitorHandlers(
+    powerMonitor,
+    () => undefined,
+    () => {},
+  );
+
+  assert.doesNotThrow(() => powerMonitor.emit('suspend'));
+  assert.doesNotThrow(() => powerMonitor.emit('resume'));
+  assert.deepEqual(lockedStates, [true, false]);
+});

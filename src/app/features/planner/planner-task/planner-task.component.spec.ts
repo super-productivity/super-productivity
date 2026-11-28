@@ -4,6 +4,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 import { PlannerTaskComponent } from './planner-task.component';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { DEFAULT_TASK, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
@@ -13,6 +14,8 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { DateService } from '../../../core/date/date.service';
+import { findSpringForwardSunday } from '../../tasks/dst.test-helper';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { DateAdapter } from '@angular/material/core';
 import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
@@ -25,6 +28,7 @@ import {
 } from '../../work-context/store/work-context-meta.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TODAY_TAG } from '../../tag/tag.const';
+import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
 
 const makeTask = (overrides: Partial<TaskCopy> = {}): TaskCopy =>
   ({
@@ -38,10 +42,12 @@ const makeTask = (overrides: Partial<TaskCopy> = {}): TaskCopy =>
 describe('PlannerTaskComponent', () => {
   let currentTaskId: WritableSignal<string | null>;
   let taskServiceMock: { toggleDoneWithAnimation: jasmine.Spy };
+  let taskSchedulingMock: { scheduleTask: jasmine.Spy };
   let storeMock: jasmine.SpyObj<Store>;
   let matDialogMock: jasmine.SpyObj<MatDialog>;
   let config: typeof DEFAULT_GLOBAL_CONFIG;
   let logicalToday: Date;
+  let startOfNextDayDiffMs: number;
   let firstDayOfWeek: number;
   let multiSelectMock: {
     selectedIds: WritableSignal<Set<string>>;
@@ -79,7 +85,6 @@ describe('PlannerTaskComponent', () => {
         'setSelectedId',
         'setCurrentId',
         'scheduleForTodayById',
-        'scheduleTask',
         'remove',
         'toggleDoneWithAnimation',
         'update',
@@ -88,8 +93,10 @@ describe('PlannerTaskComponent', () => {
       getByIdLive$: () => of(null),
       getByIdWithSubTaskData$: () => of(null),
     };
+    taskSchedulingMock = jasmine.createSpyObj('TaskSchedulingService', ['scheduleTask']);
     config = DEFAULT_GLOBAL_CONFIG;
     logicalToday = new Date(2026, 8, 12);
+    startOfNextDayDiffMs = 0;
     firstDayOfWeek = 1;
     storeMock = jasmine.createSpyObj('Store', ['dispatch']);
     matDialogMock = jasmine.createSpyObj('MatDialog', ['open']);
@@ -111,6 +118,7 @@ describe('PlannerTaskComponent', () => {
       schemas: [NO_ERRORS_SCHEMA],
       providers: [
         { provide: TaskService, useValue: taskServiceMock },
+        { provide: TaskSchedulingService, useValue: taskSchedulingMock },
         {
           provide: GlobalConfigService,
           useValue: {
@@ -125,6 +133,7 @@ describe('PlannerTaskComponent', () => {
           useValue: {
             getLogicalTodayDate: () => new Date(logicalToday),
             todayStr: () => '2026-09-12',
+            getStartOfNextDayDiffMs: () => startOfNextDayDiffMs,
           },
         },
         {
@@ -147,7 +156,14 @@ describe('PlannerTaskComponent', () => {
         // `done-toggle` stays REAL: the planner's modifier-click behaviour is a
         // property of how this template configures that shared component, so
         // stubbing it would test nothing (see the spec at the bottom).
-        imports: [DoneToggleComponent, MsToStringPipe, RenderLinksPipe, TranslatePipe],
+        // Inline estimates also need the real input and its duration value accessor.
+        imports: [
+          DoneToggleComponent,
+          InlineInputComponent,
+          MsToStringPipe,
+          RenderLinksPipe,
+          TranslatePipe,
+        ],
         schemas: [NO_ERRORS_SCHEMA],
       },
     });
@@ -215,7 +231,7 @@ describe('PlannerTaskComponent', () => {
 
       component.onKeydown(moveDayEvent(component, 'ArrowRight'));
 
-      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
         task,
         new Date(2026, 0, 1, 23, 15).getTime(),
         'm30',
@@ -228,13 +244,15 @@ describe('PlannerTaskComponent', () => {
       ['ArrowRight', new Date(2026, 8, 15, 1, 0).getTime()],
     ] as const) {
       it(`moves a timed task from its scheduled date with ${key} when its displayed logical day differs`, () => {
+        // 01:00 on Sep 14 is the late night of Sep 13 with a 04:00 day start (#12012)
+        startOfNextDayDiffMs = 4 * 60 * 60 * 1000;
         const dueWithTime = new Date(2026, 8, 14, 1, 0).getTime();
         const task = makeTask({ dueWithTime, remindAt: undefined });
         const { component } = create(task, true, '2026-09-13');
 
         component.onKeydown(moveDayEvent(component, key));
 
-        expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+        expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
           task,
           expectedDate,
           TaskReminderOptionId.DoNotRemind,
@@ -242,6 +260,33 @@ describe('PlannerTaskComponent', () => {
         );
       });
     }
+
+    // On the spring-forward Sunday a time just after the day start is less
+    // than the offset past midnight, yet it belongs to that Sunday
+    it('moves a time just after the day start from its own day on a spring-forward day', () => {
+      const gap = findSpringForwardSunday(2026);
+      if (!gap) {
+        // Timezone without a spring-forward transition (UTC, Tokyo).
+        return;
+      }
+      const dayStartHour = gap.missingHour + 2;
+      startOfNextDayDiffMs = dayStartHour * 60 * 60 * 1000;
+      const due = new Date(gap.sunday);
+      due.setHours(dayStartHour, 30, 0, 0);
+      const expected = new Date(due);
+      expected.setDate(expected.getDate() + 1);
+      const task = makeTask({ dueWithTime: due.getTime(), remindAt: undefined });
+      const { component } = create(task, true, getDbDateStr(gap.sunday));
+
+      component.onKeydown(moveDayEvent(component, 'ArrowRight'));
+
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
+        task,
+        expected.getTime(),
+        TaskReminderOptionId.DoNotRemind,
+        false,
+      );
+    });
 
     it('leaves the move-day shortcut untouched in an input and for opt-out cards', () => {
       const optedIn = create(makeTask(), true, '2026-01-01').component;
@@ -350,7 +395,7 @@ describe('PlannerTaskComponent', () => {
 
       component.onTaskShortcut(shortcutEvent('m'));
 
-      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
         task,
         new Date(2026, 8, 13, 14, 45).getTime(),
         'm30',
@@ -374,7 +419,7 @@ describe('PlannerTaskComponent', () => {
 
       component.onTaskShortcut(shortcutEvent('m'));
 
-      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
         task,
         new Date(2026, 8, 13, 14, 45).getTime(),
         TaskReminderOptionId.m30,
@@ -393,7 +438,7 @@ describe('PlannerTaskComponent', () => {
 
       component.onTaskShortcut(shortcutEvent('m'));
 
-      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+      expect(taskSchedulingMock.scheduleTask).toHaveBeenCalledWith(
         task,
         new Date(2026, 8, 13, 14, 45).getTime(),
         TaskReminderOptionId.DoNotRemind,
@@ -590,7 +635,7 @@ describe('PlannerTaskComponent', () => {
       spyOn(next, 'focus');
       spyOn(moved, 'focus');
       host.focus();
-      taskServiceMock['scheduleTask'].and.callFake(() => {
+      taskSchedulingMock.scheduleTask.and.callFake(() => {
         component.ngOnDestroy();
         host.remove();
       });
@@ -965,6 +1010,85 @@ describe('PlannerTaskComponent', () => {
   });
 
   describe('timeEstimate', () => {
+    it('does not overwrite an externally updated estimate when the same duration is pasted inline', fakeAsync(() => {
+      const hour = 60 * 60 * 1000;
+      const task = makeTask({ timeEstimate: 0, timeSpent: 0 });
+      const { fixture, component } = create(task);
+      tick();
+      const input = fixture.nativeElement.querySelector(
+        'inline-input input',
+      ) as HTMLInputElement;
+      const update = taskServiceMock['update'] as jasmine.Spy;
+
+      input.focus();
+      input.value = '1h';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.blur();
+      expect(update).toHaveBeenCalledOnceWith(task.id, { timeEstimate: hour });
+      fixture.componentRef.setInput('task', { ...task, timeEstimate: hour });
+      fixture.detectChanges();
+      tick();
+
+      // The estimation dialog can update this task while Planner retains its row.
+      fixture.componentRef.setInput('task', { ...task, timeEstimate: 2 * hour });
+      fixture.detectChanges();
+      tick();
+      expect(fixture.nativeElement.querySelector('inline-input input')).toBe(input);
+      expect(input.value).toBe('2h');
+      update.calls.reset();
+
+      input.focus();
+      input.value = '2h';
+      input.dispatchEvent(
+        new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertFromPaste',
+          data: '2h',
+        }),
+      );
+      input.blur();
+
+      expect(update.calls.allArgs()).toEqual([]);
+      expect(component.timeEstimate()).toBe(2 * hour);
+      expect(input.value).toBe('2h');
+    }));
+
+    it('does not save an inline estimate typed before an external update replaced it', fakeAsync(() => {
+      const hour = 60 * 60 * 1000;
+      const task = makeTask({ timeEstimate: 0, timeSpent: 0 });
+      const { fixture, component } = create(task);
+      tick();
+      const input = fixture.nativeElement.querySelector(
+        'inline-input input',
+      ) as HTMLInputElement;
+      const update = taskServiceMock['update'] as jasmine.Spy;
+
+      input.focus();
+      input.value = '1h';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+
+      // A sync op or another window updates the estimate while the field is focused.
+      fixture.componentRef.setInput('task', { ...task, timeEstimate: 2 * hour });
+      fixture.detectChanges();
+      tick();
+      expect(fixture.nativeElement.querySelector('inline-input input')).toBe(input);
+      expect(input.value).toBe('2h');
+
+      input.value = '2h';
+      input.dispatchEvent(
+        new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertFromPaste',
+          data: '2h',
+        }),
+      );
+      input.blur();
+
+      expect(update.calls.allArgs()).toEqual([]);
+      expect(component.timeEstimate()).toBe(2 * hour);
+      expect(input.value).toBe('2h');
+    }));
+
     it('returns the raw estimate when the task has subTaskIds', () => {
       const { component } = create(
         makeTask({ timeEstimate: 5000, timeSpent: 2000, subTaskIds: ['s1'] }),

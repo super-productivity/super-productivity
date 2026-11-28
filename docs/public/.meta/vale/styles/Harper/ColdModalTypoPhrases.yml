@@ -1,0 +1,22 @@
+---
+# Generated from Harper's ColdModalTypoPhrases rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Rewrites `cold` to `could` when it appears in common subject-plus-verb modal contexts.
+extends: existence
+message: "This looks like a modal typo."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "could"
+nonword: true
+tokens:
+  - "(?<=\\b(?:they|she|you|he|it|we|i)(?!\\s*\\n\\s*\\n)\\s+)(?:cold)(?=(?!\\s*\\n\\s*\\n)\\s+(?:never)(?!\\s*\\n\\s*\\n)\\s+(?:leave|start|think|feel|find|have|help|know|make|need|stop|take|want|work|get|say|see|use|be|do|go)\\b)"
+  - "(?<=\\b(?:they|she|you|he|it|we|i)(?!\\s*\\n\\s*\\n)\\s+)(?:cold)(?=(?!\\s*\\n\\s*\\n)\\s+(?:not)(?!\\s*\\n\\s*\\n)\\s+(?:leave|start|think|feel|find|have|help|know|make|need|stop|take|want|work|get|say|see|use|be|do|go)\\b)"
+  - "(?<=\\b(?:they|she|you|he|it|we|i)(?!\\s*\\n\\s*\\n)\\s+)(?:cold)(?=(?!\\s*\\n\\s*\\n)\\s+(?:leave|start|think|feel|find|have|help|know|make|need|stop|take|want|work|get|say|see|use|be|do|go)\\b)"

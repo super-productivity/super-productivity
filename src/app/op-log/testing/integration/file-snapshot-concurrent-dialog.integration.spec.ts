@@ -361,9 +361,13 @@ for (const isUseSplitSyncFiles of [false, true]) {
       async () => {
         const pendingId = await phoneSyncsOnceThenEditsOffline();
 
+        // Few ops on purpose: every op here goes through the real merge path
+        // (~10 ms/op locally), so ~1900 ops took 17-22s and timed out under
+        // full-suite load. The 1999-vs-2000 MAX_RECENT_OPS boundary is covered
+        // by file-based-sync-gap.util.spec.ts.
         await desktopUploadsBatch(10); // sv=2
-        await desktopUploadsBatch(1000); // sv=3
-        await desktopUploadsBatch(900); // sv=4 → 1911 + seed ≤ 2000
+        await desktopUploadsBatch(20); // sv=3
+        await desktopUploadsBatch(20); // sv=4 → 51 ops, well within recentOps
         expect(desktopCounter + 1).toBeLessThanOrEqual(
           FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS,
         );

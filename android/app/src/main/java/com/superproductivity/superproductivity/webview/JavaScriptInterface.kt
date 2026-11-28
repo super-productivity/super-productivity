@@ -14,6 +14,8 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.superproductivity.superproductivity.App
 import com.superproductivity.superproductivity.BuildConfig
+import com.superproductivity.superproductivity.CapacitorMainActivity
+import com.superproductivity.superproductivity.FullscreenActivity
 import com.superproductivity.superproductivity.FullscreenActivity.Companion.WINDOW_INTERFACE_PROPERTY
 import com.superproductivity.superproductivity.app.LaunchDecider
 import com.superproductivity.superproductivity.review.InAppReview
@@ -23,7 +25,9 @@ import com.superproductivity.superproductivity.service.FocusModeForegroundServic
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
+import com.superproductivity.superproductivity.service.RepeatReminderCache
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
+import com.superproductivity.superproductivity.service.TimeEstimate
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.share.CaptureKeyStore
 import com.superproductivity.superproductivity.share.ShareUploadWorker
@@ -90,6 +94,25 @@ class JavaScriptInterface(
         val launchDecider = LaunchDecider(activity)
         val launchMode = launchDecider.getLaunchMode()
         return "${versionName}_L$launchMode"
+    }
+
+    /**
+     * Online-mode sunset (#8832): the web bundle calls this once it has written
+     * and verified the native-store backup, which the offline app restores on
+     * its blank first start. Only the legacy online activity may hand over, so a
+     * misdetecting offline caller can never trigger a restart.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun switchToOfflineMode(): Boolean {
+        if (activity !is FullscreenActivity || !LaunchDecider(activity).switchToOfflineMode()) {
+            return false
+        }
+        activity.runOnUiThread {
+            activity.startActivity(Intent(activity, CapacitorMainActivity::class.java))
+            activity.finish()
+        }
+        return true
     }
 
     // Tells the web bundle that snooze/tap events carry the reminder type, so it
@@ -247,6 +270,22 @@ class JavaScriptInterface(
             // (exempt from the background-start ban) or, after a restore in a new
             // process, this comes from the JS recovery at launch or onResume.
             activity.startService(intent)
+        }
+    }
+
+    /**
+     * The estimate of the tracked task, so native can notify when it is
+     * exceeded while the WebView is paused (#11896). [timeEstimateMs] <= 0
+     * clears it. Title and body come translated from the web app.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setTrackingTimeEstimate(taskId: String, timeEstimateMs: Long, title: String, body: String) {
+        safeCall("Failed to set tracking time estimate") {
+            TrackingForegroundService.setTimeEstimate(
+                activity,
+                if (timeEstimateMs > 0) TimeEstimate(taskId, timeEstimateMs, title, body) else null
+            )
         }
     }
 
@@ -547,11 +586,34 @@ class JavaScriptInterface(
     /**
      * Get pending done-state changes from the home screen widget and clear the
      * queue. Returns a JSON object string `{taskId: targetIsDone}` or null if empty.
+     * Only for legacy online-mode installs whose remote web app predates
+     * peekWidgetDoneQueue()/ackWidgetDoneQueue().
      */
     @Suppress("unused")
     @JavascriptInterface
     fun getWidgetDoneQueue(): String? {
         return WidgetDoneQueue.getAndClear(activity)
+    }
+
+    /** Like getWidgetDoneQueue(), but the entries stay until ackWidgetDoneQueue(). */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun peekWidgetDoneQueue(): String? {
+        return WidgetDoneQueue.peekJson(activity)
+    }
+
+    /** Remove the entries of a peekWidgetDoneQueue() read once their ops are written. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun ackWidgetDoneQueue(ackedJson: String) {
+        WidgetDoneQueue.acknowledge(activity, ackedJson)
+    }
+
+    /** Get the project selected by the most recent widget row tap and clear it. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getWidgetProjectToOpen(): String? {
+        return TaskListWidgetProvider.getAndClearProjectToOpen(activity)
     }
 
     /**
@@ -666,6 +728,33 @@ class JavaScriptInterface(
     fun setBackgroundReminderSettings(isDisabled: Boolean, useAlarmStyle: Boolean) {
         safeCall("Failed to set background reminder settings") {
             BackgroundReminderSettingsStore.save(activity, isDisabled, useAlarmStyle)
+        }
+    }
+
+    /**
+     * Mirrors the start-of-next-day offset used when a repeat clock falls
+     * before that boundary (#3378). A separate method so an old WebView that
+     * only calls [setBackgroundReminderSettings] keeps working, and so that
+     * call does not reset an offset already stored.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setStartOfNextDayDiffMs(diffMs: Int) {
+        safeCall("Failed to set start-of-next-day offset") {
+            BackgroundReminderSettingsStore.saveStartOfNextDayDiffMs(activity, diffMs.toLong())
+        }
+    }
+
+    /**
+     * Mirrors the open app's repeat configs to the background repeat-reminder
+     * cache (RepeatReminderCache.replaceFromApp). Optional on the JS side so
+     * an old bundle paired with this APK keeps working.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setRepeatCfgSnapshot(json: String) {
+        safeCall("Failed to store repeat configs") {
+            RepeatReminderCache.replaceFromApp(activity, json)
         }
     }
 

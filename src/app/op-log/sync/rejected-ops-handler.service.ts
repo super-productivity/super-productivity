@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { Operation, OpType, RepairSummary, VectorClock } from '../core/operation.types';
 import { OpLog } from '../../core/log';
@@ -14,38 +14,8 @@ import {
 import { toEntityKey } from '../util/entity-key.util';
 import { compareVectorClocks, VectorClockComparison } from '../../core/util/vector-clock';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import { getRepairSummary } from '../validation/repair-summary.util';
 import { OperationLogDownloadService } from './operation-log-download.service';
-
-const REPAIR_SUMMARY_KEYS: readonly (keyof RepairSummary)[] = [
-  'entityStateFixed',
-  'orphanedEntitiesRestored',
-  'invalidReferencesRemoved',
-  'relationshipsFixed',
-  'structureRepaired',
-  'typeErrorsFixed',
-];
-
-const getRepairSummary = (payload: unknown): RepairSummary | undefined => {
-  if (typeof payload !== 'object' || payload === null) {
-    return undefined;
-  }
-  const summary = (payload as Record<string, unknown>)['repairSummary'];
-  if (typeof summary !== 'object' || summary === null) {
-    return undefined;
-  }
-  const summaryRecord = summary as Record<string, unknown>;
-  if (
-    !REPAIR_SUMMARY_KEYS.every(
-      (key) =>
-        typeof summaryRecord[key] === 'number' &&
-        Number.isFinite(summaryRecord[key]) &&
-        (summaryRecord[key] as number) >= 0,
-    )
-  ) {
-    return undefined;
-  }
-  return summaryRecord as unknown as RepairSummary;
-};
 
 const MAX_LOGGED_REJECTION_CLOCK_SAMPLES = 5;
 
@@ -101,6 +71,7 @@ type ConcurrentResolutionResult =
 })
 export class RejectedOpsHandlerService {
   private opLogStore = inject(OperationLogStoreService);
+  private injector = inject(Injector);
   private snackService = inject(SnackService);
   private supersededOperationResolver = inject(SupersededOperationResolverService);
   private repairOperationService = inject(RepairOperationService);
@@ -175,7 +146,7 @@ export class RejectedOpsHandlerService {
         OpLog.error(
           `RejectedOpsHandlerService: Storage quota exceeded - sync is broken!`,
         );
-        handleStorageQuotaError(rejected.errorCode);
+        handleStorageQuotaError(rejected.errorCode, this.injector);
         // Don't mark as rejected - user needs to take action to fix storage
         continue;
       }

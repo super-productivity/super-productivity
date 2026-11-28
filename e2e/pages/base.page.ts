@@ -195,10 +195,12 @@ export abstract class BasePage {
       const expectedTask = this.page
         .locator('task')
         .filter({ hasText: prefixedExpectedVisibleTitle });
+      // Short syntax (`30m/1h`, `#tag`) changes the visible title, so also
+      // accept any new task row instead of waiting out the full timeout.
+      const newTaskRow = this.page.locator('task').nth(initialCount);
 
       try {
-        // Primary: wait for the specific task to be visible
-        await expectedTask.first().waitFor({
+        await expectedTask.or(newTaskRow).first().waitFor({
           state: 'visible',
           timeout: maxWaitTime,
         });

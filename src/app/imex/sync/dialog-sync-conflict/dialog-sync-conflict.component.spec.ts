@@ -9,6 +9,8 @@ import { DialogSyncConflictComponent } from './dialog-sync-conflict.component';
 import { ConflictData, ConflictReason, VectorClock } from '../../../op-log/sync-exports';
 import { T } from '../../../t.const';
 import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
+import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 
 const buildConflictData = (overrides: {
   localVectorClock?: VectorClock;
@@ -49,8 +51,10 @@ describe('DialogSyncConflictComponent', () => {
   };
 
   let mockSyncLocalStateService: jasmine.SpyObj<SyncLocalStateService>;
+  let activeProviderId: SyncProviderId;
 
   beforeEach(async () => {
+    activeProviderId = SyncProviderId.WebDAV;
     const mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
     const mockDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockSyncLocalStateService = jasmine.createSpyObj('SyncLocalStateService', [
@@ -72,6 +76,10 @@ describe('DialogSyncConflictComponent', () => {
         { provide: MatDialog, useValue: mockDialog },
         { provide: MAT_DIALOG_DATA, useValue: buildConflictData({}) },
         { provide: SyncLocalStateService, useValue: mockSyncLocalStateService },
+        {
+          provide: SyncProviderManager,
+          useValue: { getActiveProvider: () => ({ id: activeProviderId }) },
+        },
       ],
     }).compileComponents();
   });
@@ -102,6 +110,35 @@ describe('DialogSyncConflictComponent', () => {
       expect(
         mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps,
       ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('first sync on SuperSync (2b)', () => {
+    it('uses the first-sync choice for a never-synced SuperSync device', () => {
+      activeProviderId = SyncProviderId.SuperSync;
+      expect(createComponent(buildConflictData({})).isFirstSuperSync).toBe(true);
+    });
+
+    it('keeps the full dialog for a device that synced before', () => {
+      activeProviderId = SyncProviderId.SuperSync;
+      const data = buildConflictData({ lastSyncedVectorClock: { clientA: 1 } });
+      expect(createComponent(data).isFirstSuperSync).toBe(false);
+    });
+
+    it('keeps the full dialog for other providers', () => {
+      expect(createComponent(buildConflictData({})).isFirstSuperSync).toBe(false);
+    });
+
+    it('closes without the overwrite confirm once the choice showed its warning', () => {
+      const component = createComponent(buildConflictData({}));
+
+      component.close('USE_LOCAL', true);
+
+      expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+      expect(TestBed.inject(MatDialogRef).close).toHaveBeenCalledWith('USE_LOCAL');
+      expect(
+        mockSyncLocalStateService.confirmOverwriteOfUndecryptableRemoteOps,
+      ).toHaveBeenCalled();
     });
   });
 

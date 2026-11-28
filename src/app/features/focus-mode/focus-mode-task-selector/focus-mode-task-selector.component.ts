@@ -64,6 +64,8 @@ export class FocusModeTaskSelectorComponent implements AfterViewInit {
 
   @HostListener('keydown.enter', ['$event'])
   handleEnter(event: KeyboardEvent): void {
+    // Enter confirms an IME candidate before the task draft is finished.
+    if (event.isComposing || event.keyCode === 229) return;
     if (this.selectTaskComponent?.isInCreateMode()) {
       event.preventDefault();
       this.createAndSelectTaskFromInput();
@@ -71,6 +73,8 @@ export class FocusModeTaskSelectorComponent implements AfterViewInit {
   }
 
   onKeyDown(event: KeyboardEvent): void {
+    // Escape cancels the candidate, not the task draft.
+    if (event.isComposing || event.keyCode === 229) return;
     // Only handle Escape to close the task selector
     // Let the autocomplete and input handle all other keys naturally
     if (event.key === 'Escape') {
@@ -80,11 +84,17 @@ export class FocusModeTaskSelectorComponent implements AfterViewInit {
   }
 
   createAndSelectTaskFromInput(): void {
-    const taskTitle = this.currentTaskInputText().trim();
+    // SelectTaskComponent hands its text over in an effect, which can run
+    // after an Enter or click that follows the last keystroke too closely.
+    const value: unknown = this.selectTaskComponent
+      ? this.selectTaskComponent.taskSelectCtrl.value
+      : this.currentTaskInputText();
+    const taskTitle = typeof value === 'string' ? value.trim() : '';
     if (taskTitle) {
       const newTaskId = this._taskService.add(taskTitle, false, {});
-      this.taskSelected.emit(newTaskId);
+      this.selectTaskComponent?.taskSelectCtrl.setValue('');
       this.currentTaskInputText.set('');
+      this.taskSelected.emit(newTaskId);
     }
   }
 

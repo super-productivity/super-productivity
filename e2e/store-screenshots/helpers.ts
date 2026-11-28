@@ -9,6 +9,7 @@
 
 import type { Page } from '@playwright/test';
 import { waitForAppReady } from '../utils/waits';
+import { FORCED_THEME } from './matrix';
 
 /**
  * Toggle the right-hand notes panel. Selector from
@@ -98,7 +99,11 @@ export const resetView = async (page: Page): Promise<void> => {
  * new DARK_MODE setter on top of the fixture's initial setter wins from here
  * on. We then reload so GlobalThemeService picks up the new value at boot.
  */
-export const applyTheme = async (page: Page, theme: 'dark' | 'light'): Promise<void> => {
+export const applyTheme = async (
+  page: Page,
+  requestedTheme: 'dark' | 'light',
+): Promise<void> => {
+  const theme = FORCED_THEME ?? requestedTheme;
   await page.addInitScript((darkMode) => {
     try {
       localStorage.setItem('DARK_MODE', darkMode);
@@ -294,4 +299,67 @@ export const setPlannerCalendarExpanded = async (
   }, expanded);
   // Settle frame so layout reflects the new state.
   await page.waitForTimeout(150);
+};
+
+/** Open the issue provider panel on layouts without the desktop toggle button. */
+export const showIssuePanel = async (page: Page): Promise<void> => {
+  await dispatchInPage(page, { type: '[Layout] Toggle IssuePanel' });
+  await page.locator('issue-panel').first().waitFor({ state: 'visible' });
+};
+
+/**
+ * Track `taskId` and open the focus-mode overlay with the given timer strategy.
+ * Used on phones, which have neither the hover start button nor the header
+ * focus button the desktop scenes click.
+ */
+export const startFocusOverlay = async (
+  page: Page,
+  taskId: string,
+  mode: 'Flowtime' | 'Pomodoro' | 'Countdown',
+): Promise<void> => {
+  await dispatchInPage(page, { type: '[Task] SetCurrentTask', id: taskId });
+  await dispatchInPage(page, { type: '[FocusMode] Set Mode', mode });
+  await dispatchInPage(page, { type: '[FocusMode] Show Overlay' });
+};
+
+/** End the focus session and close its overlay so routing works again. */
+export const stopFocusOverlay = async (page: Page): Promise<void> => {
+  await dispatchInPage(page, { type: '[FocusMode] Cancel Session' });
+  await dispatchInPage(page, { type: '[FocusMode] Hide Overlay' });
+  await page.locator('focus-mode-main').first().waitFor({ state: 'hidden' });
+};
+
+/**
+ * Give seeded tasks tracked time on past days so time-tracking views have
+ * content. The seed ships with zero tracked time because the regular store
+ * captures would otherwise show time badges on every row.
+ */
+export const addTrackedTime = async (
+  page: Page,
+  entries: readonly {
+    taskId: string;
+    minutesByDay: readonly (readonly [dayOffset: number, minutes: number])[];
+  }[],
+): Promise<void> => {
+  for (const { taskId, minutesByDay } of entries) {
+    // Day keys are computed in-page so they follow the pinned clock and timezone.
+    const timeSpentOnDay = await page.evaluate((days) => {
+      const out: Record<string, number> = {};
+      for (const [offset, minutes] of days) {
+        // setDate, not ms arithmetic, so a DST change can't shift the day.
+        const d = new Date(Date.now());
+        d.setDate(d.getDate() + offset);
+        const pad = (n: number): string => String(n).padStart(2, '0');
+        const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        out[key] = minutes * 60_000;
+      }
+      return out;
+    }, minutesByDay);
+    const timeSpent = Object.values(timeSpentOnDay).reduce((a, b) => a + b, 0);
+    await dispatchInPage(page, {
+      type: '[Task Shared] updateTask',
+      task: { id: taskId, changes: { timeSpentOnDay, timeSpent } },
+      meta: { isPersistent: false },
+    });
+  }
 };

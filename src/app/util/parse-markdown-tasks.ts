@@ -71,13 +71,13 @@ const parseLineStructure = (line: string): ParsedLine | null => {
     return null;
   }
 
-  // Check for checkbox list items: - [ ] or - [x]
-  const checkboxMatch = trimmedLine.match(/^-\s*\[([ x])\]\s*(.+)$/);
+  // Check for checkbox list items: - [ ], - [x] or - [X], also with a * bullet
+  const checkboxMatch = trimmedLine.match(/^[-*]\s*\[([ xX])\]\s*(.+)$/);
   if (checkboxMatch) {
     return {
       indentLevel,
       content: checkboxMatch[2].trim(),
-      isCompleted: checkboxMatch[1] === 'x',
+      isCompleted: checkboxMatch[1] !== ' ',
       isTaskLine: true,
       originalLine: line,
     };

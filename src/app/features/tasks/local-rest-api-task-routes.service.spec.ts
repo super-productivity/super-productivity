@@ -1,8 +1,10 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of } from 'rxjs';
 import { LocalRestApiTaskRoutesService } from './local-rest-api-task-routes.service';
 import { TaskService } from './task.service';
+import { TaskArchiveOrchestratorService } from './task-archive-orchestrator.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { ProjectService } from '../project/project.service';
 import { Project } from '../project/project.model';
@@ -17,10 +19,13 @@ import {
   LocalRestApiResponsePayload,
 } from '../../../../electron/shared-with-frontend/local-rest-api.model';
 import { ArchiveOperationHandler } from '../../op-log/apply/archive-operation-handler.service';
+import { TrackingPresenceService } from '../tracking-presence/tracking-presence.service';
+import { RemoteSessionView } from '../tracking-presence/tracking-presence.model';
 
 describe('LocalRestApiTaskRoutesService', () => {
   let service: LocalRestApiTaskRoutesService;
   let taskServiceMock: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestratorMock: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let taskArchiveServiceMock: jasmine.SpyObj<TaskArchiveService>;
   let archiveOperationHandlerMock: jasmine.SpyObj<ArchiveOperationHandler>;
   let projectServiceMock: jasmine.SpyObj<ProjectService>;
@@ -28,6 +33,7 @@ describe('LocalRestApiTaskRoutesService', () => {
   let featureBridgeMock: jasmine.SpyObj<LocalRestApiFeatureBridgeService>;
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
+  const remoteSessionView = signal<RemoteSessionView | null>(null);
   let activeProjects: Project[];
 
   const createMockTask = (id: string, overrides: Partial<Task> = {}): Task =>
@@ -93,19 +99,11 @@ describe('LocalRestApiTaskRoutesService', () => {
 
   beforeEach(() => {
     activeProjects = [];
+    remoteSessionView.set(null);
 
     taskServiceMock = jasmine.createSpyObj(
       'TaskService',
-      [
-        'add',
-        'addSubTaskTo',
-        'update',
-        'remove',
-        'setCurrentId',
-        'moveToArchive',
-        'restoreTask',
-        'getAllTasksEverywhere',
-      ],
+      ['add', 'addSubTaskTo', 'update', 'remove', 'setCurrentId'],
       {
         allTasks$: of([]),
         currentTask$: of(null),
@@ -113,6 +111,11 @@ describe('LocalRestApiTaskRoutesService', () => {
         getByIdWithSubTaskData$: (_id: string) => of(undefined),
       },
     );
+    taskArchiveOrchestratorMock = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'moveToArchive',
+      'restoreTask',
+      'getAllTasksEverywhere',
+    ]);
     (taskServiceMock as any).add.and.returnValue('new-task-id');
     (taskServiceMock as any).addSubTaskTo.and.returnValue('new-subtask-id');
 
@@ -170,11 +173,16 @@ describe('LocalRestApiTaskRoutesService', () => {
       providers: [
         LocalRestApiTaskRoutesService,
         { provide: TaskService, useValue: taskServiceMock },
+        {
+          provide: TaskArchiveOrchestratorService,
+          useValue: taskArchiveOrchestratorMock,
+        },
         { provide: TaskArchiveService, useValue: taskArchiveServiceMock },
         { provide: ArchiveOperationHandler, useValue: archiveOperationHandlerMock },
         { provide: ProjectService, useValue: projectServiceMock },
         { provide: DateService, useValue: dateServiceMock },
         { provide: LocalRestApiFeatureBridgeService, useValue: featureBridgeMock },
+        { provide: TrackingPresenceService, useValue: { remoteSessionView } },
         provideMockStore(),
       ],
     });
@@ -183,6 +191,17 @@ describe('LocalRestApiTaskRoutesService', () => {
     store = TestBed.inject(MockStore);
     dispatchSpy = spyOn(store, 'dispatch');
   });
+
+  const expectInvalidDueDay = (
+    response: Awaited<ReturnType<typeof sendRequestAndWait>>,
+  ): void => {
+    expect(response.status).toBe(400);
+    if (response.body.ok) {
+      throw new Error('Expected an error response');
+    }
+    expect(response.body.error.code).toBe('INVALID_INPUT');
+    expect(response.body.error.message).toBe('dueDay must be a valid YYYY-MM-DD date');
+  };
 
   describe('GET /status', () => {
     it('should return status with current task info', async () => {
@@ -194,6 +213,76 @@ describe('LocalRestApiTaskRoutesService', () => {
 
       expect(response.body.ok).toBe(true);
       expect(response.status).toBe(200);
+    });
+
+    it('reports the logical day', async () => {
+      Object.defineProperty(taskServiceMock, 'currentTask$', { get: () => of(null) });
+      Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of([]) });
+      dateServiceMock.todayStr.and.returnValue('2026-05-11');
+
+      const response = await sendRequestAndWait(createRequest('GET', '/status'));
+
+      expect((response.body as { data: Record<string, unknown> }).data['todayStr']).toBe(
+        '2026-05-11',
+      );
+    });
+
+    describe('trackingOnOtherDevice', () => {
+      const setRemote = (
+        state: 'tracking' | 'stopped',
+        opts: { isStale?: boolean } = {},
+      ): void => {
+        remoteSessionView.set({
+          session: {
+            payload: {
+              v: 1,
+              sessionId: 's1',
+              seq: 1,
+              state,
+              taskId: 'remote-task',
+              sinceTs: 1000,
+              deviceLabel: 'Android',
+            },
+            producerConnected: true,
+            receivedAt: 2000,
+          },
+          isStale: opts.isStale ?? false,
+          stateKey: '',
+          timeKey: '',
+          timeTs: 0,
+          showStop: state === 'tracking',
+        });
+      };
+
+      const getStatusBody = async (): Promise<Record<string, unknown>> => {
+        Object.defineProperty(taskServiceMock, 'currentTask$', { get: () => of(null) });
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of([]) });
+        const response = await sendRequestAndWait(createRequest('GET', '/status'));
+        return (response.body as { data: Record<string, unknown> }).data;
+      };
+
+      it('reports the session another device is live-tracking', async () => {
+        setRemote('tracking');
+        expect((await getStatusBody()).trackingOnOtherDevice).toEqual({
+          taskId: 'remote-task',
+          deviceLabel: 'Android',
+          sinceTs: 1000,
+        });
+      });
+
+      it('is null when no other device is tracking', async () => {
+        expect((await getStatusBody()).trackingOnOtherDevice).toBeNull();
+      });
+
+      it('is null when the other device stopped or paused', async () => {
+        setRemote('stopped');
+        expect((await getStatusBody()).trackingOnOtherDevice).toBeNull();
+      });
+
+      it('is null when the other session is stale', async () => {
+        setRemote('tracking', { isStale: true });
+        expect((await getStatusBody()).trackingOnOtherDevice).toBeNull();
+      });
     });
   });
 
@@ -460,7 +549,7 @@ describe('LocalRestApiTaskRoutesService', () => {
       });
 
       it('should return all tasks when source=all', async () => {
-        (taskServiceMock as any).getAllTasksEverywhere.and.returnValue(
+        taskArchiveOrchestratorMock.getAllTasksEverywhere.and.returnValue(
           Promise.resolve([
             createMockTask('task-1'),
             createMockTask('archivedTask1', { isDone: true }),
@@ -473,11 +562,55 @@ describe('LocalRestApiTaskRoutesService', () => {
 
         expect(response.body.ok).toBe(true);
         expectTaskIds(response, ['task-1']);
-        expect(taskServiceMock.getAllTasksEverywhere).toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.getAllTasksEverywhere).toHaveBeenCalled();
       });
     });
 
     describe('POST /tasks', () => {
+      describe('dueDay', () => {
+        beforeEach(() => {
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(createMockTask('new-task-id')),
+          });
+        });
+
+        it('should create a task planned for a valid day', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'New Task', dueDay: '2026-05-13' },
+            }),
+          );
+
+          expect(response.status).toBe(201);
+          expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+            title: 'New Task',
+            dueDay: '2026-05-13',
+          });
+        });
+
+        for (const dueDay of ['tomorrow', '2026-5-13', '2026-02-30', '2026-13-01']) {
+          it(`should reject the dueDay "${dueDay}"`, async () => {
+            expectInvalidDueDay(
+              await sendRequestAndWait(
+                createRequest('POST', '/tasks', { body: { title: 'New Task', dueDay } }),
+              ),
+            );
+            expect(taskServiceMock.add).not.toHaveBeenCalled();
+          });
+        }
+
+        it('should reject an invalid dueDay on a subtask', async () => {
+          expectInvalidDueDay(
+            await sendRequestAndWait(
+              createRequest('POST', '/tasks', {
+                body: { title: 'Child', parentId: 'parent-1', dueDay: 'tomorrow' },
+              }),
+            ),
+          );
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+        });
+      });
+
       it('should create a task with valid input', async () => {
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
           get: () => (_id: string) => of(createMockTask('new-task-id')),
@@ -1164,6 +1297,59 @@ describe('LocalRestApiTaskRoutesService', () => {
     });
 
     describe('PATCH /tasks/:id', () => {
+      describe('dueDay', () => {
+        beforeEach(() => {
+          const mockTask = createMockTask('task-1');
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(mockTask),
+          });
+        });
+
+        it('should plan a task for a valid day', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { dueDay: '2026-05-13' } }),
+          );
+
+          expect(response.status).toBe(200);
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            dueDay: '2026-05-13',
+          });
+        });
+
+        it('should still unplan a task with a null dueDay', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { dueDay: null } }),
+          );
+
+          expect(response.status).toBe(200);
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            dueDay: null,
+          } as unknown as Partial<Task>);
+        });
+
+        it('should unplan a task with an empty dueDay', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { dueDay: '' } }),
+          );
+
+          expect(response.status).toBe(200);
+          expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+            dueDay: null,
+          } as unknown as Partial<Task>);
+        });
+
+        for (const dueDay of ['tomorrow', '2026-02-30', '13/05/2026']) {
+          it(`should reject the dueDay "${dueDay}"`, async () => {
+            expectInvalidDueDay(
+              await sendRequestAndWait(
+                createRequest('PATCH', '/tasks/task-1', { body: { dueDay } }),
+              ),
+            );
+            expect(taskServiceMock.update).not.toHaveBeenCalled();
+          });
+        }
+      });
+
       it('should update a task', async () => {
         const mockTask = createMockTask('task-1');
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
@@ -2620,14 +2806,14 @@ describe('LocalRestApiTaskRoutesService', () => {
         Object.defineProperty(taskServiceMock, 'getByIdWithSubTaskData$', {
           get: () => (_id: string) => of(createMockTaskWithSubTasks(mockTask)),
         });
-        (taskServiceMock as any).moveToArchive.and.returnValue(Promise.resolve());
+        taskArchiveOrchestratorMock.moveToArchive.and.returnValue(Promise.resolve());
 
         const response = await sendRequestAndWait(
           createRequest('POST', '/tasks/task-1/archive'),
         );
 
         expect(response.body.ok).toBe(true);
-        expect(taskServiceMock.moveToArchive).toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.moveToArchive).toHaveBeenCalled();
       });
 
       it('should return 404 for non-existent task', async () => {
@@ -2642,9 +2828,68 @@ describe('LocalRestApiTaskRoutesService', () => {
         expect(response.body.ok).toBe(false);
         expect(response.status).toBe(404);
       });
+
+      // moveToArchive only archives top-level tasks, so a subtask on its own was left in
+      // place while the response said it was archived.
+      it('should reject a subtask with 400 and not archive anything', async () => {
+        const subTask = createMockTask('sub-1', { parentId: 'parent-1' });
+        Object.defineProperty(taskServiceMock, 'getByIdWithSubTaskData$', {
+          get: () => (_id: string) => of(createMockTaskWithSubTasks(subTask)),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks/sub-1/archive'),
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.ok).toBe(false);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskArchiveOrchestratorMock.moveToArchive).not.toHaveBeenCalled();
+      });
     });
 
     describe('POST /tasks/:id/restore', () => {
+      it('rejects restoring a subtask alone without dispatching or changing the archive', async () => {
+        const subtask = createMockTask('sub-1', { parentId: 'parent-1' });
+        taskArchiveServiceMock.hasTask.and.resolveTo(true);
+        taskArchiveServiceMock.getById.and.resolveTo(subtask);
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks/sub-1/restore'),
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.ok).toBe(false);
+        expect(taskArchiveOrchestratorMock.restoreTask).not.toHaveBeenCalled();
+        expect(taskArchiveServiceMock.load).not.toHaveBeenCalled();
+        expect(
+          archiveOperationHandlerMock.whenLocalOperationsSettled,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('restores a parent together with its archived subtasks', async () => {
+        const parent = createMockTask('parent-1', { subTaskIds: ['sub-1'] });
+        const subtask = createMockTask('sub-1', { parentId: parent.id });
+        taskArchiveServiceMock.hasTask.and.resolveTo(true);
+        taskArchiveServiceMock.getById.and.resolveTo(parent);
+        taskArchiveServiceMock.load.and.resolveTo({
+          ids: [parent.id, subtask.id],
+          entities: { [parent.id]: parent, [subtask.id]: subtask },
+        } as TaskArchive);
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(parent),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks/parent-1/restore'),
+        );
+
+        expect(response.status).toBe(200);
+        expect(taskArchiveOrchestratorMock.restoreTask).toHaveBeenCalledOnceWith(parent, [
+          subtask,
+        ]);
+      });
+
       it('should restore an archived task', async () => {
         const archivedTask = createMockTask('archivedTask1', { isDone: true });
         (taskArchiveServiceMock as any).hasTask.and.returnValue(Promise.resolve(true));
@@ -2663,7 +2908,7 @@ describe('LocalRestApiTaskRoutesService', () => {
         );
 
         expect(response.body.ok).toBe(true);
-        expect(taskServiceMock.restoreTask).toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.restoreTask).toHaveBeenCalled();
       });
 
       it('should not respond before the archive removal has settled (#9952)', async () => {
@@ -2686,7 +2931,7 @@ describe('LocalRestApiTaskRoutesService', () => {
         ).then((r) => (response = r));
         await new Promise((resolve) => setTimeout(resolve));
 
-        expect(taskServiceMock.restoreTask).toHaveBeenCalled();
+        expect(taskArchiveOrchestratorMock.restoreTask).toHaveBeenCalled();
         expect(response).toBeUndefined();
 
         settleArchive();

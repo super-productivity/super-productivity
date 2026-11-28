@@ -33,6 +33,7 @@ import { DEFAULT_TAG_COLOR } from './work-context.const';
 import { getDefaultWorkContextTheme } from './work-context-default-theme.util';
 import { TagService } from '../tag/tag.service';
 import { ArchiveTask, Task, TaskWithSubTasks } from '../tasks/task.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import { isCompletedTask } from '../tasks/util/is-wont-do-task';
 import {
   hasTasksToWorkOn,
@@ -48,6 +49,7 @@ import {
   selectTasksWithSubTasksByIdsFactory,
   TaskWithSubTasksCache,
 } from '../tasks/store/task.selectors';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered feature-boundary debt (#8299)
 import {
   getEndOfTodayTime,
   isInLaterTodayWindow,
@@ -303,8 +305,11 @@ export class WorkContextService {
     switchMap(() => timer(50).pipe(mapTo(false), startWith(true))),
     startWith(false),
   );
+  // The work view unmounts its content while this is true. 50 + 25 = 75ms: the
+  // old context's content fades out over that (PAGE_LEAVE_TIMING), and the new
+  // one mounts as it ends, so the two neither overlap nor leave a blank page.
   isContextChangingWithDelay$: Observable<boolean> = this.isContextChanging$.pipe(
-    delayWhen((val) => (val ? of(undefined) : interval(60))),
+    delayWhen((val) => (val ? of(undefined) : interval(25))),
   );
 
   // NOTES LEVEL

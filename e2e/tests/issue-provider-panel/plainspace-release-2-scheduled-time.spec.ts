@@ -18,7 +18,15 @@ import {
 // `page.route` fake (see plainspace-fake.ts).
 
 const TASK_ID = 'task-1';
-const REMOTE_TIME = '2026-11-03T14:30:00.000Z';
+// A time in the future: a past time would fire its reminder and the reminder
+// dialog would block the rest of the test. Whole minutes keep ISO round-trips exact.
+const inDays = (days: number): string => {
+  const offsetMs = days * 24 * 60 * 60 * 1000;
+  const d = new Date(Date.now() + offsetMs);
+  d.setUTCSeconds(0, 0);
+  return d.toISOString();
+};
+const REMOTE_TIME = inDays(7);
 
 /**
  * Shares a project with one task assigned to me, as Plainspace has it, and
@@ -169,7 +177,7 @@ test.describe('Plainspace Release 2: scheduled time', () => {
     expect(server.patches).toEqual([]);
 
     // ...until the next occurrence moves it.
-    const next = '2026-11-04T14:30:00.000Z';
+    const next = inDays(8);
     server.remoteEdit(TASK_ID, { scheduledAt: next });
     await restart(page, server);
     await expect

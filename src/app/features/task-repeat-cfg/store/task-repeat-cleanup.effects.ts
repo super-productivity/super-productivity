@@ -21,10 +21,12 @@ import { TODAY_TAG } from '../../tag/tag.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getRepeatDueWithTime } from './get-repeat-due-with-time.util';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
+import { getRepeatDeadlineDay } from './get-repeat-deadline-day.util';
 import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
 import { getTaskPriority } from '../../tasks/task-priority.const';
 import { selectConfigFeatureState } from '../../config/store/global-config.reducer';
 import { TimeTrackingConfig } from '../../config/global-config.model';
+import { getRepeatableTaskIdDay } from '../get-repeatable-task-id.util';
 
 const _sameStringSet = (a: readonly string[], b: readonly string[]): boolean => {
   if (a.length !== b.length) {
@@ -41,6 +43,16 @@ const _hasNoDeadlineFields = (
   task: Pick<TaskWithSubTasks, 'deadlineDay' | 'deadlineWithTime' | 'deadlineRemindAt'>,
 ): boolean =>
   _isNil(task.deadlineDay) &&
+  _isNil(task.deadlineWithTime) &&
+  _isNil(task.deadlineRemindAt);
+
+// A cfg-derived deadline is template data; any other deadline is a user edit.
+const _hasTemplateDeadline = (
+  task: TaskWithSubTasks,
+  cfg: TaskRepeatCfg,
+  dueStr: string,
+): boolean =>
+  (task.deadlineDay ?? undefined) === getRepeatDeadlineDay(cfg, dueStr) &&
   _isNil(task.deadlineWithTime) &&
   _isNil(task.deadlineRemindAt);
 
@@ -149,7 +161,7 @@ const _isUnmodifiedSkipOverdueInstance = (
     ? task.projectId === cfg.projectId
     : task.projectId === newestInstanceProjectId) &&
   _hasTemplateSchedule(task, cfg, dueStr, startOfNextDayDiffMs) &&
-  _hasNoDeadlineFields(task) &&
+  _hasTemplateDeadline(task, cfg, dueStr) &&
   _hasTemplateSubTasks(task, cfg, timeTrackingCfg);
 
 @Injectable()
@@ -220,7 +232,9 @@ export class TaskRepeatCleanupEffects {
               //   represent separate scheduled occurrences (e.g. yesterday's
               //   overdue instance + today's freshly-created instance). Only
               //   same-day collisions are the sync-bug we want to clean up
-              //   (#7718).
+              //   (#7718). An instance with a deterministic id is its own
+              //   occurrence and never a duplicate: its creation time, read in
+              //   another timezone, can fall on a neighbouring day.
               // - skipOverdue configs: key by repeatCfgId alone so instances
               //   from earlier days collapse together and the empty overdue
               //   ones can be reaped once a newer one exists (#7977).
@@ -229,9 +243,12 @@ export class TaskRepeatCleanupEffects {
                 if (task.parentId || !task.repeatCfgId) {
                   continue;
                 }
-                const key = cfgById.get(task.repeatCfgId)?.skipOverdue
-                  ? task.repeatCfgId
-                  : `${task.repeatCfgId}|${getDbDateStr(task.created)}`;
+                let key = `${task.repeatCfgId}|${getDbDateStr(task.created)}`;
+                if (cfgById.get(task.repeatCfgId)?.skipOverdue) {
+                  key = task.repeatCfgId;
+                } else if (getRepeatableTaskIdDay(task.id, task.repeatCfgId)) {
+                  key = task.id;
+                }
                 const group = tasksByKey.get(key);
                 if (group) {
                   group.push(task);

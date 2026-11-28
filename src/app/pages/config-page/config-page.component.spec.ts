@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { ConfigPageComponent } from './config-page.component';
 import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -24,6 +24,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 import { T } from '../../t.const';
+import { DialogSyncSetupComponent } from '../../imex/sync/dialog-sync-setup/dialog-sync-setup.component';
 import { By } from '@angular/platform-browser';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
@@ -90,6 +91,7 @@ describe('ConfigPageComponent', () => {
           useValue: jasmine.createSpyObj('GlobalConfigService', ['updateSection'], {
             cfg$: of({}),
             sync$: of({}),
+            sync: signal({ isEnabled: false }),
             cfg: signal({
               appFeatures: NEW_INSTALL_APP_FEATURES,
               idle: NEW_INSTALL_IDLE_CONFIG,
@@ -256,9 +258,9 @@ describe('ConfigPageComponent', () => {
     expect(mockSyncWrapperService.sync).toHaveBeenCalled();
   });
 
-  it('openSyncCfgDialog() should open DialogSyncCfgComponent', async () => {
+  it('openSyncCfgDialog() opens the sign-in dialog while sync is off', async () => {
     await component.openSyncCfgDialog();
-    expect(mockMatDialog.open).toHaveBeenCalled();
+    expect(mockMatDialog.open).toHaveBeenCalledWith(DialogSyncSetupComponent);
   });
 
   it('should expose Android automatic backup restore action', async () => {
@@ -364,6 +366,7 @@ describe('ConfigPageComponent', () => {
       for (const key of [
         T.FILE_IMEX.IMPORT_FROM_TODOIST,
         T.FILE_IMEX.IMPORT_FROM_TICKTICK,
+        T.FILE_IMEX.IMPORT_FROM_MS_TODO,
       ]) {
         component.onSearchChange(key);
         const hit = component.searchResults.find((r) => r.labelKey === key);
@@ -391,6 +394,27 @@ describe('ConfigPageComponent', () => {
 
       expect(component.selectedTabIndex).toBe(0);
     });
+
+    it('opens and briefly highlights a linked section, e.g. Import/Export', fakeAsync(() => {
+      // this suite renders an empty template; stand in for the real section
+      const sectionEl = document.createElement('section');
+      sectionEl.className = 'section-IMEX_YEAH';
+      fixture.nativeElement.appendChild(sectionEl);
+      const scrollSpy = spyOn(sectionEl, 'scrollIntoView');
+      TestBed.inject(ActivatedRoute).queryParams = of({ tab: '5', section: 'IMEX_YEAH' });
+      component.ngOnInit();
+
+      expect(component.expandedSection).toBe('IMEX_YEAH');
+      expect(component.highlightedSection()).toBe('IMEX_YEAH');
+
+      tick(200);
+      expect(scrollSpy).toHaveBeenCalled();
+
+      tick(3800);
+      expect(component.highlightedSection()).toBeNull();
+      // still open: only the highlight fades
+      expect(component.expandedSection).toBe('IMEX_YEAH');
+    }));
   });
 
   describe('App Features open by default', () => {

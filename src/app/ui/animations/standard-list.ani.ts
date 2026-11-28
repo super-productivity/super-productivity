@@ -9,8 +9,13 @@ import {
 } from '@angular/animations';
 import { ANI_FAST_TIMING } from './animation.const';
 
+// Items fade while their height opens or closes, clipped so their content
+// never spills over the neighbours. Overflow stays hidden in every keyframe:
+// it is discrete and would otherwise flip halfway through.
 export const STANDARD_LIST_ANI = [
-  query(':enter', style({ opacity: 0, height: 0 }), { optional: true }),
+  query(':enter', style({ opacity: 0, height: 0, overflow: 'hidden' }), {
+    optional: true,
+  }),
 
   query(
     ':enter',
@@ -18,9 +23,9 @@ export const STANDARD_LIST_ANI = [
       animate(
         ANI_FAST_TIMING,
         keyframes([
-          style({ opacity: 0, height: 0, transform: 'scale(0)', offset: 0 }),
-          style({ opacity: 1, height: '*', transform: 'scale(1)', offset: 0.99 }),
-          style({ height: 'auto', offset: 1.0 }),
+          style({ opacity: 0, height: 0, overflow: 'hidden', offset: 0 }),
+          style({ opacity: 1, height: '*', overflow: 'hidden', offset: 0.99 }),
+          style({ height: 'auto', overflow: 'hidden', offset: 1.0 }),
         ]),
       ),
     ]),
@@ -30,8 +35,8 @@ export const STANDARD_LIST_ANI = [
   query(
     ':leave',
     stagger('-40ms', [
-      style({ transform: 'scale(1)', opacity: 1, height: '*' }),
-      animate(ANI_FAST_TIMING, style({ transform: 'scale(0)', height: 0 })),
+      style({ opacity: 1, height: '*', overflow: 'hidden' }),
+      animate(ANI_FAST_TIMING, style({ opacity: 0, height: 0, overflow: 'hidden' })),
     ]),
     { optional: true },
   ),

@@ -303,6 +303,8 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   keydownHandler(ev: KeyboardEvent): void {
+    // Leave a key that confirms or cancels an IME candidate to the IME.
+    if (ev.isComposing || ev.keyCode === 229) return;
     if (ev.key === 'Enter' && ev.ctrlKey) {
       this.close();
       return;

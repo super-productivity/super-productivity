@@ -4,6 +4,7 @@ import { VectorClock, EntityType, Operation } from '../core/operation.types';
 import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { toEntityKey } from '../util/entity-key.util';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
+import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 
 /**
  * Service for managing vector clocks in the operation log system.
@@ -42,6 +43,7 @@ import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 })
 export class VectorClockService {
   private opLogStore = inject(OperationLogStoreService);
+  private clientIdProvider = inject(CLIENT_ID_PROVIDER);
 
   /**
    * Gets the current global vector clock.
@@ -79,6 +81,24 @@ export class VectorClockService {
     }
 
     return clock;
+  }
+
+  /**
+   * Returns `remoteClock` with this device's own counter kept at the higher of
+   * its local and remote values. Used when local clock knowledge is replaced
+   * by a remote one (USE_REMOTE rebuild): a rolled-back remote can lack this
+   * device's latest uploaded ops, and taking its lower counter would make the
+   * next own op reuse a counter other devices already saw — they then drop it
+   * as a duplicate or superseded op (#11564). Mirrors the own-counter rule of
+   * full-state import resets in the op-log store.
+   */
+  async keepOwnCounter(remoteClock: VectorClock): Promise<VectorClock> {
+    const clientId = await this.clientIdProvider.loadClientId();
+    const localCounter = clientId ? (await this.getCurrentVectorClock())[clientId] : 0;
+    if (!clientId || !localCounter || localCounter <= (remoteClock[clientId] ?? 0)) {
+      return remoteClock;
+    }
+    return { ...remoteClock, [clientId]: localCounter };
   }
 
   /**

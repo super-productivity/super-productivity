@@ -33,7 +33,9 @@ import {
 import { MatIcon } from '@angular/material/icon';
 import { MatOption } from '@angular/material/core';
 import { TranslatePipe } from '@ngx-translate/core';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { TagComponent } from '../../tag/tag/tag.component';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { parseProjectChanges } from '../short-syntax';

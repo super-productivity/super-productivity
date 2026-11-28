@@ -42,6 +42,7 @@ import {
 } from '../dialog-confirm-url-import/dialog-confirm-url-import.component';
 import { Log } from '../../core/log';
 import { DialogArchiveCompressionComponent } from '../../features/archive/dialog-archive-compression/dialog-archive-compression.component';
+import { DialogBackupsListComponent } from '../local-backup/dialog-backups-list/dialog-backups-list.component';
 import {
   BackupRepairFailedError,
   DataValidationFailedError,
@@ -52,6 +53,7 @@ import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 const TODOIST_IMPORT_PLUGIN_ID = 'todoist-import';
 const TICKTICK_IMPORT_PLUGIN_ID = 'ticktick-import';
+const MS_TODO_IMPORT_PLUGIN_ID = 'ms-todo-import';
 
 @Component({
   selector: 'file-imex',
@@ -73,6 +75,7 @@ export class FileImexComponent implements OnInit {
 
   readonly fileInputRef = viewChild<ElementRef>('fileInput');
   T: typeof T = T;
+  readonly IS_NATIVE_PLATFORM = IS_NATIVE_PLATFORM;
 
   ngOnInit(): void {
     this._activatedRoute.queryParams.pipe(first()).subscribe((params) => {
@@ -319,6 +322,11 @@ export class FileImexComponent implements OnInit {
     });
   }
 
+  /** Lives here so every platform (incl. web, which has no automatic backups) can reach the recovery ring. */
+  openBackupsList(): void {
+    this._matDialog.open(DialogBackupsListComponent, { restoreFocus: true });
+  }
+
   openTodoistImport(): Promise<void> {
     return this._openImportPlugin(
       TODOIST_IMPORT_PLUGIN_ID,
@@ -330,6 +338,13 @@ export class FileImexComponent implements OnInit {
     return this._openImportPlugin(
       TICKTICK_IMPORT_PLUGIN_ID,
       T.FILE_IMEX.S_ERR_TICKTICK_IMPORT_OPEN,
+    );
+  }
+
+  openMsTodoImport(): Promise<void> {
+    return this._openImportPlugin(
+      MS_TODO_IMPORT_PLUGIN_ID,
+      T.FILE_IMEX.S_ERR_MS_TODO_IMPORT_OPEN,
     );
   }
 

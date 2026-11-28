@@ -50,6 +50,12 @@ export interface CapturePayload {
   dueTime?: string;
   /** Optional within v1; apps that predate it add a one-off task. */
   repeat?: CaptureRepeat;
+  /** `YYYY-MM-DD`; optional within v1, ignored by apps that predate it. */
+  deadlineDate?: string;
+  /** `HH:MM`, local to the importing device; only with `deadlineDate`. */
+  deadlineTime?: string;
+  /** Whole minutes; optional within v1, ignored by apps that predate it. */
+  estimateMinutes?: number;
   createdAt: number;
   client: string;
 }

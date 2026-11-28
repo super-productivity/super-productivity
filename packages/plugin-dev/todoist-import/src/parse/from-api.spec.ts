@@ -160,21 +160,60 @@ describe('parseSyncResponse', () => {
   });
 
   describe('recurring', () => {
-    it('flags recurring tasks and appends the verbatim rule to notes', () => {
+    const recurringItem = (rule: string, parentId?: string) => ({
+      id: parentId ? 't2' : 't1',
+      project_id: 'p1',
+      content: 'water plants',
+      description: 'living room only',
+      ...(parentId ? { parent_id: parentId } : {}),
+      due: { date: '2026-07-15', is_recurring: true, string: rule },
+    });
+
+    it('maps an understood rule to a repeat and keeps it out of the notes', () => {
       const raw = baseFixture();
-      raw.items = [
-        {
-          id: 't1',
-          project_id: 'p1',
-          content: 'water plants',
-          description: 'living room only',
-          due: { date: '2026-07-15', is_recurring: true, string: 'every! 3 days' },
-        },
-      ];
+      raw.items = [recurringItem('every! 3 days')];
       const [task] = parseSyncResponse(raw).tasks;
       expect(task.isRecurring).toBe(true);
-      expect(task.notes).toBe('living room only\n\nRepeats: every! 3 days');
+      expect(task.notes).toBe('living room only');
+      expect(task.repeat).toEqual({
+        schedule: {
+          quickSetting: 'CUSTOM',
+          repeatCycle: 'DAILY',
+          repeatEvery: 3,
+          repeatFromCompletionDate: true,
+        },
+        notesWithRule: 'living room only\n\nRepeats: every! 3 days',
+      });
     });
+
+    it('notes the verbatim rule when it cannot repeat', () => {
+      const raw = baseFixture();
+      raw.items = [recurringItem('every 3 hours'), recurringItem('every day', 't1')];
+      const [unmapped, subTask] = parseSyncResponse(raw).tasks;
+      expect(unmapped.repeat).toBeNull();
+      expect(unmapped.notes).toBe('living room only\n\nRepeats: every 3 hours');
+      // sub-tasks cannot repeat
+      expect(subTask.repeat).toBeNull();
+      expect(subTask.notes).toBe('living room only\n\nRepeats: every day');
+    });
+
+    // Todoist days are calendar days; the app reads repeat days as logical days
+    it.each(['every 15th at 2am', 'every wed at 2am', 'every weekday at 2am'])(
+      'leaves "%s" unmapped when its time falls before the start of the day',
+      (rule) => {
+        const raw = baseFixture();
+        // 02:00 on Wed 2026-07-15 belongs to Tue 2026-07-14 when the day starts at 04:00
+        raw.items = [
+          {
+            ...recurringItem(rule),
+            due: { date: '2026-07-15T02:00:00', is_recurring: true, string: rule },
+          },
+        ];
+        const fourHours = 4 * 60 * 60 * 1000;
+        expect(parseSyncResponse(raw).tasks[0].repeat).not.toBeNull();
+        expect(parseSyncResponse(raw, undefined, fourHours).tasks[0].repeat).toBeNull();
+      },
+    );
   });
 
   describe('durations', () => {
@@ -313,7 +352,7 @@ describe('parseSyncResponse', () => {
           id: 't1',
           project_id: 'p1',
           content: '',
-          due: { date: '2026-07-15', is_recurring: true, string: 'every day' },
+          due: { date: '2026-07-15', is_recurring: true, string: 'every 2 hours' },
           deadline: { date: '2026-08-01' },
         },
       ];
@@ -337,7 +376,7 @@ describe('parseSyncResponse', () => {
 
       expect(taskParsed.title).toBe('Aufgabe ohne Titel');
       expect(taskParsed.notes).toBe(
-        'Wiederholt: every day\nFrist: 2026-08-01\n\nKommentare:\n- attachment Datei: https://x/file',
+        'Wiederholt: every 2 hours\nFrist: 2026-08-01\n\nKommentare:\n- attachment Datei: https://x/file',
       );
     });
   });

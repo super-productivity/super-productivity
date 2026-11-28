@@ -14,7 +14,9 @@ import {
   FuzzStep,
   generateIntent,
   Intent,
+  IntentWeights,
   isUiPossible,
+  MOVE_WEIGHTS,
   REPLACEMENT_INTENTS,
   REPLACEMENT_WEIGHTS,
 } from './sync-fuzz-actions';
@@ -449,6 +451,7 @@ describe('sync fuzz generator', () => {
       { ...EMPTY_SIMPLE_COUNTER, id: 'hOff', isEnabled: false },
     ],
     timeTracking: { project: {}, tag: {} },
+    projectIds: ['INBOX_PROJECT'],
   };
 
   it('emits only steps the UI offers', () => {
@@ -474,6 +477,49 @@ describe('sync fuzz generator', () => {
     ]);
     expect(isUiPossible(['editNote', 'nT', 'isPinnedToToday', false], view)).toBeFalse();
     expect(isUiPossible(['countHabit', 'hOff'], view)).toBeFalse();
+  });
+
+  it('moves tasks only in the move mix, to another project, without shifting other mixes', () => {
+    const task = (id: string, projectId: string): Task => ({
+      ...DEFAULT_TASK,
+      id,
+      title: id,
+      projectId,
+    });
+    const oneProject: DeviceView = {
+      ...view,
+      tasks: [task('t1', 'INBOX_PROJECT'), task('t2', 'INBOX_PROJECT')],
+    };
+    const threeProjects: DeviceView = {
+      ...oneProject,
+      tasks: [task('t1', 'INBOX_PROJECT'), task('t2', 'p1')],
+      projectIds: ['INBOX_PROJECT', 'p1', 'p2'],
+    };
+    const sequence = (v: DeviceView, weights?: IntentWeights): (Intent | undefined)[] => {
+      const random = createRandom(13);
+      let id = 0;
+      return Array.from({ length: 2_000 }, (_, i) =>
+        generateIntent(random, v, [], `L${i}`, (p) => `${p}${++id}`, weights),
+      );
+    };
+    // The default mix draws the same numbers whatever projects exist.
+    const plain = sequence(threeProjects);
+    expect(plain.some((intent) => intent?.[0] === 'moveTask')).toBeFalse();
+    expect(plain.map((intent) => intent?.[0])).toEqual(
+      sequence(oneProject).map((intent) => intent?.[0]),
+    );
+    const moves = sequence(threeProjects, MOVE_WEIGHTS).filter(
+      (intent): intent is ['moveTask', string, string] => intent?.[0] === 'moveTask',
+    );
+    expect(moves.length).toBeGreaterThan(100);
+    for (const [, id, target] of moves) {
+      expect(threeProjects.projectIds).toContain(target);
+      expect(target).not.toBe(threeProjects.tasks.find((t) => t.id === id)!.projectId);
+    }
+    // With a single project there is nowhere to move a task.
+    expect(
+      sequence(oneProject, MOVE_WEIGHTS).some((intent) => intent?.[0] === 'moveTask'),
+    ).toBeFalse();
   });
 
   it('replaces state only in the replacement mix, and imports only exported backups', () => {
@@ -505,4 +551,46 @@ describe('sync fuzz generator', () => {
     ]);
     expect(DEFAULT_WEIGHTS.some(([kind]) => REPLACEMENT_INTENTS.has(kind))).toBeFalse();
   });
+});
+
+describe('sync fuzz kill step', () => {
+  afterEach(() => SyncFuzzHarness.dispose());
+
+  it('knows of an upload that landed before the kill', async () => {
+    const outcomes: string[] = [];
+    for (let x = 1; outcomes.at(-1) !== 'not killed'; x++) {
+      const harness = await SyncFuzzHarness.create({});
+      const a = await harness.addDevice('A');
+      await harness.as(a, () => executeIntent(harness, ['addTask', 'x1', 'T']));
+      const isKilled = await harness.syncKilled(a, x);
+      const transport = harness.fileTransport!;
+      const isOnWire = transport.log.rows.some((row) => row.op.entityId === 'x1');
+      outcomes.push(
+        isKilled
+          ? `${transport.hasLanded ? 'landed' : 'not landed'}, ${isOnWire ? 'on wire' : 'not on wire'}`
+          : 'not killed',
+      );
+      SyncFuzzHarness.dispose();
+    }
+
+    // A kill before the upload, one between its landing and the response, and
+    // an `x` past the sync's last write, which fails nothing.
+    expect(new Set(outcomes)).toEqual(
+      new Set(['not landed, not on wire', 'landed, on wire', 'not killed']),
+    );
+  }, 60_000);
+
+  // Kills before the upload, between its landing and the response, and after.
+  it('recovers from a kill at every durable write of a plain upload', async () => {
+    const failures: string[] = [];
+    for (let x = 1; x <= 16; x++) {
+      const result = await runFuzz({
+        steps: [{ d: 'A', a: ['addTask', 'x1', 'T'], s: 1, x }],
+        fileTransport: {},
+      });
+      failures.push(...result.failures.map((f) => `x=${x} ${f.signature}`));
+    }
+    expect(failures).toEqual([]);
+    // 16 runs in one spec.
+  }, 60_000);
 });

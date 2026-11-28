@@ -2,7 +2,7 @@
 
 // Folder expand/collapse icon animation
 .folder-icon {
-  transition: transform 0.3s ease-in-out;
+  transition: transform var(--transition-duration-m) ease-in-out;
 
   &.expanded {
     transform: rotate(90deg);
@@ -334,7 +334,7 @@ button[mat-menu-item].nav-link.active {
 }
 
 .expand-icon {
-  transition: transform 0.2s ease;
+  transition: transform var(--transition-duration-m) ease;
 }
 
 .expanded .expand-icon {

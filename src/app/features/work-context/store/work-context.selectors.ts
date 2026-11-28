@@ -1,4 +1,4 @@
-import { createFeatureSelector, createSelector } from '@ngrx/store';
+import { createFeatureSelector, createSelector, MemoizedSelector } from '@ngrx/store';
 import { WorkContext, WorkContextState, WorkContextType } from '../work-context.model';
 import {
   computeOrderedTaskIdsForTag,
@@ -39,8 +39,8 @@ export const WORK_CONTEXT_FEATURE_NAME = 'workContext';
  *
  * See: ARCHITECTURE-DECISIONS.md Decision #2
  */
-const computeOrderedTaskIdsForToday = (
-  todayTag: Tag | undefined,
+export const computeOrderedTaskIdsForToday = (
+  todayTag: Pick<Tag, 'taskIds'> | undefined,
   taskEntities: Record<
     string,
     | {
@@ -358,6 +358,28 @@ export const selectTodayTaskIds = createSelector(
     );
   },
 );
+
+/**
+ * Today's task ids judged against the given day/offset instead of the store's.
+ * For callers that captured the logical day from the clock: the store's
+ * `todayStr` follows it only after the sync window closes, and mixing the two
+ * days makes tasks due today look like they are missing from Today.
+ */
+export const selectTodayTaskIdsForDay = (
+  todayStr: string,
+  startOfNextDayDiffMs: number,
+): MemoizedSelector<object, string[]> =>
+  createSelector(
+    selectTagFeatureState,
+    selectTaskSchedulingSnapshotRecord,
+    (tagState, activeTaskEntities): string[] =>
+      computeOrderedTaskIdsForToday(
+        tagState.entities[TODAY_TAG.id],
+        activeTaskEntities,
+        todayStr,
+        startOfNextDayDiffMs,
+      ),
+  );
 
 export const selectUndoneTodayTaskIds = createSelector(
   selectTodayTaskIds,

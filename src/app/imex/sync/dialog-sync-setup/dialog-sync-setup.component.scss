@@ -1,0 +1,83 @@
+mat-dialog-content {
+  // Same width as the other sync dialogs (enter password, decrypt error).
+  max-width: 400px;
+}
+
+.intro {
+  margin-bottom: var(--s2);
+  text-align: center;
+
+  .hero-icon {
+    color: var(--palette-primary-500);
+  }
+
+  .lead {
+    margin: var(--s) 0 var(--s-half);
+    font-size: var(--font-size-lg);
+    // The dialog body text is muted; the lead stands out from the hint below.
+    color: var(--text-color);
+  }
+
+  .hint {
+    line-height: var(--line-height-snug);
+  }
+}
+
+.server-field {
+  display: block;
+}
+
+.sign-in {
+  width: 100%;
+}
+
+.server-name,
+.other-options {
+  text-align: center;
+}
+
+.other-options {
+  margin: var(--s) 0 0;
+}
+
+// Keeps the server icon at the start of the actions row, the other buttons at
+// the end; the logical margin keeps that in right-to-left languages.
+.change-server {
+  margin-inline-end: auto;
+}
+
+.callout {
+  margin-bottom: var(--s2);
+}
+
+.hint {
+  margin: var(--s-half) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
+}
+
+.centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.match-code {
+  margin: 0;
+  font-family: monospace;
+  font-size: 2em;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.hero-icon {
+  width: 48px;
+  height: 48px;
+  font-size: 48px;
+  color: var(--text-color-muted);
+}
+
+.token-field {
+  display: block;
+  margin-top: var(--s2);
+}

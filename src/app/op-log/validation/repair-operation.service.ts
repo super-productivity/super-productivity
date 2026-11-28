@@ -159,8 +159,10 @@ export class RepairOperationService {
 
   /**
    * Rebuilds a stale automatic repair after its missing server suffix was applied.
-   * The old rejection marker and the new repair are persisted atomically so a
-   * crash cannot strand the repaired state without an uploadable boundary.
+   * Also replaces any rejected local full-state op on a file-based provider,
+   * whose remote cannot reject one on its merits (#11352). The old rejection
+   * marker and the new repair are persisted atomically so a crash cannot
+   * strand the repaired state without an uploadable boundary.
    */
   async rebaseStaleRepair(options: RebaseStaleRepairOptions): Promise<number> {
     const { staleRepairOpId, repairSummary, clientId, repairBaseServerSeq } = options;
@@ -169,7 +171,10 @@ export class RepairOperationService {
     }
 
     return this.lockService.request(LOCK_NAMES.OPERATION_LOG, async () => {
-      const repairedState = await this.stateSnapshotService.getStateSnapshotAsync();
+      // Pending task time is not in the op log yet; a later time-sync op carries
+      // it, so a snapshot that already held it would count it twice (#11483).
+      const repairedState =
+        await this.stateSnapshotService.getStateSnapshotForOperationLogAsync();
       const replacementOp = await this._buildRepairOperation(
         repairedState,
         repairSummary,

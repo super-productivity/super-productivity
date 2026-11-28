@@ -139,7 +139,7 @@ function App() {
   };
 
   return (
-    <div class="app">
+    <div class="page">
       <main>
         {isLoading() ? (
           <p>Loading...</p>

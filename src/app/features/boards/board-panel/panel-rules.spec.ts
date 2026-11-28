@@ -15,9 +15,11 @@ import {
   getNewTaskTagsToRemove,
   getPanelChangesToMatch,
   hasMissingTag,
+  isHiddenByBarChoices,
   orderPanelTasks,
   placeInOrder,
   withPartOrder,
+  withoutBarChoices,
 } from './panel-rules';
 
 const panel = (fields: Partial<BoardPanelCfg> = {}): BoardPanelCfg => ({
@@ -131,6 +133,29 @@ describe('panel rules', () => {
         priority: 3,
       });
       expect(getNewTaskFields(panel(), panelToCriteria(panel()))).toEqual({});
+    });
+  });
+
+  describe('add-task bar choices', () => {
+    it('leaves project, tags and planned day to the bar', () => {
+      expect(
+        withoutBarChoices({
+          projectId: 'p',
+          tagIds: ['a'],
+          scheduleDay: '2026-09-12',
+          isUnschedule: true,
+          isDone: true,
+          deadlineDay: '2026-09-13',
+        }),
+      ).toEqual({ isDone: true, deadlineDay: '2026-09-13' });
+    });
+
+    it('hides a task that needs a bar choice or cannot match at all', () => {
+      expect(isHiddenByBarChoices({})).toBeFalse();
+      expect(isHiddenByBarChoices({ isDone: true })).toBeFalse();
+      expect(isHiddenByBarChoices({ tagIds: ['a'] })).toBeTrue();
+      expect(isHiddenByBarChoices({ isUnschedule: true })).toBeTrue();
+      expect(isHiddenByBarChoices(null)).toBeTrue();
     });
   });
 

@@ -11,6 +11,14 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import {
+  ERROR_SNACK_SELECTOR,
+  installDomRecorder,
+  readDomRecord,
+  SYNC_ERROR_ICON_SELECTOR,
+} from '../../utils/audit-error-paths-helpers';
+
+const DUPLICATE_ERROR_UI_SELECTOR = `${SYNC_ERROR_ICON_SELECTOR}, ${ERROR_SNACK_SELECTOR}`;
 
 interface MutableServerOperation {
   op?: {
@@ -267,7 +275,7 @@ test.describe('@supersync Error Scenarios', () => {
       // Verify alert was shown with appropriate message
       expect(rejectedOpIds.length).toBeGreaterThan(0);
       expect(alertShown).toBe(true);
-      expect(alertMessage.length).toBeGreaterThan(0);
+      expect(alertMessage).toContain('Your data is too large to upload');
 
       // Task should still exist locally (not lost)
       await waitForTask(clientA.page, taskName);
@@ -349,6 +357,10 @@ test.describe('@supersync Error Scenarios', () => {
         }
       });
 
+      // Record error UI from the start: an error snack is transient, and the
+      // later syncAndWait could clear an error icon before it is checked.
+      await installDomRecorder(clientA.page, 'dupErrorUi', DUPLICATE_ERROR_UI_SELECTOR);
+
       // Trigger sync — duplicate rejection should be handled silently
       try {
         await clientA.sync.triggerSync();
@@ -362,6 +374,14 @@ test.describe('@supersync Error Scenarios', () => {
           message: 'the duplicate response must acknowledge the exact uploaded ops',
         })
         .toBe(true);
+
+      // Silently means silently: no error icon and no error snack while the
+      // duplicate response was handled, checked before the route is removed.
+      expect(await clientA.sync.hasSyncError()).toBe(false);
+      expect(
+        (await readDomRecord(clientA.page, 'dupErrorUi')).matched,
+        'no sync error icon or error snack may appear for DUPLICATE_OPERATION',
+      ).toBe(false);
 
       // Remove interception
       await unrouteSuperSyncOps(clientA.page);

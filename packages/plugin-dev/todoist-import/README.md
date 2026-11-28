@@ -28,8 +28,11 @@ Current limitations are surfaced in preview and summary:
 - nested projects are flattened and sections are not imported;
 - deeper subtasks are re-parented to the top-level ancestor;
 - subtask labels and priorities are omitted because SP subtasks cannot hold tags;
-- recurrence keeps the next due date and appends the Todoist recurrence text to
-  notes; no `TaskRepeatCfg` is created;
+- English recurrence rules on top-level tasks become repeat configs (daily,
+  weekly, monthly and yearly intervals, weekday lists, "every!" from completion,
+  "until" end days; parsed in `src/parse/parse-recurrence.ts`). Anything else —
+  hourly rules, other languages, rules on subtasks, or a repeat the app rejects —
+  keeps the next due date and the Todoist rule text in the notes;
 - day-based durations, assignees, file attachments, completed history, and
   reminders are not imported; and
 - collision detection sees active SP projects only, so an archived prior import

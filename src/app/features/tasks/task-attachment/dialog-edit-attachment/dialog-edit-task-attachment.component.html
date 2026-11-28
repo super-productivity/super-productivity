@@ -48,6 +48,12 @@
           type="text"
         />
       </mat-form-field>
+
+      @if (isShowRepeatInstanceHint()) {
+        <div class="callout callout--info">
+          <p>{{ T.F.ATTACHMENT.DIALOG_EDIT.REPEAT_INSTANCE_HINT | translate }}</p>
+        </div>
+      }
     </div>
   </mat-dialog-content>
 

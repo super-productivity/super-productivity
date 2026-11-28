@@ -100,76 +100,81 @@ const PromptView: Component<PromptViewProps> = (props) => {
   });
 
   return (
-    <div class="page-fade">
-      <div class="selected-prompt-header">
-        <h2 class="text-primary">{props.selectedPrompt.prompt.title}</h2>
-      </div>
+    <div class="stack page-fade">
+      <h2 class="intro">{props.selectedPrompt.prompt.title}</h2>
 
-      <div class="prompt-options">
-        <label class="dropdown-label">
-          Include tasks in prompt:
-          <select
-            class="task-dropdown"
-            value={taskSelection()}
-            onChange={(e) => handleTaskSelectionChange(e.target.value)}
-          >
-            <option value="none">No tasks</option>
-            <option value="today">Today's tasks ({taskCounts().today || 0} tasks)</option>
-            <option value="context">
-              Current project/context ({taskCounts().context || 0} tasks)
-            </option>
-            <optgroup label="Individual Projects">
-              <For each={projects()}>
-                {(project) => (
-                  <option value={`project-${project.id}`}>
-                    {project.title} ({taskCounts()[`project-${project.id}`] || 0} tasks)
-                  </option>
-                )}
-              </For>
-            </optgroup>
-            <option value="all">All tasks ({taskCounts().all || 0} tasks)</option>
-          </select>
-        </label>
+      <div class="card">
+        <div class="stack">
+          <div class="field">
+            <label for="task-selection">Include tasks in prompt:</label>
+            <select
+              id="task-selection"
+              value={taskSelection()}
+              onChange={(e) => handleTaskSelectionChange(e.target.value)}
+            >
+              <option value="none">No tasks</option>
+              <option value="today">
+                Today's tasks ({taskCounts().today || 0} tasks)
+              </option>
+              <option value="context">
+                Current project/context ({taskCounts().context || 0} tasks)
+              </option>
+              <optgroup label="Individual Projects">
+                <For each={projects()}>
+                  {(project) => (
+                    <option value={`project-${project.id}`}>
+                      {project.title} ({taskCounts()[`project-${project.id}`] || 0} tasks)
+                    </option>
+                  )}
+                </For>
+              </optgroup>
+              <option value="all">All tasks ({taskCounts().all || 0} tasks)</option>
+            </select>
+          </div>
 
-        <div class="task-preview">
-          <Show when={isLoading()}>
-            <LoadingSpinner message="Loading tasks..." />
-          </Show>
-
-          <Show when={!isLoading()}>
-            <Show when={taskSelection() === 'none'}>
-              <span class="task-count-info text-muted">No tasks will be included</span>
+          <div>
+            <Show when={isLoading()}>
+              <LoadingSpinner message="Loading tasks..." />
             </Show>
 
-            <Show when={taskSelection() !== 'none'}>
-              <TaskPreview
-                selection={taskSelection()}
-                previews={taskPreviews()}
-                counts={taskCounts()}
-                displayName={getSelectionDisplayName()}
-              />
+            <Show when={!isLoading()}>
+              <Show when={taskSelection() === 'none'}>
+                <span class="text-muted text-sm">No tasks will be included</span>
+              </Show>
+
+              <Show when={taskSelection() !== 'none'}>
+                <TaskPreview
+                  selection={taskSelection()}
+                  previews={taskPreviews()}
+                  counts={taskCounts()}
+                  displayName={getSelectionDisplayName()}
+                />
+              </Show>
             </Show>
-          </Show>
+          </div>
         </div>
       </div>
 
       <textarea
-        class="prompt-text"
         value={generatedPrompt()}
         readonly
         rows="15"
       />
 
-      <div class="prompt-actions">
+      <div class="actions">
         <Button onClick={handleCopyToClipboard}>{copyButtonText()}</Button>
-        <a
-          class="chatgpt-button"
-          href={createChatGPTUrl(generatedPrompt())}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          class="btn-outline"
+          onClick={() =>
+            window.open(
+              createChatGPTUrl(generatedPrompt()),
+              '_blank',
+              'noopener,noreferrer',
+            )
+          }
         >
           🤖 Open in ChatGPT
-        </a>
+        </button>
       </div>
     </div>
   );
@@ -186,23 +191,19 @@ const TaskPreview: Component<{
   const hasNoTasks = () => tasks().length === 0;
 
   return (
-    <div class="task-preview-content">
+    <div class="text-sm">
       <Show when={hasNoTasks()}>
-        <span class="task-count-info text-muted">
-          No tasks available for this selection
-        </span>
+        <span class="text-muted text-sm">No tasks available for this selection</span>
       </Show>
 
       <Show when={!hasNoTasks()}>
-        <div class="task-count-header">
+        <div class="text-primary">
           {props.displayName} ({props.counts[props.selection] || 0}):
         </div>
-        <div class="task-preview-list">
-          <For each={tasks().slice(0, 3)}>
-            {(taskTitle) => <div class="task-preview-item">• {taskTitle}</div>}
-          </For>
+        <div>
+          <For each={tasks().slice(0, 3)}>{(taskTitle) => <div>• {taskTitle}</div>}</For>
           <Show when={tasks().length > 3}>
-            <div class="task-preview-more">...and {tasks().length - 3} more</div>
+            <div class="text-muted">...and {tasks().length - 3} more</div>
           </Show>
         </div>
       </Show>

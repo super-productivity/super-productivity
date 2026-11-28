@@ -53,8 +53,6 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
     switch (issueProvider.issueProviderKey) {
       case 'JIRA':
         return issueProvider.host;
-      case 'GITLAB':
-        return issueProvider.project;
       case 'CALDAV':
         // resourceName is a required field the user filled in themselves, so it
         // reads better than the raw URL (#9144).
@@ -127,8 +125,6 @@ export const getIssueProviderInitials = (
     case 'OPEN_PROJECT':
       return issueProvider.projectId?.substring(0, 2).toUpperCase();
 
-    case 'GITLAB':
-      return getRepoInitials(issueProvider.project);
     case 'PLAINSPACE':
       return issueProvider.spaceId?.substring(0, 2)?.toUpperCase() || 'PS';
   }

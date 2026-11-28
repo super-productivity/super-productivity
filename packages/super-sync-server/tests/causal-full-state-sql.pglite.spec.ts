@@ -3,6 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 import {
   CAUSAL_FULL_STATE_OPERATION_WHERE,
+  fullStateOpBetweenSql,
   latestCausalFullStateSql,
 } from '../src/sync/sync.types';
 import { createIndexFromMigration } from './migration-index.helper';
@@ -130,16 +131,40 @@ describe('latestCausalFullStateSql (real Postgres)', () => {
     await db.close();
   });
 
+  describe('fullStateOpBetweenSql', () => {
+    const between = async (user: number, after: number, before: number) =>
+      (await query(fullStateOpBetweenSql(user, after, before))).map((r) => r.server_seq);
+
+    it('finds an import strictly between the bounds', async () => {
+      expect(await between(USER, 1, 15)).toEqual([5]);
+    });
+
+    it('finds a legacy REPAIR, which the causal lookup never offers', async () => {
+      expect(await between(USER, 15, 30)).toEqual([25]);
+    });
+
+    it('excludes both bounds', async () => {
+      expect(await between(USER, 5, 15)).toEqual([]);
+      expect(await between(USER, 15, 25)).toEqual([]);
+    });
+
+    it('ignores ordinary ops and other users', async () => {
+      expect(await between(USER, 25, 31)).toEqual([]);
+      expect(await between(OTHER_USER, 7, 100)).toEqual([]);
+      expect(await between(OTHER_USER, 1, 100)).toEqual([7]);
+    });
+  });
+
   describe('rows', () => {
     it('returns the newest causal boundary at or below the bound', async () => {
       expect(await query(latestCausalFullStateSql(USER, 30))).toEqual([
-        { server_seq: 15, client_id: 'c-backup' },
+        { server_seq: 15, client_id: 'c-backup', op_type: 'BACKUP_IMPORT' },
       ]);
     });
 
     it('honours the bound rather than reading the newest overall', async () => {
       expect(await query(latestCausalFullStateSql(USER, 14))).toEqual([
-        { server_seq: 5, client_id: 'c-import' },
+        { server_seq: 5, client_id: 'c-import', op_type: 'SYNC_IMPORT' },
       ]);
     });
 
@@ -156,14 +181,14 @@ describe('latestCausalFullStateSql (real Postgres)', () => {
         [USER],
       );
       expect(await query(latestCausalFullStateSql(USER, 50))).toEqual([
-        { server_seq: 40, client_id: 'c-repair' },
+        { server_seq: 40, client_id: 'c-repair', op_type: 'REPAIR' },
       ]);
       await db.exec(`DELETE FROM operations WHERE id = 'a8'`);
     });
 
     it('reads the whole history when no bound is given (upload path)', async () => {
       expect(await query(latestCausalFullStateSql(USER))).toEqual([
-        { server_seq: 15, client_id: 'c-backup' },
+        { server_seq: 15, client_id: 'c-backup', op_type: 'BACKUP_IMPORT' },
       ]);
     });
 
@@ -178,7 +203,7 @@ describe('latestCausalFullStateSql (real Postgres)', () => {
 
     it('does not read another user rows', async () => {
       expect(await query(latestCausalFullStateSql(OTHER_USER, 100))).toEqual([
-        { server_seq: 7, client_id: 'c-b' },
+        { server_seq: 7, client_id: 'c-b', op_type: 'SYNC_IMPORT' },
       ]);
     });
 

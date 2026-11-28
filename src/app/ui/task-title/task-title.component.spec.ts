@@ -288,6 +288,17 @@ describe('TaskTitleComponent', () => {
       expect((component as any)._submitTrigger).toBe('modEnter');
     });
 
+    it('leaves Enter/Escape to the IME (no blur) while a candidate is composed', () => {
+      const blurSpy = spyOn<any>(component, '_forceBlur');
+
+      component.handleKeyDown(buildKey('Enter', { isComposing: true }));
+      component.handleKeyDown(buildKey('Escape', { isComposing: true }));
+      // Some browsers report IME keys as keyCode 229 without isComposing.
+      component.handleKeyDown(buildKey('Enter', { keyCode: 229 }));
+
+      expect(blurSpy).not.toHaveBeenCalled();
+    });
+
     it('swallows Enter/Escape (no blur) while the mention list is shown', () => {
       const blurSpy = spyOn<any>(component, '_forceBlur');
       // Set the gating signal directly to bypass the setTimeout in updateMentionListShown.

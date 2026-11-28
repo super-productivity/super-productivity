@@ -7,6 +7,12 @@
   "description": "Periodically speaks the current task title via the Web Speech API.",
   "author": "Super Productivity",
   "permissions": ["showSnack", "openDialog", "persistDataSynced", "loadSyncedData"],
+  "dataSharing": [
+    {
+      "recipient": "Your system speech engine (some voices are online)",
+      "data": ["taskTitles"]
+    }
+  ],
   "hooks": ["currentTaskChange"],
   "iFrame": false,
   "isSkipMenuEntry": true,

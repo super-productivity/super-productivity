@@ -10,8 +10,29 @@ data class WidgetTask(
     val title: String,
     val isDone: Boolean,
     val projectColor: String?,
-    /** A quick add the app has not imported yet; it has no task to toggle. */
+    /**
+     * A quick add the app has not imported yet, or a recurring task it has not
+     * created yet; either way there is no task to toggle.
+     */
     val isPending: Boolean = false
+)
+
+/**
+ * What a row's checkbox does, decided in one place so its tap and its
+ * screen-reader label cannot disagree.
+ */
+enum class WidgetCheckboxAction {
+    MARK_DONE,
+    MARK_UNDONE,
+
+    /** A pending row has no task to toggle yet; the tap opens the app. */
+    OPEN_APP
+}
+
+/** A project a widget instance can be pointed at (#9518). */
+data class WidgetProject(
+    val id: String,
+    val title: String
 )
 
 /** The task currently being tracked — on this device or, via SuperSync presence, a remote one. */
@@ -66,24 +87,63 @@ object WidgetData {
     private const val DAY_STR_PATTERN = "yyyy-MM-dd"
 
     /**
+     * How long a queued "open this project" request from a widget tap stays valid.
+     * A background launch that Android blocks fails silently, so without a deadline
+     * the request would wait for the next app start, however much later, and open
+     * the project unasked. A minute covers a slow cold start.
+     */
+    const val PROJECT_OPEN_REQUEST_TTL_MS = 60_000L
+
+    /**
+     * How long a project widget keeps a task checked on it before the row goes, so
+     * the tap is visibly confirmed and can be undone with a second tap.
+     */
+    const val PROJECT_DONE_TASK_GRACE_MS = 5_000L
+
+    /**
      * @param pendingDoneTargets per-task done-state targets queued via
-     * [WidgetDoneQueue] but not yet applied by Angular — overlaid so a checkbox
+     * [WidgetDoneQueue] but not yet acknowledged by Angular — overlaid so a checkbox
      * tap is reflected immediately even while the app process is dead.
+     * @param selectedProjectId the project this widget instance shows, or null for
+     * Today. An id missing from the snapshot (deleted, archived or hidden project,
+     * or a blob written before `projects` existed) falls back to Today.
+     * @param doneTapTimes when this device's widget checkbox last marked each task
+     * done ([WidgetDoneQueue.peekDoneTapTimes]). Local instants only: a synced
+     * `doneOn` comes from whichever device completed the task, with its clock.
+     * @param nowMs picks the day a Today widget lists ([activeDay]) and ends the
+     * done grace of project rows.
      */
     fun parse(
         json: String,
-        pendingDoneTargets: Map<String, Boolean> = emptyMap()
+        pendingDoneTargets: Map<String, Boolean> = emptyMap(),
+        selectedProjectId: String? = null,
+        doneTapTimes: Map<String, Long> = emptyMap(),
+        nowMs: Long = System.currentTimeMillis()
     ): List<WidgetTask> {
         val root = JSONObject(json)
         if (root.optInt("v", -1) != SUPPORTED_VERSION) {
             return emptyList()
         }
-        val tasksArray = root.optJSONArray("tasks") ?: return emptyList()
+        val projectTasks = selectedProjectId
+            ?.let { usableProject(root, it) }
+            ?.optJSONArray("tasks")
+        val tasksArray = projectTasks
+            ?: activeDay(root, nowMs).optJSONArray("tasks")
+            ?: return emptyList()
         val projectColors = root.optJSONObject("projectColors")
         val result = mutableListOf<WidgetTask>()
         for (i in 0 until tasksArray.length()) {
             val task = tasksArray.getJSONObject(i)
             val id = task.getString("id")
+            val isDone = pendingDoneTargets[id] ?: task.optBoolean("isDone", false)
+            // Today keeps its done tasks. A project widget shows one only for five
+            // seconds after this widget's own checkbox tap, as confirmation; the
+            // recent done tasks Angular adds to project lists exist just for that.
+            if (projectTasks != null && isDone &&
+                !isInDoneGrace(doneTapTimes[id] ?: 0L, nowMs)
+            ) {
+                continue
+            }
             // isNull guard: optString maps JSON null to the literal string "null"
             val projectId =
                 if (task.isNull("projectId")) null else task.optString("projectId", null)
@@ -94,8 +154,9 @@ object WidgetData {
                 WidgetTask(
                     id = id,
                     title = task.getString("title"),
-                    isDone = pendingDoneTargets[id] ?: task.optBoolean("isDone", false),
-                    projectColor = color
+                    isDone = isDone,
+                    projectColor = color,
+                    isPending = task.optBoolean("isPending", false)
                 )
             )
         }
@@ -103,18 +164,108 @@ object WidgetData {
     }
 
     /**
-     * Puts the title captures from [CaptureInbox.pendingJson] (widget quick adds)
-     * above the snapshot, newest first like the add bar's add-to-top. Not a Today
-     * rule mirrored natively: the app imports every title capture into Today by
-     * contract (AndroidCaptureImportService). The capture id becomes the task id,
-     * so one already in the snapshot (imported, not yet acknowledged) shows once.
+     * The part of the snapshot describing the day [nowMs] falls in: the snapshot
+     * itself until its `validUntil`, then the first `nextDays` entry that has not
+     * ended (#11944). Angular writes those in order, each with the day's list as far
+     * as the device knew it and its own boundary, so the widget moves on without the
+     * app running and still mirrors no calendar rule. Past the last entry, or
+     * without the field, it stays the snapshot itself — expired, and labelled so by
+     * [headerFor].
      */
-    fun withPendingCaptures(tasks: List<WidgetTask>, capturesJson: String): List<WidgetTask> {
+    private fun activeDay(root: JSONObject, nowMs: Long): JSONObject {
+        val validUntil = root.optLong("validUntil", 0L)
+        if (validUntil <= 0L || nowMs < validUntil) {
+            return root
+        }
+        val nextDays = root.optJSONArray("nextDays") ?: return root
+        return (0 until nextDays.length())
+            .mapNotNull { nextDays.optJSONObject(it) }
+            .firstOrNull { nowMs < it.optLong("validUntil", 0L) }
+            ?: root
+    }
+
+    /** The projects the snapshot offers for the widget's project picker. */
+    fun parseProjects(json: String): List<WidgetProject> {
+        val root = JSONObject(json)
+        if (root.optInt("v", -1) != SUPPORTED_VERSION) {
+            return emptyList()
+        }
+        val projects = root.optJSONArray("projects") ?: return emptyList()
+        return (0 until projects.length()).mapNotNull { i ->
+            projects.getJSONObject(i).takeIf(::isUsableProject)?.let {
+                WidgetProject(it.getString("id"), it.getString("title"))
+            }
+        }
+    }
+
+    /**
+     * The header for a project widget, or null when [projectId] is not a usable
+     * project in the snapshot — the same check [parse] uses, so header and rows
+     * always fall back to Today together.
+     */
+    fun projectTitle(json: String, projectId: String): String? {
+        val root = JSONObject(json)
+        if (root.optInt("v", -1) != SUPPORTED_VERSION) {
+            return null
+        }
+        return usableProject(root, projectId)?.getString("title")
+    }
+
+    /** The checkbox action for [task], from its DISPLAYED state (pending overlay included). */
+    fun checkboxActionFor(task: WidgetTask): WidgetCheckboxAction = when {
+        task.isPending -> WidgetCheckboxAction.OPEN_APP
+        task.isDone -> WidgetCheckboxAction.MARK_UNDONE
+        else -> WidgetCheckboxAction.MARK_DONE
+    }
+
+    /** Whether a done tap at [tappedAtMs] (0 = unknown) still keeps its row listed. */
+    fun isInDoneGrace(tappedAtMs: Long, nowMs: Long): Boolean =
+        tappedAtMs > 0L && nowMs < tappedAtMs + PROJECT_DONE_TASK_GRACE_MS
+
+    /** Whether a project-open request queued at [queuedAtMs] may still be acted on. */
+    fun isProjectOpenRequestFresh(queuedAtMs: Long, nowMs: Long): Boolean =
+        queuedAtMs > 0L && nowMs >= queuedAtMs && nowMs - queuedAtMs < PROJECT_OPEN_REQUEST_TTL_MS
+
+    private fun usableProject(root: JSONObject, projectId: String): JSONObject? {
+        val projects = root.optJSONArray("projects") ?: return null
+        return (0 until projects.length())
+            .map { projects.getJSONObject(it) }
+            .firstOrNull { !it.isNull("id") && it.optString("id") == projectId }
+            ?.takeIf(::isUsableProject)
+    }
+
+    private fun isUsableProject(project: JSONObject): Boolean =
+        !project.isNull("id") && project.optString("id").isNotEmpty() &&
+            !project.isNull("title") && project.optString("title").isNotEmpty() &&
+            project.optJSONArray("tasks") != null
+
+    /**
+     * Puts the title captures from [CaptureInbox.pendingJson] (widget quick adds)
+     * above the snapshot, newest first like the add bar's add-to-top. A capture
+     * with a `projectId` (quick add on a project widget) is listed only on widgets
+     * showing that project; one without, only on Today widgets. This follows the
+     * import contract (AndroidCaptureImportService), which files a capture in its
+     * project when that project is still usable and in Today otherwise. The
+     * capture id becomes the task id, so one already in the snapshot (imported,
+     * not yet acknowledged) shows once.
+     */
+    fun withPendingCaptures(
+        tasks: List<WidgetTask>,
+        capturesJson: String,
+        selectedProjectId: String? = null
+    ): List<WidgetTask> {
         val known = tasks.mapTo(HashSet()) { it.id }
         val captures = JSONArray(capturesJson)
         val pending = (0 until captures.length())
             .map { captures.getJSONObject(it) }
             .filter { it.getString("id") !in known }
+            // Each widget lists the quick adds headed for what it shows: its
+            // project, or Today for captures without one. isNull: optString
+            // maps JSON null to the string "null".
+            .filter {
+                val target = if (it.isNull("projectId")) null else it.optString("projectId", null)
+                target == selectedProjectId
+            }
             .map {
                 WidgetTask(
                     id = it.getString("id"),
@@ -155,19 +306,21 @@ object WidgetData {
     }
 
     /**
-     * Reads only the staleness stamp — the task list is loaded separately, in the
-     * RemoteViewsFactory, while the header lives in the provider's RemoteViews.
+     * Reads only the staleness stamp of the day [nowMs] falls in ([activeDay]) — the
+     * task list is loaded separately, in the RemoteViewsFactory, while the header
+     * lives in the provider's RemoteViews.
      *
      * Every field degrades independently to null rather than to a plausible-looking
      * default: a defaulted stamp is indistinguishable from a real one and would make
      * the widget assert a verdict it cannot support.
      */
-    fun parseMeta(json: String): WidgetMeta {
+    fun parseMeta(json: String, nowMs: Long): WidgetMeta {
         return try {
-            val root = JSONObject(json)
-            if (root.optInt("v", -1) != SUPPORTED_VERSION) {
+            val snapshot = JSONObject(json)
+            if (snapshot.optInt("v", -1) != SUPPORTED_VERSION) {
                 WidgetMeta(null, null)
             } else {
+                val root = activeDay(snapshot, nowMs)
                 WidgetMeta(
                     // isNull guard because Android's optString maps JSON null to the
                     // string "null" (the reference org.json this is tested against does

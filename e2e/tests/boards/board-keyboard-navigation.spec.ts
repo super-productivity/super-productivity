@@ -307,10 +307,7 @@ test.describe('Board keyboard navigation', () => {
     await columnTitleButton(panels.nth(1), 'Second panel').click();
     const dialog = page.locator('dialog-board-edit');
     // The clicked column's section is the open one.
-    await expect(viewEditorSection(dialog, 1).locator('.section-toggle')).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    await expect(viewEditorSection(dialog, 1).locator('.section-body')).toBeVisible();
     await setViewSort(page, viewEditorSection(dialog, 1), 'Title');
     await saveViewEditor(dialog);
     await expect(second.first()).toContainText('Alpha');

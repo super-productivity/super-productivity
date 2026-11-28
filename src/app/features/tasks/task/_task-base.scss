@@ -14,6 +14,17 @@
   color: var(--text-color-most-intense);
 }
 
+// A list that draws no line at an edge: a flat section's header draws none, so
+// a line there would read as a double border with the next part
+// (`board-panel-rows`, collapsible `.task-section-flat`).
+:host-context(.task-list-no-top-line):first-of-type {
+  border-top: none;
+}
+
+:host-context(.task-list-no-bottom-line):last-of-type {
+  border-bottom: none;
+}
+
 :host {
   --task-button-spacer: 1px;
   --play-icon-size: 22px;

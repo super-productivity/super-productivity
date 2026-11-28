@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { OperationDownloadService } from '../src/sync/services/operation-download.service';
+import { MAX_KEPT_REPAIR_PREFIX_OPS } from '../src/sync/sync.types';
 
 // Mock prisma
 vi.mock('../src/db', () => ({
@@ -123,7 +124,7 @@ const mockOpFindFirst = (
 const FULL_STATE_SQL_MARKER = 'repair_base_server_seq';
 
 const mockTxQueryRaw = (
-  fullStateOp: { serverSeq: number; clientId?: string } | null = null,
+  fullStateOp: { serverSeq: number; clientId?: string; opType?: string } | null = null,
   otherRows: unknown = [],
 ): ReturnType<typeof vi.fn> =>
   vi.fn().mockImplementation((query: unknown) => {
@@ -136,6 +137,7 @@ const mockTxQueryRaw = (
             {
               server_seq: fullStateOp.serverSeq,
               client_id: fullStateOp.clientId ?? 'client-1',
+              op_type: fullStateOp.opType ?? 'SYNC_IMPORT',
             },
           ]
         : [],
@@ -752,6 +754,137 @@ describe('OperationDownloadService', () => {
         'client-2': 5,
         'client-3': 8,
       });
+    });
+
+    describe('ops before a causal REPAIR', () => {
+      // A device with unsynced edits drops an incoming causal REPAIR and relies
+      // on having applied the ops before it, so the skip must not hide them.
+      const download = async (opts: {
+        opType: string;
+        sinceSeq: number;
+        minSeq: number;
+        fullStateOpBetween?: boolean;
+        repairSeq?: number;
+        firstReturnedSeq?: number;
+      }): Promise<{ startedAfter: number; clock: unknown; gap: boolean }> => {
+        let startedAfter = -1;
+        const repairSeq = opts.repairSeq ?? 50;
+        const queryRaw = mockTxQueryRaw(
+          { serverSeq: repairSeq, opType: opts.opType },
+          opts.fullStateOpBetween ? [{ server_seq: 20 }] : [],
+        );
+        vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) =>
+          fn({
+            operation: {
+              findFirst: mockOpFindFirst(null, opts.minSeq),
+              findMany: vi.fn().mockImplementation(async (args: any) => {
+                startedAfter = args.where.serverSeq.gt;
+                return [createMockOpRow(opts.firstReturnedSeq ?? startedAfter + 1)];
+              }),
+            },
+            userSyncState: {
+              findUnique: vi.fn().mockResolvedValue({ lastSeq: repairSeq + 10 }),
+            },
+            // Every other raw read here is the full-state-op-in-between probe.
+            $queryRaw: queryRaw,
+          }),
+        );
+        const result = await service.getOpsSinceWithSeq(1, opts.sinceSeq);
+        expect(result.latestSnapshotSeq).toBe(repairSeq);
+        // The probe, when issued, asks strictly between the cursor and the REPAIR.
+        const probe = queryRaw.mock.calls
+          .map(([q]: unknown[]) => q as { sql?: string; values?: unknown[] })
+          .find((q) => !(q.sql ?? '').includes(FULL_STATE_SQL_MARKER));
+        if (probe) expect(probe.values).toEqual([1, opts.sinceSeq, repairSeq]);
+        return {
+          startedAfter,
+          clock: result.snapshotVectorClock,
+          gap: result.gapDetected,
+        };
+      };
+
+      it('sends them to a device that synced before, while they are retained', async () => {
+        const { startedAfter, clock, gap } = await download({
+          opType: 'REPAIR',
+          sinceSeq: 10,
+          minSeq: 1,
+        });
+        expect(startedAfter).toBe(10);
+        // Nothing was skipped, so there is no skipped-ops clock to aggregate.
+        expect(clock).toBeUndefined();
+        expect(gap).toBe(false);
+      });
+
+      it('sends them when the retained history starts right after the cursor', async () => {
+        expect(
+          (await download({ opType: 'REPAIR', sinceSeq: 10, minSeq: 11 })).startedAfter,
+        ).toBe(10);
+      });
+
+      it('skips to the REPAIR once part of them is pruned', async () => {
+        expect(
+          (await download({ opType: 'REPAIR', sinceSeq: 10, minSeq: 12 })).startedAfter,
+        ).toBe(49);
+      });
+
+      it('skips to the REPAIR when another full-state op lies in between', async () => {
+        expect(
+          (
+            await download({
+              opType: 'REPAIR',
+              sinceSeq: 10,
+              minSeq: 1,
+              fullStateOpBetween: true,
+            })
+          ).startedAfter,
+        ).toBe(49);
+      });
+
+      it('skips to the REPAIR when it is further ahead than the cap', async () => {
+        const repairSeq = 10 + MAX_KEPT_REPAIR_PREFIX_OPS;
+        expect(
+          (await download({ opType: 'REPAIR', sinceSeq: 10, minSeq: 1, repairSeq }))
+            .startedAfter,
+        ).toBe(10);
+        expect(
+          (await download({ opType: 'REPAIR', sinceSeq: 9, minSeq: 1, repairSeq }))
+            .startedAfter,
+        ).toBe(repairSeq - 1);
+      });
+
+      it('reports a hole in the retained ops as a gap', async () => {
+        const result = await download({
+          opType: 'REPAIR',
+          sinceSeq: 10,
+          minSeq: 1,
+          firstReturnedSeq: 13,
+        });
+        expect(result.startedAfter).toBe(10);
+        // The client then restarts from 0 and is moved to the REPAIR, as before.
+        expect(result.gap).toBe(true);
+      });
+
+      it('keeps sending them page by page until the REPAIR', async () => {
+        for (const sinceSeq of [10, 30, 48]) {
+          expect(
+            (await download({ opType: 'REPAIR', sinceSeq, minSeq: 1 })).startedAfter,
+          ).toBe(sinceSeq);
+        }
+      });
+
+      it('skips to the REPAIR for a new device', async () => {
+        expect(
+          (await download({ opType: 'REPAIR', sinceSeq: 0, minSeq: 1 })).startedAfter,
+        ).toBe(49);
+      });
+
+      for (const opType of ['SYNC_IMPORT', 'BACKUP_IMPORT']) {
+        it(`still skips the ops before a ${opType}`, async () => {
+          expect((await download({ opType, sinceSeq: 10, minSeq: 1 })).startedAfter).toBe(
+            49,
+          );
+        });
+      }
     });
 
     it('should use persisted full-state vector clock when it matches the snapshot op', async () => {

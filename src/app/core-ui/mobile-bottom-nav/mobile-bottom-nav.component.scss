@@ -146,18 +146,18 @@
   }
 }
 
+// Cold start: the launch screen (index.html) keeps this place empty, so the bar
+// moves up into it as it appears. The fade hides the add button, which reaches
+// above the bar, while it is still low.
 @keyframes slide-up-from-bottom {
   from {
     transform: translateY(100%);
-  }
-
-  to {
-    transform: translateY(0);
+    opacity: 0;
   }
 }
 
 .mobile-bottom-nav.entrance {
-  animation: slide-up-from-bottom 400ms ease-out 250ms backwards;
+  animation: slide-up-from-bottom 320ms var(--ani-enter-timing) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

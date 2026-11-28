@@ -101,7 +101,7 @@ object ReminderAlarmStore {
             val triggerAtMs = obj.getLong("triggerAtMs")
             // Auto-cleanup: skip entries in the past
             if (triggerAtMs <= now) {
-                Log.d(TAG, "Cleaning up past alarm: ${obj.getString("title")}")
+                Log.d(TAG, "Cleaning up past alarm: id=${obj.getInt("notificationId")}")
                 continue
             }
             futureEntries.put(obj)

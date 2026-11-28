@@ -13,7 +13,7 @@ import { Log } from '../../../core/log';
 import { from, Observable, of, Subject, Subscription, timer } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
-import { debounceTime, switchMap, take } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { fadeAnimation, fadeSwapAnimation } from '../../../ui/animations/fade.ani';
 import { IssueService } from '../../issue/issue.service';
@@ -90,7 +90,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
   animations: [
     trigger('modeSwitchFade', [
       transition('* => *', [
-        style({ opacity: 0, transform: 'scale(0.8)' }),
+        style({ opacity: 0, transform: 'scale(0.95)' }),
         animate(ANI_STANDARD_TIMING, style({ opacity: 1, transform: 'scale(1)' })),
       ]),
     ]),
@@ -309,16 +309,20 @@ export class FocusModeMainComponent {
   defaultTaskNotes = signal('');
   T: typeof T = T;
 
-  issueUrl$: Observable<string | null> = this.taskService.currentTask$.pipe(
-    switchMap((v) => {
-      if (!v) {
-        return of(null);
-      }
-      return v.issueType && v.issueId && v.issueProviderId
+  // Follows the displayed task so switching tasks updates the link; the
+  // distinct check avoids re-resolving on every time-tracking tick.
+  issueUrl$: Observable<string | null> = toObservable(this.displayedTask).pipe(
+    distinctUntilChanged(
+      (a, b) =>
+        a?.issueType === b?.issueType &&
+        a?.issueId === b?.issueId &&
+        a?.issueProviderId === b?.issueProviderId,
+    ),
+    switchMap((v) =>
+      v?.issueType && v.issueId && v.issueProviderId
         ? from(this._issueService.issueLink(v.issueType, v.issueId, v.issueProviderId))
-        : of(null);
-    }),
-    take(1),
+        : of(null),
+    ),
   );
 
   private _dragEnterTarget?: HTMLElement;

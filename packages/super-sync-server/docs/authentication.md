@@ -33,6 +33,29 @@ All paths below are mounted under `/api`.
 Authentication request schemas and neutral error responses are defined beside
 these routes in [`api.ts`](../src/api.ts).
 
+### Browser sign-in of a new device
+
+A new device signs in through the browser instead of a pasted token. Routes live
+in [`connect.routes.ts`](../src/connect/connect.routes.ts), mounted under
+`/api/connect`:
+
+| Method and path              | Stable purpose                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `POST /requests`             | App creates a ten-minute request; returns its id, poll secret and match code |
+| `GET /requests/:id`          | Logged-in page reads the device name, platform and match code                |
+| `POST /requests/:id/approve` | Logged-in page binds the request to its account and current token version    |
+| `POST /requests/:id/cancel`  | Logged-in page denies a pending request, or one it approved but not yet used |
+| `POST /requests/:id/poll`    | App polls with its secret; the first poll after approval receives a JWT once |
+
+No token is stored. The claim refuses when the account's token version changed
+since approval, so any sign-out in between stops it. Unknown id, wrong secret
+and an already used request all answer `expired`.
+
+The page opens as `/?r=<request id>`. Magic-link login and both sign-up routes
+accept the same optional `r`; while that request is still pending, the emailed
+link carries it, so the email lands on the Connect step even when opened in
+another browser. In Connect mode the page never shows the long-lived token.
+
 ## Account Activation and Login
 
 ### Passkey Registration

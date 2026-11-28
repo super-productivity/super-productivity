@@ -8,12 +8,13 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { expectTaskVisible } from '../../utils/supersync-assertions';
+import { countServerOpsOfType } from '../../utils/audit-error-paths-helpers';
 
 /**
  * SuperSync Re-enable and Account Switch E2E Tests
  *
  * Scenarios covered:
- * - I.5: Re-enabling sync after disable resumes from stored lastServerSeq
+ * - I.5: Re-enabling sync after disable uploads the work done while disabled
  * - I.6: Switching SuperSync accounts syncs to new server
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-reenable-and-account-switch.spec.ts
@@ -21,7 +22,10 @@ import { expectTaskVisible } from '../../utils/supersync-assertions';
 
 test.describe('@supersync Re-enable and Account Switch', () => {
   /**
-   * Scenario I.5: Re-enabling sync after disable resumes from stored lastServerSeq
+   * Scenario I.5: Re-enabling sync after disable uploads the offline work
+   *
+   * Does not read the stored lastServerSeq: it proves only that offline work
+   * is uploaded and existing work is kept after re-enabling.
    *
    * Actions:
    * 1. Client A sets up SuperSync, creates tasks, syncs
@@ -34,7 +38,7 @@ test.describe('@supersync Re-enable and Account Switch', () => {
    * - Existing tasks preserved
    * - Status is IN_SYNC
    */
-  test('Re-enabling sync after disable resumes from stored lastServerSeq', async ({
+  test('Re-enabling sync after disable uploads work done while disabled', async ({
     browser,
     baseURL,
     testRunId,
@@ -113,10 +117,12 @@ test.describe('@supersync Re-enable and Account Switch', () => {
    * Actions:
    * 1. Client A sets up SuperSync with user1, creates tasks, syncs
    * 2. Client A switches to user2 (different token/account)
-   * 3. Client A syncs to new account — server migration creates SYNC_IMPORT
+   * 3. Client A syncs to new account, which ends up holding a SYNC_IMPORT
+   *    (server migration or the setup's encryption clean slate: this test
+   *    does not tell which one carried the data)
    *
    * Verify:
-   * - Tasks are available on the new account (via SYNC_IMPORT)
+   * - The new account holds a SYNC_IMPORT
    * - Client B joining new account receives the tasks
    */
   test('Switching SuperSync accounts syncs to new server', async ({
@@ -163,6 +169,7 @@ test.describe('@supersync Re-enable and Account Switch', () => {
 
       // Task should still be visible on Client A
       await expectTaskVisible(clientA, taskName);
+      expect(await countServerOpsOfType(user2.userId, 'SYNC_IMPORT')).toBeGreaterThan(0);
 
       // No error
       const hasError = await clientA.sync.hasSyncError();

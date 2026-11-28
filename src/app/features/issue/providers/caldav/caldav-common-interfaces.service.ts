@@ -11,12 +11,19 @@ import { CaldavCfg } from './caldav.model';
 import { truncate } from '../../../../util/truncate';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isCaldavEnabled } from './is-caldav-enabled.util';
-import { CALDAV_POLL_INTERVAL } from './caldav.const';
+import {
+  CALDAV_POLL_INTERVAL,
+  CALDAV_POLL_INTERVAL_MINUTES_MAX,
+  CALDAV_POLL_INTERVAL_MINUTES_MIN,
+} from './caldav.const';
 import { computeFieldPullChanges } from '../../two-way-sync/compute-field-pull';
 import { Store } from '@ngrx/store';
 import { GlobalConfigService } from '../../../config/global-config.service';
 import { selectTaskEntities } from '../../../tasks/store/task.selectors';
 import { caldavUidToTaskId } from './caldav-uid.util';
+import { SnackService } from '../../../../core/snack/snack.service';
+import { T } from '../../../../t.const';
+import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 
 @Injectable({
   providedIn: 'root',
@@ -26,6 +33,7 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
   private readonly _caldavSyncAdapter = inject(CaldavSyncAdapterService);
   private readonly _store = inject(Store);
   private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _snackService = inject(SnackService);
 
   // Short-lived cache so that getNewIssuesToAddToBacklog and all getSubTasks
   // calls within the same poll cycle share a single REPORT request instead of
@@ -43,9 +51,26 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
   readonly providerKey = 'CALDAV' as const;
 
   get pollInterval(): number {
-    return this._cachedCfg?.pollIntervalMinutes
-      ? this._cachedCfg.pollIntervalMinutes * 60 * 1000
+    return this._cachedCfg
+      ? this.getPollIntervalForCfg(this._cachedCfg)
       : CALDAV_POLL_INTERVAL;
+  }
+
+  // The poll effects pass the provider they build the timer for, so its own
+  // interval applies from the first timer after start, before any request has
+  // filled `_cachedCfg`, and each CalDAV provider keeps its own interval.
+  getPollIntervalForCfg(cfg: CaldavCfg): number {
+    const minutes = cfg.pollIntervalMinutes;
+    if (!minutes) {
+      return CALDAV_POLL_INTERVAL;
+    }
+    // Clamp here too: synced/persisted cfgs bypass the form's min/max, and delays
+    // above 2^31-1 ms overflow setInterval, which then fires in a tight loop.
+    const clamped = Math.min(
+      Math.max(minutes, CALDAV_POLL_INTERVAL_MINUTES_MIN),
+      CALDAV_POLL_INTERVAL_MINUTES_MAX,
+    );
+    return clamped * 60 * 1000;
   }
 
   isEnabled(cfg: CaldavCfg): boolean {
@@ -127,6 +152,17 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     const issue = await firstValueFrom(
       this._caldavClientService.getById$(task.issueId, cfg),
     );
+    if (!issue) {
+      // Only a refresh the user asked for gets here (the poll is batched and
+      // skips a missing VTODO silently), so say why nothing was refreshed. The
+      // task stays as it is: a remote delete never removes local data (#11583).
+      this._snackService.open({
+        msg: T.F.CALDAV.S.ISSUE_NOT_FOUND,
+        translateParams: { issueId: truncate(task.title) },
+      });
+      // Handled: keeps the generic "no update required" snack from replacing it.
+      throw { [HANDLED_ERROR_PROP_STR]: 'Caldav: issue not found' };
+    }
     const taskChanges = this._getRefreshTaskChanges(task, issue, cfg);
 
     if (taskChanges) {

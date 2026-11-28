@@ -143,10 +143,10 @@ import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.s
            since the pill is out of flow it was never buying anything by being
            display:none anyway. */
         transition:
-          opacity 0.3s ease-out,
-          visibility 0.3s ease-out,
-          background var(--transition-standard),
-          border-color var(--transition-standard);
+          opacity var(--transition-duration-m) ease-out,
+          visibility var(--transition-duration-m) ease-out,
+          background var(--transition-duration-m) var(--ani-standard-timing),
+          border-color var(--transition-duration-m) var(--ani-standard-timing);
 
         /* Layered, not swapped. --state-hover is a translucent overlay token
            meant to sit ON a surface, so assigning it to background replaces the

@@ -2,6 +2,7 @@ import { TaskContextMenuInnerComponent } from './task-context-menu-inner.compone
 import { ComponentFixture, TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { TaskService } from '../../task.service';
+import { TaskArchiveOrchestratorService } from '../../task-archive-orchestrator.service';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { TaskRepeatCfgService } from '../../../task-repeat-cfg/task-repeat-cfg.service';
 import { MatDialog } from '@angular/material/dialog';
@@ -19,6 +20,7 @@ import { of, throwError } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../../core/date/date.service';
+import { TaskSchedulingService } from '../../task-scheduling.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
 import { Project } from '../../../project/project.model';
@@ -56,6 +58,7 @@ describe('TaskContextMenuInnerComponent', () => {
   let component: TaskContextMenuInnerComponent;
   let fixture: ComponentFixture<TaskContextMenuInnerComponent>;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskArchiveOrchestrator: jasmine.SpyObj<TaskArchiveOrchestratorService>;
   let taskDuplicateService: jasmine.SpyObj<TaskDuplicateService>;
   let addSubtaskInputService: jasmine.SpyObj<AddSubtaskInputService>;
   let store: MockStore;
@@ -71,11 +74,13 @@ describe('TaskContextMenuInnerComponent', () => {
       'moveToProject',
       'remove',
       'getTasksWithSubTasksByRepeatCfgId$',
-      'getArchiveTasksForRepeatCfgId',
       'update',
       'setCurrentId',
       'moveToTop',
       'moveToBottom',
+    ]);
+    taskArchiveOrchestrator = jasmine.createSpyObj('TaskArchiveOrchestratorService', [
+      'getArchiveTasksForRepeatCfgId',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
     focusModeService = jasmine.createSpyObj<FocusModeService>('FocusModeService', [
@@ -101,6 +106,7 @@ describe('TaskContextMenuInnerComponent', () => {
       providers: [
         provideMockStore(),
         { provide: TaskService, useValue: taskService },
+        { provide: TaskArchiveOrchestratorService, useValue: taskArchiveOrchestrator },
         { provide: TaskDuplicateService, useValue: taskDuplicateService },
         { provide: AddSubtaskInputService, useValue: addSubtaskInputService },
         { provide: FocusModeService, useValue: focusModeService },
@@ -646,6 +652,57 @@ describe('TaskContextMenuInnerComponent', () => {
     });
   });
 
+  // #12012: at 02:00 on Mon 2030-06-17 with a 04:00 day start, today is still Jun 16
+  describe('quick picks for a timed task before a 04:00 day start', () => {
+    let scheduleSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2030, 5, 17, 2));
+      TestBed.inject(DateService).setStartOfNextDayDiff('04:00');
+      scheduleSpy = spyOn(TestBed.inject(TaskSchedulingService), 'scheduleTask');
+    });
+
+    afterEach(() => {
+      TestBed.inject(DateService).setStartOfNextDayDiff(0);
+      jasmine.clock().uninstall();
+    });
+
+    it('labels the tomorrow pick with the day after the logical today', () => {
+      const fresh = TestBed.createComponent(TaskContextMenuInnerComponent);
+      fresh.componentInstance.task = component.task;
+      const label = (fresh.componentInstance as unknown as { tomorrowLabel: string })
+        .tomorrowLabel;
+      fresh.destroy();
+      // Mon 02:00 is still Sunday's logical day, so tomorrow is Monday
+      expect(label).toBe('Mon');
+    });
+
+    [
+      { item: 1, time: [1, 30], expected: new Date(2030, 5, 17, 1, 30) },
+      { item: 2, time: [1, 30], expected: new Date(2030, 5, 18, 1, 30) },
+      { item: 1, time: [10, 0], expected: new Date(2030, 5, 16, 10, 0) },
+    ].forEach(({ item, time, expected }) => {
+      it(`keeps ${time[0]}h${time[1]}m on the logical day of quick pick ${item}`, async () => {
+        component.task = {
+          ...component.task,
+          dueDay: undefined,
+          dueWithTime: new Date(2030, 5, 20, time[0], time[1]).getTime(),
+        };
+
+        component.quickAccessBtnClick(item);
+        await Promise.resolve();
+
+        expect(scheduleSpy).toHaveBeenCalledOnceWith(
+          jasmine.anything(),
+          expected.getTime(),
+          jasmine.anything(),
+          false,
+        );
+      });
+    });
+  });
+
   describe('setWontDo()', () => {
     it('finishes the task with a matching doneOn and wontDoOn', () => {
       jasmine.clock().install();
@@ -999,7 +1056,9 @@ describe('TaskContextMenuInnerComponent', () => {
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([taskWithSubTasks]),
       );
-      taskService.getArchiveTasksForRepeatCfgId.and.returnValue(Promise.resolve([]));
+      taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId.and.returnValue(
+        Promise.resolve([]),
+      );
       // guard against regressing to the throwing selector (the #8715 root cause)
       const repeatCfgService = TestBed.inject(TaskRepeatCfgService);
       (

@@ -53,6 +53,7 @@ import { TaskSummaryTablesComponent } from '../../features/tasks/task-summary-ta
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { isCompletedTask } from '../../features/tasks/util/is-wont-do-task';
 import { TaskService } from '../../features/tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../features/tasks/task-archive-orchestrator.service';
 import { TasksByTagComponent } from '../../features/tasks/tasks-by-tag/tasks-by-tag.component';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
 import { WorkContextType } from '../../features/work-context/work-context.model';
@@ -120,6 +121,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _confettiService = inject(ConfettiService);
   readonly workContextService = inject(WorkContextService);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private readonly _router = inject(Router);
   private readonly _matDialog = inject(MatDialog);
   private readonly _snackService = inject(SnackService);
@@ -183,7 +185,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
   tasksWorkedOnOrDoneOrRepeatableFlat$: Observable<Task[]> = this.dayStr$.pipe(
     switchMap((dayStr) => this._getDailySummaryTasksFlat$(dayStr)),
-    shareReplay(1),
+    shareReplay({ bufferSize: 1, refCount: true }),
   );
 
   isArchiveLoaded = signal(false);
@@ -390,6 +392,10 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       if (isConfirm === undefined) {
         return;
       } else if (isConfirm === true) {
+        // shutdownNow quits without the before-close holds, so the running
+        // stopwatch time since the last batch is persisted here instead.
+        this._simpleCounterService.flushAccumulatedTime();
+        this._simpleCounterService.turnOffAll();
         await this._moveDoneToArchive();
         this._finishDayForGood(() => {
           window.ea.shutdownNow();
@@ -487,7 +493,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     const parentTaskCount = doneTasks.filter((task) => !task.parentId).length;
 
     // Actually wait for the archive operation to complete
-    await this._taskService.moveToArchive(doneTasks);
+    await this._taskArchiveOrchestrator.moveToArchive(doneTasks);
     Log.log('[DailySummary] Archive operation completed');
 
     // Show snackbar notification
@@ -501,6 +507,9 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       translateParams: { count: parentTaskCount },
       type: 'SUCCESS',
       ico: 'archive',
+      // archived tasks leave every list; History is where they can be viewed and restored
+      actionStr: T.MH.HISTORY,
+      actionFn: () => this._router.navigate(['/active/history']),
     });
   }
 

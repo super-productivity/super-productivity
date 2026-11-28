@@ -1,0 +1,22 @@
+---
+# Generated from Harper's CallItQuits linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reports the problem without a fix: Harper builds this correction in
+# code, from the text it matched, which the rule itself does not record.
+# `ignorecase` is off deliberately. Harper does not match a capitalised
+# `Quit`, which in this corpus is a menu item -- "some call it Quit, some
+# Exit and some Close" was 4 false positives. Verified against harper-cli:
+# it reports `call it quit` and leaves `call it Quit` alone.
+extends: sequence
+message: "This idiom uses the plural 'quits' to mean 'gives up' or 'stops'."
+level: warning
+ignorecase: false
+model: harper
+tokens:
+  - pattern: 'calling|called|calls|call'
+  - pattern: 'it'
+  - pattern: 'quit'

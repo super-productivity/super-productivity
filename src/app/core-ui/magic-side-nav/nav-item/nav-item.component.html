@@ -9,7 +9,7 @@
     [routerLink]="[type() === 'TAG' ? 'tag' : 'project', workContext()!.id, 'tasks']"
     routerLinkActive="active"
     class="nav-link"
-    [class.has-tasks]="nrOfOpenTasks() > 0"
+    [class.has-tasks]="nrOfOpenTasks() > 0 && !isHideNavTaskCount()"
     mat-menu-item
     (click)="clicked.emit()"
   >
@@ -30,7 +30,7 @@
     </span>
   </button>
 
-  @if (nrOfOpenTasks() > 0) {
+  @if (nrOfOpenTasks() > 0 && !isHideNavTaskCount()) {
     <div class="task-count">{{ nrOfOpenTasks() }}</div>
   }
 

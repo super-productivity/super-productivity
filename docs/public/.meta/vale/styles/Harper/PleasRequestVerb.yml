@@ -1,0 +1,29 @@
+---
+# Generated from Harper's PleasRequestVerb rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Fixes the typo `pleas` when it appears as a request cue before common action verbs.
+extends: substitution
+message: "Use `please` as the request opener."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "pleas(?!\\s*\\n\\s*\\n)\\s+advise(?!['\\x{2019}]s\\b)": "please advise"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+check(?!['\\x{2019}]s\\b)": "please check"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+confirm(?!['\\x{2019}]s\\b)": "please confirm"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+explain(?!['\\x{2019}]s\\b)": "please explain"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+fix(?!['\\x{2019}]s\\b)": "please fix"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+help(?!['\\x{2019}]s\\b)": "please help"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+look(?!['\\x{2019}]s\\b)": "please look"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+read(?!['\\x{2019}]s\\b)": "please read"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+review(?!['\\x{2019}]s\\b)": "please review"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+send(?!['\\x{2019}]s\\b)": "please send"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+share(?!['\\x{2019}]s\\b)": "please share"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+tell(?!['\\x{2019}]s\\b)": "please tell"
+  "pleas(?!\\s*\\n\\s*\\n)\\s+update(?!['\\x{2019}]s\\b)": "please update"

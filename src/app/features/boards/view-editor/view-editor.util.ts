@@ -1,5 +1,6 @@
 import {
   BoardCfg,
+  BoardMatchMode,
   BoardPanelCfg,
   BoardPanelCfgScheduledState,
   BoardPanelCfgTaskDoneState,
@@ -38,14 +39,22 @@ export type ViewRuleId =
   | 'timeSpent';
 
 /** The Add-rule menu's groups (Where, Tags, When, Status, Effort), in order. */
-export const VIEW_RULE_GROUPS: readonly (readonly ViewRuleId[])[] = [
-  ['project', 'backlog'],
-  ['includedTags', 'excludedTags', 'untagged'],
-  ['plannedDate', 'deadline'],
-  ['done', 'parentOnly'],
-  ['priority', 'estimate', 'timeSpent'],
+export const VIEW_RULE_GROUPS: readonly {
+  label: string;
+  rules: readonly ViewRuleId[];
+}[] = [
+  { label: T.F.BOARDS.EDITOR.GROUP_WHERE, rules: ['project', 'backlog'] },
+  {
+    label: T.F.BOARDS.EDITOR.GROUP_TAGS,
+    rules: ['includedTags', 'excludedTags', 'untagged'],
+  },
+  { label: T.F.BOARDS.EDITOR.GROUP_WHEN, rules: ['plannedDate', 'deadline'] },
+  { label: T.F.BOARDS.EDITOR.GROUP_STATUS, rules: ['done', 'parentOnly'] },
+  { label: T.F.BOARDS.EDITOR.GROUP_EFFORT, rules: ['priority', 'estimate', 'timeSpent'] },
 ];
-export const VIEW_RULE_ORDER: readonly ViewRuleId[] = VIEW_RULE_GROUPS.flat();
+export const VIEW_RULE_ORDER: readonly ViewRuleId[] = VIEW_RULE_GROUPS.flatMap(
+  (group) => group.rules,
+);
 
 /** Shown for a stored value this client doesn't know; saved unchanged. */
 export const OTHER_VALUE = '__other__';
@@ -147,9 +156,9 @@ interface SelectRuleDef extends RuleDefBase {
 interface PlainRuleDef extends RuleDefBase {
   /** Writes the rule when it is added; absent: it starts empty (its control opens). */
   add?: (panel: BoardPanelCfg) => BoardPanelCfg;
-  /** The projects or tags the summary names it by. */
-  titles?: {
-    of: keyof RuleSummaryCtx;
+  /** The projects or tags it lists. */
+  items?: {
+    of: keyof RuleKnownIds;
     ids: (panel: BoardPanelCfg) => readonly string[] | undefined;
   };
 }
@@ -166,7 +175,7 @@ const VIEW_RULES: {
     isSet: (panel) =>
       !isAllProjects(panel.projectIds) && (panel.projectIds ?? []).some((id) => !!id),
     remove: (panel) => ({ ...panel, projectIds: [''] }),
-    titles: { of: 'projects', ids: (panel) => panel.projectIds },
+    items: { of: 'projects', ids: (panel) => panel.projectIds },
   },
   backlog: {
     label: T.F.BOARDS.EDITOR.RULE_BACKLOG,
@@ -195,13 +204,13 @@ const VIEW_RULES: {
     label: T.F.BOARDS.FORM.TAGS_REQUIRED,
     isSet: (panel) => (panel.includedTagIds ?? []).length > 0,
     remove: (panel) => ({ ...without(panel, 'includedTagsMatch'), includedTagIds: [] }),
-    titles: { of: 'tags', ids: (panel) => panel.includedTagIds },
+    items: { of: 'tags', ids: (panel) => panel.includedTagIds },
   },
   excludedTags: {
     label: T.F.BOARDS.FORM.TAGS_EXCLUDED,
     isSet: (panel) => (panel.excludedTagIds ?? []).length > 0,
     remove: (panel) => ({ ...without(panel, 'excludedTagsMatch'), excludedTagIds: [] }),
-    titles: { of: 'tags', ids: (panel) => panel.excludedTagIds },
+    items: { of: 'tags', ids: (panel) => panel.excludedTagIds },
   },
   untagged: {
     label: T.F.BOARDS.EDITOR.RULE_UNTAGGED,
@@ -330,25 +339,45 @@ export const isRuleSet = (panel: BoardPanelCfg, rule: ViewRuleId): boolean =>
 export const getSetRules = (panel: BoardPanelCfg): ViewRuleId[] =>
   VIEW_RULE_ORDER.filter((rule) => isRuleSet(panel, rule));
 
-const TAG_RULES: ReadonlySet<ViewRuleId> = new Set(['includedTags', 'excludedTags']);
-
 /**
- * The rules the Add-rule menu offers: those not shown yet. "Without tags" and
- * the tag rules hide each other there (only there: a stored panel with both
- * shows both).
+ * Rules that contradict each other, so the Add-rule menu doesn't offer one
+ * next to the other. Only the pairs the stored model resolves: saving drops
+ * the tag lists of a "Without tags" panel (`normalizeBoardForSave`), and
+ * "Without tags" next to required tags is ignored (`isPanelUntagged`). Every
+ * other pair combines (a planned-date rule and its scheduled state are one
+ * rule, `getPlannedDateChoice`). A stored panel with both shows both.
  */
-export const getAddableRuleGroups = (shown: readonly ViewRuleId[]): ViewRuleId[][] => {
-  const isShown = new Set(shown);
-  const hasTagRule = shown.some((rule) => TAG_RULES.has(rule));
-  return VIEW_RULE_GROUPS.map((group) =>
-    group.filter(
-      (rule) =>
-        !isShown.has(rule) &&
-        !(rule === 'untagged' && hasTagRule) &&
-        !(TAG_RULES.has(rule) && isShown.has('untagged')),
-    ),
-  ).filter((group) => group.length > 0);
+const RULE_CONFLICTS: Partial<Record<ViewRuleId, readonly ViewRuleId[]>> = {
+  untagged: ['includedTags', 'excludedTags'],
+  includedTags: ['untagged'],
+  excludedTags: ['untagged'],
 };
+
+/** The shown rule that `rule` contradicts, if any. */
+export const getRuleConflict = (
+  shown: readonly ViewRuleId[],
+  rule: ViewRuleId,
+): ViewRuleId | undefined => RULE_CONFLICTS[rule]?.find((other) => shown.includes(other));
+
+/** An Add-rule menu entry: addable unless shown already or contradicting one. */
+export interface AddRuleItem {
+  rule: ViewRuleId;
+  isShown: boolean;
+  conflictsWith?: ViewRuleId;
+}
+
+/** The Add-rule menu: every rule in its group, with why it can't be added. */
+export const getAddRuleMenu = (
+  shown: readonly ViewRuleId[],
+): { label: string; items: AddRuleItem[] }[] =>
+  VIEW_RULE_GROUPS.map((group) => ({
+    label: group.label,
+    items: group.rules.map((rule) => {
+      const isShown = shown.includes(rule);
+      const conflictsWith = isShown ? undefined : getRuleConflict(shown, rule);
+      return conflictsWith ? { rule, isShown, conflictsWith } : { rule, isShown };
+    }),
+  }));
 
 /**
  * Adds a rule: a select rule with its first useful option, a flag set. Project
@@ -461,41 +490,134 @@ export const withSortValue = (panel: BoardPanelCfg, value: string): BoardPanelCf
 
 type Translate = (key: string) => string;
 
-/** What the rule summary names projects and tags by. */
-export interface RuleSummaryCtx {
-  projects: readonly { id: string; title: string }[];
-  tags: readonly { id: string; title: string }[];
+/** The ids of the projects and tags that exist (and aren't archived). */
+export interface RuleKnownIds {
+  projects: ReadonlySet<string>;
+  tags: ReadonlySet<string>;
 }
 
-/**
- * One line for a collapsed section: each set rule as `Label: value` (option
- * labels; project and tag titles, the label alone when none is known; the
- * label alone for rules without a value), joined by " · ", or "Every task".
- */
-export const getRuleSummary = (
+export type TagRuleId = 'includedTags' | 'excludedTags';
+
+/** The match mode each tag rule has when none is stored (`panelToCriteria`). */
+const DEFAULT_TAGS_MATCH: Record<TagRuleId, BoardMatchMode> = {
+  includedTags: 'all',
+  excludedTags: 'any',
+};
+
+/** The match modes of each tag rule, its default first. */
+export const TAGS_MATCH_OPTIONS: Record<TagRuleId, readonly RuleOption[]> = {
+  includedTags: [
+    { value: 'all', label: T.F.BOARDS.FORM.TAGS_MATCH_ALL },
+    { value: 'any', label: T.F.BOARDS.FORM.TAGS_MATCH_ANY },
+  ],
+  excludedTags: [
+    { value: 'any', label: T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_ANY },
+    { value: 'all', label: T.F.BOARDS.FORM.TAGS_EXCLUDED_MATCH_ALL },
+  ],
+};
+
+/** A tag rule's match mode, its default when none (or an unknown one) is stored. */
+export const getTagsMatch = (panel: BoardPanelCfg, rule: TagRuleId): BoardMatchMode => {
+  const stored =
+    rule === 'includedTags' ? panel.includedTagsMatch : panel.excludedTagsMatch;
+  return stored === 'all' || stored === 'any' ? stored : DEFAULT_TAGS_MATCH[rule];
+};
+
+/** How a rule reads in a chip or the collapsed summary: `Label: value`. */
+export interface RulePart {
+  rule: ViewRuleId;
+  /** The rule's label key. */
+  label: string;
+  /** Select rules: the label key of the stored option. */
+  value?: string;
+  /** Select rules: a stored value this client doesn't know ("Other (kept)"). */
+  isOther?: boolean;
+  /** Project and tag rules: the known ids, in stored order. */
+  ids?: readonly string[];
+  /** Project and tag rules: ids nothing is known by (deleted, archived). */
+  missingCount?: number;
+  /** Tag rules with several tags: the match mode's label, when not the default. */
+  match?: string;
+}
+
+const getItemsPart = (
   panel: BoardPanelCfg,
-  ctx: RuleSummaryCtx,
-  translate: Translate,
-): string => {
-  const parts = getSetRules(panel).map((rule) => {
-    const label = translate(VIEW_RULE_LABELS[rule]);
+  rule: ViewRuleId,
+  items: NonNullable<PlainRuleDef['items']>,
+  known: RuleKnownIds,
+): RulePart => {
+  const all = (items.ids(panel) ?? []).filter((id) => !!id);
+  const ids = all.filter((id) => known[items.of].has(id));
+  const part: RulePart = {
+    rule,
+    label: VIEW_RULE_LABELS[rule],
+    ids,
+    missingCount: all.length - ids.length,
+  };
+  if ((rule === 'includedTags' || rule === 'excludedTags') && all.length > 1) {
+    const match = getTagsMatch(panel, rule);
+    if (match !== DEFAULT_TAGS_MATCH[rule]) {
+      part.match = TAGS_MATCH_OPTIONS[rule].find((o) => o.value === match)?.label;
+    }
+  }
+  return part;
+};
+
+/**
+ * Each of `rules` as `Label: value`: a select's option label (or "Other
+ * (kept)"), the known projects or tags with a count of the missing ones, the
+ * label alone for a flag.
+ */
+export const getRuleParts = (
+  panel: BoardPanelCfg,
+  rules: readonly ViewRuleId[],
+  known: RuleKnownIds,
+): RulePart[] =>
+  rules.map((rule) => {
+    const label = VIEW_RULE_LABELS[rule];
     const select = selectRule(rule);
     if (select) {
       const value = getRuleValue(panel, rule as SelectRuleId);
       const option = select.options.find((o) => o.value === value);
-      return `${label}: ${translate(option?.label ?? T.F.BOARDS.EDITOR.OTHER_KEPT)}`;
+      return option
+        ? { rule, label, value: option.label }
+        : { rule, label, isOther: true };
     }
-    const titles = (VIEW_RULES[rule] as PlainRuleDef).titles;
-    if (!titles) {
-      return label;
-    }
-    const all = ctx[titles.of];
-    const names = (titles.ids(panel) ?? [])
-      .map((id) => all.find((item) => item.id === id)?.title)
-      .filter((title): title is string => !!title);
-    return names.length ? `${label}: ${names.join(', ')}` : label;
+    const items = (VIEW_RULES[rule] as PlainRuleDef).items;
+    return items ? getItemsPart(panel, rule, items, known) : { rule, label };
   });
-  return parts.length ? parts.join(' · ') : translate(T.F.BOARDS.EDITOR.EVERY_TASK);
+
+/**
+ * What a section's count reads: done tasks for a "Completed" section (all its
+ * tasks are done), else tasks.
+ */
+export const getCountLabel = (
+  count: number,
+  panel: Pick<BoardPanelCfg, 'taskDoneState'>,
+): { key: string; nr: number } => ({
+  key:
+    panel.taskDoneState === BoardPanelCfgTaskDoneState.Done
+      ? T.F.BOARDS.EDITOR.COUNT_DONE
+      : count === 1
+        ? T.F.BOARDS.EDITOR.COUNT_ONE
+        : T.F.BOARDS.EDITOR.COUNT,
+  nr: count,
+});
+
+/** Toggles one id of a list, keeping the others (unknown ones too) in order. */
+export const withIdToggled = (ids: readonly string[], id: string): string[] =>
+  ids.includes(id) ? ids.filter((other) => other !== id) : [...ids, id];
+
+/**
+ * Toggles a project of the project rule. Ids of deleted or archived projects
+ * stay; no project left is the stored "all projects" (`['']`).
+ */
+export const withProjectToggled = (panel: BoardPanelCfg, id: string): BoardPanelCfg => {
+  const ids = withIdToggled(
+    (panel.projectIds ?? []).filter((p) => !!p),
+    id,
+  );
+  return { ...panel, projectIds: ids.length ? ids : [''] };
 };
 
 /**

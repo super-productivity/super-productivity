@@ -1,0 +1,20 @@
+---
+# Generated from Harper's DespiteOf linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Reports the problem without a fix: Harper builds this correction in
+# code, from the text it matched, which the rule itself does not record.
+#
+# Corrects the misuse of `despite of` and suggests the proper alternatives
+# `despite` or `in spite of`.
+extends: sequence
+message: "The phrase “despite of” is incorrect. Please use either “despite” or “in spite of” instead."
+level: warning
+ignorecase: true
+model: harper
+tokens:
+  - pattern: 'despite'
+  - pattern: 'of'

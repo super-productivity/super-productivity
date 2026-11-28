@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "korisnik/projekt",
+    "PROJECT_HINT": "npr. super-productivity/super-productivity",
+    "TOKEN": "Access token",
+    "HOW_TO_GET_TOKEN": "Kako dobiti token?",
+    "SCOPE": "Opseg",
+    "SCOPE_ALL": "Sve",
+    "SCOPE_CREATED": "Stvoreno od mene",
+    "SCOPE_ASSIGNED": "Dodijeljeno meni",
+    "GITLAB_BASE_URL": "Prilagođeni GitLab URL (opcionalno)",
+    "FILTER_USER": "Filtriraj po korisničkom imenu",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Prilagođeni filter",
+    "FILTER_DESCRIPTION": "Pogledaj https://docs.gitlab.com/ee/api/issues.html#list-issues. Možeš kombinirati više sa znakom &",
+    "SUBMIT_TIMELOGS": "Pošalji evidenciju vremena u GitLab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Prikaži dijalog za praćenje vremena nakon klika na \"Završi dan\""
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sažetak",
+    "STATE": "Status",
+    "ASSIGNEE": "Dodijeljeno",
+    "LABELS": "Oznake",
+    "DESCRIPTION": "Opis"
+  },
+  "FORM_HELP": "<p>Ovdje možeš postaviti Super Productivity da prikazuje otvorene GitLab zadatke (online ili self-hosted) za određeni projekt u ploči za stvaranje zadataka u dnevnom planiranju. Prikazat će se kao prijedlozi s poveznicom i dodatnim informacijama.</p><p>Također možeš automatski uvesti sve otvorene zadatke.</p>"
+}

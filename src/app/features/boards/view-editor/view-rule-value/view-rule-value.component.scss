@@ -1,0 +1,32 @@
+// Inline, so a long value wraps between its items like text (a chip or the
+// collapsed summary's two lines).
+:host {
+  display: inline;
+}
+
+.label {
+  color: var(--text-color-muted);
+}
+
+tag,
+.note {
+  margin-inline-start: var(--s-half);
+  white-space: nowrap;
+}
+
+.note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-quarter);
+  vertical-align: middle;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.note--warn {
+  color: var(--color-warning);
+}

@@ -1,7 +1,3 @@
-import { dirtyDeepCopy } from '../../util/dirtyDeepCopy';
-
-let i: number = 0;
-
 const KEY_TO_REPLACE = [
   'username',
   'userName',
@@ -17,6 +13,8 @@ const KEY_TO_REPLACE = [
   'host',
   'gitlabBaseUrl',
   'nextcloudBaseUrl',
+  'apiBaseUrl',
+  'serverUrl',
   'icalUrl',
   'organization',
   'syncFilePath',
@@ -31,6 +29,10 @@ const KEY_TO_REPLACE = [
   'filterUserName',
   'filterUsername',
   'caldavUrl',
+  'calendarId',
+  'writeCalendarId',
+  'timeBlockCalendarId',
+  'workSessionCalendarId',
   'api_key',
 
   // Issue #6020: Additional PII fields
@@ -49,38 +51,19 @@ const KEY_TO_REPLACE = [
   'privateKeyPkcs8',
 ];
 
-const maskString = (key: string, val: string, counter: number): string => {
-  if (KEY_TO_REPLACE.includes(key) && val.length > 0) {
-    return `${key}__${counter}`;
-  } else {
-    return val;
-  }
-};
-
-const recurse = (obj: unknown): void => {
-  if (typeof obj !== 'object' || obj === null) return;
-
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const val = (obj as Record<string, unknown>)[key];
-      if (Array.isArray(val)) {
-        val.forEach((arrVal) => {
-          if (typeof arrVal === 'object' && arrVal !== null) {
-            recurse(arrVal);
-          }
-        });
-      } else if (typeof val === 'object' && val !== null) {
-        recurse(val);
-      } else if (typeof val === 'string') {
-        (obj as Record<string, unknown>)[key] = maskString(key, val, i);
-      }
-    }
-    i++;
-  }
-};
-
 export const privacyExport = (d: unknown): string => {
-  const cpy = dirtyDeepCopy(d);
-  recurse(cpy);
-  return JSON.stringify(cpy);
+  let counter = 0;
+  const mask = (key: string, value: unknown): unknown =>
+    typeof value === 'string' && value.length ? `${key}__${counter++}` : value;
+
+  return JSON.stringify(d, function (this: Record<string, unknown>, key, value: unknown) {
+    if (key === 'readCalendarIds' && Array.isArray(value)) {
+      return value.map((id: unknown) => mask(key, id));
+    }
+    // CalDAV task links contain the calendar and event hrefs, including the account path.
+    if (key === 'issueId' && this['issueType'] === 'plugin:caldav-calendar-provider') {
+      return mask(key, value);
+    }
+    return KEY_TO_REPLACE.includes(key) ? mask(key, value) : value;
+  });
 };

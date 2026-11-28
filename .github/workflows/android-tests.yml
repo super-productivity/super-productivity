@@ -1,10 +1,22 @@
 name: Android Native Tests
 
-# Keep this workflow present on every PR so it can be a required check. The
-# expensive setup and tests are skipped when no Android-affecting files changed.
+# Runs only for Android-affecting PRs: a workflow-level filter starts no
+# runner at all otherwise, where an in-job check still queued for one.
+# packages/sync-core is included because the Kotlin op-payload decryptor must
+# stay wire-compatible with its encrypt() — the live round-trip test below is
+# what catches drift on sync-core PRs. If this becomes a required check, the
+# filter must move back into the job (a skipped workflow never reports).
 on:
   pull_request:
     branches: [master, main]
+    paths:
+      - 'android/**'
+      - 'packages/sync-core/**'
+      - 'tools/generate-android-crypto-fixtures.mjs'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android-tests.yml'
   workflow_dispatch:
 
 permissions:
@@ -23,75 +35,38 @@ jobs:
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Detect Android-affecting changes
-        id: changes
-        env:
-          PR_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-
-          if [ -z "${PR_HEAD:-}" ]; then
-            echo "Manual run — running Android tests."
-            echo "android=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          BASE_TIP="$(git rev-parse HEAD^1)"
-          MERGE_BASE="$(git merge-base "${BASE_TIP}" "${PR_HEAD}")"
-          CHANGED_FILES="$(git diff --name-only --no-renames "${MERGE_BASE}" "${PR_HEAD}")"
-          echo "Changed files:"
-          echo "${CHANGED_FILES}"
-
-          android=false
-          # packages/sync-core is included because the Kotlin op-payload
-          # decryptor must stay wire-compatible with its encrypt() — the live
-          # round-trip test below is what catches drift on sync-core PRs.
-          ANDROID_PATTERN='^(android/|packages/sync-core/|tools/generate-android-crypto-fixtures\.mjs$|capacitor\.config\.ts$|package(-lock)?\.json$|\.github/workflows/android-tests\.yml$)'
-          if grep -Eq "${ANDROID_PATTERN}" <<< "${CHANGED_FILES}"; then android=true; fi
-
-          echo "→ android=${android}"
-          echo "android=${android}" >> "$GITHUB_OUTPUT"
-
       - name: Setup Node.js
-        if: steps.changes.outputs.android == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
         with:
           node-version: 22
           cache: npm
 
       - name: Setup Java
-        if: steps.changes.outputs.android == 'true'
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: 21
 
       - name: Setup Gradle
-        if: steps.changes.outputs.android == 'true'
-        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
       - name: Setup Android SDK
-        if: steps.changes.outputs.android == 'true'
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
         with:
           packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
 
       # Work around npm installs from git+https://github.com/johannesjo/J2M.git.
       - name: Reconfigure git to use HTTP authentication
-        if: steps.changes.outputs.android == 'true'
         run: >
           git config --global url."https://github.com/".insteadOf
           ssh://git@github.com/
 
       - name: Install npm packages
-        if: steps.changes.outputs.android == 'true'
         run: npm i
 
       - name: Prepare Capacitor Android project
-        if: steps.changes.outputs.android == 'true'
         run: |
           mkdir -p android/app/src/main/assets/public
           npx cap update android
@@ -107,18 +82,15 @@ jobs:
       # decrypted by LiveJsEncryptRoundTripTest — fails the PR that changes
       # the KDF parameters or wire format.
       - name: Generate live crypto fixtures from sync-core
-        if: steps.changes.outputs.android == 'true'
         run: node tools/generate-android-crypto-fixtures.mjs
 
       - name: Run Android JVM tests
-        if: steps.changes.outputs.android == 'true'
         working-directory: android
         env:
           LIVE_CRYPTO_FIXTURES: ${{ github.workspace }}/android/app/build/live-crypto-fixtures.tsv
         run: ./gradlew :app:testPlayDebugUnitTest :app:testFdroidDebugUnitTest
 
       - name: Enable KVM
-        if: steps.changes.outputs.android == 'true'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -126,7 +98,6 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Run Android instrumentation tests and minified launch smoke
-        if: steps.changes.outputs.android == 'true'
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
@@ -150,7 +121,6 @@ jobs:
       # and that the API 35 run above cannot exercise (the shim is a no-op
       # there by construction). Only the IME shim test runs here.
       - name: Run IME inset shim check on API 34 (old bundled WebView)
-        if: steps.changes.outputs.android == 'true'
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
@@ -164,7 +134,7 @@ jobs:
       # concludes as cancelled, which is exactly the run whose artifacts we
       # need. Skipped on green so a full logcat is not uploaded every PR.
       - name: Upload instrumentation test results and diagnostics
-        if: (failure() || cancelled()) && steps.changes.outputs.android == 'true'
+        if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-instrumentation-diagnostics-${{ github.run_id }}

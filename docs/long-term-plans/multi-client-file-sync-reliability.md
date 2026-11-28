@@ -1,6 +1,10 @@
 # Making File-Based Sync Reliable with Multiple Concurrent Clients
 
-> **Status: Planned**
+> **Status: Partly done, rest deferred** (checked against the code on 2026-11-12).
+>
+> - **Level 1:** strong-ETag revisions for WebDAV landed (#10249, #10817). Uploads retry at most twice (`_MAX_UPLOAD_RETRIES = 2`), never force-overwrite, and have no backoff or jitter. There is no `sync.lock`.
+> - **Level 2 shipped** as the opt-in v3 "split" format (`sync-ops.json`, `sync-state.json`; setting `isUseSplitSyncFiles`, #8802, #9047). The recommendation below that calls Level 2 a half-measure predates it. Whether v3 becomes the default is decided in the [fleet-boundary plan](../plans/2026-11-10-sync-fleet-boundary.md) (draft #11684, parked).
+> - **Level 3 not started.** Its prerequisite `listFiles()` was removed from every provider (#10343), as the update further down says.
 
 ## Current Vulnerabilities
 

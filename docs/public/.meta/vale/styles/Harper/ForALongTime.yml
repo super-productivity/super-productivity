@@ -1,0 +1,19 @@
+---
+# Generated from Harper's ForALongTime rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Eliminates the incorrect merging in `for along time`.
+extends: existence
+message: "Use the standard phrase `for a long time` to indicate an extended duration."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "for a long time"
+tokens:
+  - "for(?!\\s*\\n\\s*\\n)\\s+along(?!\\s*\\n\\s*\\n)\\s+time(?!['\\x{2019}]s\\b)"

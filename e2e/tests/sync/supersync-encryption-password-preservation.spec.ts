@@ -7,6 +7,10 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { DIALOG, watchDialogs } from '../../utils/audit-import-encryption-helpers';
+
+/** Prompts that would mean A lost its encryption password. */
+const PASSWORD_LOSS_DIALOGS = [DIALOG.enterPassword, DIALOG.decryptError];
 
 /**
  * SuperSync Encryption Password Preservation E2E Tests
@@ -32,22 +36,24 @@ test.describe('@supersync @encryption Password Preservation', () => {
   /**
    * Scenario: Encryption password survives form model race condition
    *
-   * Tests that after enabling encryption, the password is not cleared by
-   * a delayed form model update.
+   * Tests that the password is not cleared by a delayed form model update
+   * after the settings dialog was initialised. SuperSync encryption is
+   * mandatory, so A is set up with encryption from the start; the steps differ
+   * from the next test only in the longer (6s) wait after closing settings.
    *
    * Setup:
-   * - Client A configures SuperSync without encryption
+   * - Client A configures SuperSync with encryption
    *
    * Actions:
    * 1. Client A creates task, syncs
-   * 2. Client A enables encryption
-   * 3. Wait 5+ seconds (longer than race condition window)
+   * 2. Client A opens and closes the sync settings (form model init)
+   * 3. Wait 6 seconds (longer than the race condition window)
    * 4. Client A creates another task, syncs
    * 5. Client B joins with same password
    *
    * Verify:
+   * - A is never asked for its password and never fails to decrypt
    * - Client B can decrypt and sees all tasks
-   * - No decrypt errors
    */
   test('Encryption password survives form model race condition', async ({
     browser,
@@ -88,6 +94,8 @@ test.describe('@supersync @encryption Password Preservation', () => {
       // which could overwrite the encryption password with stale values
       console.log('[PasswordRace] Phase 2: Opening settings to trigger form model race');
 
+      // A lost key would make syncAndWait answer a password prompt silently.
+      const watcherA = await watchDialogs(clientA.page, PASSWORD_LOSS_DIALOGS);
       await clientA.sync.syncBtn.click({ button: 'right' });
       const dialog = clientA.page.locator('mat-dialog-container');
       await dialog.waitFor({ state: 'visible', timeout: 5000 });
@@ -117,6 +125,10 @@ test.describe('@supersync @encryption Password Preservation', () => {
       // Verify no sync errors on A
       const hasErrorA = await clientA.sync.hasSyncError();
       expect(hasErrorA).toBe(false);
+      await watcherA.expectNeverSeen(
+        PASSWORD_LOSS_DIALOGS,
+        'A syncing after the settings form was initialised',
+      );
       console.log('[PasswordRace] ✓ Client A synced successfully after wait');
 
       // ============ PHASE 5: Client B joins with password ============
@@ -197,6 +209,8 @@ test.describe('@supersync @encryption Password Preservation', () => {
       // ============ PHASE 2: Open and close settings dialog ============
       console.log('[SettingsOpen] Phase 2: Opening settings dialog');
 
+      // A lost key would make syncAndWait answer a password prompt silently.
+      const watcherA = await watchDialogs(clientA.page, PASSWORD_LOSS_DIALOGS);
       // Right-click sync button to open settings
       await clientA.sync.syncBtn.click({ button: 'right' });
 
@@ -229,6 +243,10 @@ test.describe('@supersync @encryption Password Preservation', () => {
       // Verify no sync errors
       const hasErrorA = await clientA.sync.hasSyncError();
       expect(hasErrorA).toBe(false);
+      await watcherA.expectNeverSeen(
+        PASSWORD_LOSS_DIALOGS,
+        'A syncing after opening settings without changes',
+      );
       console.log('[SettingsOpen] ✓ Sync successful after settings dialog');
 
       // ============ PHASE 4: Verify with Client B ============

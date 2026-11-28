@@ -13,8 +13,9 @@
     <mat-icon>wb_sunny</mat-icon>
   </button>
   @if (slot(); as slot) {
-    <!-- Tap navigates; long-press or contextmenu (right click, menu key) picks
-         the destination. The anchor only positions the menu; its
+    <!-- Tap navigates; long-press or contextmenu (right click, menu key) opens
+         a menu where picking a destination rebinds the slot and navigates
+         there. The anchor only positions the menu; its
          matButtonIcon/iconPositionEnd attributes project it into the button
          itself rather than the zero-width label. -->
     <button
@@ -200,7 +201,7 @@
       mat-menu-item
       role="menuitemradio"
       [attr.aria-checked]="option.id === slot()?.id"
-      (click)="selectSlot(option.id)"
+      (click)="selectSlot(option)"
     >
       @if (option.kind === 'route') {
         <mat-icon>{{ option.icon }}</mat-icon>

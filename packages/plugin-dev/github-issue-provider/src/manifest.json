@@ -10,6 +10,16 @@
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": [],
+  "dataSharing": [
+    {
+      "recipient": "GitHub",
+      "hosts": ["api.github.com"],
+      "userServer": true,
+      "data": ["credentials", "userText", "taskTitles", "taskStatus"],
+      "optionalData": ["taskNotes"],
+      "privacyPolicyUrl": "https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement"
+    }
+  ],
   "hooks": [],
   "i18n": {
     "languages": [

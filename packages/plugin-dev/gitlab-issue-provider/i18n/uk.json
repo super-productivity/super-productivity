@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "ID проекту (за замовчуванням) або ім'я користувача/проекту",
+    "PROJECT_HINT": "наприклад, super-productivity/super-productivity",
+    "TOKEN": "Токен доступу",
+    "HOW_TO_GET_TOKEN": "Як отримати токен?",
+    "SCOPE": "Область пошуку (Scope)",
+    "SCOPE_ALL": "Усі",
+    "SCOPE_CREATED": "Створені мною",
+    "SCOPE_ASSIGNED": "Призначені мені",
+    "GITLAB_BASE_URL": "Користувацький базовий URL GitLab (необов'язково)",
+    "FILTER_USER": "Ім'я користувача (наприклад, для фільтрації власних змін)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Користувацький фільтр",
+    "FILTER_DESCRIPTION": "Див. https://docs.gitlab.com/ee/api/issues.html#list-issues. Можна комбінувати кілька за допомогою &",
+    "SUBMIT_TIMELOGS": "Надсилати часові логи до GitLab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Показувати діалог відстеження часу після натискання кнопки завершення дня"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Підсумок",
+    "STATE": "Статус",
+    "ASSIGNEE": "Призначено",
+    "LABELS": "Мітки",
+    "DESCRIPTION": "Опис"
+  },
+  "FORM_HELP": "<p>Тут ви можете налаштувати SuperProductivity для відображення відкритих завдань GitLab (онлайн-версія або власна інстанція) для конкретного проекту в панелі створення завдань у вікні щоденного планування. Вони будуть показані як пропозиції та надаватимуть посилання на завдання, а також додаткову інформацію про нього.</p> <p>Крім того, ви можете автоматично імпортувати всі відкриті завдання.</p>"
+}

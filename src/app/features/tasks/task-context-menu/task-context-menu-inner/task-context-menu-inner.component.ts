@@ -45,6 +45,7 @@ import {
 } from 'rxjs/operators';
 import { Project } from '../../../project/project.model';
 import { TaskService } from '../../task.service';
+import { TaskSchedulingService } from '../../task-scheduling.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
 import { SnackService } from '../../../../core/snack/snack.service';
@@ -53,6 +54,7 @@ import { DEFAULT_PROJECT_ICON } from '../../../project/project.const';
 import { WorkContextService } from '../../../work-context/work-context.service';
 import { GlobalConfigService } from '../../../config/global-config.service';
 import { KeyboardConfig } from '@sp/keyboard-config';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { DialogTimeEstimateComponent } from '../../dialog-time-estimate/dialog-time-estimate.component';
@@ -74,6 +76,7 @@ import { combineDateAndTime } from '../../../../util/combine-date-and-time';
 import { getNextWeekDayOffset } from '../../../../util/get-next-week-day-offset';
 import { DateAdapter } from '@angular/material/core';
 import { ICAL_TYPE, PLAINSPACE_TYPE } from '../../../issue/issue.const';
+// eslint-disable-next-line local-rules/no-sibling-feature-ui -- grandfathered feature-boundary debt (#8299)
 import { IssueIconPipe } from '../../../issue/issue-icon/issue-icon.pipe';
 import { showFocusOverlay } from '../../../focus-mode/store/focus-mode.actions';
 import { FocusModeService } from '../../../focus-mode/focus-mode.service';
@@ -130,6 +133,7 @@ import { DIALOG_AUTO_FOCUS_TYPING } from '../../../../util/dialog-auto-focus';
 export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _datePipe = inject(LocaleDatePipe);
   private readonly _taskService = inject(TaskService);
+  private readonly _taskSchedulingService = inject(TaskSchedulingService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _issueService = inject(IssueService);
   private readonly _elementRef = inject(ElementRef);
@@ -164,7 +168,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   // the dates quickAccessBtnClick schedules: tomorrow and the week's first day.
   private readonly _weekdayNames = this._dateAdapter.getDayOfWeekNames('short');
   protected readonly tomorrowLabel =
-    this._weekdayNames[(this._dateAdapter.getDayOfWeek(new Date()) + 1) % 7];
+    this._weekdayNames[
+      (this._dateAdapter.getDayOfWeek(this._dateService.getLogicalTodayDate()) + 1) % 7
+    ];
   protected readonly nextWeekLabel =
     this._weekdayNames[this._dateAdapter.getFirstDayOfWeek()];
   protected readonly PRIORITY_LEVELS = TASK_PRIORITY_LEVELS;
@@ -787,7 +793,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   quickAccessBtnClick(item: number): void {
-    const tDate = new Date();
+    // logical today, as _schedule combines times on a logical day (#12012)
+    const tDate = this._dateService.getLogicalTodayDate();
     tDate.setMinutes(0, 0, 0);
     switch (item) {
       case 1:
@@ -843,8 +850,12 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       return;
     } else if (this.task.dueWithTime) {
       const task = this.task;
-      const newDate = combineDateAndTime(newDayDate, new Date(this.task.dueWithTime));
-      this._taskService.scheduleTask(
+      const newDate = combineDateAndTime(
+        newDayDate,
+        new Date(this.task.dueWithTime),
+        this._dateService.getStartOfNextDayDiffMs(),
+      );
+      this._taskSchedulingService.scheduleTask(
         task,
         newDate.getTime(),
         this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??

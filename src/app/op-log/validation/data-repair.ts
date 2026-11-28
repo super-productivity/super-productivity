@@ -21,6 +21,7 @@ import { repairMenuTree } from './repair-menu-tree';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { RepairSummary } from '../core/operation.types';
 import { isValidEntityId } from './is-valid-entity-id';
+import { UNLINKED_ISSUE_FIELDS } from '../../features/tasks/task-issue-fields';
 
 export interface DataRepairResult {
   data: AppDataComplete;
@@ -109,9 +110,11 @@ export const dataRepair = (
   dataOut = _fixEntityStates(dataOut, summary);
   dataOut = _ensureTaskArrayProperties(dataOut, summary);
   dataOut = _removeMissingTasksFromListsOrRestoreFromArchive(dataOut, summary);
+  // Before the subtask steps: a stale archived parent would keep its archived
+  // children from being restored to the live parent.
+  dataOut = _removeArchivedCopiesOfLiveTasks(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromIssueProviders(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromTaskRepeatCfg(dataOut, summary);
-  dataOut = _removeNonExistentRepeatCfgIdsFromTasks(dataOut, summary);
   dataOut = _moveArchivedSubTasksToUnarchivedParents(dataOut, summary);
   dataOut = _moveUnArchivedSubTasksToArchivedParents(dataOut, summary);
   dataOut = _cleanupOrphanedSubTasks(dataOut, summary);
@@ -130,6 +133,8 @@ export const dataRepair = (
   dataOut = _fixOrphanedNotes(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromTasks(dataOut, summary);
   dataOut = _removeNonExistentTagsFromTasks(dataOut, summary);
+  dataOut = _removeNonExistentRepeatCfgIdsFromTasks(dataOut, summary);
+  dataOut = _removeNonExistentIssueProviderIdsFromTasks(dataOut, summary);
   dataOut = _addInboxProjectIdIfNecessary(dataOut, summary);
   // Earlier repair passes can create new top-level tasks or reassign a dangling
   // projectId to the Inbox. Reconcile project-list membership after those passes
@@ -379,7 +384,8 @@ const _fixEntityStates = (
   return data;
 };
 
-const _removeDuplicatesFromArchive = (
+// A live task wins over its archived copy: drop the copy from both archives.
+const _removeArchivedCopiesOfLiveTasks = (
   data: AppDataComplete,
   summary: RepairSummary,
 ): AppDataComplete => {
@@ -428,15 +434,32 @@ const _removeDuplicatesFromArchive = (
     }
   }
 
-  // Remove duplicates between archiveYoung and archiveOld (keep in archiveOld as it's older)
-  const duplicateBetweenArchives = archiveYoungTaskIds.filter((id) =>
-    archiveOldIdSet.has(id),
+  return data;
+};
+
+const _removeDuplicatesFromArchive = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  if (!data.task || !data.archiveYoung?.task || !data.archiveOld?.task) {
+    return data;
+  }
+  // Runs again here: the subtask steps since the first call move tasks between
+  // live and archive.
+  _removeArchivedCopiesOfLiveTasks(data, summary);
+
+  // Remove duplicates between archiveYoung and archiveOld (keep in archiveOld as it's older).
+  // Read the ids left after the live copies are gone: rebuilding archiveYoung
+  // from ids read before that would bring back the ids of live duplicates
+  // without an entity, and count them twice.
+  const remainingYoungIds = data.archiveYoung.task.ids as string[];
+  const remainingOldIdSet = new Set<string>(data.archiveOld.task.ids as string[]);
+  const duplicateBetweenArchives = remainingYoungIds.filter((id) =>
+    remainingOldIdSet.has(id),
   );
   if (duplicateBetweenArchives.length) {
     const dupBetweenSet = new Set<string>(duplicateBetweenArchives);
-    data.archiveYoung.task.ids = archiveYoungTaskIds.filter(
-      (id) => !dupBetweenSet.has(id),
-    );
+    data.archiveYoung.task.ids = remainingYoungIds.filter((id) => !dupBetweenSet.has(id));
     duplicateBetweenArchives.forEach((id) => {
       if (data.archiveYoung.task.entities[id]) {
         delete data.archiveYoung.task.entities[id];
@@ -742,6 +765,8 @@ const _removeMissingTasksFromListsOrRestoreFromArchive = (
 
     const origTaskIdsLen = projectItem.taskIds.length;
     projectItem.taskIds = projectItem.taskIds.filter((id: string): boolean => {
+      // A live task wins over a stale archived copy. Only restore missing tasks.
+      if (taskIdSet.has(id)) return true;
       if (archiveYoungIdSet.has(id) || archiveOldIdSet.has(id)) {
         taskIdsToRestoreFromArchive.push(id);
         return true;
@@ -753,6 +778,7 @@ const _removeMissingTasksFromListsOrRestoreFromArchive = (
     const origBacklogLen = projectItem.backlogTaskIds.length;
     projectItem.backlogTaskIds = projectItem.backlogTaskIds.filter(
       (id: string): boolean => {
+        if (taskIdSet.has(id)) return true;
         if (archiveYoungIdSet.has(id) || archiveOldIdSet.has(id)) {
           taskIdsToRestoreFromArchive.push(id);
           return true;
@@ -1158,6 +1184,28 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
     summary.invalidReferencesRemoved += removedCount;
   }
 
+  return data;
+};
+
+const _removeNonExistentIssueProviderIdsFromTasks = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  const providerIds = new Set(data.issueProvider.ids);
+  let removedCount = 0;
+
+  // Archives may retain deleted provider references; only active tasks require them.
+  for (const id of data.task.ids) {
+    const task = data.task.entities[id];
+    if (task?.issueProviderId && !providerIds.has(task.issueProviderId)) {
+      Object.assign(task, UNLINKED_ISSUE_FIELDS);
+      removedCount++;
+    }
+  }
+  if (removedCount > 0) {
+    OpLog.log(`Cleared non-existent issue providers from ${removedCount} active tasks`);
+    summary.invalidReferencesRemoved += removedCount;
+  }
   return data;
 };
 

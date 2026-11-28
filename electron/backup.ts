@@ -37,9 +37,9 @@ const getBackupDir = (): string => path.join(app.getPath('userData'), `backups`)
  * pointed at them. Display-oriented but not inert: `BACKUP_LOAD_DATA` below
  * also accepts it as an allow-listed read root.
  *
- * shortcut: the package family name is hardcoded and nothing in CI would notice
- * it drifting (the appx config lives in the WIN_STORE_ELECTRON_BUILDER_YML
- * secret); drift just fails the probe and we show getBackupDir(). Verified against
+ * shortcut: the package family name is hardcoded and nothing in CI ties it to
+ * `appx.identityName` in build/electron-builder.appx.yaml; drift just fails the
+ * probe and we show getBackupDir(). Verified against
  * the shipped v18.15.1 appx on 2026-07-21 — it is `<Identity Name>_<PublisherId>`,
  * PublisherId being base32(SHA-256(UTF-16LE Publisher)[0..8]), so any release
  * artifact re-checks it without a Windows machine.
@@ -132,7 +132,25 @@ const listBackupFiles = (): LocalBackupMeta[] => {
       log(`Skipping unreadable backup file ${name}`);
     }
   }
-  return files.sort((a, b) => b.created - a.created);
+  // Match retention's tie-breaker so it keeps the file used for comparison.
+  return files.sort((a, b) => b.created - a.created || b.name.localeCompare(a.name));
+};
+
+/**
+ * Whether today's newest backup file already holds exactly this snapshot.
+ * Use the filename date, like retention, to preserve daily backup coverage.
+ * Read the file rather than caching so deleted or damaged backups are replaced.
+ */
+const isNewestBackup = (backup: string, timestamp: string): boolean => {
+  const newest = listBackupFiles()[0];
+  if (!newest || !newest.name.startsWith(timestamp.slice(0, 10))) {
+    return false;
+  }
+  try {
+    return readFileSync(newest.path, 'utf8') === backup;
+  } catch {
+    return false;
+  }
 };
 
 interface BackupDataArgs {
@@ -155,7 +173,8 @@ function backupData(
   if (!existsSync(backupDir)) {
     mkdirSync(backupDir);
   }
-  const filePath = `${backupDir}/${getBackupTimestamp()}.json`;
+  const timestamp = getBackupTimestamp();
+  const filePath = `${backupDir}/${timestamp}.json`;
   const data = isBackupDataArgs(dataOrArgs) ? dataOrArgs.data : dataOrArgs;
   const maxBackupFiles = isBackupDataArgs(dataOrArgs)
     ? dataOrArgs.maxBackupFiles
@@ -163,7 +182,11 @@ function backupData(
 
   try {
     const backup = JSON.stringify(data);
-    writeFileSync(filePath, backup);
+    // An idle app still backs up every 5 minutes. Writing the same snapshot
+    // again on the same day would push older backups out of the retention window.
+    if (!isNewestBackup(backup, timestamp)) {
+      writeFileSync(filePath, backup);
+    }
     cleanupOldBackups(maxBackupFiles);
   } catch (e) {
     log('Error while backing up');

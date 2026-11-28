@@ -14,13 +14,11 @@ For users performing a **new installation**, setting `LAUNCH_MODE` to `2` ensure
 
 ### 1. Clone the Repository
 
-To set up the project, clone the `super-productivity` repository instead of directly cloning the `super-productivity-android` repository. This ensures that all submodules, including the Android project, are properly initialized.
+The Android project lives in the `android/` folder of the `super-productivity` repository, so clone that repository:
 
 ```bash
 git clone https://github.com/super-productivity/super-productivity.git
 cd super-productivity
-git submodule init
-git submodule update
 ```
 
 ### 2. Compile the Node.js Project

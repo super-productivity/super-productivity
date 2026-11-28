@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "Vollständiger Pfad oder Benutzername / Projekt",
+    "PROJECT_HINT": "z.B. super-productivity/super-productivity",
+    "TOKEN": "Zugangstoken",
+    "HOW_TO_GET_TOKEN": "Wie bekomme ich einen Token?",
+    "SCOPE": "Bereich",
+    "SCOPE_ALL": "Alles",
+    "SCOPE_CREATED": "Von mir erstellt",
+    "SCOPE_ASSIGNED": "Mir zugewiesen",
+    "GITLAB_BASE_URL": "Benutzerdefinierte GitLab-Basis-URL",
+    "FILTER_USER": "Benutzername (z. B. um Änderungen selbst herauszufiltern)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Benutzerdefinierte Filter",
+    "FILTER_DESCRIPTION": "Siehe https://docs.gitlab.com/ee/api/issues.html#list-issues. Mehrere können durch \"&\" kombiniert werden",
+    "SUBMIT_TIMELOGS": "Timelogs an Gitlab senden",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Zeiterfassungsdialog anzeigen, nachdem du auf „Tag beenden” geklickt hast"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Zusammenfassung",
+    "STATE": "Status",
+    "ASSIGNEE": "Bearbeiter",
+    "LABELS": "Labels",
+    "DESCRIPTION": "Beschreibung"
+  },
+  "FORM_HELP": "<p> Hier kannst du SuperProductivity so konfigurieren, dass offene GitLab-Issues (entweder die Online-Version oder eine selbst gehostete Instanz) für ein bestimmtes Projekt im Bereich zur Aufgabenerstellung in der täglichen Planungsansicht aufgelistet werden. Sie werden als Vorschläge angezeigt und enthalten einen Link zum Issue sowie weitere Informationen dazu. </p> <p> Außerdem kannst du alle offenen Issues automatisch zu deinem Aufgaben-Backlog hinzufügen und synchronisieren. </p>"
+}

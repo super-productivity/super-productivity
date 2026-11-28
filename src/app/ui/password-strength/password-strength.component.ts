@@ -54,7 +54,7 @@ export type PasswordStrengthLevel = 'weak' | 'fair' | 'strong';
       .strength-fill {
         height: 100%;
         border-radius: 2px;
-        transition: width 0.3s ease;
+        transition: width var(--transition-duration-m) ease;
 
         &.weak {
           background: var(--c-warn);

@@ -1,5 +1,6 @@
 /**
- * The optional scheduling fields of `create_task`, validated with the same
+ * The optional scheduling, deadline and estimate fields of `create_task`,
+ * validated with the same
  * rules and messages as the hosted capture tool
  * (packages/super-sync-server/src/capture/create-task.tool.ts), which the main
  * process cannot import.
@@ -10,6 +11,8 @@ export const DUE_TIME_PATTERN = '^([01]\\d|2[0-3]):[0-5]\\d$';
 export const REPEAT_CYCLES = ['daily', 'weekly', 'monthly', 'yearly'] as const;
 export const REPEAT_WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 export const REPEAT_EVERY_MAX = 99;
+/** A week; matches CAPTURE_ESTIMATE_MINUTES_MAX in the renderer and server. */
+export const ESTIMATE_MINUTES_MAX = 10080;
 
 interface CaptureRepeatArg {
   cycle: (typeof REPEAT_CYCLES)[number];
@@ -23,6 +26,9 @@ interface CaptureScheduleArgs {
   dueDate?: string;
   dueTime?: string;
   repeat?: CaptureRepeatArg;
+  deadlineDate?: string;
+  deadlineTime?: string;
+  estimateMinutes?: number;
 }
 
 const DUE_DATE_RE = new RegExp(DUE_DATE_PATTERN);
@@ -83,6 +89,41 @@ const validateRepeat = (value: unknown): CaptureRepeatArg | undefined | string =
   return repeat;
 };
 
+/** `deadlineDate` and `deadlineTime` follow the same rules as `dueDate` and `dueTime`. */
+const validateDeadline = (
+  args: Record<string, unknown>,
+): Pick<CaptureScheduleArgs, 'deadlineDate' | 'deadlineTime'> | string => {
+  const { deadlineDate, deadlineTime } = args;
+  if (deadlineDate === undefined) {
+    return deadlineTime === undefined ? {} : 'deadlineTime requires deadlineDate';
+  }
+  if (
+    typeof deadlineDate !== 'string' ||
+    !DUE_DATE_RE.test(deadlineDate) ||
+    !isCalendarDay(deadlineDate)
+  ) {
+    return 'deadlineDate must be a calendar day as YYYY-MM-DD';
+  }
+  if (deadlineTime === undefined) return { deadlineDate };
+  if (typeof deadlineTime !== 'string' || !DUE_TIME_RE.test(deadlineTime)) {
+    return 'deadlineTime must be a 24-hour time as HH:MM';
+  }
+  return { deadlineDate, deadlineTime };
+};
+
+const validateEstimate = (value: unknown): number | undefined | string => {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < 1 ||
+    value > ESTIMATE_MINUTES_MAX
+  ) {
+    return `estimateMinutes must be a whole number from 1 to ${ESTIMATE_MINUTES_MAX}`;
+  }
+  return value;
+};
+
 /** Returns the validated fields, or the message to send back as a tool error. */
 export const validateCaptureSchedule = (
   args: Record<string, unknown>,
@@ -106,5 +147,17 @@ export const validateCaptureSchedule = (
   }
   const repeat = validateRepeat(args.repeat);
   if (typeof repeat === 'string') return repeat;
-  return repeat ? { ...due, repeat } : due;
+  const deadline = validateDeadline(args);
+  if (typeof deadline === 'string') return deadline;
+  // A repeat config has no deadline, so later occurrences could not keep it.
+  if (repeat && deadline.deadlineDate)
+    return 'deadlineDate cannot be combined with repeat';
+  const estimateMinutes = validateEstimate(args.estimateMinutes);
+  if (typeof estimateMinutes === 'string') return estimateMinutes;
+  return {
+    ...due,
+    ...(repeat ? { repeat } : {}),
+    ...deadline,
+    ...(estimateMinutes === undefined ? {} : { estimateMinutes }),
+  };
 };

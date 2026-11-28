@@ -6,7 +6,7 @@ import {
   expect,
 } from '@playwright/test';
 import { BasePage } from './base.page';
-import { WEBDAV_SYNC_FORMAT } from '../utils/sync-helpers';
+import { passSyncSignInDialog, WEBDAV_SYNC_FORMAT } from '../utils/sync-helpers';
 import { cssSelectors } from '../constants/selectors';
 
 type SyncCycleIntent = 'any' | 'read' | 'write';
@@ -147,6 +147,8 @@ export class SyncPage extends BasePage {
         });
         await dialog.waitFor({ state: 'visible', timeout: 5000 });
       }
+
+      await passSyncSignInDialog(this.page);
 
       // Wait for dialog to be fully loaded
       await this.page.waitForLoadState('networkidle');

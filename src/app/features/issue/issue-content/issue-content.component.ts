@@ -33,6 +33,7 @@ import { T } from '../../../t.const';
 import { devError } from '../../../util/dev-error';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { getByPath, getIssueFieldValue } from './get-by-path.util';
 
 @Component({
   selector: 'issue-content',
@@ -88,12 +89,12 @@ export class IssueContentComponent {
           if (f.linkField) {
             const linkFieldName = f.linkField;
             field.getLink = (issue: IssueData): string =>
-              (issue as Record<string, unknown>)[linkFieldName] as string;
+              (getByPath(issue, linkFieldName) as string | undefined) ?? '';
           }
           if (f.hideEmpty) {
             const fieldName = f.field;
             field.isVisible = (issue: IssueData): boolean =>
-              !!(issue as Record<string, unknown>)[fieldName];
+              !!getByPath(issue, fieldName);
           }
           return field;
         }),
@@ -168,17 +169,7 @@ export class IssueContentComponent {
     if (!issue) return undefined;
 
     try {
-      if (typeof field.value === 'function') {
-        return field.value(issue);
-      }
-
-      // Handle nested fields like 'status.name'
-      const keys = field.value.split('.');
-      let value: any = issue;
-      for (const key of keys) {
-        value = value?.[key];
-      }
-      return value;
+      return getIssueFieldValue(issue, field.value);
     } catch (error) {
       devError(error);
     }
@@ -195,22 +186,17 @@ export class IssueContentComponent {
 
   getCommentAuthor(comment: IssueComment | null, cfg: IssueContentConfig): string {
     if (!comment) return '';
-    const keys = cfg.comments!.authorField.split('.');
-    let value: any = comment;
-    for (const key of keys) {
-      value = value?.[key];
-    }
-    return value || '';
+    return (getByPath(comment, cfg.comments!.authorField) as string | undefined) || '';
   }
 
   getCommentBody(comment: IssueComment | null, cfg: IssueContentConfig): string {
     if (!comment) return '';
-    return comment[cfg.comments!.bodyField] || '';
+    return (getByPath(comment, cfg.comments!.bodyField) as string | undefined) || '';
   }
 
   getCommentCreated(comment: IssueComment | null, cfg: IssueContentConfig): string {
     if (!comment) return '';
-    return comment[cfg.comments!.createdField] || '';
+    return (getByPath(comment, cfg.comments!.createdField) as string | undefined) || '';
   }
 
   getCommentAvatar(
@@ -219,12 +205,7 @@ export class IssueContentComponent {
   ): string | undefined {
     if (!comment || !cfg.comments?.avatarField) return undefined;
 
-    const keys = cfg.comments.avatarField.split('.');
-    let value: any = comment;
-    for (const key of keys) {
-      value = value?.[key];
-    }
-    return value;
+    return getByPath(comment, cfg.comments.avatarField) as string | undefined;
   }
 
   trackByIndex(index: number): number {

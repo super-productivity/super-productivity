@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { CdkDragRelease } from '@angular/cdk/drag-drop';
+import { CdkDragMove, CdkDragRelease, CdkDragStart } from '@angular/cdk/drag-drop';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { ScheduleWeekDragService } from './schedule-week-drag.service';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -18,6 +18,8 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 const TEN_MINUTES_MS = 10 * 60 * 1000;
 const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+const FORTY_MINUTES_MS = 40 * 60 * 1000;
+const TWO_WEEKS_MS = 14 * 24 * ONE_HOUR_MS;
 
 describe('ScheduleWeekDragService', () => {
   let service: ScheduleWeekDragService;
@@ -160,6 +162,213 @@ describe('ScheduleWeekDragService', () => {
         jasmine.objectContaining({
           type: PlannerActions.moveBeforeTask.type,
           toTaskId: 'target',
+        }),
+      );
+    });
+  });
+
+  describe('tray drops', () => {
+    const DAY = '2026-01-05';
+    const OTHER_DAY = '2026-01-06';
+    // 288 rows of 1px: 12px per hour
+    const GRID_HEIGHT_PX = 24 * FH;
+    let grid: HTMLElement;
+    let col: HTMLElement;
+    let tray: HTMLElement;
+
+    const createTrayChipEvent = (task: Partial<TaskCopy>): ScheduleEvent =>
+      ({
+        id: 'chip-1',
+        type: SVEType.TaskPlannedForDay,
+        style: '',
+        startHours: 0,
+        timeLeftInHours: 1,
+        plannedForDay: DAY,
+        isInTray: true,
+        data: {
+          id: 'chip-1',
+          title: 'Chip',
+          timeEstimate: ONE_HOUR_MS,
+          timeSpent: 0,
+          subTaskIds: [],
+          dueDay: DAY,
+          ...task,
+        },
+      }) as ScheduleEvent;
+
+    // drags to the pointer and returns the release
+    const dragTo = (
+      event: ScheduleEvent,
+      elementsAtPoint: HTMLElement[],
+      pointer: { x: number; y: number },
+    ): (() => void) => {
+      const source = {
+        data: event,
+        element: { nativeElement: document.createElement('div') },
+        reset: jasmine.createSpy('reset'),
+      };
+      spyOn(document, 'elementsFromPoint').and.returnValue(elementsAtPoint);
+      service.handleDragStarted({ source } as unknown as CdkDragStart<ScheduleEvent>);
+      service.handleDragMoved({
+        source,
+        pointerPosition: pointer,
+      } as unknown as CdkDragMove<ScheduleEvent>);
+      return () =>
+        service.handleDragReleased({
+          source,
+          event: new MouseEvent('mouseup', { clientX: pointer.x, clientY: pointer.y }),
+        } as unknown as CdkDragRelease<ScheduleEvent>);
+    };
+
+    beforeEach(() => {
+      setupTestBed();
+      grid = document.createElement('div');
+      grid.style.cssText = `position: fixed; top: 0; left: 0; width: 200px; height: ${GRID_HEIGHT_PX}px`;
+      document.body.appendChild(grid);
+      col = document.createElement('div');
+      col.classList.add('col');
+      col.setAttribute('data-day', DAY);
+      tray = document.createElement('div');
+      tray.setAttribute('data-tray-day', OTHER_DAY);
+      service.setGridContainer(() => grid);
+      service.setDaysToShowAccessor(() => [DAY, OTHER_DAY]);
+    });
+
+    afterEach(() => {
+      service.destroy();
+      grid.remove();
+    });
+
+    it('plans a timed task for the day of the tray it is dropped on', () => {
+      const dueWithTime = new Date(2026, 0, 5, 10, 0).getTime();
+      // the sticky header covers the grid: the column is under the pointer too
+      const release = dragTo(createTaskEvent({ id: 'timed', dueWithTime }), [tray, col], {
+        x: 50,
+        y: 20,
+      });
+
+      expect(service.dragOverTrayDay()).toBe(OTHER_DAY);
+      expect(service.dragPreviewStyle()).toBeNull();
+
+      release();
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: PlannerActions.planTaskForDay.type,
+          day: OTHER_DAY,
+          isAddToTop: false,
+        }),
+      );
+      expect(service.dragOverTrayDay()).toBeNull();
+    });
+
+    it('neither highlights nor moves a calendar event released on a tray', () => {
+      const calEv = {
+        id: 'calendar-1::event-1',
+        type: SVEType.CalendarEvent,
+        style: '',
+        startHours: 10,
+        timeLeftInHours: 0.5,
+        data: {
+          id: 'calendar-1::event-1',
+          calProviderId: 'provider-1',
+          issueProviderKey: 'plugin:google-calendar-provider',
+          title: 'Meeting',
+          start: new Date(2026, 0, 5, 10, 0).getTime(),
+          duration: ONE_HOUR_MS,
+          icon: 'event',
+        },
+      } as ScheduleEvent;
+      const release = dragTo(calEv, [tray, col], { x: 50, y: 20 });
+
+      expect(service.dragOverTrayDay()).toBeNull();
+      expect(service.dragPreviewStyle()).toBeNull();
+
+      release();
+
+      expect(calendarEventActionsSpy.moveToStartTime).not.toHaveBeenCalled();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when a chip is dropped back on its own tray', () => {
+      tray.setAttribute('data-tray-day', DAY);
+
+      dragTo(createTrayChipEvent({}), [tray, col], { x: 50, y: 20 })();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not unschedule a chip that is released outside the grid', () => {
+      const release = dragTo(createTrayChipEvent({}), [document.body], {
+        x: 500,
+        y: 500,
+      });
+
+      expect(service.dragPreviewContext()).toBeNull();
+
+      release();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    describe('released over content below the date row', () => {
+      // e.g. the day panel's overdue list: sticky like the tray, and the grid
+      // goes on underneath it
+      let below: HTMLElement;
+
+      beforeEach(() => {
+        below = document.createElement('div');
+        below.setAttribute('weekHeaderBelow', '');
+      });
+
+      it('leaves a chip in its tray', () => {
+        const release = dragTo(createTrayChipEvent({}), [below, col], { x: 50, y: 126 });
+
+        expect(service.dragPreviewStyle()).toBeNull();
+
+        release();
+
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('leaves a timed task at its time', () => {
+        const dueWithTime = new Date(2026, 0, 5, 14, 0).getTime();
+
+        dragTo(createTaskEvent({ id: 'timed', dueWithTime }), [below, col], {
+          x: 50,
+          y: 126,
+        })();
+
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('leaves a timed task at its time while the grid is not scrolled under it', () => {
+        const dueWithTime = new Date(2026, 0, 5, 14, 0).getTime();
+
+        // scrolled to the top, the header is above the grid: outside of it
+        const release = dragTo(createTaskEvent({ id: 'timed', dueWithTime }), [below], {
+          x: 500,
+          y: 500,
+        });
+
+        expect(service.dragPreviewContext()).toBeNull();
+
+        release();
+
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+    });
+
+    it('schedules a chip at the time it is dropped on', () => {
+      // 1h chip centred on the pointer: its top edge is 6 rows above y=126, at 10:00
+      dragTo(createTrayChipEvent({}), [col], { x: 50, y: 126 })();
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: TaskSharedActions.scheduleTaskWithTime.type,
+          dueWithTime: new Date(2026, 0, 5, 10, 0).getTime(),
         }),
       );
     });
@@ -496,6 +705,37 @@ describe('ScheduleWeekDragService', () => {
       const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
       // When task already has a reminder, it updates to the new schedule time directly
       expect(dispatchedAction.remindAt).toBe(newScheduleTime);
+    });
+
+    for (const [label, lead] of [
+      ['30 minutes', THIRTY_MINUTES_MS],
+      ['1 week', 7 * 24 * ONE_HOUR_MS],
+    ] as const) {
+      it(`should keep a reminder ${label} before when moving a scheduled task`, () => {
+        setupTestBed(TaskReminderOptionId.AtStart);
+        const dueWithTime = Date.now() + TWO_WEEKS_MS;
+        const task = { ...baseTask, dueWithTime, remindAt: dueWithTime - lead };
+        const newScheduleTime = dueWithTime + ONE_HOUR_MS;
+
+        (service as any)._scheduleTask(task, newScheduleTime);
+
+        const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
+        expect(dispatchedAction.type).toBe(TaskSharedActions.reScheduleTaskWithTime.type);
+        expect(dispatchedAction.remindAt).toBe(newScheduleTime - lead);
+      });
+    }
+
+    it('should snap a reminder lead to its reminder option when moving a scheduled task, like the planner', () => {
+      setupTestBed(TaskReminderOptionId.AtStart);
+      const dueWithTime = Date.now() + TWO_WEEKS_MS;
+      // e.g. a snoozed reminder: 40 minutes before counts as "30 minutes before"
+      const task = { ...baseTask, dueWithTime, remindAt: dueWithTime - FORTY_MINUTES_MS };
+      const newScheduleTime = dueWithTime + ONE_HOUR_MS;
+
+      (service as any)._scheduleTask(task, newScheduleTime);
+
+      const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
+      expect(dispatchedAction.remindAt).toBe(newScheduleTime - THIRTY_MINUTES_MS);
     });
 
     it('should not add reminder when task already has schedule but no reminder', () => {

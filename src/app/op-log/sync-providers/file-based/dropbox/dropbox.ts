@@ -1,16 +1,15 @@
-import { CapacitorHttp } from '@capacitor/core';
 import {
   Dropbox as PackageDropbox,
   PROVIDER_ID_DROPBOX,
   type DropboxCfg,
   type DropboxDeps,
 } from '@sp/sync-providers/dropbox';
-import { type NativeHttpResponse } from '@sp/sync-providers/http';
 import { SyncProviderId } from '../../provider.const';
 import { SyncCredentialStore } from '../../credential-store.service';
 import { OP_LOG_SYNC_LOGGER } from '../../../core/sync-logger.adapter';
 import { APP_PROVIDER_PLATFORM_INFO } from '../../platform/app-provider-platform-info';
 import { APP_WEB_FETCH } from '../../platform/app-web-fetch';
+import { APP_NATIVE_HTTP_EXECUTOR } from '../../platform/capacitor-http-options';
 
 // Type-level bridge — fails to compile if the enum's runtime value drifts
 // away from the package's string literal, or if either side is renamed.
@@ -36,8 +35,7 @@ export const createDropboxProvider = (cfg: DropboxCfg): PackageDropbox => {
     credentialStore: new SyncCredentialStore(
       SyncProviderId.Dropbox,
     ) as DropboxDeps['credentialStore'],
-    nativeHttpExecutor: (httpCfg) =>
-      CapacitorHttp.request(httpCfg) as unknown as Promise<NativeHttpResponse>,
+    nativeHttpExecutor: APP_NATIVE_HTTP_EXECUTOR,
   };
   return new PackageDropbox(cfg, deps);
 };

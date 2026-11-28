@@ -1,0 +1,20 @@
+---
+# Generated from Harper's Impressed rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `impressed of` to `impressed by` or `impressed with`.
+extends: existence
+message: "The correct preposition after `impressed` is `by` or `with`."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "impressed by"
+    - "impressed with"
+tokens:
+  - "impressed(?!\\s*\\n\\s*\\n)\\s+of(?!['\\x{2019}]s\\b)"

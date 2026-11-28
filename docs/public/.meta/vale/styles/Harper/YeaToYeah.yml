@@ -1,0 +1,19 @@
+---
+# Generated from Harper's YeaToYeah rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `yea` to `yeah`.
+extends: existence
+message: "If you mean the informal word for `yes` and not the biblical or legalistic `yea`, the standard spelling is `yeah`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "yeah"
+tokens:
+  - "yea(?!['\\x{2019}]s\\b)"

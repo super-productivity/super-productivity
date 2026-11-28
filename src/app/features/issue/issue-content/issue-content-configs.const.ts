@@ -6,7 +6,7 @@ import {
   IssueContentConfig,
 } from './issue-content.model';
 import { JIRA_ISSUE_CONTENT_CONFIG } from '../providers/jira/jira-issue-content.const';
-import { GITLAB_ISSUE_CONTENT_CONFIG } from '../providers/gitlab/gitlab-issue-content.const';
+// GitLab is now a plugin — content config lives in the plugin's issueDisplay
 import { CALDAV_ISSUE_CONTENT_CONFIG } from '../providers/caldav/caldav-issue-content.const';
 // Gitea is now a plugin — content config lives in the plugin's issueDisplay
 // Redmine is now a plugin — content config lives in the plugin's issueDisplay
@@ -24,7 +24,6 @@ export const ISSUE_CONTENT_CONFIGS: Record<
   BuiltInIssueProviderKey,
   IssueContentConfig<any>
 > = {
-  GITLAB: GITLAB_ISSUE_CONTENT_CONFIG,
   JIRA: JIRA_ISSUE_CONTENT_CONFIG,
   CALDAV: CALDAV_ISSUE_CONTENT_CONFIG,
   OPEN_PROJECT: OPEN_PROJECT_ISSUE_CONTENT_CONFIG,

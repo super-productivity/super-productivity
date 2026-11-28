@@ -16,6 +16,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { DateService } from '../../../core/date/date.service';
 import { addTaskRepeatCfgToTask } from '../../task-repeat-cfg/store/task-repeat-cfg.actions';
+import { selectAllTagIds } from '../../tag/store/tag.reducer';
 
 describe('AssistantCaptureService', () => {
   let service: AssistantCaptureService;
@@ -54,13 +55,18 @@ describe('AssistantCaptureService', () => {
     TestBed.configureTestingModule({
       providers: [
         AssistantCaptureService,
-        provideMockStore(),
+        provideMockStore({
+          selectors: [{ selector: selectAllTagIds, value: ['tag1', 'tag2', 'TODAY'] }],
+        }),
         { provide: TaskService, useValue: taskService },
         { provide: HydrationStateService, useValue: hydrationState },
         { provide: OperationCaptureService, useValue: operationCapture },
         { provide: OperationWriteFlushService, useValue: writeFlush },
         { provide: GlobalConfigService, useValue: config },
-        { provide: DateService, useValue: { todayStr: () => '2026-10-17' } },
+        {
+          provide: DateService,
+          useValue: { todayStr: () => '2026-10-17', getStartOfNextDayDiffMs: () => 0 },
+        },
       ],
     });
     service = TestBed.inject(AssistantCaptureService);
@@ -175,6 +181,76 @@ describe('AssistantCaptureService', () => {
     );
   });
 
+  it('puts a deadline and an estimate in the one add op', async () => {
+    await service.capture({
+      title: 'x',
+      deadlineDay: '2026-11-06',
+      deadlineTime: [8, 0],
+      estimateMinutes: 60,
+    });
+
+    expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        additional: {
+          timeEstimate: 3600000,
+          deadlineWithTime: new Date(2026, 10, 6, 8, 0).getTime(),
+        },
+      }),
+    );
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    expect(dispatchSpy.calls.mostRecent().args[0].autoPlanToday).toBeUndefined();
+  });
+
+  it('plans a capture whose deadline is today for today, as the app does', async () => {
+    taskService.createNewTaskWithDefaults.and.callFake(
+      ({ additional }) => ({ ...task, ...additional }) as Task,
+    );
+    await service.capture({ title: 'x', deadlineDay: '2026-10-17' });
+
+    const action = dispatchSpy.calls.mostRecent().args[0];
+    expect(action.task.deadlineDay).toBe('2026-10-17');
+    expect(action.autoPlanToday).toBe('2026-10-17');
+    expect(action.autoPlanStartOfNextDayDiffMs).toBe(0);
+  });
+
+  it('keeps a capture without a deadline free of auto-plan fields', async () => {
+    await service.capture({ title: 'x' });
+
+    expect(Object.keys(dispatchSpy.calls.mostRecent().args[0])).not.toContain(
+      'autoPlanToday',
+    );
+  });
+
+  it('tags the task in the one add op', async () => {
+    await service.capture({ title: 'x', tagIds: ['tag1', 'tag2'] });
+
+    expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({ additional: { tagIds: ['tag1', 'tag2'] } }),
+    );
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a tag that does not exist, or TODAY, before dispatching', async () => {
+    for (const tagIds of [['gone'], ['tag1', 'TODAY']]) {
+      expect(await service.capture({ title: 'x', tagIds }))
+        .withContext(tagIds.join())
+        .toEqual({ status: 'TAG_NOT_FOUND' });
+    }
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
+
+  it('gives a recurring capture the same tags for later occurrences', async () => {
+    await service.capture({
+      title: 'x',
+      tagIds: ['tag1'],
+      repeat: { cycle: 'DAILY', every: 1 },
+    });
+
+    const action = dispatchSpy.calls.mostRecent().args[0];
+    expect(action.type).toBe(addTaskRepeatCfgToTask.type);
+    expect(action.taskRepeatCfg.tagIds).toEqual(['tag1']);
+  });
+
   it('makes a recurring capture repeatable before the flush', async () => {
     writeFlush.flushPendingWrites.and.callFake(async () => {
       expect(dispatchSpy).toHaveBeenCalledTimes(2);
@@ -250,12 +326,53 @@ describe('parseAssistantCaptureInput', () => {
     });
   });
 
+  it('accepts deadlineDate, deadlineTime and estimateMinutes', () => {
+    expect(
+      parseAssistantCaptureInput({
+        title: 'a',
+        deadlineDate: '2026-11-06',
+        deadlineTime: '08:00',
+        estimateMinutes: 45,
+      }),
+    ).toEqual({
+      title: 'a',
+      deadlineDay: '2026-11-06',
+      deadlineTime: [8, 0],
+      estimateMinutes: 45,
+    });
+  });
+
+  it('accepts tagIds and drops an empty list', () => {
+    expect(parseAssistantCaptureInput({ title: 'a', tagIds: ['t1', 't2'] })).toEqual({
+      title: 'a',
+      tagIds: ['t1', 't2'],
+    });
+    expect(parseAssistantCaptureInput({ title: 'a', tagIds: [] })).toEqual({
+      title: 'a',
+    });
+  });
+
+  it('rejects malformed tagIds instead of dropping them', () => {
+    for (const tagIds of ['t1', [1], [''], ['t1', 't1']]) {
+      expect(parseAssistantCaptureInput({ title: 'a', tagIds }))
+        .withContext(JSON.stringify(tagIds))
+        .toBeUndefined();
+    }
+  });
+
   it('rejects invalid scheduling fields instead of dropping them', () => {
     for (const extra of [
       { dueTime: '09:30' },
       { dueDate: '2026-02-30' },
       { dueDate: '0999-01-01' },
       { repeat: { cycle: 'hourly' } },
+      { deadlineTime: '08:00' },
+      { deadlineDate: '2026-02-30' },
+      { deadlineDate: '2026-11-06', deadlineTime: '8:00' },
+      { deadlineDate: '2026-11-06', repeat: { cycle: 'weekly' } },
+      { estimateMinutes: 0 },
+      { estimateMinutes: 10081 },
+      { estimateMinutes: 1.5 },
     ]) {
       expect(parseAssistantCaptureInput({ title: 'a', ...extra }))
         .withContext(JSON.stringify(extra))

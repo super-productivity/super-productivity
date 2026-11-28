@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "Volledig pad of gebruikersnaam / project",
+    "PROJECT_HINT": "bijv. johannesjo/superproductiviteit",
+    "TOKEN": "Toegangstoken",
+    "HOW_TO_GET_TOKEN": "Hoe krijg ik een token?",
+    "SCOPE": "strekking",
+    "SCOPE_ALL": "Allemaal",
+    "SCOPE_CREATED": "Gecreëerd door mij",
+    "SCOPE_ASSIGNED": "Toegewezen aan mij",
+    "GITLAB_BASE_URL": "Aangepaste GitLab base URL",
+    "FILTER_USER": "Gebruikersnaam (bijv. Om wijzigingen zelf uit te filteren)",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Aangepast filter",
+    "FILTER_DESCRIPTION": "Zie https://docs.gitlab.com/ee/api/issues.html#list-issues. Meerdere kunnen worden gecombineerd door &",
+    "SUBMIT_TIMELOGS": "Tijdlogs aan Gitlab toevoegen",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Tijdregistratiedialoogvenster tonen na klikken op einddag"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Overzicht",
+    "STATE": "Toestand",
+    "ASSIGNEE": "Toegewezen aan",
+    "LABELS": "Etiketten",
+    "DESCRIPTION": "Omschrijving"
+  },
+  "FORM_HELP": "<p> Hier kunt u SuperProductivity configureren om open GitLab (ofwel de online versie of een zelf-gehoste instantie) problemen voor een specifiek project in het taakcreatiepaneel in de dagelijkse planningsweergave op te sommen. Ze worden vermeld als suggesties en bevatten een link naar het probleem en meer informatie erover. </p> <p> Daarnaast kunt u automatisch alle openstaande problemen toevoegen aan en synchroniseren met uw backlog. </p>"
+}

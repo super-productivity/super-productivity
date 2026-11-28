@@ -2,6 +2,11 @@ import { PluginManifest } from '../plugin-api.model';
 import { SUPPORTED_LANGUAGE_CODES } from '../../core/locale.constants';
 import { environment } from '../../../environments/environment';
 import { compareVersions } from './community-plugin.util';
+import {
+  isHostname,
+  isValidDestination,
+  KNOWN_SHARED_DATA,
+} from './plugin-data-sharing.util';
 
 const MAX_REPORTED_INVALID_LANGUAGES = 10;
 const MAX_REPORTED_LANGUAGE_LENGTH = 20;
@@ -57,15 +62,17 @@ export const validatePluginManifest = (
     if (!Array.isArray(manifest.allowedHosts)) {
       errors.push('allowedHosts must be an array of hostnames');
     } else {
-      const badEntries = manifest.allowedHosts.filter(
-        (h) => typeof h !== 'string' || h.trim().length === 0 || /[/:]/.test(h),
-      );
+      const badEntries = manifest.allowedHosts.filter((h) => !isHostname(h));
       if (badEntries.length > 0) {
         errors.push(
           'allowedHosts entries must be non-empty hostnames without scheme, port, or path (e.g. "api.example.com")',
         );
       }
     }
+  }
+
+  if (manifest?.dataSharing !== undefined) {
+    validateDataSharing(manifest, errors, warnings);
   }
 
   // Validate i18n configuration if present
@@ -112,6 +119,52 @@ export const validatePluginManifest = (
     errors,
     warnings,
   };
+};
+
+// Keep in sync with the request-host check in plugin-bridge.service.ts (and the copy in
+// electron/bundled-plugin-ids.test.cjs).
+const normalizeHost = (h: string): string => h.trim().toLowerCase().replace(/\.$/, '');
+
+/**
+ * Wrong shapes are errors; unknown data values only warn, so a plugin built for a newer
+ * app still installs on an older one (they render as "other data").
+ */
+const validateDataSharing = (
+  manifest: PluginManifest,
+  errors: string[],
+  warnings: string[],
+): void => {
+  const destinations: unknown = manifest.dataSharing;
+  if (!Array.isArray(destinations) || !destinations.every(isValidDestination)) {
+    errors.push(
+      'dataSharing must be an array of { recipient, data[], optionalData?[], hosts?[], userServer?, privacyPolicyUrl? (https) }',
+    );
+    return;
+  }
+  const declaredHosts = new Set(
+    destinations.flatMap((d) => d.hosts ?? []).map(normalizeHost),
+  );
+  // A non-array allowedHosts is already reported above.
+  const allowedHosts = Array.isArray(manifest.allowedHosts) ? manifest.allowedHosts : [];
+  const undeclared = allowedHosts.filter(
+    (h) => typeof h === 'string' && !declaredHosts.has(normalizeHost(h)),
+  );
+  if (undeclared.length > 0) {
+    errors.push(
+      `allowedHosts must also appear in dataSharing hosts: ${undeclared.slice(0, 10).join(', ')}`,
+    );
+  }
+  const unknown = destinations
+    .flatMap((d) => [...d.data, ...(d.optionalData ?? [])])
+    .filter((v) => !KNOWN_SHARED_DATA.has(v));
+  if (unknown.length > 0) {
+    warnings.push(
+      `Unknown dataSharing values: ${unknown
+        .slice(0, MAX_REPORTED_INVALID_LANGUAGES)
+        .map((v) => v.slice(0, MAX_REPORTED_LANGUAGE_LENGTH))
+        .join(', ')} - shown as "other data"`,
+    );
+  }
 };
 
 /**

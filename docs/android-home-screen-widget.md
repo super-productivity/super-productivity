@@ -2,16 +2,59 @@
 
 > **Status:** Maintained
 >
-> **Last verified:** 2026-07-29
+> **Last verified:** 2026-11-27
 
-The widget displays up to 20 tasks from the app's last snapshot of the Today
-view and lets the user toggle completion. It is a native projection of Angular
-state, not an independent task or calendar engine.
+The widget displays up to 20 tasks from the app's last snapshot of Today,
+Inbox, or one selected active project and lets the user toggle completion.
+It is a native projection of Angular state, not an independent task or calendar
+engine.
+
+Android's configuration screen opens when adding a widget. It can select Today
+(the default), Inbox, or an unarchived, visible project for each widget. On
+launchers that support reconfiguration, the selection can be changed later
+from the launcher's widget settings. These selections do not change the app's
+default start page. Inbox and project choices come from the most recent Angular
+snapshot, so the picker can show only Today until the app has been opened once.
+
+Selections are device-local and excluded from Android backup and device
+transfer because launcher widget IDs are not stable across restoration. A
+widget whose selected project is deleted, archived, or hidden falls back to
+Today. The stored selection is retained, so making an archived or hidden
+project available again restores it.
+
+A screen reader announces each row's checkbox with the task title and what a
+tap does (mark done, mark not done, or, for a pending quick add, open the app),
+decided by `WidgetData.checkboxActionFor`, which also picks the tap's intent.
+The checkbox and the header's "+" are 48dp wide; rows keep their compact height.
+
+Tapping a widget's header or a row opens its list in the app: the project, or
+Today. A Today widget opens Today through the `com.super-productivity.app://today`
+URL, like the launcher shortcut, so it does not depend on the configured start
+page. A pending quick add's checkbox opens the same list, where the app imports
+the task.
+
+Project widgets list open tasks: the project list followed by the backlog, up
+to the 20-row limit. A task checked on the widget stays listed, checked, for
+five seconds, so the tap is confirmed and a second tap undoes it; then the row
+goes, whether or not the app is running. The five seconds count from the local
+tap time in `WidgetDoneQueue`, never from a synced `doneOn`, which carries
+another device's clock. Tasks completed elsewhere are not listed. Angular adds
+each project's five most recently done tasks to its list for this, and they do
+not count against the open rows; an alarm (or, without exact-alarm access, an
+in-process timer backed by an inexact alarm) re-renders the widget when the
+five seconds end. Today widgets keep listing completed tasks.
+
+A project tap is handed to Angular through a pending entry in
+`task_list_widget`. It expires after a minute, because Android can block a row
+tap's background activity launch without reporting it; the entry must not make
+a much later app start jump into the project. Reopening the app from recents, or
+the relaunch after a package update, does not repeat the navigation.
 
 ## Contract and ownership
 
 - Angular's `WidgetDataService` is the only writer of the `widget_data` JSON
-  snapshot. The TypeScript contract is
+  snapshot, including the projected task lists for selectable projects. The
+  TypeScript contract is
   `src/app/features/android/android-widget.model.ts`.
 - Kotlin parses the versioned `v: 1` shape in
   `android/app/src/main/java/com/superproductivity/superproductivity/widget/WidgetData.kt`.
@@ -19,16 +62,21 @@ state, not an independent task or calendar engine.
 - Native checkbox taps write only to `WidgetDoneQueue`. The renderer overlays
   queued target states immediately; Angular later drains, deduplicates, and
   applies those intents. Native code must never rewrite the snapshot.
+- Per-widget project selections and pending project navigation live in
+  `task_list_widget` SharedPreferences. This file must remain excluded from
+  Android backup and device transfer unless widget-ID remapping is implemented.
 - Keep the explicit-component PendingIntent and exported-receiver restrictions;
   external apps must not be able to complete tasks.
 - The header's "+" opens `QuickAddActivity`, a dialog over the home screen
   that writes the typed title to `CaptureInbox` (like a share) and finishes.
-  Angular imports it on its next start or resume as one Today `addTask` with
-  short syntax applied. Like checkbox taps, it never touches the snapshot: the
-  renderer lists not-yet-imported title captures above the snapshot rows
-  (`WidgetData.withPendingCaptures`, raw title, checkbox opens the app). This
-  is a fact of the capture contract (title captures always go to Today), not
-  Today membership computed natively.
+  Angular imports it on its next start or resume as one `addTask` with short
+  syntax applied: into the widget's project when the "+" belongs to a project
+  widget (the capture carries `projectId`), otherwise into Today. A project
+  deleted or archived before the import falls back to Today. Like checkbox
+  taps, it never touches the snapshot: the renderer lists not-yet-imported
+  title captures above the snapshot rows (`WidgetData.withPendingCaptures`,
+  raw title, checkbox opens the app), each only on widgets showing its target.
+  This is a fact of the capture contract, not membership computed natively.
 
 The serializer and Kotlin parser are locked to the same golden shape by
 `android-widget.selectors.spec.ts` and `WidgetDataTest.kt`. Update both ends and
@@ -40,18 +88,46 @@ Angular supplies `dayStr` and `validUntil`. Native code judges staleness only as
 `now >= validUntil`; it must not reproduce logical-day offsets, recurring-task
 materialization, overdue carry-over, or virtual `TODAY_TAG` membership.
 
+So that a Today widget survives a day change without the app (#11944), Angular
+also supplies `nextDays`: the Today list of each of the next seven days as far as
+the device knows it at push time, each with its own `dayStr` and `validUntil`
+(`selectAndroidWidgetNextDayPlans`). A day holds the tasks already due then
+(Today's own membership rule, in the planner's order, timed tasks after them by
+start time) and one row per recurring task due that day whose task is not among
+them (the planner's rule for its projections). Such a row carries
+`isPending` and the id the task will get; it does not exist yet, so its checkbox
+opens the app, which creates it. Once the snapshot's `validUntil` has passed,
+`WidgetData.activeDay` picks the first entry that has not ended, and header and
+rows come from it; the header says "Today". Native still only compares `now`
+with boundaries Angular wrote. Past the last entry the widget shows the
+snapshot's own list again, labelled outdated. Project and Inbox widgets do not
+depend on the day and ignore `nextDays`.
+
+The next days are a forecast of each day's first run, not a replay of it:
+recurring tasks set to wait for completion are left out, a recurring task missed
+on a day the app did not run is not carried to the next, and the order can
+differ from what the app settles on. The app's next push replaces it.
+
 The widget reflects the last state produced while the app was able to run. When
 the process is dead it cannot create a new day's recurring tasks or receive
 cross-client changes. Its 30-minute platform refresh is inexact and may be
-deferred by Doze. A pre-`validUntil` snapshot cannot be classified as stale
-until the app writes a current snapshot.
+deferred by Doze, so the move to a new day can lag its boundary by that much. A
+pre-`validUntil` snapshot cannot be classified as stale until the widget
+re-renders.
 
 ## Deliberate limitations
 
 - No undo or per-task deep link. Quick add takes a title only (short syntax
-  covers project, tags and dates); no list picker or configurable list.
+  covers project, tags and dates).
+- A project widget lists open tasks; a task checked there disappears after five
+  seconds. Undo it later from the app's done list.
+- Archived projects and projects hidden from the menu are not selectable.
 - Native widget chrome is English-only and uses fixed styling.
 - At most 20 tasks are rendered.
+- After more than seven days without the app running, a Today widget shows the
+  last snapshot's list labelled outdated.
+- A reminder notification's "Done" (`ReminderDoneQueue`) is not shown on the
+  widget until the app has applied it.
 - Cross-client freshness while the app is dead requires a separate background
   sync design. The reminder worker's cursor is not an authoritative app-state
   cursor; see

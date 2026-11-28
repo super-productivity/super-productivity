@@ -29,7 +29,9 @@ class BackgroundReminderOpFixturesTest {
         val name: String,
         val op: JSONObject,
         val expectSchedule: Set<ReminderToSchedule>,
+        // Tasks whose alarms all go, and single alarms (reminder ids) that go
         val expectCancel: Set<String>,
+        val expectCancelReminders: Set<String>,
     )
 
     private val cases: List<Case> by lazy {
@@ -39,6 +41,7 @@ class BackgroundReminderOpFixturesTest {
             val c = arr.getJSONObject(i)
             val schedules = c.getJSONArray("expectSchedule")
             val cancels = c.getJSONArray("expectCancel")
+            val reminderCancels = c.getJSONArray("expectCancelReminders")
             Case(
                 name = c.getString("name"),
                 op = c.getJSONObject("op"),
@@ -52,6 +55,7 @@ class BackgroundReminderOpFixturesTest {
                     )
                 }.toSet(),
                 expectCancel = (0 until cancels.length()).map { cancels.getString(it) }.toSet(),
+                expectCancelReminders = (0 until reminderCancels.length()).map { reminderCancels.getString(it) }.toSet(),
             )
         }
     }
@@ -68,6 +72,7 @@ class BackgroundReminderOpFixturesTest {
     private fun assertCase(case: Case, result: ReminderChangeResult) {
         assertEquals("${case.name}: scheduled", case.expectSchedule, result.remindersToSchedule.toSet())
         assertEquals("${case.name}: cancelled", case.expectCancel, result.taskIdsToCancel)
+        assertEquals("${case.name}: cancelled reminders", case.expectCancelReminders, result.reminderIdsToCancel)
         // The fire-time check must keep every reminder this op (re)sets…
         for (r in result.remindersToSchedule) {
             val type = if (r.isDeadline) "DEADLINE" else "TASK"

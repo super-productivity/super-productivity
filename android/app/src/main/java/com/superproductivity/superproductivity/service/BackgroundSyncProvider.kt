@@ -2,6 +2,7 @@ package com.superproductivity.superproductivity.service
 
 import android.content.Context
 import android.util.Log
+import java.util.TimeZone
 
 private const val TAG = "ReminderSyncHelper"
 private const val DUE_DAY_SUFFIX = "_dueday"
@@ -21,9 +22,18 @@ data class ReminderToSchedule(
 
 /** Reminder id as the app keys alarms (mobile-notification.effects.ts). */
 internal fun reminderIdOf(reminder: ReminderToSchedule): String =
-    if (reminder.isDeadline) reminder.taskId + DEADLINE_SUFFIX else reminder.taskId
+    if (reminder.isDeadline) deadlineReminderIdOf(reminder.taskId) else reminder.taskId
 
 internal fun dueDayReminderIdOf(taskId: String): String = taskId + DUE_DAY_SUFFIX
+
+internal fun deadlineReminderIdOf(taskId: String): String = taskId + DEADLINE_SUFFIX
+
+/** Reminder id of a task's alarm of [reminderType] (TASK, DEADLINE or DUE_DATE). */
+internal fun reminderIdOfType(taskId: String, reminderType: String): String = when (reminderType) {
+    "DEADLINE" -> deadlineReminderIdOf(taskId)
+    "DUE_DATE" -> dueDayReminderIdOf(taskId)
+    else -> taskId
+}
 
 internal fun taskIdOfReminderId(reminderId: String): String =
     reminderId.removeSuffix(DEADLINE_SUFFIX).removeSuffix(DUE_DAY_SUFFIX)
@@ -56,6 +66,17 @@ fun cancelRemindersForTask(context: Context, taskId: String) {
     }
 }
 
+/** Cancel the single alarm keyed by [reminderId]. No-op on failure — logs and continues. */
+internal fun cancelReminderById(context: Context, reminderId: String) {
+    try {
+        ReminderNotificationHelper.cancelReminder(
+            context, SuperSyncBackgroundProvider.generateNotificationId(reminderId)
+        )
+    } catch (e: Exception) {
+        Log.w(TAG, "Failed to cancel a reminder", e)
+    }
+}
+
 /**
  * Schedule an AlarmManager alarm from a sync-detected reminder.
  * [useAlarmStyle] mirrors the user's setting; like the app
@@ -79,13 +100,15 @@ fun scheduleReminderFromSync(context: Context, reminder: ReminderToSchedule, use
 /**
  * Result from a background sync provider's reminder change detection.
  *
- * @param taskIdsToCancel Set of task IDs whose reminders should be cancelled
+ * @param taskIdsToCancel Task IDs whose alarms ALL go (deleted, done, archived)
  * @param remindersToSchedule List of reminders to schedule as AlarmManager alarms
  * @param latestSeq The latest server sequence number processed
  * @param hasMore Whether more operations are available (pagination)
  * @param unreadableTaskIds Task IDs touched by encrypted ops whose payload could
  *   not be decrypted (e.g. no cached key for a new desktop session), so their
  *   reminder changes are unknown
+ * @param reminderIdsToCancel Single alarms to cancel (their reminder ids), for
+ *   ops that clear one reminder kind and leave the task's other alarms (#10618)
  */
 data class ReminderChangeResult(
     val taskIdsToCancel: Set<String>,
@@ -93,10 +116,21 @@ data class ReminderChangeResult(
     val latestSeq: Long,
     val hasMore: Boolean,
     val unreadableTaskIds: Set<String> = emptySet(),
+    val reminderIdsToCancel: Set<String> = emptySet(),
+    /**
+     * Repeat configs whose future occurrences this page disarmed (deleted,
+     * paused, reminder cleared). Occurrence ids are `rpt_<cfgId>_<day>`, so
+     * a fired alarm can be judged stale without a second download.
+     */
+    val repeatCfgIdsRemoved: Set<String> = emptySet(),
+    /** Repeat-config cache after folding this page's ops onto the cache passed in. */
+    val nextRepeatState: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
+    /** Configs explicitly deleted on this page, as they were when their tasks were detached. */
+    val detachedSeries: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
 ) {
     /**
-     * Fire-time stale check for one alarm: was it cancelled (deleted/done/
-     * dismissed/unscheduled) or rescheduled to a different time by these ops?
+     * Fire-time stale check for one alarm: was it cancelled (deleted/done, or
+     * its own kind dismissed/unscheduled) or rescheduled to a different time by these ops?
      *
      * A reminder these ops (re)schedule for the alarm's own slot decides first:
      * an op may cancel a task's alarms and set one slot again (an LWW snapshot
@@ -116,7 +150,18 @@ data class ReminderChangeResult(
             }
             if (current != null) return triggerAtMs > 0L && current.remindAt != triggerAtMs
         }
-        return taskId in taskIdsToCancel
+        if (taskId in taskIdsToCancel || reminderIdOfType(taskId, reminderType) in reminderIdsToCancel) {
+            return true
+        }
+        // Series-level removal only reaches alarms pre-scheduled from the config
+        // (always "TASK"). An instance the config already created keeps its own
+        // reminder and deadline under the same occurrence id.
+        if (reminderType != "TASK") return false
+        val repeatCfgId = parseRepeatOccurrenceId(taskId)?.cfgId ?: return false
+        if (repeatCfgId !in repeatCfgIdsRemoved) return false
+        // A deleted config detaches its instances; judge them by its last known state.
+        val state = if (nextRepeatState.byId(repeatCfgId) == null) detachedSeries else nextRepeatState
+        return !isLiveRepeatInstance(taskId, state, TimeZone.getDefault())
     }
 }
 
@@ -137,6 +182,7 @@ interface BackgroundSyncProvider {
         baseUrl: String,
         accessToken: String,
         lastSeq: Long,
-        limit: Int = 100
+        limit: Int = 100,
+        repeatState: RepeatCfgSyncState = RepeatCfgSyncState.EMPTY,
     ): ReminderChangeResult?
 }

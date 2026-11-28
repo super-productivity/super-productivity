@@ -22,6 +22,10 @@ import { DialogServerMigrationConfirmComponent } from './dialog-server-migration
 import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
 import { AppDataComplete, MODEL_CONFIGS } from '../model/model-config';
 import { OperationWriteFlushService } from './operation-write-flush.service';
+import {
+  mayHealRejectedSuperSyncFullState,
+  recordRejectedSuperSyncFullStateHeal,
+} from './super-sync-rejected-full-state-heal';
 
 const MEANINGFUL_ENTITY_STATE_KEYS = new Set(['task', 'project', 'tag', 'note']);
 
@@ -359,8 +363,13 @@ export class ServerMigrationService {
         syncImportReason: options?.syncImportReason ?? 'SERVER_MIGRATION',
       };
 
-      // Append to operation log - will be uploaded via snapshot endpoint
-      await this.opLogStore.append(op, 'local');
+      // Append to operation log - will be uploaded via snapshot endpoint.
+      // The rebasing append also advances the stored vector clock; a plain
+      // append left it behind, so this device's next op reused the import's
+      // clock and peers that had applied the import skipped it (#11651).
+      await this.opLogStore.appendMixedSourceBatchSkipDuplicates([
+        { ops: [op], source: 'local' },
+      ]);
 
       OpLog.normal(
         'ServerMigrationService: Created SYNC_IMPORT operation for server migration. ' +
@@ -399,6 +408,17 @@ export class ServerMigrationService {
         OpLog.warn(
           `ServerMigrationService: Previous server-migration snapshot ${existing.op.id} ` +
             'was rejected by a file-based provider; seeding again from current state.',
+        );
+        return false;
+      }
+      // #11671: the rejection may be a misclassified upload error from a
+      // version before v20.1.0. Seed again once per device; a genuine
+      // rejection of the new snapshot then stops here as before.
+      if (mayHealRejectedSuperSyncFullState(existing.op.id)) {
+        recordRejectedSuperSyncFullStateHeal(existing.op.id);
+        OpLog.warn(
+          `ServerMigrationService: Previous server-migration snapshot ${existing.op.id} ` +
+            'was rejected, possibly by an older version; seeding again from current state.',
         );
         return false;
       }

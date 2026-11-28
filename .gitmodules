@@ -1,4 +1,0 @@
-[submodule "android"]
-	path = android
-	url = https://github.com/jiongxuan/super-productivity-android.git
-	branch = feat/platform-android-offline

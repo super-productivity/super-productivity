@@ -10,6 +10,16 @@
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": [],
+  "dataSharing": [
+    {
+      "recipient": "Azure DevOps",
+      "hosts": ["dev.azure.com"],
+      "userServer": true,
+      "data": ["credentials", "userText"],
+      "optionalData": ["taskStatus"],
+      "privacyPolicyUrl": "https://privacy.microsoft.com/privacystatement"
+    }
+  ],
   "hooks": [],
   "i18n": {
     "languages": [

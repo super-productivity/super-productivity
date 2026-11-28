@@ -20,8 +20,6 @@
 # Agent instructions and reusable agent workflows
 AGENTS.md @johannesjo
 CLAUDE.md @johannesjo
-/.agents/ @johannesjo
-/.codex/ @johannesjo
 
 # ==========================================
 # Build & Deployment Configuration (HIGH)

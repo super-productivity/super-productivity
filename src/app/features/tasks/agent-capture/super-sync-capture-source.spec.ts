@@ -57,6 +57,7 @@ describe('createSuperSyncCaptureSource', () => {
       defaultEstimate: 0,
       defaultRemindOption: TaskReminderOptionId.AtStart,
       todayStr: '2026-10-15',
+      startOfNextDayDiffMs: 0,
       assertUnchanged: (context) => {
         if (!isCurrent) throw new Error(`changed at ${context}`);
       },
@@ -106,6 +107,46 @@ describe('createSuperSyncCaptureSource', () => {
       typeof TaskSharedActions.addTask
     >;
     expect(action.task.timeEstimate).toBe(1500);
+  });
+
+  it('puts a deadline and a capture estimate into the addTask itself', async () => {
+    provider.claimCaptures.and.resolveTo(ok());
+    run = { ...(run as AgentCaptureRun), defaultEstimate: 1500 };
+    const src = source();
+    await src.getPending();
+    src.createTask({
+      id: 'task-1',
+      task: {
+        title: 'Lab report',
+        createdAt: 1,
+        deadlineDay: '2026-10-16',
+        deadlineTime: [8, 0],
+        estimateMinutes: 60,
+      },
+    });
+    const action = dispatch.calls.mostRecent().args[0] as ReturnType<
+      typeof TaskSharedActions.addTask
+    >;
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(action.task.timeEstimate).toBe(3600000);
+    expect(action.task.deadlineWithTime).toBe(new Date(2026, 9, 16, 8, 0).getTime());
+    expect(action.task.deadlineDay).toBeUndefined();
+    expect(action.autoPlanToday).toBeUndefined();
+  });
+
+  it('plans a capture whose deadline is today for today', async () => {
+    provider.claimCaptures.and.resolveTo(ok());
+    const src = source();
+    await src.getPending();
+    src.createTask({
+      id: 'task-1',
+      task: { title: 'Quiz', createdAt: 1, deadlineDay: '2026-10-15' },
+    });
+    const action = dispatch.calls.mostRecent().args[0] as ReturnType<
+      typeof TaskSharedActions.addTask
+    >;
+    expect(action.task.deadlineDay).toBe('2026-10-15');
+    expect(action.autoPlanToday).toBe('2026-10-15');
   });
 
   it('schedules a day without a time as dueDay, in the addTask itself', async () => {
@@ -348,6 +389,53 @@ describe('toCaptureTask', () => {
       title: 'Dentist',
       createdAt: 1,
       dueDay: '2026-10-16',
+    });
+  });
+});
+
+describe('toCaptureTask deadline and estimate', () => {
+  const base = { v: 1, title: 'Lab report', createdAt: 1, client: 'Claude' };
+
+  it('reads an optional deadline day, time and estimate', () => {
+    expect(
+      toCaptureTask({
+        ...base,
+        deadlineDate: '2026-10-16',
+        deadlineTime: '08:00',
+        estimateMinutes: 60,
+      }),
+    ).toEqual({
+      title: 'Lab report',
+      createdAt: 1,
+      deadlineDay: '2026-10-16',
+      deadlineTime: [8, 0],
+      estimateMinutes: 60,
+    });
+  });
+
+  it('drops an invalid deadline or estimate but keeps the task', () => {
+    for (const extra of [
+      { deadlineDate: '2026-02-30' },
+      { deadlineDate: '0999-12-31' },
+      { deadlineTime: '08:00' },
+      { estimateMinutes: 0 },
+      { estimateMinutes: 10081 },
+      { estimateMinutes: '30' },
+    ]) {
+      expect(toCaptureTask({ ...base, ...extra })).toEqual({
+        title: 'Lab report',
+        createdAt: 1,
+      });
+    }
+  });
+
+  it('drops a deadline from a recurring capture', () => {
+    expect(
+      toCaptureTask({ ...base, deadlineDate: '2026-10-16', repeat: { cycle: 'weekly' } }),
+    ).toEqual({
+      title: 'Lab report',
+      createdAt: 1,
+      repeat: { cycle: 'WEEKLY', every: 1 },
     });
   });
 });

@@ -235,3 +235,34 @@ export const STORE_RULES: readonly StoreRule[] = [
 export const SCREENSHOT_BASE_DATE = new Date(
   process.env.SCREENSHOT_BASE_DATE ?? '2026-05-06T09:30:00',
 );
+
+/**
+ * Native window capture mode (`npm run screenshots:flathub:native`).
+ *
+ * Flathub's quality review asks for screenshots with the desktop's own window
+ * decoration, rounded corners and shadow. In this mode the app uses the system
+ * title bar and the desktop's screenshot tool captures each Flathub scene:
+ * - KDE: Spectacle captures the active window automatically.
+ * - GNOME: Shell only lets its own tool capture a single window, so the
+ *   pipeline waits for the user to press Alt+Print and picks the PNG up.
+ * - anything else: falls back to the X11/Wayland region capture.
+ */
+export const IS_NATIVE_CAPTURE = process.env.SP_SCREENSHOT_NATIVE === '1';
+
+/**
+ * Window size for native capture. Flathub asks for at most 1000×700 logical
+ * pixels (2000×1400 on HiDPI).
+ */
+export const NATIVE_CAPTURE_WINDOW = { width: 1000, height: 700 } as const;
+
+/** Optional theme override applied to every scene (e.g. `light` for Flathub's
+ *  "default settings" check). */
+export const FORCED_THEME: Theme | undefined =
+  process.env.SP_SCREENSHOT_FORCE_THEME === 'light' ||
+  process.env.SP_SCREENSHOT_FORCE_THEME === 'dark'
+    ? process.env.SP_SCREENSHOT_FORCE_THEME
+    : undefined;
+
+/** Scenarios that end up in the Flathub gallery, in gallery order. */
+export const FLATHUB_SCENARIOS: readonly string[] =
+  STORE_RULES.find((rule) => rule.store === 'flathub')?.scenarioOrder ?? [];

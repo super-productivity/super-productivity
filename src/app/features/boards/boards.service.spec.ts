@@ -1,14 +1,14 @@
 import { TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { NavigationEnd, Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { signal } from '@angular/core';
 import { BoardsService } from './boards.service';
 import { BoardsActions } from './store/boards.actions';
-import { BoardCfg } from './boards.model';
-import { DEFAULT_BOARD_CFG } from './boards.const';
+import { BoardCfg, BoardPanelCfgTaskDoneState } from './boards.model';
+import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from './boards.const';
 import { DialogBoardEditComponent } from './dialog-board-edit/dialog-board-edit.component';
 import { GlobalConfigService } from '../config/global-config.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -22,6 +22,7 @@ describe('BoardsService', () => {
   let dialogResult: unknown;
   let updateSection: jasmine.Spy;
   let snackOpen: jasmine.Spy;
+  let routerEvents: Subject<unknown>;
   // The store's boards: an added one shows up, as with the real reducer.
   const storeBoards = signal<BoardCfg[]>([]);
   const appFeatures = signal({ isBoardsEnabled: true });
@@ -42,6 +43,7 @@ describe('BoardsService', () => {
       }
     });
     navigate = jasmine.createSpy('navigate');
+    routerEvents = new Subject();
     dialogResult = undefined;
     updateSection = jasmine.createSpy('updateSection');
     appFeatures.set({ isBoardsEnabled: true });
@@ -53,7 +55,7 @@ describe('BoardsService', () => {
       providers: [
         { provide: Store, useValue: { dispatch, selectSignal: () => storeBoards } },
         { provide: SnackService, useValue: { open: snackOpen } },
-        { provide: Router, useValue: { navigate } },
+        { provide: Router, useValue: { navigate, events: routerEvents, url: '/' } },
         { provide: MatDialog, useValue: { open } },
         { provide: GlobalConfigService, useValue: { appFeatures, updateSection } },
         {
@@ -61,7 +63,13 @@ describe('BoardsService', () => {
           useValue: {
             // 'PM' names a group of keys, as `instant` returns it.
             instant: (key: string): unknown =>
-              key === board.title ? 'Kanban' : key === 'PM' ? { X: 'x' } : key,
+              key === board.title
+                ? 'Kanban'
+                : key === T.F.BOARDS.V.ALL_TASKS_TITLE
+                  ? 'All tasks'
+                  : key === 'PM'
+                    ? { X: 'x' }
+                    : key,
           },
         },
       ],
@@ -80,12 +88,13 @@ describe('BoardsService', () => {
     expect(navigate).toHaveBeenCalledOnceWith(['/boards', 'new-id']);
   });
 
-  it('opens the edit dialog full screen on phones', async () => {
+  it('opens the edit dialog full screen on phones, focusing the dialog itself', async () => {
     await service.editBoard(board);
     expect(open).toHaveBeenCalledOnceWith(DialogBoardEditComponent, {
       restoreFocus: true,
       panelClass: 'fullscreen-xs-dialog',
       data: { board },
+      autoFocus: 'dialog',
     });
   });
 
@@ -181,6 +190,82 @@ describe('BoardsService', () => {
         newerField: 'kept',
       } as Partial<BoardCfg>),
     );
+  });
+
+  describe('openAllTasksList', () => {
+    const allTasks: BoardCfg = {
+      id: 'mine',
+      title: 'Everything',
+      cols: 1,
+      panels: [
+        {
+          ...DEFAULT_PANEL_CFG,
+          id: 'p',
+          taskDoneState: BoardPanelCfgTaskDoneState.UnDone,
+        },
+      ],
+    };
+    const goTo = (url: string): void => routerEvents.next(new NavigationEnd(1, url, url));
+
+    it('adds a list of open tasks from all projects and opens it', () => {
+      storeBoards.set([board]);
+      service.openAllTasksList();
+
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      const added: BoardCfg = dispatch.calls.mostRecent().args[0].board;
+      expect(dispatch.calls.mostRecent().args[0].type).toBe(BoardsActions.addBoard.type);
+      // the translated text is stored, not its key
+      expect(added.title).toBe('All tasks');
+      expect(added.cols).toBe(1);
+      expect(added.panels.length).toBe(1);
+      expect(added.panels[0].taskDoneState).toBe(BoardPanelCfgTaskDoneState.UnDone);
+      expect(added.panels[0].projectIds).toEqual(['']);
+      expect(added.id).not.toBe(board.id);
+      expect(navigate).toHaveBeenCalledOnceWith(['/boards', added.id]);
+      expect(service.arrivalId()).toBe(added.id);
+      expect(snackOpen).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens the one the user already has, renamed or not, without adding', () => {
+      storeBoards.set([board, allTasks]);
+      service.openAllTasksList();
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledOnceWith(['/boards', 'mine']);
+      expect(snackOpen).not.toHaveBeenCalled();
+    });
+
+    it('opens the same view on a second click', () => {
+      service.openAllTasksList();
+      service.openAllTasksList();
+
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      expect(storeBoards().length).toBe(1);
+    });
+
+    it('turns Views on when they are off', () => {
+      appFeatures.set({ isBoardsEnabled: false });
+      storeBoards.set([allTasks]);
+      service.openAllTasksList();
+
+      expect(updateSection).toHaveBeenCalledOnceWith(
+        'appFeatures',
+        { isBoardsEnabled: true },
+        true,
+      );
+    });
+
+    it('knows when such a list is the page shown', () => {
+      storeBoards.set([board, allTasks]);
+      expect(service.isAllTasksListOpen()).toBe(false);
+
+      goTo('/boards/b1');
+      expect(service.isAllTasksListOpen()).toBe(false);
+      goTo('/boards/mine?x=1');
+      expect(service.isAllTasksListOpen()).toBe(true);
+      goTo('/tag/TODAY/tasks');
+      expect(service.isAllTasksListOpen()).toBe(false);
+    });
   });
 
   describe('setViewLayout', () => {

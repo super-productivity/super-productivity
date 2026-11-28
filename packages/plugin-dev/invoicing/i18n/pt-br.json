@@ -1,0 +1,58 @@
+{
+  "TITLE": "Faturas",
+  "LOADING": "Carregando…",
+  "LIST": {
+    "EMPTY": "Nenhuma fatura ainda.",
+    "PRINT": "Imprimir / PDF",
+    "CSV": "CSV",
+    "DELETE": "Excluir",
+    "CONFIRM_DELETE": "Excluir a fatura {{number}}? As horas dela voltam a contar como não faturadas."
+  },
+  "NEW": {
+    "TITLE": "Nova fatura",
+    "PROJECT": "Projeto",
+    "NO_PROJECTS": "Crie um projeto primeiro. Cada projeto é faturado separadamente.",
+    "FROM": "De",
+    "TO": "Até",
+    "RATE": "Valor por hora",
+    "LANGUAGE": "Idioma da fatura",
+    "CLIENT": "Faturado para",
+    "CLIENT_HINT": "Nome e endereço do cliente. Fica salvo para este projeto.",
+    "INCLUDE": "Incluir",
+    "NO_HOURS": "Não há tempo a faturar neste projeto neste período.",
+    "NUMBER": "Número da fatura",
+    "ISSUE_DATE": "Data de emissão",
+    "ISSUE": "Emitir e imprimir",
+    "BLOCK": {
+      "PERIOD": "Escolha as datas De e Até; De deve vir primeiro.",
+      "LINES": "Marque pelo menos uma linha com horas.",
+      "RATE": "Informe um valor por hora.",
+      "NUMBER": "Informe um número de fatura.",
+      "NUMBER_USED": "Este número de fatura já está em uso.",
+      "DATE": "Informe a data de emissão."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Seus dados",
+    "SELLER": "Seu nome, endereço e CPF/CNPJ",
+    "PAYMENT_NOTE": "Dados de pagamento",
+    "PAYMENT_NOTE_HINT": "Dados bancários ou condições de pagamento, impressos no rodapé.",
+    "CURRENCY": "Código da moeda",
+    "TAX": "Imposto %",
+    "PAYMENT_DAYS": "Dias até o vencimento",
+    "ROUNDING": "Arredondar cada linha para cima em",
+    "ROUNDING_NONE": "Sem arredondamento",
+    "ROUNDING_MIN": "{{min}} minutos",
+    "PREFIX": "Prefixo do número da fatura",
+    "SAVE": "Salvar",
+    "SAVED": "Salvo."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Descrição",
+    "HOURS": "Horas",
+    "TOTAL": "Total"
+  },
+  "ERROR": {
+    "GENERIC": "Algo deu errado: {{error}}"
+  }
+}

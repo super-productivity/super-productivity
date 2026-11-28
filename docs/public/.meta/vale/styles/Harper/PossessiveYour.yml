@@ -1,0 +1,19 @@
+---
+# Generated from Harper's PossessiveYour linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+#
+# The possessive form of `you` is more likely before nouns.
+extends: substitution
+message: "The possessive version of this word is more common in this context."
+level: warning
+ignorecase: true
+action:
+  name: replace
+swap:
+  "you(?!\\s*\\n\\s*\\n)\\s+knowledge\\.(?!\\s*\\n\\s*\\n)\\s+you(?!\\s*\\n\\s*\\n)\\s+imagination\\.(?!\\s*\\n\\s*\\n)\\s+you": "Your knowledge. Your imagination. You're an"

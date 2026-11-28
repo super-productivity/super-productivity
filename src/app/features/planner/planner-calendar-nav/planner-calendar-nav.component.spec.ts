@@ -311,10 +311,10 @@ describe('PlannerCalendarNavComponent', () => {
       expect(component['_availableForRows']()).toBe(178);
     });
 
-    // The route enter animation (warpRoute) starts the view at scale(1.2) and
-    // the first measurement lands while it is in flight. Read through
-    // getBoundingClientRect that reported 227px of room where there were 178 —
-    // a whole extra row, and the handle ended up below the route content.
+    // The route enter animation (warpRoute) transforms the view and the first
+    // measurement lands while it is in flight. When that was a scale(1.2) zoom,
+    // getBoundingClientRect reported 227px of room where there were 178 — a
+    // whole extra row, and the handle ended up below the route content.
     it('should measure the same while an ancestor is being scaled', () => {
       plannerEl.style.height = '300px';
       plannerEl.style.overflow = 'hidden';

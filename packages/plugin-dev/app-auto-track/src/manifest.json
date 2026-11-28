@@ -14,6 +14,7 @@
     "registerHook",
     "nodeExecution"
   ],
+  "dataSharing": [],
   "nodeScriptConfig": {
     "timeout": 30000,
     "memoryLimit": "64MB"

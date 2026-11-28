@@ -170,13 +170,24 @@ OmniFocus 4, Vikunja), not hands-on.
   Templates were built and dropped with it: next to the default boards they
   only duplicated them and **Duplicate**, and made "+" a two-click menu.
 - **Save as view keeps done tasks for project and tag lists.** Their column is
-  "All", so a ticked-off task moves to the Done group like in the list. Today
+  "All", so a ticked-off task moves below the open rows (done tasks show
+  inline, no separate group: a group doubled the header noise). Today
   stays "Not completed": a completed task keeps its due day, and
   `todayOrOverdue` (or a filter alone) would collect every completed task.
 - **Menu items live in the menu's own template.** MatMenu's arrow keys only
   reach `mat-menu-item`s written inside the `mat-menu` (a content query), not
   ones inside another component. The title bar renders the view's items itself
   (`VIEW_MENU_ITEMS`); `view-menu` uses the same list for the side menu's rows.
+- **Add-task in a view prefills, the user decides.** A section's tags and
+  planned day appear as chips in its add bar (`newTaskPrefill`); priority, done
+  state and deadline stay forced. After creation the panel applies only what the
+  bar does not show (`withoutBarChoices`), so a removed chip stays removed; the
+  bar says "Hidden by this view" with "Add back" when the task won't show.
+  The global "+" adds into the first section without a tag rule or done state.
+- **One pinned view in the bottom nav.** The slot offers each view (`view:<id>`);
+  a deleted view falls back to the last opened view, not the first.
+- **Sections are flat:** title and a quiet count (`collapsible` `count` input),
+  no edge lines.
 
 ## Known gaps and follow-ups
 
@@ -202,6 +213,9 @@ OmniFocus 4, Vikunja), not hands-on.
 - **View titles on phones:** at 360–375px the title ellipsizes ("Eisenhower …")
   next to the header's global buttons (play, focus, sync). Left to a
   header-wide decision; the title still opens the editor.
+- **Prefilled tag chips in narrow add bars:** the action row scrolls
+  horizontally and Tags sits after Schedule and Deadline, so in a column or on
+  a phone the prefilled chip starts off-screen (the hidden note still shows).
 - **#11386:** editor redesign.
 - **#11388 (fixed, 2026-11-02):** a reorder (declared on the panel) and a
   concurrent editor save (declared on the board, carrying every panel's

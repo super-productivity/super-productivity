@@ -132,7 +132,9 @@ export class GlobalTrackingIntervalService {
 
   consumeCurrentTick(): Tick {
     const now = Date.now();
-    const delta = now - this._currentTrackingStart;
+    // A clock stepped back (by hand or by NTP) makes the difference negative;
+    // count nothing rather than subtract time already tracked.
+    const delta = Math.max(0, now - this._currentTrackingStart);
     this._currentTrackingStart = now;
     return {
       duration: delta,

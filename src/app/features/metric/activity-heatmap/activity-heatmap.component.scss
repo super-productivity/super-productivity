@@ -25,7 +25,7 @@
 
     button {
       opacity: 0.7;
-      transition: opacity 0.2s;
+      transition: opacity var(--transition-duration-m);
       flex: 0 0 auto;
 
       &:hover:not(:disabled) {

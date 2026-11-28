@@ -7,6 +7,7 @@ import {
   OnDestroy,
   OnInit,
   output,
+  signal,
   viewChild,
   ViewContainerRef,
 } from '@angular/core';
@@ -26,6 +27,7 @@ import { customConfigFormSectionComponent } from '../custom-config-form-section-
 import { exists } from '../../../util/exists';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
+import { HelpToggleBtnComponent } from '../../../ui/help-section/help-toggle-btn.component';
 import { ConfigFormComponent } from '../config-form/config-form.component';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -47,6 +49,7 @@ interface CustomFormInstance {
   imports: [
     CollapsibleComponent,
     HelpSectionComponent,
+    HelpToggleBtnComponent,
     ConfigFormComponent,
     TranslatePipe,
     MatButton,
@@ -65,6 +68,7 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
   @Input() section?: ConfigFormSection<Record<string, unknown>>;
   @Input() isExpanded: boolean = false;
   readonly isExpandedChange = output<boolean>();
+  readonly isShowHelp = signal(false);
   readonly save = output<{
     sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey | TagCfgFormKey;
     config: Record<string, unknown>;
@@ -175,10 +179,6 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
     } catch (err) {
       Log.err('ConfigSection action error', err);
     }
-  }
-
-  trackByIndex(i: number, p: unknown): number {
-    return i;
   }
 
   private _loadCustomSection(customSection: CustomCfgSection): void {

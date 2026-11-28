@@ -4,6 +4,7 @@ import {
   Hooks,
   NotifyCfg,
   PluginCreateTaskData,
+  PluginUpdateTaskOptions,
   PluginHeaderBtnCfg,
   PluginNodeScriptRequest,
 } from './plugin-api.model';
@@ -27,6 +28,7 @@ export const pluginAssert = {
   dialogCfg: typia.createAssert<DialogCfg>(),
   partialTask: typia.createAssert<Partial<TaskCopy>>(),
   createTaskData: typia.createAssert<PluginCreateTaskData>(),
+  updateTaskOptions: typia.createAssert<PluginUpdateTaskOptions | undefined>(),
   partialProject: typia.createAssert<Partial<ProjectCopy>>(),
   partialTag: typia.createAssert<Partial<TagCopy>>(),
   batchUpdateRequest: typia.createAssert<BatchUpdateRequest>(),

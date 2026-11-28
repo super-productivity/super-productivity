@@ -50,6 +50,10 @@ export const selectAllSimpleCounters = createSelector(
   selectSimpleCounterFeatureState,
   selectAll,
 );
+export const selectSimpleCounterEntities = createSelector(
+  selectSimpleCounterFeatureState,
+  selectEntities,
+);
 export const selectSimpleCounterById = createSelector(
   selectSimpleCounterFeatureState,
   (state: SimpleCounterState, props: { id: string }) => state.entities[props.id],

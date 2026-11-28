@@ -16,6 +16,7 @@ npm run screenshots:capture:electron # Electron build → dist/screenshots/_mast
 npm run screenshots:electron         # capture:electron + build (lands in dist/)
 npm run screenshots:build:flathub    # rebuild only dist/screenshots/flathub/
 npm run screenshots:flathub          # Linux Electron capture + Flathub-ready build
+npm run screenshots:flathub:native   # same, with the desktop's own window screenshots (KDE: automatic)
 npm run screenshots:build            # rebuild dist/ layout from existing masters
 
 # One group while iterating
@@ -108,6 +109,27 @@ for (const locale of LOCALES) {
   });
 }
 ```
+
+## Flathub with native window shots (`screenshots:flathub:native`)
+
+Flathub's quality review wants default settings, native window decoration
+with rounded corners and shadow, and a window of at most 1000×700 logical
+pixels. `npm run screenshots:flathub:native` seeds the demo data, forces the
+light theme and the system title bar, sizes the window to 1000×700, walks
+through the Flathub scenes only, and lets the desktop's own tool capture each
+window:
+
+- **KDE Plasma:** fully automatic via `spectacle --background --activewindow`.
+  Keep the app window in front while it runs. Spectacle's "Include window
+  titlebar and borders" and "Include window shadow" settings apply.
+- **GNOME:** Shell only lets its own tool capture a single window, so at each
+  `📸 [n/8]` prompt click the app's title bar and press **Alt+Print**. The PNG
+  is picked up from `$(xdg-user-dir PICTURES)` or any folder directly inside it
+  (override with `SP_SCREENSHOT_GNOME_DIR`).
+- **Other desktops:** falls back to the `grim` / `import` region capture.
+
+Output lands in `dist/screenshots/flathub/` without the drawn-on frame, ready
+to copy into the Flathub packaging repo.
 
 ## Per-store gotchas
 

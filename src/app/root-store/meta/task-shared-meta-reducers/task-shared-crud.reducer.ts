@@ -1,4 +1,4 @@
-import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
+import { Action, MetaReducer } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-state';
 import {
@@ -40,6 +40,7 @@ import { moveItemAfterAnchor } from '../../../features/work-context/store/work-c
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
   ActionHandlerMap,
+  createActionHandlerMetaReducer,
   addTaskToListAtAnchor,
   addTaskToPlannerDay,
   collectTaskAndSubTaskIds,
@@ -435,14 +436,13 @@ const handleDeleteTask = (state: RootState, task: TaskWithSubTasks): RootState =
     ),
   };
 
-  // Update project if task has projectId
-  if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
-    const project = getProject(state, task.projectId);
-    updatedState = updateProject(updatedState, task.projectId, {
-      taskIds: removeTasksFromList(project.taskIds, [task.id]),
-      backlogTaskIds: removeTasksFromList(project.backlogTaskIds, [task.id]),
-    });
-  }
+  // Remove the task from every project list, found in CURRENT STATE like the
+  // tags below, not from the payload's projectId: the receiving client can
+  // hold the task in another project. A bulk replay skips an LWW row of a
+  // task deleted later in the batch, so a move that travelled as a
+  // `projectId` row (#11685) is not applied there and the task is still
+  // listed in the project it left.
+  updatedState = removeTasksFromAllProjects(updatedState, [task.id]);
 
   // Find affected tags from CURRENT STATE, not payload — during sync the
   // receiving client may have different tag associations, so all tags are
@@ -1130,17 +1130,5 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   },
 });
 
-export const taskSharedCrudMetaReducer: MetaReducer = (
-  reducer: ActionReducer<any, Action>,
-) => {
-  return (state: unknown, action: Action) => {
-    if (!state) return reducer(state, action);
-
-    const rootState = state as RootState;
-    const actionHandlers = createActionHandlers(rootState, action);
-    const handler = actionHandlers[action.type];
-    const updatedState = handler ? handler(rootState) : rootState;
-
-    return reducer(updatedState, action);
-  };
-};
+export const taskSharedCrudMetaReducer: MetaReducer =
+  createActionHandlerMetaReducer(createActionHandlers);

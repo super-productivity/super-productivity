@@ -5,7 +5,6 @@ import { SnackService } from '../../../core/snack/snack.service';
 import {
   IssueProvider,
   IssueProviderGithub,
-  IssueProviderGitlab,
   IssueProviderState,
 } from '../../../features/issue/issue.model';
 import { IssueProviderActions } from '../../../features/issue/store/issue-provider.actions';
@@ -110,26 +109,28 @@ const families = [
 ] as const;
 type Family = (typeof families)[number];
 // The Enabled switch submits this full 18-field GitLab model, not a flag delta.
-const provider = (id: string): IssueProviderGitlab => ({
-  id,
-  issueProviderKey: 'GITLAB',
-  isEnabled: id !== 'untouched',
-  isAutoPoll: false,
-  isAutoAddToBacklog: false,
-  isIntegratedAddTaskBar: false,
-  defaultProjectId: PROJECT,
-  pinnedSearch: null,
-  pollingMode: 'whenProjectOpen',
-  defaultTagIds: [],
-  defaultNote: 'Synthetic note',
-  project: 'synthetic/provider',
-  gitlabBaseUrl: 'https://issues.example.invalid/',
-  token: 'synthetic-only-not-a-credential',
-  filterUsername: 'synthetic-user',
-  scope: 'all',
-  filter: 'state=opened',
-  isEnableTimeTracking: false,
-});
+// Legacy built-in GitLab shape: released clients still create and sync it.
+const provider = (id: string): IssueProvider =>
+  ({
+    id,
+    issueProviderKey: 'GITLAB',
+    isEnabled: id !== 'untouched',
+    isAutoPoll: false,
+    isAutoAddToBacklog: false,
+    isIntegratedAddTaskBar: false,
+    defaultProjectId: PROJECT,
+    pinnedSearch: null,
+    pollingMode: 'whenProjectOpen',
+    defaultTagIds: [],
+    defaultNote: 'Synthetic note',
+    project: 'synthetic/provider',
+    gitlabBaseUrl: 'https://issues.example.invalid/',
+    token: 'synthetic-only-not-a-credential',
+    filterUsername: 'synthetic-user',
+    scope: 'all',
+    filter: 'state=opened',
+    isEnableTimeTracking: false,
+  }) as unknown as IssueProvider;
 const pluginProvider: IssueProviderGithub = {
   id: IDS[0],
   issueProviderKey: 'GITHUB',
@@ -1026,11 +1027,12 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
                 IssueProviderActions.updateIssueProvider({
                   issueProvider: {
                     id: IDS[0],
+                    // legacy built-in GitLab field, as released clients still send it
                     changes: {
                       isEnabled: true,
                       filter: 'state=closed',
                       migratedFromProjectId: 'later-project',
-                    },
+                    } as Partial<IssueProvider>,
                   },
                 }),
               ]
@@ -1066,7 +1068,11 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
           expect(actionPayloadOf(replacements[0])).toEqual({
             issueProvider: {
               id: IDS[0],
-              changes: { ...provider(IDS[0]), isEnabled: true, filter: 'state=closed' },
+              changes: {
+                ...provider(IDS[0]),
+                isEnabled: true,
+                filter: 'state=closed',
+              } as unknown as Partial<IssueProvider>,
             },
           });
         }

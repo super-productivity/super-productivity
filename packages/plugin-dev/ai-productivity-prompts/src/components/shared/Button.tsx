@@ -2,7 +2,7 @@ import { Component, JSX } from 'solid-js';
 
 interface ButtonProps {
   onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'back';
+  variant?: 'primary' | 'secondary' | 'back' | 'icon';
   disabled?: boolean;
   title?: string;
   class?: string;
@@ -13,6 +13,8 @@ export const Button: Component<ButtonProps> = (props) => {
   const getButtonClass = () => {
     const customClass = props.class || '';
     switch (props.variant) {
+      case 'icon':
+        return `btn-icon ${customClass}`.trim();
       case 'back':
       case 'secondary':
         return `btn-outline ${customClass}`.trim();

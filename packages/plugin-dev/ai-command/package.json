@@ -1,0 +1,20 @@
+{
+  "name": "ai-command",
+  "version": "0.1.0",
+  "description": "AI Command plugin for Super Productivity",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node scripts/test.js",
+    "typecheck": "tsc --noEmit",
+    "eval": "node scripts/eval.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.33",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@super-productivity/plugin-api": "file:../../plugin-api"
+  }
+}

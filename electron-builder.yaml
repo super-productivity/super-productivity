@@ -86,12 +86,7 @@ portable:
   # portable covers both archs and halves what we submit for signing. The
   # release workflow creates the old architecture-specific names after signing.
   artifactName: ${name}.${ext}
-appx:
-  applicationId: SuperProductivity
-  displayName: Super Productivity
-  publisherDisplayName: johannesjo
-  publisher: CN=___-___
-  identityName: ___johannesjo.SuperProductivity
+# The Microsoft Store build is configured in build/electron-builder.appx.yaml.
 
 linux:
   # Fix for issue #5259: Set executable name without spaces for snap compatibility

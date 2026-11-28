@@ -1,6 +1,6 @@
 import { ConfigFormSection, LimitedFormlyFieldConfig } from '../global-config.model';
 import { T } from '../../../t.const';
-import { IS_ELECTRON } from '../../../app.constants';
+import { IS_ELECTRON, DOCS_URL } from '../../../app.constants';
 import { KeyboardConfig } from '@sp/keyboard-config';
 
 /** Builds a single keyboard-shortcut form field (the dominant, repeated shape). */
@@ -30,6 +30,7 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
   title: T.GCF.KEYBOARD.TITLE,
   key: 'keyboard',
   help: T.GCF.KEYBOARD.HELP,
+  docsUrl: `${DOCS_URL}reference/keyboard-shortcuts/`,
   isHideForAndroidApp: true,
   items: [
     // SYSTEM WIDE

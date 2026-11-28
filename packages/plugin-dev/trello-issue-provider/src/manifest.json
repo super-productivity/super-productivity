@@ -10,6 +10,14 @@
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": [],
+  "dataSharing": [
+    {
+      "recipient": "Trello",
+      "hosts": ["api.trello.com"],
+      "data": ["credentials", "userText", "taskTitles", "taskStatus"],
+      "privacyPolicyUrl": "https://www.atlassian.com/legal/privacy-policy"
+    }
+  ],
   "hooks": [],
   "i18n": {
     "languages": [

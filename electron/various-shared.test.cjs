@@ -15,6 +15,7 @@ let mockIsMinimizeToTray = false;
 let mockEnsureIndicator = false;
 let mockIsMac = false;
 let mockWasMaximizedBeforeHide = false;
+let mockWasFullScreen = false;
 
 const installMocks = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
@@ -32,6 +33,9 @@ const installMocks = () => {
           mockWasMaximizedBeforeHide = value;
         },
       };
+    }
+    if (request === './window-full-screen-state') {
+      return { getWasFullScreen: () => mockWasFullScreen };
     }
     if (request === './task-widget/task-widget') {
       return {
@@ -74,11 +78,16 @@ const makeWin = (state) => {
   const calls = [];
   const win = {
     calls,
-    _state: { maximized: false, ...state },
+    _state: { maximized: false, fullScreen: false, ...state },
     isVisible: () => win._state.visible,
     isMinimized: () => win._state.minimized,
     isFocused: () => win._state.focused,
     isMaximized: () => win._state.maximized,
+    isFullScreen: () => win._state.fullScreen,
+    setFullScreen: (flag) => {
+      calls.push(`setFullScreen(${flag})`);
+      win._state = { ...win._state, fullScreen: flag };
+    },
     isDestroyed: () => false,
     minimize: () => {
       calls.push('minimize');
@@ -93,7 +102,17 @@ const makeWin = (state) => {
       calls.push('restore');
       // Windows emits unmaximize synchronously, and main-window clears the saved flag.
       if (win._state.maximized) mockWasMaximizedBeforeHide = false;
-      win._state = { ...win._state, maximized: false, minimized: false };
+      // X11 restore() also leaves full screen; on an on-screen window that
+      // clears the saved flag the same way.
+      if (win._state.fullScreen && win._state.visible && !win._state.minimized) {
+        mockWasFullScreen = false;
+      }
+      win._state = {
+        ...win._state,
+        maximized: false,
+        fullScreen: false,
+        minimized: false,
+      };
     },
     show: () => {
       calls.push('show');
@@ -119,6 +138,7 @@ test.beforeEach(() => {
   mockEnsureIndicator = false;
   mockIsMac = false;
   mockWasMaximizedBeforeHide = false;
+  mockWasFullScreen = false;
   Date.now = () => mockNow;
 });
 
@@ -260,6 +280,70 @@ test('showOrFocus preserves a hidden maximized window when restore clears the sa
 
   assert.deepEqual(win.calls, ['restore', 'show', 'maximize']);
   assert.equal(win.isMaximized(), true);
+});
+
+test('showOrFocus re-enters full screen after re-maximizing a hidden window', () => {
+  // A --start-minimized window skipped full screen at creation, and hide()
+  // can drop it on some platforms; the saved flag brings it back.
+  mockWasMaximizedBeforeHide = true;
+  mockWasFullScreen = true;
+  const { showOrFocus } = loadModule();
+  const win = makeWin({ visible: false, minimized: false, focused: false });
+
+  showOrFocus(win);
+
+  assert.deepEqual(win.calls, ['restore', 'show', 'maximize', 'setFullScreen(true)']);
+  assert.equal(win.isFullScreen(), true);
+});
+
+test('showOrFocus does not restore a visible full-screen window out of full screen', () => {
+  mockWasMaximizedBeforeHide = true;
+  mockWasFullScreen = true;
+  const { showOrFocus } = loadModule();
+  const win = makeWin({
+    visible: true,
+    minimized: false,
+    focused: false,
+    fullScreen: true,
+  });
+
+  showOrFocus(win);
+
+  // No restore() (it would leave full screen) and no maximize() (it leaves
+  // full screen on X11).
+  assert.deepEqual(win.calls, ['show']);
+  assert.equal(win.isFullScreen(), true);
+});
+
+test('showOrFocus re-enters full screen for a minimized full-screen window', () => {
+  mockWasFullScreen = true;
+  const { showOrFocus } = loadModule();
+  const win = makeWin({
+    visible: true,
+    minimized: true,
+    focused: false,
+    fullScreen: true,
+  });
+
+  showOrFocus(win);
+
+  assert.deepEqual(win.calls, ['restore', 'show', 'setFullScreen(true)']);
+  assert.equal(win.isFullScreen(), true);
+});
+
+test('showOrFocus leaves a window that is already full screen alone', () => {
+  mockWasFullScreen = true;
+  const { showOrFocus } = loadModule();
+  const win = makeWin({
+    visible: true,
+    minimized: false,
+    focused: false,
+    fullScreen: true,
+  });
+
+  showOrFocus(win);
+
+  assert.ok(!win.calls.includes('setFullScreen(true)'));
 });
 
 test('showOrFocus restores a minimized maximized window even when visibility is stale', () => {

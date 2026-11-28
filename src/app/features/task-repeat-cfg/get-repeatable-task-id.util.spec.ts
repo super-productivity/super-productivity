@@ -1,4 +1,9 @@
-import { getRepeatableTaskId } from './get-repeatable-task-id.util';
+import { getDbDateStr } from '../../util/get-db-date-str';
+import {
+  getRepeatableTaskId,
+  getRepeatableTaskIdDay,
+  getRepeatInstanceDay,
+} from './get-repeatable-task-id.util';
 
 describe('getRepeatableTaskId', () => {
   describe('valid inputs', () => {
@@ -91,5 +96,33 @@ describe('getRepeatableTaskId', () => {
         /dueDay must be in YYYY-MM-DD format/,
       );
     });
+  });
+});
+
+describe('getRepeatableTaskIdDay', () => {
+  it('reads the day from a deterministic id', () => {
+    expect(getRepeatableTaskIdDay('rpt_cfg-1_2026-06-16', 'cfg-1')).toBe('2026-06-16');
+  });
+
+  it('returns undefined for a legacy id, another config or a subtask', () => {
+    expect(getRepeatableTaskIdDay('legacy-id', 'cfg-1')).toBeUndefined();
+    expect(getRepeatableTaskIdDay('rpt_cfg-2_2026-06-16', 'cfg-1')).toBeUndefined();
+    expect(getRepeatableTaskIdDay('rpt_cfg-1_2026-06-16_sub_0', 'cfg-1')).toBeUndefined();
+  });
+});
+
+describe('getRepeatInstanceDay', () => {
+  const created = new Date(2026, 5, 17, 4, 0).getTime();
+
+  it('reads the day from a deterministic id, not from the creation time', () => {
+    expect(getRepeatInstanceDay({ id: 'rpt_cfg-1_2026-06-16', created }, 'cfg-1')).toBe(
+      '2026-06-16',
+    );
+  });
+
+  it('falls back to the local creation day for a legacy id', () => {
+    expect(getRepeatInstanceDay({ id: 'legacy-id', created }, 'cfg-1')).toBe(
+      getDbDateStr(created),
+    );
   });
 });

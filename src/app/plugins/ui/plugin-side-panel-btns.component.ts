@@ -47,7 +47,7 @@ import { PluginLog } from '../../core/log';
       }
 
       .plugin-side-panel-btn {
-        transition: all 0.2s ease;
+        transition: all var(--transition-duration-m) ease;
         position: relative;
         overflow: visible !important;
       }
@@ -58,7 +58,7 @@ import { PluginLog } from '../../core/log';
       }
 
       .plugin-side-panel-btn plugin-icon {
-        transition: transform 0.2s ease;
+        transition: transform var(--transition-duration-m) ease;
         display: block;
       }
 

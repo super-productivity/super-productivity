@@ -9,6 +9,7 @@ import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { TaskCopy } from '../../../../tasks/task.model';
 import { IssueData } from '../../../issue.model';
 import { IssueFieldConfig } from '../../issue-content.model';
+import { getByPath } from '../../get-by-path.util';
 
 @Component({
   selector: 'caldav-time',
@@ -31,14 +32,7 @@ export class CaldavTimeComponent {
       return field.value(issue);
     }
 
-    // Handle nested fields like 'status.name'
-    const keys = field.value.split('.');
-    let value: any = issue;
-    for (const key of keys) {
-      value = value?.[key];
-    }
-
-    const date = new Date(value);
+    const date = new Date(getByPath(issue, field.value) as number);
     const isOnlyDate =
       date.getHours() == 0 && date.getMinutes() == 0 && date.getSeconds() == 0;
     return this._datePipe.transform(date, isOnlyDate ? 'shortDate' : 'short');

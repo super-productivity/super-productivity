@@ -9,11 +9,16 @@ describe('ViewTaskListRegistry', () => {
     additionalFields: { projectId: 'INBOX_PROJECT' },
     tagsToRemove: [],
     taskIdsToExclude: [],
+    prefill: { fields: {}, isHidden: () => false },
   };
-  const host = (rowIds: string[], isTarget: boolean): ViewTaskListHost =>
+  const host = (
+    rowIds: string[],
+    isTarget: boolean,
+    over: Partial<ViewNewTaskTarget> = {},
+  ): ViewTaskListHost =>
     ({
       isRow: (id: string) => rowIds.includes(id),
-      newTaskTarget: signal(isTarget ? target : null),
+      newTaskTarget: signal(isTarget ? { ...target, ...over } : null),
     }) as unknown as ViewTaskListHost;
 
   beforeEach(() => {
@@ -27,6 +32,21 @@ describe('ViewTaskListRegistry', () => {
     expect(registry.addTarget()).toBe(later);
     expect(registry.hostForRow('a')).toBe(overdue);
     expect(registry.hostForRow('x')).toBeNull();
+  });
+
+  it('prefers a section without tag or done rules for the global add bar', () => {
+    const tagged = host([], true, {
+      prefill: { fields: { tagIds: ['urgent'] }, isHidden: () => false },
+    });
+    const done = host([], true, {
+      additionalFields: { projectId: 'INBOX_PROJECT', isDone: true },
+    });
+    const plain = host([], true);
+    registry.set({}, [tagged, done, plain]);
+    expect(registry.addTarget()).toBe(plain);
+
+    registry.set({}, [tagged, done]);
+    expect(registry.addTarget()).toBe(tagged);
   });
 
   it("doesn't let a leaving view clear the next view's columns", () => {

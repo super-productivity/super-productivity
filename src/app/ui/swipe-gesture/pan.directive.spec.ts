@@ -1,6 +1,7 @@
 import { Component, DoCheck } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PanDirective } from './pan.directive';
+import { claimTouchStartForEdgeSwipe } from './edge-swipe-claim';
 
 let checks = 0;
 
@@ -76,5 +77,21 @@ describe('PanDirective', () => {
     expect(move.defaultPrevented).toBeTrue();
     expect(checks).toBeGreaterThan(0);
     expect(el.textContent?.trim()).toBe('1');
+  });
+
+  it('leaves a touch alone whose touchstart the drawer edge swipe claimed (#4464)', async () => {
+    const claim = (ev: Event): void => claimTouchStartForEdgeSwipe(ev);
+    // The drawer listens in the capture phase on the document, before the element.
+    document.addEventListener('touchstart', claim, { capture: true });
+    try {
+      fireTouch(el, 'touchstart', 100, 100);
+    } finally {
+      document.removeEventListener('touchstart', claim, { capture: true });
+    }
+    const move = fireTouch(el, 'touchmove', 40, 100);
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.pans).toBe(0);
+    expect(move.defaultPrevented).toBeFalse();
   });
 });

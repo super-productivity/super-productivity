@@ -178,6 +178,13 @@ const buildOps = (): Record<string, WireOp> => {
     // Time-preserving conflict winner: a patch whose clearedFields lists the
     // absent deadlineRemindAt while it still sets remindAt
     lwwTimePreservingPatch: fromOp(timePreserving.localWinOp!),
+    // Clear one reminder kind only: the task's other alarms must stay (#10618)
+    dismissReminderOnly: fromAction(
+      TaskSharedActions.dismissReminderOnly({ id: 'task-dismiss' }),
+    ),
+    clearDeadlineReminder: fromAction(
+      TaskSharedActions.clearDeadlineReminder({ taskId: 'task-clear-deadline' }),
+    ),
   };
 };
 

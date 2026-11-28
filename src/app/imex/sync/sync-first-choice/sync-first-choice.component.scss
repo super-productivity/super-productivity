@@ -1,0 +1,16 @@
+// Title, content and actions stay direct parts of the dialog's layout.
+:host {
+  display: contents;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s);
+  margin-bottom: var(--s2);
+}
+
+// A <label> may only hold inline content, so the hint is a block-level span.
+.hint {
+  display: block;
+}

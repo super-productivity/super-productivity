@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "nome de usuário/projeto",
+    "PROJECT_HINT": "ex: super-productivity/super-productivity",
+    "TOKEN": "Token de Acesso",
+    "HOW_TO_GET_TOKEN": "Como obter um token?",
+    "SCOPE": "Escopo",
+    "SCOPE_ALL": "Todos",
+    "SCOPE_CREATED": "Criado por mim",
+    "SCOPE_ASSIGNED": "Atribuído a mim",
+    "GITLAB_BASE_URL": "URL base personalizada do GitLab (opcional)",
+    "FILTER_USER": "Filtrar nome de usuário",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Filtro Personalizado",
+    "FILTER_DESCRIPTION": "Consulte https://docs.gitlab.com/ee/api/issues.html#list-issues. Múltiplos podem ser combinados com &",
+    "SUBMIT_TIMELOGS": "Enviar registros de tempo para o GitLab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Mostrar diálogo de controle de tempo após clicar em \"Encerrar o Dia\""
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumo",
+    "STATE": "Status",
+    "ASSIGNEE": "Responsável",
+    "LABELS": "Etiquetas",
+    "DESCRIPTION": "Descrição"
+  },
+  "FORM_HELP": "<p>Aqui você pode configurar o Super Productivity para listar issues abertas do GitLab (seja a versão online ou uma instância auto-hospedada) para um projeto específico no painel de criação de tarefas na visualização de planejador. Elas serão listadas como sugestões e fornecerão um link para a issue, bem como mais informações sobre ela.</p><p>Além disso, você pode importar automaticamente todas as issues abertas.</p>"
+}

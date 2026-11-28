@@ -184,7 +184,6 @@ export class DialogWorkContextSettingsComponent {
           title: p.title,
           icon: p.icon,
           isEnableBacklog: p.isEnableBacklog,
-          isHiddenFromMenu: p.isHiddenFromMenu,
           theme,
         },
         isSkipSnack,

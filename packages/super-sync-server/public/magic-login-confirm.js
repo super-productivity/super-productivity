@@ -34,7 +34,8 @@
           successEl.style.display = 'block';
           loginBtn.style.display = 'none';
           sessionStorage.setItem('loginToken', result.data.token);
-          window.location.href = '/';
+          // Keeps a new device's sign-in request (`/?r=…`), set by the server.
+          window.location.href = document.body.dataset.loginPage || '/';
         } else {
           throw new Error(result.data.error || 'Login failed');
         }

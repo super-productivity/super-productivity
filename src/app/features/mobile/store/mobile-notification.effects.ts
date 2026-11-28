@@ -15,18 +15,15 @@ import {
 } from '../../tasks/store/task.selectors';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
 import { CapacitorPlatformService } from '../../../core/platform/capacitor-platform.service';
+import { IOS_REMINDER_BUDGET } from '../../../core/platform/ios-reminder-budget';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { ReminderConfig } from '../../config/global-config.model';
+import { selectActiveTaskRepeatCfgs } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import {
-  selectActiveTaskRepeatCfgs,
-  selectTaskRepeatCfgsForExactDay,
-} from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
-import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
-import { getRepeatableTaskId } from '../../task-repeat-cfg/get-repeatable-task-id.util';
-import { isValidSplitTime } from '../../../util/is-valid-split-time';
-import { getRepeatDueWithTime } from '../../task-repeat-cfg/store/get-repeat-due-with-time.util';
-import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+  getUpcomingRepeatReminders,
+  REPEAT_LOOKAHEAD_DAYS,
+  REPEAT_MAX_SCHEDULED,
+} from '../../task-repeat-cfg/get-upcoming-repeat-reminders';
 import { getDueDateNotificationOffsetMs } from '../due-date-notification-offset';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
@@ -36,25 +33,13 @@ import { loadArmedIds, loadArmedTriggers, saveArmed } from '../armed-reminder-st
 const DELAY_PERMISSIONS = 2000;
 const DELAY_SCHEDULE = 5000;
 
-// How many days ahead we pre-schedule recurring reminders for. Every
-// occurrence in this window is armed (up to REPEAT_MAX_SCHEDULED), because
-// nothing re-arms the next one while the app is closed: the native side only
-// shows alarms and restores them on reboot (#10781). Longer-period configs
-// (e.g. monthly) are picked up the next time the app is opened within this
-// window. See #7850.
-const REPEAT_LOOKAHEAD_DAYS = 14;
-
-// Upper bound on how many recurring reminders we pre-schedule in one pass.
-// iOS caps pending local notifications at 64 GLOBALLY (across every reminder
-// effect), silently dropping the rest, and it keeps the soonest-firing ones;
-// Android allows ~500 alarms per app. Over the cap we keep every config's next
-// occurrence before any config's second (then soonest first), so a weekly
-// config is never crowded out by daily ones, and leave headroom for the
-// live/due-date effects. Truncation is logged, never silent.
-// shortcut: one cap for both platforms, so with many timed daily configs the
-// app-closed coverage shrinks to 32 / configs days (e.g. 5 configs → ~6 days)
-// — raise it on Android only if users report gaps.
-const REPEAT_MAX_SCHEDULED = 32;
+// Lookahead and cap live in get-upcoming-repeat-reminders.ts so the Android
+// background worker can port the same function. iOS holds 64 pending
+// notifications per app, so one budget picks what is armed there, soonest
+// first across every reminder effect (see ios-reminder-budget.ts). Recurring
+// reminders are offered far enough ahead to fill its free slots: a daily
+// config alone fills the budget in this many days.
+const IOS_REPEAT_LOOKAHEAD_DAYS = IOS_REMINDER_BUDGET;
 
 // Settle window for the recurring-reminder scheduler. Instance creation
 // dispatches addTask → updateTaskRepeatCfg → scheduleTaskWithTime back-to-back,
@@ -311,7 +296,19 @@ export class MobileNotificationEffects {
               }
 
               const now = Date.now();
-              const upcoming = this._getUpcomingRepeatReminders(cfgs, now);
+              const isIOS = this._platformService.isIOS();
+              const upcoming = getUpcomingRepeatReminders(
+                cfgs,
+                now,
+                this._dateService.getStartOfNextDayDiffMs(),
+                {
+                  lookaheadDays: isIOS
+                    ? IOS_REPEAT_LOOKAHEAD_DAYS
+                    : REPEAT_LOOKAHEAD_DAYS,
+                  maxScheduled: isIOS ? IOS_REMINDER_BUDGET : REPEAT_MAX_SCHEDULED,
+                  soonestFirst: isIOS,
+                },
+              );
               const current = new Map(upcoming.map((u) => [u.taskId, u.triggerAtMs]));
 
               // IDs whose real instance already exists with a live reminder.
@@ -406,7 +403,9 @@ export class MobileNotificationEffects {
             try {
               // Opt-in: one notification per planned task fires at the same hour, which
               // rang phones once per Today task every morning (2026 survey #88).
-              const notifyOnDueDate = reminderCfg?.notifyOnDueDate ?? false;
+              // The legacy `notifyOnDueDate` is deliberately not read: its old
+              // default-on value is still stored on installs that never chose it.
+              const isNotifyOnPlannedDay = reminderCfg?.isNotifyOnPlannedDay ?? false;
               const disableReminders = reminderCfg?.disableReminders ?? false;
               const dueDateHour = Math.floor(
                 Math.max(0, Math.min(23, reminderCfg?.dueDateNotificationHour ?? 9)),
@@ -414,7 +413,7 @@ export class MobileNotificationEffects {
 
               // If disabled (by master switch or per-category), cancel previously
               // scheduled due-date notifications and short-circuit.
-              if (disableReminders || !notifyOnDueDate) {
+              if (disableReminders || !isNotifyOnPlannedDay) {
                 // The persisted tracked set misses alarms armed by builds that kept
                 // it in-memory only (e.g. under the old default-on); native alarms
                 // outlive the app, so those would still fire. Ids are
@@ -595,92 +594,6 @@ export class MobileNotificationEffects {
         dispatch: false,
       },
     );
-
-  /**
-   * For each active timed recurring config, find its upcoming occurrences within
-   * the lookahead window that still need a reminder, and compute their
-   * deterministic task ids + native trigger times.
-   *
-   * Reuses selectTaskRepeatCfgsForExactDay's projector per day so the
-   * isPaused / already-created / deletedInstanceDates / archived-project guards
-   * stay in lockstep with the instance-creation path. Time computation mirrors
-   * TaskRepeatCfgService exactly so the pre-scheduled trigger matches the one
-   * the real instance would get.
-   */
-  private _getUpcomingRepeatReminders(
-    activeCfgs: TaskRepeatCfg[],
-    now: number,
-  ): { taskId: string; triggerAtMs: number; title: string }[] {
-    const result: {
-      taskId: string;
-      triggerAtMs: number;
-      title: string;
-      // 0 for a config's next occurrence, 1 for the one after, …
-      rank: number;
-    }[] = [];
-    const countByCfgId = new Map<string, number>();
-
-    // Anchor each day at noon to keep the per-day timestamp clear of DST /
-    // midnight edges; getDbDateStr/getRepeatDueWithTime only use the date.
-    const baseDay = new Date(now);
-    baseDay.setHours(12, 0, 0, 0);
-
-    for (let dayOffset = 0; dayOffset <= REPEAT_LOOKAHEAD_DAYS; dayOffset++) {
-      const day = new Date(baseDay);
-      day.setDate(baseDay.getDate() + dayOffset);
-      const dayMs = day.getTime();
-
-      const dueCfgs = selectTaskRepeatCfgsForExactDay.projector(activeCfgs, {
-        dayDate: dayMs,
-      });
-
-      for (const cfg of dueCfgs) {
-        const cfgId = cfg.id as string;
-        // waitForCompletion: the next instance only exists once the current one
-        // is completed, so its occurrence cannot be reliably pre-scheduled.
-        if (cfg.waitForCompletion) {
-          continue;
-        }
-        if (!isValidSplitTime(cfg.startTime) || !cfg.remindAt) {
-          continue;
-        }
-
-        const dueMs = getRepeatDueWithTime(
-          cfg.startTime,
-          dayMs,
-          this._dateService.getStartOfNextDayDiffMs(),
-        );
-        const triggerAtMs = remindOptionToMilliseconds(dueMs, cfg.remindAt);
-        if (typeof triggerAtMs !== 'number' || triggerAtMs <= now) {
-          continue;
-        }
-
-        const rank = countByCfgId.get(cfgId) ?? 0;
-        countByCfgId.set(cfgId, rank + 1);
-        result.push({
-          taskId: getRepeatableTaskId(cfgId, getDbDateStr(dayMs)),
-          triggerAtMs,
-          title: cfg.title || '',
-          rank,
-        });
-      }
-    }
-
-    // Over the cap, keep each config's nearer occurrences first, soonest first
-    // within a rank (see REPEAT_MAX_SCHEDULED). Sort explicitly so the cap is
-    // deterministic.
-    result.sort((a, b) => a.rank - b.rank || a.triggerAtMs - b.triggerAtMs);
-    if (result.length > REPEAT_MAX_SCHEDULED) {
-      Log.log('MobileEffects: capping pre-scheduled repeat reminders', {
-        total: result.length,
-        cap: REPEAT_MAX_SCHEDULED,
-      });
-    }
-
-    return result
-      .slice(0, REPEAT_MAX_SCHEDULED)
-      .map(({ taskId, triggerAtMs, title }) => ({ taskId, triggerAtMs, title }));
-  }
 
   private _notifyPermissionIssue(message?: string): void {
     if (this._hasShownNotificationWarning) {

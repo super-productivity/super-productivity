@@ -244,4 +244,77 @@ test.describe('Schedule touch scrolling (#9675)', () => {
     await expect(event).not.toHaveClass(/cdk-drag-dragging/);
     await expect.poll(() => event.getAttribute('style')).not.toBe(styleBefore);
   });
+
+  // Android fires contextmenu during a still long-press, before CDK knows whether it
+  // becomes a drag. CDP touch input synthesizes no long-press, so the test fires it.
+  test.describe('long-press task menu (#11977)', () => {
+    const MENU = '.mat-mdc-menu-panel';
+
+    const longPress = async (
+      page: Page,
+      event: Locator,
+    ): Promise<{ touch: TouchDriver; x: number; y: number }> => {
+      const box = await event.boundingBox();
+      expect(box).not.toBeNull();
+      const halfWidth = box!.width / 2;
+      const halfHeight = box!.height / 2;
+      const x = box!.x + halfWidth;
+      const y = box!.y + halfHeight;
+      const touch = await touchDriver(page);
+      await touch.start(x, y);
+      await page.waitForTimeout(DRAG_DELAY_FOR_TOUCH + 200);
+      await event.dispatchEvent('contextmenu', { bubbles: true, cancelable: true });
+      return { touch, x, y };
+    };
+
+    test('a long-press drag moves the task without opening its menu', async ({
+      page,
+      workViewPage,
+    }) => {
+      const event = await seedScheduledTaskAndOpenSchedule(
+        page,
+        workViewPage,
+        'Touch menu drag task',
+      );
+      const styleBefore = await event.getAttribute('style');
+      // A menu dismissed before release still counts.
+      await page.evaluate((menu) => {
+        new MutationObserver(() => {
+          if (document.querySelector(menu)) {
+            document.body.dataset.menuSeen = 'true';
+          }
+        }).observe(document.body, { childList: true, subtree: true });
+      }, MENU);
+
+      const { touch, x, y } = await longPress(page, event);
+      for (let i = 1; i <= 8; i++) {
+        const travelled = i * DRAG_STEP_PX;
+        await touch.move(x, y + travelled);
+        await page.waitForTimeout(15);
+      }
+      await touch.end();
+      await touch.detach();
+
+      await expect.poll(() => event.getAttribute('style')).not.toBe(styleBefore);
+      await expect(page.locator(MENU)).toHaveCount(0);
+      await expect(page.locator('body')).not.toHaveAttribute('data-menu-seen');
+    });
+
+    test('a long-press released in place opens the menu', async ({
+      page,
+      workViewPage,
+    }) => {
+      const event = await seedScheduledTaskAndOpenSchedule(
+        page,
+        workViewPage,
+        'Touch menu task',
+      );
+
+      const { touch } = await longPress(page, event);
+      await touch.end();
+      await touch.detach();
+
+      await expect(page.locator(MENU)).toBeVisible();
+    });
+  });
 });

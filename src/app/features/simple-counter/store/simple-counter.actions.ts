@@ -38,7 +38,13 @@ export const upsertSimpleCounter = createAction(
 
 export const deleteSimpleCounter = createAction(
   '[SimpleCounter] Delete SimpleCounter',
-  (counterProps: { id: string }) => ({
+  (counterProps: {
+    id: string;
+    // The deleted counter, so a concurrent remote update that wins by LWW can
+    // restore it intact on this device (#11465). Optional: older clients and
+    // stored ops lack it, and reducers ignore it.
+    simpleCounter?: SimpleCounter;
+  }) => ({
     ...counterProps,
     meta: {
       isPersistent: true,

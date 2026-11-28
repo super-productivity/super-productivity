@@ -1490,6 +1490,39 @@ describe('SyncWrapperService', () => {
       );
     });
 
+    describe('untrusted WebDAV server certificate (#2855)', () => {
+      const certError = (): WebDavNativeRequestError =>
+        new WebDavNativeRequestError(
+          'SSL certificate error: Trust anchor for certification path not found.',
+          'SSL_CERT_ERROR',
+        );
+
+      it('sets ERROR status and shows the certificate hint on a manual sync', async () => {
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(certError()));
+
+        const result = await service.sync(true);
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+        expect(mockSnackService.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            msg: T.F.SYNC.S.ERROR_UNTRUSTED_CERTIFICATE_ANDROID,
+            type: 'ERROR',
+          }),
+        );
+      });
+
+      it('sets ERROR status without a snack on an automatic sync', async () => {
+        mockSyncService.downloadRemoteOps.and.returnValue(Promise.reject(certError()));
+
+        const result = await service.sync();
+
+        expect(result).toBe('HANDLED_ERROR');
+        expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+        expect(mockSnackService.open).not.toHaveBeenCalled();
+      });
+    });
+
     it('should handle OperationIntegrityError with a calm ERROR snack, not the password dialog', async () => {
       // GHSA-8pxh-mgc7-gp3g: decryption succeeded but metadata was tampered (or a
       // plaintext op arrived while encryption is mandatory). Must fail closed with

@@ -1,1 +1,5 @@
-npm run lint && npm run test
+# Keep this hook short: git opens the SSH connection before running it, and a
+# multi-minute hook lets the idle connection drop, so the push fails silently.
+# pre-commit lints staged files; full lint and the full test suite run in CI.
+npm run test:affected
+npm run packages:test

@@ -157,7 +157,10 @@ export class CalendarCommonInterfacesService extends BaseIssueProviderService<Is
         );
         if (!matchingEvent) continue;
 
-        const taskData = this.getAddTaskData(matchingEvent);
+        // Feed descriptions seed new tasks; existing notes belong to the user.
+        // A title/time update must not replace their meeting notes.
+        const taskData = { ...this.getAddTaskData(matchingEvent) };
+        delete taskData.notes;
         const hasChanges =
           taskData.dueWithTime !== task.dueWithTime ||
           taskData.dueDay !== task.dueDay ||

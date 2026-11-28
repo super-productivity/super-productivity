@@ -35,22 +35,13 @@ export const buildWorkContextSettingsFormCfg = (
   }
 
   if (isProject) {
-    basicFields.push(
-      {
-        key: 'isEnableBacklog',
-        type: 'checkbox',
-        templateOptions: {
-          label: T.F.PROJECT.FORM_BASIC.L_ENABLE_BACKLOG,
-        },
+    basicFields.push({
+      key: 'isEnableBacklog',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.F.PROJECT.FORM_BASIC.L_ENABLE_BACKLOG,
       },
-      {
-        key: 'isHiddenFromMenu',
-        type: 'checkbox',
-        templateOptions: {
-          label: T.F.PROJECT.FORM_BASIC.L_IS_HIDDEN_FROM_MENU,
-        },
-      },
-    );
+    });
   }
 
   const sharedItems = WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG.items!;

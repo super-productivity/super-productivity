@@ -30,7 +30,7 @@
     height: 6px;
     background-color: var(--bottom-panel-handle);
     border-radius: 3px;
-    transition: background-color 0.2s ease;
+    transition: background-color var(--transition-duration-m) ease;
 
     :host-context(.dragging) & {
       background-color: var(--bottom-panel-handle-active);

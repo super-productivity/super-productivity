@@ -4,6 +4,7 @@ import { firstValueFrom, forkJoin } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { Update } from '@ngrx/entity';
 import { TaskService } from './task.service';
+import { TaskArchiveOrchestratorService } from './task-archive-orchestrator.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg/task-repeat-cfg.service';
 import { ProjectService } from '../project/project.service';
 import { TaskCopy, TaskWithSubTasks } from './task.model';
@@ -23,6 +24,7 @@ import { TaskLog } from '../../core/log';
 })
 export class TaskMoveToProjectService {
   private readonly _taskService = inject(TaskService);
+  private readonly _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private readonly _projectService = inject(ProjectService);
   private readonly _matDialog = inject(MatDialog);
@@ -55,7 +57,7 @@ export class TaskMoveToProjectService {
           this._taskService
             .getTasksWithSubTasksByRepeatCfgId$(task.repeatCfgId)
             .pipe(first()),
-          this._taskService.getArchiveTasksForRepeatCfgId(task.repeatCfgId),
+          this._taskArchiveOrchestrator.getArchiveTasksForRepeatCfgId(task.repeatCfgId),
           this._projectService.getByIdOnce$(projectId),
         ]),
       );
@@ -112,7 +114,7 @@ export class TaskMoveToProjectService {
       });
     });
     if (archiveUpdates.length) {
-      await this._taskService.updateArchiveTasks(archiveUpdates);
+      await this._taskArchiveOrchestrator.updateArchiveTasks(archiveUpdates);
     }
     return true;
   }

@@ -15,6 +15,13 @@ import { ShortTimePipe } from '../../../ui/pipes/short-time.pipe';
 import type { SyncImportReason } from '../../core/operation.types';
 import { confirmDialog } from '../../../util/native-dialogs';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { SyncFirstChoiceComponent } from '../../../imex/sync/sync-first-choice/sync-first-choice.component';
+import { SyncProviderManager } from '../../sync-providers/provider-manager.service';
+import { SyncProviderId } from '../../sync-providers/provider.const';
+import type {
+  SyncImportConflictChange,
+  SyncImportConflictChangeKind,
+} from '../sync-import-conflict-change-summary.util';
 
 export interface SyncImportConflictData {
   filteredOpCount: number;
@@ -28,6 +35,19 @@ export interface SyncImportConflictData {
    * explicit extra confirmation. See the fresh-client first-sync data-loss-trap plan.
    */
   isNeverSynced?: boolean;
+  /**
+   * Tasks in the incoming snapshot, archives included; unset when none are
+   * countable. Ops after the snapshot are not counted.
+   */
+  accountTaskCount?: number;
+  /**
+   * The local changes an incoming full-state replace would discard, one row per
+   * touched entity. Absent for LOCAL_IMPORT_FILTERS_REMOTE (the filtered ops are
+   * remote there) and when there are too many to list usefully.
+   */
+  localChanges?: SyncImportConflictChange[];
+  /** Pending ops the app wrote itself (e.g. repeat-task bookkeeping), left out of `localChanges`. */
+  automaticChangeCount?: number;
 }
 
 export type SyncImportConflictResolution = 'USE_LOCAL' | 'USE_REMOTE' | 'CANCEL';
@@ -46,6 +66,7 @@ export type SyncImportConflictResolution = 'USE_LOCAL' | 'USE_REMOTE' | 'CANCEL'
     TranslatePipe,
     LocaleDatePipe,
     ShortTimePipe,
+    SyncFirstChoiceComponent,
   ],
 })
 export class DialogSyncImportConflictComponent {
@@ -54,6 +75,11 @@ export class DialogSyncImportConflictComponent {
   private _translateService = inject(TranslateService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   data = inject<SyncImportConflictData>(MAT_DIALOG_DATA);
+  // A device that never synced, joining a SuperSync account that has tasks (2b).
+  readonly isFirstSuperSync =
+    this.data.scenario === 'INCOMING_IMPORT' &&
+    !!this.data.isNeverSynced &&
+    inject(SyncProviderManager).getActiveProvider()?.id === SyncProviderId.SuperSync;
 
   // Exposed so the template can pass the reactive locale to the now-pure
   // `localeDate` pipe, preserving re-render on a locale change.
@@ -69,6 +95,30 @@ export class DialogSyncImportConflictComponent {
     SERVER_MIGRATION: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_SERVER_MIGRATION,
     REPAIR: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_REPAIR,
   };
+
+  private static readonly _CHANGE_KIND_KEYS: Record<
+    SyncImportConflictChangeKind,
+    string
+  > = {
+    CREATED: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.CHANGE_CREATED,
+    UPDATED: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.CHANGE_UPDATED,
+    DELETED: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.CHANGE_DELETED,
+    IMPORTED: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.CHANGE_IMPORTED,
+    OTHER: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.CHANGE_OTHER,
+  };
+
+  /** One display row per local change; built once so the template stays call-free. */
+  readonly localChangeRows = (this.data.localChanges ?? []).map(
+    (change: SyncImportConflictChange) => ({
+      // An entity type without a translation falls back to its raw name.
+      entityKey: (
+        T.F.SYNC.D_SYNC_IMPORT_CONFLICT.ENTITY as Record<string, string | undefined>
+      )[change.entityType],
+      entityType: change.entityType,
+      label: change.label,
+      kindKey: DialogSyncImportConflictComponent._CHANGE_KIND_KEYS[change.kind],
+    }),
+  );
 
   get reasonKey(): string {
     const reason = this.data.syncImportReason;
@@ -97,6 +147,11 @@ export class DialogSyncImportConflictComponent {
 
   constructor() {
     this._matDialogRef.disableClose = true;
+  }
+
+  /** The first-sync choice already showed its warning, so no confirm follows. */
+  closeFirstSync(choice: 'USE_LOCAL' | 'USE_REMOTE' | undefined): void {
+    this._matDialogRef.close(choice ?? 'CANCEL');
   }
 
   close(result?: SyncImportConflictResolution): void {

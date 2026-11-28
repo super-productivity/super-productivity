@@ -241,7 +241,7 @@ describe('MobileNotificationEffects', () => {
     const buildCfg = (overrides: Partial<ReminderConfig> = {}): TestCfg => ({
       reminder: {
         disableReminders: false,
-        notifyOnDueDate: false,
+        isNotifyOnPlannedDay: false,
         dueDateNotificationHour: 9,
         ...overrides,
       },
@@ -433,7 +433,7 @@ describe('MobileNotificationEffects', () => {
       cfg$ = new BehaviorSubject<TestCfg>({
         reminder: {
           disableReminders: false,
-          notifyOnDueDate: true,
+          isNotifyOnPlannedDay: true,
           dueDateNotificationHour: 9,
         },
       });
@@ -477,7 +477,7 @@ describe('MobileNotificationEffects', () => {
       cfg$.next({
         reminder: {
           disableReminders: true,
-          notifyOnDueDate: true,
+          isNotifyOnPlannedDay: true,
           dueDateNotificationHour: 9,
         },
       });
@@ -492,7 +492,7 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
     }));
 
-    it('does not schedule due-date notifications when notifyOnDueDate was never set (opt-in)', fakeAsync(() => {
+    it('does not schedule due-date notifications when isNotifyOnPlannedDay was never set (opt-in)', fakeAsync(() => {
       cfg$.next({ reminder: { disableReminders: false } });
 
       effects = TestBed.inject(MobileNotificationEffects);
@@ -505,8 +505,32 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
     }));
 
+    // Installs from v17.3–v19.x stored the old default `notifyOnDueDate: true`
+    // without anyone choosing it; that stored value must no longer ring.
+    it('ignores a stored legacy notifyOnDueDate: true', fakeAsync(() => {
+      cfg$.next({
+        reminder: {
+          disableReminders: false,
+          notifyOnDueDate: true,
+          dueDateNotificationHour: 9,
+        },
+      });
+
+      effects = TestBed.inject(MobileNotificationEffects);
+      (
+        effects.scheduleDueDateNotifications$ as unknown as Observable<unknown>
+      ).subscribe();
+
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
+      expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledWith(
+        generateNotificationId('x_dueday'),
+      );
+    }));
+
     it('cancels due-date alarms a previous app run left armed when disabled at startup', fakeAsync(() => {
-      cfg$.next({ reminder: { disableReminders: false, notifyOnDueDate: false } });
+      cfg$.next({ reminder: { disableReminders: false, isNotifyOnPlannedDay: false } });
 
       effects = TestBed.inject(MobileNotificationEffects);
       (
@@ -609,7 +633,7 @@ describe('MobileNotificationEffects', () => {
     const buildCfg = (overrides: Partial<ReminderConfig> = {}): TestCfg => ({
       reminder: {
         disableReminders: false,
-        notifyOnDueDate: true,
+        isNotifyOnPlannedDay: true,
         dueDateNotificationHour: 9,
         ...overrides,
       },
@@ -1283,7 +1307,53 @@ describe('MobileNotificationEffects', () => {
       );
     }));
 
-    it('caps pre-scheduled reminders, keeping the soonest-firing (iOS 64-pending limit)', fakeAsync(() => {
+    describe('on iOS', () => {
+      beforeEach(() => {
+        platformService.isAndroid.and.returnValue(false);
+        platformService.isIOS.and.returnValue(true);
+      });
+
+      it('offers a daily config 60 days ahead, for the reminder budget to fill its free slots', fakeAsync(() => {
+        store.overrideSelector(selectActiveTaskRepeatCfgs, [mkDailyCfg()]);
+        subscribeRepeatReminders();
+
+        tick(REPEAT_SETTLE_MS + 1);
+
+        // Today's instance exists already, so the occurrences are days 1 to 60.
+        expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(60);
+        for (const offset of [1, 15, 60]) {
+          expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              notificationId: generateNotificationId(
+                getRepeatableTaskId('cfgDaily', dayStr(offset)),
+              ),
+              triggerAtMs: triggerFor(offset, '09:00'),
+            }),
+          );
+        }
+      }));
+
+      it('offers no more than the budget holds, soonest first', fakeAsync(() => {
+        // Two daily configs: 60 slots cover 30 days of both.
+        store.overrideSelector(selectActiveTaskRepeatCfgs, [
+          mkDailyCfg({ id: 'early', startTime: '09:00' }),
+          mkDailyCfg({ id: 'late', startTime: '10:00' }),
+        ]);
+        subscribeRepeatReminders();
+
+        tick(REPEAT_SETTLE_MS + 1);
+
+        expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(60);
+        expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledWith(
+          jasmine.objectContaining({ triggerAtMs: triggerFor(30, '10:00') }),
+        );
+        expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ triggerAtMs: triggerFor(31, '09:00') }),
+        );
+      }));
+    });
+
+    it('caps pre-scheduled reminders on Android, keeping the soonest-firing', fakeAsync(() => {
       // More configs than the cap (REPEAT_MAX_SCHEDULED = 32 in the effect),
       // each due tomorrow at a distinct clock time 30 min apart (00:00 → 19:30).
       const cfgs = Array.from({ length: 40 }, (_, i) => {

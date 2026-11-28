@@ -2,11 +2,14 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { Action } from '@ngrx/store';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of, Subject } from 'rxjs';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
+import { T } from '../../../../t.const';
 import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
+import { setCurrentTask } from '../../../tasks/store/task.actions';
+import { selectCurrentTaskParentOrCurrent } from '../../../tasks/store/task.selectors';
 import { IssueLocalState, IssueProviderJira } from '../../issue.model';
 import { IssueProviderService } from '../../issue-provider.service';
 import { IssueService } from '../../issue.service';
@@ -21,11 +24,13 @@ import { TaskService } from '../../../tasks/task.service';
 
 describe('JiraIssueEffects', () => {
   let actions$: Subject<Action>;
+  let store: MockStore;
   let jiraApiService: jasmine.SpyObj<JiraApiService>;
   let issueProviderService: jasmine.SpyObj<IssueProviderService>;
   let issueService: jasmine.SpyObj<IssueService>;
   let snackService: jasmine.SpyObj<SnackService>;
   let taskService: jasmine.SpyObj<TaskService>;
+  let matDialog: jasmine.SpyObj<MatDialog>;
   let jiraCfg: IssueProviderJira;
   let task: Task;
 
@@ -123,6 +128,10 @@ describe('JiraIssueEffects', () => {
     ]);
     snackService = jasmine.createSpyObj<SnackService>('SnackService', ['open']);
     taskService = jasmine.createSpyObj<TaskService>('TaskService', ['getByIdOnce$']);
+    matDialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
+    matDialog.open.and.returnValue({
+      afterClosed: () => of(undefined),
+    } as ReturnType<MatDialog['open']>);
 
     task = {
       ...DEFAULT_TASK,
@@ -152,13 +161,12 @@ describe('JiraIssueEffects', () => {
         { provide: IssueService, useValue: issueService },
         { provide: SnackService, useValue: snackService },
         { provide: TaskService, useValue: taskService },
-        {
-          provide: MatDialog,
-          useValue: jasmine.createSpyObj<MatDialog>('MatDialog', ['open']),
-        },
+        { provide: MatDialog, useValue: matDialog },
         { provide: LOCAL_ACTIONS, useValue: actions$ },
       ],
     });
+    store = TestBed.inject(MockStore);
+    store.overrideSelector(selectCurrentTaskParentOrCurrent, task);
   });
 
   it('does not transition when the issue is already in the transition target status', fakeAsync(() => {
@@ -207,5 +215,98 @@ describe('JiraIssueEffects', () => {
     );
     expect(snackService.open).toHaveBeenCalled();
     expect(issueService.refreshIssueTask).toHaveBeenCalledWith(task, false, false);
+  }));
+
+  it('transitions on task start when IN_PROGRESS transition is configured', fakeAsync(() => {
+    const targetStatus = createStatus('3', 'In Progress');
+    const transition = createTransition('11', 'Start progress', targetStatus);
+    jiraCfg = {
+      ...jiraCfg,
+      transitionConfig: {
+        ...jiraCfg.transitionConfig,
+        [IssueLocalState.IN_PROGRESS]: transition,
+      },
+    };
+    issueProviderService.getCfgOnce$.and.returnValue(of(jiraCfg));
+    jiraApiService.getReducedIssueById$.and.returnValue(
+      of(createIssue(createStatus('1', 'To Do'))),
+    );
+    jiraApiService.transitionIssue$.and.returnValue(of({}));
+    issueService.refreshIssueTask.and.returnValue(Promise.resolve());
+
+    const sub = TestBed.inject(JiraIssueEffects).checkForStartTransition$.subscribe();
+    actions$.next(setCurrentTask({ id: 'task-1' }));
+    tick();
+
+    expect(jiraApiService.transitionIssue$).toHaveBeenCalledWith(
+      'issue-1',
+      '11',
+      jiraCfg,
+    );
+    expect(snackService.open).toHaveBeenCalledWith({
+      type: 'SUCCESS',
+      msg: T.F.JIRA.S.TRANSITION_SUCCESS,
+      translateParams: {
+        issueKey: 'SP-1',
+        chosenTransition: 'Start progress',
+      },
+    });
+    expect(issueService.refreshIssueTask).toHaveBeenCalledWith(task, false, false);
+    sub.unsubscribe();
+  }));
+
+  it('opens transition dialog when configured as ALWAYS_ASK', async () => {
+    jiraCfg = {
+      ...jiraCfg,
+      transitionConfig: {
+        ...jiraCfg.transitionConfig,
+        [IssueLocalState.DONE]: 'ALWAYS_ASK',
+      },
+    };
+    issueProviderService.getCfgOnce$.and.returnValue(of(jiraCfg));
+    jiraApiService.getReducedIssueById$.and.returnValue(
+      of(createIssue(createStatus('1', 'To Do'))),
+    );
+
+    const dialogOpened = new Promise<void>((resolve) => {
+      matDialog.open.and.callFake(() => {
+        resolve();
+        return { afterClosed: () => of(undefined) } as ReturnType<MatDialog['open']>;
+      });
+    });
+
+    const sub = TestBed.inject(JiraIssueEffects).checkForDoneTransition$.subscribe();
+    emitDoneUpdate();
+
+    await dialogOpened;
+    expect(matDialog.open).toHaveBeenCalled();
+    expect(jiraApiService.transitionIssue$).not.toHaveBeenCalled();
+    sub.unsubscribe();
+  });
+
+  it('shows error snack and fetches issue after 2000ms for invalid transition fallback', fakeAsync(() => {
+    jiraCfg = {
+      ...jiraCfg,
+      transitionConfig: {
+        ...jiraCfg.transitionConfig,
+        [IssueLocalState.DONE]: 'INVALID_OPTION',
+      },
+    };
+    issueProviderService.getCfgOnce$.and.returnValue(of(jiraCfg));
+    jiraApiService.getReducedIssueById$.and.returnValue(
+      of(createIssue(createStatus('1', 'To Do'))),
+    );
+
+    const sub = TestBed.inject(JiraIssueEffects).checkForDoneTransition$.subscribe();
+    emitDoneUpdate();
+
+    expect(snackService.open).toHaveBeenCalledWith({
+      msg: T.F.JIRA.S.NO_VALID_TRANSITION,
+      type: 'ERROR',
+    });
+    expect(jiraApiService.getReducedIssueById$).not.toHaveBeenCalled();
+    tick(2000);
+    expect(jiraApiService.getReducedIssueById$).toHaveBeenCalledWith('issue-1', jiraCfg);
+    sub.unsubscribe();
   }));
 });

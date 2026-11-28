@@ -1,0 +1,27 @@
+---
+# Generated from Harper's WrongApostrophe linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+extends: substitution
+message: "Did you mean `{replacement_str}`?"
+level: warning
+ignorecase: true
+action:
+  name: replace
+swap:
+  "don;t": "DON'T|Don't|don't"
+  "don´t": "don't"
+  "i;ll(?!\\s*\\n\\s*\\n)\\s+be(?!\\s*\\n\\s*\\n)\\s+a(?!\\s*\\n\\s*\\n)\\s+monkey;s": "I'll be a monkey's"
+  "i;ve": "I've"
+  "it´s": "it's"
+  "i´m": "I'm"
+  "let;s(?!\\s*\\n\\s*\\n)\\s+see(?!\\s*\\n\\s*\\n)\\s+if(?!\\s*\\n\\s*\\n)\\s+we;ve(?!\\s*\\n\\s*\\n)\\s+fixed(?!\\s*\\n\\s*\\n)\\s+patrakov;s(?!\\s*\\n\\s*\\n)\\s+bug\\.(?!\\s*\\n\\s*\\n)\\s+fun(?!\\s*\\n\\s*\\n)\\s+wasn;t": "Let's see if we've fixed patrakov's bug. Fun wasn't"
+  "let´s": "Let's"
+  "microsoft´s": "Microsoft's"
+  "won`t(?!\\s*\\n\\s*\\n)\\s+make(?!\\s*\\n\\s*\\n)\\s+one(?!\\s*\\n\\s*\\n)\\s+bit(?!\\s*\\n\\s*\\n)\\s+of(?!\\s*\\n\\s*\\n)\\s+difference(?!\\s*\\n\\s*\\n)\\s+if(?!\\s*\\n\\s*\\n)\\s+i(?!\\s*\\n\\s*\\n)\\s+answer(?!\\s*\\n\\s*\\n)\\s+right(?!\\s*\\n\\s*\\n)\\s+or(?!\\s*\\n\\s*\\n)\\s+wrong\\.(?!\\s*\\n\\s*\\n)\\s+when(?!\\s*\\n\\s*\\n)\\s+you`re": "Won'T Make One Bit Of Difference If I Answer Right Or Wrong. When You'Re"
+  "you´re(?!\\s*\\n\\s*\\n)\\s+looking(?!\\s*\\n\\s*\\n)\\s+for(?!\\s*\\n\\s*\\n)\\s+clues,(?!\\s*\\n\\s*\\n)\\s+but(?!\\s*\\n\\s*\\n)\\s+you´re": "You're looking for clues, but you're"

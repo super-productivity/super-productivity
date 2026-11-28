@@ -77,6 +77,13 @@ const isAllDayEvent = (vevent: ICalVEvent): boolean => {
   }
 };
 
+// RFC 5545 enumerated values such as STATUS are case-insensitive; ical.js keeps their case.
+const isCancelledStatus = (status: unknown): boolean => {
+  if (typeof status === 'string') return status.toUpperCase() === 'CANCELLED';
+  const fn = (status as { toUpperCase?: () => string })?.toUpperCase;
+  return typeof fn === 'function' && fn.call(status) === 'CANCELLED';
+};
+
 /**
  * Exception event data for RECURRENCE-ID handling
  */
@@ -105,11 +112,6 @@ const buildExceptionMap = (vevents: ICalVEvent[]): ExceptionMap => {
         const uid = ve.getFirstPropertyValue('uid');
         if (!uid) continue;
 
-        const status = ve.getFirstPropertyValue('status');
-        const isCancelled =
-          (status as { toUpperCase?: () => string })?.toUpperCase?.() === 'CANCELLED' ||
-          (typeof status === 'string' && status.toUpperCase() === 'CANCELLED');
-
         const uidStr = String(uid);
         if (!exceptionMap.has(uidStr)) {
           exceptionMap.set(uidStr, []);
@@ -118,7 +120,7 @@ const buildExceptionMap = (vevents: ICalVEvent[]): ExceptionMap => {
         exceptionMap.get(uidStr)!.push({
           vevent: ve,
           recurrenceId,
-          isCancelled,
+          isCancelled: isCancelledStatus(ve.getFirstPropertyValue('status')),
         });
       }
     } catch (error) {
@@ -216,6 +218,13 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
 
       // Skip exception events here - they'll be processed separately
       if (recurrenceId !== null) {
+        return;
+      }
+
+      if (isCancelledStatus(ve.getFirstPropertyValue('status'))) {
+        // A cancelled master must not resurrect its detached overrides either.
+        const uid = ve.getFirstPropertyValue('uid');
+        if (uid) processedRecurringUids.add(String(uid));
         return;
       }
 
@@ -570,6 +579,11 @@ const getAllPossibleEventsAfterStartFromIcal = (
 
   const allPossibleFutureEvents = vevents.filter((ve: ICalVEvent) => {
     try {
+      // An override can move an in-window occurrence before the query window.
+      // Keep it for exclusion even when its replacement DTSTART is out of range.
+      if (safeGetDateTimestamp(ve, 'recurrence-id') !== null) {
+        return true;
+      }
       const dtstart = ve.getFirstPropertyValue('dtstart');
       // Skip events without valid dtstart
       if (
@@ -587,6 +601,11 @@ const getAllPossibleEventsAfterStartFromIcal = (
       // Check if it's a recurring event that might have future occurrences
       const rrule = ve.getFirstPropertyValue('rrule');
       if (rrule) {
+        // Keep cancelled masters so their detached overrides remain suppressed
+        // even when the series ended before the query window.
+        if (isCancelledStatus(ve.getFirstPropertyValue('status'))) {
+          return true;
+        }
         const until = (rrule as { until?: unknown }).until;
         if (!until) {
           // No end date means infinite recurrence

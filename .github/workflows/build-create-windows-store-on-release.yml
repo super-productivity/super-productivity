@@ -67,19 +67,15 @@ jobs:
       - name: Build Frontend & Electron
         run: npm run build
 
-      # `npm run build` checks the repository's Linux packaging config during lint.
-      - name: Load Electron Builder Windows Store Config
-        run: echo $WIN_STORE_ELECTRON_BUILDER_YML | base64 --decode > electron-builder.yaml
-        shell: bash
-        env:
-          WIN_STORE_ELECTRON_BUILDER_YML: ${{secrets.WIN_STORE_ELECTRON_BUILDER_YML}}
-
+      # `--publish never`: the shared config publishes win builds to GitHub, and
+      # electron-builder would otherwise publish on a tag build.
       - name: Build/Release Electron app
         uses: johannesjo/action-electron-builder@9ea9e2d991c97668843d57337848e3e2b1ffab3d # v1
         with:
           build_script_name: empty
           release: false
           github_token: ${{ secrets.github_token }}
+          args: --config build/electron-builder.appx.yaml --publish never
 
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -1,0 +1,18 @@
+---
+# Generated from Harper's IncidentReport rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `incidence reports` to `incident reports`.
+extends: substitution
+message: "Did you mean %[1]s?"
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+swap:
+  "incidence(?!\\s*\\n\\s*\\n)\\s+report(?!['\\x{2019}]s\\b)": "incident report"
+  "incidence(?!\\s*\\n\\s*\\n)\\s+reports(?!['\\x{2019}]s\\b)": "incident reports"

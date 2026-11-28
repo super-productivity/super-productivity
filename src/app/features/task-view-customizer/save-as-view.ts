@@ -91,8 +91,8 @@ export const buildViewFromList = (opts: {
   if (isToday && isFiltered) {
     hints.push(T.F.BOARDS.V.HINT_FILTER_NOT_ONLY_TODAY);
   } else if (isToday) {
+    // Its rule chip says it: overdue tasks are listed with today's.
     panel.dueState = 'todayOrOverdue';
-    hints.push(T.F.BOARDS.V.HINT_TODAY_OR_OVERDUE);
   } else if (list.type === WorkContextType.PROJECT) {
     panel.projectIds = [list.id];
     panel.backlogState = BoardPanelCfgTaskTypeFilter.NoBacklog;

@@ -1,6 +1,7 @@
 package com.superproductivity.superproductivity
 
 import android.app.Activity
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import com.superproductivity.superproductivity.app.LaunchDecider
@@ -31,7 +32,10 @@ class AppShortcutActivity : Activity() {
                 data = intent.data
             }
         } else {
-            Intent(this, FullscreenActivity::class.java)
+            // MAIN/LAUNCHER, like a launcher tap: it matches the task's base
+            // intent, so a running app is brought to front instead of getting a
+            // second FullscreenActivity (it is not singleTask).
+            Intent.makeMainActivity(ComponentName(this, FullscreenActivity::class.java))
         }
         startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         finish()

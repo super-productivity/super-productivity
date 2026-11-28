@@ -362,6 +362,384 @@ describe('planLwwConflictResolutions', () => {
     ]);
   });
 
+  describe('concurrent creates of one id (#11645)', () => {
+    // Deterministic ids (a repeat instance is `rpt_<cfgId>_<day>`) let two
+    // devices create the same entity without seeing each other.
+    const create = (id: string, timestamp: number, clientId: string): Operation =>
+      createOp({ id, opType: OpType.Create, timestamp, clientId });
+    const update = (id: string, timestamp: number, clientId: string): Operation =>
+      createOp({ id, opType: OpType.Update, timestamp, clientId });
+
+    it('lets the edited remote side beat a newer local create-only side', () => {
+      // One conflict per remote op, as detection emits them.
+      const localOps = [create('b-create', 9_000, 'B')];
+      const conflicts = [
+        createConflict(localOps, [create('a-create', 1_000, 'A')]),
+        createConflict(localOps, [update('a-time', 2_000, 'A')]),
+      ];
+
+      const plans = planLwwConflictResolutions(conflicts, { isArchiveAction });
+
+      expect(plans.map((p) => [p.winner, p.reason, p.localWinOperationKind])).toEqual([
+        ['remote', 'remote-duplicate-create', undefined],
+        ['remote', 'remote-duplicate-create', undefined],
+      ]);
+    });
+
+    it('keeps the edited local side against a newer remote create-only side', () => {
+      const conflict = createConflict(
+        [create('a-create', 1_000, 'A'), update('a-time', 2_000, 'A')],
+        [create('b-create', 9_000, 'B')],
+      );
+
+      const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+      expect([plan.winner, plan.reason, plan.localWinOperationKind]).toEqual([
+        'local',
+        'local-duplicate-create',
+        'update',
+      ]);
+    });
+
+    it('keeps the edited local side when its ops span several conflicts', () => {
+      const remoteOps = [create('b-create', 9_000, 'B')];
+      const conflicts = [
+        createConflict([create('a-create', 1_000, 'A')], remoteOps),
+        createConflict([update('a-time', 2_000, 'A')], remoteOps),
+      ];
+
+      const plans = planLwwConflictResolutions(conflicts, { isArchiveAction });
+
+      expect(plans.map((p) => [p.winner, p.reason])).toEqual([
+        ['local', 'local-duplicate-create'],
+        ['local', 'local-duplicate-create'],
+      ]);
+    });
+
+    it('lets a one-sided delete beat a newer create-only copy', () => {
+      // A user-deleted instance must not come back as the other device's blank copy.
+      const conflict = createConflict(
+        [
+          create('a-create', 1_000, 'A'),
+          createOp({
+            id: 'a-delete',
+            opType: OpType.Delete,
+            timestamp: 2_000,
+            clientId: 'A',
+          }),
+        ],
+        [create('b-create', 9_000, 'B')],
+      );
+
+      const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+      expect([plan.winner, plan.reason]).toEqual(['local', 'local-duplicate-create']);
+    });
+
+    describe('with the same automatic follow-up on both sides', () => {
+      // A repeat with a start time is created as addTask + scheduleTaskWithTime;
+      // both devices derive the same schedule from the series.
+      const schedule = (
+        id: string,
+        timestamp: number,
+        clientId: string,
+        at = 5_000,
+      ): Operation<OpType> =>
+        createOp({
+          id,
+          actionType: '[Task Shared] scheduleTaskWithTime',
+          // Capture shape (action minus type/meta, plus entityChanges); task trimmed to its id.
+          payload: {
+            actionPayload: { task: { id: 'task-1' }, dueWithTime: at, remindAt: at },
+            entityChanges: [],
+          },
+          timestamp,
+          clientId,
+        });
+
+      it('does not count the mirrored follow-up as an edit', () => {
+        const conflict = createConflict(
+          [create('b-create', 9_000, 'B'), schedule('b-schedule', 9_001, 'B')],
+          [
+            create('a-create', 1_000, 'A'),
+            schedule('a-schedule', 1_001, 'A'),
+            update('a-time', 2_000, 'A'),
+          ],
+        );
+
+        const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+        expect([plan.winner, plan.reason]).toEqual(['remote', 'remote-duplicate-create']);
+      });
+
+      it('mirrors when only an undefined key differs (lost in JSON transit)', () => {
+        // "Do not remind" schedules with remindAt: undefined; the local op keeps
+        // the key, the downloaded copy has it dropped by JSON.
+        const local = schedule('a-schedule', 1_001, 'A');
+        (
+          local.payload as { actionPayload: Record<string, unknown> }
+        ).actionPayload.remindAt = undefined;
+        const remote = schedule('b-schedule', 9_001, 'B');
+        delete (remote.payload as { actionPayload: Record<string, unknown> })
+          .actionPayload.remindAt;
+        const conflict = createConflict(
+          [create('b-create', 9_000, 'B'), remote],
+          [create('a-create', 1_000, 'A'), local, update('a-time', 2_000, 'A')],
+        );
+
+        const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+        expect([plan.winner, plan.reason]).toEqual(['remote', 'remote-duplicate-create']);
+      });
+
+      it('counts a follow-up the other side did not make the same way', () => {
+        const conflict = createConflict(
+          [create('b-create', 9_000, 'B'), schedule('b-schedule', 9_001, 'B', 6_000)],
+          [
+            create('a-create', 1_000, 'A'),
+            schedule('a-schedule', 1_001, 'A'),
+            update('a-time', 2_000, 'A'),
+          ],
+        );
+
+        const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+        expect([plan.winner, plan.reason]).toEqual(['local', 'local-timestamp']);
+      });
+    });
+
+    it('falls back to timestamps when both sides only created', () => {
+      const conflict = createConflict(
+        [create('b-create', 9_000, 'B')],
+        [create('a-create', 1_000, 'A')],
+      );
+
+      const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+      expect([plan.winner, plan.reason]).toEqual(['local', 'local-timestamp']);
+    });
+
+    it('keeps timestamps when only one side created', () => {
+      const conflict = createConflict(
+        [create('b-create', 9_000, 'B')],
+        [update('a-edit', 1_000, 'A')],
+      );
+
+      const [plan] = planLwwConflictResolutions([conflict], { isArchiveAction });
+
+      expect([plan.winner, plan.reason]).toEqual(['local', 'local-timestamp']);
+    });
+  });
+
+  describe('delete-wins frontier guard (#11489)', () => {
+    const options = { isArchiveAction, isDeleteWinsAction };
+    const deleteWins = (overrides: Partial<Operation>): Operation =>
+      createOp({ actionType: '[Test] Delete Wins', opType: OpType.Delete, ...overrides });
+
+    it('falls back to timestamp LWW when the remote side re-created the entity after its delete', () => {
+      // 3 devices: A deletes (t1); a released O edits later, wins by timestamp
+      // and uploads a re-creating update U that saw the delete (t2); this
+      // device has an offline edit (t3). Detection emits one conflict per
+      // remote op. Both must resolve the same way, or this device drops the
+      // entity while its own snapshot re-creates it elsewhere.
+      const localEdit = createOp({
+        id: 'local-edit',
+        clientId: 'n2',
+        vectorClock: { n2: 1 },
+        timestamp: 3_000,
+      });
+      const remoteDelete = deleteWins({
+        id: 'remote-delete',
+        clientId: 'a',
+        vectorClock: { a: 1 },
+        timestamp: 1_000,
+      });
+      const remoteRecreate = createOp({
+        id: 'remote-recreate',
+        actionType: '[TASK] LWW Update',
+        clientId: 'o',
+        vectorClock: { a: 1, o: 1 },
+        timestamp: 2_000,
+      });
+      const deleteConflict = createConflict([localEdit], [remoteDelete]);
+      const recreateConflict = createConflict([localEdit], [remoteRecreate]);
+
+      const plans = planLwwConflictResolutions(
+        [deleteConflict, recreateConflict],
+        options,
+      );
+
+      expect(plans.map((plan) => [plan.winner, plan.reason])).toEqual([
+        ['local', 'local-timestamp'],
+        ['local', 'local-timestamp'],
+      ]);
+    });
+
+    it('falls back to timestamp LWW when the local side re-created the entity after its delete', () => {
+      const localDelete = deleteWins({
+        id: 'local-delete',
+        vectorClock: { client1: 1 },
+        timestamp: 1_000,
+      });
+      const localRecreate = createOp({
+        id: 'local-recreate',
+        opType: OpType.Create,
+        vectorClock: { client1: 2 },
+        timestamp: 3_000,
+      });
+      const remoteEdit = createOp({
+        id: 'remote-edit',
+        clientId: 'client2',
+        vectorClock: { client2: 1 },
+        timestamp: 2_000,
+      });
+
+      const [plan] = planLwwConflictResolutions(
+        [createConflict([localDelete, localRecreate], [remoteEdit])],
+        options,
+      );
+
+      expect(plan.winner).toBe('local');
+      expect(plan.reason).toBe('local-timestamp');
+      expect(plan.localWinOperationKind).toBe('update');
+    });
+
+    it('still lets the delete win over a concurrent edit on its own side', () => {
+      // A concurrent same-side op (did not see the delete) does not block it.
+      const remoteDelete = deleteWins({
+        id: 'remote-delete',
+        clientId: 'a',
+        vectorClock: { a: 1 },
+        timestamp: 1_000,
+      });
+      const remoteConcurrentEdit = createOp({
+        id: 'remote-concurrent-edit',
+        clientId: 'b',
+        vectorClock: { b: 1 },
+        timestamp: 2_000,
+      });
+      const localEdit = createOp({
+        id: 'local-edit',
+        clientId: 'n2',
+        vectorClock: { n2: 1 },
+        timestamp: 3_000,
+      });
+
+      const plans = planLwwConflictResolutions(
+        [
+          createConflict([localEdit], [remoteDelete]),
+          createConflict([localEdit], [remoteConcurrentEdit]),
+        ],
+        options,
+      );
+
+      expect(plans[0].reason).toBe('remote-delete-wins');
+      // The concurrent edit's own conflict holds no delete, so it stays on
+      // timestamp LWW (pre-existing split, unchanged by the guard).
+      expect([plans[1].winner, plans[1].reason]).toEqual(['local', 'local-timestamp']);
+    });
+
+    it('keeps delete-wins when the only later same-side op is a plain update', () => {
+      // A plain update of a deleted id (e.g. a plugin update without an
+      // existence check) is a no-op on replay and must not block the delete,
+      // or the local delete would be rejected without a replacement.
+      const localDelete = deleteWins({
+        id: 'local-delete',
+        vectorClock: { client1: 1 },
+        timestamp: 1_000,
+      });
+      const localStrayUpdate = createOp({
+        id: 'local-stray-update',
+        vectorClock: { client1: 2 },
+        timestamp: 3_000,
+      });
+      const remoteEdit = createOp({
+        id: 'remote-edit',
+        clientId: 'client2',
+        vectorClock: { client2: 1 },
+        timestamp: 2_000,
+      });
+
+      const [plan] = planLwwConflictResolutions(
+        [createConflict([localDelete, localStrayUpdate], [remoteEdit])],
+        options,
+      );
+
+      expect(plan.reason).toBe('local-delete-wins');
+      expect(plan.localWinOperationKind).toBe('delete-win');
+    });
+
+    it('does not count a recreate-marked patch delta as a re-create', () => {
+      const remoteDelete = deleteWins({
+        id: 'remote-delete',
+        clientId: 'a',
+        vectorClock: { a: 1 },
+        timestamp: 1_000,
+      });
+      const remotePatch = createOp({
+        id: 'remote-patch',
+        actionType: '[TASK] LWW Update',
+        clientId: 'o',
+        vectorClock: { a: 1, o: 1 },
+        timestamp: 2_000,
+        payload: {
+          actionPayload: { id: 'task-1' },
+          entityChanges: [],
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      });
+      const localEdit = createOp({
+        id: 'local-edit',
+        clientId: 'n2',
+        vectorClock: { n2: 1 },
+        timestamp: 3_000,
+      });
+
+      const plans = planLwwConflictResolutions(
+        [
+          createConflict([localEdit], [remoteDelete]),
+          createConflict([localEdit], [remotePatch]),
+        ],
+        options,
+      );
+
+      expect(plans[0].reason).toBe('remote-delete-wins');
+    });
+
+    it('lets a later delete win again after a re-create', () => {
+      const localDelete = deleteWins({
+        id: 'local-delete-1',
+        vectorClock: { client1: 1 },
+        timestamp: 1_000,
+      });
+      const localRecreate = createOp({
+        id: 'local-recreate',
+        opType: OpType.Create,
+        vectorClock: { client1: 2 },
+        timestamp: 1_500,
+      });
+      const localDeleteAgain = deleteWins({
+        id: 'local-delete-2',
+        vectorClock: { client1: 3 },
+        timestamp: 1_800,
+      });
+      const remoteEdit = createOp({
+        id: 'remote-edit',
+        clientId: 'client2',
+        vectorClock: { client2: 1 },
+        timestamp: 2_000,
+      });
+
+      const [plan] = planLwwConflictResolutions(
+        [createConflict([localDelete, localRecreate, localDeleteAgain], [remoteEdit])],
+        options,
+      );
+
+      expect(plan.reason).toBe('local-delete-wins');
+    });
+  });
+
   it('lets a remote archive win over local non-archive operations', () => {
     const conflict = createConflict(
       [createOp({ id: 'local', timestamp: 2_000 })],

@@ -19,6 +19,7 @@ import {
   closeLegacyClient,
   toArchiveOnlyLegacyData,
 } from '../../utils/legacy-migration-helpers';
+import { getStoreTaskTitles } from '../../utils/audit-winners-helpers';
 
 // Import fixtures
 import legacyDataClientA from '../../fixtures/legacy-migration-client-a.json';
@@ -48,7 +49,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
    * 2. Client B has different legacy data (Task B1, Task B2), migrates
    * 3. Client B sets up SuperSync to same account -> conflict dialog appears
    * 4. Client B chooses "Use My Data" -> B's data replaces remote
-   * 5. Client A syncs -> receives B's data
+   * 5. Client A syncs -> receives B's data: B1-B3, no A1/A2
    */
   test('both clients migrated from legacy - Keep local resolution', async ({
     browser,
@@ -132,40 +133,56 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       await waitForStatePersistence(clientB.page);
       console.log('[Test] Client B added task after migration');
 
-      // Setup sync - may trigger conflict dialog or auto-resolve via native confirm
-      // SuperSync can use either Angular dialogs or native browser confirm dialogs
-      console.log('[Test] Client B setting up sync...');
-
-      // Set up handler for native confirm dialogs to keep local data
-      clientB.page.on('dialog', async (dialog) => {
-        if (dialog.type() === 'confirm') {
-          console.log('[Test] Native confirm dialog: ' + dialog.message());
-          // Accept to keep local data (default behavior)
-          await dialog.accept();
-        }
+      // Setup sync without the helper's silent dialog handling: B holds real
+      // local data and the server holds A's, so B must be asked; silently
+      // merging or silently taking either side is wrong.
+      console.log('[Test] Client B setting up sync — expecting a conflict dialog...');
+      await syncPageB.setupSuperSync({
+        ...syncConfig,
+        syncImportChoice: 'local',
+        waitForInitialSync: false,
       });
+      // B meets the incoming-import gate (A's encrypted setup uploaded a
+      // SYNC_IMPORT), so the sync-import dialog is the prompt (observed in CI).
+      await expect(syncPageB.syncImportConflictDialog).toBeVisible({ timeout: 30000 });
+      await expect(syncPageB.conflictDialog).toBeHidden();
+      await syncPageB.chooseSyncImportUseLocal();
+      await syncPageB.syncAndWait({ useLocal: true });
+      console.log('[Test] Client B kept local data');
 
-      await syncPageB.setupSuperSync({ ...syncConfig, syncImportChoice: 'local' });
-      console.log('[Test] Client B sync completed');
+      // B's choice shipped its state as a full-state op that reached the server.
+      const opsBAfter = await getLocalOpLogSummary(clientB.page);
+      expect(opsBAfter.some((op) => isFullStateOpType(op.opType) && op.isSynced)).toBe(
+        true,
+      );
 
       // Navigate to B's project and verify data
       await sidenavB.locator('nav-item', { hasText: 'Client B Project' }).click();
       await clientB.page.waitForLoadState('networkidle').catch(() => {});
       await workViewB.waitForTaskList();
 
-      // Verify Client B still has its data
-      await expect(clientB.page.locator('task', { hasText: 'Task B1' })).toBeVisible();
-      await expect(clientB.page.locator('task', { hasText: 'Task B2' })).toBeVisible();
-      await expect(clientB.page.locator('task', { hasText: 'Task B3' })).toBeVisible();
+      const expectedTitles = [
+        'Task B1 - Client B',
+        'Task B2 - Client B',
+        'Task B3 - After Migration',
+      ];
+      const legacyTitles = (titles: string[]): string[] =>
+        titles.filter((title) => /^Task [AB]\d/.test(title));
+      expect(legacyTitles(await getStoreTaskTitles(clientB.page))).toEqual(
+        expectedTitles,
+      );
       console.log('[Test] Client B verified: kept local data');
 
-      // Core test passed: Both clients migrated from legacy, and Client B successfully
-      // synced while keeping its local data. This is the main scenario we're testing.
-      // Note: Client A could sync again but with divergent MIGRATION_GENESIS_IMPORT
-      // operations, the behavior is complex and already covered by other sync tests.
-      console.log(
-        '[Test] PASSED: Legacy migration sync - Client B kept local data after conflict',
-      );
+      // === Client A syncs and adopts B's state ===
+      // A has nothing pending, so taking the server's (B's) data is the only
+      // correct outcome: B1-B3, and none of A's own legacy tasks.
+      await syncPageA.syncAndWait();
+      await expect
+        .poll(async () => legacyTitles(await getStoreTaskTitles(clientA!.page)), {
+          timeout: 15000,
+        })
+        .toEqual(expectedTitles);
+      console.log("[Test] PASSED: Client B kept local data and A adopted B's state");
     } finally {
       if (clientA) await closeLegacyClient(clientA).catch(() => {});
       if (clientB) await closeLegacyClient(clientB).catch(() => {});
@@ -421,36 +438,22 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       await clientA.page.waitForLoadState('networkidle').catch(() => {});
       await workViewA.waitForTaskList();
 
-      // With divergent MIGRATION_GENESIS_IMPORT operations, Client A may keep its
-      // own data or receive Client B's data depending on sync logic.
-      // The key assertion is: no ID duplicates - only ONE version of shared-task-1 exists.
+      // B kept its local data, so B's SYNC_IMPORT replaced the server state.
+      // A has nothing pending: it must adopt B's state, i.e. Version B of the
+      // colliding id plus B's extra task, and only one copy of the shared id.
       await expect(clientA.page.locator('#t-shared-task-1')).toBeVisible({
         timeout: 10000,
       });
-
-      // Check which version Client A has
-      const hasVersionB = await clientA.page
-        .locator('#t-shared-task-1', { hasText: 'Version B' })
-        .isVisible()
-        .catch(() => false);
-      const hasVersionA = await clientA.page
-        .locator('#t-shared-task-1', { hasText: 'Version A' })
-        .isVisible()
-        .catch(() => false);
-
-      // Only ONE version should exist (no duplicates)
-      expect(hasVersionA || hasVersionB).toBe(true);
-      expect(hasVersionA && hasVersionB).toBe(false); // Can't have both
-
-      if (hasVersionB) {
-        console.log(
-          '[Test] SUCCESS: ID collision resolved - Client A received Version B',
-        );
-      } else {
-        console.log(
-          '[Test] SUCCESS: ID collision handled - Client A kept Version A (divergent timeline)',
-        );
-      }
+      await expect(clientA.page.locator('#t-shared-task-1')).toHaveCount(1);
+      await expect(
+        clientA.page.locator('#t-shared-task-1', { hasText: 'Version B' }),
+      ).toBeVisible();
+      const titlesA = await getStoreTaskTitles(clientA.page);
+      expect(titlesA.filter((title) => title.includes('Version'))).toEqual([
+        'Shared Task (Version B)',
+        'Version B Extra Task',
+      ]);
+      console.log('[Test] SUCCESS: ID collision resolved - Client A received Version B');
     } finally {
       if (clientA) await closeLegacyClient(clientA).catch(() => {});
       if (clientB) await closeLegacyClient(clientB).catch(() => {});
@@ -591,9 +594,11 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       await expect(clientA.page.locator('task', { hasText: 'Task B1' })).toBeVisible({
         timeout: 10000,
       });
-      await expect(
-        clientA.page.locator('task', { hasText: 'Task A1 - Fresh' }),
-      ).not.toBeVisible();
+      // Store read: the work view only renders one project, so absence there
+      // says nothing. A's own tasks must be gone after adopting B's import.
+      const titlesA = await getStoreTaskTitles(clientA.page);
+      expect(titlesA).toEqual(expect.arrayContaining(['Task B1 - Client B']));
+      expect(titlesA.filter((title) => title.startsWith('Task A'))).toEqual([]);
 
       // A adopted B's import and never received a genesis op from B.
       const opsAAfter = await getLocalOpLogSummary(clientA.page);

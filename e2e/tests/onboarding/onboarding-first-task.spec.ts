@@ -12,8 +12,8 @@ const pixel5TestOptions = { ...devices['Pixel 5'] };
 Reflect.deleteProperty(pixel5TestOptions, 'defaultBrowserType');
 
 // Up to the inline icons, whose ligature names are part of the text content.
-const MODEL_TIP = 'This task is planned for today, so it shows in';
-const INBOX_TIP = 'Tasks without a project of your own stay in';
+const MODEL_TIP = 'This one is planned for today, so it shows here too';
+const INBOX_TIP = 'Tasks without a project of your own go to';
 const INBOX_NAV_ITEM =
   'magic-side-nav nav-item[data-project-id="INBOX_PROJECT"] .nav-link';
 const TODAY_NAV_ITEM = 'magic-side-nav nav-item[data-tag-id="TODAY"] .nav-link';
@@ -229,12 +229,32 @@ test.describe('First-run onboarding', () => {
     // The play button stays disabled (and inert) until there is something to track.
     await addTaskViaComposer(page, `Tracking off task ${Date.now()}`);
 
+    // Closing the composer focuses the new task after a short delay; let that
+    // land first so it can't steal focus from the menu below.
+    await expect(page.locator('task').first()).toBeFocused();
+
     const playBtn = page.locator('.tour-playBtn');
     const disableItem = page.getByRole('menuitem', { name: 'Disable feature' });
     // Closing the menu hands focus back to the play button.
     await playBtn.click({ button: 'right' });
     await expect(disableItem).toBeVisible();
     await page.keyboard.press('Escape');
+    await expect(disableItem).toHaveCount(0);
+    await expect(playBtn).toBeFocused();
+
+    // Also when Escape lands before the menu's first render: mat-menu's queued
+    // "focus first item" must not pull focus away afterwards. Both events are
+    // dispatched in one task so the timing is deterministic.
+    await page.evaluate(() => {
+      const btn = document.querySelector<HTMLElement>('.tour-playBtn');
+      btn?.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true }),
+      );
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+      );
+    });
+    // The panel detaches only after its exit animation, past that first render.
     await expect(disableItem).toHaveCount(0);
     await expect(playBtn).toBeFocused();
 

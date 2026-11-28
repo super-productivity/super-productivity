@@ -76,7 +76,9 @@ module.exports = function (config) {
           '--disable-renderer-backgrounding',
           '--disable-device-discovery-notifications',
           // Without a remote debugging port, Google Chrome exits immediately.
-          '--remote-debugging-port=9222',
+          // Port 0 lets Chrome pick a free one, so parallel shards
+          // (tools/test-shards.js) don't collide on a fixed port.
+          '--remote-debugging-port=0',
           '--disable-web-security',
           // Additional performance optimizations
           '--disable-dev-shm-usage', // Overcome limited resource problems

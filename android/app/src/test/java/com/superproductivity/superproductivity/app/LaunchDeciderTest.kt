@@ -1,6 +1,8 @@
 package com.superproductivity.superproductivity.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LaunchDeciderTest {
@@ -51,5 +53,17 @@ class LaunchDeciderTest {
                 hasLegacyData = false,
             ),
         )
+    }
+
+    @Test
+    fun `a build forcing online mode never hands over to offline mode`() {
+        assertFalse(LaunchDecider.canLeaveOnlineMode("1"))
+    }
+
+    @Test
+    fun `default and offline builds may hand over to offline mode`() {
+        assertTrue(LaunchDecider.canLeaveOnlineMode("0"))
+        assertTrue(LaunchDecider.canLeaveOnlineMode("2"))
+        assertTrue(LaunchDecider.canLeaveOnlineMode(""))
     }
 }

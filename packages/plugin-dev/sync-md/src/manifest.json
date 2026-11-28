@@ -26,6 +26,7 @@
     "showSnack",
     "batchUpdateForProject"
   ],
+  "dataSharing": [],
   "nodeScriptConfig": {
     "timeout": 30000,
     "memoryLimit": "256MB"

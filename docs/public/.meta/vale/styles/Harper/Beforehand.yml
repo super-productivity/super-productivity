@@ -1,0 +1,20 @@
+---
+# Generated from Harper's Beforehand rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# `Beforehand` functions as a fixed adverb meaning ‘in advance’; writing it as two words or with a hyphen is nonstandard and can jar readers.
+extends: existence
+message: "Prefer the single-word adverb `beforehand`."
+level: suggestion
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "beforehand"
+tokens:
+  - "before(?!\\s*\\n\\s*\\n)\\s+hand(?!['\\x{2019}]s\\b)"
+  - "before-hand(?!['\\x{2019}]s\\b)"

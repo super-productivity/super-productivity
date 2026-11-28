@@ -30,5 +30,14 @@ export const FOCUS_MODE_LOCAL_FORM_CFG: ConfigFormSection<FocusModeLocalConfig> 
         label: T.GCF.FOCUS_MODE_LOCAL.L_IS_NOTIFY_ON_SESSION_END,
       },
     },
+    {
+      key: 'isFocusWindowOnSessionEnd',
+      type: 'checkbox',
+      // Desktop only: web can't raise its tab and uses the notification above.
+      hideExpression: () => !IS_ELECTRON,
+      templateOptions: {
+        label: T.GCF.FOCUS_MODE_LOCAL.L_IS_FOCUS_WINDOW_ON_SESSION_END,
+      },
+    },
   ] as LimitedFormlyFieldConfig<FocusModeLocalConfig>[],
 };

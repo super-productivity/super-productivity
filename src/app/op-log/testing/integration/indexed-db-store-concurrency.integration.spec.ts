@@ -65,7 +65,12 @@ describe('Op-log + archive store concurrency (IndexedDB)', () => {
     // Start the op-log and archive writes concurrently.
     const work: Promise<unknown>[] = [];
     for (let i = 0; i < 10; i++) {
-      work.push(opLogStore.appendBatch([makeOp(`batch-${i}-a`), makeOp(`batch-${i}-b`)]));
+      work.push(
+        opLogStore.appendBatchSkipDuplicates([
+          makeOp(`batch-${i}-a`),
+          makeOp(`batch-${i}-b`),
+        ]),
+      );
       work.push(
         archiveStore.saveArchivesAtomic(archiveModel([`y${i}`]), archiveModel([])),
       );

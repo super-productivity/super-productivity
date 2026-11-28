@@ -1,7 +1,4 @@
-<div
-  #dropZone
-  class="schedule-day-drop-zone"
->
+<div class="schedule-day-drop-zone">
   @if (currentPage(); as current) {
     <swipe-pager
       #pager
@@ -18,13 +15,23 @@
         let-page
         let-isCurrent="isCurrent"
       >
-        <!-- The bottom sheet covers the task list, so there is nothing to drop -->
+        <!-- The bottom sheet covers the task list this hint is about -->
         @if (page.hasNoEvents && !isInBottomSheet) {
           <div class="empty-state-anchor">
             <div class="empty-state">
               <div class="empty-state-text">
                 {{ T.F.SCHEDULE.DROP_TASKS_HERE_TO_SCHEDULE | translate }}
               </div>
+              @if (isCurrent && !boardsService.isAllTasksListOpen()) {
+                <button
+                  class="empty-state-btn"
+                  mat-button
+                  color="primary"
+                  (click)="boardsService.openAllTasksList()"
+                >
+                  {{ T.F.SCHEDULE.SHOW_ALL_TASKS | translate }}
+                </button>
+              }
             </div>
           </div>
         }
@@ -32,6 +39,7 @@
           [isInPanel]="true"
           [events]="page.events"
           [beyondBudget]="page.beyondBudget"
+          [trays]="page.trays"
           [daysToShow]="page.daysToShow"
           [todayDateStr]="todayDateStr()"
           [workStartEnd]="workStartEnd() || null"
@@ -58,6 +66,15 @@
           >
             <mat-icon>chevron_right</mat-icon>
           </button>
+          <!-- On every day, so a task can also be placed on a later one, and on
+               the neighbouring pages too, so their grids line up while swiping. -->
+          @if (overdueTasks().length) {
+            <schedule-day-overdue
+              weekHeaderBelow
+              [tasks]="overdueTasks()"
+              [(isExpanded)]="isOverdueExpanded"
+            ></schedule-day-overdue>
+          }
         </schedule-week>
       </ng-template>
     </swipe-pager>

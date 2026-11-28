@@ -71,7 +71,7 @@
   top: 12px;
   width: auto;
   opacity: 0.75;
-  transition: opacity 0.25s;
+  transition: opacity var(--transition-duration-m);
 
   &:hover {
     opacity: 1;
@@ -108,8 +108,8 @@
   opacity: 0;
   outline: none;
   transition:
-    opacity 0.3s,
-    visibility 0.3s;
+    opacity var(--transition-duration-m),
+    visibility var(--transition-duration-m);
   visibility: hidden;
   width: 100%;
 
@@ -139,8 +139,8 @@
   position: relative;
   overflow: hidden;
   transition:
-    background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    background-color var(--transition-duration-m) var(--ani-standard-timing),
+    box-shadow var(--transition-duration-m) var(--ani-standard-timing);
 
   // Hover state - similar to Material button hover
   &:hover:not(:disabled) {

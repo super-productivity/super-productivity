@@ -166,6 +166,10 @@ Plugins are not sandboxed, so no permission limits what plugin code can read or
 change; see
 [Security Considerations](https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md#security-considerations).
 
+Declare what the plugin sends off the device in `dataSharing` (`[]` if
+nothing); the app shows it to users. See
+[Declaring what your plugin sends](https://github.com/super-productivity/super-productivity/blob/master/docs/plugin-development.md#declaring-what-your-plugin-sends-datasharing).
+
 - `nodeExecution` - Run Node.js scripts (desktop only, after the user allows it)
 - `http` - Send `PluginAPI.request` calls to the hosts listed in `allowedHosts`
 - `showSnack` - Show notifications
@@ -183,6 +187,7 @@ change; see
 - `deleteProject` - Delete a project and everything it contains (irreversible)
 - `getAllTags` - Read tags
 - `addTag` - Create tags
+- `addTaskRepeatCfg` / `updateTaskRepeatCfg` - Make a task repeat, change its schedule
 - `persistDataSynced` - Persist plugin data
 - `getAppState` - Read-only snapshot of application state
 

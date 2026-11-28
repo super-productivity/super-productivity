@@ -1,6 +1,11 @@
 import { defineConfig } from '@playwright/test';
 import path from 'path';
-import { VIEWPORTS, type ViewportSpec } from './store-screenshots/matrix';
+import {
+  NATIVE_CAPTURE_WINDOW,
+  IS_NATIVE_CAPTURE,
+  VIEWPORTS,
+  type ViewportSpec,
+} from './store-screenshots/matrix';
 
 /**
  * Electron-mode screenshot config.
@@ -35,6 +40,14 @@ export default defineConfig({
   projects: [
     // Desktop master only — Electron pipeline doesn't do mobile.
     (() => {
+      // Native capture: smaller 1:1 window that stays inside Flathub's
+      // "reasonable window size" guideline. The desktop scales HiDPI itself.
+      if (IS_NATIVE_CAPTURE) {
+        return {
+          name: 'desktopMaster',
+          use: { viewport: { ...NATIVE_CAPTURE_WINDOW }, deviceScaleFactor: 1 },
+        };
+      }
       const vp = VIEWPORTS.desktopMaster as ViewportSpec;
       const dpr = vp.deviceScaleFactor ?? 1;
       return {
@@ -63,6 +76,7 @@ export default defineConfig({
   outputDir: path.join(__dirname, '..', '.tmp', 'screenshots', '_test-results-electron'),
 
   // Electron startup adds ~5–10 s overhead per test. Loosen the cap.
-  timeout: 240 * 1000,
+  // Native capture on GNOME waits for a human to press Alt+Print per scene.
+  timeout: IS_NATIVE_CAPTURE ? 30 * 60 * 1000 : 240 * 1000,
   expect: { timeout: 20 * 1000 },
 });

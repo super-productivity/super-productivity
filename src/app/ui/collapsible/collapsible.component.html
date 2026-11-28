@@ -25,6 +25,11 @@
   } @else {
     <div class="collapsible-title">{{ title() }}</div>
   }
+  <!-- After the title, not inside it: tests and screen readers read the
+       title's text as it is. -->
+  @if (count() !== undefined) {
+    <span class="collapsible-count">{{ count() }}</span>
+  }
 
   <ng-content select="[actions]"></ng-content>
 

@@ -1,0 +1,22 @@
+---
+# Hand-written from Harper's CloseTightKnit: the word is `knit`.
+#
+# The generated rule keyed on punctuation. Harper takes `close`, `closely`,
+# `tight` or `tightly` before `nit`, joined by a space or a hyphen, which is
+# what separates the typo from the insect.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Did you mean `knit`?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+  params:
+    - "knit"
+tokens:
+  - '(?<=\b(?:close|closely|tight|tightly)[\s-])nit\b'

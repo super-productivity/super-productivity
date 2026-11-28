@@ -28,6 +28,16 @@ export const updateTag = createAction(
   }),
 );
 
+/**
+ * Payload marker stamped on every new single-tag `deleteTag` operation so the
+ * LWW conflict planner gives it delete-wins precedence over a concurrent edit
+ * of the same tag (#11489, ARCHITECTURE-DECISIONS.md #7). Released clients
+ * ignore it and keep resolving the delete by timestamp. Shared with the sync
+ * classifier (`conflict-resolution.util.ts`) so a rename is compiler-checked
+ * on both ends. `deleteTags` deliberately carries no marker.
+ */
+export const TAG_DELETE_WINS_MARKER = 'tagDeleteWins';
+
 export const deleteTag = createAction(
   '[Tag] Delete Tag',
   // Tag titles for the push-on-delete two-way-sync effect ride on
@@ -35,6 +45,7 @@ export const deleteTag = createAction(
   // content stays out of the exportable op-log (rule 9).
   (tagProps: { id: string }) => ({
     ...tagProps,
+    [TAG_DELETE_WINS_MARKER]: true as const,
     meta: {
       isPersistent: true,
       entityType: 'TAG',

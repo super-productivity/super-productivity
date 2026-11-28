@@ -138,13 +138,19 @@ export const generateRegistrationOptions = async (
   return options;
 };
 
+interface RegistrationExtras {
+  termsAcceptedAt?: number;
+  /** Browser sign-in request to return to after verifying; see connect-request.store.ts. */
+  connectRequestId?: string;
+}
+
 /**
  * Verify passkey registration and create user
  */
 export const verifyRegistration = async (
   email: string,
   credential: RegistrationResponseJSON,
-  termsAcceptedAt?: number,
+  { termsAcceptedAt, connectRequestId }: RegistrationExtras = {},
 ): Promise<{ message: string }> => {
   const { rpID, origin } = getWebAuthnConfig();
 
@@ -267,7 +273,11 @@ export const verifyRegistration = async (
     }
 
     // Normal flow: send verification email
-    const emailSent = await sendVerificationEmail(email, verificationToken);
+    const emailSent = await sendVerificationEmail(
+      email,
+      verificationToken,
+      connectRequestId,
+    );
     if (!emailSent) return { message: REGISTRATION_SUCCESS_MESSAGE };
 
     Logger.info(`Passkey registration initiated`);

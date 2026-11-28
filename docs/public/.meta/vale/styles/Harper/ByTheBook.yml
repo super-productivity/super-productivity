@@ -1,0 +1,27 @@
+---
+# Hand-written from Harper's ByTheBook: the idiom is singular.
+#
+# The generated rule keyed on punctuation and caught only its own examples.
+#
+# The word set before `by the books` is Harper's: it is what separates the
+# idiom from a literal plural, so "we did all by the books" is a match and
+# "the sales figures are broken down by the books" is not.
+#
+# Not before an apostrophe: "done by the books' id" is a possessive plural,
+# not the idiom.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "Did you mean the idiom `by the book`?"
+level: warning
+ignorecase: true
+matchcase: true
+nonword: true
+action:
+  name: replace
+  params:
+    - "book"
+tokens:
+  - '(?<=\b(?:all|done|everything|go|it|play|playing)\s+by\s+the\s+)books\b(?!'')'

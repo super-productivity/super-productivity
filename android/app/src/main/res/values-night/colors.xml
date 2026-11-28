@@ -3,6 +3,8 @@
     <color name="statusBar">#131314</color>
     <color name="navigationBar">#131314</color>
     <color name="windowBackground">#131314</color>
+    <!-- System splash checkmark: web boot splash logo color (dark sp-fg color). -->
+    <color name="splash_icon">#E6E6E6</color>
 
     <!-- Home screen widget (dark) — see values/colors.xml -->
     <color name="widget_bg">#F5131314</color>

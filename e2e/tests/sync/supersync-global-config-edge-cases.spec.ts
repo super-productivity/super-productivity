@@ -35,14 +35,16 @@ test.describe('@supersync Global Config Sync Edge Cases', () => {
    *
    * Flow:
    * 1. A, B, C set up and converge
-   * 2. A toggles "Disable all animations" ON
+   * 2. A drives "Disable all animations" ON and "Disable celebration" ON
    * 3. A syncs → B syncs → C syncs (all get A's change)
    * 4. B toggles "Disable all animations" OFF (earlier timestamp)
    * 5. B syncs
    * 6. Wait for timestamp gap
-   * 7. C toggles "Disable celebration" ON (later timestamp)
+   * 7. C toggles "Disable celebration" OFF (later timestamp)
    * 8. C syncs → A syncs → B syncs → all converge to C's state
-   * 9. Verify all three show the same final state
+   * 9. GLOBAL_CONFIG `misc` resolves by whole-section LWW: C's later section
+   *    replaces B's, so all three end at anim=ON (C never saw B's anim=OFF),
+   *    celeb=OFF. No field merge: anim=OFF would mean B's field leaked in.
    */
   test('Three-client concurrent config changes converge to latest', async ({
     browser,
@@ -79,8 +81,15 @@ test.describe('@supersync Global Config Sync Edge Cases', () => {
       // Client A toggles "Disable all animations" ON
       await navigateToMiscSettings(clientA.page);
       await ensureSettingState(clientA.page, 'Disable all animations', true);
+      // Drive celebration ON too, so C's later change below is a real edit
+      // regardless of the shipped default.
+      await ensureSettingState(clientA.page, 'Disable celebration', true);
+      // Leave the config page so formly modelChange cannot re-dispatch during
+      // the later syncs and overwrite the winning section.
+      await clientA.page.goto('/#/tag/TODAY/tasks');
+      await clientA.page.waitForURL(/tag\/TODAY/);
       await clientA.sync.syncAndWait();
-      console.log('[3Client] Client A set animations=ON, synced');
+      console.log('[3Client] Client A set animations=ON, celebration=ON, synced');
 
       // All sync to get A's change
       await clientB.sync.syncAndWait();
@@ -89,17 +98,24 @@ test.describe('@supersync Global Config Sync Edge Cases', () => {
       // Client B toggles "Disable all animations" OFF (earlier timestamp)
       await navigateToMiscSettings(clientB.page, true);
       await ensureSettingState(clientB.page, 'Disable all animations', false);
+      await clientB.page.goto('/#/tag/TODAY/tasks');
+      await clientB.page.waitForURL(/tag\/TODAY/);
       await clientB.sync.syncAndWait();
       console.log('[3Client] Client B set animations=OFF, synced');
 
       // Timestamp gap
       await clientC.page.waitForTimeout(2000);
 
-      // Client C toggles "Disable celebration" ON (later timestamp)
+      // Client C toggles "Disable celebration" OFF (later timestamp). C has
+      // not synced since B's change, so C's misc section is anim=ON, celeb=OFF.
       await navigateToMiscSettings(clientC.page, true);
-      await ensureSettingState(clientC.page, 'Disable celebration', true);
+      expect(await isSettingChecked(clientC.page, 'Disable celebration')).toBe(true);
+      await ensureSettingState(clientC.page, 'Disable celebration', false);
+      // Leave the config page so formly modelChange cannot re-dispatch during sync.
+      await clientC.page.goto('/#/tag/TODAY/tasks');
+      await clientC.page.waitForURL(/tag\/TODAY/);
       await clientC.sync.syncAndWait();
-      console.log('[3Client] Client C set celebration=ON, synced');
+      console.log('[3Client] Client C set celebration=OFF, synced');
 
       // Convergence rounds
       await clientA.sync.syncAndWait();
@@ -132,8 +148,11 @@ test.describe('@supersync Global Config Sync Edge Cases', () => {
       expect(aCeleb).toBe(bCeleb);
       expect(aCeleb).toBe(cCeleb);
 
-      // Verify the expected LWW winner: C's operation was latest, so celebration should be ON
-      expect(aCeleb).toBe(true);
+      // The single correct winner: C's whole misc section (later timestamp).
+      // anim=ON proves B's earlier anim=OFF lost (no field merge); celeb=OFF
+      // proves C's edit won.
+      expect(aAnim).toBe(true);
+      expect(aCeleb).toBe(false);
 
       console.log('[3Client] ✓ All three clients converged to same state');
     } finally {
@@ -146,14 +165,17 @@ test.describe('@supersync Global Config Sync Edge Cases', () => {
   /**
    * Scenario: Rapid successive config toggles result in final state being synced
    *
-   * Tests that when a client makes 4 rapid changes to the same setting,
+   * Tests that when a client makes 3 rapid changes to the same setting,
    * only the final state matters and syncs correctly.
    *
+   * An odd number of toggles is required: with an even count the final state
+   * equals the initial one, so B passes even if nothing syncs at all.
+   *
    * Flow:
-   * 1. Client A toggles "Disable all animations" ON → OFF → ON → OFF rapidly
-   * 2. Client A syncs
-   * 3. Client B syncs
-   * 4. Verify B has the final state (OFF)
+   * 1. Client A toggles "Disable all animations" 3 times (ends at !initial)
+   * 2. Verify B still shows `initial` (nothing synced yet)
+   * 3. Client A syncs, client B syncs
+   * 4. Verify B has the final state (!initial)
    */
   test('Rapid successive config toggles result in final state synced', async ({
     browser,
@@ -180,22 +202,31 @@ test.describe('@supersync Global Config Sync Edge Cases', () => {
       await clientB.sync.syncAndWait();
       console.log('[RapidToggle] Setup convergence complete');
 
-      // Verify initial state (OFF)
+      // Read the initial state (whatever the default is)
       await navigateToMiscSettings(clientA.page);
       const initialState = await isSettingChecked(clientA.page, 'Disable all animations');
       console.log(`[RapidToggle] Initial state: ${initialState}`);
 
-      // Rapid toggles: 4 times (ON → OFF → ON → OFF)
-      await toggleSetting(clientA.page, 'Disable all animations'); // → ON
-      await toggleSetting(clientA.page, 'Disable all animations'); // → OFF
-      await toggleSetting(clientA.page, 'Disable all animations'); // → ON
-      await toggleSetting(clientA.page, 'Disable all animations'); // → OFF
-      console.log('[RapidToggle] 4 rapid toggles complete (back to initial state)');
+      // B starts at the same state, so a later change on B can only come from sync.
+      await navigateToMiscSettings(clientB.page, true);
+      expect(await isSettingChecked(clientB.page, 'Disable all animations')).toBe(
+        initialState,
+      );
+      await clientB.page.goto('/#/tag/TODAY/tasks');
+      await clientB.page.waitForURL(/tag\/TODAY/);
 
-      // Final state should be same as initial
+      // Rapid toggles: 3 times (→ !initial → initial → !initial)
+      await toggleSetting(clientA.page, 'Disable all animations');
+      await toggleSetting(clientA.page, 'Disable all animations');
+      await toggleSetting(clientA.page, 'Disable all animations');
+      console.log('[RapidToggle] 3 rapid toggles complete (ends at !initial)');
+
       const afterToggles = await isSettingChecked(clientA.page, 'Disable all animations');
-      expect(afterToggles).toBe(initialState);
+      expect(afterToggles).toBe(!initialState);
       console.log(`[RapidToggle] After toggles: ${afterToggles}`);
+
+      await clientA.page.goto('/#/tag/TODAY/tasks');
+      await clientA.page.waitForURL(/tag\/TODAY/);
 
       // Sync
       await clientA.sync.syncAndWait();
@@ -207,7 +238,7 @@ test.describe('@supersync Global Config Sync Edge Cases', () => {
       // Verify Client B has the final state
       await navigateToMiscSettings(clientB.page, true);
       const bState = await isSettingChecked(clientB.page, 'Disable all animations');
-      expect(bState).toBe(initialState);
+      expect(bState).toBe(!initialState);
       console.log(`[RapidToggle] Client B state: ${bState}`);
 
       console.log('[RapidToggle] ✓ Rapid toggle test PASSED');

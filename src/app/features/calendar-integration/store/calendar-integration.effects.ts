@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { createEffect } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import {
   catchError,
@@ -32,7 +32,7 @@ import { selectCalendarProviders } from '../../issue/store/issue-provider.select
 import { IssueProviderCalendar, IssueProviderKey } from '../../issue/issue.model';
 import { IssueService } from '../../issue/issue.service';
 import { DateService } from '../../../core/date/date.service';
-import { TaskService } from '../../tasks/task.service';
+import { TaskArchiveOrchestratorService } from '../../tasks/task-archive-orchestrator.service';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { Log } from '../../../core/log';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
@@ -46,15 +46,21 @@ import { getEffectiveCheckInterval } from '../../issue/providers/calendar/calend
 import { passesCalendarEventRegexFilter } from '../calendar-event-regex-filter';
 import { IS_ONLINE$ } from '../../../util/is-online.token';
 import { pollWhileOnline } from '../../../util/poll-while-online';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import {
+  getCalendarAutoImportDismissals,
+  TaskSharedActions,
+} from '../../../root-store/meta/task-shared.actions';
 
 const CHECK_TO_SHOW_INTERVAL = 60 * 1000;
 
 @Injectable()
 export class CalendarIntegrationEffects {
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _store = inject(Store);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _bannerService = inject(BannerService);
-  private _taskService = inject(TaskService);
+  private _taskArchiveOrchestrator = inject(TaskArchiveOrchestratorService);
   private _datePipe = inject(LocaleDatePipe);
   private _calendarIntegrationService = inject(CalendarIntegrationService);
   private _navigateToTaskService = inject(NavigateToTaskService);
@@ -124,7 +130,7 @@ export class CalendarIntegrationEffects {
                       const getAllIssueIdsForProvider = async (): Promise<string[]> => {
                         if (!allIssueIdsForProvider) {
                           allIssueIdsForProvider =
-                            await this._taskService.getAllIssueIdsForProviderEverywhere(
+                            await this._taskArchiveOrchestrator.getAllIssueIdsForProviderEverywhere(
                               calProvider.id,
                             );
                         }
@@ -249,6 +255,49 @@ export class CalendarIntegrationEffects {
       ),
     );
   }
+
+  /**
+   * Adding an event as a task skips it for the day. Once that task is deleted the
+   * skip is all that still hides the event, so lift it.
+   */
+  unskipEventsOfDeletedTasks$ = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.deleteTask, TaskSharedActions.deleteTasks),
+        tap((action) => {
+          const tasks =
+            action.type === TaskSharedActions.deleteTask.type
+              ? [action.task, ...(action.task.subTasks ?? [])]
+              : (action.tasks ?? []);
+          this._calendarIntegrationService.unskipCalendarEvents(
+            getCalendarAutoImportDismissals(tasks).map(({ issueId }) => issueId),
+          );
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  /**
+   * A restore (undo, Recently Deleted, History, REST API, issue search) puts the
+   * task back, so skip its event again. The due-event banner only checks the
+   * skip list, and a restored task would otherwise show it.
+   */
+  skipEventsOfRestoredTasks$ = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.restoreDeletedTask, TaskSharedActions.restoreTask),
+        tap((action) => {
+          const tasks =
+            action.type === TaskSharedActions.restoreTask.type
+              ? [action.task, ...action.subTasks]
+              : [action.task, ...(action.task.subTasks ?? [])];
+          this._calendarIntegrationService.skipCalendarEvents(
+            getCalendarAutoImportDismissals(tasks).map(({ issueId }) => issueId),
+          );
+        }),
+      ),
+    { dispatch: false },
+  );
 
   private _currentlyShownBanners$ = new BehaviorSubject<
     { id: string; calEv: CalendarIntegrationEvent; calProvider: IssueProviderCalendar }[]
@@ -398,11 +447,12 @@ export class CalendarIntegrationEffects {
     );
 
     for (const issueId of issueIdsToCheck) {
-      const linkedTask = await this._taskService.checkForTaskWithIssueEverywhere(
-        issueId,
-        issueProviderKey,
-        calProvider.id,
-      );
+      const linkedTask =
+        await this._taskArchiveOrchestrator.checkForTaskWithIssueEverywhere(
+          issueId,
+          issueProviderKey,
+          calProvider.id,
+        );
       if (linkedTask) {
         return linkedTask.isFromArchive;
       }

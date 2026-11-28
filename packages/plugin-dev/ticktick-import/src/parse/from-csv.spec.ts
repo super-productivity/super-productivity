@@ -66,6 +66,14 @@ const csv = (...rows: RowInput[]): string =>
   [PREAMBLE, HEADER, ...rows.map(row)].join('\n');
 
 describe('parseTickTickCsv', () => {
+  it('rejects an unterminated quoted field rather than importing partial rows', () => {
+    expect(
+      parseTickTickCsv(
+        'List Name,Title,Content,Status\nWork,Valid task,Notes,0\nWork,"Truncated task\nWork,Another task,Notes,0',
+      ),
+    ).toBeNull();
+  });
+
   it('returns null for a file that is not a TickTick backup', () => {
     expect(parseTickTickCsv('a,b,c\n1,2,3')).toBeNull();
   });

@@ -1,21 +1,11 @@
 /**
- * Simplified mapper functions - types are now unified!
- * These functions now just handle minor field transformations
+ * The plugin API's Task, Project and Tag share their shape with the internal
+ * models and are passed through as-is. These are the conversions that do work.
  */
 
 import { Task as TaskCopy } from '../features/tasks/task.model';
-import { Project as ProjectCopy } from '../features/project/project.model';
-import { Tag as TagCopy } from '../features/tag/tag.model';
 import { SnackParams } from '../core/snack/snack.model';
-import { Task, Project, Tag, SnackCfg } from '@super-productivity/plugin-api';
-
-/**
- * Convert internal Task to plugin API Task (mostly passthrough now)
- */
-export const taskCopyToTaskData = (task: TaskCopy): Task => {
-  // Most fields map directly now
-  return task as Task;
-};
+import { Task, SnackCfg } from '@super-productivity/plugin-api';
 
 /**
  * Convert plugin API Task updates to internal format
@@ -40,38 +30,6 @@ export const taskDataToPartialTaskCopy = (updates: Partial<Task>): Partial<TaskC
   }
 
   return result as Partial<TaskCopy>;
-};
-
-/**
- * Convert internal Project to plugin API Project
- */
-export const projectCopyToProjectData = (project: ProjectCopy): Project => {
-  // Projects map directly now
-  return project as Project;
-};
-
-/**
- * Convert plugin API Project updates to internal format
- */
-export const projectDataToPartialProjectCopy = (
-  updates: Partial<Project>,
-): Partial<ProjectCopy> => {
-  return updates as Partial<ProjectCopy>;
-};
-
-/**
- * Convert internal Tag to plugin API Tag
- */
-export const tagCopyToTagData = (tag: TagCopy): Tag => {
-  // Tags map directly now
-  return tag as Tag;
-};
-
-/**
- * Convert plugin API Tag updates to internal format
- */
-export const tagDataToPartialTagCopy = (updates: Partial<Tag>): Partial<TagCopy> => {
-  return updates as Partial<TagCopy>;
 };
 
 const ACTION_SNACK_DURATION_MS = 10000;

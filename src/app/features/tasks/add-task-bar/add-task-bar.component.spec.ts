@@ -6,6 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AddTaskBarComponent } from './add-task-bar.component';
 import { TaskService } from '../task.service';
+import { TaskSchedulingService } from '../task-scheduling.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
@@ -58,6 +59,7 @@ describe('AddTaskBarComponent', () => {
   let component: AddTaskBarComponent;
   let fixture: ComponentFixture<AddTaskBarComponent>;
   let mockTaskService: jasmine.SpyObj<TaskService>;
+  let mockTaskSchedulingService: jasmine.SpyObj<TaskSchedulingService>;
   let mockWorkContextService: jasmine.SpyObj<WorkContextService>;
   let mockProjectService: jasmine.SpyObj<ProjectService>;
   let mockTagService: jasmine.SpyObj<TagService>;
@@ -187,11 +189,13 @@ describe('AddTaskBarComponent', () => {
     sessionStorage.removeItem(SS.ADD_TASK_BAR_NOTE);
 
     // Create spies
+    mockTaskSchedulingService = jasmine.createSpyObj('TaskSchedulingService', [
+      'scheduleTask',
+    ]);
     mockTaskService = jasmine.createSpyObj('TaskService', [
       'add',
       'getByIdOnce$',
       'getByIdWithSubTaskData$',
-      'scheduleTask',
       'moveToCurrentWorkContext',
     ]);
     mockWorkContextService = jasmine.createSpyObj('WorkContextService', [], {
@@ -248,6 +252,7 @@ describe('AddTaskBarComponent', () => {
       imports: [AddTaskBarComponent, NoopAnimationsModule, TranslateModule.forRoot()],
       providers: [
         { provide: TaskService, useValue: mockTaskService },
+        { provide: TaskSchedulingService, useValue: mockTaskSchedulingService },
         { provide: WorkContextService, useValue: mockWorkContextService },
         { provide: ProjectService, useValue: mockProjectService },
         { provide: TagService, useValue: mockTagService },
@@ -551,6 +556,68 @@ describe('AddTaskBarComponent', () => {
     });
   });
 
+  describe('view prefill', () => {
+    // Hidden unless the task keeps the tag "need" and is planned for the day.
+    const prefill = {
+      fields: { tagIds: ['need'], dueDay: '2026-09-12' },
+      isHidden: (f: Partial<TaskCopy>) =>
+        !f.tagIds?.includes('need') || f.dueDay !== '2026-09-12',
+    };
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('isNoDefaults', true);
+      fixture.componentRef.setInput('viewPrefill', prefill);
+      fixture.detectChanges();
+    });
+
+    it("shows the view's values as chips", () => {
+      expect(component.stateService.state().tagIds).toEqual(['need']);
+      expect(component.stateService.state().date).toBe('2026-09-12');
+      expect(component.isHiddenInView()).toBeFalse();
+    });
+
+    it('tells when a removed chip hides the task, and adds it back', () => {
+      component.stateService.updateTagIds([]);
+      expect(component.isHiddenInView()).toBeTrue();
+
+      component.applyViewPrefill();
+      expect(component.isHiddenInView()).toBeFalse();
+    });
+
+    it('adds back the work project the view requires', () => {
+      fixture.componentRef.setInput('viewPrefill', {
+        fields: { projectId: 'proj-a' },
+        isHidden: (f: Partial<TaskCopy>) => f.projectId !== 'proj-a',
+      });
+      component.stateService.updateProjectId('proj-b');
+      expect(component.isHiddenInView()).toBeTrue();
+
+      component.applyViewPrefill();
+      expect(component.isHiddenInView()).toBeFalse();
+    });
+
+    it('keeps the view tags for the next task', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      component.stateService.updateInputTxt('First task');
+      component.stateService.updateCleanText('First task');
+      await component.addTask();
+
+      expect(component.stateService.state().tagIds).toEqual(['need']);
+    });
+
+    it('adds the view tag once when the title also names it as #tag', async () => {
+      mockTaskService.add.and.returnValue('task-1');
+      component.stateService.updateInputTxt('First task #need');
+      component.stateService.updateCleanText('First task');
+      component.stateService.updateTagIdsFromTxt(['need']);
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.tagIds).toEqual(['need']);
+    });
+  });
+
   describe('addTask', () => {
     it('should not add a task when the visible input is empty', async () => {
       component.stateService.updateCleanText('Stale task');
@@ -729,6 +796,24 @@ describe('AddTaskBarComponent', () => {
       const due = new Date(taskData.dueWithTime!);
       expect(`${due.getHours()}:${due.getMinutes()}`).toBe('9:30');
       expect(addRepeatCfgSpy.calls.mostRecent().args[2].startDate).toBe('2026-03-30');
+    });
+
+    // With the day starting at 04:00, logical day 2026-03-30 runs until 04:00 on
+    // the 31st, so 02:00 picked on it is the night of the 30th (#12012)
+    it('should put a time before a custom day start at the end of the picked day', async () => {
+      mockDateService.getStartOfNextDayDiffMs.and.returnValue(4 * 60 * 60 * 1000);
+      mockTaskService.add.and.returnValue('task-1');
+      mockTaskService.getByIdOnce$.and.returnValue(of({ id: 'task-1' } as TaskCopy));
+
+      component.stateService.updateInputTxt('Night shift');
+      component.stateService.updateCleanText('Night shift');
+      component.stateService.updateDate('2026-03-30', '02:00');
+
+      await component.addTask();
+
+      const taskData = mockTaskService.add.calls.mostRecent()
+        .args[2] as Partial<TaskCopy>;
+      expect(taskData.dueWithTime).toBe(new Date(2026, 2, 31, 2, 0).getTime());
     });
 
     // The schedule pick offers day/week lead times; a repeat config persists the
@@ -1401,6 +1486,7 @@ describe('AddTaskBarComponent', () => {
         imports: [AddTaskBarComponent, NoopAnimationsModule, TranslateModule.forRoot()],
         providers: [
           { provide: TaskService, useValue: mockTaskService },
+          { provide: TaskSchedulingService, useValue: mockTaskSchedulingService },
           { provide: WorkContextService, useValue: mockWorkContextService },
           { provide: ProjectService, useValue: mockProjectServiceEmpty },
           { provide: TagService, useValue: mockTagService },
@@ -1721,6 +1807,7 @@ describe('AddTaskBarComponent', () => {
           imports: [AddTaskBarComponent, NoopAnimationsModule, TranslateModule.forRoot()],
           providers: [
             { provide: TaskService, useValue: mockTaskService },
+            { provide: TaskSchedulingService, useValue: mockTaskSchedulingService },
             { provide: WorkContextService, useValue: mockWorkContextService },
             { provide: ProjectService, useValue: mockProjectService },
             { provide: TagService, useValue: mockTagService },

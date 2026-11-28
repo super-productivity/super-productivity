@@ -1,0 +1,27 @@
+{
+  "CFG": {
+    "PROJECT": "användarnamn/projekt",
+    "PROJECT_HINT": "t.ex. super-productivity/super-productivity",
+    "TOKEN": "Åtkomsttoken",
+    "HOW_TO_GET_TOKEN": "Hur får man en token?",
+    "SCOPE": "Omfattning",
+    "SCOPE_ALL": "Alla",
+    "SCOPE_CREATED": "Skapad av mig",
+    "SCOPE_ASSIGNED": "Tilldelad mig",
+    "GITLAB_BASE_URL": "Anpassad GitLab-bas-URL (valfritt)",
+    "FILTER_USER": "Filtrera användarnamn",
+    "FILTER_USER_DESC": "To filter out comments and other changes by yourself when polling for issue updates",
+    "FILTER": "Anpassat filter",
+    "FILTER_DESCRIPTION": "Se https://docs.gitlab.com/ee/api/issues.html#list-issues. Flera kan kombineras med &.",
+    "SUBMIT_TIMELOGS": "Skicka in tidsloggar till GitLab",
+    "SUBMIT_TIMELOGS_DESCRIPTION": "Visa dialogrutan för tidrapportering efter att du har klickat på avsluta dag"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammanfattning",
+    "STATE": "Status",
+    "ASSIGNEE": "Mottagare",
+    "LABELS": "Etiketter",
+    "DESCRIPTION": "Beskrivning"
+  },
+  "FORM_HELP": "<p>Här kan du konfigurera SuperProductivity så att det listar öppna GitLab-ärenden (antingen onlineversionen eller en egenhostad instans) för ett specifikt projekt i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt importera alla öppna ärenden. </p>"
+}

@@ -50,6 +50,6 @@ note {
   outline: 2px solid var(--c-accent) !important;
   box-shadow: var(--whiteframe-shadow-6dp) !important;
   transition:
-    outline 0.2s ease,
-    box-shadow 0.2s ease;
+    outline var(--transition-duration-m) ease,
+    box-shadow var(--transition-duration-m) ease;
 }

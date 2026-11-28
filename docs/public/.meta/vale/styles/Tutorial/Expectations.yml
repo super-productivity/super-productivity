@@ -1,0 +1,27 @@
+# A tutorial tells the learner what they'll see at each step, so they know
+# they're on track: "You will see the server start."
+# https://diataxis.fr/tutorials/#the-language-of-tutorials
+extends: occurrence
+message: "Tell the learner what they will see at some point: 'You will see ...', 'Notice that ...'."
+link: https://diataxis.fr/tutorials/#the-language-of-tutorials
+level: suggestion
+scope: summary
+token: "(?i)\\b(?:you(?:'ll| will| should) (?:see|notice|get|now have)|notice that|the output (?:is|shows|will be))\\b"
+min: 1
+
+tests:
+  - name: fires
+    input: |
+      # Title
+
+      Run the server. Then open the page.
+
+    want: |
+      3:1:Tutorial.Expectations:Tell the learner what they will see at some point: 'You will see ...', 'Notice that ...'.
+  - name: clean
+    input: |
+      # Title
+
+      Run the server. You will see it start on port 8080.
+
+    want: ""

@@ -1,0 +1,58 @@
+{
+  "TITLE": "Faktur",
+  "LOADING": "Memuat…",
+  "LIST": {
+    "EMPTY": "Belum ada faktur.",
+    "PRINT": "Cetak / PDF",
+    "CSV": "CSV",
+    "DELETE": "Hapus",
+    "CONFIRM_DELETE": "Hapus faktur {{number}}? Jamnya dihitung lagi sebagai belum ditagih."
+  },
+  "NEW": {
+    "TITLE": "Faktur baru",
+    "PROJECT": "Proyek",
+    "NO_PROJECTS": "Buat proyek dulu. Setiap proyek ditagih terpisah.",
+    "FROM": "Dari",
+    "TO": "Sampai",
+    "RATE": "Tarif per jam",
+    "LANGUAGE": "Bahasa faktur",
+    "CLIENT": "Ditagihkan kepada",
+    "CLIENT_HINT": "Nama dan alamat klien. Diingat untuk proyek ini.",
+    "INCLUDE": "Sertakan",
+    "NO_HOURS": "Tidak ada waktu yang belum ditagih di proyek ini pada periode ini.",
+    "NUMBER": "Nomor faktur",
+    "ISSUE_DATE": "Tanggal faktur",
+    "ISSUE": "Terbitkan dan cetak",
+    "BLOCK": {
+      "PERIOD": "Pilih tanggal Dari dan Sampai; Dari harus lebih dulu.",
+      "LINES": "Centang setidaknya satu baris yang memiliki jam.",
+      "RATE": "Masukkan tarif per jam.",
+      "NUMBER": "Masukkan nomor faktur.",
+      "NUMBER_USED": "Nomor faktur ini sudah dipakai.",
+      "DATE": "Masukkan tanggal faktur."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Data Anda",
+    "SELLER": "Nama, alamat, dan ID pajak Anda",
+    "PAYMENT_NOTE": "Detail pembayaran",
+    "PAYMENT_NOTE_HINT": "Detail bank atau ketentuan pembayaran, dicetak di bagian bawah.",
+    "CURRENCY": "Kode mata uang",
+    "TAX": "Pajak / PPN %",
+    "PAYMENT_DAYS": "Hari hingga jatuh tempo",
+    "ROUNDING": "Bulatkan setiap baris ke atas ke",
+    "ROUNDING_NONE": "Tanpa pembulatan",
+    "ROUNDING_MIN": "{{min}} menit",
+    "PREFIX": "Awalan nomor faktur",
+    "SAVE": "Simpan",
+    "SAVED": "Tersimpan."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Deskripsi",
+    "HOURS": "Jam",
+    "TOTAL": "Total"
+  },
+  "ERROR": {
+    "GENERIC": "Terjadi kesalahan: {{error}}"
+  }
+}

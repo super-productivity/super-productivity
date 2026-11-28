@@ -174,8 +174,15 @@ test.describe('Calendar #10047', () => {
     // outcome -- isShowDueDayBtn() only suppresses it on the active Today
     // list -- so that intermediate state proves nothing; only the check back
     // on Today, below, is meaningful.) ---
-    await page.getByRole('menuitem', { name: 'Inbox' }).click();
+    // Confirm each route change: CI run 42293358990 clicked Inbox right after
+    // closing the setup dialog, the URL stayed on Today, the Today click was
+    // then a no-op, and no context switch (so no poll) ever happened.
+    await expect(async () => {
+      await page.getByRole('menuitem', { name: 'Inbox' }).click();
+      await expect(page).toHaveURL(/\/project\/INBOX_PROJECT\//, { timeout: 2000 });
+    }).toPass({ timeout: 15000 });
     await page.getByRole('menuitem', { name: 'Today' }).click();
+    await expect(page).toHaveURL(/\/tag\/TODAY\//);
 
     // --- Expected: once the poll-driven reschedule lands, the task should
     // have a reminder, same as if it had been imported with a time from the

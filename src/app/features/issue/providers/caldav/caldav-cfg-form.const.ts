@@ -1,3 +1,4 @@
+import { DOCS_URL } from '../../../../app.constants';
 import { T } from '../../../../t.const';
 import {
   ConfigFormSection,
@@ -5,6 +6,10 @@ import {
 } from '../../../config/global-config.model';
 import { IssueProviderCaldav } from '../../issue.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
+import {
+  CALDAV_POLL_INTERVAL_MINUTES_MAX,
+  CALDAV_POLL_INTERVAL_MINUTES_MIN,
+} from './caldav.const';
 
 const SYNC_DIRECTION_OPTIONS = [
   { value: 'off', label: T.F.CALDAV.FORM.TWO_WAY_SYNC_OFF },
@@ -132,7 +137,8 @@ export const CALDAV_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderCaldav>[]
         templateOptions: {
           label: T.F.CALDAV.FORM.POLL_INTERVAL_MINUTES,
           type: 'number',
-          min: 1,
+          min: CALDAV_POLL_INTERVAL_MINUTES_MIN,
+          max: CALDAV_POLL_INTERVAL_MINUTES_MAX,
         },
       },
     ],
@@ -145,4 +151,5 @@ export const CALDAV_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderCaldav> 
   key: 'CALDAV',
   items: CALDAV_CONFIG_FORM,
   help: T.F.CALDAV.FORM_SECTION.HELP,
+  docsUrl: `${DOCS_URL}how-to/set-up-caldav/`,
 };

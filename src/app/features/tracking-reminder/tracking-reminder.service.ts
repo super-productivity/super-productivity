@@ -32,10 +32,12 @@ import { playSound } from '../../util/play-sound';
 import { Store } from '@ngrx/store';
 import {
   selectCurrentScreen,
+  selectMode,
   selectTimer,
 } from '../focus-mode/store/focus-mode.selectors';
 import { selectIsFocusModeEnabled } from '../config/store/global-config.reducer';
-import { FocusScreen } from '../focus-mode/focus-mode.model';
+import { FocusModeMode, FocusScreen } from '../focus-mode/focus-mode.model';
+import { adjustRemainingTime } from '../focus-mode/store/focus-mode.actions';
 
 const DESKTOP_NOTIFICATION_THROTTLE = 60 * 1000;
 
@@ -54,6 +56,9 @@ export class TrackingReminderService {
   private _notifyService = inject(NotifyService);
   private _uiHelperService = inject(UiHelperService);
   private _store = inject(Store);
+  private _focusMode = this._store.selectSignal(selectMode);
+  private _focusTimer = this._store.selectSignal(selectTimer);
+  private _isFocusModeEnabled = this._store.selectSignal(selectIsFocusModeEnabled);
 
   _cfg$: Observable<TimeTrackingConfig> = this._globalConfigService.cfg$.pipe(
     map((cfg) => cfg?.timeTracking),
@@ -217,6 +222,14 @@ export class TrackingReminderService {
             } else {
               this._taskService.addTimeSpentAndSync(task, timeSpent);
               this._taskService.setCurrentId(task.id);
+            }
+            // Starting tracking may create or resume the session, so adjust it afterwards.
+            if (
+              this._isFocusModeEnabled() &&
+              this._focusMode() === FocusModeMode.Pomodoro &&
+              this._focusTimer().purpose === 'work'
+            ) {
+              this._store.dispatch(adjustRemainingTime({ amountMs: -timeSpent }));
             }
           }
           this._dismissBanner();

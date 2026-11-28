@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { EMPTY, from, merge, Observable, timer } from 'rxjs';
+import { combineLatest, EMPTY, from, merge, Observable, of, timer } from 'rxjs';
 import { catchError, first, map, switchMap } from 'rxjs/operators';
 import { IssueService } from '../issue.service';
 import { Task, TaskWithSubTasks } from '../../tasks/task.model';
@@ -22,7 +22,9 @@ import { IssueLog } from '../../../core/log';
 import { getRefreshOnLook$ } from './refresh-on-look';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { IS_ONLINE$ } from '../../../util/is-online.token';
+import { isLocalProvider } from './is-local-provider';
 import { pollWhileOnline } from '../../../util/poll-while-online';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 @Injectable()
 export class PollIssueUpdatesEffects {
@@ -32,6 +34,7 @@ export class PollIssueUpdatesEffects {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _syncTriggerService = inject(SyncTriggerService);
   private readonly _isOnline$ = inject(IS_ONLINE$);
+  private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
 
   pollIssueTaskUpdatesActions$: Observable<unknown> = this._actions$.pipe(
     ofType(setActiveWorkContext, loadAllData),
@@ -44,15 +47,22 @@ export class PollIssueUpdatesEffects {
   pollIssueChangesForCurrentContext$: Observable<unknown> = createEffect(
     () =>
       this.pollIssueTaskUpdatesActions$.pipe(
-        switchMap(() => this._store.select(selectEnabledIssueProviders).pipe(first())),
-        switchMap((enabledProviders: IssueProvider[]) => {
+        switchMap(() =>
+          // Plugin providers report a poll interval of 0 until they register,
+          // so re-evaluate on registration changes too (#10112).
+          combineLatest([
+            this._store.select(selectEnabledIssueProviders).pipe(first()),
+            this._pluginRegistry.registrationChanges$,
+          ]),
+        ),
+        switchMap(([enabledProviders]) => {
           const providers = enabledProviders.filter(
             (provider) =>
               provider.isAutoPoll &&
               // Exclude 'always' providers (handled by pollIssueChangesAlways$), keep ICAL
               (provider.pollingMode !== 'always' ||
                 provider.issueProviderKey === ICAL_TYPE) &&
-              this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+              this._issueService.getPollInterval(provider.issueProviderKey, provider) > 0,
           );
 
           if (providers.length === 0) {
@@ -70,23 +80,29 @@ export class PollIssueUpdatesEffects {
   /**
    * Polls issue updates for providers with pollingMode 'always'.
    * Starts once, after the initial sync and the initial data load, and runs
-   * continuously, reacting only to provider configuration changes -- not to
-   * context switches. A session may never switch context or load data
-   * locally (a boot that replays the op log while staying on Today), so it
-   * must not wait for those actions.
+   * continuously, reacting only to provider configuration and registration
+   * changes -- not to context switches. A session may never switch context or
+   * load data locally (a boot that replays the op log while staying on Today),
+   * so it must not wait for those actions.
    */
   pollIssueChangesAlways$: Observable<unknown> = createEffect(
     () =>
       this._syncTriggerService.afterInitialSyncDoneStrict$.pipe(
         switchMap(() =>
-          this._store.select(selectEnabledIssueProviders).pipe(
-            switchMap((enabledProviders: IssueProvider[]) => {
+          combineLatest([
+            this._store.select(selectEnabledIssueProviders),
+            this._pluginRegistry.registrationChanges$,
+          ]).pipe(
+            switchMap(([enabledProviders]) => {
               const alwaysProviders = enabledProviders.filter(
                 (provider) =>
                   provider.isAutoPoll &&
                   provider.pollingMode === 'always' &&
                   provider.issueProviderKey !== ICAL_TYPE &&
-                  this._issueService.getPollInterval(provider.issueProviderKey) > 0,
+                  this._issueService.getPollInterval(
+                    provider.issueProviderKey,
+                    provider,
+                  ) > 0,
               );
 
               if (alwaysProviders.length === 0) {
@@ -107,11 +123,11 @@ export class PollIssueUpdatesEffects {
 
   private _createUpdatePollTimer(provider: IssueProvider): Observable<unknown> {
     return pollWhileOnline(
-      this._isOnline$,
+      isLocalProvider(provider) ? of(true) : this._isOnline$,
       [
         timer(
           DELAY_BEFORE_ISSUE_POLLING,
-          this._issueService.getPollInterval(provider.issueProviderKey),
+          this._issueService.getPollInterval(provider.issueProviderKey, provider),
         ),
         getRefreshOnLook$(provider),
       ],

@@ -117,7 +117,7 @@ test('does not treat substrings (e.g. snapshot, windowing) as platforms', () => 
 test('end-to-end: produces clean plain-text What’s New without platform names', () => {
   // Mirrors the real build/release-notes.md shape that Apple rejected for 18.12.0.
   const markdown = [
-    'For all current downloads, package links, and platform-specific notes: [check the wiki](https://example.com/wiki).',
+    'For all current downloads, package links, and platform-specific notes: [see the docs](https://example.com/docs/).',
     '',
     '### Features',
     '',
@@ -133,7 +133,7 @@ test('end-to-end: produces clean plain-text What’s New without platform names'
   const text = buildAppStoreReleaseNotes(markdown);
 
   // Footer link and markdown stripped.
-  assert.doesNotMatch(text, /check the wiki/i);
+  assert.doesNotMatch(text, /downloads|see the docs/i);
   assert.doesNotMatch(text, /\(https?:\/\//);
   assert.doesNotMatch(text, /\*\*/);
   // No third-party platform references survive.

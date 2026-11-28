@@ -365,6 +365,25 @@ describe('TagListComponent', () => {
     });
   });
 
+  describe('project tag click', () => {
+    it('should leave the project chip a label so clicks reach the row', () => {
+      projectState$.next({
+        ids: ['proj-1'],
+        entities: { 'proj-1': createMockProject('proj-1', 'My Project') },
+      });
+      workContext$.next({ activeId: 'TODAY', activeType: WorkContextType.TAG });
+      fixture.componentRef.setInput('task', createMockTask({ projectId: 'proj-1' }));
+      fixture.detectChanges();
+      const rowClick = jasmine.createSpy('rowClick');
+      fixture.nativeElement.addEventListener('click', rowClick);
+      const projectChip: HTMLElement = fixture.nativeElement.querySelector('tag');
+      projectChip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+      expect(rowClick).toHaveBeenCalledTimes(1);
+      expect(getComputedStyle(projectChip).pointerEvents).toBe('none');
+    });
+  });
+
   describe('reactive updates', () => {
     it('should update tags when store emits new state', () => {
       const task = createMockTask({ tagIds: ['tag-1'] });

@@ -1,0 +1,45 @@
+---
+# Hand-written from Harper's DayAndAge: the idiom is `in this day and age`.
+#
+# The generated rule matched every combination the chain allows -- (this|these)
+# (day|days) (and|in|an|on|of) (age|ages) -- including the correct one, so
+# "in this day and age" was itself flagged. 24 false positives.
+#
+# Harper's chain matches all of those too, then decides in code. Reading its
+# `match_to_lint`, there is exactly one case it declines to report: the idiom is
+# spelled correctly *and* the preposition in front of it is `in` or `for`.
+# Everything else lints -- `since this day and age`, `on this day and age`, a
+# bare `this day and age` with no preposition, and every misspelling of the
+# idiom whatever precedes it.
+#
+# So the first token below is the correct idiom, excluded after `in` or `for`;
+# the rest enumerate the ways the idiom can be wrong, which lint regardless of
+# what comes before them. Enumerating is what makes the two halves independent:
+# a single pattern with the lookbehind on it would also have suppressed
+# "in these days and ages", which Harper does report.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+extends: existence
+message: "The correct idiom is `in this day and age`."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  # Correct spelling after the wrong preposition. Harper puts its alert on the
+  # preposition, so the lookahead does too -- the oracle pairs findings by
+  # overlap, and reporting the idiom instead would land beside Harper's span
+  # rather than on it. These were the 5 false positives left after the first
+  # pass at this rule.
+  - '\b(?:at|on|of|by|with|from|to|since|during|through|about|into|is|it)(?=\s+this\s+day\s+and\s+age\b)'
+  # No preposition at all: nothing to point at but the idiom itself.
+  - '(?<!\b(?:in|for|at|on|of|by|with|from|to|since|during|through|about|into|is|it)\s)\bthis\s+day\s+and\s+age\b'
+  # `these` is always wrong -- the idiom is singular.
+  - '\bthese\s+(?:day|days)\s+(?:and|in|an|on|of)\s+(?:age|ages)\b'
+  # Plural `days`.
+  - '\bthis\s+days\s+(?:and|in|an|on|of)\s+(?:age|ages)\b'
+  # Wrong connector: `in`, `an`, `on`, `of` where `and` belongs.
+  - '\bthis\s+day\s+(?:in|an|on|of)\s+(?:age|ages)\b'
+  # Plural `ages`.
+  - '\bthis\s+day\s+and\s+ages\b'

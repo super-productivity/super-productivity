@@ -6,6 +6,7 @@ import {
   closeClient,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { getStoreCounterByTitle } from '../../utils/audit-concurrency-helpers';
 
 /**
  * SuperSync Simple Counter E2E Tests
@@ -196,96 +197,77 @@ test.describe('@supersync Simple Counter Sync', () => {
   });
 
   /**
-   * Scenario: Click counter on Client B doesn't get wrong value
+   * Scenario: Concurrent increments converge on the later writer's value
    *
-   * This tests the specific bug scenario where:
-   * - Client A increments counter to 2
-   * - Client B increments counter to 1
-   * - Client C syncs and should NOT see 0
+   * An increment is captured as an absolute set of today's count, not as a
+   * delta, so concurrent increments on two clients cannot add up: every client
+   * must end with the later writer's value, and none may show 0.
    *
    * Actions:
-   * 1. Client A creates a click counter, increments to 2, syncs
-   * 2. Client B syncs, increments to 3 (2+1), syncs
-   * 3. Client C syncs
-   * 4. Verify Client C sees 3 (not 0 or any other wrong value)
+   * 1. A creates a click counter (0), syncs; B downloads it
+   * 2. A increments twice (A: 2), B increments once later (B: 1), no sync between
+   * 3. Sync A, B, A; then a fresh C joins
+   * 4. Verify A, B and C all hold 1 (B's later absolute write) in store and header
    */
-  test('Click counter maintains correct value across multiple clients', async ({
+  test('Concurrent click counter increments converge on the later write', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
     const uniqueId = Date.now();
     const counterTitle = `MultiClientClick-${uniqueId}`;
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-    let clientC: SimulatedE2EClient | null = null;
+    const clients: SimulatedE2EClient[] = [];
 
     try {
       const user = await createTestUser(testRunId);
       const syncConfig = getSuperSyncConfig(user);
 
-      // ============ PHASE 1: Client A creates and increments ============
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      const clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+      clients.push(clientA);
       await clientA.sync.setupSuperSync(syncConfig);
-
       await createSimpleCounter(clientA, counterTitle, 'click');
-      await clientA.page.waitForTimeout(500);
-
-      // Increment to 2
-      await incrementClickCounter(clientA);
-      await clientA.page.waitForTimeout(200);
-      await incrementClickCounter(clientA);
-      await clientA.page.waitForTimeout(200);
-
-      const valueA = await getCounterValue(clientA);
-      expect(valueA).toBe('2');
-      console.log(`Client A counter value: ${valueA}`);
-
       await clientA.sync.syncAndWait();
-      console.log('Client A synced.');
 
-      // ============ PHASE 2: Client B syncs and increments ============
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      const clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      clients.push(clientB);
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
-      console.log('Client B initial sync done.');
+      await expect
+        .poll(async () => (await getStoreCounterByTitle(clientB, counterTitle))?.id)
+        .toBe((await getStoreCounterByTitle(clientA, counterTitle))?.id);
+
+      // ============ Concurrent increments, no sync in between ============
+      await incrementClickCounter(clientA);
+      await clientA.page.waitForTimeout(200);
+      await incrementClickCounter(clientA);
+      expect(await getCounterValue(clientA)).toBe('2');
 
       await clientB.page.waitForTimeout(1000);
-
-      // Verify B got the value from A
-      let valueB = await getCounterValue(clientB);
-      expect(valueB).toBe('2');
-      console.log(`Client B after sync: ${valueB}`);
-
-      // B increments (should be 3)
       await incrementClickCounter(clientB);
-      await clientB.page.waitForTimeout(200);
+      expect(await getCounterValue(clientB)).toBe('1');
 
-      valueB = await getCounterValue(clientB);
-      expect(valueB).toBe('3');
-      console.log(`Client B after increment: ${valueB}`);
-
+      // ============ Sync A, B, A; then C joins ============
+      await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
-      console.log('Client B synced.');
+      await clientA.sync.syncAndWait();
 
-      // ============ PHASE 3: Client C syncs and verifies ============
-      clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
+      const clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
+      clients.push(clientC);
       await clientC.sync.setupSuperSync(syncConfig);
       await clientC.sync.syncAndWait();
-      console.log('Client C synced.');
 
-      await clientC.page.waitForTimeout(1000);
-
-      // Verify C sees 3 (not 0 or any other wrong value)
-      const valueC = await getCounterValue(clientC);
-      console.log(`Client C counter value: ${valueC}`);
-      expect(valueC).toBe('3');
-
-      console.log('✓ Multi-client click counter sync verification passed!');
+      for (const client of clients) {
+        await expect
+          .poll(async () =>
+            Object.values(
+              (await getStoreCounterByTitle(client, counterTitle))?.countOnDay ?? {},
+            ),
+          )
+          .toEqual([1]);
+        expect(await getCounterValue(client)).toBe('1');
+      }
     } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-      if (clientC) await closeClient(clientC);
+      for (const client of clients) await closeClient(client);
     }
   });
 });

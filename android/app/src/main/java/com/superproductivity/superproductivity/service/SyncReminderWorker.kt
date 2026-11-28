@@ -54,53 +54,92 @@ class SyncReminderWorker(
         var hasMore = true
         var iterations = 0
         val maxIterations = 100
+        var repeatGeneration = RepeatReminderCache.getGeneration(applicationContext)
+        var repeatState = RepeatReminderCache.getState(applicationContext)
+        val protectedRepeatIds = HashSet<String>()
 
         while (hasMore && iterations < maxIterations) {
             iterations++
             val result = provider.fetchReminderChanges(
                 credentials.baseUrl,
                 credentials.accessToken,
-                lastSeq
+                lastSeq,
+                repeatState = repeatState,
             )
 
             if (result == null) {
                 Log.w(TAG, "Fetch failed, will retry later")
                 return Result.retry()
             }
+            // A login change and this page's local alarm, cache and cursor writes
+            // must finish in order. The network request stays outside the lock.
+            synchronized(BackgroundSyncCredentialStore) {
+                if (credentialsChanged(credentials)) return Result.success()
 
-            // Cancel reminders for each affected task
-            for (taskId in result.taskIdsToCancel) {
-                cancelRemindersForTask(applicationContext, taskId)
-                totalCancelled++
-            }
-
-            // Schedule new reminders — unless the user disabled reminders. The
-            // cursor still advances: re-enabling them in the app reschedules
-            // every reminder from its full state, so nothing is lost.
-            if (!reminderSettings.isDisabled) {
-                for (reminder in result.remindersToSchedule) {
-                    scheduleReminderFromSync(applicationContext, reminder, reminderSettings.useAlarmStyle)
-                    totalScheduled++
+                // Cancel every alarm of gone/done tasks, and single cleared ones
+                for (taskId in result.taskIdsToCancel) {
+                    cancelRemindersForTask(applicationContext, taskId)
+                    totalCancelled++
                 }
-            }
-
-            // Update sequence cursor.
-            // Also reset if server's latestSeq is lower (server was wiped/reset).
-            if (result.latestSeq != lastSeq) {
-                if (result.latestSeq < lastSeq) {
-                    Log.w(TAG, "Server seq (${ result.latestSeq}) < local seq ($lastSeq), server was likely reset. Resetting cursor.")
+                for (reminderId in result.reminderIdsToCancel) {
+                    cancelReminderById(applicationContext, reminderId)
+                    totalCancelled++
                 }
-                lastSeq = result.latestSeq
-                BackgroundSyncCredentialStore.setLastServerSeq(
-                    applicationContext, credentials.baseUrl, lastSeq
-                )
-            }
 
-            hasMore = result.hasMore
+                // Schedule new reminders — unless the user disabled reminders. The
+                // cursor still advances: re-enabling them in the app reschedules
+                // every reminder from its full state, so nothing is lost.
+                if (!reminderSettings.isDisabled) {
+                    for (reminder in result.remindersToSchedule) {
+                        scheduleReminderFromSync(applicationContext, reminder, reminderSettings.useAlarmStyle)
+                        protectedRepeatIds.add(reminder.taskId)
+                        totalScheduled++
+                    }
+                }
+
+                // Persist the folded repeat configs in this same iteration as the
+                // seq cursor, and before it: a retried page is idempotent, a page
+                // whose seq advanced without the fold would be lost.
+                repeatState = result.nextRepeatState
+                if (!RepeatReminderCache.saveStateIfUnchanged(applicationContext, result, repeatGeneration)) {
+                    // The open app sent its configs mid-run. Re-fetch this page onto
+                    // them without moving the cursor, so none of its ops are lost;
+                    // re-scheduling its task alarms is idempotent (same ids).
+                    repeatGeneration = RepeatReminderCache.getGeneration(applicationContext)
+                    repeatState = RepeatReminderCache.getState(applicationContext)
+                    return@synchronized
+                }
+
+                // Update sequence cursor.
+                // Also reset if server's latestSeq is lower (server was wiped/reset).
+                if (result.latestSeq != lastSeq) {
+                    if (result.latestSeq < lastSeq) {
+                        Log.w(TAG, "Server seq (${ result.latestSeq}) < local seq ($lastSeq), server was likely reset. Resetting cursor.")
+                    }
+                    lastSeq = result.latestSeq
+                    BackgroundSyncCredentialStore.setLastServerSeq(applicationContext, credentials.baseUrl, lastSeq)
+                }
+
+                hasMore = result.hasMore
+            }
         }
 
         if (iterations >= maxIterations) {
             Log.w(TAG, "Hit max pagination iterations ($maxIterations), stopping. seq=$lastSeq")
+        }
+
+        // Re-derive even when this run downloaded nothing new, so the 14-day
+        // window slides. Disabled reminders still folded the cache above and
+        // leave the armed slots alone; opening the app reschedules them.
+        synchronized(BackgroundSyncCredentialStore) {
+            if (!reminderSettings.isDisabled && !credentialsChanged(credentials)) {
+                armRepeatReminders(
+                    applicationContext,
+                    repeatState,
+                    reminderSettings.useAlarmStyle,
+                    protectedRepeatIds,
+                )
+            }
         }
 
         if (totalCancelled > 0 || totalScheduled > 0) {
@@ -112,4 +151,9 @@ class SyncReminderWorker(
         return Result.success()
     }
 
+    private fun credentialsChanged(captured: BackgroundSyncCredentialStore.Credentials): Boolean {
+        if (BackgroundSyncCredentialStore.get(applicationContext) == captured) return false
+        Log.d(TAG, "Sync credentials changed mid-run, stopping")
+        return true
+    }
 }

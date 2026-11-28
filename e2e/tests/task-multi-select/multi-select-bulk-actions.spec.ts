@@ -259,6 +259,39 @@ test.describe('Task multi-select bulk actions', () => {
     }
   });
 
+  test('the tags and project shortcuts open their submenus for the selection', async ({
+    page,
+    workViewPage,
+    taskPage,
+    tagPage,
+    projectPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const tagName = `${testPrefix}-KeyTag`;
+    await tagPage.createTag(tagName);
+    // A second project, so "Move to project" has a target and is shown.
+    await projectPage.createProject('KeyProject');
+    await page.goto(TODAY_ROUTE);
+    await workViewPage.waitForTaskList();
+    const titles = await addTasks(workViewPage, testPrefix, ['Key A', 'Key B']);
+    await ctrlSelect(taskPage, titles);
+
+    // G is "Toggle tags": it opens that submenu, as for a single task, not
+    // just the bulk menu.
+    await page.keyboard.press('g');
+    const submenu = page.locator('.mat-mdc-menu-panel').nth(1);
+    await expect(submenu).toBeVisible();
+    await expect(submenu.locator('button', { hasText: tagName })).toBeVisible();
+    await closeMenus(page);
+
+    await taskPage.getTaskByText(titles[0]).focus();
+    await page.keyboard.press('e');
+    await expect(submenu).toBeVisible();
+    await expect(submenu.locator('button', { hasText: 'KeyProject' })).toBeVisible();
+    await closeMenus(page);
+  });
+
   test('toggles a tag on and off for the selection', async ({
     page,
     workViewPage,

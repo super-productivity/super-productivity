@@ -1,0 +1,19 @@
+---
+# Generated from Harper's SomeOfThe rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Quantity words such as `some` normally take `of` before a definite article. Including `of` signals that you mean a subset of a larger set, preventing a momentary stumble in comprehension.
+extends: existence
+message: "Add `of` to form the partitive phrase: `some of the`."
+level: error
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "some of the"
+tokens:
+  - "some(?!\\s*\\n\\s*\\n)\\s+the(?!['\\x{2019}]s\\b)"

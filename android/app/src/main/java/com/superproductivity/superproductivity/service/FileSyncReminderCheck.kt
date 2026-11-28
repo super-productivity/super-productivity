@@ -89,7 +89,17 @@ internal fun runFileSyncReminderCheck(
 
     val fetch = fetchSyncFile(httpClient, credentials, BackgroundSyncCredentialStore.getFileETag(context))
     val (body, eTag) = when (fetch) {
-        SyncFileFetch.Unchanged -> return ListenableWorker.Result.success()
+        SyncFileFetch.Unchanged -> {
+            // The file did not change, but the 14-day window did. Re-derive
+            // from the configs the last download already stored.
+            armRepeatReminders(
+                context,
+                RepeatReminderCache.getState(context),
+                settings.useAlarmStyle,
+                protectedIds = emptySet(),
+            )
+            return ListenableWorker.Result.success()
+        }
         is SyncFileFetch.Skip -> {
             Log.w(TAG, "HTTP ${fetch.httpCode} for sync file")
             return ListenableWorker.Result.success()
@@ -126,6 +136,13 @@ internal fun runFileSyncReminderCheck(
     }
     for (reminder in plan.toSchedule) {
         scheduleReminderFromSync(context, reminder, settings.useAlarmStyle)
+    }
+    val reminders = result as SyncFileReadResult.Reminders
+    if (reminders.repeatCfgs != null) {
+        val repeatState = RepeatCfgSyncState(reminders.repeatCfgs, reminders.archivedProjectIds)
+        RepeatReminderCache.saveState(context, repeatState)
+        val liveIds = reminders.reminders.mapTo(HashSet()) { it.taskId } + reminders.dueDayTaskIds
+        armRepeatReminders(context, repeatState, settings.useAlarmStyle, liveIds)
     }
     BackgroundSyncCredentialStore.setFileReadResult(context, eTag, JSONObject(plan.slots).toString())
     Log.d(TAG, "Cancelled ${plan.reminderIdsToCancel.size} reminder(s), ${plan.taskIdsToCancel.size} task(s), scheduled ${plan.toSchedule.size} reminder(s)")
@@ -176,14 +193,4 @@ private fun readBody(source: BufferedSource?, eTag: String?): SyncFileFetch {
     // request() buffers at most cap + 1 bytes, also for chunked responses
     if (source.request(MAX_SYNC_FILE_BYTES + 1)) return SyncFileFetch.TooLarge(eTag)
     return SyncFileFetch.Body(source.buffer.readUtf8(), eTag)
-}
-
-private fun cancelReminderById(context: Context, reminderId: String) {
-    try {
-        ReminderNotificationHelper.cancelReminder(
-            context, SuperSyncBackgroundProvider.generateNotificationId(reminderId)
-        )
-    } catch (e: Exception) {
-        Log.w(TAG, "Failed to cancel a reminder", e)
-    }
 }

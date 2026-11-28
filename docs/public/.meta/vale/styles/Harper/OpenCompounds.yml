@@ -1,0 +1,28 @@
+---
+# Generated from Harper's OpenCompounds linter. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Built from the phrases the linter's own tests demonstrate, so it
+# catches those rather than everything the Rust rule matches.
+extends: substitution
+message: "`{phrase}` should be written as two words."
+level: warning
+ignorecase: true
+action:
+  name: replace
+swap:
+  "\\(infront\\)": "(in front)"
+  "afew": "a few"
+  "alot": "A lot"
+  "aswell": "As well|as well"
+  "atall": "at all"
+  "atleast": "At least|at least"
+  "eachother": "Each other|each other"
+  "incase": "In case|in case"
+  "infact": "in fact"
+  "infront(?!\\s*\\n\\s*\\n)\\s+infront": "in front in front"
+  "infront/fullscreen": "in front/fullscreen"
+  "upto": "up to"

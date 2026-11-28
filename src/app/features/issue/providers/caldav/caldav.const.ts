@@ -9,6 +9,10 @@ export const DEFAULT_CALDAV_CFG: CaldavCfg = {
   username: null,
   password: null,
   categoryFilter: null,
+  // A todo list is the user's own: once they pick a default project they expect
+  // its tasks there, not only in the issue panel (#8275). Does nothing until a
+  // default project is set; applies to newly created providers only.
+  isAutoAddToBacklog: true,
   twoWaySync: {
     isDone: 'pullOnly',
     title: 'pullOnly',
@@ -19,4 +23,7 @@ export const DEFAULT_CALDAV_CFG: CaldavCfg = {
 };
 
 export const CALDAV_POLL_INTERVAL = 10 * 60 * 1000;
+export const CALDAV_POLL_INTERVAL_MINUTES_MIN = 1;
+// One day; well below setInterval's ~24.8-day overflow limit.
+export const CALDAV_POLL_INTERVAL_MINUTES_MAX = 24 * 60;
 export const CALDAV_INITIAL_POLL_DELAY = 8 * 1000;

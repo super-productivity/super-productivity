@@ -8,6 +8,7 @@ import { GlobalConfigService } from '../config/global-config.service';
 import {
   concatMap,
   distinctUntilChanged,
+  filter,
   first,
   map,
   switchMap,
@@ -75,25 +76,39 @@ export class FinishDayBeforeCloseEffects {
       () =>
         this.isEnabled$.pipe(
           switchMap((isEnabled) =>
-            isEnabled ? this._execBeforeCloseService.onBeforeClose$ : EMPTY,
+            isEnabled
+              ? this._warnOnRequest$(this._execBeforeCloseService.onBeforeClose$)
+              : EMPTY,
           ),
-          switchMap(() =>
-            this._workContextService.mainWorkContext$.pipe(
-              first(),
-              switchMap((workContext) =>
-                this._taskService.getByIdsLive$(workContext.taskIds).pipe(first()),
-              ),
-            ),
-          ),
-          tap((todayMainTasks) => {
-            this._handleCloseDecision(todayMainTasks).catch(() => {
-              // Don't let a dialog/router failure trap the user in close-pending state
-              this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
-            });
-          }),
         ),
       { dispatch: false },
     );
+
+  /**
+   * Prompts for each quit request carrying this hold's id. Kept out of the
+   * Electron-only effect above so specs can drive it.
+   */
+  _warnOnRequest$(requests$: Observable<string[]>): Observable<Task[]> {
+    return requests$.pipe(
+      // The main process re-notifies the holds still pending after one
+      // finishes; once this one is done it must not prompt again.
+      filter((ids) => ids.includes(EXEC_BEFORE_CLOSE_ID)),
+      switchMap(() =>
+        this._workContextService.mainWorkContext$.pipe(
+          first(),
+          switchMap((workContext) =>
+            this._taskService.getByIdsLive$(workContext.taskIds).pipe(first()),
+          ),
+        ),
+      ),
+      tap((todayMainTasks) => {
+        this._handleCloseDecision(todayMainTasks).catch(() => {
+          // Don't let a dialog/router failure trap the user in close-pending state
+          this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
+        });
+      }),
+    );
+  }
 
   async _handleCloseDecision(todayMainTasks: Task[]): Promise<void> {
     // Finish Day archives every done task, won't-do ones too.

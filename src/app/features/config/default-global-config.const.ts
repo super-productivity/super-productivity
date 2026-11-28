@@ -54,6 +54,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeExit: false,
     isConfirmBeforeExitWithoutFinishDay: true,
     isMinimizeToTray: false,
+    isHideNavTaskCount: false,
     isShowDueTaskBadge: false,
     isCheckForUpdates: true,
     isTrayShowCurrentCountdown: true,
@@ -228,7 +229,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     defaultTaskRemindOption: TaskReminderOptionId.AtStart, // The hard-coded default prior to this changeable setting
     isFocusWindow: false,
     useAlarmStyleReminders: false,
-    notifyOnDueDate: false,
+    isNotifyOnPlannedDay: false,
     dueDateNotificationHour: 9,
   },
   schedule: {

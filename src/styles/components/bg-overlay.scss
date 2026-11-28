@@ -6,6 +6,6 @@
   position: fixed;
   z-index: var(--z-bg-overlay);
   background-color: var(--c-bg-overlay);
-  transition: opacity 0.2s ease-in-out;
+  transition: opacity var(--transition-duration-m) ease-in-out;
   pointer-events: none;
 }

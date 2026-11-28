@@ -54,7 +54,7 @@
 
   [mat-icon-button] {
     opacity: 0.6;
-    transition: opacity 0.2s ease;
+    transition: opacity var(--transition-duration-m) ease;
 
     &:hover {
       opacity: 1;
@@ -188,7 +188,7 @@
 }
 
 .cdk-drag-animating {
-  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+  transition: transform var(--transition-duration-m) var(--ani-enter-timing);
 }
 
 .habit-title {
@@ -428,7 +428,7 @@
   }
 
   .progress-ring-circle {
-    transition: stroke-dashoffset 0.3s;
+    transition: stroke-dashoffset var(--transition-duration-m);
     color: var(--c-primary);
   }
 }

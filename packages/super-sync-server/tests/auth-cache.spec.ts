@@ -133,6 +133,27 @@ describe('auth verification cache', () => {
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
   });
 
+  it('rejects a valid token whose account no longer exists', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+
+    await expect(verifyToken(createToken())).resolves.toEqual({
+      valid: false,
+      reason: 'Account unavailable',
+    });
+  });
+
+  it('rejects a malformed or foreign-signed token without a database read', async () => {
+    const foreign = jwt.sign({ userId: 1, email: 'user@example.com' }, 'b'.repeat(32));
+
+    for (const token of ['not-a-jwt', foreign]) {
+      await expect(verifyToken(token)).resolves.toEqual({
+        valid: false,
+        reason: 'Invalid token',
+      });
+    }
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
   it('bounds invalidationVersions and keeps recent invalidations newest', () => {
     // A long-ago invalidation must not pin heap forever.
     authCache.invalidate(1);

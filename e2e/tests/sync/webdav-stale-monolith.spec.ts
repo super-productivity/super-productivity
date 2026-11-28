@@ -283,7 +283,9 @@ test.describe('@webdav stale monolith #10256', () => {
             // Independent first-time datasets use the existing conflict policy.
             // Cancelling must preserve both sides rather than silently overwrite.
             await b.sync.triggerSync();
-            expect(await waitForSyncComplete(b.page, b.sync)).toBe('conflict');
+            expect(
+              await waitForSyncComplete(b.page, b.sync, 30000, { expectConflict: true }),
+            ).toBe('conflict');
             const dialog = b.page.locator('dialog-sync-conflict');
             await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
             await expect(dialog).toBeHidden();

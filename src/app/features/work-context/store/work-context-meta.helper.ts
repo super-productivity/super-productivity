@@ -1,5 +1,10 @@
 import { DropListModelSource } from '../../tasks/task.model';
 import { filterOutId } from '../../../util/filter-out-id';
+import {
+  arrayMove,
+  arrayMoveLeftUntil,
+  arrayMoveRightUntil,
+} from '../../../util/array-move';
 
 /**
  * Moves an item to a position after the specified anchor.
@@ -117,4 +122,68 @@ export const moveItemInList = (
   newCompleteList.splice(newIndex, 0, itemId);
 
   return newCompleteList;
+};
+
+/**
+ * Replays a keyboard "move task up" against a work context's task order
+ * (#11464). `undoneTaskIds` is the op's snapshot of the context's NOT-done
+ * ids, in list order, taken when the user moved the task (the wire-frozen
+ * `doneTaskIds` field).
+ *
+ * The user's intent is "put the task right before its upper neighbour", the
+ * snapshot's previous id. Without a concurrent change that neighbour is the
+ * first snapshot task above the task, and this is exactly the legacy
+ * `arrayMoveLeftUntil` move. When the first snapshot task above is earlier in
+ * the snapshot than the neighbour, the neighbour is gone (deleted or moved out
+ * of the list on another device) or already below the task. The legacy move
+ * would then jump the task over that earlier task, while the moving device,
+ * applying the delete after its move, keeps the task in the neighbour's slot.
+ * So the task goes right after that earlier task instead, which makes the
+ * move commute with the delete.
+ */
+export const moveUndoneTaskUpInList = (
+  list: string[],
+  taskId: string,
+  undoneTaskIds: string[],
+): string[] => {
+  const undoneIndex = new Map(undoneTaskIds.map((id, i) => [id, i]));
+  const isSkipped = (id: string): boolean => !undoneIndex.has(id);
+  const ownIndex = undoneIndex.get(taskId);
+  const from = list.indexOf(taskId);
+  if (ownIndex === undefined || ownIndex === 0 || from === -1) {
+    return arrayMoveLeftUntil(list, taskId, isSkipped);
+  }
+  let stop = from - 1;
+  while (stop >= 0 && isSkipped(list[stop])) {
+    stop--;
+  }
+  if (stop < 0 || (undoneIndex.get(list[stop]) as number) >= ownIndex - 1) {
+    return arrayMoveLeftUntil(list, taskId, isSkipped);
+  }
+  // The upper neighbour is missing: take its slot after the nearest earlier task.
+  return stop + 1 === from ? list : arrayMove(list, from, stop + 1);
+};
+
+/** Mirror of {@link moveUndoneTaskUpInList} for "move task down" (#11464). */
+export const moveUndoneTaskDownInList = (
+  list: string[],
+  taskId: string,
+  undoneTaskIds: string[],
+): string[] => {
+  const undoneIndex = new Map(undoneTaskIds.map((id, i) => [id, i]));
+  const isSkipped = (id: string): boolean => !undoneIndex.has(id);
+  const ownIndex = undoneIndex.get(taskId);
+  const from = list.indexOf(taskId);
+  if (ownIndex === undefined || ownIndex === undoneTaskIds.length - 1 || from === -1) {
+    return arrayMoveRightUntil(list, taskId, isSkipped);
+  }
+  let stop = from + 1;
+  while (stop < list.length && isSkipped(list[stop])) {
+    stop++;
+  }
+  if (stop >= list.length || (undoneIndex.get(list[stop]) as number) <= ownIndex + 1) {
+    return arrayMoveRightUntil(list, taskId, isSkipped);
+  }
+  // The lower neighbour is missing: take its slot before the nearest later task.
+  return stop - 1 === from ? list : arrayMove(list, from, stop - 1);
 };

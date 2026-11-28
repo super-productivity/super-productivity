@@ -11,19 +11,26 @@ import {
   selectTaskEntities,
 } from '../features/tasks/store/task.selectors';
 import { Task } from '../features/tasks/task.model';
+import { Router } from '@angular/router';
+import { selectProjectFeatureState } from '../features/project/store/project.selectors';
+import { ProjectState } from '../features/project/project.model';
 
 describe('PluginBridgeContextService', () => {
   let service: PluginBridgeContextService;
   let store: MockStore;
   let taskService: jasmine.SpyObj<TaskService>;
+  let router: jasmine.SpyObj<Router>;
 
   beforeEach(() => {
     taskService = jasmine.createSpyObj('TaskService', ['setCurrentId']);
+    router = jasmine.createSpyObj('Router', ['navigate']);
+    router.navigate.and.resolveTo(true);
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeContextService,
         provideMockStore(),
         { provide: TaskService, useValue: taskService },
+        { provide: Router, useValue: router },
         { provide: WorkContextService, useValue: { activeWorkContext$: EMPTY } },
         {
           provide: DateService,
@@ -98,5 +105,32 @@ describe('PluginBridgeContextService', () => {
   it('stops tracking', async () => {
     await service.stopTracking();
     expect(taskService.setCurrentId).toHaveBeenCalledWith(null);
+  });
+
+  it('opens an existing project on its task list', async () => {
+    store.overrideSelector(selectProjectFeatureState, {
+      ids: ['p1'],
+      entities: { p1: { id: 'p1' } },
+    } as unknown as ProjectState);
+    await service.openProject('p1');
+    expect(router.navigate).toHaveBeenCalledWith(['/project', 'p1', 'tasks']);
+  });
+
+  it('rejects when navigation to the project is blocked', async () => {
+    store.overrideSelector(selectProjectFeatureState, {
+      ids: ['p1'],
+      entities: { p1: { id: 'p1' } },
+    } as unknown as ProjectState);
+    router.navigate.and.resolveTo(false);
+    await expectAsync(service.openProject('p1')).toBeRejected();
+  });
+
+  it('refuses to open an unknown project', async () => {
+    store.overrideSelector(selectProjectFeatureState, {
+      ids: [],
+      entities: {},
+    } as unknown as ProjectState);
+    await expectAsync(service.openProject('missing')).toBeRejected();
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 });

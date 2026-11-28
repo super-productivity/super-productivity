@@ -1,6 +1,11 @@
-import { getTaskDoneChangesToApply } from './android-widget.effects';
+import {
+  ackWidgetDoneQueueOnceWritten,
+  getTaskDoneChangesToApply,
+  getWidgetProjectRoute,
+} from './android-widget.effects';
 import { Task } from '../../tasks/task.model';
 import { Dictionary } from '@ngrx/entity';
+import { Project } from '../../project/project.model';
 
 /**
  * The effects themselves are gated by IS_ANDROID_WEB_VIEW (false in tests), so
@@ -51,6 +56,24 @@ describe('AndroidWidgetEffects - getTaskDoneChangesToApply', () => {
     expect(getTaskDoneChangesToApply('{"a":false}', entities({ id: 'a' }))).toEqual([]);
   });
 
+  it('only applies new or changed native targets while a previous read awaits acknowledgement', () => {
+    const tasks = entities(
+      { id: 'reopened' },
+      { id: 'toggled', isDone: true },
+      { id: 'new' },
+    );
+    expect(
+      getTaskDoneChangesToApply(
+        '{"reopened":true,"toggled":false,"new":true}',
+        tasks,
+        '{"reopened":true,"toggled":true}',
+      ),
+    ).toEqual([
+      { id: 'toggled', isDone: false },
+      { id: 'new', isDone: true },
+    ]);
+  });
+
   it('should return empty for invalid JSON', () => {
     expect(getTaskDoneChangesToApply('not json', entities({ id: 'a' }))).toEqual([]);
   });
@@ -62,5 +85,78 @@ describe('AndroidWidgetEffects - getTaskDoneChangesToApply', () => {
 
   it('should skip non-boolean target values', () => {
     expect(getTaskDoneChangesToApply('{"a":"true"}', entities({ id: 'a' }))).toEqual([]);
+  });
+});
+
+describe('AndroidWidgetEffects - ackWidgetDoneQueueOnceWritten', () => {
+  it('should acknowledge the read queue only after the op writes finished', async () => {
+    const calls: string[] = [];
+    let finishFlush!: () => void;
+    const done = ackWidgetDoneQueueOnceWritten('{"a":true}', {
+      flushPendingWrites: () =>
+        new Promise<void>((resolve) => {
+          finishFlush = () => {
+            calls.push('flushed');
+            resolve();
+          };
+        }),
+      hasUnrecoveredPersistFailure: () => false,
+      hasDeferredWrites: () => false,
+      ack: (queueJson) => calls.push(`ack ${queueJson}`),
+    });
+
+    await Promise.resolve();
+    expect(calls).toEqual([]);
+
+    finishFlush();
+    await done;
+    expect(calls).toEqual(['flushed', 'ack {"a":true}']);
+  });
+
+  it('should keep the queue when the op writes did not finish', async () => {
+    const ack = jasmine.createSpy('ack');
+    await ackWidgetDoneQueueOnceWritten('{"a":true}', {
+      flushPendingWrites: () => Promise.reject(new Error('flush timeout')),
+      hasUnrecoveredPersistFailure: () => false,
+      hasDeferredWrites: () => false,
+      ack,
+    });
+    expect(ack).not.toHaveBeenCalled();
+  });
+
+  it('should keep the queue when an op write failed', async () => {
+    const ack = jasmine.createSpy('ack');
+    await ackWidgetDoneQueueOnceWritten('{"a":true}', {
+      flushPendingWrites: () => Promise.resolve(),
+      hasUnrecoveredPersistFailure: () => true,
+      hasDeferredWrites: () => false,
+      ack,
+    });
+    expect(ack).not.toHaveBeenCalled();
+  });
+
+  it('should keep the queue while a tap applied during a sync is still unwritten', async () => {
+    const ack = jasmine.createSpy('ack');
+    const flush = jasmine.createSpy('flush');
+    await ackWidgetDoneQueueOnceWritten('{"a":true}', {
+      flushPendingWrites: flush,
+      hasUnrecoveredPersistFailure: () => false,
+      hasDeferredWrites: () => true,
+      ack,
+    });
+    expect(flush).not.toHaveBeenCalled();
+    expect(ack).not.toHaveBeenCalled();
+  });
+});
+
+describe('AndroidWidgetEffects - getWidgetProjectRoute', () => {
+  it('should route a project widget to the selected project task list', () => {
+    expect(getWidgetProjectRoute('work', { id: 'work' } as Project)).toBe(
+      'project/work/tasks',
+    );
+  });
+
+  it('should leave the current route unchanged when the selected project was deleted', () => {
+    expect(getWidgetProjectRoute('deleted', undefined)).toBeNull();
   });
 });

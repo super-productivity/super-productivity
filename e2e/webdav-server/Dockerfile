@@ -7,6 +7,10 @@
 FROM httpd:2.4
 RUN mkdir -p /dav-data /dav-lock \
   && chown daemon:daemon /dav-data /dav-lock \
-  && htpasswd -bc /usr/local/apache2/conf/e2e.htpasswd admin admin
+  && htpasswd -bc /usr/local/apache2/conf/e2e.htpasswd admin admin \
+  # Throwaway non-ASCII passwords, hashed from their UTF-8 bytes like a real
+  # server stores them (webdav-non-ascii-password.spec.ts).
+  && htpasswd -b /usr/local/apache2/conf/e2e.htpasswd e2e-latin1 'pw-éß-e2e' \
+  && htpasswd -b /usr/local/apache2/conf/e2e.htpasswd e2e-euro 'pw-€-e2e'
 COPY httpd.conf /usr/local/apache2/conf/httpd.conf
 EXPOSE 2345

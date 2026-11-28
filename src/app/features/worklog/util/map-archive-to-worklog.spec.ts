@@ -23,6 +23,37 @@ const fakeTaskStateFromArray = (tasks: TaskCopy[]): EntityState<Task> => {
 };
 
 describe('mapArchiveToWorklog', () => {
+  it('places an untracked independently tagged subtask on its own date when its parent is outside the context', () => {
+    const state = fakeTaskStateFromArray([
+      {
+        ...DEFAULT_TASK,
+        id: 'subtask',
+        projectId: 'INBOX_PROJECT',
+        parentId: 'outside-context',
+        tagIds: ['own-tag'],
+        created: new Date(2026, 9, 20, 12).getTime(),
+        doneOn: new Date(2026, 9, 21, 12).getTime(),
+      },
+      {
+        ...DEFAULT_TASK,
+        id: 'logged',
+        projectId: 'INBOX_PROJECT',
+        timeSpentOnDay: { '2026-10-21': 600000 },
+      },
+    ]);
+    const { worklog } = mapArchiveToWorklog(
+      state,
+      [],
+      { workStart: {}, workEnd: {} },
+      1,
+      'en-US',
+    );
+    expect(
+      worklog[2026].ent[10].ent[21].logEntries.map((entry) => entry.task.id),
+    ).toEqual(['logged', 'subtask']);
+    expect(state.entities.subtask?.timeSpentOnDay).toEqual({});
+  });
+
   it('should preserve restore flags for every day of active and archived tasks', () => {
     const taskState = fakeTaskStateFromArray(
       ['active', 'archived'].map((id) => ({
@@ -466,6 +497,8 @@ describe('mapArchiveToWorklog weeks crossing a month boundary (#9950)', () => {
     expect(w[2026].ent[9].weeks[0].startDateStr).toBe('2026-08-30');
     expect(w[2026].ent[9].weeks[0].endDateStr).toBe('2026-09-05');
     expect(w[2026].ent[9].weeks[1].startDateStr).toBe('2026-09-06');
+    // #11855: Mon 2026-08-31 – Sat 09-05 are ISO W36, Mon 09-07 – Sat 09-12 are W37
+    expect(w[2026].ent[9].weeks.map((wk) => wk.weekNr)).toEqual([36, 37]);
   });
 
   it('should keep a week crossing the year boundary whole', () => {

@@ -1,0 +1,84 @@
+<h1 mat-dialog-title>
+  @if (data.icon) {
+    <mat-icon
+      class="dialog-header-icon"
+      [svgIcon]="data.icon"
+    ></mat-icon>
+  }
+  <span>{{
+    T.F.ISSUE.DIALOG_SUBMIT_WORKLOG.TITLE | translate: { providerName: data.providerName }
+  }}</span>
+</h1>
+
+<mat-dialog-content>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ T.F.ISSUE.DIALOG_SUBMIT_WORKLOG.T_TITLE | translate }}</th>
+        @if (data.getTimeLogged) {
+          <th>{{ T.F.ISSUE.DIALOG_SUBMIT_WORKLOG.T_ALREADY_LOGGED | translate }}</th>
+        }
+        <th>{{ T.F.ISSUE.DIALOG_SUBMIT_WORKLOG.T_TO_BE_SUBMITTED | translate }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.taskId) {
+        <tr>
+          <td>{{ row.title }}</td>
+          @if (data.getTimeLogged) {
+            <td>
+              @if (row.timeLoggedRemote !== undefined) {
+                {{ row.timeLoggedRemote | msToClockString }}
+              }
+            </td>
+          }
+          <td>
+            @if (row.hasOtherDays) {
+              <mat-icon
+                [matTooltip]="T.F.ISSUE.DIALOG_SUBMIT_WORKLOG.OTHER_DAYS_INFO | translate"
+                >info</mat-icon
+              >
+            }
+            <inline-input
+              [type]="'duration'"
+              [value]="row.timeToSubmit"
+              [displayValue]="row.timeToSubmit | msToClockString"
+              (changed)="updateTimeToSubmit(row.taskId, $event)"
+            ></inline-input>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  <p
+    [innerHTML]="
+      T.F.ISSUE.DIALOG_SUBMIT_WORKLOG.TOTAL_MSG
+        | translate
+          : {
+              totalTime: totalTimeToSubmit() | msToString,
+              nrOfIssues: rowsToSubmit().length,
+            }
+    "
+  ></p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    type="button"
+    [disabled]="isSubmitting()"
+    (click)="close()"
+  >
+    {{ T.G.CANCEL | translate }}
+  </button>
+  <button
+    mat-flat-button
+    color="primary"
+    type="button"
+    [disabled]="isSubmitting()"
+    (click)="submit()"
+  >
+    {{ T.G.SUBMIT | translate }}
+  </button>
+</mat-dialog-actions>

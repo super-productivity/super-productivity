@@ -21,6 +21,7 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -67,6 +68,13 @@ class BackgroundReminderSyncInstrumentedTest {
     private val expectedCancels: Set<String> by lazy {
         (0 until fixture.length()).flatMap { i ->
             val cancels = fixture.getJSONObject(i).getJSONArray("expectCancel")
+            (0 until cancels.length()).map { cancels.getString(it) }
+        }.toSet()
+    }
+    /** Single alarms (reminder ids) the ops cancel, leaving the task's other alarms. */
+    private val expectedReminderCancels: Set<String> by lazy {
+        (0 until fixture.length()).flatMap { i ->
+            val cancels = fixture.getJSONObject(i).getJSONArray("expectCancelReminders")
             (0 until cancels.length()).map { cancels.getString(it) }
         }.toSet()
     }
@@ -163,6 +171,67 @@ class BackgroundReminderSyncInstrumentedTest {
     }
 
     @Test
+    fun sameServerLoginAfterLogoutReadsTheNewAccountsFirstPage() {
+        assertEquals(ListenableWorker.Result.success(), runWorker())
+        val reminder = expectedSchedules.first { !it.isDeadline }
+        cancelRemindersForTask(context, reminder.taskId)
+        BackgroundSyncCredentialStore.clear(context)
+        BackgroundSyncCredentialStore.save(context, baseUrl, "new-account-token")
+        assertEquals(ListenableWorker.Result.success(), runWorker())
+        assertNotNull(storedAlarm(reminder.taskId))
+    }
+
+    @Test
+    fun accountSwitchWhileFetchingDiscardsTheOldPage() {
+        val taskId = expectedSchedules.first { !it.isDeadline }.taskId
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                BackgroundSyncCredentialStore.save(context, baseUrl, "new-account-token")
+                return MockResponse().setBody(opsResponse(0).toString())
+            }
+        }
+        assertEquals(ListenableWorker.Result.success(), runWorker())
+        assertEquals(0L, BackgroundSyncCredentialStore.getLastServerSeq(context, baseUrl))
+        assertNull(storedAlarm(taskId))
+    }
+
+    @Test
+    fun deletingSeriesAfterCreatingAnInstanceKeepsOnlyTheDetachedAlarm() {
+        val cfg = RepeatCfg("detached", lastTaskCreationDay = "2099-06-14", isComplete = true)
+        val live = "rpt_detached_2099-06-15"
+        val future = "rpt_detached_2099-06-16"
+        fun op(seq: Int, type: String, action: String, payload: JSONObject) = JSONObject()
+            .put("serverSeq", seq).put("op", JSONObject().put("entityType", "TASK_REPEAT_CFG")
+                .put("entityId", cfg.id).put("opType", type).put("actionType", action)
+                .put("payload", JSONObject().put("actionPayload", payload)))
+        val update = JSONObject().put("taskRepeatCfg", JSONObject().put("id", cfg.id)
+            .put("changes", JSONObject().put("lastTaskCreationDay", "2099-06-15")))
+        val ops = JSONArray()
+            .put(op(1, "UPD", "[TaskRepeatCfg] Update TaskRepeatCfg", update))
+            .put(op(2, "DEL", "[TaskRepeatCfg] Delete TaskRepeatCfg", JSONObject().put("taskRepeatCfgId", cfg.id)))
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = MockResponse().setBody(
+                JSONObject().put("ops", ops).put("latestSeq", 2).put("hasMore", false).toString(),
+            )
+        }
+        RepeatReminderCache.saveState(context, RepeatCfgSyncState(listOf(cfg)))
+        RepeatReminderCache.saveSlots(context, mapOf(live to FAR_FUTURE, future to FAR_FUTURE))
+        try {
+            seedAlarm(live, "TASK", live)
+            seedAlarm(future, "TASK", future)
+            fireAlarm(slotId(live, false), live, "TASK", FAR_FUTURE)
+            assertNotNull("detached reminder should fire", waitFor(15_000) { activeNotification(slotId(live, false)) })
+            seedAlarm(live, "TASK", live)
+            assertEquals(ListenableWorker.Result.success(), runWorker())
+            assertNotNull("worker must keep the detached reminder", storedAlarm(live))
+            assertNull("worker must cancel the future occurrence", storedAlarm(future))
+        } finally {
+            cancelRemindersForTask(context, live)
+            cancelRemindersForTask(context, future)
+        }
+    }
+
+    @Test
     fun workerUsesAlarmStyleWhenTheUserEnabledIt() {
         BackgroundReminderSettingsStore.save(context, isDisabled = false, useAlarmStyle = true)
 
@@ -182,9 +251,13 @@ class BackgroundReminderSyncInstrumentedTest {
 
         assertEquals(ListenableWorker.Result.success(), runWorker())
 
-        // Expected schedules of tasks that are not also cancelled must not appear
+        // Expected schedules of tasks that are not also cancelled must not appear;
+        // a seeded alarm a single-slot cancel leaves alone may stay (#10618)
         for (e in expectedSchedules.filter { it.taskId !in expectedCancels }) {
-            assertNull("no alarm while reminders are disabled: ${e.taskId}", storedAlarm(slotId(e.taskId, e.isDeadline)))
+            assertNotEquals(
+                "no alarm while reminders are disabled: ${e.taskId}",
+                e.remindAt, storedAlarm(slotId(e.taskId, e.isDeadline))?.triggerAtMs,
+            )
         }
         assertCancelledSlotsAreGone(includingRescheduled = true)
         // Re-enabling reschedules from the app's full state, so the cursor may advance
@@ -195,9 +268,11 @@ class BackgroundReminderSyncInstrumentedTest {
 
     @Test
     fun firedAlarmForAReminderStillCurrentOnTheServerIsShown() {
-        // The time-preserving conflict winner both cancels and re-sets this
-        // task's reminder; the alarm at that time is the current one.
-        val e = expectedSchedules.first { it.taskId in expectedCancels && !it.isDeadline }
+        // The time-preserving conflict winner both cancels this task's deadline
+        // and re-sets its reminder; the alarm at that time is the current one.
+        val e = expectedSchedules.first { s ->
+            !s.isDeadline && expectedReminderCancels.any { taskIdOfReminderId(it) == s.taskId }
+        }
         val id = slotId(e.taskId, false)
 
         fireAlarm(id, e.taskId, "TASK", e.remindAt)
@@ -235,9 +310,12 @@ class BackgroundReminderSyncInstrumentedTest {
     private fun runWorker(): ListenableWorker.Result =
         TestListenableWorkerBuilder.from(context, SyncReminderWorker::class.java).build().startWork().get()
 
-    /** Alarms in every slot of the tasks the ops cancel, as if set earlier. */
+    /**
+     * Alarms in every slot of the tasks the ops cancel, as if set earlier.
+     * Tasks with single-slot cancels get every slot too: the others must stay (#10618).
+     */
     private fun seedAlarmsThatMustBeCancelled() {
-        for (taskId in expectedCancels) {
+        for (taskId in expectedCancels + expectedReminderCancels.map(::taskIdOfReminderId)) {
             seedAlarm(taskId, "TASK", taskId)
             seedAlarm(taskId, "DEADLINE", taskId + "_deadline")
             seedAlarm(taskId, "DUE_DATE", taskId + "_dueday")
@@ -251,6 +329,15 @@ class BackgroundReminderSyncInstrumentedTest {
                 val keptBySchedule = !includingRescheduled && rescheduled.any { it.isDeadline == isDeadline }
                 if (keptBySchedule) continue
                 assertNull("$reminderId should be cancelled", storedAlarm(SuperSyncBackgroundProvider.generateNotificationId(reminderId)))
+            }
+        }
+        for (reminderId in expectedReminderCancels) {
+            assertNull("$reminderId should be cancelled", storedAlarm(reminderId))
+        }
+        // A single-slot cancel leaves the task's other alarms alone
+        for (taskId in expectedReminderCancels.map(::taskIdOfReminderId).toSet() - expectedCancels) {
+            for (reminderId in listOf(taskId, taskId + "_deadline", taskId + "_dueday") - expectedReminderCancels) {
+                assertNotNull("$reminderId should be kept", storedAlarm(reminderId))
             }
         }
     }

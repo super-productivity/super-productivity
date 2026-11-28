@@ -5,17 +5,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.window.SplashScreenView
 import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
+import com.getcapacitor.WebViewListener
 import com.superproductivity.superproductivity.app.LaunchUrlReplayGuard
 import com.superproductivity.superproductivity.plugins.NavigationBarPlugin
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
@@ -70,6 +74,7 @@ class CapacitorMainActivity : BridgeActivity() {
     private var isForegroundServiceFailureReceiverRegistered = false
     private var isWidgetDoneDrainReceiverRegistered = false
     private var isNotificationActionDrainReceiverRegistered = false
+    private var isWidgetProjectOpenDrainReceiverRegistered = false
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -88,7 +93,7 @@ class CapacitorMainActivity : BridgeActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == TaskListWidgetProvider.ACTION_WIDGET_DONE_DRAIN) {
                 // Contentless drain signal: Angular pulls the queued IDs itself via
-                // getWidgetDoneQueue(), so there is a single delivery path and no
+                // peekWidgetDoneQueue(), so there is a single delivery path and no
                 // task data crosses the string-interpolated JS bridge.
                 callJSInterfaceFunctionIfExists("next", "onWidgetDoneDrainRequest$")
             }
@@ -100,6 +105,16 @@ class CapacitorMainActivity : BridgeActivity() {
             if (intent?.action == NotificationActionReceiver.ACTION_DRAIN) {
                 // Contentless: Angular pulls the queued actions itself.
                 callJSInterfaceFunctionIfExists("next", "onNotificationActionDrainRequest$")
+            }
+        }
+    }
+
+    private val widgetProjectOpenDrainReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN) {
+                // The project ID remains in the native queue so cold and warm starts
+                // use the same pull-based Angular delivery path.
+                callJSInterfaceFunctionIfExists("next", "onWidgetProjectOpenDrainRequest$")
             }
         }
     }
@@ -148,17 +163,21 @@ class CapacitorMainActivity : BridgeActivity() {
 
         // On Activity recreation (config change / process death) getIntent() still
         // holds the original launch intent and BridgeActivity.load() replays it
-        // through onNewIntent — without the LAUNCHED_FROM_HISTORY flag, so the
-        // recents guard in onNewIntent doesn't catch it. A stale VIEW data URI
-        // would re-fire appUrlOpen and duplicate the URL scheme task action;
-        // clear it (mirrors the savedInstanceState guard for handleIntent below).
+        // through onNewIntent during super.onCreate() — without the
+        // LAUNCHED_FROM_HISTORY flag, so the recents guards in onNewIntent don't
+        // catch it. A stale VIEW data URI would re-fire appUrlOpen and duplicate the
+        // URL scheme task action, and a stale widget project extra would reopen that
+        // project unasked; strip both before load() runs (mirrors the
+        // savedInstanceState guard for handleIntent below).
         if (savedInstanceState != null) {
             intent?.data = null
+            intent?.removeExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
         } else if (intent != null &&
             !LaunchUrlReplayGuard.shouldDispatchFreshLaunch(this)
         ) {
             // The system relaunched the task after a package update (#11153).
             intent.data = null
+            intent.removeExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
         }
         try {
             super.onCreate(savedInstanceState)
@@ -177,6 +196,7 @@ class CapacitorMainActivity : BridgeActivity() {
             showWebViewInitFailure("Bridge or WebView is null after onCreate")
             return
         }
+        holdSystemSplashUntilPageVisible()
 
         try {
             printWebViewVersion(webView)
@@ -278,6 +298,11 @@ class CapacitorMainActivity : BridgeActivity() {
             IntentFilter(NotificationActionReceiver.ACTION_DRAIN)
         )
         isNotificationActionDrainReceiverRegistered = true
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            widgetProjectOpenDrainReceiver,
+            IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN)
+        )
+        isWidgetProjectOpenDrainReceiverRegistered = true
 
         // Schedule background sync worker if credentials are configured.
         // Off the main thread: the first credential read opens the
@@ -367,7 +392,23 @@ class CapacitorMainActivity : BridgeActivity() {
             intent.data = null
         }
         super.onNewIntent(intent)
+        handleWidgetProjectOpenIntent(intent)
         handleIntent(intent)
+    }
+
+    private fun handleWidgetProjectOpenIntent(intent: Intent) {
+        val projectId = intent.getStringExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
+            ?: return
+        intent.removeExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
+        // Reopening from recents re-delivers the task's base intent (after a reboot
+        // even into a fresh activity) with the widget tap's extra still on it, since
+        // removeExtra only changes this process's copy. That is not a new tap.
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) {
+            return
+        }
+        TaskListWidgetProvider.queueProjectToOpen(this, projectId)
+        LocalBroadcastManager.getInstance(this)
+            .sendBroadcast(Intent(TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN))
     }
 
     /** Called by the web app once its bundle has initialised, including after a reload. */
@@ -447,6 +488,52 @@ class CapacitorMainActivity : BridgeActivity() {
         // Restore scoped storage permission on Android 10+
         storageHelper.onRestoreInstanceState(savedInstanceState)
         bridge?.webView?.restoreState(savedInstanceState)
+    }
+
+    /**
+     * Keeps the Android 12+ system splash up until the WebView shows index.html's
+     * boot splash, which looks the same. By default the system removes its splash
+     * on the activity's first frame, before the WebView has painted the page, so
+     * a few frames of blank background (no logo) showed before the web splash.
+     *
+     * Taking over the splash's exit leaves it on screen as an overlay while the
+     * window keeps drawing underneath, so the WebView can render and report
+     * onPageCommitVisible (its first frame with the page's content); only then is
+     * the overlay removed. (Withholding the window's first draw instead would also
+     * keep the WebView from drawing, so that signal could not arrive.) Page load,
+     * a load error, or a 2s cap also release it, so a slow or failing page never
+     * leaves the app stuck on the splash. Older Android shows no icon splash.
+     */
+    private fun holdSystemSplashUntilPageVisible() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        var isPageVisible = false
+        var splashView: SplashScreenView? = null
+        val handler = Handler(Looper.getMainLooper())
+        val release = {
+            if (!isPageVisible) {
+                isPageVisible = true
+                handler.removeCallbacksAndMessages(SPLASH_HOLD_TOKEN)
+                splashView?.remove()
+                splashView = null
+            }
+        }
+        splashScreen.setOnExitAnimationListener { view ->
+            if (isPageVisible) {
+                view.remove()
+            } else {
+                splashView = view
+            }
+        }
+        handler.postAtTime(
+            release,
+            SPLASH_HOLD_TOKEN,
+            SystemClock.uptimeMillis() + SPLASH_HOLD_MAX_MS,
+        )
+        bridge?.addWebViewListener(object : WebViewListener() {
+            override fun onPageCommitVisible(view: WebView?, url: String?) = release()
+            override fun onPageLoaded(webView: WebView?) = release()
+            override fun onReceivedError(webView: WebView?) = release()
+        })
     }
 
     override fun onPause() {
@@ -664,11 +751,19 @@ class CapacitorMainActivity : BridgeActivity() {
             )
             isNotificationActionDrainReceiverRegistered = false
         }
+        if (isWidgetProjectOpenDrainReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(
+                widgetProjectOpenDrainReceiver
+            )
+            isWidgetProjectOpenDrainReceiverRegistered = false
+        }
         super.onDestroy()
     }
 
     companion object {
         const val WINDOW_INTERFACE_PROPERTY: String = "SUPAndroid"
         const val WINDOW_PROPERTY_F_DROID: String = "SUPFDroid"
+        private const val SPLASH_HOLD_MAX_MS = 2_000L
+        private val SPLASH_HOLD_TOKEN = Any()
     }
 }

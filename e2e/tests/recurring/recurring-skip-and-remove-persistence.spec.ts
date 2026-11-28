@@ -2,6 +2,7 @@ import { expect, test } from '../../fixtures/test.fixture';
 import { type Locator, type Page } from '@playwright/test';
 import {
   gotoHashRoute,
+  gotoToday,
   openRecurDialog,
   saveRecurDialog,
 } from '../../utils/recurring-task-helpers';
@@ -94,7 +95,7 @@ test.describe('Recurring task occurrence and series removal persistence', () => 
 
     await page.clock.setSystemTime(NEXT_DATE);
     await page.reload();
-    await gotoHashRoute(page, '/#/tag/TODAY/tasks', page.locator('task-list').first());
+    await gotoToday(page);
     await workViewPage.waitForTaskList();
     await expect(
       taskPage.getUndoneTasks().filter({ hasText: controlTitle }).first(),
@@ -177,7 +178,7 @@ test.describe('Recurring task occurrence and series removal persistence', () => 
 
     await page.clock.setSystemTime(NEXT_DATE);
     await page.reload();
-    await gotoHashRoute(page, '/#/tag/TODAY/tasks', page.locator('task-list').first());
+    await gotoToday(page);
     await workViewPage.waitForTaskList();
     await expect(
       taskPage.getUndoneTasks().filter({ hasText: controlTitle }).first(),

@@ -24,6 +24,7 @@ import { SimpleCounterService } from '../simple-counter/simple-counter.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { TaskService } from '../tasks/task.service';
 import { Task } from '../tasks/task.model';
+import { selectTaskEntities } from '../tasks/store/task.selectors';
 import { selectAllProjectColorsAndTitles } from '../project/store/project.selectors';
 import { mapArchiveToWorklog } from '../worklog/util/map-archive-to-worklog';
 import { DateService } from '../../core/date/date.service';
@@ -98,6 +99,7 @@ describe('HistoryComponent', () => {
       providers: [
         provideMockStore({
           selectors: [
+            { selector: selectTaskEntities, value: {} },
             {
               selector: selectAllProjectColorsAndTitles,
               value: [],

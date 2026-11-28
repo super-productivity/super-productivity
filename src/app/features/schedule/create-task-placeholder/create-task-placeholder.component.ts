@@ -15,7 +15,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
+import { MatDialog } from '@angular/material/dialog';
 import { TaskService } from '../../tasks/task.service';
+import { TaskSchedulingService } from '../../tasks/task-scheduling.service';
 import { Task } from '../../tasks/task.model';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -50,7 +52,9 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
   T: typeof T = T;
 
   private _taskService = inject(TaskService);
+  private _taskSchedulingService = inject(TaskSchedulingService);
   private _store = inject(Store);
+  private readonly _matDialog = inject(MatDialog);
   private readonly _snackService = inject(SnackService);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _dateTimeFormatService = inject(DateTimeFormatService);
@@ -105,11 +109,10 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
   onDocumentClick(event: MouseEvent): void {
     if (this.isEditMode()) {
       const target = event.target as HTMLElement;
-      const component = target.closest('create-task-placeholder');
-      const autocompleteOption = target.closest('mat-option');
-
-      // If click is outside the component and not on an autocomplete option, close it
-      if (!component && !autocompleteOption) {
+      // A tap on a dialog or its backdrop belongs to that overlay.
+      if (
+        !target.closest('create-task-placeholder, mat-option, .cdk-overlay-container')
+      ) {
         this._closeAndReset();
       }
     }
@@ -150,8 +153,8 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
 
   onSimpleTaskInputBlur(): void {
     this._clearTimeouts();
-    // Only close if we're in idle state (not editing autocomplete or selecting)
-    if (this._interactionState === 'Idle') {
+    // A reminder takes focus temporarily and restores it when dismissed.
+    if (this._interactionState === 'Idle' && !this._matDialog.openDialogs.length) {
       this._blurTimeout = window.setTimeout(() => this._closeAndReset(), this.BLUR_DELAY);
     }
   }
@@ -255,7 +258,7 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
         );
       } else {
         // Schedule task with specific time
-        this._taskService.addAndSchedule(
+        this._taskSchedulingService.addAndSchedule(
           title,
           {
             timeEstimate: 30 * 60 * 1000,
@@ -285,7 +288,7 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
       );
     } else {
       // Schedule existing task with specific time
-      this._taskService.scheduleTask(
+      this._taskSchedulingService.scheduleTask(
         task,
         this.due(),
         this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??

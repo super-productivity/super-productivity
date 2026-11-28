@@ -9,7 +9,7 @@ import {
 } from '../../utils/supersync-helpers';
 import {
   createView,
-  expandViewSection,
+  fillViewEditor,
   openViewEditor,
   readBoard,
   saveViewEditor,
@@ -62,9 +62,7 @@ const moveUp = async (page: Page, title: string): Promise<void> => {
 /** Renames the first section in the view editor. */
 const renameMainSection = async (page: Page, title: string): Promise<void> => {
   const dialog = await openViewEditor(page);
-  const section = viewEditorSection(dialog, 0);
-  await expandViewSection(section);
-  await section.getByRole('textbox', { name: /^(Section|Column) title$/ }).fill(title);
+  await fillViewEditor(page, dialog, { sections: [{ title }] });
   await saveViewEditor(dialog);
 };
 

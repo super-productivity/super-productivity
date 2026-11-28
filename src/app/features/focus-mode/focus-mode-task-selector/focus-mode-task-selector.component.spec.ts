@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { EnvironmentInjector, runInInjectionContext } from '@angular/core';
 import { FocusModeTaskSelectorComponent } from './focus-mode-task-selector.component';
 import { TaskService } from '../../tasks/task.service';
+import { SelectTaskComponent } from '../../tasks/select-task/select-task.component';
+import { UntypedFormControl } from '@angular/forms';
 
 describe('FocusModeTaskSelectorComponent', () => {
   let component: FocusModeTaskSelectorComponent;
@@ -94,6 +96,54 @@ describe('FocusModeTaskSelectorComponent', () => {
 
       expect(mockTaskService.add).toHaveBeenCalledWith('Task with spaces', false, {});
     });
+
+    describe('when the input is ahead of currentTaskInputText', () => {
+      const setInputValue = (value: unknown): void => {
+        component.selectTaskComponent = {
+          taskSelectCtrl: new UntypedFormControl(value),
+          isInCreateMode: () => true,
+        } as unknown as SelectTaskComponent;
+        component.currentTaskInputText.set('Earlier draft');
+      };
+
+      it('should create the task from the text in the input', () => {
+        setInputValue('  Final draft  ');
+
+        component.createAndSelectTaskFromInput();
+
+        expect(mockTaskService.add).toHaveBeenCalledOnceWith('Final draft', false, {});
+      });
+
+      it('should consume the input before emitting and ignore a second submission before rendering', () => {
+        setInputValue('  Final draft  ');
+        const taskSelectedSpy = spyOn(component.taskSelected, 'emit').and.callFake(() => {
+          expect(component.selectTaskComponent?.taskSelectCtrl.value).toBe('');
+          expect(component.currentTaskInputText()).toBe('');
+        });
+
+        component.handleEnter(new KeyboardEvent('keydown', { key: 'Enter' }));
+        component.createAndSelectTaskFromInput();
+
+        expect(mockTaskService.add).toHaveBeenCalledOnceWith('Final draft', false, {});
+        expect(taskSelectedSpy).toHaveBeenCalledOnceWith('new-task-id');
+      });
+
+      it('should not create the earlier draft when the input was cleared', () => {
+        setInputValue(null);
+
+        component.createAndSelectTaskFromInput();
+
+        expect(mockTaskService.add).not.toHaveBeenCalled();
+      });
+
+      it('should not create the earlier draft when a task was selected', () => {
+        setInputValue({ id: 'task-123', title: 'Existing task' });
+
+        component.createAndSelectTaskFromInput();
+
+        expect(mockTaskService.add).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('close', () => {
@@ -125,6 +175,33 @@ describe('FocusModeTaskSelectorComponent', () => {
       expect(closedSpy).not.toHaveBeenCalled();
     });
   });
+
+  for (const eventInit of [
+    { key: 'Enter', isComposing: true, keyCode: 13 },
+    { key: 'Enter', isComposing: false, keyCode: 229 },
+    { key: 'Escape', isComposing: true, keyCode: 27 },
+  ]) {
+    it(`preserves the task draft for IME ${eventInit.key}/${eventInit.keyCode}`, () => {
+      const createSpy = spyOn(component, 'createAndSelectTaskFromInput');
+      const selectTask = jasmine.createSpyObj<SelectTaskComponent>(
+        'SelectTaskComponent',
+        ['isInCreateMode'],
+      );
+      selectTask.isInCreateMode.and.returnValue(true);
+      component.selectTaskComponent = selectTask;
+      const closedSpy = spyOn(component.closed, 'emit');
+      const event = new KeyboardEvent('keydown', eventInit);
+      component.currentTaskInputText.set('Draft');
+      if (eventInit.key === 'Enter') {
+        component.handleEnter(event);
+      } else {
+        component.onKeyDown(event);
+      }
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(closedSpy).not.toHaveBeenCalled();
+      expect(component.currentTaskInputText()).toBe('Draft');
+    });
+  }
 
   describe('handleEnter', () => {
     it('should call createAndSelectTaskFromInput when in create mode', () => {

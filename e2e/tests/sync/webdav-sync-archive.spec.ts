@@ -13,6 +13,7 @@ import {
   waitForArchivePersistence,
   closeContextsSafely,
 } from '../../utils/sync-helpers';
+import { expectArchivedNotLive } from '../../utils/audit-webdav-helpers';
 
 /**
  * WebDAV Archive Sync E2E Tests
@@ -104,7 +105,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Diff] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -119,7 +120,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     // Client B syncs (downloads tasks)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await expect(pageB.locator('task')).toHaveCount(2);
     console.log('[Archive Diff] Client B downloaded 2 tasks');
 
@@ -184,7 +185,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     // Client A syncs to get Task3 archive operation from B
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Diff] Client A synced to get B changes');
 
     // --- Verify final state ---
@@ -264,7 +265,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Same] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -279,7 +280,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     // Client B syncs (downloads task)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await expect(pageB.locator('task')).toHaveCount(1);
     await expect(pageB.locator('task').first()).toContainText(taskName);
     console.log('[Archive Same] Client B downloaded task');
@@ -289,6 +290,8 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // Client A marks task done and archives
     // Use .first() to avoid strict mode issues during animations
     const taskOnA = taskPageA.getTaskByText(taskName).first();
+    const taskId = await taskOnA.getAttribute('data-task-id');
+    expect(taskId).toBeTruthy();
     await taskPageA.markTaskAsDone(taskOnA);
     // Wait for animation to settle, then verify done state
     await pageA.waitForTimeout(300);
@@ -313,7 +316,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // --- Both clients sync ---
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Same] Client A synced');
 
     await waitForStatePersistence(pageB);
@@ -326,7 +329,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     // Client A syncs again to get any B changes
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
 
     // --- Verify final state ---
     // Both clients should have no tasks visible (task archived)
@@ -335,6 +338,10 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     await expect(pageB.locator('task')).toHaveCount(0);
     console.log('[Archive Same] Client B has no visible tasks');
+
+    // Hidden is not enough: a deleted task also leaves the work view.
+    await expectArchivedNotLive(pageA, [taskId!], 'A');
+    await expectArchivedNotLive(pageB, [taskId!], 'B');
 
     console.log('[Archive Same] ✓ Both clients archived same task without conflict');
 
@@ -390,7 +397,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Edit] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -405,12 +412,14 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     // Client B syncs (downloads task)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await expect(pageB.locator('task')).toHaveCount(1);
     console.log('[Archive Edit] Client B downloaded task');
 
     // --- Client A archives the task ---
     const taskOnA = taskPageA.getTaskByText(originalTaskName).first();
+    const taskId = await taskOnA.getAttribute('data-task-id');
+    expect(taskId).toBeTruthy();
     await taskPageA.markTaskAsDone(taskOnA);
     await pageA.waitForTimeout(300);
     await expect(taskPageA.getTaskByText(originalTaskName).first()).toHaveClass(/isDone/);
@@ -436,19 +445,19 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // --- Client B syncs (will download archive operation) ---
     await waitForStatePersistence(pageB);
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Archive Edit] Client B synced');
 
     // Client A syncs to get any changes from B
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Edit] Client A synced');
 
     // Sync both again to ensure eventual consistency
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Edit] Both clients synced again for eventual consistency');
 
     // --- Verify final state ---
@@ -458,6 +467,9 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // With archive-wins rule, archive always wins regardless of timestamps
     await expect(pageA.locator('task')).toHaveCount(0, { timeout: 30000 });
     await expect(pageB.locator('task')).toHaveCount(0, { timeout: 30000 });
+    // Archive won, so the task is archived on both clients, not deleted.
+    await expectArchivedNotLive(pageA, [taskId!], 'A');
+    await expectArchivedNotLive(pageB, [taskId!], 'B');
 
     const taskCountA = await pageA.locator('task').count();
     const taskCountB = await pageB.locator('task').count();
@@ -522,12 +534,27 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // Verify subtasks exist (use .first() to avoid matching parent that contains subtask text)
     await expect(taskPageA.getTaskByText(subtask1Name).first()).toBeVisible();
     await expect(taskPageA.getTaskByText(subtask2Name).first()).toBeVisible();
+    const familyIds = await Promise.all([
+      parentTask.getAttribute('data-task-id'),
+      pageA
+        .locator('task.hasNoSubTasks')
+        .filter({ hasText: subtask1Name })
+        .first()
+        .getAttribute('data-task-id'),
+      pageA
+        .locator('task.hasNoSubTasks')
+        .filter({ hasText: subtask2Name })
+        .first()
+        .getAttribute('data-task-id'),
+    ]);
+    expect(familyIds.every((id) => !!id)).toBe(true);
+    expect(new Set(familyIds).size).toBe(3);
     console.log('[Archive Subtasks] Client A added 2 subtasks');
 
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Subtasks] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -542,7 +569,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     // Client B syncs (downloads parent + subtasks)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await expect(taskPageB.getTaskByText(parentTaskName).first()).toBeVisible();
     await expect(taskPageB.getTaskByText(subtask1Name).first()).toBeVisible();
     await expect(taskPageB.getTaskByText(subtask2Name).first()).toBeVisible();
@@ -596,18 +623,22 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     // Client A syncs
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Subtasks] Client A synced archive');
 
     // Client B syncs
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Archive Subtasks] Client B synced');
 
     // --- Verify final state ---
     // Client B should have no tasks (all archived, no orphans)
     await expect(pageB.locator('task')).toHaveCount(0);
     console.log('[Archive Subtasks] Client B has no tasks (all archived)');
+
+    // Parent and both subtasks are archived on both clients, not dropped.
+    await expectArchivedNotLive(pageA, familyIds as string[], 'A');
+    await expectArchivedNotLive(pageB, familyIds as string[], 'B');
 
     // Verify no orphan subtask errors in console (if we were monitoring)
     console.log('[Archive Subtasks] ✓ Archive with subtasks synced correctly');
@@ -657,7 +688,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // Client A syncs
     await waitForStatePersistence(pageA);
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Create] Client A initial sync complete');
 
     // --- Setup Client B ---
@@ -672,7 +703,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
 
     // Client B syncs (downloads Task1)
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     await expect(pageB.locator('task')).toHaveCount(1);
     await expect(taskPageB.getTaskByText(task1Name)).toBeVisible();
     console.log('[Archive Create] Client B downloaded Task1');
@@ -694,18 +725,18 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // --- Both clients sync ---
     // Client A syncs first (uploads archive)
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Create] Client A synced archive');
 
     // Client B syncs (downloads archive, uploads Task2)
     await waitForStatePersistence(pageB);
     await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    expect(await waitForSyncComplete(pageB, syncPageB)).toBe('success');
     console.log('[Archive Create] Client B synced');
 
     // Client A syncs again to get Task2
     await syncPageA.triggerSync();
-    await waitForSyncComplete(pageA, syncPageA);
+    expect(await waitForSyncComplete(pageA, syncPageA)).toBe('success');
     console.log('[Archive Create] Client A synced again');
 
     // --- Verify final state ---

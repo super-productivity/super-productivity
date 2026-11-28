@@ -3,6 +3,10 @@ import { isRelatedModelDataValid } from './is-related-model-data-valid';
 import { OpLog } from '../../core/log';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
+import { createAppDataCompleteMock } from '../../util/app-data-mock';
+import { DEFAULT_TASK } from '../../features/tasks/task.model';
+import { INBOX_PROJECT } from '../../features/project/project.const';
+import { IssueProvider } from '../../features/issue/issue.model';
 
 describe('isRelatedModelDataValid', () => {
   beforeEach(() => {
@@ -21,6 +25,42 @@ describe('isRelatedModelDataValid', () => {
 
   afterEach(() => {
     (window.confirm as jasmine.Spy).and.returnValue(true);
+  });
+
+  it('should reject stale issue providers on active tasks but allow them in both archives', () => {
+    const data = createAppDataCompleteMock();
+    const task = {
+      ...DEFAULT_TASK,
+      id: 'linked',
+      projectId: INBOX_PROJECT.id,
+      issueProviderId: 'provider',
+      issueId: 'issue-1',
+    };
+    data.task = { ...data.task, ids: [task.id], entities: { [task.id]: task } };
+    data.project = {
+      ids: [INBOX_PROJECT.id],
+      entities: {
+        [INBOX_PROJECT.id]: { ...INBOX_PROJECT, taskIds: [task.id] },
+      },
+    };
+    expect(isRelatedModelDataValid(data)).toBe(false);
+    data.issueProvider = {
+      ids: ['provider'],
+      entities: { provider: { id: 'provider' } as IssueProvider },
+    };
+    expect(isRelatedModelDataValid(data)).toBe(true);
+    data.issueProvider = { ids: [], entities: {} };
+    data.task = { ...data.task, ids: [], entities: {} };
+    data.project.entities[INBOX_PROJECT.id] = { ...INBOX_PROJECT, taskIds: [] };
+    data.archiveYoung.task = {
+      ids: ['young'],
+      entities: { young: { ...task, id: 'young' } },
+    };
+    data.archiveOld.task = {
+      ids: ['old'],
+      entities: { old: { ...task, id: 'old' } },
+    };
+    expect(isRelatedModelDataValid(data)).toBe(true);
   });
 
   it('should handle null data gracefully', () => {

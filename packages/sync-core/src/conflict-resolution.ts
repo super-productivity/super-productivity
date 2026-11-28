@@ -7,6 +7,7 @@ import {
 } from './operation.types';
 import type { EntityConflict, LwwUpdatePayload, Operation } from './operation.types';
 import { NOOP_SYNC_LOGGER } from './sync-logger';
+import { compareVectorClocks, VectorClockComparison } from './vector-clock';
 import type { SyncLogger } from './sync-logger';
 
 export type ConflictResolutionSuggestion = 'local' | 'remote' | 'manual';
@@ -19,7 +20,9 @@ export type LwwConflictResolutionReason =
   | 'remote-delete-wins'
   | 'local-delete-wins'
   | 'local-timestamp'
-  | 'remote-timestamp-or-tie';
+  | 'remote-timestamp-or-tie'
+  | 'local-duplicate-create'
+  | 'remote-duplicate-create';
 
 const DEFAULT_MAX_DEEP_EQUAL_DEPTH = 50;
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -44,6 +47,11 @@ export interface LwwConflictResolutionPlanningOptions<
   TOperation extends Operation<string> = Operation,
 > {
   isArchiveAction: (op: TOperation) => boolean;
+  /**
+   * Opts an op into delete-wins precedence over concurrent edits. It wins only
+   * while no same-side op re-creates the entity after it (frontier guard);
+   * otherwise the entity is resolved by timestamp LWW.
+   */
   isDeleteWinsAction?: (op: TOperation) => boolean;
   toEntityKey?: (entityType: string, entityId: string) => string;
 }
@@ -63,9 +71,12 @@ export interface LocalDeleteRemoteUpdateConversionOptions<
     entityType: string,
   ) => Record<string, unknown>;
   /**
-   * Applies an additive UPDATE (one whose payload holds arguments such as a
-   * delta, not field values) to `entity`, or returns undefined when `op` is
-   * not additive. Without it, every payload is read as field values.
+   * Applies an UPDATE whose payload is not field values to `entity` and
+   * returns the resulting entity: an additive delta (a task's
+   * `syncTimeSpent`) or a semantic action the host replays with its reducer
+   * (a counter's `setSimpleCounterCounterToday`). Returns undefined when the
+   * host does not apply `op` itself; the payload is then read as field
+   * values, as it is for every op when this hook is absent.
    */
   applyAdditiveUpdate?: (
     entity: Record<string, unknown>,
@@ -139,8 +150,9 @@ const getPayloadKeys = (payload: unknown): string[] | undefined => {
  * converted op replaces it with the state after all of them. Each op is
  * stored and replayed, so built from the delete payload alone, whichever
  * applied last would erase the others (#10380); carrying the same final state
- * also leaves their apply order irrelevant. An additive op (see
- * `applyAdditiveUpdate`) is applied by the host, never read as fields.
+ * also leaves their apply order irrelevant. An op the host applies itself
+ * (an additive delta or a semantic action, see `applyAdditiveUpdate`) is
+ * never read as fields.
  */
 export const convertLocalDeleteRemoteUpdatesToLww = <
   TOperation extends Operation<string> = Operation,
@@ -427,11 +439,112 @@ const winningClientId = (
 ): string => ops.find((op) => op.timestamp === maxTimestamp)?.clientId ?? '';
 
 /**
+ * Both devices created the same id (deterministic ids, e.g. a repeat instance
+ * `rpt_<cfgId>_<day>`) without seeing each other (#11645). A side whose only
+ * ops on the entity are that create (plus follow-ups the other side made
+ * identically) holds no user edit, so the side that also
+ * edited wins, whatever the timestamps: otherwise a device that opens hours
+ * later wipes the other's tracked time with its blank copy. Undefined when
+ * this rule does not decide (not both created, or neither or both edited);
+ * timestamp LWW decides then. Symmetric, so both devices pick the same side.
+ * `localOps`/`remoteOps` hold all of a side's conflicting ops for the entity,
+ * across conflicts (commuting ops applied outside conflicts are absent). A delete
+ * counts as an edit, so a deleted instance does not come back as a blank copy.
+ * Archive and delete-wins are decided before this rule; they are edits too, so
+ * both rules always agree on the side.
+ *
+ * shortcut: an automatic follow-up counts as an edit unless the other side
+ * made it identically (e.g. both derived the same schedule); otherwise
+ * timestamps decide. Known residual: payloads that differ per device (devices
+ * on different days or timezones, or a series without a project, which takes
+ * each device's active project) never mirror, so the old timestamp loss
+ * remains there. Count only non-noise ops (host hook) if a report shows it.
+ */
+const editedSideOfDuplicateCreate = (
+  localOps: readonly Operation<string>[],
+  remoteOps: readonly Operation<string>[],
+): LwwConflictResolutionWinner | undefined => {
+  const isCreate = (op: Operation<string>): boolean => op.opType === OpType.Create;
+  if (!localOps.some(isCreate) || !remoteOps.some(isCreate)) return undefined;
+  // An op the other side made identically (a repeat's derived schedule) is
+  // part of creating the entity on both devices, not a user edit. Compare the
+  // wire form: a downloaded op lost its undefined keys in JSON, a local one
+  // kept them ("do not remind" schedules carry remindAt: undefined).
+  const wire = (payload: unknown): unknown =>
+    payload === undefined ? undefined : JSON.parse(JSON.stringify(payload));
+  const isMirrored = (
+    op: Operation<string>,
+    other: readonly Operation<string>[],
+  ): boolean =>
+    other.some(
+      (o) =>
+        o.opType === op.opType &&
+        o.actionType === op.actionType &&
+        deepEqual(wire(o.payload), wire(op.payload)),
+    );
+  const isEdit = (op: Operation<string>, other: readonly Operation<string>[]): boolean =>
+    !isCreate(op) && !isMirrored(op, other);
+  const localEdited = localOps.some((op) => isEdit(op, remoteOps));
+  const remoteEdited = remoteOps.some((op) => isEdit(op, localOps));
+  if (localEdited === remoteEdited) return undefined;
+  return localEdited ? 'local' : 'remote';
+};
+
+/**
+ * Whether replaying `op` would re-create its entity after a delete: a Create,
+ * or an LWW Update (the host's LWW reducer re-creates an absent entity). The
+ * action-type suffix also covers released clients, whose LWW Updates carry no
+ * `lwwUpdateMode` envelope. A recreate-marked 'patch' delta is excluded: it is
+ * ignored when the entity is absent. A plain update of a missing id is a no-op
+ * on replay, so it does not count.
+ */
+const isEntityRecreatingOp = (op: Operation<string>): boolean => {
+  if (op.opType === OpType.Create) return true;
+  if (!op.actionType.endsWith('] LWW Update')) return false;
+  return !(
+    isLwwUpdatePayload(op.payload) &&
+    op.payload.lwwUpdateMode === 'patch' &&
+    op.payload.recreatesEntityAfterDelete === true
+  );
+};
+
+/**
+ * Frontier guard for delete-wins (#11489): a delete-wins op wins only while no
+ * same-side op RE-CREATES the entity after it. Such an op is causally after the
+ * delete (vector clock GREATER_THAN: it saw the delete) and would re-create the
+ * entity on replay (`isEntityRecreatingOp`), e.g. a released client's
+ * re-creating LWW update or a same-id add. That side moved past the delete, so
+ * the entity falls back to timestamp LWW, exactly as before delete-wins.
+ * Concurrent ops and plain later updates (a no-op on a deleted entity) do not
+ * block, and nor do other delete-wins ops. `ops` must hold ALL of the side's
+ * ops for the entity, across conflicts, because detection emits one conflict
+ * per remote op.
+ */
+const hasFrontierDeleteWins = <TOperation extends Operation<string>>(
+  ops: readonly TOperation[],
+  isDeleteWinsAction: (op: TOperation) => boolean,
+): boolean =>
+  ops.some(
+    (deleteOp) =>
+      isDeleteWinsAction(deleteOp) &&
+      !ops.some(
+        (op) =>
+          !isDeleteWinsAction(op) &&
+          isEntityRecreatingOp(op) &&
+          compareVectorClocks(op.vectorClock, deleteOp.vectorClock) ===
+            VectorClockComparison.GREATER_THAN,
+      ),
+  );
+
+/**
  * Plans last-write-wins conflict resolution without looking up host state or
  * creating operations.
  *
  * The host supplies archive-action detection and may opt specific operations
- * into delete-wins precedence because both policies are domain-specific. The
+ * into delete-wins precedence because both policies are domain-specific. A
+ * delete-wins op only wins while no same-side op re-creates the entity after
+ * it (the frontier guard, `hasFrontierDeleteWins`); otherwise the entity is
+ * resolved by timestamp LWW. The
  * returned plan tells the host whether a local-win op must be created and which
  * app-side factory should create it.
  */
@@ -449,6 +562,20 @@ export const planLwwConflictResolutions = <
   const entitiesWithLocalArchive = new Set<string>();
   const entitiesWithRemoteArchive = new Set<string>();
 
+  // Every op per entity and side, across conflicts, for the delete-wins
+  // frontier guard (detection emits one conflict per remote op).
+  const localOpsByEntity = new Map<string, Map<string, TOperation>>();
+  const remoteOpsByEntity = new Map<string, Map<string, TOperation>>();
+  const collect = (
+    byEntity: Map<string, Map<string, TOperation>>,
+    entityKey: string,
+    ops: readonly TOperation[],
+  ): void => {
+    const byId = byEntity.get(entityKey) ?? new Map<string, TOperation>();
+    ops.forEach((op) => byId.set(op.id, op));
+    byEntity.set(entityKey, byId);
+  };
+
   for (const conflict of conflicts) {
     const entityKey = toEntityKey(conflict.entityType, conflict.entityId);
     if (conflict.localOps.some(options.isArchiveAction)) {
@@ -457,7 +584,20 @@ export const planLwwConflictResolutions = <
     if (conflict.remoteOps.some(options.isArchiveAction)) {
       entitiesWithRemoteArchive.add(entityKey);
     }
+    collect(localOpsByEntity, entityKey, conflict.localOps);
+    collect(remoteOpsByEntity, entityKey, conflict.remoteOps);
   }
+
+  const isDeleteWinsAction = options.isDeleteWinsAction;
+  const sideDeleteWins = (
+    byEntity: Map<string, Map<string, TOperation>>,
+    entityKey: string,
+  ): boolean =>
+    !!isDeleteWinsAction &&
+    hasFrontierDeleteWins(
+      [...(byEntity.get(entityKey)?.values() ?? [])],
+      isDeleteWinsAction,
+    );
 
   return conflicts.map((conflict) => {
     const entityKey = toEntityKey(conflict.entityType, conflict.entityId);
@@ -483,13 +623,14 @@ export const planLwwConflictResolutions = <
       };
     }
 
-    const isDeleteWinsAction = options.isDeleteWinsAction;
-    const remoteHasDeleteWins = isDeleteWinsAction
-      ? conflict.remoteOps.some(isDeleteWinsAction)
-      : false;
-    const localHasDeleteWins = isDeleteWinsAction
-      ? conflict.localOps.some(isDeleteWinsAction)
-      : false;
+    const remoteHasDeleteWins =
+      !!isDeleteWinsAction &&
+      conflict.remoteOps.some(isDeleteWinsAction) &&
+      sideDeleteWins(remoteOpsByEntity, entityKey);
+    const localHasDeleteWins =
+      !!isDeleteWinsAction &&
+      conflict.localOps.some(isDeleteWinsAction) &&
+      sideDeleteWins(localOpsByEntity, entityKey);
 
     if (remoteHasDeleteWins) {
       return {
@@ -505,6 +646,22 @@ export const planLwwConflictResolutions = <
         winner: 'local',
         reason: 'local-delete-wins',
         localWinOperationKind: 'delete-win',
+      };
+    }
+
+    const duplicateCreateWinner = editedSideOfDuplicateCreate(
+      [...(localOpsByEntity.get(entityKey)?.values() ?? [])],
+      [...(remoteOpsByEntity.get(entityKey)?.values() ?? [])],
+    );
+    if (duplicateCreateWinner === 'remote') {
+      return { conflict, winner: 'remote', reason: 'remote-duplicate-create' };
+    }
+    if (duplicateCreateWinner === 'local') {
+      return {
+        conflict,
+        winner: 'local',
+        reason: 'local-duplicate-create',
+        localWinOperationKind: 'update',
       };
     }
 

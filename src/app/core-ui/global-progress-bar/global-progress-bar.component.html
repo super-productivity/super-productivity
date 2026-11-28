@@ -1,16 +1,6 @@
-@if (globalProgressBarService.label$ | async; as label) {
-  <div
-    [@fadeOut]
-    class="badge"
-  >
-    {{ label.key | translate: label.params }}
-  </div>
-}
 @if (globalProgressBarService.isShowGlobalProgressBar$ | async) {
-  <div [@fadeInOutBottom]>
-    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-  </div>
+  <mat-progress-bar
+    @fade
+    mode="indeterminate"
+  ></mat-progress-bar>
 }
-
-<!--<div class="badge">Some test text</div>-->
-<!--<mat-progress-bar mode="indeterminate"></mat-progress-bar>-->

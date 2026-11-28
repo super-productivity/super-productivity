@@ -39,6 +39,7 @@ describe('TaskViewCustomizerPanelComponent', () => {
     selectedSort: WritableSignal<SortOption>;
     selectedGroup: WritableSignal<GroupOption>;
     selectedFilter: WritableSignal<FilterOption>;
+    isCustomized: WritableSignal<boolean>;
     availableGroupOptions: () => GroupOption[];
     setSort: jasmine.Spy;
     setFilter: jasmine.Spy;
@@ -50,6 +51,7 @@ describe('TaskViewCustomizerPanelComponent', () => {
       selectedSort: signal<SortOption>(DEFAULT_OPTIONS.sort),
       selectedGroup: signal<GroupOption>(DEFAULT_OPTIONS.group),
       selectedFilter: signal<FilterOption>(DEFAULT_OPTIONS.filter),
+      isCustomized: signal(false),
       availableGroupOptions: () => OPTIONS.group.list,
       setSort: jasmine.createSpy('setSort'),
       setFilter: jasmine.createSpy('setFilter'),
@@ -87,11 +89,17 @@ describe('TaskViewCustomizerPanelComponent', () => {
     );
   };
 
-  it('shows grouping, "Save as view…" and "Reset all"', () => {
+  it('shows grouping and "Reset all", but no "Save as view…" without customization', () => {
     const texts = openMenuTexts();
     expect(texts.some((t) => t.includes(T.F.TASK_VIEW.CUSTOMIZER.GROUP_BY))).toBeTrue();
-    expect(texts.some((t) => t.includes(T.F.BOARDS.V.SAVE_AS_VIEW))).toBeTrue();
+    expect(texts.some((t) => t.includes(T.F.BOARDS.V.SAVE_AS_VIEW))).toBeFalse();
     expect(texts.some((t) => t.includes(T.F.TASK_VIEW.CUSTOMIZER.RESET_ALL))).toBeTrue();
+  });
+
+  it('shows "Save as view…" once a sort, group or filter is active', () => {
+    customizer.isCustomized.set(true);
+    const texts = openMenuTexts();
+    expect(texts.some((t) => t.includes(T.F.BOARDS.V.SAVE_AS_VIEW))).toBeTrue();
   });
 
   it("writes the list's customizer state", () => {

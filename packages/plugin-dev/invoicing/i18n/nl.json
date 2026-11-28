@@ -1,0 +1,58 @@
+{
+  "TITLE": "Facturen",
+  "LOADING": "Laden…",
+  "LIST": {
+    "EMPTY": "Nog geen facturen.",
+    "PRINT": "Afdrukken / PDF",
+    "CSV": "CSV",
+    "DELETE": "Verwijderen",
+    "CONFIRM_DELETE": "Factuur {{number}} verwijderen? De uren tellen weer als niet-gefactureerd."
+  },
+  "NEW": {
+    "TITLE": "Nieuwe factuur",
+    "PROJECT": "Project",
+    "NO_PROJECTS": "Maak eerst een project aan. Elk project wordt apart gefactureerd.",
+    "FROM": "Van",
+    "TO": "Tot",
+    "RATE": "Uurtarief",
+    "LANGUAGE": "Factuurtaal",
+    "CLIENT": "Factuur aan",
+    "CLIENT_HINT": "Naam en adres van de klant. Wordt onthouden voor dit project.",
+    "INCLUDE": "Opnemen",
+    "NO_HOURS": "Geen niet-gefactureerde tijd in dit project in deze periode.",
+    "NUMBER": "Factuurnummer",
+    "ISSUE_DATE": "Factuurdatum",
+    "ISSUE": "Aanmaken en afdrukken",
+    "BLOCK": {
+      "PERIOD": "Kies een begin- en einddatum; het begin moet eerst komen.",
+      "LINES": "Vink minstens één regel met uren aan.",
+      "RATE": "Voer een uurtarief in.",
+      "NUMBER": "Voer een factuurnummer in.",
+      "NUMBER_USED": "Dit factuurnummer is al in gebruik.",
+      "DATE": "Voer de factuurdatum in."
+    }
+  },
+  "SETTINGS": {
+    "TITLE": "Jouw gegevens",
+    "SELLER": "Je naam, adres en btw-nummer",
+    "PAYMENT_NOTE": "Betaalgegevens",
+    "PAYMENT_NOTE_HINT": "Bankgegevens of betalingsvoorwaarden, onderaan afgedrukt.",
+    "CURRENCY": "Valutacode",
+    "TAX": "Btw %",
+    "PAYMENT_DAYS": "Dagen tot vervaldatum",
+    "ROUNDING": "Rond elke regel naar boven af op",
+    "ROUNDING_NONE": "Niet afronden",
+    "ROUNDING_MIN": "{{min}} minuten",
+    "PREFIX": "Voorvoegsel factuurnummer",
+    "SAVE": "Opslaan",
+    "SAVED": "Opgeslagen."
+  },
+  "INVOICE": {
+    "DESCRIPTION": "Omschrijving",
+    "HOURS": "Uren",
+    "TOTAL": "Totaal"
+  },
+  "ERROR": {
+    "GENERIC": "Er is iets misgegaan: {{error}}"
+  }
+}

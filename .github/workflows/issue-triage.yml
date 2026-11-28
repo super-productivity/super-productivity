@@ -174,6 +174,24 @@ jobs:
             const triage = parseModelJson(process.env.CLASSIFY_RESPONSE);
             const { labels, missing } = pickLabels(triage);
 
+            // In-app error reports ("💥 " title, getGithubErrorUrl) open a blank
+            // issue, and reporters without push access cannot set a type.
+            let typeError = null;
+            if (context.payload.issue.title.startsWith('💥')) {
+              try {
+                const { data } = await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number,
+                  type: 'Bug',
+                });
+                // GitHub drops type changes silently when access is missing
+                if (data.type?.name !== 'Bug') typeError = 'The Bug type was not applied.';
+              } catch (err) {
+                typeError = `Could not set the Bug type: ${err.message}`;
+              }
+            }
+
             if (labels.length) {
               try {
                 await github.rest.issues.addLabels({ owner, repo, issue_number, labels });
@@ -223,3 +241,4 @@ jobs:
                   'has not expired and still has the "Copilot Requests" permission.',
               );
             }
+            if (typeError) core.setFailed(typeError);

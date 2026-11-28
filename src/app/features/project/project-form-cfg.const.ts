@@ -13,8 +13,6 @@ export const CREATE_PROJECT_BASIC_CONFIG_FORM_CONFIG: ConfigFormSection<CreatePr
     title: 'Project Settings & Theme',
     key: 'basic',
 
-    help: `Very basic settings for your project.`,
-
     items: [
       {
         key: 'title',

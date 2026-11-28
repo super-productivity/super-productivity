@@ -2,6 +2,7 @@ import { test, expect } from '../../fixtures/test.fixture';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { cssSelectors } from '../../constants/selectors';
 import { fillMarkdownEditor } from '../../utils/markdown-editor';
+import { waitForAppReady } from '../../utils/waits';
 
 /**
  * Repro for the Reddit report: notes written in focus mode's fullscreen
@@ -105,14 +106,19 @@ test.describe('Focus Mode - fullscreen notes save', () => {
   // auto-completes, the focus-mode overlay swaps screens and destroys the
   // editor, and Save must still persist the note. Shared by the Countdown and
   // Pomodoro variants (the two modes whose timer auto-completes; Flowtime never
-  // does). Slow (~1min) because there is no sub-minute UI duration: we shrink
-  // the timer to ~1 min and let it elapse with the dialog open.
+  // does). There is no sub-minute UI duration, so we shrink the timer to ~1 min
+  // and fast-forward a fake clock past it with the dialog open.
   const expectNoteSurvivesMidEditCompletion = async (
     page: import('@playwright/test').Page,
     taskPage: import('../../pages/task.page').TaskPage,
     workViewPage: WorkViewPage,
     mode?: 'Pomodoro',
   ): Promise<void> => {
+    // Install before the app bootstraps so its timers use the fake clock;
+    // the fixture already loaded the app, hence the reload.
+    await page.clock.install();
+    await page.reload();
+    await waitForAppReady(page);
     await startSessionInProgress(page, workViewPage, mode);
 
     // Shrink the timer to ~1 min (default is 25 min, the time-adjust button
@@ -134,9 +140,10 @@ test.describe('Focus Mode - fullscreen notes save', () => {
 
     // While we keep the dialog open, the focus session auto-completes: the
     // in-progress complete-session button detaches once it leaves InProgress.
+    await page.clock.fastForward(65_000);
     await expect(
       page.locator('focus-mode-main button.complete-session-btn'),
-    ).not.toBeAttached({ timeout: 90000 });
+    ).not.toBeAttached({ timeout: 10000 });
 
     // Now save the long note.
     await page.locator('#T-save-note').click();
@@ -160,7 +167,6 @@ test.describe('Focus Mode - fullscreen notes save', () => {
     testPrefix,
     taskPage,
   }) => {
-    test.setTimeout(120000);
     const workViewPage = new WorkViewPage(page, testPrefix);
     await expectNoteSurvivesMidEditCompletion(page, taskPage, workViewPage);
   });
@@ -170,7 +176,6 @@ test.describe('Focus Mode - fullscreen notes save', () => {
     testPrefix,
     taskPage,
   }) => {
-    test.setTimeout(120000);
     const workViewPage = new WorkViewPage(page, testPrefix);
     await expectNoteSurvivesMidEditCompletion(page, taskPage, workViewPage, 'Pomodoro');
   });

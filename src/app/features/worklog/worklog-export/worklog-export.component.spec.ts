@@ -1,100 +1,152 @@
-import { TestBed } from '@angular/core/testing';
-import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideMockStore } from '@ngrx/store/testing';
+import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { WorklogExportComponent } from './worklog-export.component';
 import { WorklogService } from '../worklog.service';
 import { WorkContextService } from '../../work-context/work-context.service';
-import { WorkContextType } from '../../work-context/work-context.model';
-import { WORKLOG_EXPORT_DEFAULTS } from '../../work-context/work-context.const';
-import { ProjectService } from '../../project/project.service';
-import { DEFAULT_PROJECT } from '../../project/project.const';
-import { selectUnarchivedProjects } from '../../project/store/project.selectors';
 import { TagService } from '../../tag/tag.service';
 import { TimeTrackingService } from '../../time-tracking/time-tracking.service';
 import { SnackService } from '../../../core/snack/snack.service';
+import { initialProjectState, projectAdapter } from '../../project/store/project.reducer';
+import { DEFAULT_PROJECT } from '../../project/project.const';
+import { Project } from '../../project/project.model';
 import { DEFAULT_TASK, WorklogTask } from '../../tasks/task.model';
 import { WorklogGrouping } from '../worklog.model';
 
 describe('WorklogExportComponent', () => {
-  for (const groupBy of Object.values(WorklogGrouping)) {
-    it(`should export archived project titles and tracked time when grouped by ${groupBy}`, async () => {
-      const project = {
-        ...DEFAULT_PROJECT,
-        id: 'completed-project',
-        title: 'Completed project',
-        isArchived: true,
-      };
-      const dateStr = '2026-10-01';
-      const task: WorklogTask = {
-        ...DEFAULT_TASK,
-        id: 'tracked-task',
-        title: 'Tracked task',
-        projectId: project.id,
-        timeSpentOnDay: { [dateStr]: 3600000 },
-        dateStr: '',
-      };
-      TestBed.configureTestingModule({
-        imports: [WorklogExportComponent],
-        providers: [
-          provideMockStore({
-            initialState: {
-              projects: { ids: [project.id], entities: { [project.id]: project } },
-            },
-          }),
-          {
-            provide: ProjectService,
-            useFactory: (store: MockStore) => ({
-              list$: store.select(selectUnarchivedProjects),
-            }),
-            deps: [MockStore],
-          },
-          {
-            provide: WorklogService,
-            useValue: { getTaskListForRange$: () => of([task]) },
-          },
-          {
-            provide: WorkContextService,
-            useValue: {
-              advancedCfg$: of({
-                worklogExportSettings: {
-                  ...WORKLOG_EXPORT_DEFAULTS,
-                  groupBy,
-                  cols: ['PROJECTS', 'TITLES', 'TIME_MS'],
-                },
-              }),
-              activeWorkContext$: of({
-                id: 'TODAY',
-                type: WorkContextType.TAG,
-              }),
-            },
-          },
-          { provide: TagService, useValue: { tags$: of([]) } },
-          {
-            provide: TimeTrackingService,
-            useValue: {
-              getLegacyWorkStartEndForWorkContext: async () => ({
-                workStart: {},
-                workEnd: {},
-              }),
-            },
-          },
-          { provide: SnackService, useValue: {} },
-        ],
-      });
-      TestBed.overrideComponent(WorklogExportComponent, {
-        set: { template: '', imports: [] },
-      });
-      const fixture = TestBed.createComponent(WorklogExportComponent);
-      fixture.componentRef.setInput('rangeStart', new Date(2026, 9, 1));
-      fixture.componentRef.setInput('rangeEnd', new Date(2026, 9, 31));
-      fixture.detectChanges();
-      await fixture.whenStable();
+  const day = '2026-09-15';
+  // #11351: "Complete project" archives the project; its tasks move to the
+  // task archive but still show up in the Today history range.
+  const archivedProject: Project = {
+    ...DEFAULT_PROJECT,
+    id: 'archived-project',
+    title: 'Client Work',
+    isArchived: true,
+  };
+  const archivedTask: WorklogTask = {
+    ...DEFAULT_TASK,
+    id: 'archived-task',
+    title: 'Write report',
+    projectId: archivedProject.id,
+    isDone: true,
+    timeSpentOnDay: { [day]: 3600000 },
+    timeSpent: 3600000,
+    dateStr: day,
+  };
 
-      expect(fixture.componentInstance.formattedRows).toEqual([
-        ['Completed project', 'Tracked task', 3600000],
-      ]);
-      expect(fixture.componentInstance.txt).toContain('Completed project');
-      expect(fixture.componentInstance.txt).toContain('Tracked task');
+  const createComponent = async (
+    projects: Project[],
+    tasks: WorklogTask[],
+    groupBy = WorklogGrouping.DATE,
+  ): Promise<ComponentFixture<WorklogExportComponent>> => {
+    TestBed.configureTestingModule({
+      imports: [WorklogExportComponent, TranslateModule.forRoot()],
+      providers: [
+        provideNoopAnimations(),
+        provideMockStore({
+          initialState: {
+            projects: projectAdapter.setAll(projects, initialProjectState),
+          },
+        }),
+        {
+          provide: WorklogService,
+          useValue: { getTaskListForRange$: () => of(tasks) },
+        },
+        {
+          provide: WorkContextService,
+          useValue: {
+            advancedCfg$: of({
+              worklogExportSettings: {
+                cols: ['DATE', 'PROJECTS', 'TITLES_INCLUDING_SUB', 'TIME_MS'],
+                roundWorkTimeTo: null,
+                roundStartTimeTo: null,
+                roundEndTimeTo: null,
+                separateTasksBy: ' | ',
+                groupBy,
+              },
+            }),
+            activeWorkContext$: of({ id: 'TODAY' }),
+            updateWorklogExportSettingsForCurrentContext: () => undefined,
+          },
+        },
+        { provide: TagService, useValue: { tags$: of([]) } },
+        {
+          provide: TimeTrackingService,
+          useValue: {
+            getLegacyWorkStartEndForWorkContext: () =>
+              Promise.resolve({ workStart: {}, workEnd: {} }),
+          },
+        },
+        { provide: SnackService, useValue: { open: () => undefined } },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(WorklogExportComponent);
+    fixture.componentRef.setInput('rangeStart', new Date(2026, 8, 1));
+    fixture.componentRef.setInput('rangeEnd', new Date(2026, 9, 31));
+    fixture.componentInstance.ngOnInit();
+
+    // work start/end comes from a promise
+    await new Promise((resolve) => setTimeout(resolve));
+    return fixture;
+  };
+
+  for (const groupBy of Object.values(WorklogGrouping)) {
+    it(`should export tasks of archived projects grouped by ${groupBy} (#11351)`, async () => {
+      const fixture = await createComponent([archivedProject], [archivedTask], groupBy);
+
+      expect(fixture.componentInstance.txt).toBe(
+        'Date;Projects;Titles;Worked\n2026-09-15;Client Work;Write report;3600000',
+      );
     });
   }
+
+  it('should total the time per project for the range', async () => {
+    const otherProject: Project = { ...DEFAULT_PROJECT, id: 'other', title: 'Other' };
+    const otherTask: WorklogTask = {
+      ...archivedTask,
+      id: 'other-task',
+      projectId: otherProject.id,
+      timeSpentOnDay: { [day]: 10800000 },
+    };
+    const fixture = await createComponent(
+      [archivedProject, otherProject],
+      [archivedTask, otherTask],
+    );
+
+    expect(fixture.componentInstance.projectTotals).toEqual([
+      { projectId: 'other', title: 'Other', timeSpent: 10800000, share: 0.75 },
+      {
+        projectId: 'archived-project',
+        title: 'Client Work',
+        timeSpent: 3600000,
+        share: 0.25,
+      },
+    ]);
+
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    // collapsed by default: the header is there, the table is not
+    expect(el.querySelectorAll('collapsible').length).toBe(2);
+    expect(el.querySelector('.project-totals')).toBeNull();
+
+    el.querySelector<HTMLElement>('collapsible .collapsible-header')!.click();
+    fixture.detectChanges();
+    const cells = Array.from(el.querySelectorAll('.project-totals tr')).map((tr) =>
+      Array.from(tr.children).map((c) => c.textContent!.trim()),
+    );
+    expect(cells).toEqual([
+      ['Other', '3h', '75%'],
+      ['Client Work', '1h', '25%'],
+    ]);
+  });
+
+  it('should not offer project totals for a single project', async () => {
+    const fixture = await createComponent([archivedProject], [archivedTask]);
+
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('collapsible').length).toBe(1);
+  });
 });

@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { provideMockStore } from '@ngrx/store/testing';
+import { selectTaskEntities } from '../../../features/tasks/store/task.selectors';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { ActionType, OpType, Operation } from '../../core/operation.types';
 import { SyncImportConflictGateService } from '../../sync/sync-import-conflict-gate.service';
@@ -57,6 +59,9 @@ describe('Example-task SYNC_IMPORT gate (integration)', () => {
   beforeEach(async () => {
     TestBed.configureTestingModule({
       providers: [
+        provideMockStore({
+          selectors: [{ selector: selectTaskEntities, value: {} }],
+        }),
         OperationLogStoreService,
         SyncImportConflictGateService,
         {

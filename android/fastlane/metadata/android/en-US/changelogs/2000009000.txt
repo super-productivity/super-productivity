@@ -1,0 +1,5 @@
+20.0.0 brings Smart Lists, multi-tag filters and a redesigned view editor.
+Add tasks from the home-screen widget and save shares without opening the app.
+New: optional AI Command plugin, guided plugin creation and calendar logging of tracked work.
+Android gains background reminders for WebDAV/Nextcloud.
+Faster startup, reduced-motion support, and fixes for reminders, sync, recurring tasks, planning and worklog exports.

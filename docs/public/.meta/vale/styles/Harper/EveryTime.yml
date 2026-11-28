@@ -1,0 +1,19 @@
+---
+# Generated from Harper's EveryTime rule. Do not edit by hand.
+#
+# Harper is Copyright (c) Automattic, Inc. and contributors,
+# licensed under the Apache License 2.0.
+# https://github.com/Automattic/harper
+#
+# Corrects `everytime` to `every time`.
+extends: existence
+message: "`Everytime` as a single word is proscribed. Use `every time` instead."
+level: warning
+ignorecase: true
+matchcase: true
+action:
+  name: replace
+  params:
+    - "every time"
+tokens:
+  - "everytime(?!['\\x{2019}]s\\b)"

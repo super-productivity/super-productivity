@@ -49,6 +49,8 @@ import { CustomThemeService } from '../theme/custom-theme.service';
 import { UpdateCheckService } from '../update-check/update-check.service';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { JiraElectronBridgeService } from '../../features/issue/providers/jira/jira-electron-bridge.service';
+import { MatDialog } from '@angular/material/dialog';
+import { openSyncSettingsDialog } from '../../imex/sync/open-sync-settings-dialog';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
@@ -90,6 +92,7 @@ export class StartupService {
   private _injector = inject(Injector);
   private _customThemeService = inject(CustomThemeService);
   private _jiraElectronBridge = inject(JiraElectronBridgeService);
+  private _matDialog = inject(MatDialog);
 
   constructor() {
     // Claim the privileged Jira IPC capability here, in trusted startup code,
@@ -482,7 +485,14 @@ export class StartupService {
             !OnboardingHintService.isOnboardingInProgress()
           ) {
             Log.warn('Persistence not allowed');
-            this._snackService.open({ msg: T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED });
+            // WARNING keeps it up long enough to read and reach the action.
+            this._snackService.open({
+              type: 'WARNING',
+              msg: T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED,
+              actionStr: T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED_SET_UP_SYNC,
+              actionFn: () =>
+                openSyncSettingsDialog(this._matDialog, this._globalConfigService.sync()),
+            });
           }
         });
       })

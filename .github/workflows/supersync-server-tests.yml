@@ -16,6 +16,8 @@ on:
       - 'src/app/op-log/testing/integration/sync-fuzz/**'
       - '.github/workflows/supersync-server-tests.yml'
   workflow_dispatch:
+  # Called on master image pushes by supersync-docker.yml as a gate for `supersync:latest`.
+  workflow_call:
 
 permissions:
   contents: read

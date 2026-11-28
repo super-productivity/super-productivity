@@ -1014,12 +1014,12 @@ describe('MainHeaderComponent action placement', () => {
       expect(component.isSyncIconSpinning()).toBe(false);
     });
 
-    it('spins the sync glyph while syncing, even with nothing left to upload', () => {
+    it('shows a distinct spinning glyph while syncing, even with nothing left to upload', () => {
       readySync({ isSyncInProgress: true, hasNoPendingOps: true });
 
       component = createComponent();
 
-      expect(component.syncIcon()).toBe('sync_ring');
+      expect(component.syncIcon()).toBe('sync_in_progress');
       expect(component.isSyncIconSpinning()).toBe(true);
     });
 

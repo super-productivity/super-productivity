@@ -10,6 +10,14 @@
   "icon": "icon.svg",
   "iFrame": false,
   "permissions": [],
+  "dataSharing": [
+    {
+      "recipient": "Nextcloud Deck",
+      "userServer": true,
+      "data": ["credentials", "taskTitles", "taskStatus"],
+      "optionalData": ["taskNotes"]
+    }
+  ],
   "hooks": [],
   "i18n": {
     "languages": [

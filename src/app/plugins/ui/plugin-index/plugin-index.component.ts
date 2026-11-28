@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  effect,
   ElementRef,
   inject,
   Input,
@@ -13,6 +14,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
 import { trigger, transition, style, animate } from '@angular/animations';
+import { ANI_ENTER_TIMING } from '../../../ui/animations/animation.const';
+import { PAGE_ENTER_FROM } from '../../../ui/animations/warp-route';
 import { PluginService } from '../../plugin.service';
 import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCleanupService } from '../../plugin-cleanup.service';
@@ -20,6 +23,7 @@ import {
   PluginIframeConfig,
   buildPluginIframeHtml,
   handlePluginMessage,
+  refreshPluginTheme,
 } from '../../util/plugin-iframe.util';
 import {
   MatCard,
@@ -34,6 +38,8 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { GlobalThemeService } from '../../../core/theme/global-theme.service';
+import { CustomThemeService } from '../../../core/theme/custom-theme.service';
 
 @Component({
   selector: 'plugin-index',
@@ -52,14 +58,12 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
     TranslatePipe,
   ],
   animations: [
+    // Another plugin in the reused page: the content swap of a page change
+    // (`workViewProjectChangeAnimation` offset).
     trigger('pluginSwitch', [
-      transition(':enter', [
-        style({ opacity: 0, transform: 'translateX(20px)' }),
-        animate('300ms ease-in-out', style({ opacity: 1, transform: 'translateX(0)' })),
-      ]),
       transition('* => *', [
-        style({ opacity: 0, transform: 'translateX(-20px)' }),
-        animate('300ms ease-in-out', style({ opacity: 1, transform: 'translateX(0)' })),
+        style({ opacity: 0, transform: PAGE_ENTER_FROM }),
+        animate(ANI_ENTER_TIMING, style({ opacity: 1, transform: 'none' })),
       ]),
     ]),
   ],
@@ -87,6 +91,8 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _translateService = inject(TranslateService);
   private readonly _layoutService = inject(LayoutService);
+  private readonly _globalThemeService = inject(GlobalThemeService);
+  private readonly _customThemeService = inject(CustomThemeService);
 
   T = T;
 
@@ -95,6 +101,19 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   readonly error = signal<string | null>(null);
   readonly iframeSrcdoc = signal<SafeHtml | null>(null);
   readonly isResizing = this._layoutService.isPanelResizing;
+
+  // The iframe holds a copy of the theme tokens; re-copy them on a theme switch
+  // so an open plugin view follows without reloading.
+  // shortcut: tracks dark mode and custom themes — a project color change
+  // while a plugin view is open still needs a reopen.
+  private readonly _themeSync = effect(() => {
+    this._globalThemeService.isDarkTheme();
+    this._customThemeService.appliedThemeVersion();
+    const iframe = this.iframeRef?.nativeElement;
+    if (iframe) {
+      refreshPluginTheme(iframe);
+    }
+  });
 
   private _messageListener?: EventListener;
   private _routeSubscription?: Subscription;
@@ -366,6 +385,10 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     // race-sensitive. Do not "unify" this with the listener's DOM lookup.
     if (this.iframeRef?.nativeElement && this.pluginId()) {
       this._cleanupService.registerIframe(this.pluginId(), this.iframeRef.nativeElement);
+    }
+    // A theme switch before load reached the initial about:blank document
+    if (this.iframeRef?.nativeElement) {
+      refreshPluginTheme(this.iframeRef.nativeElement);
     }
   }
 }

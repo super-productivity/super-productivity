@@ -68,4 +68,27 @@ test.describe('Context menu keyboard navigation', () => {
     await expect(menu).toHaveCount(0);
     await expect(viewRow.locator('a.nav-link')).toBeFocused();
   });
+
+  // MatMenu's type-ahead jumps to the first label starting with the pressed
+  // letter; a shortcut the menu lists must run its own item instead.
+  test('a shortcut listed in an open task menu runs that item', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const title = `${testPrefix}-Menu key`;
+    await workViewPage.addTask(title);
+    await taskPage.getTaskByText(title).click({ button: 'right' });
+
+    const menus = page.locator('.mat-mdc-menu-panel');
+    await expect(menus).toHaveCount(1);
+    // T is listed on "Estimate"; type-ahead would pick "Toggle tags".
+    await page.keyboard.press('t');
+    await expect(menus).toHaveCount(2);
+    await expect(
+      menus.nth(1).getByRole('menuitem', { name: '1h', exact: true }),
+    ).toBeVisible();
+  });
 });
