@@ -1,7 +1,8 @@
 import { checkKeyCombo } from './check-key-combo';
 import { isInputElement } from './dom-element';
 
-// Keys the menu itself uses to move and choose; a shortcut never overrides them.
+// Keys the menu itself uses to move and choose; a shortcut overrides them only
+// with Ctrl, Alt or Meta held.
 const MENU_NAVIGATION_KEYS = new Set([
   'Enter',
   ' ',
@@ -30,7 +31,7 @@ export const handleMenuItemHotkey = (ev: KeyboardEvent): boolean => {
     !(target instanceof HTMLElement) ||
     isInputElement(target) ||
     ev.isComposing ||
-    MENU_NAVIGATION_KEYS.has(ev.key)
+    (MENU_NAVIGATION_KEYS.has(ev.key) && !ev.ctrlKey && !ev.altKey && !ev.metaKey)
   ) {
     return false;
   }

@@ -13,12 +13,18 @@ describe('handleMenuItemHotkey', () => {
     return btn;
   };
 
-  const press = (target: HTMLElement, key: string, code: string): KeyboardEvent => {
+  const press = (
+    target: HTMLElement,
+    key: string,
+    code: string,
+    modifiers: KeyboardEventInit = {},
+  ): KeyboardEvent => {
     const ev = new KeyboardEvent('keydown', {
       key,
       code,
       bubbles: true,
       cancelable: true,
+      ...modifiers,
     });
     Object.defineProperty(ev, 'target', { value: target });
     return ev;
@@ -77,9 +83,21 @@ describe('handleMenuItemHotkey', () => {
     const input = document.createElement('input');
     panel.appendChild(input);
     item('Enter-bound', 'Enter');
+    item('Arrow-bound', 'ArrowUp');
 
     expect(handleMenuItemHotkey(press(input, 't', 'KeyT'))).toBeFalse();
     expect(handleMenuItemHotkey(press(tagsItem, 'Enter', 'Enter'))).toBeFalse();
+    expect(handleMenuItemHotkey(press(tagsItem, 'ArrowUp', 'ArrowUp'))).toBeFalse();
+  });
+
+  it('runs a listed arrow shortcut held with Ctrl+Alt, which the menu ignores', () => {
+    const toTopItem = item('Move to top', 'Ctrl+Alt+ArrowUp');
+    const toTopClick = spyOn(toTopItem, 'click');
+    const ev = press(tagsItem, 'ArrowUp', 'ArrowUp', { ctrlKey: true, altKey: true });
+
+    expect(handleMenuItemHotkey(ev)).toBeTrue();
+    expect(toTopClick).toHaveBeenCalled();
+    expect(ev.defaultPrevented).toBeTrue();
   });
 
   it('leaves unlisted keys to the menu', () => {
