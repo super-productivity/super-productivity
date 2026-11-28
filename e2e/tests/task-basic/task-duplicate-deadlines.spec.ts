@@ -55,7 +55,7 @@ test('duplicating a family preserves its deadlines and deadline reminders', asyn
     .poll(
       async () =>
         Object.values((await read(page)).tasks.entities).filter(
-          (t) => t?.title === `${parent.title} (copy)`,
+          (t) => t?.title === parent.title && t.id !== parent.id,
         ).length,
     )
     .toBe(1);
@@ -63,7 +63,9 @@ test('duplicating a family preserves its deadlines and deadline reminders', asyn
   await page.reload();
   await workViewPage.waitForTaskList();
   const tasks = (await read(page)).tasks.entities;
-  const copy = Object.values(tasks).find((t) => t?.title === `${parent.title} (copy)`)!;
+  const copy = Object.values(tasks).find(
+    (t) => t?.title === parent.title && t.id !== parent.id,
+  )!;
   expect(copy.deadlineDay).toBe('2030-06-17');
   expect(copy.deadlineWithTime).toBeFalsy();
   expect(copy.subTaskIds).toHaveLength(1);
