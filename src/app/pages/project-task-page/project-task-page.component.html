@@ -22,9 +22,12 @@
   </div>
 }
 <work-view
-  [unclaimedTasks]="unclaimedTasks()"
-  [backlogTasks]="backlogTasks()"
-  [doneTasks]="doneTasks()"
+  [teamOverview]="teamOverview()"
+  [teamRows]="taskLists().previews"
+  [(onlyMine)]="onlyMine"
+  [localSubtaskParents]="taskLists().localSubtaskParents"
+  [backlogTasks]="taskLists().backlog"
+  [doneTasks]="taskLists().done"
   [isShowBacklog]="isShowBacklog()"
-  [undoneTasks]="undoneTasks()"
+  [undoneTasks]="taskLists().undone"
 ></work-view>

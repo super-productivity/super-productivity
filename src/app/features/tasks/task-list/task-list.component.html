@@ -1,4 +1,4 @@
-@if (isHideDone() || isHideAll()) {
+@if (isHideDone() ? doneTasksLength() : isHideAll() && allTasksLength()) {
   <div
     @expandFadeFast
     class="done-task-box"

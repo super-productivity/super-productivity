@@ -1,3 +1,4 @@
+import { PLAINSPACE_PROJECT_ROWS } from '../../plainspace/plainspace-shared-task.model';
 import { TaskMultiDragService } from '../task-multi-drag.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TaskListComponent } from './task-list.component';
@@ -83,6 +84,13 @@ describe('TaskListComponent', () => {
       imports: [TaskListComponent, NoopAnimationsModule],
       providers: [
         {
+          provide: PLAINSPACE_PROJECT_ROWS,
+          useValue: {
+            ownerLabel: () => undefined,
+            hideNativeTask: (task: Task) => task.id === 'foreign-child',
+          },
+        },
+        {
           provide: TaskMultiDragService,
           useValue: {
             ids: () => [],
@@ -144,6 +152,21 @@ describe('TaskListComponent', () => {
     fixture.componentRef.setInput('listId', 'PARENT');
     fixture.componentRef.setInput('listModelId', 'UNDONE');
     fixture.detectChanges();
+  });
+
+  it('filters shared subtask rows without changing the full tree used by native actions', () => {
+    const own = { id: 'own-child' } as TaskWithSubTasks;
+    const foreign = { id: 'foreign-child', isDone: true } as TaskWithSubTasks;
+    const children = [own, foreign];
+    fixture.componentRef.setInput('listId', 'SUB');
+    fixture.componentRef.setInput('listModelId', 'parent');
+    fixture.componentRef.setInput('tasks', children);
+    expect(component.filteredTasks()).toEqual([own]);
+    expect(component.allTasksLength()).toBe(1);
+    expect(component.doneTasksLength()).toBe(0);
+    expect(component.tasks()).toBe(children);
+    expect(component.tasks()).toEqual([own, foreign]);
+    fixture.componentRef.setInput('tasks', []);
   });
 
   describe("a view's lists (VIEW / VIEW_DONE)", () => {

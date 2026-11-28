@@ -79,6 +79,44 @@ describe('PlainspaceApiService', () => {
     expect((await p).map((t) => t.id)).toEqual(['u1']);
   });
 
+  it('getTeamTasks$ sends the PAT to the bound space and returns previews and assigned IDs', async () => {
+    const p = firstValueFrom(service.getTeamTasks$({ ...cfg, spaceId: 'team-space' }));
+    const req = httpMock.expectOne(`${BASE}/spaces/team-space/team-tasks`);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.headers.get('Authorization')).toBe('Bearer pat_test');
+    const preview = {
+      id: 'a',
+      title: 'Open task',
+      isRecurring: true,
+      url: 'https://plainspace.org/team-space/item/a',
+      assignee: { id: 'm-a', displayName: 'Alice' },
+    };
+    const snapshot = {
+      tasks: [preview, { ...preview, id: 'b', assignee: null }],
+      assignedTaskIds: ['a', 'completed'],
+    };
+    req.flush(snapshot);
+    expect(await p).toEqual(snapshot);
+  });
+
+  for (const body of [
+    null,
+    { tasks: [] },
+    { tasks: [], assignedTaskIds: [123] },
+    {
+      tasks: [
+        { id: 'a', title: 'A', isRecurring: false, url: 'https://plainspace.org/a' },
+      ],
+      assignedTaskIds: [],
+    },
+  ]) {
+    it(`getTeamTasks$ rejects a malformed team snapshot (${JSON.stringify(body)})`, async () => {
+      const p = firstValueFrom(service.getTeamTasks$(cfg));
+      httpMock.expectOne(`${BASE}/spaces/space-1/team-tasks`).flush(body);
+      await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 0 }));
+    });
+  }
+
   for (const body of [null, {}, { tasks: null }]) {
     it(`getMyTasks$ rejects a 200 without a task list (${JSON.stringify(body)}) as no answer`, async () => {
       const p = firstValueFrom(service.getMyTasks$(cfg));
@@ -105,7 +143,21 @@ describe('PlainspaceApiService', () => {
     const req = httpMock.expectOne(`${BASE}/tasks/u1/claim`);
     expect(req.request.method).toBe('POST');
     req.flush({ task: spTask('u1', 'space-1') });
-    expect((await p)?.id).toBe('u1');
+    expect((await p).id).toBe('u1');
+  });
+
+  it('claimTask$ preserves a 409 from the claim endpoint', async () => {
+    const p = firstValueFrom(service.claimTask$('u1', cfg));
+    httpMock
+      .expectOne(`${BASE}/tasks/u1/claim`)
+      .flush({ error: 'Task already claimed' }, { status: 409, statusText: 'Conflict' });
+    await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 409 }));
+  });
+
+  it('claimTask$ preserves a network failure from the claim endpoint', async () => {
+    const p = firstValueFrom(service.claimTask$('u1', cfg));
+    httpMock.expectOne(`${BASE}/tasks/u1/claim`).error(new ProgressEvent('error'));
+    await expectAsync(p).toBeRejectedWith(jasmine.objectContaining({ status: 0 }));
   });
 
   it('getById$ returns null on 404', async () => {
@@ -347,6 +399,7 @@ describe('PlainspaceApiService', () => {
   }
 
   it('createTask$ POSTs { spaceId, title } and maps the created task', async () => {
+    const created = firstValueFrom(service.createdTasks$);
     const p = firstValueFrom(service.createTask$('Buy milk', cfg));
     const req = httpMock.expectOne(`${BASE}/tasks`);
     expect(req.request.method).toBe('POST');
@@ -357,6 +410,7 @@ describe('PlainspaceApiService', () => {
     expect(issue.id).toBe('new-1');
     expect(issue.title).toBe('Buy milk');
     expect(issue.isDone).toBe(false);
+    expect(await created).toEqual({ cfg, taskId: 'new-1' });
   });
 
   it('createTask$ lets errors propagate (so the auto-create effect can report)', async () => {

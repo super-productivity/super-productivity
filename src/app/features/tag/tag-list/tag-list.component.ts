@@ -7,6 +7,7 @@ import {
 } from '@angular/core';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
 import { Tag } from '../tag.model';
+import { PLAINSPACE_PROJECT_ROWS } from '../../plainspace/plainspace-shared-task.model';
 import { Task } from '../../tasks/task.model';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { WorkContextType } from '../../work-context/work-context.model';
@@ -35,7 +36,8 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 export type TagListTask = Pick<
   Task,
   'tagIds' | 'issueId' | 'issueType' | 'issuePoints' | 'repeatCfgId'
-> & { projectId: string | null };
+> &
+  Partial<Pick<Task, 'issueProviderId'>> & { projectId: string | null };
 
 @Component({
   selector: 'tag-list',
@@ -46,6 +48,9 @@ export type TagListTask = Pick<
   imports: [TagComponent],
 })
 export class TagListComponent {
+  private readonly _projectRows = inject(PLAINSPACE_PROJECT_ROWS, {
+    optional: true,
+  });
   private readonly _tagListState = inject(TagListStateService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
@@ -133,6 +138,10 @@ export class TagListComponent {
         label = this._pluginRegistry.getHumanReadableName(t.issueType);
       }
 
+      if (t.issueType === 'PLAINSPACE' && t.issueProviderId) {
+        const ownerKey = this._projectRows?.ownerLabel(t.issueId, t.issueProviderId);
+        if (ownerKey) chips.push({ title: this._translateService.instant(ownerKey) });
+      }
       if (label) {
         chips.push({
           title: t.issuePoints ? `${label} (${t.issuePoints})` : label,

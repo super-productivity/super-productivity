@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { Subject, firstValueFrom } from 'rxjs';
 import { Task } from '../../../tasks/task.model';
 import { IssueProviderService } from '../../issue-provider.service';
 import { IssueSyncStateService } from '../../two-way-sync/issue-sync-state.service';
@@ -9,6 +9,12 @@ import { Log } from '../../../../core/log';
 import { T } from '../../../../t.const';
 import { PlainspaceApiService, PlainspaceMember } from './plainspace-api.service';
 import { PlainspaceCfg } from './plainspace.model';
+
+export interface PlainspaceHandedOffTask {
+  cfg: PlainspaceCfg;
+  providerId: string;
+  taskId: string;
+}
 
 /**
  * Hands a linked task assigned to me to another member of its space, or
@@ -33,6 +39,8 @@ export class PlainspaceHandoffService {
   private _issueProviderService = inject(IssueProviderService);
   private _syncState = inject(IssueSyncStateService);
   private _snackService = inject(SnackService);
+  private readonly _handedOffTasks$ = new Subject<PlainspaceHandedOffTask>();
+  readonly handedOffTasks$ = this._handedOffTasks$.asObservable();
 
   /** Who the task can be handed to, or null after a snack saying why not. */
   async getMembers(task: Task): Promise<PlainspaceMember[] | null> {
@@ -54,8 +62,9 @@ export class PlainspaceHandoffService {
       });
       return;
     }
+    let cfg: PlainspaceCfg;
     try {
-      const cfg = await this._getCfg(task);
+      cfg = await this._getCfg(task);
       await firstValueFrom(
         this._apiService.patchTask$(
           task.issueId as string,
@@ -81,6 +90,11 @@ export class PlainspaceHandoffService {
       return;
     }
     this._syncState.setMissing([task.id], [task.id]);
+    this._handedOffTasks$.next({
+      cfg,
+      providerId: task.issueProviderId as string,
+      taskId: task.issueId as string,
+    });
     this._snackService.open(
       member
         ? {

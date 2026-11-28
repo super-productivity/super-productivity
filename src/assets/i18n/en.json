@@ -3375,9 +3375,12 @@
   },
   "PLAINSPACE": {
     "CLAIM": "Claim",
-    "CLAIM_FAILED": "Couldn't claim this task — it may have just been claimed by someone else, or you're offline.",
+    "CLAIM_ALREADY_TAKEN": "Someone else already claimed this task.",
+    "CLAIM_IMPORT_FAILED": "Task claimed in Plainspace. Super Productivity couldn't add it to your list.",
     "CLAIM_POOL_TITLE": "Available to claim",
+    "CLAIM_REQUEST_FAILED": "Couldn't claim this task. Check your connection and try again.",
     "CLAIM_SUCCESS": "Task claimed and added to your list.",
+    "CLAIM_UNAVAILABLE": "This task is no longer available to claim.",
     "CONNECT": {
       "ALREADY_CONNECTED": "{{email}} already has a Plainspace key active in another app or device.",
       "BACK": "Back",
@@ -3485,7 +3488,17 @@
       "ERR_TITLE_TOO_LONG": "Plainspace takes titles up to 500 characters.",
       "NOT_IN_LIST": "No longer in your Plainspace list: it was reassigned or deleted, or you lost access to the space. It stays here, but no longer syncs.",
       "SERVER_TOO_OLD": "This Plainspace server is too old to sync titles and times. Done state keeps syncing; titles and times sync once the server is updated."
-    }
+    },
+    "EVERYONE": "Everyone",
+    "LOCAL_COPY": "Local copy",
+    "YOU": "You",
+    "NO_OPEN_TASKS": "No open tasks in this project.",
+    "NO_OPEN_TASKS_MINE": "You have no open tasks in this project.",
+    "ONLY_MINE": "Only mine",
+    "TEAM_LOADING": "Loading team tasks…",
+    "TEAM_OVERVIEW": "Team overview",
+    "TEAM_UNAVAILABLE": "Team assignments are currently unavailable.",
+    "UNASSIGNED": "Unassigned"
   },
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Action type \"{{type}}\" is not allowed",

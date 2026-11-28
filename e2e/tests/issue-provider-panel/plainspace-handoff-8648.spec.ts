@@ -94,14 +94,26 @@ const restart = async (page: Page, server: FakePlainspace): Promise<void> => {
   await waitForPollAfter(page, server, before);
 };
 
+const planForToday = async (page: Page): Promise<void> => {
+  const row = taskRow(page, 'Buy tent');
+  await row.focus();
+  await row.press('Shift+T');
+};
+
 /**
- * After a handoff the task is no longer mine: it says so, offers no further
- * handoff, and a local edit is not pushed. Reassigned back, it syncs again.
+ * From Today the retained copy still shows its sync state, offers no further
+ * handoff, and keeps local edits. The edits sync once the task is assigned back.
  */
 const expectNoLongerMineThenBack = async (
   page: Page,
   server: FakePlainspace,
 ): Promise<void> => {
+  await page.getByRole('menuitem', { name: 'Today', exact: true }).click();
+  await expect(
+    page.locator('tag-task-page task').filter({ hasText: 'Buy tent' }),
+  ).toBeVisible();
+  // The old project row animates out as Today renders the retained copy.
+  await expect(taskRow(page, 'Buy tent')).toHaveCount(1);
   await openDetail(page, 'Buy tent');
   await expect(notInList(page)).toBeVisible();
 
@@ -117,6 +129,8 @@ const expectNoLongerMineThenBack = async (
 
   // Someone gives it back in Plainspace: the next poll lists it again, and
   // the rename made meanwhile is pushed.
+  server.teammateAssignments.delete(TASK_ID);
+  server.claimableIds.delete(TASK_ID);
   server.assignedIds.add(TASK_ID);
   await restart(page, server);
   await expect
@@ -136,6 +150,7 @@ test.describe('Plainspace handoff (#8648)', () => {
   }) => {
     await workViewPage.waitForTaskList();
     const server = await setUp(page, projectPage);
+    await planForToday(page);
 
     await openContextMenu(page, 'Buy tent');
     await menuItem(page, 'Assign to…').click();
@@ -157,6 +172,7 @@ test.describe('Plainspace handoff (#8648)', () => {
   }) => {
     await workViewPage.waitForTaskList();
     const server = await setUp(page, projectPage);
+    await planForToday(page);
 
     await openContextMenu(page, 'Buy tent');
     await menuItem(page, 'Release to Space').click();

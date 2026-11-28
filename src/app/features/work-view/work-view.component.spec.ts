@@ -35,7 +35,11 @@ import { Section } from '../section/section.model';
 import { SnackService } from '../../core/snack/snack.service';
 import { SnackParams } from '../../core/snack/snack.model';
 import { GlobalConfigService } from '../config/global-config.service';
-import { TaskWithSubTasks } from '../tasks/task.model';
+import { Task, TaskWithSubTasks } from '../tasks/task.model';
+import { TaskFocusService } from '../tasks/task-focus.service';
+import { AddSubtaskInputComponent } from '../tasks/add-subtask-input/add-subtask-input.component';
+import { AddSubtaskInputService } from '../tasks/add-subtask-input/add-subtask-input.service';
+import { PLAINSPACE_PROJECT_ROWS } from '../plainspace/plainspace-shared-task.model';
 import { T } from '../../t.const';
 import { DEFAULT_OPTIONS } from '../task-view-customizer/types';
 import {
@@ -238,6 +242,7 @@ const configureWorkViewTestBed = (
             ScheduledDateGroupPipe,
             CollapsibleComponent,
             TaskListStubComponent,
+            AddSubtaskInputComponent,
           ],
           schemas: [NO_ERRORS_SCHEMA],
           styles: [''],
@@ -278,12 +283,14 @@ describe('WorkViewComponent', () => {
     // (a plain Subject) to exercise the sentinel/readiness guard.
     let customizeSource: () => Observable<{ list: TaskWithSubTasks[] }>;
     let isCustomized: ReturnType<typeof signal<boolean>>;
+    let hiddenSubtaskId: WritableSignal<string | null>;
 
     const createComponent = async (
       inputs: {
         undone?: TaskWithSubTasks[];
         done?: TaskWithSubTasks[];
         backlog?: TaskWithSubTasks[];
+        localSubtaskParents?: TaskWithSubTasks[];
       } = {},
     ): Promise<WorkViewComponent> => {
       await TestBed.compileComponents();
@@ -291,6 +298,10 @@ describe('WorkViewComponent', () => {
       fixture.componentRef.setInput('undoneTasks', inputs.undone ?? []);
       fixture.componentRef.setInput('doneTasks', inputs.done ?? []);
       fixture.componentRef.setInput('backlogTasks', inputs.backlog ?? []);
+      fixture.componentRef.setInput(
+        'localSubtaskParents',
+        inputs.localSubtaskParents ?? [],
+      );
       fixture.detectChanges();
       return fixture.componentInstance;
     };
@@ -301,6 +312,7 @@ describe('WorkViewComponent', () => {
       customized$ = new BehaviorSubject<{ list: TaskWithSubTasks[] }>({ list: [] });
       customizeSource = () => customized$.asObservable();
       isCustomized = signal(false);
+      hiddenSubtaskId = signal<string | null>(null);
       activeContext.id = 'some-project-id';
 
       configureWorkViewTestBed({
@@ -309,6 +321,9 @@ describe('WorkViewComponent', () => {
           customizeUndoneTasks: () => customizeSource(),
           isCustomized,
         },
+      });
+      TestBed.overrideProvider(PLAINSPACE_PROJECT_ROWS, {
+        useValue: { hideNativeTask: (task: Task) => task.id === hiddenSubtaskId() },
       });
 
       store = TestBed.inject(MockStore);
@@ -385,6 +400,30 @@ describe('WorkViewComponent', () => {
       expect(setSelectedId).not.toHaveBeenCalled();
     });
 
+    it('opens a retained local subtask while its handed-off parent is hidden', async () => {
+      await createComponent({
+        localSubtaskParents: [buildTask('handed-off', [buildTask('my-subtask')])],
+      });
+      selectedTaskId.set('my-subtask');
+      TestBed.flushEffects();
+      expect(setSelectedId).not.toHaveBeenCalled();
+
+      selectedTaskId.set('handed-off');
+      TestBed.flushEffects();
+      expect(setSelectedId).toHaveBeenCalledOnceWith(null);
+    });
+
+    it('deselects a subtask hidden by Plainspace ownership under a visible parent', async () => {
+      await createComponent({ undone: [buildTask('parent', [buildTask('child')])] });
+      selectedTaskId.set('child');
+      TestBed.flushEffects();
+      expect(setSelectedId).not.toHaveBeenCalled();
+
+      hiddenSubtaskId.set('child');
+      TestBed.flushEffects();
+      expect(setSelectedId).toHaveBeenCalledOnceWith(null);
+    });
+
     it('keeps the selection when the task is in backlogTasks (existing behaviour)', async () => {
       await createComponent({ backlog: [buildTask('backlog-1')] });
       selectedTaskId.set('backlog-1');
@@ -423,6 +462,85 @@ describe('WorkViewComponent', () => {
       TestBed.flushEffects();
 
       expect(setSelectedId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Plainspace team view', () => {
+    const createComponent = async (
+      taskService?: ServiceStub,
+    ): Promise<ComponentFixture<WorkViewComponent>> => {
+      configureWorkViewTestBed({ isTemplateRendered: true, taskService });
+      store = TestBed.inject(MockStore);
+      overrideDefaultSelectors(store);
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(WorkViewComponent);
+      fixture.componentRef.setInput('undoneTasks', []);
+      fixture.componentRef.setInput('doneTasks', []);
+      fixture.componentRef.setInput('backlogTasks', []);
+      return fixture;
+    };
+
+    it('opens the standard input for a hidden parent and restores focus to the originating child on Escape', async () => {
+      const focusTaskIfPossible = jasmine.createSpy('focusTaskIfPossible');
+      const addSubTaskTo = jasmine.createSpy('addSubTaskTo');
+      const fixture = await createComponent({ addSubTaskTo, focusTaskIfPossible });
+      fixture.componentRef.setInput('undoneTasks', [buildTask('normal-parent')]);
+      fixture.componentRef.setInput('localSubtaskParents', [
+        buildTask('hidden-parent', [
+          buildTask('first-child'),
+          buildTask('focused-child'),
+        ]),
+      ]);
+      fixture.detectChanges();
+
+      const root = fixture.nativeElement as HTMLElement;
+      const requests = TestBed.inject(AddSubtaskInputService);
+      requests.requestOpen('normal-parent');
+      fixture.detectChanges();
+      expect(requests.openRequest()).toBe('normal-parent');
+      expect(root.querySelector('add-subtask-input')).toBeNull();
+
+      TestBed.inject(TaskFocusService).focusedTaskId.set('focused-child');
+      requests.requestOpen('hidden-parent');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const input = root.querySelector<HTMLInputElement>('add-subtask-input input')!;
+      expect(requests.openRequest()).toBeNull();
+      expect(root.ownerDocument.activeElement).toBe(input);
+
+      input.value = 'New child';
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+      expect(addSubTaskTo).toHaveBeenCalledOnceWith('hidden-parent', {
+        title: 'New child',
+      });
+
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(root.querySelector('add-subtask-input')).toBeNull();
+      expect(focusTaskIfPossible).toHaveBeenCalledOnceWith('focused-child');
+    });
+
+    it('shows status instead of an empty result while Only mine is loading or unavailable', async () => {
+      const fixture = await createComponent();
+      fixture.componentRef.setInput('onlyMine', true);
+      const root = fixture.nativeElement as HTMLElement;
+      for (const [status, message] of [
+        ['loading', T.PLAINSPACE.TEAM_LOADING],
+        ['unavailable', T.PLAINSPACE.TEAM_UNAVAILABLE],
+        ['ready', T.PLAINSPACE.NO_OPEN_TASKS_MINE],
+      ]) {
+        fixture.componentRef.setInput('teamOverview', {
+          status,
+          tasks: [],
+          providerId: 'ps',
+        });
+        fixture.detectChanges();
+        const messages = root.querySelectorAll('.team-list-message');
+        expect(messages.length).toBe(1);
+        expect(messages[0].textContent?.trim()).toBe(message);
+      }
     });
   });
 
@@ -1426,6 +1544,19 @@ describe('WorkViewComponent', () => {
 
       expect(row.focus).toHaveBeenCalledOnceWith({ preventScroll: true });
       expect(highlightTaskBriefly).not.toHaveBeenCalled();
+    });
+
+    it('reveals a newly claimed main-list task inside a collapsed group', () => {
+      const { cmp, toggleGroupExpansion } = setup({
+        undone: [buildTask('wanted')],
+        grouped: { groupA: [buildTask('wanted')] },
+        collapsedGroupIds: ['groupA'],
+      });
+
+      cmp.focusClaimedTask('wanted');
+      expect(toggleGroupExpansion).toHaveBeenCalledWith('groupA');
+      const { row } = revealRenderedRow(cmp);
+      expect(row.focus).toHaveBeenCalledOnceWith({ preventScroll: true });
     });
 
     it('does not touch any container without a focusItem', () => {
