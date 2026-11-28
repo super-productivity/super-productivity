@@ -100,16 +100,40 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
             },
           },
           {
+            key: 'streakDirection',
+            type: 'select',
+            resetOnHide: false,
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) => !fCfg.model.isTrackStreaks,
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_STREAK_DIRECTION,
+              options: [
+                {
+                  label: T.F.SIMPLE_COUNTER.FORM.L_STREAK_DIRECTION_BUILD,
+                  value: 'build',
+                },
+                {
+                  label: T.F.SIMPLE_COUNTER.FORM.L_STREAK_DIRECTION_AVOID,
+                  value: 'avoid',
+                },
+              ],
+              getInitialValue: () => 'build',
+            },
+          },
+          {
             key: 'streakMinValue',
             type: 'input',
             resetOnHide: false,
             expressions: {
               hide: (fCfg: FormlyFieldConfig) =>
                 fCfg.model.type === SimpleCounterType.StopWatch ||
-                !fCfg.model.isTrackStreaks,
+                !fCfg.model.isTrackStreaks ||
+                fCfg.model.streakDirection === 'avoid',
               'props.required': (fCfg: FormlyFieldConfig) =>
                 fCfg.model.type !== SimpleCounterType.StopWatch &&
-                !!fCfg.model.isTrackStreaks,
+                !!fCfg.model.isTrackStreaks &&
+                fCfg.model.streakDirection !== 'avoid',
             },
             templateOptions: {
               label: T.F.SIMPLE_COUNTER.FORM.L_DAILY_GOAL,
@@ -125,13 +149,59 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
             expressions: {
               hide: (fCfg: FormlyFieldConfig) =>
                 fCfg.model.type !== SimpleCounterType.StopWatch ||
-                !fCfg.model.isTrackStreaks,
+                !fCfg.model.isTrackStreaks ||
+                fCfg.model.streakDirection === 'avoid',
               'props.required': (fCfg: FormlyFieldConfig) =>
                 fCfg.model.type === SimpleCounterType.StopWatch &&
-                !!fCfg.model.isTrackStreaks,
+                !!fCfg.model.isTrackStreaks &&
+                fCfg.model.streakDirection !== 'avoid',
             },
             templateOptions: {
               label: T.F.SIMPLE_COUNTER.FORM.L_DAILY_GOAL,
+              min: 60 * 1000,
+              description: T.G.DURATION_DESCRIPTION,
+              getInitialValue: () => 10 * 60 * 1000,
+            },
+          },
+          // 'avoid' mode reuses streakMinValue as an upper limit
+          {
+            key: 'streakMinValue',
+            type: 'input',
+            resetOnHide: false,
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type === SimpleCounterType.StopWatch ||
+                !fCfg.model.isTrackStreaks ||
+                fCfg.model.streakDirection !== 'avoid',
+              'props.required': (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type !== SimpleCounterType.StopWatch &&
+                !!fCfg.model.isTrackStreaks &&
+                fCfg.model.streakDirection === 'avoid',
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_DAILY_LIMIT,
+              description: T.F.SIMPLE_COUNTER.FORM.L_DAILY_LIMIT_DESCRIPTION,
+              type: 'number',
+              min: 1,
+              getInitialValue: () => 1,
+            },
+          },
+          {
+            key: 'streakMinValue',
+            type: 'duration',
+            resetOnHide: false,
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type !== SimpleCounterType.StopWatch ||
+                !fCfg.model.isTrackStreaks ||
+                fCfg.model.streakDirection !== 'avoid',
+              'props.required': (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type === SimpleCounterType.StopWatch &&
+                !!fCfg.model.isTrackStreaks &&
+                fCfg.model.streakDirection === 'avoid',
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_DAILY_LIMIT,
               min: 60 * 1000,
               description: T.G.DURATION_DESCRIPTION,
               getInitialValue: () => 10 * 60 * 1000,

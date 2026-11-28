@@ -1,4 +1,7 @@
-import { getSimpleCounterStreakDuration } from './get-simple-counter-streak-duration';
+import {
+  getSimpleCounterStreakDuration,
+  getAvoidDayCleanCheck,
+} from './get-simple-counter-streak-duration';
 import { SimpleCounterCopy } from './simple-counter.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 
@@ -646,6 +649,134 @@ describe('getSimpleCounterStreakDuration()', () => {
       // If the weekly-frequency path used the calendar day instead of the passed
       // offset, the calendar week's 1 (unmet) tick would be added on top, giving 3.
       expect(getSimpleCounterStreakDuration(sc, FOUR_HOURS)).toBe(2);
+    });
+  });
+});
+
+describe('getSimpleCounterStreakDuration() in avoid direction', () => {
+  const ALL_DAYS = { 0: true, 1: true, 2: true, 3: true, 4: true, 5: true, 6: true };
+  // January 2026; Thursday Jan 29 is "today"
+  const day = (d: number): string => getDbDateStr(new Date(2026, 0, d));
+
+  beforeEach(() => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(2026, 0, 29, 12, 0, 0));
+  });
+
+  afterEach(() => jasmine.clock().uninstall());
+
+  const avoid = (
+    countOnDay: Record<string, number>,
+    extra: Partial<SimpleCounterCopy> = {},
+  ): SimpleCounterCopy =>
+    ({
+      id: '1',
+      countOnDay,
+      isTrackStreaks: true,
+      streakDirection: 'avoid',
+      streakMinValue: 1,
+      streakWeekDays: ALL_DAYS,
+      ...extra,
+    }) as Partial<SimpleCounterCopy> as SimpleCounterCopy;
+
+  describe('specific-days mode', () => {
+    it('should count empty days since the earliest entry as clean', () => {
+      expect(getSimpleCounterStreakDuration(avoid({ [day(25)]: 0 }))).toBe(4);
+    });
+
+    it('should not count today before it is over', () => {
+      expect(getSimpleCounterStreakDuration(avoid({ [day(28)]: 0 }))).toBe(1);
+      expect(getSimpleCounterStreakDuration(avoid({ [day(25)]: 0, [day(29)]: 0 }))).toBe(
+        4,
+      );
+    });
+
+    it('should break the streak when today reaches the limit', () => {
+      expect(getSimpleCounterStreakDuration(avoid({ [day(25)]: 0, [day(29)]: 1 }))).toBe(
+        0,
+      );
+    });
+
+    it('should end the streak at the last slip', () => {
+      expect(getSimpleCounterStreakDuration(avoid({ [day(25)]: 0, [day(26)]: 1 }))).toBe(
+        2,
+      );
+      expect(getSimpleCounterStreakDuration(avoid({ [day(25)]: 0, [day(28)]: 1 }))).toBe(
+        0,
+      );
+    });
+
+    it('should treat values below the limit as clean and the limit itself as a slip', () => {
+      const limit3 = { streakMinValue: 3 };
+      expect(
+        getSimpleCounterStreakDuration(avoid({ [day(25)]: 0, [day(27)]: 2 }, limit3)),
+      ).toBe(4);
+      expect(
+        getSimpleCounterStreakDuration(avoid({ [day(25)]: 0, [day(27)]: 3 }, limit3)),
+      ).toBe(1);
+    });
+
+    it('should return 0 without any history', () => {
+      expect(getSimpleCounterStreakDuration(avoid({}))).toBe(0);
+    });
+
+    it('should only count the scheduled weekdays', () => {
+      // Mon-Fri; Sat Jan 24 / Sun Jan 25 are skipped, a slip on Sunday doesn't matter
+      const weekdays = {
+        streakWeekDays: {
+          0: false,
+          1: true,
+          2: true,
+          3: true,
+          4: true,
+          5: true,
+          6: false,
+        },
+      };
+      expect(
+        getSimpleCounterStreakDuration(avoid({ [day(21)]: 0, [day(25)]: 5 }, weekdays)),
+      ).toBe(6);
+    });
+  });
+
+  describe('weekly-frequency mode', () => {
+    const weekly = (
+      countOnDay: Record<string, number>,
+      streakWeeklyFrequency: number,
+    ): SimpleCounterCopy =>
+      avoid(countOnDay, { streakMode: 'weekly-frequency', streakWeeklyFrequency });
+
+    it('should count weeks with enough clean days', () => {
+      // Jan 12-18: 7 clean, Jan 19-25: 5 clean (2 slips), Jan 26-28: 3 clean so far
+      const sc = weekly({ [day(12)]: 0, [day(20)]: 1, [day(23)]: 2 }, 5);
+      expect(getSimpleCounterStreakDuration(sc)).toBe(15);
+    });
+
+    it('should break on a week with too many slips', () => {
+      const sc = weekly({ [day(12)]: 0, [day(20)]: 1, [day(22)]: 1, [day(23)]: 1 }, 5);
+      expect(getSimpleCounterStreakDuration(sc)).toBe(3);
+    });
+
+    it('should not count today and later days of the current week', () => {
+      // started Monday: only Mon-Wed are over, so the week isn't met in advance
+      expect(getSimpleCounterStreakDuration(weekly({ [day(26)]: 0 }, 4))).toBe(3);
+    });
+
+    it('should return 0 without any history', () => {
+      expect(getSimpleCounterStreakDuration(weekly({}, 3))).toBe(0);
+    });
+  });
+
+  describe('getAvoidDayCleanCheck()', () => {
+    it('should only accept past days since the earliest entry below the limit', () => {
+      const isClean = getAvoidDayCleanCheck(
+        avoid({ [day(25)]: 0, [day(27)]: 1 }),
+        day(29),
+      );
+      expect(isClean(day(24))).toBe(false);
+      expect(isClean(day(26))).toBe(true);
+      expect(isClean(day(27))).toBe(false);
+      expect(isClean(day(29))).toBe(false);
     });
   });
 });

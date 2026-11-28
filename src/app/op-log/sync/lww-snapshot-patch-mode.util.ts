@@ -16,6 +16,7 @@ const SIMPLE_COUNTER_OPTIONAL_FIELDS: readonly string[] = Object.keys({
   streakMode: true,
   streakWeekDays: true,
   streakWeeklyFrequency: true,
+  streakDirection: true,
   countdownDuration: true,
 } satisfies Record<OptionalKeys<SimpleCounterCopy>, true>);
 

@@ -49,6 +49,7 @@ describe('asPatchSnapshotIfTypeShadowed', () => {
         'streakMode',
         'streakWeekDays',
         'streakWeeklyFrequency',
+        'streakDirection',
         'countdownDuration',
       ],
     });
@@ -65,6 +66,7 @@ describe('asPatchSnapshotIfTypeShadowed', () => {
           streakMode: 'weekly-frequency',
           streakWeekDays: {},
           streakWeeklyFrequency: 3,
+          streakDirection: 'avoid',
           countdownDuration: 60000,
         },
       }),

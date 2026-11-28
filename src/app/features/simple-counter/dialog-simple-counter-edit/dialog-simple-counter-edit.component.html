@@ -20,7 +20,14 @@
         </div>
 
         <div class="streak-goal">
-          <div class="label">{{ T.F.SIMPLE_COUNTER.D_EDIT.DAILY_GOAL | translate }}</div>
+          <div class="label">
+            {{
+              (counter.streakDirection === 'avoid'
+                ? T.F.SIMPLE_COUNTER.FORM.L_DAILY_LIMIT
+                : T.F.SIMPLE_COUNTER.D_EDIT.DAILY_GOAL
+              ) | translate
+            }}
+          </div>
           <div class="value">
             <strong>
               @if (counter.type === SimpleCounterType.StopWatch) {

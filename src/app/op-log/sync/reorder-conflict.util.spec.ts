@@ -232,6 +232,7 @@ const COUNTER_FIELDS: Required<SimpleCounterCopy> = {
   streakMode: 'weekly-frequency',
   streakWeekDays: Object.fromEntries([[1, true]]),
   streakWeeklyFrequency: 2,
+  streakDirection: 'avoid',
   countdownDuration: 60000,
   countOnDay: Object.fromEntries([[DAY, 4]]),
   isOn: true,
