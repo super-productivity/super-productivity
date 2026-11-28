@@ -31,6 +31,7 @@ const AUTOMATION_CONDITION_TYPES = [
   'projectIs',
   'hasTag',
   'weekdayIs',
+  'priorityIs',
 ] as const satisfies readonly ConditionType[];
 const _exhaustiveConditions: _AssertEq<ConditionType, (typeof AUTOMATION_CONDITION_TYPES)[number]> =
   true;
@@ -41,6 +42,7 @@ const AUTOMATION_ACTION_TYPES = [
   'addTag',
   'removeTag',
   'moveToProject',
+  'setPriority',
   'displaySnack',
   'displayDialog',
   'webhook',

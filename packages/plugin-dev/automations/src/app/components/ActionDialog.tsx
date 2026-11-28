@@ -2,6 +2,15 @@ import { createEffect, createSignal } from 'solid-js';
 import { Action, ActionType } from '../../types';
 import { Dialog } from './Dialog';
 
+// Inline, not shared with core/priority.ts: a runtime import shared by the UI
+// and plugin.js would become a shared chunk (see utils/rule-validator.ts).
+const PRIORITY_OPTIONS = [
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+  { value: 'none', label: 'None' },
+];
+
 interface ActionDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -20,6 +29,7 @@ export function ActionDialog(props: ActionDialogProps) {
     'addTag',
     'removeTag',
     'moveToProject',
+    'setPriority',
     'displaySnack',
     'displayDialog',
     'webhook',
@@ -101,7 +111,17 @@ export function ActionDialog(props: ActionDialogProps) {
       </label>
       <label>
         Value
-        {action().type === 'moveToProject' && props.projects?.length ? (
+        {action().type === 'setPriority' ? (
+          <select
+            value={action().value}
+            onChange={(e) => setAction({ ...action(), value: e.currentTarget.value })}
+          >
+            <option value="">Select Priority</option>
+            {PRIORITY_OPTIONS.map((p) => (
+              <option value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        ) : action().type === 'moveToProject' && props.projects?.length ? (
           <select
             value={action().value}
             onChange={(e) => setAction({ ...action(), value: e.currentTarget.value })}

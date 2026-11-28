@@ -5,6 +5,7 @@ import {
   ConditionProjectIs,
   ConditionHasTag,
   ConditionWeekdayIs,
+  ConditionPriorityIs,
 } from './conditions';
 import { AutomationContext } from './definitions';
 import { Condition, TaskEvent } from '../types';
@@ -116,9 +117,9 @@ describe('Conditions', () => {
       const event = { task: { title: 'Test' } } as unknown as TaskEvent;
       const longPattern = 'a'.repeat(201);
       const condition: Condition = { type: 'titleContains', value: longPattern, isRegex: true };
-      expect(
-        await ConditionTitleContains.check(mockContext, event, longPattern, condition),
-      ).toBe(false);
+      expect(await ConditionTitleContains.check(mockContext, event, longPattern, condition)).toBe(
+        false,
+      );
       expect(mockPlugin.log.warn).toHaveBeenCalledWith(
         expect.stringContaining('Regex pattern too long'),
       );
@@ -128,7 +129,11 @@ describe('Conditions', () => {
       const event = { task: { title: 'aaaaaaaaaaX' } } as unknown as TaskEvent;
       // Build the dangerous pattern dynamically to avoid CodeQL flagging the test itself
       const dangerousPattern = ['(a', '+)+', '$'].join('');
-      const condition: Condition = { type: 'titleContains', value: dangerousPattern, isRegex: true };
+      const condition: Condition = {
+        type: 'titleContains',
+        value: dangerousPattern,
+        isRegex: true,
+      };
       expect(
         await ConditionTitleContains.check(mockContext, event, dangerousPattern, condition),
       ).toBe(false);
@@ -288,6 +293,38 @@ describe('Conditions', () => {
     it('should return false for empty value', async () => {
       const event = { task: { title: 'Test' } } as unknown as TaskEvent;
       expect(await ConditionWeekdayIs.check(mockContext, event, '')).toBe(false);
+    });
+  });
+
+  describe('ConditionPriorityIs', () => {
+    const eventWith = (priority: unknown): TaskEvent =>
+      ({ task: { id: 't1', title: 'T', priority } }) as unknown as TaskEvent;
+
+    it('should match the numeric encoding the app writes', async () => {
+      expect(await ConditionPriorityIs.check(mockContext, eventWith(3), 'high')).toBe(true);
+      expect(await ConditionPriorityIs.check(mockContext, eventWith(2), 'medium')).toBe(true);
+      expect(await ConditionPriorityIs.check(mockContext, eventWith(1), 'low')).toBe(true);
+      expect(await ConditionPriorityIs.check(mockContext, eventWith(1), 'high')).toBe(false);
+    });
+
+    it('should match the older string encoding', async () => {
+      expect(await ConditionPriorityIs.check(mockContext, eventWith('high'), 'high')).toBe(true);
+      expect(await ConditionPriorityIs.check(mockContext, eventWith('low'), 'medium')).toBe(false);
+    });
+
+    it('should treat null and missing priority as none', async () => {
+      expect(await ConditionPriorityIs.check(mockContext, eventWith(null), 'none')).toBe(true);
+      expect(await ConditionPriorityIs.check(mockContext, eventWith(undefined), 'none')).toBe(true);
+      expect(await ConditionPriorityIs.check(mockContext, eventWith(2), 'none')).toBe(false);
+    });
+
+    it('should ignore case and surrounding spaces in the rule value', async () => {
+      expect(await ConditionPriorityIs.check(mockContext, eventWith(3), ' High ')).toBe(true);
+    });
+
+    it('should not match without a task or value', async () => {
+      expect(await ConditionPriorityIs.check(mockContext, {} as TaskEvent, 'none')).toBe(false);
+      expect(await ConditionPriorityIs.check(mockContext, eventWith(3), '')).toBe(false);
     });
   });
 });

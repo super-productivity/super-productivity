@@ -2,6 +2,15 @@ import { createSignal, createEffect, createMemo, Show } from 'solid-js';
 import { Condition, ConditionType } from '../../types';
 import { Dialog } from './Dialog';
 
+// Inline, not shared with core/priority.ts: a runtime import shared by the UI
+// and plugin.js would become a shared chunk (see utils/rule-validator.ts).
+const PRIORITY_OPTIONS = [
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+  { value: 'none', label: 'None' },
+];
+
 interface ConditionDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -30,6 +39,7 @@ export function ConditionDialog(props: ConditionDialogProps) {
     'projectIs',
     'hasTag',
     'weekdayIs',
+    'priorityIs',
   ];
   const availableTypes = () =>
     props.allowedTypes ? allTypes.filter((t) => props.allowedTypes!.includes(t)) : allTypes;
@@ -106,7 +116,17 @@ export function ConditionDialog(props: ConditionDialogProps) {
       </label>
       <label>
         Value
-        {condition().type === 'projectIs' && props.projects ? (
+        {condition().type === 'priorityIs' ? (
+          <select
+            value={condition().value}
+            onChange={(e) => setCondition({ ...condition(), value: e.currentTarget.value })}
+          >
+            <option value="">Select Priority</option>
+            {PRIORITY_OPTIONS.map((p) => (
+              <option value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        ) : condition().type === 'projectIs' && props.projects ? (
           <select
             value={condition().value}
             onChange={(e) => setCondition({ ...condition(), value: e.currentTarget.value })}

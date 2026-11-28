@@ -1,5 +1,6 @@
 import { Condition } from '../types';
 import { IAutomationCondition } from './definitions';
+import { getRulePriority } from './priority';
 
 const MAX_REGEX_PATTERN_LENGTH = 200;
 const DANGEROUS_REGEX_PATTERN = /(\([^)]*[+*{][^)]*\))[+*{]/;
@@ -82,6 +83,16 @@ export const ConditionHasTag: IAutomationCondition = {
     const tags = await ctx.dataCache.getTags();
     const tag = tags.find((t) => t.id === value || t.title === value);
     return tag ? event.task.tagIds.includes(tag.id) : false;
+  },
+};
+
+export const ConditionPriorityIs: IAutomationCondition = {
+  id: 'priorityIs',
+  name: 'Priority is',
+  description: 'Checks the task priority: "high", "medium", "low" or "none"',
+  check: async (ctx, event, value) => {
+    if (!event.task || !value) return false;
+    return getRulePriority(event.task.priority) === value.trim().toLowerCase();
   },
 };
 

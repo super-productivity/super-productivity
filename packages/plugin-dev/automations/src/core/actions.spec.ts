@@ -5,6 +5,7 @@ import {
   ActionAddTag,
   ActionRemoveTag,
   ActionMoveToProject,
+  ActionSetPriority,
   ActionDisplaySnack,
   ActionDisplayDialog,
   ActionWebhook,
@@ -351,6 +352,39 @@ describe('Actions', () => {
       (global.fetch as any).mockRejectedValue(new Error('Network Error'));
       await ActionWebhook.execute(mockContext, {} as TaskEvent, 'http://example.com');
       expect(mockPlugin.log.error).toHaveBeenCalled();
+    });
+  });
+
+  describe('ActionSetPriority', () => {
+    const eventWith = (priority: unknown): TaskEvent =>
+      ({ task: { id: 't1', title: 'T', tagIds: [], priority } }) as unknown as TaskEvent;
+
+    it('should write the numeric priority', async () => {
+      await ActionSetPriority.execute(mockContext, eventWith(undefined), 'high');
+      expect(mockPlugin.updateTask).toHaveBeenCalledWith('t1', { priority: 3 });
+    });
+
+    it('should clear the priority for none', async () => {
+      await ActionSetPriority.execute(mockContext, eventWith(2), 'none');
+      expect(mockPlugin.updateTask).toHaveBeenCalledWith('t1', { priority: null });
+    });
+
+    it('should skip a task that already has the priority, in either encoding', async () => {
+      await ActionSetPriority.execute(mockContext, eventWith(1), 'low');
+      await ActionSetPriority.execute(mockContext, eventWith('medium'), 'medium');
+      await ActionSetPriority.execute(mockContext, eventWith(null), 'none');
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+    });
+
+    it('should reject an unknown value', async () => {
+      await ActionSetPriority.execute(mockContext, eventWith(undefined), 'urgent');
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+      expect(mockPlugin.log.warn).toHaveBeenCalled();
+    });
+
+    it('should do nothing without task context', async () => {
+      await ActionSetPriority.execute(mockContext, {} as TaskEvent, 'high');
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
     });
   });
 });
