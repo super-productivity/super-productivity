@@ -322,5 +322,18 @@
       "downloadUrl": "https://github.com/ptrckmgl/sp-gamify/releases/download/v1.1.1/sp-gamify.zip",
       "sha256": "6471e6b58b6557bf957772aec9afaa0529fc05554a7048fce19bca50845d728e"
     }
+  },
+  {
+    "name": "NavoPath Sync",
+    "shortDescription": "Two-way project, task and subtask sync with NavoPath Cloud, first-import review and conflict choices.",
+    "url": "https://github.com/shawn89890916/NavoPath-planner/tree/a204267224e8a06de3e7cbb1f8bbd414d284ff27/integrations/super-productivity-navopath",
+    "author": "NavoPath",
+    "authorUrl": "https://github.com/shawn89890916",
+    "id": "navopath-sync",
+    "release": {
+      "version": "1.1.1",
+      "downloadUrl": "https://raw.githubusercontent.com/shawn89890916/NavoPath-planner/a204267224e8a06de3e7cbb1f8bbd414d284ff27/integrations/super-productivity-navopath/navopath-sync-1.1.1.zip",
+      "sha256": "a9396e2b9f0e9cf16ec919b2ed6a10ce0cf3480fe862510279a34e8f86a1228c"
+    }
   }
 ]
