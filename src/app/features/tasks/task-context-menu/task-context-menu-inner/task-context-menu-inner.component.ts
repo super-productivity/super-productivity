@@ -46,6 +46,7 @@ import {
 import { Project } from '../../../project/project.model';
 import { TaskService } from '../../task.service';
 import { TaskSchedulingService } from '../../task-scheduling.service';
+import { findTaskFocusTarget } from '../../../../core-ui/layout/layout.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IssueService } from '../../../issue/issue.service';
 import { SnackService } from '../../../../core/snack/snack.service';
@@ -398,7 +399,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         return;
       }
 
-      const taskElement = document.getElementById(`t-${this.task.id}`);
+      const taskElement = findTaskFocusTarget(this.task.id);
       if (taskElement) {
         // Restore focus to the acted-on task (keyboard continuity) WITHOUT
         // scrolling: an action that relocates the task (e.g. Overdue -> Today)
@@ -769,7 +770,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   private _highlightSourceTask(): void {
-    const taskEl = document.getElementById(`t-${this.task.id}`);
+    const taskEl = findTaskFocusTarget(this.task.id);
     if (!taskEl) {
       return;
     }

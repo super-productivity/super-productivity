@@ -81,7 +81,10 @@ describe('PlainspaceHandoffService', () => {
   describe('handOff', () => {
     it('assigns the task to a member, then treats it as no longer mine', async () => {
       api.patchTask$.and.returnValue(of({ id: 'item-1', isDone: false }));
+      const handedOff = jasmine.createSpy('handedOff');
+      const subscription = service.handedOffTasks$.subscribe(handedOff);
       await service.handOff(task, bob);
+      subscription.unsubscribe();
 
       expect(api.patchTask$).toHaveBeenCalledWith(
         'item-1',
@@ -89,6 +92,11 @@ describe('PlainspaceHandoffService', () => {
         jasmine.objectContaining(cfg),
       );
       expect(syncState.isMissing('t1')).toBeTrue();
+      expect(handedOff).toHaveBeenCalledOnceWith({
+        cfg,
+        providerId: task.issueProviderId,
+        taskId: task.issueId,
+      });
       expect(snack.open).toHaveBeenCalledWith({
         type: 'SUCCESS',
         msg: T.PLAINSPACE.HANDOFF.ASSIGNED,
@@ -196,9 +204,13 @@ describe('PlainspaceHandoffService', () => {
 
     it('keeps the task mine when the request fails otherwise', async () => {
       api.patchTask$.and.returnValue(throwError(() => httpError(500)));
+      const handedOff = jasmine.createSpy('handedOff');
+      const subscription = service.handedOffTasks$.subscribe(handedOff);
       await service.handOff(task, bob);
+      subscription.unsubscribe();
 
       expect(syncState.isMissing('t1')).toBeFalse();
+      expect(handedOff).not.toHaveBeenCalled();
       expect(snack.open).toHaveBeenCalledWith({
         type: 'ERROR',
         msg: T.PLAINSPACE.HANDOFF.FAILED,

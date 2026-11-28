@@ -1,8 +1,8 @@
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Capacitor, CapacitorHttp, HttpOptions, HttpResponse } from '@capacitor/core';
-import { Observable, defer, of, throwError } from 'rxjs';
-import { catchError, map, retry } from 'rxjs/operators';
+import { Observable, Subject, defer, of, throwError } from 'rxjs';
+import { catchError, map, retry, tap } from 'rxjs/operators';
 import { SearchResultItem } from '../../issue.model';
 import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceIssue } from './plainspace-issue.model';
@@ -42,14 +42,16 @@ export const PLAINSPACE_NATIVE_HTTP = new InjectionToken<PlainspaceNativeHttp | 
  * here, keeping the real contract isolated to this file — the DTO interfaces
  * below are the endpoint contract.
  *
- * `getMyTasks$` and `getById$` let errors propagate (offline, 401, 5xx) so no
+ * `getMyTasks$`, `getTeamTasks$` and `getById$` let errors propagate so no
  * caller can mistake a failed request for "no tasks"; the poll decides what to
- * show. The token check and claim pool fail soft (see each).
+ * show. The token check and claim pool reads fail soft (see each).
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceApiService {
   private _http = inject(HttpClient);
   private _nativeHttp = inject(PLAINSPACE_NATIVE_HTTP);
+  private readonly _createdTasks$ = new Subject<PlainspaceCreatedTask>();
+  readonly createdTasks$ = this._createdTasks$.asObservable();
 
   /**
    * Verifies a token against the host, keeping "the server rejected this token"
@@ -156,6 +158,23 @@ export class PlainspaceApiService {
       );
   }
 
+  /** Open tasks and the caller's assigned IDs in the bound space. */
+  getTeamTasks$(cfg: PlainspaceCfg): Observable<SPTeamTasksResponse> {
+    const url = `${this._base(cfg)}/spaces/${encodeURIComponent(cfg.spaceId ?? '')}/team-tasks`;
+    return this._http.get<unknown>(url, { headers: this._headers(cfg) }).pipe(
+      map((res) => {
+        if (!isTeamTasksResponse(res)) {
+          throw new HttpErrorResponse({
+            status: 0,
+            statusText: 'Invalid team tasks response',
+            url,
+          });
+        }
+        return res;
+      }),
+    );
+  }
+
   /** Unclaimed (unassigned, not-done) tasks in this space — the claim pool. */
   getUnclaimedTasks$(cfg: PlainspaceCfg): Observable<PlainspaceIssue[]> {
     // Filter to the bound space client-side so `spaceId` works whether it holds
@@ -196,20 +215,17 @@ export class PlainspaceApiService {
   }
 
   /**
-   * Self-assigns ("claims") an unclaimed task. Returns the claimed task, or null
-   * if it could not be claimed (already taken, offline, …).
+   * Self-assigns ("claims") a task. A 409 means another member already claimed
+   * it. HTTP errors propagate so callers can distinguish a conflict from an outage.
    */
-  claimTask$(id: string, cfg: PlainspaceCfg): Observable<PlainspaceIssue | null> {
+  claimTask$(id: string, cfg: PlainspaceCfg): Observable<PlainspaceIssue> {
     return this._http
       .post<SPTaskResponse>(
         `${this._base(cfg)}/tasks/${encodeURIComponent(id)}/claim`,
         {},
         { headers: this._headers(cfg) },
       )
-      .pipe(
-        map((res) => mapSPTaskToIssue(res.task)),
-        catchError(() => of(null)),
-      );
+      .pipe(map((res) => mapSPTaskToIssue(res.task)));
   }
 
   /**
@@ -258,7 +274,10 @@ export class PlainspaceApiService {
         { spaceId: cfg.spaceId, title },
         { headers: this._headers(cfg) },
       )
-      .pipe(map((res) => mapSPTaskToIssue(res.task)));
+      .pipe(
+        map((res) => mapSPTaskToIssue(res.task)),
+        tap((issue) => this._createdTasks$.next({ cfg, taskId: issue.id })),
+      );
   }
 
   /**
@@ -450,6 +469,24 @@ interface SPSpaceMembersResponse {
   members: PlainspaceMember[];
 }
 
+export interface PlainspaceTeamTask {
+  id: string;
+  title: string;
+  isRecurring: boolean;
+  url: string;
+  assignee: PlainspaceMember | null;
+}
+
+export interface SPTeamTasksResponse {
+  tasks: PlainspaceTeamTask[];
+  assignedTaskIds: string[];
+}
+
+export interface PlainspaceCreatedTask {
+  cfg: PlainspaceCfg;
+  taskId: string;
+}
+
 /**
  * What a PATCH answer echoes; `title`, `scheduledAt` and `updatedAt` are absent
  * when the answer omits them.
@@ -486,6 +523,31 @@ const matchesSpace = (t: SPTask, spaceId: string | null | undefined): boolean =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
+
+const isTeamTask = (value: unknown): value is PlainspaceTeamTask => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const assignee = value['assignee'];
+  return (
+    typeof value['id'] === 'string' &&
+    !!value['id'] &&
+    typeof value['title'] === 'string' &&
+    typeof value['isRecurring'] === 'boolean' &&
+    typeof value['url'] === 'string' &&
+    (assignee === null ||
+      (isRecord(assignee) &&
+        typeof assignee['id'] === 'string' &&
+        typeof assignee['displayName'] === 'string'))
+  );
+};
+
+const isTeamTasksResponse = (value: unknown): value is SPTeamTasksResponse =>
+  isRecord(value) &&
+  Array.isArray(value['tasks']) &&
+  value['tasks'].every(isTeamTask) &&
+  Array.isArray(value['assignedTaskIds']) &&
+  value['assignedTaskIds'].every((id: unknown) => typeof id === 'string' && !!id);
 
 const parsePlainspacePatchConfirmation = (
   value: unknown,

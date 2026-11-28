@@ -1,37 +1,79 @@
-@if (tasks().length) {
-  @for (task of tasks(); track task.id) {
-    <div class="claim-task">
-      <span class="title">{{ task.title }}</span>
-      @if (task.isRecurring) {
-        <mat-icon
-          class="recurring-icon"
-          [matTooltip]="T.PLAINSPACE.RECURRING | translate"
-          >repeat</mat-icon
-        >
-      }
-      @if (task.url) {
-        <a
-          class="open-link"
-          mat-icon-button
-          [href]="task.url"
-          target="_blank"
-          rel="noopener"
-          [matTooltip]="T.PLAINSPACE.OPEN_IN_PLAINSPACE | translate"
-        >
-          <mat-icon>open_in_new</mat-icon>
-        </a>
-      }
+@for (task of tasks(); track task.id) {
+  @let isClaiming = claimingIds().has(task.id);
+  <div class="claim-task">
+    <mat-icon class="team-icon">{{ task.assignee ? 'person' : 'group' }}</mat-icon>
+    <div class="task-label">
+      <div class="claim-title">
+        <span [id]="'claim-title-' + task.id">{{ task.title }}</span>
+        @if (task.isRecurring) {
+          <mat-icon
+            class="recurring-icon"
+            role="img"
+            aria-hidden="false"
+            [attr.aria-label]="T.PLAINSPACE.RECURRING | translate"
+            [matTooltip]="T.PLAINSPACE.RECURRING | translate"
+            >repeat</mat-icon
+          >
+        }
+      </div>
+      <div class="claim-meta">
+        <span>{{
+          (task.isMine ? (T.PLAINSPACE.YOU | translate) : task.assignee?.displayName) ??
+            (T.PLAINSPACE.UNASSIGNED | translate)
+        }}</span>
+        <div class="claim-links">
+          @if (task.url) {
+            <a
+              class="source-link focus-ring"
+              [href]="task.url"
+              target="_blank"
+              rel="noopener"
+              [attr.aria-label]="
+                (T.PLAINSPACE.OPEN_IN_PLAINSPACE | translate) + ' — ' + task.title
+              "
+              [matTooltip]="T.PLAINSPACE.OPEN_IN_PLAINSPACE | translate"
+            >
+              <mat-icon>open_in_new</mat-icon>
+            </a>
+          }
+          @if (task.localTaskId; as localTaskId) {
+            <button
+              type="button"
+              class="local-copy-button focus-ring"
+              [id]="'task-focus-' + localTaskId"
+              [attr.aria-labelledby]="
+                'task-focus-' + localTaskId + ' claim-title-' + task.id
+              "
+              (click)="openLocalCopy.emit(localTaskId)"
+            >
+              {{ T.PLAINSPACE.LOCAL_COPY | translate }}
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+    @if (!task.assignee && !task.isMine) {
       <button
+        #claimButton
         mat-stroked-button
-        color="primary"
-        [disabled]="claimingIds().has(task.id)"
+        [attr.aria-labelledby]="'claim-action-' + task.id + ' claim-title-' + task.id"
+        disabledInteractive
+        [disabled]="isClaiming"
+        [showProgress]="isClaiming"
+        [attr.aria-busy]="isClaiming || null"
         (click)="claim(task)"
       >
-        <mat-icon>add</mat-icon>
-        {{ T.PLAINSPACE.CLAIM | translate }}
+        <span [id]="'claim-action-' + task.id">{{ T.PLAINSPACE.CLAIM | translate }}</span>
+        <ng-container progressIndicator>
+          @if (isClaiming) {
+            <mat-progress-spinner
+              mode="indeterminate"
+              diameter="18"
+              aria-hidden="true"
+            ></mat-progress-spinner>
+          }
+        </ng-container>
       </button>
-    </div>
-  }
-} @else {
-  <div class="no-tasks">{{ T.PLAINSPACE.NO_UNCLAIMED | translate }}</div>
+    }
+  </div>
 }

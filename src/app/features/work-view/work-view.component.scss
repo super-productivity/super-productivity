@@ -62,6 +62,31 @@ h2 {
   }
 }
 
+.team-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s) var(--s-half);
+
+  h2 {
+    margin: 0;
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+.team-section-title,
+.team-list-message {
+  margin: var(--s) 0;
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.team-section-title {
+  font-weight: var(--font-weight-semibold);
+}
+
 .status-bar {
   display: flex;
   align-items: center;

@@ -98,8 +98,52 @@
           ></plugin-index>
         }
       } @else {
-        <div class="task-list-wrapper">
-          @if (!(workContextService.isHasTasksToWorkOn$ | async)) {
+        <div
+          #taskListRegion
+          class="task-list-wrapper"
+          [attr.role]="teamOverview() ? 'region' : null"
+          [attr.tabindex]="teamOverview() ? -1 : null"
+          [attr.aria-label]="teamOverview() ? (T.MH.TASK_LIST | translate) : null"
+        >
+          @if (teamOverview(); as team) {
+            <div class="team-toolbar">
+              <h2>
+                {{ T.PLAINSPACE.TEAM_OVERVIEW | translate }}
+              </h2>
+              <compact-segmented-control
+                [ariaLabel]="T.PLAINSPACE.TEAM_OVERVIEW | translate"
+                [options]="teamFilterOptions"
+                [(value)]="onlyMine"
+              />
+            </div>
+            @if (team.status !== 'ready') {
+              <p
+                class="team-list-message"
+                role="status"
+              >
+                {{
+                  (team.status === 'loading'
+                    ? T.PLAINSPACE.TEAM_LOADING
+                    : T.PLAINSPACE.TEAM_UNAVAILABLE
+                  ) | translate
+                }}
+              </p>
+            } @else if (
+              !undoneTasks().length &&
+              !localSubtaskParents().length &&
+              !backlogTasks().length &&
+              !teamRows().length
+            ) {
+              <p class="team-list-message">
+                {{
+                  (onlyMine()
+                    ? T.PLAINSPACE.NO_OPEN_TASKS_MINE
+                    : T.PLAINSPACE.NO_OPEN_TASKS
+                  ) | translate
+                }}
+              </p>
+            }
+          } @else if (!(workContextService.isHasTasksToWorkOn$ | async)) {
             <!-- The archived count loads asynchronously (null until then). Wait
                  for it, so headline and hint render once in their final form
                  instead of flashing the "nothing planned" variant first. -->
@@ -305,6 +349,36 @@
                 listModelId="UNDONE"
               ></task-list>
             }
+          }
+
+          @let localDraft = localSubtaskDraft();
+          @for (parent of localSubtaskParents(); track parent.id) {
+            <div #localSubtaskGroup>
+              <h4 class="team-section-title">{{ parent.title }}</h4>
+              <task-list
+                [isSubTaskList]="true"
+                [listModelId]="parent.id"
+                [parentId]="parent.id"
+                [tasks]="parent.subTasks"
+                listId="SUB"
+              />
+              @if (localDraft?.parentId === parent.id) {
+                <add-subtask-input
+                  @expandFade
+                  [parentId]="parent.id"
+                  (closed)="closeLocalSubtaskInput(parent.id, $event, localSubtaskGroup)"
+                />
+              }
+            </div>
+          }
+          @if (teamOverview()) {
+            <plainspace-claim-pool
+              [tasks]="teamRows()"
+              [projectId]="workContextService.activeWorkContextId || ''"
+              (claimed)="focusClaimedTask($event)"
+              (focusList)="taskListRegion.focus()"
+              (openLocalCopy)="taskService.setSelectedId($event)"
+            ></plainspace-claim-pool>
           }
 
           @if (isShowOverduePanel()) {
@@ -526,32 +600,6 @@
                     }
                   }
                 </div>
-              </collapsible>
-            </div>
-          }
-
-          @if (isShowClaimPool()) {
-            <div
-              @expand
-              class="collapsible-section"
-            >
-              <collapsible
-                class="task-section"
-                [title]="
-                  (T.PLAINSPACE.CLAIM_POOL_TITLE | translate) +
-                  ' (' +
-                  unclaimedTasks().length +
-                  ')'
-                "
-                [isExpanded]="!isClaimPoolHidden()"
-                (isExpandedChange)="isClaimPoolHidden.set(!$event)"
-                [isIconBefore]="true"
-                [isGroup]="true"
-              >
-                <plainspace-claim-pool
-                  [tasks]="unclaimedTasks()"
-                  [projectId]="workContextService.activeWorkContextId || ''"
-                ></plainspace-claim-pool>
               </collapsible>
             </div>
           }

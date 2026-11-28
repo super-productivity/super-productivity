@@ -32,6 +32,19 @@ const XS_MEDIA_QUERY = maxWidthMediaQuery(XS_BREAKPOINT);
 const XXXS_MEDIA_QUERY = maxWidthMediaQuery(XXXS_BREAKPOINT);
 const initialXsMatch =
   typeof window !== 'undefined' ? window.matchMedia(XS_MEDIA_QUERY).matches : false;
+const TASK_ROW_ID_PREFIX = 't-';
+export const REPLACEMENT_TASK_ID_PREFIX = 'task-focus-';
+
+export const findTaskFocusTarget = (
+  taskId: string,
+  container?: HTMLElement,
+): HTMLElement | null => {
+  // A replacement can appear while the native row is still animating out.
+  const replacement = document.getElementById(REPLACEMENT_TASK_ID_PREFIX + taskId);
+  if (replacement && (!container || container.contains(replacement))) return replacement;
+  const row = document.getElementById(TASK_ROW_ID_PREFIX + taskId);
+  return row && (!container || container.contains(row)) ? row : null;
+};
 
 @Injectable({
   providedIn: 'root',
@@ -45,7 +58,7 @@ export class LayoutService {
 
   private _store$ = inject<Store<LayoutState>>(Store);
   private _breakPointObserver = inject(BreakpointObserver);
-  private _previouslyFocusedElement: HTMLElement | null = null;
+  private _previouslyFocusedTask: { element: HTMLElement; id: string } | null = null;
   private _pendingFocusTaskId: string | null = null; // store new task id until user closes the bar
   private _pendingTaskRevealTimeout?: number;
   private _pendingTaskHighlightTimeout?: number;
@@ -124,10 +137,17 @@ export class LayoutService {
   readonly isPanelResizing = signal(false);
 
   showAddTaskBar(): void {
-    // Store currently focused element if it's a task
-    const activeElement = document.activeElement as HTMLElement;
-    if (activeElement && activeElement.id && activeElement.id.startsWith('t-')) {
-      this._previouslyFocusedElement = activeElement;
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      const prefix = [TASK_ROW_ID_PREFIX, REPLACEMENT_TASK_ID_PREFIX].find((value) =>
+        activeElement.id.startsWith(value),
+      );
+      if (prefix) {
+        this._previouslyFocusedTask = {
+          element: activeElement,
+          id: activeElement.id.slice(prefix.length),
+        };
+      }
     }
     this._store$.dispatch(showAddTaskBar());
   }
@@ -151,7 +171,7 @@ export class LayoutService {
         focusTaskId,
         (newTaskElement) => {
           newTaskElement.focus({ preventScroll: true });
-          this._previouslyFocusedElement = null;
+          this._previouslyFocusedTask = null;
         },
         () => this._focusPreviousTaskOrFallback(),
       );
@@ -170,7 +190,7 @@ export class LayoutService {
   }
 
   focusTaskInViewIfPossible(taskId: string): HTMLElement | null {
-    const el = document.getElementById(`t-${taskId}`);
+    const el = findTaskFocusTarget(taskId);
     if (!el || !this._isTaskElementReady(el)) {
       return null;
     }
@@ -245,7 +265,7 @@ export class LayoutService {
     onNotFound?: () => void,
   ): void {
     window.setTimeout(() => {
-      const el = document.getElementById(`t-${taskId}`);
+      const el = findTaskFocusTarget(taskId);
       if (el && this._isTaskElementReady(el)) {
         cb(el);
       } else {
@@ -318,13 +338,21 @@ export class LayoutService {
   }
 
   private _focusPreviousTaskOrFallback(): void {
-    if (
-      this._previouslyFocusedElement &&
-      document.body.contains(this._previouslyFocusedElement)
-    ) {
-      this._previouslyFocusedElement.focus({ preventScroll: true });
-      this._previouslyFocusedElement = null;
-      return;
+    const previous = this._previouslyFocusedTask;
+    this._previouslyFocusedTask = null;
+    if (previous) {
+      const connected = previous.element.isConnected ? previous.element : null;
+      const current = findTaskFocusTarget(previous.id);
+      // Keep an in-panel row in the user's current context.
+      const target =
+        current?.id.startsWith(REPLACEMENT_TASK_ID_PREFIX) &&
+        !connected?.closest('task-detail-panel')
+          ? current
+          : (connected ?? current);
+      if (target) {
+        target.focus({ preventScroll: true });
+        return;
+      }
     }
 
     // Final fallback to keep keyboard navigation working.

@@ -29,7 +29,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatRippleModule } from '@angular/material/core';
 import { RightPanelContentComponent } from './right-panel-content.component';
 import { TaskService } from '../tasks/task.service';
-import { LayoutService } from '../../core-ui/layout/layout.service';
+import {
+  findTaskFocusTarget,
+  LayoutService,
+  REPLACEMENT_TASK_ID_PREFIX,
+} from '../../core-ui/layout/layout.service';
 import { Store } from '@ngrx/store';
 import { hidePluginPanel } from '../../core-ui/layout/store/layout.actions';
 import {
@@ -395,6 +399,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   }
 
   close(): void {
+    const selectedTaskId = this._taskService.selectedTaskId();
     // FORCE blur because otherwise task notes won't save.
     // On mobile, tapping close doesn't blur the textarea naturally.
     // On desktop, pointerdown preventDefault() (for drag handling) suppresses the natural blur.
@@ -411,6 +416,13 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     this._store.dispatch(hidePluginPanel());
 
     this.wasClosed.emit();
+    // Explicit Close removes the panel content along with its focus effect.
+    if (selectedTaskId && !isTouchActive()) {
+      const target = findTaskFocusTarget(selectedTaskId);
+      if (target?.id.startsWith(REPLACEMENT_TASK_ID_PREFIX)) {
+        target.focus({ preventScroll: true });
+      }
+    }
   }
 
   private _getWidthRelatedStyles(): CssString {

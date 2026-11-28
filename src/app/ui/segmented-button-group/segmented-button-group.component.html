@@ -11,6 +11,7 @@
       [class.is-active]="isActive(option)"
       [class.is-disabled]="option.disabled"
       role="radio"
+      [tabIndex]="index === focusableIndex() ? 0 : -1"
       [attr.aria-checked]="isActive(option)"
       [disabled]="option.disabled"
       (click)="onSelect(option.id)"

@@ -1,3 +1,4 @@
+import { PLAINSPACE_PROJECT_ROWS } from '../../plainspace/plainspace-shared-task.model';
 import { TaskMultiDragService } from '../task-multi-drag.service';
 import { TaskGroupDragPreviewComponent } from '../task-group-drag-preview/task-group-drag-preview.component';
 import {
@@ -123,6 +124,7 @@ export interface DropModelDataForList {
   ],
 })
 export class TaskListComponent implements OnDestroy, AfterViewInit {
+  private readonly _projectRows = inject(PLAINSPACE_PROJECT_ROWS, { optional: true });
   readonly multiDrag = inject(TaskMultiDragService);
   private _taskService = inject(TaskService);
   private _workContextService = inject(WorkContextService);
@@ -176,8 +178,16 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     };
   });
 
+  private readonly _tasksInScope = computed(() => {
+    const tasks = this.tasks() ?? [];
+    const rows = this._projectRows;
+    return rows && this.listId() !== 'PARENT'
+      ? tasks.filter((task) => !rows.hideNativeTask(task))
+      : tasks;
+  });
+
   filteredTasks = computed<TaskWithSubTasks[]>(() => {
-    const tasks = this.tasks();
+    const tasks = this._tasksInScope();
     if (this.listId() === 'PARENT') {
       return tasks;
     }
@@ -188,9 +198,9 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   });
 
   doneTasksLength = computed(() => {
-    return this.tasks()?.filter((task) => task.isDone).length ?? 0;
+    return this._tasksInScope().filter((task) => task.isDone).length;
   });
-  allTasksLength = computed(() => this.tasks()?.length ?? 0);
+  allTasksLength = computed(() => this._tasksInScope().length);
 
   readonly dropList = viewChild(CdkDropList);
   private _clearDragPointerTracking: (() => void) | undefined;

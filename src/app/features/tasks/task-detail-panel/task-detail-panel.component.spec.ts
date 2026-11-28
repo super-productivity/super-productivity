@@ -977,6 +977,22 @@ describe('TaskDetailPanelComponent add sub-task', () => {
     mainParentTask.remove();
   }));
 
+  it('returns focus to the retained parent button when the parent has no native row', fakeAsync(() => {
+    const parentButton = document.createElement('button');
+    parentButton.id = 'task-focus-P';
+    document.body.append(parentButton);
+
+    try {
+      component.isAddSubtaskInputVisible.set(true);
+      component.onAddSubtaskInputClosed('prev');
+      tick();
+
+      expect(document.activeElement).toBe(parentButton);
+    } finally {
+      parentButton.remove();
+    }
+  }));
+
   it('routes the add-subtask shortcut to addSubTask (with prevent/stopPropagation)', () => {
     spyOn(component, 'addSubTask');
     const ev = keydown('a', document.createElement('div'));

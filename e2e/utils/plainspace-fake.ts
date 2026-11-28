@@ -17,6 +17,11 @@ export const PLAINSPACE_SPACE = {
   role: 'owner',
 };
 
+const DEFAULT_MEMBER = {
+  id: 'member-me',
+  displayName: PLAINSPACE_SPACE.memberDisplayName,
+};
+
 /** The integration API's task DTO (`SPTask`). */
 export interface FakeSpTask {
   id: string;
@@ -71,8 +76,13 @@ export interface FakePlainspace {
   connectRequests: Record<string, unknown>[];
   /** Every task of the space, keyed by id. */
   tasks: Map<string, FakeSpTask>;
-  /** Ids of tasks assigned to me; only these are listed, read and patched. */
+  /** IDs of tasks assigned to the fake's default member. */
   assignedIds: Set<string>;
+  claimableIds: Set<string>;
+  /** Member IDs for tasks assigned to a teammate. */
+  teammateAssignments: Map<string, string>;
+  /** Bearer tokens for members other than the default account. */
+  memberIdsByToken: Map<string, string>;
   /** `/tasks` (the poll) gets no answer. */
   isTasksOffline: boolean;
   /** No request gets an answer: the device is offline. */
@@ -106,7 +116,8 @@ export interface FakePlainspace {
   taskListRequests: { status: number }[];
   /** A collaborator edits a task in Plainspace's web app. */
   remoteEdit: (id: string, changes: Partial<FakeSpTask>) => void;
-  addAssignedTask: (id: string, title: string) => FakeSpTask;
+  addAssignedTask: (id: string, title: string, teammateId?: string) => FakeSpTask;
+  addClaimableTask: (id: string, title: string) => FakeSpTask;
 }
 
 let clock = Date.parse('2026-10-20T08:00:00.000Z');
@@ -154,6 +165,9 @@ export const installFakePlainspace = async (
     connectRequests: [],
     tasks: new Map(),
     assignedIds: new Set(),
+    claimableIds: new Set(),
+    teammateAssignments: new Map(),
+    memberIdsByToken: new Map(),
     isTasksOffline: false,
     isOffline: false,
     offlineRequests: [],
@@ -171,10 +185,20 @@ export const installFakePlainspace = async (
       const task = server.tasks.get(id)!;
       server.tasks.set(id, { ...task, ...changes, updatedAt: nextUpdatedAt() });
     },
-    addAssignedTask: (id, title) => {
+    addAssignedTask: (id, title, teammateId) => {
       const task = newTask(id, title);
       server.tasks.set(id, task);
-      server.assignedIds.add(id);
+      if (teammateId) {
+        server.teammateAssignments.set(id, teammateId);
+      } else {
+        server.assignedIds.add(id);
+      }
+      return task;
+    },
+    addClaimableTask: (id, title) => {
+      const task = newTask(id, title);
+      server.tasks.set(id, task);
+      server.claimableIds.add(id);
       return task;
     },
   };
@@ -190,9 +214,15 @@ export const installFakePlainspace = async (
     const json = (status: number, body: unknown): Promise<void> =>
       route.fulfill({ status, headers: cors, json: body });
     const taskMatch = path.match(/^\/tasks\/([^/]+)$/);
-    const assignedTask = (id: string): FakeSpTask | undefined =>
-      server.assignedIds.has(id) ? server.tasks.get(id) : undefined;
+    const claimMatch = path.match(/^\/tasks\/([^/]+)\/claim$/);
+    const teamTasksMatch = path.match(/^\/spaces\/([^/]+)\/team-tasks$/);
     const token = (req.headers()['authorization'] ?? '').replace(/^Bearer /, '');
+    const memberId = server.memberIdsByToken.get(token) ?? DEFAULT_MEMBER.id;
+    const getAssigneeId = (id: string): string | undefined =>
+      server.teammateAssignments.get(id) ??
+      (server.assignedIds.has(id) ? DEFAULT_MEMBER.id : undefined);
+    const assignedTask = (id: string): FakeSpTask | undefined =>
+      getAssigneeId(id) === memberId ? server.tasks.get(id) : undefined;
 
     if (server.isOffline) {
       server.offlineRequests.push(`${req.method()} ${path}`);
@@ -219,7 +249,9 @@ export const installFakePlainspace = async (
       }
       server.taskListRequests.push({ status: 200 });
       await json(200, {
-        tasks: [...server.assignedIds].map((id) => server.tasks.get(id)),
+        tasks: [...server.tasks.values()].filter(
+          (task) => getAssigneeId(task.id) === memberId,
+        ),
       });
     } else if (path === '/tasks' && req.method() === 'POST') {
       const body = req.postDataJSON() as { spaceId: string; title: string };
@@ -234,12 +266,66 @@ export const installFakePlainspace = async (
         await json(500, { error: 'Internal error' });
         return;
       }
-      const task = server.addAssignedTask(`created-${server.creates.length}`, body.title);
+      const task = server.addAssignedTask(
+        `created-${server.creates.length}`,
+        body.title,
+        memberId === DEFAULT_MEMBER.id ? undefined : memberId,
+      );
       await json(201, { task });
     } else if (path === `/spaces/${PLAINSPACE_SPACE.id}/members` && !server.isOldServer) {
-      await json(200, { members: server.members });
+      await json(200, {
+        members: server.members.filter((member) => member.id !== memberId),
+      });
+    } else if (teamTasksMatch && req.method() === 'GET' && !server.isOldServer) {
+      const spaceId = decodeURIComponent(teamTasksMatch[1]);
+      const space = server.spaces.find((sp) => sp.id === spaceId || sp.slug === spaceId);
+      if (!space) {
+        await json(404, { error: 'Space not found' });
+        return;
+      }
+      const spaceTasks = [...server.tasks.values()].filter(
+        (task) => task.projectId === space.id,
+      );
+      const tasks = spaceTasks
+        .filter((task) => !task.done)
+        .flatMap(({ id, title, isRecurring, url: taskUrl }) => {
+          const assigneeId = getAssigneeId(id);
+          const assignee =
+            assigneeId === DEFAULT_MEMBER.id
+              ? DEFAULT_MEMBER
+              : server.members.find((member) => member.id === assigneeId);
+          return assignee || server.claimableIds.has(id)
+            ? [{ id, title, isRecurring, url: taskUrl, assignee: assignee ?? null }]
+            : [];
+        });
+      await json(200, {
+        tasks,
+        assignedTaskIds: spaceTasks
+          .filter((task) => getAssigneeId(task.id) === memberId)
+          .map((task) => task.id),
+      });
     } else if (path === '/claimable-tasks') {
-      await json(200, { tasks: [] });
+      const tasks = [...server.claimableIds]
+        .map((id) => server.tasks.get(id))
+        .filter((task) => task && !task.done && !assignedTask(task.id));
+      await json(200, { tasks });
+    } else if (claimMatch && req.method() === 'POST') {
+      const id = claimMatch[1];
+      const task = server.tasks.get(id);
+      if (assignedTask(id)) {
+        await json(200, { task });
+      } else if (getAssigneeId(id)) {
+        await json(409, { error: 'Task already claimed' });
+      } else if (task && !task.done && server.claimableIds.delete(id)) {
+        if (memberId === DEFAULT_MEMBER.id) {
+          server.assignedIds.add(id);
+        } else {
+          server.teammateAssignments.set(id, memberId);
+        }
+        await json(200, { task });
+      } else {
+        await json(404, { error: 'Task not found' });
+      }
     } else if (taskMatch && req.method() === 'GET') {
       const task = assignedTask(taskMatch[1]);
       await (task ? json(200, { task }) : json(404, { error: 'Task not found' }));
@@ -295,6 +381,13 @@ export const installFakePlainspace = async (
         }
         // Handed to someone else or released: no longer listed for me.
         server.assignedIds.delete(id);
+        if (assigneeId === null) {
+          server.teammateAssignments.delete(id);
+          server.claimableIds.add(id);
+        } else if (typeof assigneeId === 'string') {
+          server.teammateAssignments.set(id, assigneeId);
+          server.claimableIds.delete(id);
+        }
       }
       server.remoteEdit(id, {
         ...(typeof body['done'] === 'boolean' ? { done: body['done'] } : {}),
@@ -307,6 +400,8 @@ export const installFakePlainspace = async (
       await answer(200, { task: server.tasks.get(id) });
     } else if (taskMatch && req.method() === 'DELETE') {
       server.assignedIds.delete(taskMatch[1]);
+      server.claimableIds.delete(taskMatch[1]);
+      server.teammateAssignments.delete(taskMatch[1]);
       await route.fulfill({ status: 204, headers: cors });
     } else {
       await json(404, { error: 'Not found' });
@@ -466,6 +561,7 @@ const installFakeAuth = async (
 export const addPlainspaceProvider = async (
   page: Page,
   projectName: string | RegExp,
+  token = 'pat_e2e',
 ): Promise<void> => {
   await page.locator('.e2e-toggle-issue-provider-panel').click();
   await expect(page.locator('issue-panel')).toBeVisible();
@@ -474,7 +570,7 @@ export const addPlainspaceProvider = async (
   const editDialog = page.locator('dialog-edit-issue-provider');
   await editDialog.locator('input[id*="host"]').fill(PLAINSPACE_HOST);
   await editDialog.locator('input[id*="spaceId"]').fill(PLAINSPACE_SPACE.id);
-  await editDialog.locator('input[id*="token"]').fill('pat_e2e');
+  await editDialog.locator('input[id*="token"]').fill(token);
   await editDialog.getByRole('button', { name: /Advanced Config/i }).click();
   await editDialog.locator('mat-select[id*="defaultProjectId"]').click();
   await page.getByRole('option', { name: projectName }).click();

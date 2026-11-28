@@ -8,12 +8,18 @@ import {
   ElementRef,
   afterNextRender,
   inject,
+  Injector,
   input,
   linkedSignal,
+  model,
+  OnChanges,
   OnDestroy,
   OnInit,
   signal,
+  SimpleChanges,
+  untracked,
   ViewChild,
+  viewChild,
 } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
@@ -23,7 +29,7 @@ import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrat
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
-import { LayoutService } from '../../core-ui/layout/layout.service';
+import { findTaskFocusTarget, LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
@@ -37,7 +43,13 @@ import {
   timer,
   zip,
 } from 'rxjs';
-import { TaskWithSubTasks } from '../tasks/task.model';
+import { Task, TaskWithSubTasks } from '../tasks/task.model';
+import { TaskFocusService } from '../tasks/task-focus.service';
+import {
+  AddSubtaskInputComponent,
+  AddSubtaskInputCloseReason,
+} from '../tasks/add-subtask-input/add-subtask-input.component';
+import { AddSubtaskInputService } from '../tasks/add-subtask-input/add-subtask-input.service';
 import { delay, filter, map, observeOn, switchMap } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
@@ -51,7 +63,7 @@ import {
   TaskViewCustomizerService,
 } from '../task-view-customizer/task-view-customizer.service';
 import { DEFAULT_OPTIONS } from '../task-view-customizer/types';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import { groupTasksBySection } from '../section/section.util';
@@ -71,6 +83,7 @@ import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
+import { CompactSegmentedControlComponent } from '../../ui/compact-segmented-control/compact-segmented-control.component';
 import { TaskListComponent } from '../tasks/task-list/task-list.component';
 import { SplitComponent } from './split/split.component';
 import { BacklogComponent } from './backlog/backlog.component';
@@ -112,12 +125,20 @@ import {
 import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
 import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
 import { recordSearchNavDebug } from '../../util/search-nav-debug';
-import { dragDelayForTouch } from '../../util/input-intent';
+import { dragDelayForTouch, isTouchActive } from '../../util/input-intent';
+import {
+  findLastTaskInSubtree,
+  findNextTaskAfterSubtree,
+} from '../../util/find-adjacent-focusable';
 import { DateService } from '../../core/date/date.service';
 import { PluginIndexComponent } from '../../plugins/ui/plugin-index/plugin-index.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { PlainspaceClaimPoolComponent } from '../plainspace/claim-pool/claim-pool.component';
-import { PlainspaceSharedTask } from '../plainspace/plainspace-shared-task.model';
+import {
+  PLAINSPACE_PROJECT_ROWS,
+  PlainspaceSharedTask,
+  PlainspaceTeamOverview,
+} from '../plainspace/plainspace-shared-task.model';
 import { DIALOG_AUTO_FOCUS_TYPING } from '../../util/dialog-auto-focus';
 
 // Stable reference used as the toSignal initial value below so the deselect
@@ -161,11 +182,13 @@ const INITIAL_CUSTOMIZED_UNDONE_TASKS: CustomizedUndoneTasks = { list: [] };
     RepeatCfgPreviewComponent,
     PluginIndexComponent,
     PlainspaceClaimPoolComponent,
+    CompactSegmentedControlComponent,
     PlannerCalendarEventComponent,
     AddTaskBarComponent,
+    AddSubtaskInputComponent,
   ],
 })
-export class WorkViewComponent implements OnInit, OnDestroy {
+export class WorkViewComponent implements OnInit, OnChanges, OnDestroy {
   private static readonly _FOCUS_ITEM_RETRY_DELAY = 250;
   private static readonly _FOCUS_ITEM_MAX_RETRIES = 20;
 
@@ -185,6 +208,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
   private _destroyRef = inject(DestroyRef);
+  private readonly _injector = inject(Injector);
+  private readonly _addSubtaskInputService = inject(AddSubtaskInputService);
+  private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _plainspaceProjectRows = inject(PLAINSPACE_PROJECT_ROWS, {
+    optional: true,
+  });
   private _dateService = inject(DateService);
   private _pluginBridge = inject(PluginBridgeService);
   private _calendarIntegrationService = inject(CalendarIntegrationService);
@@ -295,7 +324,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   );
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
-    this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
+    this.customizerService.customizeUndoneTasks(toObservable(this.undoneTasks)),
     { initialValue: INITIAL_CUSTOMIZED_UNDONE_TASKS },
   );
   doneTasks = input.required<TaskWithSubTasks[]>();
@@ -345,18 +374,28 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
   isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
-  // Claim pool is tucked away (collapsed) by default.
-  isClaimPoolHidden = signal(
-    localStorage.getItem(LS.PLAINSPACE_CLAIM_POOL_HIDDEN) !== 'false',
-  );
 
-  // Unclaimed Plainspace tasks for a shared project, fed from project-task-page
-  // (PlainspaceClaimPoolService). Read-only until claimed; never enters the SP
-  // task store / op-log sync. Empty for non-shared projects and tags.
-  readonly unclaimedTasks = input<PlainspaceSharedTask[]>([]);
-  isShowClaimPool = computed(
-    () => this.isProjectContext() && this.unclaimedTasks().length > 0,
-  );
+  readonly teamOverview = input<PlainspaceTeamOverview | null>(null);
+  readonly teamRows = input<PlainspaceSharedTask[]>([]);
+  readonly localSubtaskParents = input<TaskWithSubTasks[]>([]);
+  readonly localSubtaskDraft = linkedSignal<
+    TaskWithSubTasks[],
+    { parentId: string; originTaskId: string } | null
+  >({
+    source: this.localSubtaskParents,
+    computation: (parents, previous) => {
+      const draft = previous?.value ?? null;
+      return draft && parents.some((parent) => parent.id === draft.parentId)
+        ? draft
+        : null;
+    },
+  });
+  private readonly _localSubtaskInput = viewChild(AddSubtaskInputComponent);
+  readonly teamFilterOptions = [
+    { value: false, labelKey: T.PLAINSPACE.EVERYONE },
+    { value: true, labelKey: T.PLAINSPACE.ONLY_MINE },
+  ];
+  readonly onlyMine = model(false);
 
   repeatCfgsForContext = toSignal(
     this.workContextService.activeWorkContextTypeAndId$.pipe(
@@ -465,21 +504,54 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       const visibleUndoneTasks = this._getVisibleUndoneTasksForSelection();
       if (!visibleUndoneTasks) return;
 
-      if (this._hasTaskInList(visibleUndoneTasks, currentSelectedId)) return;
-      if (this._hasTaskInList(this.doneTasks(), currentSelectedId)) return;
-      if (this._hasTaskInList(this.laterTodayTasks(), currentSelectedId)) return;
+      const hasVisibleTask = (tasks: TaskWithSubTasks[]): boolean =>
+        this._hasTaskInList(
+          tasks,
+          currentSelectedId,
+          (child) => !this._plainspaceProjectRows?.hideNativeTask(child),
+        );
+      if (hasVisibleTask(visibleUndoneTasks)) return;
+      if (hasVisibleTask(this.doneTasks())) return;
+      if (hasVisibleTask(this.laterTodayTasks())) return;
 
       if (
         this.workContextService.activeWorkContextId === TODAY_TAG.id &&
-        this._hasTaskInList(this.overdueTasks(), currentSelectedId)
+        hasVisibleTask(this.overdueTasks())
       )
         return;
 
       // Check if task is in backlog
-      if (this._hasTaskInList(this.backlogTasks(), currentSelectedId)) return;
+      if (hasVisibleTask(this.backlogTasks())) return;
+      if (this.teamRows().some((task) => task.localTaskId === currentSelectedId)) return;
+      if (
+        this.localSubtaskParents().some((parent) =>
+          parent.subTasks.some((child) => child.id === currentSelectedId),
+        )
+      )
+        return;
 
       // if task really is gone
       this.taskService.setSelectedId(null);
+    });
+
+    effect(() => {
+      const parentId = this._addSubtaskInputService.openRequest();
+      if (!parentId) return;
+
+      untracked(() => {
+        const parent = this.localSubtaskParents().find((task) => task.id === parentId);
+        if (!parent?.subTasks.length) return;
+
+        const focusedId =
+          this._taskFocusService.focusedTaskId() ??
+          this._taskFocusService.lastFocusedTaskComponent()?.task().id;
+        const origin =
+          parent.subTasks.find((child) => child.id === focusedId) ?? parent.subTasks[0];
+        const wasOpen = this.localSubtaskDraft()?.parentId === parentId;
+        this.localSubtaskDraft.set({ parentId, originTaskId: origin.id });
+        this._addSubtaskInputService.consume();
+        if (wasOpen) this._localSubtaskInput()?.focus();
+      });
     });
 
     effect(() => {
@@ -518,16 +590,78 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       }
     });
 
-    effect(() => {
-      // Persist 'false' when expanded; default (absent) means collapsed.
-      if (this.isClaimPoolHidden()) {
-        localStorage.removeItem(LS.PLAINSPACE_CLAIM_POOL_HIDDEN);
-      } else {
-        localStorage.setItem(LS.PLAINSPACE_CLAIM_POOL_HIDDEN, 'false');
-      }
-    });
-
     afterNextRender(() => this._initScrollTracking());
+  }
+
+  closeLocalSubtaskInput(
+    parentId: string,
+    reason: AddSubtaskInputCloseReason,
+    group: HTMLElement,
+  ): void {
+    const draft = this.localSubtaskDraft();
+    if (draft?.parentId !== parentId) return;
+    this.localSubtaskDraft.set(null);
+    if (reason === 'blur') return;
+
+    afterNextRender(
+      () => {
+        if (reason === 'escape') {
+          if (!isTouchActive()) this.taskService.focusTaskIfPossible(draft.originTaskId);
+          return;
+        }
+        const lastRow = findLastTaskInSubtree(group);
+        const target =
+          reason === 'prev' ? lastRow : (findNextTaskAfterSubtree(group) ?? lastRow);
+        target.focus();
+      },
+      { injector: this._injector },
+    );
+  }
+
+  focusClaimedTask(taskId: string): void {
+    if (this._activeWorkContext()?.backlogTaskIds?.includes(taskId)) {
+      if (this.splitInputPos === 100) {
+        this.splitInputPos = 50;
+      }
+      this.layoutService.focusTaskInViewWhenReady(taskId);
+    } else {
+      this._revealMainListTask(taskId);
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges<WorkViewComponent>): void {
+    if (!changes.teamRows) return;
+
+    // Search can focus the native list row before the team preview replaces it.
+    const focused = document.activeElement;
+    const row = focused?.closest<HTMLElement>('task[data-task-id]');
+    const taskId = row?.dataset['taskId'];
+    if (
+      !row ||
+      row.closest('task-detail-panel') ||
+      !taskId ||
+      !this.teamRows().some((task) => task.localTaskId === taskId)
+    ) {
+      return;
+    }
+
+    const wasHighlighted = row.classList.contains('highlight-searched-task');
+    afterNextRender(
+      () => {
+        if (
+          document.activeElement !== focused &&
+          document.activeElement !== document.body
+        ) {
+          return;
+        }
+        const container = this._splitTopElement;
+        const target = container && findTaskFocusTarget(taskId, container);
+        if (!target?.classList.contains('local-copy-button')) return;
+        target.focus();
+        if (wasHighlighted) this.layoutService.highlightTaskBriefly(target);
+      },
+      { injector: this._injector },
+    );
   }
 
   ngOnInit(): void {
@@ -548,9 +682,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
             selectedTaskId: this.selectedTaskId(),
             splitInputPos: this.splitInputPos,
           });
-          this._pendingFocusItemTaskId = params.focusItem;
-          this._isPendingFocusItemFromSearch = params.isFromSearch === 'true';
-          this._focusItemInWorkViewWhenReady(params.focusItem);
+          this._revealMainListTask(params.focusItem, params.isFromSearch === 'true');
         } else {
           // Cancel the chain too, not just the marker: a still-running loop
           // would keep expanding containers for a task the user has navigated
@@ -786,6 +918,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     return isCustomizedListReady ? customized.list : null;
   }
 
+  private _revealMainListTask(taskId: string, isFromSearch = false): void {
+    this._pendingFocusItemTaskId = taskId;
+    this._isPendingFocusItemFromSearch = isFromSearch;
+    this._focusItemInWorkViewWhenReady(taskId);
+  }
+
   private _focusItemInWorkViewWhenReady(
     taskId: string,
     retriesLeft: number = WorkViewComponent._FOCUS_ITEM_MAX_RETRIES,
@@ -796,10 +934,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     }
 
     const container = this._splitTopElement;
-    // Avoid querySelector here — task IDs are nanoid-generated and may start
-    // with `-` or a digit, which would throw SyntaxError.
-    const byId = document.getElementById(`t-${taskId}`);
-    const directMatch = byId && container?.contains(byId) ? byId : null;
+    const directMatch = container ? findTaskFocusTarget(taskId, container) : null;
     const selectedMatch =
       this.selectedTaskId() === taskId
         ? ((container?.querySelector('task.isSelected') as HTMLElement | null) ?? null)
@@ -934,9 +1069,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
           return;
         }
         this.customizerService.setFilter(DEFAULT_OPTIONS.filter);
-        this._pendingFocusItemTaskId = taskId;
-        this._isPendingFocusItemFromSearch = isFromSearch;
-        this._focusItemInWorkViewWhenReady(taskId);
+        this._revealMainListTask(taskId, isFromSearch);
       },
     });
   }
@@ -1093,6 +1226,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _hasTaskInList(
     taskList: TaskWithSubTasks[] | null | undefined,
     taskId: string,
+    isSubTaskVisible?: (subTask: Task) => boolean,
   ): boolean {
     // Array check, not just truthiness: callers index plain object literals by
     // a key that may be stale, and an inherited Object.prototype member would
@@ -1113,7 +1247,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       const subTasks = task.subTasks;
       if (Array.isArray(subTasks) && subTasks.length) {
         for (const subTask of subTasks) {
-          if (subTask && subTask.id === taskId) {
+          if (subTask && subTask.id === taskId && (isSubTaskVisible?.(subTask) ?? true)) {
             return true;
           }
         }
