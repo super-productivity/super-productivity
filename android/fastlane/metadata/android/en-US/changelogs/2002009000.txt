@@ -1,0 +1,3 @@
+Choose a project for each Android widget. Tasks you add from a project widget go straight to that project. You can also show Inbox in a widget or use it as your start page. The Today widget opens Today and updates when the day changes. Widget checkboxes are easier to tap and have screen reader labels.
+
+Restore archived tasks from their details. Dismissing a reminder keeps your task draft. Future repeats keep moved subtasks and leave out removed ones.
