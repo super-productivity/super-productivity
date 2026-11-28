@@ -6,6 +6,12 @@ describe('markdownToChecklist()', () => {
     // --
     ['- [ ] task', [{ text: 'task', isChecked: false }]],
     ['- [x] task', [{ text: 'task', isChecked: true }]],
+    ['- [X] task with capital X', [{ text: 'task with capital X', isChecked: true }]],
+    ['  - [ ] indented task', [{ text: 'indented task', isChecked: false }]],
+    [
+      '# Heading\nSome prose text\n- [ ] valid item\nAnother line',
+      [{ text: 'valid item', isChecked: false }],
+    ],
     [
       '\n- [x] task \n - [ ] whatever sdasd asd sadf asdfa sdfasdf asdf',
       [

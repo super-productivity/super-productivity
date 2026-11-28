@@ -9,6 +9,7 @@ import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { IssueService } from '../../issue/issue.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
+import { MarkdownPasteService } from '../markdown-paste.service';
 import { MatDialog } from '@angular/material/dialog';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { Store } from '@ngrx/store';
@@ -36,6 +37,7 @@ describe('TaskDetailPanelComponent', () => {
   let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
   let mockAttachmentService: jasmine.SpyObj<TaskAttachmentService>;
   let mockTaskService: jasmine.SpyObj<TaskService>;
+  let mockMarkdownPasteService: jasmine.SpyObj<MarkdownPasteService>;
   let isXs: WritableSignal<boolean>;
   let currentNavigation: WritableSignal<Navigation | null>;
 
@@ -51,12 +53,23 @@ describe('TaskDetailPanelComponent', () => {
     ]);
     mockTaskService = jasmine.createSpyObj(
       'TaskService',
-      ['update', 'setSelectedId', 'focusTaskIfPossible', 'addSubTaskTo'],
+      [
+        'update',
+        'setSelectedId',
+        'focusTaskIfPossible',
+        'addSubTaskTo',
+        'showSubTasks',
+        'getByIdWithSubTaskData$',
+      ],
       {
         taskDetailPanelTargetPanel$: of(null),
         selectedTaskId: jasmine.createSpy().and.returnValue(null),
       },
     );
+    mockTaskService.getByIdWithSubTaskData$.and.returnValue(of(undefined));
+    mockMarkdownPasteService = jasmine.createSpyObj('MarkdownPasteService', [
+      'convertChecklistToSubTasks',
+    ]);
     const mockLayoutService = jasmine.createSpyObj('LayoutService', [], {
       isShowList: jasmine.createSpy().and.returnValue(true),
       isXs,
@@ -111,6 +124,7 @@ describe('TaskDetailPanelComponent', () => {
         { provide: ClipboardImageService, useValue: mockClipboardImageService },
         { provide: TaskAttachmentService, useValue: mockAttachmentService },
         { provide: TaskService, useValue: mockTaskService },
+        { provide: MarkdownPasteService, useValue: mockMarkdownPasteService },
         { provide: LayoutService, useValue: mockLayoutService },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: IssueService, useValue: mockIssueService },
@@ -451,6 +465,43 @@ describe('TaskDetailPanelComponent', () => {
       expect(back).not.toHaveBeenCalled();
     });
   });
+
+  describe('convertChecklistToSubTasks', () => {
+    it('calls markdownPasteService.convertChecklistToSubTasks for a parent task', () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        id: 'task-1',
+        notes: '- [ ] item 1\n- [ ] item 2',
+      });
+      component.convertChecklistToSubTasks();
+      expect(mockMarkdownPasteService.convertChecklistToSubTasks).toHaveBeenCalledWith(
+        'task-1',
+        '- [ ] item 1\n- [ ] item 2',
+      );
+    });
+
+    it('unhides subtasks if subtask mode was HideAll', () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        id: 'task-1',
+        notes: '- [ ] item 1',
+        _hideSubTasksMode: 2, // HideSubTasksMode.HideAll
+      });
+      component.convertChecklistToSubTasks();
+      expect(mockTaskService.showSubTasks).toHaveBeenCalledWith('task-1');
+    });
+
+    it('does not call convertChecklistToSubTasks when task is a subtask', () => {
+      componentRef.setInput('task', {
+        ...MOCK_TASK,
+        id: 'subtask-1',
+        parentId: 'parent-1',
+        notes: '- [ ] item 1',
+      });
+      component.convertChecklistToSubTasks();
+      expect(mockMarkdownPasteService.convertChecklistToSubTasks).not.toHaveBeenCalled();
+    });
+  });
 });
 
 const fakeTask = (id: string): TaskWithSubTasks =>
@@ -488,6 +539,7 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
           },
         },
         { provide: TaskAttachmentService, useValue: {} },
+        { provide: MarkdownPasteService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
         {
@@ -743,6 +795,7 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
           },
         },
         { provide: TaskAttachmentService, useValue: {} },
+        { provide: MarkdownPasteService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
         {
@@ -847,6 +900,7 @@ describe('TaskDetailPanelComponent add sub-task', () => {
           },
         },
         { provide: TaskAttachmentService, useValue: {} },
+        { provide: MarkdownPasteService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
         {

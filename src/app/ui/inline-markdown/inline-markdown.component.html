@@ -93,6 +93,15 @@
           <mat-icon>delete_sweep</mat-icon>
           {{ T.F.TASK.ADDITIONAL_INFO.CLEAR_COMPLETED | translate }}
         </button>
+        @if (canConvertToSubTasks()) {
+          <button
+            (click)="convertToSubTasks.emit()"
+            mat-menu-item
+          >
+            <mat-icon>playlist_add</mat-icon>
+            {{ T.F.TASK.ADDITIONAL_INFO.CONVERT_TO_SUB_TASKS | translate }}
+          </button>
+        }
       </mat-menu>
     }
     <button

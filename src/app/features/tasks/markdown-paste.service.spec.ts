@@ -7,9 +7,12 @@ import { TaskService } from './task.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_TASK } from './task.model';
 
+import { addSubTask } from './store/task.actions';
+
 describe('MarkdownPasteService', () => {
   let service: MarkdownPasteService;
   let taskService: jasmine.SpyObj<TaskService>;
+  let store: jasmine.SpyObj<Store>;
 
   const PASTED_LIST = '- First\n  - Child\n- Second';
 
@@ -26,6 +29,7 @@ describe('MarkdownPasteService', () => {
     taskService = jasmine.createSpyObj<TaskService>('TaskService', [
       'add',
       'createNewTaskWithDefaults',
+      'update',
     ]);
     taskService.add.and.callFake((title) => `id-${title}`);
     taskService.createNewTaskWithDefaults.and.callFake(({ title, additional }) => ({
@@ -49,6 +53,7 @@ describe('MarkdownPasteService', () => {
       ],
     });
     service = TestBed.inject(MarkdownPasteService);
+    store = TestBed.inject(Store) as jasmine.SpyObj<Store>;
   });
 
   it('appends pasted parent tasks to the active list by default', async () => {
@@ -77,5 +82,73 @@ describe('MarkdownPasteService', () => {
         additional: jasmine.objectContaining({ parentId: 'id-First' }),
       }),
     );
+  });
+
+  describe('convertChecklistToSubTasks', () => {
+    it('creates sub-tasks preserving title and completion state and clears checklist lines from notes', () => {
+      const notes = 'Notes:\n\n- [ ] First item\n- [x] Second item\n\nMore text';
+      const result = service.convertChecklistToSubTasks('parent-1', notes);
+
+      expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
+        title: 'First item',
+        additional: jasmine.objectContaining({
+          isDone: false,
+          parentId: 'parent-1',
+        }),
+      });
+      expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
+        title: 'Second item',
+        additional: jasmine.objectContaining({
+          isDone: true,
+          parentId: 'parent-1',
+        }),
+      });
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: addSubTask.type,
+          parentId: 'parent-1',
+          task: jasmine.objectContaining({
+            title: 'First item',
+            isDone: false,
+            parentId: 'parent-1',
+          }),
+        }),
+      );
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: addSubTask.type,
+          parentId: 'parent-1',
+          task: jasmine.objectContaining({
+            title: 'Second item',
+            isDone: true,
+            parentId: 'parent-1',
+          }),
+        }),
+      );
+
+      expect(result).toBe('Notes:\n\nMore text');
+      expect(taskService.update).toHaveBeenCalledWith('parent-1', {
+        notes: 'Notes:\n\nMore text',
+      });
+    });
+
+    it('returns empty string when notes consist entirely of checklist items', () => {
+      const notes = '- [ ] Item 1\n- [x] Item 2';
+      const result = service.convertChecklistToSubTasks('parent-1', notes);
+
+      expect(result).toBe('');
+      expect(taskService.update).toHaveBeenCalledWith('parent-1', { notes: '' });
+      expect(store.dispatch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does nothing and returns original notes if no checklist items exist', () => {
+      const notes = 'Just plain notes without checklists.';
+      const result = service.convertChecklistToSubTasks('parent-1', notes);
+
+      expect(result).toBe(notes);
+      expect(store.dispatch).not.toHaveBeenCalled();
+      expect(taskService.update).not.toHaveBeenCalled();
+    });
   });
 });

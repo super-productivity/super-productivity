@@ -14,6 +14,8 @@ import { parseTimeSpentChanges } from './short-syntax';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { Task } from './task.model';
+import { markdownToChecklist } from '../markdown-checklist/markdown-to-checklist';
+import { removeAllChecklistItems } from '../markdown-checklist/checklist-operations';
 
 // Anchored at line start: ATX header (#…) or list-item marker (-/* with
 // optional checkbox). One-shot regex that bails before invoking the full
@@ -196,6 +198,30 @@ export class MarkdownPasteService {
         );
       }
     }
+  }
+
+  convertChecklistToSubTasks(taskId: string, notes: string): string {
+    const checklistItems = markdownToChecklist(notes);
+    if (!checklistItems || checklistItems.length === 0) {
+      return notes;
+    }
+
+    for (const item of checklistItems) {
+      const { title, timeProps } = this._parseTimeProps(item.text);
+      const subTask = this._taskService.createNewTaskWithDefaults({
+        title,
+        additional: {
+          isDone: item.isChecked,
+          parentId: taskId,
+          ...timeProps,
+        },
+      });
+      this._store.dispatch(addSubTask({ task: subTask, parentId: taskId }));
+    }
+
+    const newNotes = removeAllChecklistItems(notes);
+    this._taskService.update(taskId, { notes: newNotes });
+    return newNotes;
   }
 
   isMarkdownTaskList(text: string): boolean {

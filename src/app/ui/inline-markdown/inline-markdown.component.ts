@@ -110,8 +110,10 @@ export class InlineMarkdownComponent implements OnChanges, OnInit, OnDestroy {
   readonly defaultText = input<string>('');
   readonly placeholderTxt = input<string | undefined>(undefined);
   readonly taskId = input<string | undefined>(undefined);
+  readonly canConvertToSubTasks = input<boolean>(false);
 
   readonly changed = output<string>();
+  readonly convertToSubTasks = output<void>();
   readonly focused = output<Event>();
   readonly blurred = output<Event>();
   readonly keyboardUnToggle = output<Event>();

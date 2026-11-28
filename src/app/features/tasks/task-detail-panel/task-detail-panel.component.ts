@@ -29,6 +29,7 @@ import {
 } from 'rxjs/operators';
 import { T } from '../../../t.const';
 import { TaskService } from '../task.service';
+import { MarkdownPasteService } from '../markdown-paste.service';
 import {
   expandAnimation,
   expandFadeAnimation,
@@ -153,6 +154,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   private _issueService = inject(IssueService);
   private _jiraElectronBridge = inject(JiraElectronBridgeService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
+  private _markdownPasteService = inject(MarkdownPasteService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
   private readonly _issueSyncState = inject(IssueSyncStateService);
@@ -638,6 +640,17 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     const defaultNotes = this.defaultTaskNotes();
     if (!defaultNotes || !$event || $event.trim() !== defaultNotes.trim()) {
       this.taskService.update(this.task().id, { notes: $event });
+    }
+  }
+
+  convertChecklistToSubTasks(): void {
+    const task = this.task();
+    if (!task || !task.id || task.parentId) {
+      return;
+    }
+    this._markdownPasteService.convertChecklistToSubTasks(task.id, task.notes || '');
+    if (task._hideSubTasksMode === HideSubTasksMode.HideAll) {
+      this.taskService.showSubTasks(task.id);
     }
   }
 

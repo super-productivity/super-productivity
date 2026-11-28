@@ -1392,6 +1392,12 @@ describe('InlineMarkdownComponent', () => {
       component.uncheckAllChecklistItems();
       expect(component.changed.emit).not.toHaveBeenCalled();
     });
+
+    it('should emit convertToSubTasks when convert to subtasks action is invoked', () => {
+      spyOn(component.convertToSubTasks, 'emit');
+      component.convertToSubTasks.emit();
+      expect(component.convertToSubTasks.emit).toHaveBeenCalled();
+    });
   });
 
   describe('fullscreen editor save after the host is destroyed mid-edit', () => {
