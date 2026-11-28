@@ -2,9 +2,11 @@ import {
   CAPTURE_DAILY_LIMIT_TEXT,
   CAPTURE_ESTIMATE_MINUTES_MAX,
   CAPTURE_NOTES_MAX_BYTES,
+  CAPTURE_PROJECT_MAX_CHARS,
   CAPTURE_QUEUE_FULL_TEXT,
   CAPTURE_REPEAT_EVERY_MAX,
   CAPTURE_REVOKED_TEXT,
+  CAPTURE_SAVED_PROJECT_TEXT,
   CAPTURE_SAVED_TEXT,
   CAPTURE_SWITCHED_OFF_TEXT,
   CAPTURE_TITLE_MAX_CHARS,
@@ -25,18 +27,20 @@ const DUE_TIME_PATTERN = '^([01]\\d|2[0-3]):[0-5]\\d$';
 
 /**
  * `create_task(title, notes?, dueDate?, dueTime?, repeat?, deadlineDate?,
- * deadlineTime?, estimateMinutes?)`: the only tool.
+ * deadlineTime?, estimateMinutes?, project?)`: the only tool.
  * Public once shipped: optional fields may be added, nothing removed or renamed.
  */
 export const CREATE_TASK_TOOL: McpToolDefinition = {
   name: 'create_task',
   title: 'Add task to Inbox',
   description:
-    'Add a task to the Inbox in Super Productivity. Text is kept literally: ' +
+    'Add a task to the Inbox, or to an existing project, in Super ' +
+    'Productivity. Text is kept literally: ' +
     '#tags, +projects and dates in the title or notes are not parsed; pass ' +
-    'dueDate (and optionally dueTime) to schedule the task, and repeat to make ' +
-    'it recurring; deadlineDate (and optionally deadlineTime) when the work is ' +
-    'due, and estimateMinutes for how long it takes. This tool cannot read tasks.',
+    'dueDate (and optionally dueTime) to schedule the task, repeat to make it ' +
+    'recurring, and project to name the project. Use deadlineDate (and optionally ' +
+    'deadlineTime) for when the work is due and estimateMinutes for how long it ' +
+    'takes. This tool cannot read tasks or projects.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -91,6 +95,16 @@ export const CREATE_TASK_TOOL: McpToolDefinition = {
         required: ['cycle'],
         additionalProperties: false,
       },
+      project: {
+        type: 'string',
+        description:
+          'Optional: the name of an existing project to add the task to, ' +
+          'matched ignoring case. If no single open project has this name, ' +
+          'the task goes to the Inbox. Hidden projects and projects linked ' +
+          'to an issue tracker are never used. Projects are never created.',
+        minLength: 1,
+        maxLength: CAPTURE_PROJECT_MAX_CHARS,
+      },
       deadlineDate: {
         type: 'string',
         description:
@@ -118,7 +132,8 @@ export const CREATE_TASK_TOOL: McpToolDefinition = {
     additionalProperties: false,
   },
   // Adds and never overwrites. Not idempotent: the retry window merges an
-  // identical call for 10 minutes only. Touches only the user's own Inbox.
+  // identical call for 10 minutes only. Touches only the user's own Inbox or
+  // one of their existing projects.
   annotations: {
     title: 'Add task to Inbox',
     readOnlyHint: false,
@@ -141,6 +156,8 @@ export type CreateTaskArgs = {
   /** `HH:MM`, 24-hour; only with `dueDate`. */
   dueTime?: string;
   repeat?: CaptureRepeat;
+  /** Trimmed project title; matched on the importing device. */
+  project?: string;
   /** `YYYY-MM-DD`, a real calendar day. */
   deadlineDate?: string;
   /** `HH:MM`, 24-hour; only with `deadlineDate`. */
@@ -155,6 +172,7 @@ const ARG_NAMES = [
   'dueDate',
   'dueTime',
   'repeat',
+  'project',
   'deadlineDate',
   'deadlineTime',
   'estimateMinutes',
@@ -283,6 +301,16 @@ const validateRepeat = (value: unknown): CaptureRepeat | undefined | string => {
   return repeat;
 };
 
+/** Returns the trimmed project title, or the error message. */
+const validateProject = (value: unknown): string | undefined | { error: string } => {
+  if (value === undefined) return undefined;
+  const error = { error: `project must be 1 to ${CAPTURE_PROJECT_MAX_CHARS} characters` };
+  if (typeof value !== 'string') return error;
+  const project = value.trim();
+  const chars = [...project].length;
+  return chars === 0 || chars > CAPTURE_PROJECT_MAX_CHARS ? error : project;
+};
+
 /** Returns the validated arguments, or the message to send back as a tool error. */
 export const validateCreateTaskArgs = (
   args: Record<string, unknown>,
@@ -300,6 +328,8 @@ export const validateCreateTaskArgs = (
   if (typeof dueOnly === 'string') return dueOnly;
   const repeat = validateRepeat(args.repeat);
   if (typeof repeat === 'string') return repeat;
+  const project = validateProject(args.project);
+  if (typeof project === 'object') return project.error;
   const deadline = validateDeadline(args);
   if (typeof deadline === 'string') return deadline;
   // A repeat config has no deadline, so later occurrences could not keep it.
@@ -307,21 +337,25 @@ export const validateCreateTaskArgs = (
     return 'deadlineDate cannot be combined with repeat';
   const estimateMinutes = validateEstimate(args.estimateMinutes);
   if (typeof estimateMinutes === 'string') return estimateMinutes;
-  const due = {
+  const extra = {
     ...dueOnly,
     ...(repeat ? { repeat } : {}),
+    ...(project === undefined ? {} : { project }),
     ...deadline,
     ...(estimateMinutes === undefined ? {} : { estimateMinutes }),
   };
-  if (args.notes === undefined) return { title, ...due };
+  if (args.notes === undefined) return { title, ...extra };
   if (typeof args.notes !== 'string') return 'notes must be a string';
   if (Buffer.byteLength(args.notes, 'utf8') > CAPTURE_NOTES_MAX_BYTES) {
     return 'notes must be at most 8 KiB';
   }
   return args.notes.length === 0
-    ? { title, ...due }
-    : { title, notes: args.notes, ...due };
+    ? { title, ...extra }
+    : { title, notes: args.notes, ...extra };
 };
+
+const savedText = (args: CreateTaskArgs): string =>
+  args.project === undefined ? CAPTURE_SAVED_TEXT : CAPTURE_SAVED_PROJECT_TEXT;
 
 export const runCreateTask = async (
   grant: AuthenticatedGrant,
@@ -332,7 +366,7 @@ export const runCreateTask = async (
 
   return withGrantLock(grant.grantId, async () => {
     if (isRecentCapture(grant.grantId, args)) {
-      return text(CAPTURE_SAVED_TEXT);
+      return text(savedText(args));
     }
     if (isGrantDailyCapReached(grant.grantId)) {
       return text(CAPTURE_DAILY_LIMIT_TEXT, true);
@@ -346,6 +380,7 @@ export const runCreateTask = async (
       ...(args.dueDate === undefined ? {} : { dueDate: args.dueDate }),
       ...(args.dueTime === undefined ? {} : { dueTime: args.dueTime }),
       ...(args.repeat === undefined ? {} : { repeat: args.repeat }),
+      ...(args.project === undefined ? {} : { project: args.project }),
       ...(args.deadlineDate === undefined ? {} : { deadlineDate: args.deadlineDate }),
       ...(args.deadlineTime === undefined ? {} : { deadlineTime: args.deadlineTime }),
       ...(args.estimateMinutes === undefined
@@ -359,6 +394,6 @@ export const runCreateTask = async (
     if (result === 'queue_full') return text(CAPTURE_QUEUE_FULL_TEXT, true);
     recordCapture(grant.grantId, args);
     recordGrantCreate(grant.grantId);
-    return text(CAPTURE_SAVED_TEXT);
+    return text(savedText(args));
   });
 };

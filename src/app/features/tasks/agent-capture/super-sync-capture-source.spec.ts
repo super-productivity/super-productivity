@@ -9,6 +9,7 @@ import {
   AgentCaptureRun,
   CaptureUnsupportedError,
   createSuperSyncCaptureSource,
+  findCaptureProjectId,
   neutralizeAutoloadMedia,
   toCaptureTask,
 } from './super-sync-capture-source';
@@ -57,6 +58,7 @@ describe('createSuperSyncCaptureSource', () => {
       defaultEstimate: 0,
       defaultRemindOption: TaskReminderOptionId.AtStart,
       todayStr: '2026-10-15',
+      getTargetProjects: () => [{ id: 'p-work', title: 'Work' }],
       startOfNextDayDiffMs: 0,
       assertUnchanged: (context) => {
         if (!isCurrent) throw new Error(`changed at ${context}`);
@@ -109,7 +111,7 @@ describe('createSuperSyncCaptureSource', () => {
     expect(action.task.timeEstimate).toBe(1500);
   });
 
-  it('puts a deadline and a capture estimate into the addTask itself', async () => {
+  it('adds the task to the named project with its deadline and estimate in one action', async () => {
     provider.claimCaptures.and.resolveTo(ok());
     run = { ...(run as AgentCaptureRun), defaultEstimate: 1500 };
     const src = source();
@@ -119,6 +121,7 @@ describe('createSuperSyncCaptureSource', () => {
       task: {
         title: 'Lab report',
         createdAt: 1,
+        project: 'Work',
         deadlineDay: '2026-10-16',
         deadlineTime: [8, 0],
         estimateMinutes: 60,
@@ -128,6 +131,8 @@ describe('createSuperSyncCaptureSource', () => {
       typeof TaskSharedActions.addTask
     >;
     expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(action.task.projectId).toBe('p-work');
+    expect(action.workContextId).toBe('p-work');
     expect(action.task.timeEstimate).toBe(3600000);
     expect(action.task.deadlineWithTime).toBe(new Date(2026, 9, 16, 8, 0).getTime());
     expect(action.task.deadlineDay).toBeUndefined();
@@ -236,6 +241,45 @@ describe('createSuperSyncCaptureSource', () => {
         saturday: false,
       }),
     );
+  });
+
+  it('adds a capture and its repeat to the named project', async () => {
+    provider.claimCaptures.and.resolveTo(ok());
+    const src = source();
+    await src.getPending();
+    src.createTask({
+      id: 'task-1',
+      task: {
+        title: 'Review',
+        createdAt: 1,
+        project: 'work',
+        repeat: { cycle: 'DAILY', every: 1 },
+      },
+    });
+    const [[addTask], [addRepeat]] = dispatch.calls.allArgs() as [
+      [ReturnType<typeof TaskSharedActions.addTask>],
+      [ReturnType<typeof addTaskRepeatCfgToTask>],
+    ];
+    expect(addTask.task.projectId).toBe('p-work');
+    expect(addTask.workContextId).toBe('p-work');
+    expect(addRepeat.taskRepeatCfg.projectId).toBe('p-work');
+  });
+
+  it('uses the Inbox when the named project is gone at create time', async () => {
+    provider.claimCaptures.and.resolveTo(ok());
+    const src = source();
+    await src.getPending();
+    // Deleted after the claim: the source holds this run and reads it lazily.
+    (run as AgentCaptureRun).getTargetProjects = () => [];
+    src.createTask({
+      id: 'task-1',
+      task: { title: 'Review', createdAt: 1, project: 'Work' },
+    });
+    const action = dispatch.calls.mostRecent().args[0] as ReturnType<
+      typeof TaskSharedActions.addTask
+    >;
+    expect(action.task.projectId).toBe(INBOX_PROJECT.id);
+    expect(action.workContextId).toBe(INBOX_PROJECT.id);
   });
 
   it("starts an undated series on this device's today", async () => {
@@ -390,6 +434,43 @@ describe('toCaptureTask', () => {
       createdAt: 1,
       dueDay: '2026-10-16',
     });
+  });
+});
+
+describe('toCaptureTask project', () => {
+  const base = { v: 1, title: 'Review', createdAt: 1, client: 'Claude' };
+
+  it('keeps a trimmed project title and drops an invalid one', () => {
+    expect(toCaptureTask({ ...base, project: '  Work ' })).toEqual({
+      title: 'Review',
+      createdAt: 1,
+      project: 'Work',
+    });
+    for (const project of ['', '   ', 1, 'x'.repeat(201)]) {
+      expect(toCaptureTask({ ...base, project })).toEqual({
+        title: 'Review',
+        createdAt: 1,
+      });
+    }
+  });
+});
+
+describe('findCaptureProjectId', () => {
+  const projects = [
+    { id: 'p-work', title: 'Work' },
+    { id: 'p-home-1', title: 'Home' },
+    { id: 'p-home-2', title: 'home ' },
+  ];
+
+  it('finds the one project with that title, ignoring case and space', () => {
+    expect(findCaptureProjectId('WORK', projects)).toBe('p-work');
+    expect(findCaptureProjectId(' work', projects)).toBe('p-work');
+  });
+
+  it('falls back to the Inbox for no, a missing or an ambiguous match', () => {
+    expect(findCaptureProjectId(undefined, projects)).toBe(INBOX_PROJECT.id);
+    expect(findCaptureProjectId('Garden', projects)).toBe(INBOX_PROJECT.id);
+    expect(findCaptureProjectId('Home', projects)).toBe(INBOX_PROJECT.id);
   });
 });
 

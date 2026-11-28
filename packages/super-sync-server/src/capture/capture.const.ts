@@ -8,6 +8,7 @@ import { MS_PER_DAY } from '../sync/sync.types';
 export const CAPTURE_TITLE_MAX_CHARS = 500;
 export const CAPTURE_NOTES_MAX_BYTES = 8 * 1024;
 export const CAPTURE_REPEAT_EVERY_MAX = 99;
+export const CAPTURE_PROJECT_MAX_CHARS = 200;
 /** `estimateMinutes`, in minutes: a week. The app and the desktop tool use the same bound. */
 export const CAPTURE_ESTIMATE_MINUTES_MAX = 10080;
 /** Room for JSON escaping: 8 KiB of notes can more than double as `\uXXXX`. */
@@ -44,6 +45,9 @@ export const CAPTURE_TOKEN_PREFIX = 'sp_cap_';
 
 export const CAPTURE_SAVED_TEXT =
   'Saved. It will appear in your Super Productivity Inbox the next time the app syncs.';
+export const CAPTURE_SAVED_PROJECT_TEXT =
+  'Saved. It will appear in that Super Productivity project the next time the ' +
+  'app syncs, or in the Inbox if no single eligible project has this name.';
 export const CAPTURE_SWITCHED_OFF_TEXT =
   'AI capture is switched off in Super Productivity.';
 export const CAPTURE_REVOKED_TEXT = 'This connection was removed in Super Productivity.';

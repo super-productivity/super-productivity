@@ -13,6 +13,7 @@ import { resetCaptureMemoryForTests } from '../src/capture/capture-retry-window'
 import { resetCaptureRateLimitForTests } from '../src/capture/capture-rate-limit';
 import {
   CAPTURE_MAX_PENDING_PER_GRANT,
+  CAPTURE_SAVED_PROJECT_TEXT,
   CAPTURE_SAVED_TEXT,
   CAPTURE_SWITCHED_OFF_TEXT,
 } from '../src/capture/capture.const';
@@ -46,6 +47,7 @@ const toolCall = (
     dueDate?: string;
     dueTime?: string;
     repeat?: Record<string, unknown>;
+    project?: string;
     deadlineDate?: string;
     deadlineTime?: string;
     estimateMinutes?: number;
@@ -257,10 +259,37 @@ describe('capture routes (PGlite)', () => {
     expect(payloads[1].repeat).toBeUndefined();
   });
 
-  it('seals a deadline and an estimate, and keeps differing ones apart', async () => {
+  it('seals the project and keeps captures for other projects apart', async () => {
+    await api('PUT', '/key', { publicKey: key.publicKey });
+    const token = await newToken();
+    const first = await mcp(token, toolCall(1, 'Review', undefined, { project: 'Work' }));
+    expect(toolText(first).text).toBe(CAPTURE_SAVED_PROJECT_TEXT);
+    // Matched ignoring case on the device, so merged ignoring case here.
+    await mcp(token, toolCall(2, 'Review', undefined, { project: 'work' }));
+    await mcp(token, toolCall(3, 'Review', undefined, { project: 'Home' }));
+    await mcp(token, toolCall(4, 'Review'));
+
+    const claim = (
+      await api('POST', '/claim', {
+        deviceId: 'dev-a',
+        fingerprint: captureKeyFingerprint(key.publicKey),
+      })
+    ).json();
+    const payloads = claim.items.map((item: { itemId: string; ciphertext: string }) =>
+      openCapture(key.ecdh, item.itemId, item.ciphertext),
+    );
+    expect(payloads.map((p: { project?: string }) => p.project)).toEqual([
+      'Work',
+      'Home',
+      undefined,
+    ]);
+  });
+
+  it('seals the project, deadline and estimate, and keeps differing estimates apart', async () => {
     await api('PUT', '/key', { publicKey: key.publicKey });
     const token = await newToken();
     const lab = {
+      project: 'Work',
       deadlineDate: '2026-10-16',
       deadlineTime: '08:00',
       estimateMinutes: 60,
