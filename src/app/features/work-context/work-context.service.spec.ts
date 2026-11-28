@@ -196,6 +196,8 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
         UNDONE,
       ]);
       store.refreshState();
+      // Today's own list; read lazily inside switchMap, like below
+      (service as unknown as { mainListTasks$: unknown }).mainListTasks$ = of([UNDONE]);
     });
 
     it('lists only tasks due or completed today, newest first', async () => {
@@ -223,6 +225,50 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
 
       expect(ids).toEqual([]);
       sub.unsubscribe();
+    });
+
+    // #12003: a subtask due today whose parent is not shows on its own in
+    // Today's list; completing it must not make it vanish from Today.
+    it('keeps a done subtask that Today lists on its own', async () => {
+      const SUB = createMockTask({
+        id: 'SUB',
+        parentId: 'PARENT_NOT_TODAY',
+        isDone: true,
+        dueDay: '2023-06-13',
+        doneOn: at(5, 13, 10),
+      });
+      (service as unknown as { mainListTasks$: unknown }).mainListTasks$ = of([
+        SUB,
+        UNDONE,
+      ]);
+
+      const done = await firstValueFrom(service.doneTasks$);
+
+      expect(done.map((t) => t.id)).toEqual([
+        'SUB',
+        'DUE_TODAY',
+        'DONE_TODAY',
+        'DUE_TIME_TODAY',
+      ]);
+    });
+
+    it('does not repeat a done subtask whose parent is in the Done list', async () => {
+      const SUB = createMockTask({
+        id: 'SUB',
+        parentId: DONE_TODAY.id,
+        isDone: true,
+        dueDay: '2023-06-13',
+        doneOn: at(5, 13, 10),
+      });
+      (service as unknown as { mainListTasks$: unknown }).mainListTasks$ = of([SUB]);
+
+      const done = await firstValueFrom(service.doneTasks$);
+
+      expect(done.map((t) => t.id)).toEqual([
+        'DUE_TODAY',
+        'DONE_TODAY',
+        'DUE_TIME_TODAY',
+      ]);
     });
 
     it('archives every unarchived done task, including earlier ones', async () => {

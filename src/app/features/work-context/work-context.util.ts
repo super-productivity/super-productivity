@@ -36,6 +36,26 @@ export const isDoneTaskForToday = (
   isValidTsToday(task.dueWithTime, todayStr, startOfNextDayDiffMs) ||
   isValidTsToday(task.doneOn, todayStr, startOfNextDayDiffMs);
 
+/**
+ * Adds the done subtasks that Today lists on their own to Today's Done list.
+ * A subtask due today whose parent is not shows as a top-level row on Today,
+ * but the Done list is built from top-level tasks only, so once completed it
+ * would vanish from Today (#12003). A subtask whose parent is already in the
+ * Done list is skipped: it is shown nested under that parent.
+ */
+export const addDoneSubTasksListedOnToday = (
+  doneTasks: TaskWithSubTasks[],
+  todayListTasks: TaskWithSubTasks[],
+): TaskWithSubTasks[] => {
+  const doneIds = new Set(doneTasks.map((task) => task.id));
+  const doneSubTasks = todayListTasks.filter(
+    (task) => task && task.isDone && !!task.parentId && !doneIds.has(task.parentId),
+  );
+  return doneSubTasks.length
+    ? sortDoneTasksByDoneDate([...doneTasks, ...doneSubTasks])
+    : doneTasks;
+};
+
 export const mapEstimateRemainingFromTasks = (tasks: TaskWithSubTasks[]): number =>
   tasks &&
   tasks.length &&
