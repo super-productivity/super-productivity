@@ -28,6 +28,7 @@ import {
   SyncDeviceListEntry,
 } from '../super-sync-devices.service';
 import { T } from '../../../t.const';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 interface DeviceRow extends SyncDeviceListEntry {
   icon: string;
@@ -74,6 +75,7 @@ export class DialogSyncDevicesComponent implements OnInit {
   private _snackService = inject(SnackService);
 
   T = T;
+  readonly dateTimeFormatService = inject(DateTimeFormatService);
 
   devices = signal<DeviceRow[]>([]);
   isLoading = signal(true);

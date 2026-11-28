@@ -27,7 +27,17 @@
             <div class="device-meta">
               {{
                 T.F.SYNC.D_DEVICES.LAST_SEEN
-                  | translate: { date: device.lastSeenAt | localeDate: 'medium' }
+                  | translate
+                    : {
+                        date:
+                          device.lastSeenAt
+                          | localeDate
+                            : (dateTimeFormatService.isoTextLocale()
+                                ? 'yyyy-MM-dd HH:mm:ss'
+                                : 'medium')
+                            : undefined
+                            : dateTimeFormatService.currentLocale(),
+                      }
               }}
             </div>
             <div class="device-id">{{ device.clientId }}</div>
