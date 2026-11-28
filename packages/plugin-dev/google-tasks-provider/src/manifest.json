@@ -1,0 +1,43 @@
+{
+  "id": "google-tasks-provider",
+  "name": "Google Tasks",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "18.0.0",
+  "description": "Import and sync tasks with Google Tasks",
+  "author": "Super Productivity",
+  "type": "issueProvider",
+  "icon": "icon.svg",
+  "iFrame": false,
+  "permissions": ["oauth", "http"],
+  "dataSharing": [
+    {
+      "recipient": "Google Tasks",
+      "hosts": ["tasks.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"],
+      "data": [
+        "credentials",
+        "userText",
+        "taskTitles",
+        "taskNotes",
+        "taskSchedule",
+        "taskStatus",
+        "ids"
+      ],
+      "privacyPolicyUrl": "https://policies.google.com/privacy"
+    }
+  ],
+  "hooks": [],
+  "i18n": {
+    "languages": ["en"]
+  },
+  "issueProvider": {
+    "pollIntervalMs": 300000,
+    "icon": "task_alt",
+    "humanReadableName": "Google Tasks",
+    "issueStrings": {
+      "singular": "Task",
+      "plural": "Tasks"
+    },
+    "defaultAutoAddToBacklog": false
+  }
+}

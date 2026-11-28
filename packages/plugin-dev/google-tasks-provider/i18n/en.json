@@ -1,0 +1,29 @@
+{
+  "CFG": {
+    "CONNECT_ACCOUNT": "Connect Google Account",
+    "TASK_LIST": "Task list",
+    "TASK_LIST_DESC": "Select which Google Tasks list to sync with.",
+    "DEFAULT_TASK_LIST": "Default list",
+    "INCLUDE_COMPLETED": "Include completed tasks in search",
+    "INCLUDE_COMPLETED_DESC": "Show already completed Google Tasks when searching for tasks to import.",
+    "CUSTOM_CLIENT_ID": "OAuth Client ID (Desktop)",
+    "CUSTOM_CLIENT_ID_DESC": "Google Cloud Desktop OAuth Client ID with the Google Tasks API enabled.",
+    "CUSTOM_CLIENT_SECRET": "OAuth Client Secret (Desktop)",
+    "CUSTOM_CLIENT_SECRET_DESC": "Google Cloud Desktop OAuth Client Secret (non-confidential installed-app credential; synced with provider config).",
+    "CUSTOM_REDIRECT_URI": "Custom OAuth Redirect URI (Desktop)",
+    "CUSTOM_REDIRECT_URI_DESC": "Optional loopback redirect URI (e.g. http://127.0.0.1:8976/callback). Leave empty for the default automatic loopback port."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Title",
+    "STATUS": "Status",
+    "DUE_DATE": "Due Date",
+    "DESCRIPTION": "Notes"
+  },
+  "STATUS": {
+    "COMPLETED": "Completed",
+    "NEEDS_ACTION": "Needs action"
+  },
+  "FALLBACK": {
+    "NO_TITLE": "(No title)"
+  }
+}

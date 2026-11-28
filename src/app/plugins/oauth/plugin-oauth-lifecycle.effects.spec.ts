@@ -16,7 +16,10 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { PluginOAuthBridgeService } from './plugin-oauth-bridge.service';
 import { PluginOAuthLifecycleEffects } from './plugin-oauth-lifecycle.effects';
-import { GOOGLE_CALENDAR_PLUGIN_ID } from './plugin-oauth-token-key.util';
+import {
+  GOOGLE_CALENDAR_PLUGIN_ID,
+  GOOGLE_TASKS_PLUGIN_ID,
+} from './plugin-oauth-token-key.util';
 import {
   deleteOAuthTokensByPrefix,
   loadOAuthTokens,
@@ -347,5 +350,37 @@ describe('PluginOAuthLifecycleEffects', () => {
     expect(
       await bridge.getOAuthToken(GOOGLE_CALENDAR_PLUGIN_ID, undefined, 'b'),
     ).toBeNull();
+  });
+
+  it('cleans Google Tasks provider credentials when deleted', async () => {
+    const tasksKey = `${GOOGLE_TASKS_PLUGIN_ID}__oauth__tasks-1`;
+    await boot([]);
+    await saveOAuthTokens(tasksKey, serialized);
+    await run(() =>
+      store.dispatch(
+        IssueProviderActions.addIssueProvider({
+          issueProvider: {
+            ...ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
+            id: 'tasks-1',
+            issueProviderKey: 'plugin:google-tasks-provider',
+            pluginId: GOOGLE_TASKS_PLUGIN_ID,
+            pluginConfig: { taskListId: '@default' },
+            isEnabled: true,
+          },
+        }),
+      ),
+    );
+    await run(() =>
+      store.dispatch(
+        TaskSharedActions.deleteIssueProvider({
+          issueProviderId: 'tasks-1',
+          taskIdsToUnlink: [],
+        }),
+      ),
+    );
+    expect(
+      await bridge.getOAuthToken(GOOGLE_TASKS_PLUGIN_ID, undefined, 'tasks-1'),
+    ).toBeNull();
+    await deleteOAuthTokensByPrefix(`${GOOGLE_TASKS_PLUGIN_ID}__oauth`);
   });
 });
