@@ -15,8 +15,11 @@ import { ensureGlobalAddTaskBarOpen } from '../../utils/element-helpers';
  * date, so switching the task to "weekly on current weekday" afterwards
  * produced a Saturday-only recurrence.
  *
- * Expected: submitting rolls the weekend day forward once, so the persisted
- *           `startDate` and the task's own due day are both the Monday.
+ * Expected: the bar hands the picked weekend day through, and the persisted
+ *           `startDate` is anchored to the Monday at creation
+ *           (`TaskRepeatCfgService.addTaskRepeatCfgToTask`, #9488), with the
+ *           `addTaskRepeatCfgToTask` effects moving the task's own due day
+ *           there too.
  *
  * The unit specs for this stop at `TaskService.add` and a mocked repeat-cfg
  * service. This one is here to cover the part they cannot: that the value
@@ -132,8 +135,9 @@ test.describe('Recurring Task - workday schedule on a weekend date (#9404)', () 
 
     await page.keyboard.press('Enter');
 
-    // Polled: the task's due day is written on submit and then re-asserted by
-    // the addTaskRepeatCfgToTask effects, which run after the add.
+    // Polled: the task's due day is written as picked (the Saturday) on
+    // submit and then moved to the Monday by the addTaskRepeatCfgToTask
+    // effects, which run after the add.
     await expect
       .poll(async () => await getPersisted(page, taskTitle), { timeout: 15000 })
       .toEqual({
