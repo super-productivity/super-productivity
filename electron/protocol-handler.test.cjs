@@ -389,3 +389,39 @@ test('cold-start toggle-visibility shows the launched window instead of toggling
   assert.equal(showOrFocusCalls[0], win);
   assert.deepEqual(win.sent, []);
 });
+
+test('dev protocol registration forwards the profile and its API port', () => {
+  const registered = [];
+  const app = {
+    ...makeFakeApp(),
+    setAsDefaultProtocolClient: (...args) => registered.push(args),
+  };
+  const originalArgv = process.argv;
+  const originalDefaultApp = process.defaultApp;
+  process.argv = [
+    '/path/to/electron',
+    'electron/main.js',
+    '--user-data-dir=/tmp/work-profile',
+    '--rest-api-port=3877',
+    '--disable-tray',
+  ];
+  process.defaultApp = true;
+  try {
+    loadModule().initializeProtocolHandling(true, app, () => null);
+  } finally {
+    process.argv = originalArgv;
+    process.defaultApp = originalDefaultApp;
+  }
+
+  assert.deepEqual(registered, [
+    [
+      'superproductivity',
+      process.execPath,
+      [
+        path.resolve('electron/main.js'),
+        '--user-data-dir=/tmp/work-profile',
+        '--rest-api-port=3877',
+      ],
+    ],
+  ]);
+});

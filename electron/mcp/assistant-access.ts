@@ -11,6 +11,7 @@ import {
   AssistantAccessScope,
   AssistantAccessState,
 } from '../shared-with-frontend/assistant-access.model';
+import { LOCAL_REST_API_PORT } from '../shared-with-frontend/local-rest-api.model';
 import { loadSimpleStoreAll, saveSimpleStore } from '../simple-store';
 import { readSecretFile, writeSecretFile } from '../secure-file';
 
@@ -43,9 +44,10 @@ let loaded: Promise<void> = Promise.resolve();
 let onListenerNeedChanged: () => Promise<void> = async () => undefined;
 let getListenerStatus: () => Pick<
   AssistantAccessState,
-  'isListening' | 'error'
+  'isListening' | 'port' | 'error'
 > = () => ({
   isListening: false,
+  port: LOCAL_REST_API_PORT,
 });
 
 const getVerifierFilePath = (): string =>
@@ -158,7 +160,7 @@ export interface AssistantAccessHooks {
    * resulting listen() has bound or failed.
    */
   onListenerNeedChanged: () => Promise<void>;
-  getListenerStatus: () => Pick<AssistantAccessState, 'isListening' | 'error'>;
+  getListenerStatus: () => Pick<AssistantAccessState, 'isListening' | 'port' | 'error'>;
 }
 
 export const initAssistantAccess = (hooks: AssistantAccessHooks): void => {
