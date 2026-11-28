@@ -1,7 +1,8 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
-import { filter, tap } from 'rxjs/operators';
+import { combineLatest } from 'rxjs';
+import { filter, map, tap } from 'rxjs/operators';
 import * as actions from './store/focus-mode.actions';
 import * as selectors from './store/focus-mode.selectors';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -10,6 +11,18 @@ import { FocusModeMode, getCountdownDurationForTask } from './focus-mode.model';
 import { FocusModeStrategyFactory } from './focus-mode-strategies';
 import { TaskCopy } from '../tasks/task.model';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
+
+/**
+ * Remaining time for timers with a fixed duration (Pomodoro/Countdown work
+ * sessions and all breaks). Elapsed time for open-ended Flowtime work
+ * sessions (duration 0) and for Pomodoro overtime, where the remaining time
+ * would stay clamped at 0 while the overlay keeps counting.
+ */
+export const getDisplayedSessionTime = (
+  duration: number,
+  elapsed: number,
+  isInOvertime: boolean,
+): number => (duration > 0 && !isInOvertime ? Math.max(0, duration - elapsed) : elapsed);
 
 @Injectable({
   providedIn: 'root',
@@ -66,6 +79,19 @@ export class FocusModeService {
   sessionProgress$ = this._store.select(selectors.selectProgress);
   currentSessionTime$ = this._store.select(selectors.selectTimeElapsed);
   timeToGo$ = this._store.select(selectors.selectTimeRemaining);
+  /**
+   * Time to show in the tray and the mini task widget, matching the focus
+   * overlay. See `getDisplayedSessionTime`.
+   */
+  displayedSessionTime$ = combineLatest([
+    this._store.select(selectors.selectTimeDuration),
+    this.currentSessionTime$,
+    this._store.select(selectors.selectIsInOvertime),
+  ]).pipe(
+    map(([duration, elapsed, isInOvertime]) =>
+      getDisplayedSessionTime(duration, elapsed, !!isInOvertime),
+    ),
+  );
 
   // Single timer that updates the store at 1-second intervals for smooth UI
   constructor() {

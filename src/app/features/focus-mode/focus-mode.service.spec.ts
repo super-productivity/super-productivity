@@ -6,7 +6,7 @@ import {
 } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { of } from 'rxjs';
-import { FocusModeService } from './focus-mode.service';
+import { FocusModeService, getDisplayedSessionTime } from './focus-mode.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { FocusScreen, FocusModeMode, FocusMainUIState } from './focus-mode.model';
 import * as selectors from './store/focus-mode.selectors';
@@ -174,6 +174,12 @@ describe('FocusModeService', () => {
 
     it('should initialize mode signal', fakeAsync(() => {
       expect(service.mode()).toBe(FocusModeMode.Pomodoro);
+    }));
+
+    it('should expose remaining time as displayed session time for Pomodoro', fakeAsync(() => {
+      let value: number | undefined;
+      service.displayedSessionTime$.subscribe((v) => (value = v));
+      expect(value).toBe(300000);
     }));
 
     it('should initialize isOverlayShown signal', fakeAsync(() => {
@@ -441,5 +447,23 @@ describe('FocusModeService.tryStartSessionForTask', () => {
     focusCfg = { isShowPreparation: true };
     expect(service.tryStartSessionForTask(task)).toBe(false);
     expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('getDisplayedSessionTime', () => {
+  it('should return remaining time for a Pomodoro/Countdown work session', () => {
+    expect(getDisplayedSessionTime(1_500_000, 600_000, false)).toBe(900_000);
+  });
+
+  it('should return elapsed time during Pomodoro overtime', () => {
+    expect(getDisplayedSessionTime(1_500_000, 1_501_000, true)).toBe(1_501_000);
+  });
+
+  it('should return elapsed time for a Flowtime work session', () => {
+    expect(getDisplayedSessionTime(0, 600_000, false)).toBe(600_000);
+  });
+
+  it('should return remaining time for a fixed-length break', () => {
+    expect(getDisplayedSessionTime(300_000, 60_000, false)).toBe(240_000);
   });
 });

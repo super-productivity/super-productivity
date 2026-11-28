@@ -123,7 +123,7 @@ describe('TaskElectronEffects', () => {
         {
           provide: FocusModeService,
           useValue: {
-            currentSessionTime$: new BehaviorSubject(0),
+            displayedSessionTime$: new BehaviorSubject(0),
             mode: () => 'Flowtime',
           },
         },
