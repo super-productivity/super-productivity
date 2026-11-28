@@ -1,6 +1,10 @@
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { Log } from '../core/log';
-import { DEFAULT_LOCALE, DateTimeLocale } from '../core/locale.constants';
+import {
+  DEFAULT_LOCALE,
+  DateTimeLocale,
+  DateTimeLocales,
+} from '../core/locale.constants';
 import { dateTimeFormatter } from './datetime-formatter';
 
 // Jan 5: single-digit day and month reveal whether a locale pads them
@@ -37,7 +41,8 @@ const getMonthDayFormatter = (locale: DateTimeLocale): Intl.DateTimeFormat => {
       ? '2-digit'
       : 'numeric';
 
-  const formatter = dateTimeFormatter(locale, {
+  const formatLocale = locale === DateTimeLocales.sv ? DateTimeLocales.en_us : locale;
+  const formatter = dateTimeFormatter(formatLocale, {
     month: widthOf('month'),
     day: widthOf('day'),
   });
