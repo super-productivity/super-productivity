@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { WorkContextService } from '../../features/work-context/work-context.service';
@@ -10,6 +10,7 @@ import { ProjectService } from '../../features/project/project.service';
 import { PlainspaceClaimPoolService } from '../../features/plainspace/plainspace-claim-pool.service';
 import { PlainspaceSharedTask } from '../../features/plainspace/plainspace-shared-task.model';
 import { T } from '../../t.const';
+import { GlobalConfigService } from '../../features/config/global-config.service';
 
 @Component({
   selector: 'work-view-page',
@@ -22,6 +23,7 @@ export class ProjectTaskPageComponent {
   workContextService = inject(WorkContextService);
   private readonly _projectService = inject(ProjectService);
   private readonly _plainspaceClaimPoolService = inject(PlainspaceClaimPoolService);
+  private readonly _configService = inject(GlobalConfigService);
 
   readonly T = T;
 
@@ -57,6 +59,12 @@ export class ProjectTaskPageComponent {
   readonly currentProject = toSignal(this._projectService.currentProject$, {
     initialValue: null,
   });
+
+  readonly isProjectKanban = computed(
+    () =>
+      this.currentProject()?.projectViewState === 'kanban' &&
+      !!this._configService.appFeatures()?.isBoardsEnabled,
+  );
 
   restoreProject(): void {
     const project = this.currentProject();

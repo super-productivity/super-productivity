@@ -294,6 +294,8 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this.customizerService.groupTasksBySelectedGroup(this.laterTodayTasks()),
   );
   undoneTasks = input.required<TaskWithSubTasks[]>();
+  // Project/Today board mode: the same sections, side by side instead of stacked.
+  isSectionsBoard = input<boolean>(false);
   customizedUndoneTasks = toSignal(
     this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
     { initialValue: INITIAL_CUSTOMIZED_UNDONE_TASKS },

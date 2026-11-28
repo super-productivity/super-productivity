@@ -26,6 +26,9 @@ export interface ProjectBasicCfg {
   taskIds: string[];
   backlogTaskIds: string[];
   noteIds: string[];
+  // Optional: a project's own list/board layout. Absent means the normal task
+  // list; it needs the Views feature and never changes other projects or views.
+  projectViewState?: 'list' | 'kanban';
 }
 
 // Omit conflicting properties from PluginProject when extending
