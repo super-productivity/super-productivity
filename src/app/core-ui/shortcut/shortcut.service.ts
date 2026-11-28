@@ -383,14 +383,12 @@ export class ShortcutService {
 
   private _hasOpenCdkOverlay(): boolean {
     const containerEl = this._overlayContainer.getContainerElement();
-    // NOTE: All CDK class name knowledge is encapsulated here to ease future updates.
-    return Array.from(containerEl.children).some((child) => {
-      return (
-        child.classList.contains(CDK_OVERLAY_PANE_CLASS) &&
-        child.childElementCount > 0 &&
-        !child.classList.contains(MAT_TOOLTIP_PANEL_CLASS)
-      );
-    });
+    // A connected menu sits inside a positioning wrapper and can receive Escape
+    // before focus moves off the task row. Snackbars also have wrapped panes.
+    return !!containerEl.querySelector(
+      `:scope > .${CDK_OVERLAY_PANE_CLASS}:not(.${MAT_TOOLTIP_PANEL_CLASS}) > *, ` +
+        `.${CDK_OVERLAY_PANE_CLASS} [role="menu"]`,
+    );
   }
 
   private _isEventFromOverlay(ev: KeyboardEvent): boolean {

@@ -93,15 +93,6 @@ describe('ShortcutService', () => {
         { provide: Store, useValue: { dispatch: jasmine.createSpy('dispatch') } },
         { provide: PluginBridgeService, useValue: mockPluginBridgeService },
         { provide: TaskViewCustomizerService, useValue: mockTaskViewCustomizerService },
-        {
-          provide: OverlayContainer,
-          useValue: {
-            getContainerElement: () => ({
-              querySelector: () => null,
-              children: [],
-            }),
-          },
-        },
       ],
     });
 
@@ -109,6 +100,27 @@ describe('ShortcutService', () => {
   });
 
   describe('handleKeyDown', () => {
+    it('leaves Escape to an open menu and restores task shortcuts with only a snackbar', async () => {
+      const container = TestBed.inject(OverlayContainer).getContainerElement();
+      container.innerHTML = `
+        <div class="cdk-global-overlay-wrapper">
+          <div class="cdk-overlay-pane"><mat-snack-bar-container></mat-snack-bar-container></div>
+        </div>
+        <div class="cdk-overlay-connected-position-bounding-box">
+          <div class="cdk-overlay-pane"><div role="menu" class="mat-mdc-menu-panel"></div></div>
+        </div>`;
+      const ev = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape' });
+      Object.defineProperty(ev, 'target', { value: document.createElement('task') });
+      mockTaskShortcutService.handleTaskShortcuts.and.returnValue(true);
+
+      await service.handleKeyDown(ev);
+      expect(mockTaskShortcutService.handleTaskShortcuts).not.toHaveBeenCalled();
+
+      container.querySelector('.cdk-overlay-connected-position-bounding-box')!.remove();
+      await service.handleKeyDown(ev);
+      expect(mockTaskShortcutService.handleTaskShortcuts).toHaveBeenCalledOnceWith(ev);
+    });
+
     it('should open the header filter menu on the filter shortcut', async () => {
       const ev = new KeyboardEvent('keydown', { key: 'c', code: 'KeyC' });
       Object.defineProperty(ev, 'target', { value: document.body });
