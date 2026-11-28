@@ -23,7 +23,6 @@ import { DEADLINE_REMINDER_OPTIONS } from './deadline-reminder-options.const';
 import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
-import { formatTimeHHmm } from '../../../util/format-time-hhmm';
 import {
   getLogicalDayOfTimestamp,
   getRepeatDueWithTime,
@@ -109,7 +108,14 @@ export class DialogDeadlineComponent implements AfterViewInit {
             this._dateService.getStartOfNextDayDiffMs(),
           ),
         );
-        this.selectedTime = formatTimeHHmm(this.task.deadlineWithTime);
+        this.selectedTime = new Date(this.task.deadlineWithTime).toLocaleTimeString(
+          'en-GB',
+          {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
+        );
         if (this.task.deadlineRemindAt) {
           this.selectedReminderCfgId = millisecondsDiffToRemindOption(
             this.task.deadlineWithTime,
