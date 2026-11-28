@@ -29,7 +29,7 @@ import { TaskArchiveOrchestratorService } from '../tasks/task-archive-orchestrat
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
-import { LayoutService } from '../../core-ui/layout/layout.service';
+import { findTaskFocusTarget, LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
@@ -632,11 +632,16 @@ export class WorkViewComponent implements OnInit, OnChanges, OnDestroy {
   ngOnChanges(changes: SimpleChanges<WorkViewComponent>): void {
     if (!changes.teamRows) return;
 
-    // Search can focus the native row while the remote overview is still loading.
+    // Search can focus the native list row before the team preview replaces it.
     const focused = document.activeElement;
     const row = focused?.closest<HTMLElement>('task[data-task-id]');
     const taskId = row?.dataset['taskId'];
-    if (!row || !taskId || !this.teamRows().some((task) => task.localTaskId === taskId)) {
+    if (
+      !row ||
+      row.closest('task-detail-panel') ||
+      !taskId ||
+      !this.teamRows().some((task) => task.localTaskId === taskId)
+    ) {
       return;
     }
 
@@ -649,11 +654,11 @@ export class WorkViewComponent implements OnInit, OnChanges, OnDestroy {
         ) {
           return;
         }
-        const button = this._splitTopElement?.querySelector<HTMLButtonElement>(
-          `plainspace-claim-pool #${CSS.escape(row.id)}`,
-        );
-        button?.focus();
-        if (button && wasHighlighted) this.layoutService.highlightTaskBriefly(button);
+        const container = this._splitTopElement;
+        const target = container && findTaskFocusTarget(taskId, container);
+        if (!target?.classList.contains('local-copy-button')) return;
+        target.focus();
+        if (wasHighlighted) this.layoutService.highlightTaskBriefly(target);
       },
       { injector: this._injector },
     );
@@ -929,10 +934,7 @@ export class WorkViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     const container = this._splitTopElement;
-    // Avoid querySelector here — task IDs are nanoid-generated and may start
-    // with `-` or a digit, which would throw SyntaxError.
-    const byId = document.getElementById(`t-${taskId}`);
-    const directMatch = byId && container?.contains(byId) ? byId : null;
+    const directMatch = container ? findTaskFocusTarget(taskId, container) : null;
     const selectedMatch =
       this.selectedTaskId() === taskId
         ? ((container?.querySelector('task.isSelected') as HTMLElement | null) ?? null)

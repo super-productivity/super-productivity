@@ -44,7 +44,10 @@ import { TaskDetailItemComponent } from './task-additional-info-item/task-detail
 import { IssueData, IssueProviderJira } from '../../issue/issue.model';
 import { ICAL_TYPE, JIRA_TYPE } from '../../issue/issue.const';
 import { HISTORY_STATE, IS_ELECTRON } from '../../../app.constants';
-import { LayoutService } from '../../../core-ui/layout/layout.service';
+import {
+  findTaskFocusTarget,
+  LayoutService,
+} from '../../../core-ui/layout/layout.service';
 import { devError } from '../../../util/dev-error';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
@@ -752,9 +755,13 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     const panelSubtaskEls = Array.from(
       this._elementRef.nativeElement.querySelectorAll<HTMLElement>('task'),
     );
-    const mainParentTaskEl = Array.from(
-      document.querySelectorAll<HTMLElement>(`#t-${CSS.escape(this.task().id)}`),
-    ).find((taskEl) => !taskEl.closest('task-detail-panel'));
+    const parentId = this.task().id;
+    const parentFocusTarget = findTaskFocusTarget(parentId);
+    const mainParentTaskEl = parentFocusTarget?.closest('task-detail-panel')
+      ? Array.from(
+          document.querySelectorAll<HTMLElement>(`#t-${CSS.escape(parentId)}`),
+        ).find((taskEl) => !taskEl.closest('task-detail-panel'))
+      : parentFocusTarget;
     const fallbackTarget =
       panelSubtaskEls[panelSubtaskEls.length - 1] ??
       mainParentTaskEl ??

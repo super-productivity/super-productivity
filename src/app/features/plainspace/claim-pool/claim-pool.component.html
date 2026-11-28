@@ -40,8 +40,10 @@
             <button
               type="button"
               class="local-copy-button focus-ring"
-              [id]="'t-' + localTaskId"
-              [attr.aria-labelledby]="'t-' + localTaskId + ' claim-title-' + task.id"
+              [id]="'task-focus-' + localTaskId"
+              [attr.aria-labelledby]="
+                'task-focus-' + localTaskId + ' claim-title-' + task.id
+              "
               (click)="openLocalCopy.emit(localTaskId)"
             >
               {{ T.PLAINSPACE.LOCAL_COPY | translate }}

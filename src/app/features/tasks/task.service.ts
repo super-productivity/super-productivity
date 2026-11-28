@@ -4,6 +4,10 @@ import { distinctUntilChanged, first, map, take, withLatestFrom } from 'rxjs/ope
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { merge, Observable } from 'rxjs';
+import {
+  findTaskFocusTarget,
+  REPLACEMENT_TASK_ID_PREFIX,
+} from '../../core-ui/layout/layout.service';
 import { pageHidden$ } from '../../util/page-hidden';
 import {
   DEFAULT_TASK,
@@ -201,9 +205,9 @@ export class TaskService {
       'focus',
       (ev) => {
         if (
-          ev.target &&
           ev.target instanceof HTMLElement &&
-          ev.target.tagName.toLowerCase() === 'task'
+          (ev.target.tagName === 'TASK' ||
+            ev.target.id.startsWith(REPLACEMENT_TASK_ID_PREFIX))
         ) {
           this._lastFocusedTaskEl = new WeakRef(ev.target);
         }
@@ -887,7 +891,7 @@ export class TaskService {
   }
 
   focusTask(id: string): void {
-    const el = document.getElementById('t-' + id);
+    const el = findTaskFocusTarget(id);
     if (!el) {
       throw new Error('Cannot find focus el');
     }
@@ -899,7 +903,7 @@ export class TaskService {
   }
 
   focusTaskIfPossible(id: string): void {
-    const tEl = document.getElementById('t-' + id);
+    const tEl = findTaskFocusTarget(id);
 
     if (tEl) {
       tEl.focus();

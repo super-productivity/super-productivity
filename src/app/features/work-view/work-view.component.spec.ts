@@ -480,6 +480,43 @@ describe('WorkViewComponent', () => {
       return fixture;
     };
 
+    it('keeps focus on a connected detail-panel child when its team preview appears', async () => {
+      const fixture = await createComponent();
+      fixture.detectChanges();
+      const replacement = document.createElement('button');
+      replacement.id = 'task-focus-panel-child';
+      replacement.classList.add('local-copy-button');
+      const root = fixture.nativeElement as HTMLElement;
+      root.querySelector('.today')!.append(replacement);
+      const panel = document.createElement('task-detail-panel');
+      const row = document.createElement('task');
+      row.id = 't-panel-child';
+      row.dataset['taskId'] = 'panel-child';
+      row.tabIndex = 0;
+      panel.append(row);
+      document.body.append(panel);
+
+      try {
+        row.focus();
+        fixture.componentRef.setInput('teamRows', [
+          {
+            id: 'remote',
+            title: 'Team task',
+            isDone: false,
+            isRecurring: false,
+            localTaskId: 'panel-child',
+          },
+        ]);
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(document.activeElement).toBe(row);
+      } finally {
+        panel.remove();
+        replacement.remove();
+      }
+    });
+
     it('opens the standard input for a hidden parent and restores focus to the originating child on Escape', async () => {
       const focusTaskIfPossible = jasmine.createSpy('focusTaskIfPossible');
       const addSubTaskTo = jasmine.createSpy('addSubTaskTo');

@@ -171,6 +171,86 @@ describe('LayoutService', () => {
       }, 100);
     });
 
+    it('restores focus to a task replacement after cancelling the add-task bar', fakeAsync(() => {
+      const replacement = document.createElement('button');
+      replacement.id = 'task-focus-retained-task';
+      document.body.appendChild(replacement);
+
+      try {
+        replacement.focus();
+        service.showAddTaskBar();
+        replacement.blur();
+        service.hideAddTaskBar();
+        tick(50);
+
+        expect(document.activeElement).toBe(replacement);
+      } finally {
+        replacement.remove();
+      }
+    }));
+
+    it('restores focus when the native row is replaced while the add-task bar is open', fakeAsync(() => {
+      const replacement = document.createElement('button');
+      replacement.id = 'task-focus-task123';
+
+      try {
+        mockTaskElement.focus();
+        service.showAddTaskBar();
+        mockTaskElement.remove();
+        document.body.appendChild(replacement);
+        service.hideAddTaskBar();
+        tick(50);
+
+        expect(document.activeElement).toBe(replacement);
+      } finally {
+        replacement.remove();
+      }
+    }));
+
+    it('keeps the connected panel row when its task also has a replacement', fakeAsync(() => {
+      const panel = document.createElement('task-detail-panel');
+      const replacement = document.createElement('button');
+      replacement.id = 'task-focus-task123';
+      panel.append(mockTaskElement);
+      document.body.append(panel, replacement);
+
+      try {
+        mockTaskElement.focus();
+        service.showAddTaskBar();
+        mockTaskElement.blur();
+        service.hideAddTaskBar();
+        tick(50);
+
+        expect(document.activeElement).toBe(mockTaskElement);
+      } finally {
+        panel.remove();
+        replacement.remove();
+      }
+    }));
+
+    it('restores the native task when its replacement is removed while the add-task bar is open', fakeAsync(() => {
+      const replacement = document.createElement('button');
+      replacement.id = 'task-focus-task123';
+      const otherTask = document.createElement('task');
+      otherTask.tabIndex = 0;
+      mockTaskElement.remove();
+      document.body.append(otherTask, replacement);
+
+      try {
+        replacement.focus();
+        service.showAddTaskBar();
+        replacement.remove();
+        document.body.append(mockTaskElement);
+        service.hideAddTaskBar();
+        tick(50);
+
+        expect(document.activeElement).toBe(mockTaskElement);
+      } finally {
+        otherTask.remove();
+        replacement.remove();
+      }
+    }));
+
     it('should not store focus if active element is not a task', (done) => {
       // Spy on focus method
       spyOn(mockTaskElement, 'focus');
@@ -336,6 +416,26 @@ describe('LayoutService', () => {
 
     it('should return null when the task element is missing', () => {
       expect(service.focusTaskInViewIfPossible('missing-task')).toBeNull();
+    });
+
+    it('focuses the replacement while the native row is still rendered', () => {
+      const taskId = 'retained-task';
+      const container = document.createElement('div');
+      const native = document.createElement('div');
+      native.id = `t-${taskId}`;
+      mockRenderedTaskElement(native, 40);
+      const replacement = document.createElement('button');
+      replacement.id = `task-focus-${taskId}`;
+      mockRenderedTaskElement(replacement, 40);
+      container.append(native, replacement);
+      document.body.appendChild(container);
+
+      try {
+        expect(service.focusTaskInViewIfPossible(taskId)).toBe(replacement);
+        expect(document.activeElement).toBe(replacement);
+      } finally {
+        container.remove();
+      }
     });
   });
 

@@ -110,6 +110,9 @@ test('Everyone shows team previews and Only mine hides tasks assigned to others'
   await expect(myTask.getByText('You', { exact: true })).toBeVisible();
   const localId = await myTask.getAttribute('data-task-id');
   const detailPanel = page.locator('task-detail-panel');
+  const closeDetailPanel = page.getByRole('button', {
+    name: 'Close right panel or drag to resize',
+  });
   const notes = detailPanel.locator('inline-markdown');
   const timeSpent = detailPanel.locator('task-detail-item.--estimate .time-val').first();
   const noteText = 'Personal research for the onboarding checklist';
@@ -127,9 +130,7 @@ test('Everyone shows team previews and Only mine hides tasks assigned to others'
   await page.keyboard.insertText(noteText);
   await editor.blur();
   await expect(notes).toContainText(noteText);
-  await page
-    .getByRole('button', { name: 'Close right panel or drag to resize' })
-    .press('Enter');
+  await closeDetailPanel.press('Enter');
 
   await myTask.locator('task-title').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Assign to…', exact: true }).click();
@@ -166,11 +167,17 @@ test('Everyone shows team previews and Only mine hides tasks assigned to others'
   }
   await expect(everyone).toBeChecked();
   const openLocalCopy = handedOff.getByRole('button', { name: `Local copy ${myTitle}` });
+  await expect(myTask).toHaveCount(0);
   await expect(openLocalCopy).toBeFocused();
   await expect(openLocalCopy).toHaveClass(/highlight-searched-task/);
   await page.keyboard.press('Enter');
   await expect(notes.getByText(noteText, { exact: true })).toBeVisible();
   await expect(timeSpent).toHaveText('1h');
+  await closeDetailPanel.press('Enter');
+  await expect(detailPanel).toBeHidden();
+  await expect(openLocalCopy).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(detailPanel).toBeVisible();
   await onlyMine.click();
   await expect(detailPanel).toBeHidden();
 
