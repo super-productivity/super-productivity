@@ -297,6 +297,35 @@ finish-day-btn,
   margin-bottom: var(--s3);
 }
 
+// A board needs the width a saved Kanban view gets, not the narrow centred
+// task-list wrapper. Only the board mode breaks out.
+.task-list-wrapper.is-sections-board {
+  max-width: none;
+  margin: 0;
+  padding: 0 var(--s2);
+}
+
+// The same sections, side by side instead of stacked, with horizontal scroll.
+.sections-wrapper.is-horizontal-board {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--s2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: var(--s);
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-section,
+  .section-container {
+    flex: 1 0 clamp(360px, 28vw, 520px);
+    margin-bottom: 0;
+  }
+}
+
 // Header icon buttons (section/group "+" and menu) stay hidden until the
 // header is hovered or focused, so long lists don't fill up with icons.
 @mixin header-buttons-on-hover($buttons) {

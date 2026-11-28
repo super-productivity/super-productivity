@@ -48,6 +48,10 @@ import { TagService } from '../../../features/tag/tag.service';
 import { openWorkContextSettingsWithErrorHandling } from '../../../features/work-context/dialog-work-context-settings/open-work-context-settings-dialog';
 import { LayoutService } from '../../layout/layout.service';
 import { SnackService } from '../../../core/snack/snack.service';
+import { Project } from '../../../features/project/project.model';
+import { updateProject } from '../../../features/project/store/project.actions';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
+import { WorkViewLayoutService } from '../../../features/work-view/work-view-layout.service';
 
 @Component({
   selector: 'page-title',
@@ -447,6 +451,7 @@ export class PageTitleComponent {
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
   private _snackService = inject(SnackService);
+  private _workViewLayout = inject(WorkViewLayoutService);
 
   readonly T = T;
 
@@ -561,6 +566,40 @@ export class PageTitleComponent {
 
   isSpecialSection = computed(() => !!this._routeSection() || !!this.pluginId());
   isWorkViewPage = computed(() => /tasks$/.test(this._url()));
+
+  // `projectviewswitch`: per-context list/Kanban switch. Projects keep their
+  // persisted flag; Today (a virtual tag) uses UI-only state so sync is untouched.
+  readonly isProjectViewSwitch = computed(() => {
+    const ctx = this.activeWorkContextTypeAndId();
+    return (
+      (ctx?.activeType === WorkContextType.PROJECT || ctx?.activeId === TODAY_TAG.id) &&
+      !!this._configService.appFeatures()?.isBoardsEnabled
+    );
+  });
+  readonly isProjectKanban = computed(() => {
+    if (this.activeWorkContextTypeAndId()?.activeId === TODAY_TAG.id) {
+      return this._workViewLayout.getLayout(TODAY_TAG.id) === 'kanban';
+    }
+    return (this.activeWorkContext() as Project | null)?.projectViewState === 'kanban';
+  });
+
+  toggleProjectView(): void {
+    const ctx = this.activeWorkContextTypeAndId();
+    if (!ctx) return;
+    if (ctx.activeId === TODAY_TAG.id) {
+      this._workViewLayout.toggleLayout(TODAY_TAG.id);
+      return;
+    }
+    if (ctx.activeType !== WorkContextType.PROJECT) return;
+    this._store.dispatch(
+      updateProject({
+        project: {
+          id: ctx.activeId,
+          changes: { projectViewState: this.isProjectKanban() ? 'list' : 'kanban' },
+        },
+      }),
+    );
+  }
 
   displayTitle = computed(() => {
     const boardTitle = this._boardTitle();
