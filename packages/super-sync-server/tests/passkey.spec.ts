@@ -70,6 +70,7 @@ vi.mock('@simplewebauthn/server', () => ({
 // Import mocked modules to get references
 import { prisma } from '../src/db';
 import { sendPasskeyRecoveryEmail, sendVerificationEmail } from '../src/email';
+import { matchCodeForCredentialId } from '../src/match-code';
 import * as simplewebauthn from '@simplewebauthn/server';
 
 // Import module under test
@@ -88,6 +89,15 @@ describe('Passkey Authentication', () => {
   const testChallenge = 'test-challenge-base64';
   const registrationResponse = {
     message: 'Registration successful. Please check your email to verify your account.',
+  };
+  // Every verify response carries the match code, even the neutral ones, so
+  // the browser can compare it with the emailed confirmation page (#9032).
+  const expectNeutralRegistration = (result: {
+    message: string;
+    matchCode?: string;
+  }): void => {
+    expect(result).toMatchObject(registrationResponse);
+    expect(result.matchCode).toMatch(/^[2-9A-HJKMNP-Z]{3}-[2-9A-HJKMNP-Z]{3}$/);
   };
   const recoveryResponse = {
     message: 'If an account with that email exists, a recovery link has been sent.',
@@ -302,7 +312,7 @@ describe('Passkey Authentication', () => {
         clientExtensionResults: {},
       } as RegistrationResponseJSON);
 
-      expect(result).toEqual(registrationResponse);
+      expectNeutralRegistration(result);
       expect(mockPrisma.user.create).not.toHaveBeenCalled();
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
       expect(sendVerificationEmail).not.toHaveBeenCalled();
@@ -338,7 +348,7 @@ describe('Passkey Authentication', () => {
         clientExtensionResults: {},
       } as RegistrationResponseJSON);
 
-      expect(result).toEqual(registrationResponse);
+      expectNeutralRegistration(result);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
       expect(sendVerificationEmail).not.toHaveBeenCalled();
     });
@@ -373,7 +383,7 @@ describe('Passkey Authentication', () => {
         clientExtensionResults: {},
       } as RegistrationResponseJSON);
 
-      expect(result).toEqual(registrationResponse);
+      expectNeutralRegistration(result);
       expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
         where: {
           id: 1,
@@ -426,7 +436,7 @@ describe('Passkey Authentication', () => {
         clientExtensionResults: {},
       } as RegistrationResponseJSON);
 
-      expect(result).toEqual(registrationResponse);
+      expectNeutralRegistration(result);
       expect(mockPrisma.pendingPasskeyRegistration.create).toHaveBeenCalledOnce();
       expect(mockPrisma.passkey.create).not.toHaveBeenCalled();
       expect(mockPrisma.user.deleteMany).not.toHaveBeenCalled();
@@ -459,7 +469,7 @@ describe('Passkey Authentication', () => {
         clientExtensionResults: {},
       } as RegistrationResponseJSON);
 
-      expect(result).toEqual(registrationResponse);
+      expectNeutralRegistration(result);
       expect(mockPrisma.pendingPasskeyRegistration.create).toHaveBeenCalledOnce();
       expect(mockPrisma.user.deleteMany).not.toHaveBeenCalled();
     });
@@ -1110,6 +1120,55 @@ describe('Passkey Authentication', () => {
       await expect(verifyRegistration(testEmail, mockCredential as any)).rejects.toThrow(
         'Challenge expired or not found',
       );
+    });
+  });
+
+  describe('Registration match code (#9032)', () => {
+    it('is deterministic for the same credential and distinct for different ones', () => {
+      const a = matchCodeForCredentialId(Buffer.from('credential-a'));
+      const b = matchCodeForCredentialId(Buffer.from('credential-a'));
+      const c = matchCodeForCredentialId(Buffer.from('credential-b'));
+
+      expect(a).toBe(b);
+      expect(a).not.toBe(c);
+      expect(a).toMatch(/^[2-9A-HJKMNP-Z]{3}-[2-9A-HJKMNP-Z]{3}$/);
+    });
+
+    it('uses the same value for the same credential on every registration', async () => {
+      const credential = {
+        id: 'credential-id-base64',
+        rawId: 'raw-id',
+        type: 'public-key',
+        response: {
+          clientDataJSON: 'client-data',
+          attestationObject: 'attestation',
+          transports: ['internal'],
+        },
+        clientExtensionResults: {},
+      };
+      mockVerifyRegistration.mockResolvedValue({
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: new Uint8Array([9, 10, 11, 12]),
+            publicKey: new Uint8Array([13, 14, 15, 16]),
+            counter: 0,
+          },
+        },
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        isVerified: 0,
+        verificationResendCount: 1,
+      });
+
+      await generateRegistrationOptions(testEmail);
+      const firstResult = await verifyRegistration(testEmail, credential as any);
+      await generateRegistrationOptions(testEmail);
+      const secondResult = await verifyRegistration(testEmail, credential as any);
+
+      expect(firstResult.matchCode).toBe(secondResult.matchCode);
     });
   });
 });

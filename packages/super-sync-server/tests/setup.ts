@@ -410,6 +410,7 @@ vi.mock('../src/auth', () => ({
   VERIFICATION_TOKEN_EXPIRY_MS: 24 * 60 * 60 * 1000,
   MAX_VERIFICATION_RESEND_COUNT: 20,
   verifyEmail: vi.fn().mockResolvedValue(true),
+  getVerificationPreview: vi.fn().mockResolvedValue(null),
 }));
 
 // Reset test data before each test

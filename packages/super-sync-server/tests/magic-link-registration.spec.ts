@@ -78,6 +78,7 @@ vi.mock('../src/auth', async (importOriginal) => {
 // Import mocked modules to get references
 import { prisma } from '../src/db';
 import { sendLoginMagicLinkEmail, sendVerificationEmail } from '../src/email';
+import { matchCodeForCredentialId } from '../src/match-code';
 import { Prisma } from '@prisma/client';
 
 // Import module under test
@@ -86,6 +87,7 @@ import {
   requestLoginMagicLink,
   verifyEmail,
   verifyLoginMagicLink,
+  getVerificationPreview,
 } from '../src/auth';
 
 describe('Magic Link Registration', () => {
@@ -410,6 +412,63 @@ describe('Magic Link Registration', () => {
       expect(mockPrisma.pendingPasskeyRegistration.deleteMany).toHaveBeenCalledWith({
         where: { userId: 1 },
       });
+    });
+
+    it('should preview the passkey a link authorizes, without activating it (#9032)', async () => {
+      const credentialId = Buffer.from('owner-credential');
+      mockPrisma.pendingPasskeyRegistration.findUnique.mockResolvedValue({
+        userId: 1,
+        verificationToken: 'pending-token',
+        verificationTokenExpiresAt: BigInt(Date.now() + 60_000),
+        credentialId,
+        publicKey: Buffer.from('owner-public-key'),
+        counter: 0n,
+        transports: '["internal"]',
+        createdAt: new Date(),
+        user: { email: testEmail },
+      });
+
+      const preview = await getVerificationPreview('pending-token');
+
+      expect(preview?.kind).toBe('passkey');
+      expect(preview?.email).toBe(testEmail);
+      // Same derived code the register response showed for this credential.
+      expect(preview?.matchCode).toBe(matchCodeForCredentialId(credentialId));
+      expect(preview?.matchCode).toMatch(/^[2-9A-HJKMNP-Z]{3}-[2-9A-HJKMNP-Z]{3}$/);
+      expect(mockPrisma.passkey.create).not.toHaveBeenCalled();
+      expect(mockPrisma.passkey.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('should return null for an expired pending token', async () => {
+      mockPrisma.pendingPasskeyRegistration.findUnique.mockResolvedValue({
+        userId: 1,
+        verificationToken: 'expired-token',
+        verificationTokenExpiresAt: BigInt(Date.now() - 1_000),
+        credentialId: Buffer.from('owner-credential'),
+        publicKey: Buffer.from('owner-public-key'),
+        counter: 0n,
+        transports: null,
+        createdAt: new Date(),
+        user: { email: testEmail },
+      });
+
+      await expect(getVerificationPreview('expired-token')).resolves.toBeNull();
+    });
+
+    it('should preview a magic-link token without credential details', async () => {
+      const token = 'magic-token';
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        verificationToken: token,
+        verificationTokenExpiresAt: BigInt(Date.now() + 60_000),
+      });
+
+      const preview = await getVerificationPreview(token);
+
+      expect(preview?.kind).toBe('magic-link');
+      expect(preview?.email).toBe(testEmail);
+      expect(preview?.matchCode).toBeUndefined();
     });
 
     it('should reject an unknown token without touching any account', async () => {
