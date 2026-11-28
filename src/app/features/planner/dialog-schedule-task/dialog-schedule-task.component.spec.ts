@@ -30,7 +30,10 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { findSpringForwardSunday } from '../../tasks/dst.test-helper';
 import { DateService } from '../../../core/date/date.service';
-import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
+import {
+  selectAllTasksWithDueTimeSorted,
+  selectCurrentTaskId,
+} from '../../tasks/store/task.selectors';
 import { ScheduleConfig } from '../../config/global-config.model';
 import { selectTaskRepeatCfgByIdAllowUndefined } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 
@@ -128,6 +131,7 @@ describe('DialogScheduleTaskComponent', () => {
           },
           selectors: [
             { selector: selectAllTasksWithDueTimeSorted, value: [] },
+            { selector: selectCurrentTaskId, value: null },
             { selector: selectTimelineConfig, value: null },
           ],
         }),
@@ -221,6 +225,29 @@ describe('DialogScheduleTaskComponent', () => {
   });
 
   describe('schedule hints', () => {
+    it('uses the booked end for the running task and remaining time when it stops', () => {
+      const day = new Date(2026, 3, 15);
+      spyOn(Date, 'now').and.returnValue(new Date(2026, 3, 15, 16, 40).getTime());
+      component.selectedDate = day;
+      component.selectedTime = '16:30';
+      component.task = {
+        ...(component.task as TaskCopy),
+        id: 'task123',
+        timeEstimate: h(1),
+        timeSpent: h(0.75),
+      };
+      store.overrideSelector(selectCurrentTaskId, 'task123');
+      store.overrideSelector(selectTimelineConfig, workHoursConfig());
+      store.refreshState();
+
+      expect(component.scheduleWarnings().isOutsideWorkHours).toBe(true);
+
+      store.overrideSelector(selectCurrentTaskId, null);
+      store.refreshState();
+
+      expect(component.scheduleWarnings().isOutsideWorkHours).toBe(false);
+    });
+
     it('should show an inline info hint when the selected time overlaps another task', () => {
       const selectedDate = new Date(2026, 3, 15);
       component.selectedDate = selectedDate;

@@ -1,33 +1,36 @@
 import { TaskWithDueTime } from '../task.model';
-import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
+import { getScheduledTaskInterval } from './get-scheduled-task-interval';
 
 const MIN_TASK_DURATION = 60 * 1000;
 
-export const getTimeConflictTaskIds = (tasks: TaskWithDueTime[]): Set<string> => {
+export const getTimeConflictTaskIds = (
+  tasks: TaskWithDueTime[],
+  currentTaskId: string | null = null,
+  now = Date.now(),
+): Set<string> => {
   const relevantTasks = tasks
     .filter((task) => !task.isDone)
-    .sort((a, b) => a.dueWithTime - b.dueWithTime);
+    .map((task) => ({
+      id: task.id,
+      ...getScheduledTaskInterval(task, currentTaskId, now, MIN_TASK_DURATION),
+    }))
+    .filter(({ start, end }) => start < end)
+    .sort((a, b) => a.start - b.start);
 
   const conflictingIds = new Set<string>();
-  let latestEndingTask: TaskWithDueTime | undefined;
-  let latestEnd = -Infinity;
+  let latestEndingTask: (typeof relevantTasks)[number] | undefined;
 
   for (const task of relevantTasks) {
     // Sorted starts mean only the furthest previous end is needed. Any other
     // overlapping previous task was already marked when it entered this scan.
-    if (latestEndingTask && task.dueWithTime < latestEnd) {
+    if (latestEndingTask && task.start < latestEndingTask.end) {
       conflictingIds.add(latestEndingTask.id);
       conflictingIds.add(task.id);
     }
-    const taskEnd = _getTaskEnd(task);
-    if (taskEnd > latestEnd) {
-      latestEnd = taskEnd;
+    if (!latestEndingTask || task.end > latestEndingTask.end) {
       latestEndingTask = task;
     }
   }
 
   return conflictingIds;
 };
-
-const _getTaskEnd = (task: TaskWithDueTime): number =>
-  task.dueWithTime + Math.max(getTimeLeftForTask(task), MIN_TASK_DURATION);

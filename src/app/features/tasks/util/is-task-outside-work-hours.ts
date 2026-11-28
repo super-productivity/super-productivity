@@ -1,6 +1,6 @@
 import { ScheduleConfig } from '../../config/global-config.model';
 import { Task } from '../task.model';
-import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
+import { getScheduledTaskInterval } from './get-scheduled-task-interval';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
@@ -9,8 +9,12 @@ import { isValidSplitTime } from '../../../util/is-valid-split-time';
 const MIN_TASK_DURATION = 60 * 1000;
 
 export const isTaskOutsideWorkHours = (
-  task: Pick<Task, 'dueWithTime' | 'timeEstimate' | 'timeSpent' | 'subTaskIds'>,
+  task: Pick<Task, 'dueWithTime' | 'timeEstimate' | 'timeSpent' | 'subTaskIds'> & {
+    id?: string;
+  },
   scheduleConfig?: ScheduleConfig | null,
+  currentTaskId: string | null = null,
+  now = Date.now(),
 ): boolean => {
   // A corrupt workStart/workEnd (an imported or synced `schedule` config is
   // taken verbatim -- never per-field defaulted, never healed) would throw
@@ -29,8 +33,13 @@ export const isTaskOutsideWorkHours = (
   const dayDate = dateStrToUtcDate(getDbDateStr(task.dueWithTime));
   const workStart = getDateTimeFromClockString(scheduleConfig.workStart, dayDate);
   const workEnd = getDateTimeFromClockString(scheduleConfig.workEnd, dayDate);
-  const taskEnd =
-    task.dueWithTime + Math.max(getTimeLeftForTask(task as Task), MIN_TASK_DURATION);
+  // The guard narrows the timestamp property, so carry that type into the interval input.
+  const { start, end } = getScheduledTaskInterval(
+    { ...task, dueWithTime: task.dueWithTime },
+    currentTaskId,
+    now,
+    MIN_TASK_DURATION,
+  );
 
-  return task.dueWithTime < workStart || taskEnd > workEnd;
+  return start < workStart || end > workEnd;
 };

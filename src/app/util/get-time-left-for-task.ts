@@ -1,7 +1,9 @@
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { Task } from '../features/tasks/task.model';
 
-export const getTimeLeftForTask = (task: Task): number => {
+export const getTimeLeftForTask = (
+  task: Pick<Task, 'subTaskIds' | 'timeEstimate' | 'timeSpent'>,
+): number => {
   if (task.subTaskIds.length > 0) {
     return task.timeEstimate;
   }

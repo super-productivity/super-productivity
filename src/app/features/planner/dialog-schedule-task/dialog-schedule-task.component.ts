@@ -55,7 +55,10 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { Log } from '../../../core/log';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
-import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
+import {
+  selectAllTasksWithDueTimeSorted,
+  selectCurrentTaskId,
+} from '../../tasks/store/task.selectors';
 import { selectTimelineConfig } from '../../config/store/global-config.reducer';
 import { getTimeConflictTaskIds } from '../../tasks/util/get-time-conflict-task-ids';
 import { isTaskOutsideWorkHours } from '../../tasks/util/is-task-outside-work-hours';
@@ -118,6 +121,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     selectAllTasksWithDueTimeSorted,
   );
   private readonly _timelineConfig = this._store.selectSignal(selectTimelineConfig);
+  private readonly _currentTaskId = this._store.selectSignal(selectCurrentTaskId);
 
   // Wait for localization config to be loaded before rendering calendar
   // This ensures DateAdapter.getFirstDayOfWeek() returns the correct value
@@ -251,28 +255,44 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       };
     }
 
+    const task = this._liveTask() ?? this.task;
     const candidateTask = {
       id: this._previewTaskId,
       dueWithTime: plannedTimestamp,
-      timeEstimate: this.task?.timeEstimate || 0,
-      timeSpent: this.task?.timeSpent || 0,
-      subTaskIds: this.task?.subTaskIds || [],
+      timeEstimate: task?.timeEstimate || 0,
+      timeSpent: task?.timeSpent || 0,
+      subTaskIds: task?.subTaskIds || [],
       isDone: false,
-      projectId: this.task?.projectId || '',
-      timeSpentOnDay: this.task?.timeSpentOnDay || {},
-      attachments: this.task?.attachments || [],
-      title: this.task?.title || '',
-      tagIds: this.task?.tagIds || [],
-      created: this.task?.created || 0,
+      projectId: task?.projectId || '',
+      timeSpentOnDay: task?.timeSpentOnDay || {},
+      attachments: task?.attachments || [],
+      title: task?.title || '',
+      tagIds: task?.tagIds || [],
+      created: task?.created || 0,
     };
-    const conflictIds = getTimeConflictTaskIds([
-      ...this._tasksWithDueTimeSorted().filter((task) => task.id !== this.task?.id),
-      candidateTask,
-    ]);
+    const trackingTaskId = this._currentTaskId();
+    const currentTaskId =
+      task?.id === trackingTaskId ? this._previewTaskId : trackingTaskId;
+    const now = Date.now();
+    const conflictIds = getTimeConflictTaskIds(
+      [
+        ...this._tasksWithDueTimeSorted().filter(
+          (scheduled) => scheduled.id !== task?.id,
+        ),
+        candidateTask,
+      ],
+      currentTaskId,
+      now,
+    );
 
     return {
       hasOverlap: conflictIds.has(this._previewTaskId),
-      isOutsideWorkHours: isTaskOutsideWorkHours(candidateTask, this._timelineConfig()),
+      isOutsideWorkHours: isTaskOutsideWorkHours(
+        candidateTask,
+        this._timelineConfig(),
+        currentTaskId,
+        now,
+      ),
     };
   });
 

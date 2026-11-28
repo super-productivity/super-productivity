@@ -1,5 +1,5 @@
 import { createSortedBlockerBlocks } from './create-sorted-blocker-blocks';
-import { TaskReminderOptionId } from '../../tasks/task.model';
+import { DEFAULT_TASK, TaskReminderOptionId } from '../../tasks/task.model';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import {
   DEFAULT_TASK_REPEAT_CFG,
@@ -1255,6 +1255,78 @@ describe('createBlockerBlocks()', () => {
       const r = createSortedBlockerBlocks(fakeTasks, [], [], undefined, undefined, 0);
       expect(r.length).toEqual(1);
       expect(r[0].entries.length).toEqual(1);
+    });
+
+    it('keeps the booked end time as time is tracked on a scheduled task', () => {
+      const start = getDateTimeFromClockString('14:00', 0);
+      const task = {
+        ...DEFAULT_TASK,
+        id: 'S1',
+        projectId: 'test-project',
+        dueWithTime: start,
+        timeEstimate: hours(1),
+      };
+
+      const [beforeTracking] = createSortedBlockerBlocks(
+        [task],
+        [],
+        [],
+        undefined,
+        undefined,
+        start,
+      );
+      const [duringTracking] = createSortedBlockerBlocks(
+        [{ ...task, timeSpent: minutes(10) }],
+        [],
+        [],
+        undefined,
+        undefined,
+        start + minutes(10),
+        undefined,
+        undefined,
+        undefined,
+        task.id,
+      );
+
+      expect(beforeTracking.entries[0].end).toBe(start + hours(1));
+      expect(duringTracking.entries[0].start).toBe(start + minutes(10));
+      expect(duringTracking.entries[0].end).toBe(start + hours(1));
+    });
+
+    it('uses the full estimate for the running slot even with work from an earlier day', () => {
+      const start = new Date(2026, 3, 15, 14).getTime();
+      const task = {
+        ...DEFAULT_TASK,
+        id: 'S1',
+        projectId: 'test-project',
+        dueWithTime: start,
+        timeEstimate: hours(1),
+        timeSpent: minutes(20),
+        timeSpentOnDay: { '2026-04-14': minutes(20) },
+      };
+      const [beforeTracking] = createSortedBlockerBlocks(
+        [task],
+        [],
+        [],
+        undefined,
+        undefined,
+        start,
+      );
+      const [duringTracking] = createSortedBlockerBlocks(
+        [task],
+        [],
+        [],
+        undefined,
+        undefined,
+        start,
+        undefined,
+        undefined,
+        undefined,
+        task.id,
+      );
+
+      expect(beforeTracking.entries[0].end).toBe(start + minutes(40));
+      expect(duringTracking.entries[0].end).toBe(start + hours(1));
     });
 
     it('should keep non-overlapping blocks separate', () => {

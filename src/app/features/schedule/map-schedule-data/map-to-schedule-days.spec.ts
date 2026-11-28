@@ -218,6 +218,49 @@ describe('mapToScheduleDays()', () => {
     ] as any);
   });
 
+  it('uses remaining time for a future slot even when its task is tracked now', () => {
+    const [day] = mapToScheduleDays(
+      N,
+      [NDS],
+      [fakeTaskEntry('N1', { timeEstimate: h(1) })],
+      [
+        fakePlannedTaskEntry('S1', minAfterNow(30), {
+          timeEstimate: h(1),
+          timeSpent: minAfterNowTs(10) - N,
+        }),
+      ],
+      [],
+      [],
+      [],
+      'S1',
+      {},
+    );
+
+    const scheduled = day.entries.find((entry) => entry.id === 'S1');
+    const continued = day.entries.find((entry) => entry.id.startsWith('N1_'));
+    expect(scheduled?.start).toBe(minAfterNowTs(30));
+    expect(scheduled?.duration).toBe(minAfterNowTs(50) - N);
+    expect(continued?.start).toBe(minAfterNowTs(80));
+  });
+
+  it('keeps the booked end and shows the remaining part of a running slot', () => {
+    const [day] = mapToScheduleDays(
+      minAfterNowTs(40),
+      [NDS],
+      [],
+      [fakePlannedTaskEntry('S1', minAfterNow(30), { timeEstimate: h(1) })],
+      [],
+      [],
+      [],
+      'S1',
+      {},
+    );
+
+    const scheduled = day.entries.find((entry) => entry.id === 'S1');
+    expect(scheduled?.start).toBe(minAfterNowTs(40));
+    expect(scheduled?.duration).toBe(minAfterNowTs(50) - N);
+  });
+
   it('should work for very long scheduled tasks', () => {
     const r = mapToScheduleDays(
       N,
